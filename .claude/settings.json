@@ -1,0 +1,43 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__claude_ai_Google_Drive__search_files",
+      "mcp__claude_ai_Google_Drive__download_file_content",
+      "Bash(python3 -c ' *)",
+      "Read(//Users/nadav/**)",
+      "Read(//Users/nadav/Desktop/**)",
+      "Bash(ls -lt /Users/nadav/Documents/github/peak-rescue-web/*.jpeg /Users/nadav/Documents/github/peak-rescue-web/*.jpg /Users/nadav/Documents/github/peak-rescue-web/*.png)",
+      "Bash(xargs ls *)",
+      "WebFetch(domain:peak-rescue.com)",
+      "WebFetch(domain:peakrescuemountainguides.com)",
+      "Bash(mkdir -p /Users/nadav/Documents/github/peak-rescue-web/public/images/certs)",
+      "Bash(curl -s \"https://peak-rescue.com/wp-content/uploads/2021/02/PTP-Logo-2020-05-29.png\" -o ptp.png)",
+      "Bash(curl -s \"https://peak-rescue.com/wp-content/uploads/2021/02/itra.png\" -o itra.png)",
+      "Bash(curl -s \"https://peak-rescue.com/wp-content/uploads/2021/02/IFMGA_color.png\" -o ifmga-color.png)",
+      "Bash(curl -s \"https://peak-rescue.com/wp-content/uploads/2021/02/IFMGA_International.png\" -o ifmga-international.png)",
+      "WebFetch(domain:www.amga.com)",
+      "Bash(awk '{print $5, $9}')",
+      "Bash(curl -sL \"https://peak-rescue.com/wp-content/uploads/2024/01/56952430-569D-4C42-B372-22C64032BD92_1_201_a.jpeg\" -o /tmp/pr-alt1.jpeg)",
+      "Bash(curl -sL \"https://peak-rescue.com/wp-content/uploads/2023/02/0.jpg\" -o /tmp/pr-alt2.jpg)",
+      "Bash(curl -sL \"https://peak-rescue.com/wp-content/uploads/2023/06/IMG_7953-e1729690873139.jpeg\" -o /tmp/pr-alt3.jpeg)",
+      "Bash(curl -sL \"https://peak-rescue.com/wp-content/uploads/2024/10/IMG_1460-e1729690685206.jpeg\" -o /tmp/pr-alt4.jpeg)",
+      "Bash(wait)",
+      "Bash(cp /tmp/pr-alt1.jpeg /Users/nadav/Documents/github/peak-rescue-web/public/images/services/standby-rescue.jpg)",
+      "Bash(cp /tmp/pr-alt2.jpg /Users/nadav/Documents/github/peak-rescue-web/public/images/services/emergency-response-team.jpg)",
+      "Bash(npx tsc *)",
+      "Bash(curl -sL \"https://peak-rescue.com/wp-content/uploads/2022/01/arial.jpg\" -o /Users/nadav/Documents/github/peak-rescue-web/public/images/services/aerial-tramway-rescue.jpg)",
+      "Bash(python3 -c \"from PIL import Image; img=Image.open\\('/Users/nadav/Documents/github/peak-rescue-web/public/images/services/aerial-tramway-rescue.jpg'\\); print\\(img.size\\)\")",
+      "Bash(curl -sL https://peak-rescue.com/wp-content/uploads/2019/02/Standby-1.jpg -o /Users/nadav/Documents/github/peak-rescue-web/public/images/services/standby-rescue.jpg)",
+      "Bash(curl -sL https://peak-rescue.com/wp-content/uploads/2023/02/0.jpg -o /Users/nadav/Documents/github/peak-rescue-web/public/images/services/tv-rigging-safety.jpg)",
+      "Bash(ls -la /Users/nadav/Documents/github/peak-rescue-web/public/images/services/standby-rescue* /Users/nadav/Documents/github/peak-rescue-web/public/images/services/tv-rigging*)",
+      "Bash(curl -sL \"https://peak-rescue.com/wp-content/uploads/2023/03/Screenshot-2023-03-18-at-1.08.09-PM.png\" -o /Users/nadav/Documents/github/peak-rescue-web/public/images/blog/influencers-in-the-wild.png)",
+      "Bash(curl -sL \"https://peak-rescue.com/wp-content/uploads/2023/02/IMG_1616.jpeg\" -o /Users/nadav/Documents/github/peak-rescue-web/public/images/blog/teaching-rope-rescue-tech-savvy-era.jpeg)",
+      "Bash(curl -sL \"https://peak-rescue.com/wp-content/uploads/2019/03/Rescue.jpg\" -o /Users/nadav/Documents/github/peak-rescue-web/public/images/blog/rescue-for-you.jpg)",
+      "Bash(curl -sL \"https://peak-rescue.com/wp-content/uploads/2019/03/asap.png\" -o /Users/nadav/Documents/github/peak-rescue-web/public/images/blog/my-gear-mance-asap.png)",
+      "mcp__claude_ai_Google_Drive__get_file_metadata"
+    ],
+    "additionalDirectories": [
+      "/Users/nadav/Documents/github/peak-rescue-web/app/blog"
+    ]
+  }
+}
