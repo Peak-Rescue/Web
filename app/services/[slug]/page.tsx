@@ -41,7 +41,7 @@ export default async function ServicePage({
   return (
     <>
       {/* Hero */}
-      <div className="relative bg-pr-surface border-b border-white/[0.06] overflow-hidden">
+      <div className="relative bg-pr-surface border-b border-white/[0.06] overflow-hidden pt-16 md:pt-20">
         <div className="absolute top-0 left-0 w-48 h-1 bg-pr-red z-10" />
 
         {service.heroImage ? (
@@ -56,13 +56,12 @@ export default async function ServicePage({
                 sizes="100vw"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-pr-bg via-pr-bg/50 to-transparent" />
-              <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-transparent" />
             </div>
             {/* Text overlaid at bottom of image */}
             <div className="absolute bottom-0 left-0 right-0 pb-12">
               <div className="site-container">
-                <div className="flex items-center gap-2 text-xs font-display tracking-widest uppercase text-pr-muted/80 mb-6">
-                  <Link href="/services" className="hover:text-pr-text transition-colors">Training</Link>
+                <div className="flex items-center gap-2 text-xs font-display tracking-widest uppercase text-white/60 mb-6">
+                  <Link href="/services" className="hover:text-white transition-colors">Training</Link>
                   <span>/</span>
                   <span className="text-pr-red">{category.label}</span>
                 </div>
@@ -83,7 +82,7 @@ export default async function ServicePage({
             </div>
           </>
         ) : (
-          <div className="pt-32 pb-20 site-container">
+          <div className="pt-8 pb-20 site-container">
             <div className="flex items-center gap-2 text-xs font-display tracking-widest uppercase text-pr-muted mb-8">
               <Link href="/services" className="hover:text-pr-text transition-colors">Training</Link>
               <span>/</span>
