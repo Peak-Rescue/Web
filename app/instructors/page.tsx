@@ -51,20 +51,10 @@ export default function InstructorsPage() {
                 </div>
 
                 {/* Info */}
-                <div className="p-6 flex flex-col flex-1">
+                <div className="p-6">
                   <h3 className="font-display font-700 text-lg uppercase tracking-wide text-pr-text group-hover:text-pr-red transition-colors">
                     {instructor.name}
                   </h3>
-                  <div className="mt-3 flex flex-wrap gap-1">
-                    {instructor.certifications.slice(0, 2).map((cert) => (
-                      <span
-                        key={cert}
-                        className="px-2 py-0.5 text-[10px] font-display tracking-widest uppercase border border-white/10 text-pr-muted"
-                      >
-                        {cert}
-                      </span>
-                    ))}
-                  </div>
                 </div>
               </Link>
             ))}
