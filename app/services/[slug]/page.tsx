@@ -40,46 +40,69 @@ export default async function ServicePage({
 
   return (
     <>
-      {/* Hero image — full width below nav */}
-      {service.heroImage && (
-        <div className="relative w-full pt-16 md:pt-20">
-          <div className="relative w-full h-56 md:h-80 lg:h-96 overflow-hidden">
-            <Image
-              src={service.heroImage}
-              alt={service.title}
-              fill
-              priority
-              className="object-cover object-center"
-              sizes="100vw"
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-pr-surface via-pr-surface/20 to-transparent" />
-          </div>
-        </div>
-      )}
+      {/* Hero */}
+      <div className={`relative bg-pr-surface border-b border-white/[0.06] overflow-hidden ${service.heroImage ? 'pt-16 md:pt-20' : 'pt-32'}`}>
+        <div className="absolute top-0 left-0 w-48 h-1 bg-pr-red z-10" />
 
-      {/* Page header — dark background, always readable */}
-      <div className={`bg-pr-surface border-b border-white/[0.06] relative overflow-hidden ${!service.heroImage ? 'pt-32' : ''}`}>
-        <div className="absolute top-0 left-0 w-48 h-1 bg-pr-red" />
-        <div className="site-container py-12">
-          <div className="flex items-center gap-2 text-xs font-display tracking-widest uppercase text-pr-muted mb-6">
-            <Link href="/services" className="hover:text-pr-text transition-colors">Training</Link>
-            <span>/</span>
-            <span className="text-pr-red">{category.label}</span>
+        {service.heroImage ? (
+          <>
+            <div className="relative w-full h-64 md:h-96 lg:h-[480px]">
+              <Image
+                src={service.heroImage}
+                alt={service.title}
+                fill
+                priority
+                className="object-cover object-center"
+                sizes="100vw"
+              />
+              {/* Strong bottom-up scrim so text is readable */}
+              <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/50 to-black/10" />
+            </div>
+            {/* Text overlaid at bottom of image */}
+            <div className="absolute bottom-0 left-0 right-0 pb-10">
+              <div className="site-container">
+                <div className="inline-flex items-center gap-2 text-xs font-display tracking-widest uppercase text-white mb-4 bg-black/60 backdrop-blur-sm px-3 py-1.5">
+                  <Link href="/services" className="hover:text-white/70 transition-colors">Training</Link>
+                  <span>/</span>
+                  <span className="text-pr-red">{category.label}</span>
+                </div>
+                <h1 className="display-lg mt-2 text-white max-w-3xl" style={{ textShadow: '0 2px 12px rgba(0,0,0,0.9)' }}>{service.title}</h1>
+                <p className="mt-4 text-lg text-white/80 max-w-2xl leading-relaxed font-display font-500 tracking-wide" style={{ textShadow: '0 1px 6px rgba(0,0,0,0.9)' }}>
+                  {service.tagline}
+                </p>
+                <div className="mt-8">
+                  <Link
+                    href="/contact"
+                    className="inline-block px-8 py-4 bg-pr-red text-white font-display font-700 text-sm tracking-widest uppercase hover:bg-pr-red-light transition-colors"
+                  >
+                    Inquire About This Program
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </>
+        ) : (
+          <div className="pb-20 site-container">
+            <div className="flex items-center gap-2 text-xs font-display tracking-widest uppercase text-pr-muted mb-6">
+              <Link href="/services" className="hover:text-pr-text transition-colors">Training</Link>
+              <span>/</span>
+              <span className="text-pr-red">{category.label}</span>
+            </div>
+            <span className="section-label">{category.label}</span>
+            <h1 className="display-lg mt-3 text-pr-text max-w-3xl">{service.title}</h1>
+            <p className="mt-6 text-xl text-pr-muted max-w-2xl leading-relaxed font-display font-500 tracking-wide">
+              {service.tagline}
+            </p>
+            <div className="mt-10">
+              <Link
+                href="/contact"
+                className="inline-block px-8 py-4 bg-pr-red text-white font-display font-700 text-sm tracking-widest uppercase hover:bg-pr-red-light transition-colors"
+              >
+                Inquire About This Program
+              </Link>
+            </div>
           </div>
-          <span className="section-label">{category.label}</span>
-          <h1 className="display-lg mt-3 text-pr-text max-w-3xl">{service.title}</h1>
-          <p className="mt-6 text-xl text-pr-muted max-w-2xl leading-relaxed font-display font-500 tracking-wide">
-            {service.tagline}
-          </p>
-          <div className="mt-10">
-            <Link
-              href="/contact"
-              className="inline-block px-8 py-4 bg-pr-red text-white font-display font-700 text-sm tracking-widest uppercase hover:bg-pr-red-light transition-colors"
-            >
-              Inquire About This Program
-            </Link>
-          </div>
-        </div>
+        )}
       </div>
 
       {/* Content */}
