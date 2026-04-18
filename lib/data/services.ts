@@ -219,11 +219,11 @@ export const services: Service[] = [
     ],
   },
   {
-    slug: 'swiftwater-canyoning-rescue',
-    title: 'Swiftwater Canyoning Rescue',
-    shortTitle: 'Swiftwater Canyoning',
+    slug: 'class-c-canyon-rescue',
+    title: 'Class C Canyon Rescue',
+    shortTitle: 'Class C Canyon Rescue',
     category: 'sar',
-    heroImage: '/images/services/swiftwater-canyoning-rescue.jpg',
+    heroImage: '/images/services/Canyon.jpeg',
     tagline: 'Technical rescue in swiftwater canyon environments — moving water meets vertical terrain.',
     description:
       'A five-day collaborative program training rescue team members in the fundamental skills required for swiftwater canyoning rescue operations. Combines technical canyon rope systems with moving-water rescue techniques for teams operating in technical drainages.',
@@ -387,7 +387,7 @@ export const services: Service[] = [
     title: 'Zip-Line & Adventure Park Rescue',
     shortTitle: 'Adventure Park Rescue',
     category: 'industrial',
-    heroImage: '/images/services/zipline-adventure-park-rescue.jpg',
+    heroImage: '/images/services/zipline.jpeg',
     tagline: 'Safely and efficiently evacuate passengers from zip-lines and adventure parks.',
     description:
       'Aerial rescue training for zip-line operators and adventure park staff, developed in collaboration with commercial operations worldwide. Covers multiple rescue and evacuation methods including lowering, rescuer approach, and pulley-to-pulley transfers. Dynamic and hands-on — delivered at our facilities or on-site internationally.',
