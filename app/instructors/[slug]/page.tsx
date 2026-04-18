@@ -1,8 +1,7 @@
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
-import { getInstructorBySlug, instructors, roleLabels } from '@/lib/data/instructors'
-import { getServiceBySlug } from '@/lib/data/services'
+import { getInstructorBySlug, instructors } from '@/lib/data/instructors'
 import type { Metadata } from 'next'
 
 export function generateStaticParams() {
@@ -31,10 +30,6 @@ export default async function InstructorPage({
   const { slug } = await params
   const instructor = getInstructorBySlug(slug)
   if (!instructor) notFound()
-
-  const specialtyServices = instructor.specialties
-    .map((s) => getServiceBySlug(s))
-    .filter(Boolean)
 
   return (
     <>
@@ -71,11 +66,7 @@ export default async function InstructorPage({
 
             {/* Info */}
             <div>
-              <span className="section-label">{roleLabels[instructor.role]}</span>
               <h1 className="display-lg mt-2 text-pr-text">{instructor.name}</h1>
-              <p className="mt-2 text-pr-muted font-display font-500 tracking-wide">
-                {instructor.title}
-              </p>
               <div className="mt-4 flex flex-wrap gap-2">
                 {instructor.certifications.map((cert) => (
                   <span
@@ -91,42 +82,13 @@ export default async function InstructorPage({
         </div>
       </div>
 
-      {/* Bio + specialties */}
+      {/* Bio */}
       <div className="py-20 bg-pr-bg">
-        <div className="site-container grid grid-cols-1 lg:grid-cols-3 gap-16">
-          <div className="lg:col-span-2">
-            <div className="accent-line">
-              <h2 className="display-md text-pr-text mb-6">Background</h2>
-            </div>
-            <p className="text-pr-muted leading-relaxed text-lg">{instructor.bio}</p>
+        <div className="site-container max-w-3xl">
+          <div className="accent-line">
+            <h2 className="display-md text-pr-text mb-6">Background</h2>
           </div>
-
-          <div>
-            <h3 className="section-label mb-6">Specialties</h3>
-            <div className="flex flex-col gap-3">
-              {specialtyServices.map((service) => service && (
-                <Link
-                  key={service.slug}
-                  href={`/services/${service.slug}`}
-                  className="group flex items-center justify-between p-4 glass-card hover:border-pr-red/30 transition-all"
-                >
-                  <span className="text-sm font-display font-600 uppercase tracking-wide text-pr-text group-hover:text-pr-red transition-colors">
-                    {service.shortTitle}
-                  </span>
-                  <span className="text-pr-red text-xs">→</span>
-                </Link>
-              ))}
-            </div>
-
-            <div className="mt-10 pt-8 border-t border-white/[0.06]">
-              <Link
-                href="/contact"
-                className="block text-center px-6 py-3 bg-pr-red text-white font-display font-700 text-sm tracking-widest uppercase hover:bg-pr-red-light transition-colors"
-              >
-                Train with {instructor.name.split(' ')[0]}
-              </Link>
-            </div>
-          </div>
+          <p className="text-pr-muted leading-relaxed text-lg">{instructor.bio}</p>
         </div>
       </div>
     </>

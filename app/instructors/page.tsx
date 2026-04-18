@@ -72,21 +72,6 @@ export default function InstructorsPage() {
         </div>
       </div>
 
-      {/* CTA */}
-      <div className="py-16 bg-pr-surface border-t border-white/[0.06]">
-        <div className="site-container text-center">
-          <h2 className="display-md text-pr-text mb-4">Train with the experts.</h2>
-          <p className="text-pr-muted mb-8 max-w-lg mx-auto">
-            Every program is led by instructors who work in the field — not just the classroom.
-          </p>
-          <Link
-            href="/contact"
-            className="inline-block px-8 py-4 bg-pr-red text-white font-display font-700 text-sm tracking-widest uppercase hover:bg-pr-red-light transition-colors"
-          >
-            Contact Us
-          </Link>
-        </div>
-      </div>
     </>
   )
 }
