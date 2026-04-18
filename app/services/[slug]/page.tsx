@@ -56,6 +56,7 @@ export default async function ServicePage({
                 sizes="100vw"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-pr-bg via-pr-bg/50 to-transparent" />
+              <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-transparent" />
             </div>
             {/* Text overlaid at bottom of image */}
             <div className="absolute bottom-0 left-0 right-0 pb-12">
