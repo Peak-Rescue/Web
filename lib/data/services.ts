@@ -211,7 +211,7 @@ export const services: Service[] = [
       'Prepares teams for alpine and mountainous terrain operations through summer and winter modules. Summer focuses on lightweight rope systems for steep terrain; winter covers snow and ice navigation and avalanche awareness. Both modules can incorporate live fire and tactical scenarios.',
     details: [
       'Efficiency on 3rd–5th class terrain',
-      'Lightweight alpine rope techniques and running belays',
+      'Lightweight alpine rope techniques and tactical follow techniques',
       'Crampon and ice axe technique on snow and ice',
       'Avalanche awareness, terrain selection, and companion rescue',
       'Weather pattern recognition and go/no-go decision frameworks',
@@ -256,13 +256,13 @@ export const services: Service[] = [
   },
   {
     slug: 'canyoneering',
-    title: 'Canyoneering & Canyon Rescue',
-    shortTitle: 'Canyoneering',
+    title: 'Canyon Mobility',
+    shortTitle: 'Canyon Mobility',
     category: 'tactical',
     heroImage: '/images/services/canyoneering.jpg',
-    tagline: 'Navigate narrow canyons and rugged slot terrain with military-grade rope skills.',
+    tagline: 'Navigate narrow canyons and rugged slot terrain with a focus on military applications.',
     description:
-      'Hones the skills required to navigate narrow canyons and rugged slot terrain with military applications. Instruction covers advanced rigging, water hazard navigation, and technical canyon movement — preparing teams to move efficiently and extract casualties from some of the most demanding terrain on earth.',
+      'This course hones the skills required to navigate narrow canyons and rugged slot terrain with a focus on military applications. Students will learn advanced rigging techniques, water hazards navigation, confined space maneuvers, and rapid team movement through technical canyon systems. Training scenarios replicate the complexities of tactical engagements in confined natural environments, prioritizing safety, speed, and mission success.',
     details: [
       'Advanced rigging for releasable, redirectable, and retrievable rappel systems',
       'Canyon-specific anchors — natural, bolted, and improvised',

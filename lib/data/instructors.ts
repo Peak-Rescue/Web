@@ -52,9 +52,9 @@ export const instructors: Instructor[] = [
     bio: 'Toph spent most of his childhood in the Wyoming outdoors enjoying hunting, fishing, camping and exploring. While going to college he worked as a wildland firefighter for the BLM and graduated from the University of Wyoming with a bachelor\'s in resource management. Many years later he transitioned into the structure firefighting world and found his passion for technical rescue. He holds many certifications and has obtained invaluable knowledge through training and real-world experience. In addition, he serves on an extrication module specializing in removing injured firefighters and civilians from remote areas of the backcountry. Toph has been to countless 80s rock concerts and brings an upbeat positive attitude to every situation he encounters. He lives by two credos in life; you can\'t have no in your heart and life is a garden...dig it! He enjoys anything outdoors and spending time with his family. He is the newest addition to the Peak Rescue team but has proved to be an invaluable asset in and out of the classroom.',
     certifications: ['SPRAT Level 3', 'Wildland Firefighter', 'Structure Firefighter', 'Vehicle Extrication', 'Technical Rescue Technician', 'International Canyon Academy'],
     specialties: ['emergency-response-team', 'small-team-rescue', 'urban-mobility', 'mountain-rescue', 'canyoneering'],
-    avatar: '/images/instructors/toph-steinhoff.png',
-    avatarPosition: 'object-[50%_100%]',
-    avatarScale: 'scale-[1.75]',
+    avatar: '/images/instructors/toph.JPG',
+    avatarPosition: 'object-[50%_42%]',
+    avatarScale: 'scale-[2.5]',
   },
   {
     slug: 'cody-carroll',

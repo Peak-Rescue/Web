@@ -54,7 +54,7 @@ export default async function InstructorPage({
                   src={instructor.avatar}
                   alt={instructor.name}
                   fill
-                  className="object-cover object-top"
+                  className={`object-cover ${instructor.avatarPosition ?? 'object-top'} ${instructor.avatarScale ?? ''}`}
                   sizes="224px"
                 />
               ) : (
