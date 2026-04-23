@@ -5,11 +5,27 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
+import { createClient } from '@/lib/supabase/client'
+
+function UserIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="8" r="4" /><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
+    </svg>
+  )
+}
+
+function SignOutIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" />
+    </svg>
+  )
+}
 
 const navLinks = [
   { href: '/services', label: 'Training' },
   { href: '/instructors', label: 'Team' },
-  { href: '/courses', label: 'Courses' },
   { href: '/gallery', label: 'Gallery' },
   { href: '/blog', label: 'Blog' },
   { href: '/contact', label: 'Contact' },
@@ -18,7 +34,17 @@ const navLinks = [
 export default function Header() {
   const [scrolled, setScrolled] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [loggedIn, setLoggedIn] = useState(false)
   const pathname = usePathname()
+
+  useEffect(() => {
+    const supabase = createClient()
+    supabase.auth.getSession().then(({ data }) => setLoggedIn(!!data.session))
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setLoggedIn(!!session)
+    })
+    return () => subscription.unsubscribe()
+  }, [])
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 40)
@@ -70,12 +96,34 @@ export default function Header() {
                 </Link>
               )
             })}
-            <Link
-              href="/contact"
-              className="ml-4 px-5 py-2 bg-pr-red text-white text-sm font-display font-700 tracking-widest uppercase hover:bg-pr-red-light transition-colors"
-            >
-              Get Training
-            </Link>
+            {loggedIn ? (
+              <div className="ml-4 flex items-center gap-2">
+                <Link
+                  href="/dashboard"
+                  className="flex items-center gap-1.5 px-3 py-1.5 border border-white/20 hover:border-white/40 text-pr-muted hover:text-pr-text text-xs font-display font-600 tracking-widest uppercase transition-colors"
+                >
+                  <UserIcon />
+                  Portal
+                </Link>
+                <form action="/auth/signout" method="post">
+                  <button
+                    type="submit"
+                    className="flex items-center gap-1.5 px-3 py-1.5 border border-white/20 hover:border-white/40 text-pr-muted hover:text-pr-text text-xs font-display font-600 tracking-widest uppercase transition-colors"
+                  >
+                    <SignOutIcon />
+                    Sign out
+                  </button>
+                </form>
+              </div>
+            ) : (
+              <Link
+                href="/login"
+                className="ml-4 flex items-center gap-1.5 px-3 py-1.5 border border-white/20 hover:border-white/40 text-pr-muted hover:text-pr-text text-xs font-display font-600 tracking-widest uppercase transition-colors"
+              >
+                <UserIcon />
+                Sign in
+              </Link>
+            )}
           </nav>
 
           {/* Mobile menu button */}
@@ -135,8 +183,33 @@ export default function Header() {
                 href="/contact"
                 className="mt-4 py-3 text-center bg-pr-red text-white text-lg font-display font-700 tracking-widest uppercase"
               >
-                Get Training
+                Contact
               </Link>
+              {loggedIn ? (
+                <>
+                  <Link
+                    href="/dashboard"
+                    className="mt-2 py-3 flex items-center justify-center gap-2 border border-white/20 text-pr-muted text-sm font-display font-600 tracking-widest uppercase"
+                  >
+                    <UserIcon /> Portal
+                  </Link>
+                  <form action="/auth/signout" method="post">
+                    <button
+                      type="submit"
+                      className="w-full py-3 flex items-center justify-center gap-2 border border-white/20 text-pr-muted text-sm font-display font-600 tracking-widest uppercase"
+                    >
+                      <SignOutIcon /> Sign out
+                    </button>
+                  </form>
+                </>
+              ) : (
+                <Link
+                  href="/login"
+                  className="mt-2 py-3 flex items-center justify-center gap-2 border border-white/20 text-pr-muted text-sm font-display font-600 tracking-widest uppercase"
+                >
+                  <UserIcon /> Sign in
+                </Link>
+              )}
             </nav>
           </motion.div>
         )}
