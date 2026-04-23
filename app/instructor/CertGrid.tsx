@@ -29,6 +29,7 @@ const CERT_CATEGORIES: { label: string; types: CertType[] }[] = [
   { label: 'Medical',    types: ['cpr', 'wfr', 'emt', 'other_ems'] },
   { label: 'Guiding',   types: ['amga_rock', 'amga_alpine', 'amga_ski', 'ifmga', 'avy', 'lnt'] },
   { label: 'Industrial', types: ['sprat'] },
+  { label: 'Water & Canyon', types: ['swiftwater', 'canyoneering'] },
   { label: 'Other',     types: ['other'] },
 ]
 

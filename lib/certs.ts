@@ -1,7 +1,9 @@
 export type CertType =
   | 'cpr' | 'wfr' | 'emt' | 'other_ems'
   | 'amga_rock' | 'amga_alpine' | 'amga_ski' | 'ifmga'
-  | 'sprat' | 'avy' | 'lnt' | 'other'
+  | 'sprat' | 'avy' | 'lnt'
+  | 'swiftwater' | 'canyoneering'
+  | 'other'
 
 export type CertStatus = 'current' | 'expiring' | 'expired' | 'missing'
 
@@ -23,13 +25,17 @@ export const CERT_META: Record<CertType, {
   sprat:      { label: 'SPRAT',             hasLevel: true,  levelOptions: ['Level 1', 'Level 2', 'Level 3'],        hasExpiry: true,  hasNotes: false },
   avy:        { label: 'Avalanche',         hasLevel: true,  levelOptions: ['Rec 1', 'Rec 2', 'Pro 1', 'Pro 2'], hasExpiry: false, hasNotes: false },
   lnt:        { label: 'Leave No Trace',    hasLevel: true,  levelOptions: ['LNT 1 (Trainer)', 'LNT 2 (Master Educator)'], hasExpiry: false, hasNotes: false },
+  swiftwater: { label: 'Swift Water',       hasLevel: false, hasExpiry: false, hasNotes: true  },
+  canyoneering:{ label: 'Canyoneering',    hasLevel: false, hasExpiry: false, hasNotes: true  },
   other:      { label: 'Other',             hasLevel: false, hasExpiry: true,  hasNotes: true  },
 }
 
 export const CERT_ORDER: CertType[] = [
   'cpr', 'wfr', 'emt', 'other_ems',
   'amga_rock', 'amga_alpine', 'amga_ski', 'ifmga',
-  'sprat', 'avy', 'lnt', 'other',
+  'sprat', 'avy', 'lnt',
+  'swiftwater', 'canyoneering',
+  'other',
 ]
 
 export function certStatus(expiresAt: string | null | undefined): CertStatus {
