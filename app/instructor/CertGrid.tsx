@@ -55,6 +55,8 @@ export default function CertGrid({ initialCerts }: { initialCerts: DbCert[] }) {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
   const [currentLevel, setCurrentLevel] = useState<string>('')
   const [originalLevel, setOriginalLevel] = useState<string>('')
+  const [currentExpiry, setCurrentExpiry] = useState<string>('')
+  const [originalExpiry, setOriginalExpiry] = useState<string>('')
   const formRef = useRef<HTMLFormElement>(null)
 
   const certMap = Object.fromEntries(certs.map(c => [c.cert_type, c]))
@@ -68,6 +70,9 @@ export default function CertGrid({ initialCerts }: { initialCerts: DbCert[] }) {
       const lvl = certMap[type]?.level ?? ''
       setCurrentLevel(lvl)
       setOriginalLevel(lvl)
+      const exp = certMap[type]?.expires_at?.slice(0, 10) ?? ''
+      setCurrentExpiry(exp)
+      setOriginalExpiry(exp)
     }
   }
 
@@ -76,6 +81,13 @@ export default function CertGrid({ initialCerts }: { initialCerts: DbCert[] }) {
     certMap[editing] &&
     CERT_META[editing].hasLevel &&
     currentLevel !== originalLevel
+  )
+
+  const expiryChanged = !!(
+    editing &&
+    certMap[editing] &&
+    CERT_META[editing].hasExpiry &&
+    currentExpiry !== originalExpiry
   )
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>, certType: CertType) {
@@ -131,13 +143,14 @@ export default function CertGrid({ initialCerts }: { initialCerts: DbCert[] }) {
         alert('Level changed — please upload a new document for the updated level.')
         return
       }
-      if (CERT_META[certType].hasExpiry) {
-        const fd = new FormData(e.currentTarget)
-        if (!fd.get('expires_at')) {
-          alert('Level changed — please enter a new expiration date for the updated level.')
-          return
-        }
-      }
+    }
+    if (expiryChanged && pendingDocs.length === 0) {
+      alert('Expiration date changed — please upload the renewed certificate document.')
+      return
+    }
+    if (levelChanged && CERT_META[certType].hasExpiry && !currentExpiry) {
+      alert('Level changed — please enter a new expiration date.')
+      return
     }
     setSaving(true)
     try {
@@ -145,11 +158,21 @@ export default function CertGrid({ initialCerts }: { initialCerts: DbCert[] }) {
       const saved = await upsertCert(fd)
       if (saved) {
         const existing = certMap[saved.cert_type as CertType]
-        let docs = existing?.instructor_cert_documents ?? []
+        const oldDocs = existing?.instructor_cert_documents ?? []
+        let docs: CertDoc[] = []
 
         for (const pending of pendingDocs) {
           const doc = await addCertDocument(saved.id, pending.url, pending.fileName)
           if (doc) docs = [...docs, doc as CertDoc]
+        }
+
+        // Replace old docs when new ones are uploaded
+        if (pendingDocs.length > 0 && oldDocs.length > 0) {
+          for (const old of oldDocs) {
+            await deleteCertDocument(old.id)
+          }
+        } else if (pendingDocs.length === 0) {
+          docs = oldDocs
         }
 
         const merged: DbCert = { ...saved as DbCert, instructor_cert_documents: docs }
@@ -280,12 +303,17 @@ export default function CertGrid({ initialCerts }: { initialCerts: DbCert[] }) {
                         <div>
                           <label className="block text-sm text-zinc-400 mb-1">Expiration date</label>
                           <input
-                            key={currentLevel}
                             type="date"
                             name="expires_at"
-                            defaultValue={levelChanged ? '' : (certMap[editing]?.expires_at ?? '')}
+                            value={levelChanged ? '' : currentExpiry}
+                            onChange={e => setCurrentExpiry(e.target.value)}
                             className="w-full px-3 py-2 bg-zinc-800 border border-zinc-600 rounded text-white focus:outline-none focus:border-orange-500"
                           />
+                          {expiryChanged && (
+                            <p className="mt-1.5 text-xs text-yellow-400">
+                              Expiration date changed — please upload the renewed certificate document.
+                            </p>
+                          )}
                         </div>
                       )}
 

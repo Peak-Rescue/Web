@@ -21,6 +21,11 @@
 /* Base */
 html {
   scroll-behavior: smooth;
+  scrollbar-width: none;
+}
+
+html::-webkit-scrollbar {
+  display: none;
 }
 
 body {
@@ -28,6 +33,11 @@ body {
   color: #f0f0f0;
   font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;
+  scrollbar-width: none;
+}
+
+body::-webkit-scrollbar {
+  display: none;
 }
 
 /* Typography scale */
@@ -100,14 +110,3 @@ body {
   }
 }
 
-/* Custom scrollbar */
-::-webkit-scrollbar {
-  width: 4px;
-}
-::-webkit-scrollbar-track {
-  background: #0a0b0d;
-}
-::-webkit-scrollbar-thumb {
-  background: #cc1f1a;
-  border-radius: 2px;
-}

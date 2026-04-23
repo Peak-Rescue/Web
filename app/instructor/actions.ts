@@ -80,7 +80,7 @@ export async function deleteCertDocument(docId: string) {
 
   const { data: doc } = await admin
     .from('instructor_cert_documents')
-    .select('id, cert_id')
+    .select('id, cert_id, url')
     .eq('id', docId)
     .single()
 
@@ -101,6 +101,19 @@ export async function deleteCertDocument(docId: string) {
     .eq('id', docId)
 
   if (error) throw new Error(error.message)
+
+  // Delete from storage — path follows publicUrl: /storage/v1/object/public/cert-documents/<path>
+  try {
+    const url = new URL(doc.url)
+    const marker = '/object/public/cert-documents/'
+    const idx = url.pathname.indexOf(marker)
+    if (idx !== -1) {
+      const storagePath = url.pathname.slice(idx + marker.length)
+      await admin.storage.from('cert-documents').remove([storagePath])
+    }
+  } catch {
+    // non-fatal: DB row is already gone
+  }
 
   revalidatePath('/instructor')
 }

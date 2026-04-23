@@ -17,7 +17,7 @@ export default function InstructorsPage() {
           <span className="section-label">Who We Are</span>
           <h1 className="display-lg mt-3 text-pr-text">The Team</h1>
           <p className="mt-4 text-pr-muted max-w-2xl leading-relaxed">
-            IFMGA guides, military veterans, fire department careers, and decades of field experience across mountain, water, urban, and tactical environments.
+            Top-of-field professionals from across the mountain, rescue, and technical disciplines — each still actively working in the field and bringing thousands of hours of real-world experience to every course.
           </p>
         </div>
       </div>

@@ -35,7 +35,8 @@ export default async function InstructorPage({
     <>
       {/* Hero */}
       <div className="pt-32 pb-20 bg-pr-surface border-b border-white/[0.06] relative overflow-hidden">
-        <div className="absolute top-0 left-0 w-48 h-1 bg-pr-red" />
+        <div className="absolute top-0 left-0 w-16 h-[3px] bg-pr-red" />
+        <div className="absolute top-0 left-0 w-[3px] h-16 bg-pr-red" />
         <div className="site-container">
           {/* Breadcrumb */}
           <div className="flex items-center gap-2 text-xs font-display tracking-widest uppercase text-pr-muted mb-8">

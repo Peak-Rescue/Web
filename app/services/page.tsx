@@ -33,8 +33,7 @@ function ServicesContent() {
             Training Programs
           </h1>
           <p className="mt-4 text-pr-muted max-w-2xl leading-relaxed">
-            Specialized programs across military, SAR, industrial, and commercial disciplines — all
-            customizable to your team, timeline, and mission profile. IFMGA-certified instructors. Real field conditions.
+            Specialized programs across military, SAR, industrial, and commercial disciplines — all customizable to your team, timeline, and mission profile. Taught by top-of-field professionals who are still actively working in the environments they teach.
           </p>
         </div>
       </div>

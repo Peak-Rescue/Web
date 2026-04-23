@@ -16,8 +16,8 @@ export default function ContactCTA() {
       />
 
       {/* Red accent corner */}
-      <div className="absolute top-0 left-0 w-32 h-1 bg-pr-red" />
-      <div className="absolute top-0 left-0 w-1 h-32 bg-pr-red" />
+      <div className="absolute top-0 left-0 w-16 h-[3px] bg-pr-red" />
+      <div className="absolute top-0 left-0 w-[3px] h-16 bg-pr-red" />
 
       <div className="relative z-10 site-container">
         <div className="max-w-3xl">

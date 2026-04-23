@@ -35,7 +35,8 @@ export default async function BlogPostPage({
     <>
       {/* Hero */}
       <div className="relative bg-pr-surface border-b border-white/[0.06] overflow-hidden">
-        <div className="absolute top-0 left-0 w-48 h-1 bg-pr-red z-10" />
+        <div className="absolute top-0 left-0 w-16 h-[3px] bg-pr-red z-10" />
+        <div className="absolute top-0 left-0 w-[3px] h-16 bg-pr-red z-10" />
 
         {post.image ? (
           <>
