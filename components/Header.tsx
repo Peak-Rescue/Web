@@ -98,13 +98,22 @@ export default function Header() {
             })}
             {loggedIn ? (
               <div className="ml-4 flex items-center gap-2">
-                <Link
-                  href="/dashboard"
-                  className="flex items-center gap-1.5 px-3 py-1.5 border border-white/20 hover:border-white/40 text-pr-muted hover:text-pr-text text-xs font-display font-600 tracking-widest uppercase transition-colors"
-                >
-                  <UserIcon />
-                  Portal
-                </Link>
+                {(() => {
+                  const portalActive = pathname === '/dashboard' || pathname.startsWith('/admin') || pathname.startsWith('/instructor')
+                  return (
+                    <Link
+                      href="/dashboard"
+                      className={`flex items-center gap-1.5 px-3 py-1.5 border text-xs font-display font-600 tracking-widest uppercase transition-colors ${
+                        portalActive
+                          ? 'border-pr-red text-pr-red'
+                          : 'border-white/20 hover:border-white/40 text-pr-muted hover:text-pr-text'
+                      }`}
+                    >
+                      <UserIcon />
+                      Portal
+                    </Link>
+                  )
+                })()}
                 <form action="/auth/signout" method="post">
                   <button
                     type="submit"
@@ -187,12 +196,21 @@ export default function Header() {
               </Link>
               {loggedIn ? (
                 <>
-                  <Link
-                    href="/dashboard"
-                    className="mt-2 py-3 flex items-center justify-center gap-2 border border-white/20 text-pr-muted text-sm font-display font-600 tracking-widest uppercase"
-                  >
-                    <UserIcon /> Portal
-                  </Link>
+                  {(() => {
+                    const portalActive = pathname === '/dashboard' || pathname.startsWith('/admin') || pathname.startsWith('/instructor')
+                    return (
+                      <Link
+                        href="/dashboard"
+                        className={`mt-2 py-3 flex items-center justify-center gap-2 border text-sm font-display font-600 tracking-widest uppercase transition-colors ${
+                          portalActive
+                            ? 'border-pr-red text-pr-red'
+                            : 'border-white/20 text-pr-muted'
+                        }`}
+                      >
+                        <UserIcon /> Portal
+                      </Link>
+                    )
+                  })()}
                   <form action="/auth/signout" method="post">
                     <button
                       type="submit"
