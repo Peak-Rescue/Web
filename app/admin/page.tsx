@@ -26,10 +26,10 @@ export default async function AdminPage() {
             href="/admin/instructors"
             className="p-6 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-pr-red transition-colors"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="mb-3 text-pr-red">
-              <circle cx="4" cy="10" r="3"/><path d="M8 21v-3a2 2 0 0 0-2-2H2a2 2 0 0 0-2 2v3"/>
-              <circle cx="12" cy="10" r="3"/><path d="M16 21v-3a2 2 0 0 0-2-2H10a2 2 0 0 0-2 2v3"/>
-              <circle cx="20" cy="10" r="3"/><path d="M24 21v-3a2 2 0 0 0-2-2H18a2 2 0 0 0-2 2v3"/>
+            <svg xmlns="http://www.w3.org/2000/svg" width="84" height="28" viewBox="0 0 72 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="mb-3 text-pr-red">
+              <circle cx="12" cy="7" r="4"/><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+              <circle cx="36" cy="7" r="4"/><path d="M44 21v-2a4 4 0 0 0-4-4H32a4 4 0 0 0-4 4v2"/>
+              <circle cx="60" cy="7" r="4"/><path d="M68 21v-2a4 4 0 0 0-4-4H56a4 4 0 0 0-4 4v2"/>
             </svg>
             <h2 className="font-semibold text-lg mb-1">All Instructors</h2>
             <p className="text-zinc-400 text-sm">View all instructor cert status</p>
