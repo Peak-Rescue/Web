@@ -138,12 +138,26 @@ export async function adminDeleteCertDocument(instructorId: string, docId: strin
   revalidatePath(`/admin/instructors/${instructorId}`)
 }
 
-export async function adminUpdateProfile(instructorId: string, { email, phone }: { email: string; phone: string }) {
+export async function adminUpdateProfile(instructorId: string, {
+  email, phone, emergency_name, emergency_relationship, emergency_phone,
+}: {
+  email: string
+  phone: string
+  emergency_name: string
+  emergency_relationship: string
+  emergency_phone: string
+}) {
   await requireAdmin()
 
   const { error } = await createAdminClient()
     .from('profiles')
-    .update({ email: email || null, phone: phone ? normalizePhone(phone) : null })
+    .update({
+      email: email || null,
+      phone: phone ? normalizePhone(phone) : null,
+      emergency_name: emergency_name || null,
+      emergency_relationship: emergency_relationship || null,
+      emergency_phone: emergency_phone ? normalizePhone(emergency_phone) : null,
+    })
     .eq('id', instructorId)
 
   if (error) throw new Error(error.message)

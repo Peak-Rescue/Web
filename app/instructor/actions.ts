@@ -119,14 +119,28 @@ export async function deleteCertDocument(docId: string) {
   revalidatePath('/instructor')
 }
 
-export async function updateProfile({ email, phone }: { email: string; phone: string }) {
+export async function updateProfile({
+  email, phone, emergency_name, emergency_relationship, emergency_phone,
+}: {
+  email: string
+  phone: string
+  emergency_name: string
+  emergency_relationship: string
+  emergency_phone: string
+}) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('Not authenticated')
 
   const { error } = await createAdminClient()
     .from('profiles')
-    .update({ email: email || null, phone: phone ? normalizePhone(phone) : null })
+    .update({
+      email: email || null,
+      phone: phone ? normalizePhone(phone) : null,
+      emergency_name: emergency_name || null,
+      emergency_relationship: emergency_relationship || null,
+      emergency_phone: emergency_phone ? normalizePhone(emergency_phone) : null,
+    })
     .eq('id', user.id)
 
   if (error) throw new Error(error.message)

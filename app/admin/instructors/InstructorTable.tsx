@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react'
 import Link from 'next/link'
-import { CERT_META, CERT_GROUPS, CERT_ORDER, certStatus, type CertType, type CertGroup } from '@/lib/certs'
+import { CERT_META, CERT_GROUPS, certStatus, type CertType, type CertGroup } from '@/lib/certs'
 import { CAPABILITY_META, CAPABILITY_ORDER, type CapabilityCategory, type CapabilityRole } from '@/lib/capabilities'
 import { formatPhone } from '@/lib/phone'
 
@@ -43,9 +43,9 @@ const LEVEL_ORDER: Partial<Record<CertType, string[]>> = {
 }
 
 const LEVEL_LABEL: Record<string, string> = {
-  'Apprentice':              'Rock 1',
-  'Assistant':               'Rock 2',
-  'Certified':               'Rock 3',
+  'Apprentice':              'Apprentice',
+  'Assistant':               'Assistant',
+  'Certified':               'Certified',
   'Basic':                   'EMT-B',
   'Intermediate':            'EMT-I',
   'Paramedic':               'Para',
@@ -60,15 +60,7 @@ const LEVEL_LABEL: Record<string, string> = {
   'LNT 2 (Master Educator)': 'LNT 2',
 }
 
-function levelLabel(level: string, certType: string): string {
-  if (certType === 'amga_alpine') {
-    const n = { 'Apprentice': '1', 'Assistant': '2', 'Certified': '3' }[level]
-    if (n) return `Alp ${n}`
-  }
-  if (certType === 'amga_ski') {
-    const n = { 'Apprentice': '1', 'Assistant': '2', 'Certified': '3' }[level]
-    if (n) return `Ski ${n}`
-  }
+function levelLabel(level: string, _certType: string): string {
   return LEVEL_LABEL[level] ?? level
 }
 
@@ -141,17 +133,25 @@ export function InstructorTable({ instructors, isAdmin = false }: { instructors:
   const [requiredCerts, setRequiredCerts] = useState<Set<CertType>>(new Set())
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [levelFilters, setLevelFilters] = useState<Map<CertType, number>>(new Map())
-  const [expertiseFilter, setExpertiseFilter] = useState<Set<CapabilityCategory>>(new Set())
-  const [showAdvanced, setShowAdvanced] = useState(false)
+  const [expertiseFilter, setExpertiseFilter] = useState<Map<CapabilityCategory, CapabilityRole | 'any'>>(new Map())
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
   const [previewDoc, setPreviewDoc] = useState<{ url: string; name: string } | null>(null)
   const [emailsCopied, setEmailsCopied] = useState(false)
 
   function toggleExpertise(cat: CapabilityCategory) {
     setExpertiseFilter(prev => {
-      const next = new Set(prev)
+      const next = new Map(prev)
       if (next.has(cat)) next.delete(cat)
-      else next.add(cat)
+      else next.set(cat, 'any')
+      return next
+    })
+  }
+
+  function setExpertiseRole(cat: CapabilityCategory, role: CapabilityRole | 'any') {
+    setExpertiseFilter(prev => {
+      const next = new Map(prev)
+      if (next.get(cat) === role) next.set(cat, 'any')
+      else next.set(cat, role)
       return next
     })
   }
@@ -226,9 +226,11 @@ export function InstructorTable({ instructors, isAdmin = false }: { instructors:
       }
 
       if (expertiseFilter.size > 0) {
-        const capMap = new Set(instructor.instructor_capabilities.map(c => c.category))
-        for (const cat of expertiseFilter) {
-          if (!capMap.has(cat)) return false
+        const capMap = Object.fromEntries(instructor.instructor_capabilities.map(c => [c.category, c.role])) as Partial<Record<CapabilityCategory, CapabilityRole>>
+        for (const [cat, roleFilter] of expertiseFilter) {
+          const role = capMap[cat]
+          if (!role) return false
+          if (roleFilter !== 'any' && role !== roleFilter) return false
         }
       }
 
@@ -242,7 +244,7 @@ export function InstructorTable({ instructors, isAdmin = false }: { instructors:
     setRequiredCerts(new Set())
     setStatusFilter('all')
     setLevelFilters(new Map())
-    setExpertiseFilter(new Set())
+    setExpertiseFilter(new Map())
   }
 
   function copyEmails() {
@@ -252,7 +254,6 @@ export function InstructorTable({ instructors, isAdmin = false }: { instructors:
     setTimeout(() => setEmailsCopied(false), 2000)
   }
 
-  const certsWithLevels = CERT_ORDER.filter(type => LEVEL_ORDER[type])
 
   return (
     <div>
@@ -265,21 +266,43 @@ export function InstructorTable({ instructors, isAdmin = false }: { instructors:
           {CERT_GROUPS.map(group => (
             <div key={group.id} className="flex flex-wrap items-center gap-3">
               <span className="text-xs text-zinc-500 w-20 shrink-0">{group.label}</span>
-              <div className="flex flex-wrap gap-1.5">
+              <div className="flex flex-wrap gap-2">
                 {group.certs.map(type => {
                   const active = requiredCerts.has(type) || levelFilters.has(type)
+                  const levels = LEVEL_ORDER[type as CertType]
+                  const activeIdx = levelFilters.get(type as CertType)
                   return (
-                    <button
-                      key={type}
-                      onClick={() => toggleCert(type)}
-                      className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
-                        active
-                          ? 'bg-pr-red-light text-white'
-                          : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-white'
-                      }`}
-                    >
-                      {CERT_META[type].label}
-                    </button>
+                    <div key={type} className="flex items-center gap-0.5">
+                      <button
+                        onClick={() => toggleCert(type as CertType)}
+                        className={`px-2.5 py-1 text-xs font-medium transition-colors ${
+                          active ? 'bg-pr-red-light text-white' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-white'
+                        } ${active && levels ? 'rounded-l' : 'rounded'}`}
+                      >
+                        {CERT_META[type as CertType].label}
+                      </button>
+                      {active && levels && levels.map((level, idx) => {
+                        const isMin = activeIdx === idx
+                        const isAbove = activeIdx !== undefined && idx > activeIdx
+                        const isLast = idx === levels.length - 1
+                        return (
+                          <button
+                            key={level}
+                            onClick={() => setMinLevel(type as CertType, idx)}
+                            title={level}
+                            className={`px-2 py-1 text-[10px] font-bold transition-colors ${isLast ? 'rounded-r' : ''} ${
+                              isMin
+                                ? 'bg-pr-red text-white'
+                                : isAbove
+                                ? 'bg-pr-red/30 text-pr-red-light hover:bg-pr-red/50'
+                                : 'bg-zinc-700 text-zinc-400 hover:bg-zinc-600 hover:text-white'
+                            }`}
+                          >
+                            {levelLabel(level, type)}
+                          </button>
+                        )
+                      })}
+                    </div>
                   )
                 })}
               </div>
@@ -310,114 +333,74 @@ export function InstructorTable({ instructors, isAdmin = false }: { instructors:
         {/* Expertise */}
         <div className="flex flex-wrap items-center gap-3">
           <span className="text-xs font-medium text-zinc-400 uppercase tracking-wider shrink-0">Expertise</span>
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex flex-wrap gap-2">
             {CAPABILITY_ORDER.map(cat => {
-              const active = expertiseFilter.has(cat)
+              const roleFilter = expertiseFilter.get(cat)
+              const active = roleFilter !== undefined
               return (
-                <button
-                  key={cat}
-                  onClick={() => toggleExpertise(cat)}
-                  className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
-                    active
-                      ? 'bg-teal-700 text-white'
-                      : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-white'
-                  }`}
-                >
-                  {CAPABILITY_META[cat].label}
-                </button>
+                <div key={cat} className="flex items-center gap-0.5">
+                  <button
+                    onClick={() => toggleExpertise(cat)}
+                    className={`px-2.5 py-1 rounded-l text-xs font-medium transition-colors ${
+                      active
+                        ? 'bg-teal-700 text-white'
+                        : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-white'
+                    } ${active ? '' : 'rounded'}`}
+                  >
+                    {CAPABILITY_META[cat].label}
+                  </button>
+                  {active && (
+                    <>
+                      <button
+                        onClick={() => setExpertiseRole(cat, 'lead')}
+                        className={`px-2 py-1 text-[10px] font-bold transition-colors ${
+                          roleFilter === 'lead'
+                            ? 'bg-teal-500 text-white'
+                            : 'bg-teal-900 text-teal-400 hover:bg-teal-800'
+                        }`}
+                      >L</button>
+                      <button
+                        onClick={() => setExpertiseRole(cat, 'assist')}
+                        className={`px-2 py-1 text-[10px] font-bold rounded-r transition-colors ${
+                          roleFilter === 'assist'
+                            ? 'bg-blue-500 text-white'
+                            : 'bg-blue-900/60 text-blue-400 hover:bg-blue-800/60'
+                        }`}
+                      >A</button>
+                    </>
+                  )}
+                </div>
               )
             })}
           </div>
         </div>
 
-        {/* Advanced: minimum level */}
-        <div className="border-t border-zinc-800 pt-3">
+        <div className="flex items-center justify-between pt-1">
           <button
-            onClick={() => setShowAdvanced(v => !v)}
-            className="flex items-center gap-1.5 text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+            onClick={copyEmails}
+            disabled={filtered.length === 0}
+            className="flex items-center gap-2 px-4 py-2 rounded font-medium text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed bg-teal-700 hover:bg-teal-600 text-white"
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="12" height="12"
-              viewBox="0 0 24 24"
-              fill="none" stroke="currentColor" strokeWidth="2"
-              strokeLinecap="round" strokeLinejoin="round"
-              className={`transition-transform ${showAdvanced ? 'rotate-90' : ''}`}
-            >
-              <polyline points="9 18 15 12 9 6" />
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/>
             </svg>
-            Advanced: minimum certification level
-            {levelFilters.size > 0 && (
-              <span className="ml-1 px-1.5 py-0.5 rounded-full bg-pr-red/20 text-pr-red-light text-[10px] font-bold">
-                {levelFilters.size} active
-              </span>
-            )}
+            {emailsCopied ? 'Copied!' : `Copy ${filtered.length} email address${filtered.length === 1 ? '' : 'es'}`}
           </button>
-
-          {showAdvanced && (
-            <div className="mt-3 space-y-3">
-              {certsWithLevels.map(type => {
-                const levels = LEVEL_ORDER[type]!
-                const activeIdx = levelFilters.get(type)
-                return (
-                  <div key={type} className="flex flex-wrap items-center gap-3">
-                    <span className="text-xs text-zinc-500 w-24 shrink-0">{CERT_META[type].label}</span>
-                    <div className="flex items-center gap-1">
-                      <span className="text-[10px] text-zinc-600 mr-1">min level:</span>
-                      {levels.map((level, idx) => {
-                        const isActive = activeIdx === idx
-                        const isAboveActive = activeIdx !== undefined && idx > activeIdx
-                        return (
-                          <button
-                            key={level}
-                            onClick={() => setMinLevel(type, idx)}
-                            title={level}
-                            className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors ${
-                              isActive
-                                ? 'bg-pr-red-light text-white'
-                                : isAboveActive
-                                ? 'bg-pr-red/20 text-pr-red-light'
-                                : 'bg-zinc-800 text-zinc-500 hover:bg-zinc-700 hover:text-white'
-                            }`}
-                          >
-                            {levelLabel(level, type)}
-                          </button>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
+          {hasFilters && (
+            <button
+              onClick={clearAll}
+              className="text-xs text-zinc-500 hover:text-white underline underline-offset-2"
+            >
+              Clear all filters
+            </button>
           )}
         </div>
-
-        {hasFilters && (
-          <button
-            onClick={clearAll}
-            className="text-xs text-zinc-500 hover:text-white underline underline-offset-2"
-          >
-            Clear all filters
-          </button>
-        )}
       </div>
 
-      <div className="flex items-center justify-between mb-3">
-        <div className="text-xs text-zinc-500">
-          {filtered.length === instructors.length
-            ? `${instructors.length} instructors`
-            : `${filtered.length} of ${instructors.length} instructors`}
-        </div>
-        <button
-          onClick={copyEmails}
-          disabled={filtered.length === 0}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-white"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-          </svg>
-          {emailsCopied ? 'Copied!' : `Copy ${filtered.length} email${filtered.length === 1 ? '' : 's'}`}
-        </button>
+      <div className="text-xs text-zinc-500 mb-3">
+        {filtered.length === instructors.length
+          ? `${instructors.length} instructors`
+          : `${filtered.length} of ${instructors.length} instructors`}
       </div>
 
       {/* Table */}

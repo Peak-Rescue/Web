@@ -15,7 +15,7 @@ export default async function InstructorPage() {
 
   const { data: profile } = await createAdminClient()
     .from('profiles')
-    .select('role, first_name, last_name, email, phone')
+    .select('role, first_name, last_name, email, phone, emergency_name, emergency_relationship, emergency_phone')
     .eq('id', user.id)
     .single()
 
@@ -50,7 +50,14 @@ export default async function InstructorPage() {
 
         <section className="mb-10">
           <h2 className="text-lg font-semibold mb-4">Contact Info</h2>
-          <ProfileForm initialEmail={profile.email ?? null} initialPhone={profile.phone ?? null} onUpdateProfile={updateProfile} />
+          <ProfileForm
+            initialEmail={profile.email ?? null}
+            initialPhone={profile.phone ?? null}
+            initialEmergencyName={profile.emergency_name ?? null}
+            initialEmergencyRelationship={profile.emergency_relationship ?? null}
+            initialEmergencyPhone={profile.emergency_phone ?? null}
+            onUpdateProfile={updateProfile}
+          />
         </section>
 
         <section className="mb-10">
@@ -60,23 +67,32 @@ export default async function InstructorPage() {
 
         {(capabilities ?? []).length > 0 && (
           <section>
-            <h2 className="text-lg font-semibold mb-4">Teaching Capabilities</h2>
-            <div className="flex flex-wrap gap-2">
+            <h2 className="text-lg font-semibold mb-4">Teaching Expertise</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               {CAPABILITY_ORDER
                 .filter(cat => capabilities?.some(c => c.category === cat))
                 .map(cat => {
                   const role = capabilities?.find(c => c.category === cat)?.role
                   return (
-                    <span
-                      key={cat}
-                      className={`px-3 py-1.5 rounded text-sm font-medium border ${
-                        role === 'lead'
-                          ? 'bg-teal-900/40 border-teal-700 text-teal-300'
-                          : 'bg-blue-900/40 border-blue-700 text-blue-300'
-                      }`}
-                    >
-                      {CAPABILITY_META[cat].label} — {role}
-                    </span>
+                    <div key={cat} className="p-3 rounded-lg border border-zinc-800 bg-zinc-900">
+                      <div className="text-sm font-medium text-white mb-2">{CAPABILITY_META[cat].label}</div>
+                      <div className="flex gap-1.5">
+                        {(['lead', 'assist'] as const).map(r => (
+                          <span
+                            key={r}
+                            className={`flex-1 px-2 py-1 rounded text-xs font-medium capitalize text-center ${
+                              role === r
+                                ? r === 'lead'
+                                  ? 'bg-green-900/40 border border-green-700 text-green-400'
+                                  : 'bg-blue-700 text-white'
+                                : 'bg-zinc-800 text-zinc-600'
+                            }`}
+                          >
+                            {r}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
                   )
                 })}
             </div>

@@ -32,7 +32,7 @@ export default async function AdminInstructorDetailPage({ params }: { params: Pr
 
   const { data: profile } = await createAdminClient()
     .from('profiles')
-    .select('id, first_name, last_name, email, phone, role')
+    .select('id, first_name, last_name, email, phone, role, emergency_name, emergency_relationship, emergency_phone')
     .eq('id', id)
     .in('role', ['instructor', 'admin'])
     .single()
@@ -71,6 +71,9 @@ export default async function AdminInstructorDetailPage({ params }: { params: Pr
           <ProfileForm
             initialEmail={profile.email ?? null}
             initialPhone={profile.phone ?? null}
+            initialEmergencyName={profile.emergency_name ?? null}
+            initialEmergencyRelationship={profile.emergency_relationship ?? null}
+            initialEmergencyPhone={profile.emergency_phone ?? null}
             onUpdateProfile={adminUpdateProfile.bind(null, id)}
           />
         </section>
