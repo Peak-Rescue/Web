@@ -585,11 +585,13 @@ export function InstructorTable({ instructors, isAdmin = false }: { instructors:
         </div>
       )}
 
-      <div className="mt-8 flex items-center gap-6 text-xs text-zinc-400">
+      <div className="mt-8 flex flex-wrap items-center gap-6 text-xs text-zinc-400">
         <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-green-400" /> Current</span>
         <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-yellow-400" /> Expiring &lt;60 days</span>
         <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-red-400" /> Expired</span>
         <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-zinc-600" /> Not on file</span>
+        <span className="flex items-center gap-1.5"><span className="inline-flex items-center justify-center rounded px-1.5 py-0.5 text-[10px] font-bold leading-none bg-teal-900/60 text-teal-300">L</span> Capability: Lead</span>
+        <span className="flex items-center gap-1.5"><span className="inline-flex items-center justify-center rounded px-1.5 py-0.5 text-[10px] font-bold leading-none bg-blue-900/60 text-blue-300">A</span> Capability: Assist</span>
       </div>
     </div>
   )
