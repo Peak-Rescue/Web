@@ -98,7 +98,7 @@ export default function LoginPage() {
                   value={firstName}
                   onChange={e => setFirstName(e.target.value)}
                   placeholder="Jane"
-                  className="w-full px-4 py-2.5 bg-zinc-900 border border-zinc-700 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-orange-500"
+                  className="w-full px-4 py-2.5 bg-zinc-900 border border-zinc-700 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-pr-red"
                 />
               </div>
               <div>
@@ -112,7 +112,7 @@ export default function LoginPage() {
                   value={lastName}
                   onChange={e => setLastName(e.target.value)}
                   placeholder="Smith"
-                  className="w-full px-4 py-2.5 bg-zinc-900 border border-zinc-700 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-orange-500"
+                  className="w-full px-4 py-2.5 bg-zinc-900 border border-zinc-700 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-pr-red"
                 />
               </div>
             </div>
@@ -129,7 +129,7 @@ export default function LoginPage() {
               value={email}
               onChange={e => setEmail(e.target.value)}
               placeholder="you@example.com"
-              className="w-full px-4 py-2.5 bg-zinc-900 border border-zinc-700 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-orange-500"
+              className="w-full px-4 py-2.5 bg-zinc-900 border border-zinc-700 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-pr-red"
             />
           </div>
 
@@ -138,7 +138,7 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-2.5 bg-orange-600 hover:bg-orange-500 disabled:opacity-50 text-white font-semibold rounded-lg transition-colors"
+            className="w-full py-2.5 bg-pr-red hover:bg-pr-red-light disabled:opacity-50 text-white font-semibold rounded-lg transition-colors"
           >
             {loading ? 'Sending…' : 'Send magic link'}
           </button>

@@ -208,7 +208,7 @@ export function InstructorTable({ instructors }: { instructors: Instructor[] }) 
                   onClick={() => toggleCert(type)}
                   className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
                     active
-                      ? 'bg-orange-500 text-white'
+                      ? 'bg-pr-red-light text-white'
                       : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-white'
                   }`}
                 >
@@ -229,7 +229,7 @@ export function InstructorTable({ instructors }: { instructors: Instructor[] }) 
                 onClick={() => setStatusFilter(s)}
                 className={`px-2.5 py-1 rounded text-xs font-medium transition-colors capitalize ${
                   statusFilter === s
-                    ? 'bg-orange-500 text-white'
+                    ? 'bg-pr-red-light text-white'
                     : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-white'
                 }`}
               >
@@ -257,7 +257,7 @@ export function InstructorTable({ instructors }: { instructors: Instructor[] }) 
             </svg>
             Advanced: minimum certification level
             {levelFilters.size > 0 && (
-              <span className="ml-1 px-1.5 py-0.5 rounded-full bg-orange-500/20 text-orange-400 text-[10px] font-bold">
+              <span className="ml-1 px-1.5 py-0.5 rounded-full bg-pr-red/20 text-pr-red-light text-[10px] font-bold">
                 {levelFilters.size} active
               </span>
             )}
@@ -283,9 +283,9 @@ export function InstructorTable({ instructors }: { instructors: Instructor[] }) 
                             title={level}
                             className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors ${
                               isActive
-                                ? 'bg-orange-500 text-white'
+                                ? 'bg-pr-red-light text-white'
                                 : isAboveActive
-                                ? 'bg-orange-500/20 text-orange-300'
+                                ? 'bg-pr-red/20 text-pr-red-light'
                                 : 'bg-zinc-800 text-zinc-500 hover:bg-zinc-700 hover:text-white'
                             }`}
                           >
@@ -327,7 +327,7 @@ export function InstructorTable({ instructors }: { instructors: Instructor[] }) 
                 <th
                   key={type}
                   className={`text-center py-3 px-2 font-medium whitespace-nowrap transition-colors ${
-                    requiredCerts.has(type) || levelFilters.has(type) ? 'text-orange-400' : 'text-zinc-400'
+                    requiredCerts.has(type) || levelFilters.has(type) ? 'text-pr-red-light' : 'text-zinc-400'
                   }`}
                 >
                   {CERT_META[type].label}
@@ -369,7 +369,7 @@ export function InstructorTable({ instructors }: { instructors: Instructor[] }) 
                               <button
                                 key={doc.id}
                                 onClick={() => setPreviewDoc({ url: doc.url, name: doc.file_name ?? `Document ${i + 1}` })}
-                                className="text-zinc-500 hover:text-orange-400 cursor-pointer"
+                                className="text-zinc-500 hover:text-pr-red-light cursor-pointer"
                                 title={doc.file_name ?? `Document ${i + 1}`}
                               >
                                 <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

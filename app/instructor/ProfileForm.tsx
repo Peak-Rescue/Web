@@ -37,7 +37,7 @@ export default function ProfileForm({ initialEmail, initialPhone }: Props) {
           value={email}
           onChange={e => setEmail(e.target.value)}
           placeholder="you@example.com"
-          className="w-full px-3 py-2 bg-zinc-800 border border-zinc-600 rounded text-white placeholder-zinc-500 focus:outline-none focus:border-orange-500"
+          className="w-full px-3 py-2 bg-zinc-800 border border-zinc-600 rounded text-white placeholder-zinc-500 focus:outline-none focus:border-pr-red"
         />
       </div>
       <div>
@@ -47,13 +47,13 @@ export default function ProfileForm({ initialEmail, initialPhone }: Props) {
           value={phone}
           onChange={e => setPhone(e.target.value)}
           placeholder="+1 (555) 000-0000"
-          className="w-full px-3 py-2 bg-zinc-800 border border-zinc-600 rounded text-white placeholder-zinc-500 focus:outline-none focus:border-orange-500"
+          className="w-full px-3 py-2 bg-zinc-800 border border-zinc-600 rounded text-white placeholder-zinc-500 focus:outline-none focus:border-pr-red"
         />
       </div>
       <button
         type="submit"
         disabled={saving || !dirty}
-        className="px-4 py-2 bg-orange-600 hover:bg-orange-500 disabled:opacity-50 text-white rounded font-medium transition-colors"
+        className="px-4 py-2 bg-pr-red hover:bg-pr-red-light disabled:opacity-50 text-white rounded font-medium transition-colors"
       >
         {saving ? 'Saving…' : saved ? 'Saved ✓' : 'Save'}
       </button>

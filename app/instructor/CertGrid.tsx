@@ -244,7 +244,7 @@ export default function CertGrid({ initialCerts }: { initialCerts: DbCert[] }) {
                       <button
                         key={type}
                         onClick={() => openEdit(type)}
-                        className={`text-left p-3 rounded-lg border transition-all ${styles} ${editing === type ? 'ring-2 ring-orange-500' : 'hover:brightness-110'}`}
+                        className={`text-left p-3 rounded-lg border transition-all ${styles} ${editing === type ? 'ring-2 ring-pr-red' : 'hover:brightness-110'}`}
                       >
                         <div className="flex items-start justify-between gap-2">
                           <span className="font-medium text-white text-sm">{meta.label}</span>
@@ -285,7 +285,7 @@ export default function CertGrid({ initialCerts }: { initialCerts: DbCert[] }) {
                             name="level"
                             value={currentLevel}
                             onChange={e => setCurrentLevel(e.target.value)}
-                            className="w-full px-3 py-2 bg-zinc-800 border border-zinc-600 rounded text-white focus:outline-none focus:border-orange-500"
+                            className="w-full px-3 py-2 bg-zinc-800 border border-zinc-600 rounded text-white focus:outline-none focus:border-pr-red"
                           >
                             <option value="">Select level…</option>
                             {CERT_META[editing].levelOptions!.map(l => (
@@ -308,7 +308,7 @@ export default function CertGrid({ initialCerts }: { initialCerts: DbCert[] }) {
                             name="expires_at"
                             value={levelChanged ? '' : currentExpiry}
                             onChange={e => setCurrentExpiry(e.target.value)}
-                            className="w-full px-3 py-2 bg-zinc-800 border border-zinc-600 rounded text-white focus:outline-none focus:border-orange-500"
+                            className="w-full px-3 py-2 bg-zinc-800 border border-zinc-600 rounded text-white focus:outline-none focus:border-pr-red"
                           />
                           {expiryChanged && (
                             <p className="mt-1.5 text-xs text-yellow-400">
@@ -326,7 +326,7 @@ export default function CertGrid({ initialCerts }: { initialCerts: DbCert[] }) {
                             name="notes"
                             defaultValue={certMap[editing]?.notes ?? ''}
                             placeholder="Describe the certification…"
-                            className="w-full px-3 py-2 bg-zinc-800 border border-zinc-600 rounded text-white placeholder-zinc-500 focus:outline-none focus:border-orange-500"
+                            className="w-full px-3 py-2 bg-zinc-800 border border-zinc-600 rounded text-white placeholder-zinc-500 focus:outline-none focus:border-pr-red"
                           />
                         </div>
                       )}
@@ -336,7 +336,7 @@ export default function CertGrid({ initialCerts }: { initialCerts: DbCert[] }) {
                     <div className="mt-4 pt-4 border-t border-zinc-800">
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-sm text-zinc-400">Documents</span>
-                        <label className={`flex items-center gap-2 px-3 py-1.5 text-xs rounded border cursor-pointer transition-colors ${uploading ? 'border-zinc-700 text-zinc-600 cursor-not-allowed' : 'border-zinc-600 text-zinc-300 hover:border-orange-500 hover:text-orange-400'}`}>
+                        <label className={`flex items-center gap-2 px-3 py-1.5 text-xs rounded border cursor-pointer transition-colors ${uploading ? 'border-zinc-700 text-zinc-600 cursor-not-allowed' : 'border-zinc-600 text-zinc-300 hover:border-pr-red hover:text-pr-red-light'}`}>
                           {uploading ? 'Uploading…' : '+ Add file'}
                           <input
                             type="file"
@@ -358,7 +358,7 @@ export default function CertGrid({ initialCerts }: { initialCerts: DbCert[] }) {
                           <ul className="space-y-1.5">
                             {savedDocs.map(doc => (
                               <li key={doc.id} className="flex items-center gap-2 text-sm">
-                                <a href={doc.url} target="_blank" rel="noopener noreferrer" className="flex-1 truncate text-orange-400 hover:text-orange-300">
+                                <a href={doc.url} target="_blank" rel="noopener noreferrer" className="flex-1 truncate text-pr-red-light hover:text-pr-red-light">
                                   📄 {doc.file_name ?? 'document'}
                                 </a>
                                 <button type="button" onClick={() => handleDeleteDoc(doc.id, editing)} className="text-zinc-600 hover:text-red-400 text-xs shrink-0" title="Remove">✕</button>
@@ -380,7 +380,7 @@ export default function CertGrid({ initialCerts }: { initialCerts: DbCert[] }) {
                         type="button"
                         disabled={saving || uploading}
                         onClick={() => formRef.current?.requestSubmit()}
-                        className="px-4 py-2 bg-orange-600 hover:bg-orange-500 disabled:opacity-50 text-white rounded font-medium transition-colors"
+                        className="px-4 py-2 bg-pr-red hover:bg-pr-red-light disabled:opacity-50 text-white rounded font-medium transition-colors"
                       >
                         {saving ? 'Saving…' : 'Save'}
                       </button>

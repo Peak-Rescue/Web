@@ -24,15 +24,23 @@ export default async function AdminPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Link
             href="/admin/instructors"
-            className="p-6 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-orange-600 transition-colors"
+            className="p-6 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-pr-red transition-colors"
           >
+            <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="mb-3 text-pr-red">
+              <circle cx="4" cy="7" r="2"/><path d="M1 21v-1a3 3 0 0 1 6 0v1"/>
+              <circle cx="12" cy="7" r="2"/><path d="M9 21v-1a3 3 0 0 1 6 0v1"/>
+              <circle cx="20" cy="7" r="2"/><path d="M17 21v-1a3 3 0 0 1 6 0v1"/>
+            </svg>
             <h2 className="font-semibold text-lg mb-1">Instructor Certifications</h2>
             <p className="text-zinc-400 text-sm">View all instructor cert status for staffing</p>
           </Link>
           <Link
             href="/instructor"
-            className="p-6 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-orange-600 transition-colors"
+            className="p-6 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-pr-red transition-colors"
           >
+            <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="mb-3 text-pr-red">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+            </svg>
             <h2 className="font-semibold text-lg mb-1">My Certifications</h2>
             <p className="text-zinc-400 text-sm">Manage your own certs and profile</p>
           </Link>
