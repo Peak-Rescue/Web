@@ -4,12 +4,15 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import CertGrid from '@/app/instructor/CertGrid'
 import ProfileForm from '@/app/instructor/ProfileForm'
+import CapabilityPanel from '@/app/admin/instructors/CapabilityPanel'
 import {
   adminUpsertCert,
   adminDeleteCert,
   adminAddCertDocument,
   adminDeleteCertDocument,
   adminUpdateProfile,
+  adminSetCapability,
+  adminRemoveCapability,
 } from './actions'
 
 export default async function AdminInstructorDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -36,11 +39,17 @@ export default async function AdminInstructorDetailPage({ params }: { params: Pr
 
   if (!profile) notFound()
 
-  const { data: certs } = await createAdminClient()
-    .from('instructor_certs')
-    .select('id, cert_type, level, expires_at, notes, instructor_cert_documents(id, url, file_name, created_at)')
-    .eq('instructor_id', id)
-    .order('cert_type')
+  const [{ data: certs }, { data: capabilities }] = await Promise.all([
+    createAdminClient()
+      .from('instructor_certs')
+      .select('id, cert_type, level, expires_at, notes, instructor_cert_documents(id, url, file_name, created_at)')
+      .eq('instructor_id', id)
+      .order('cert_type'),
+    createAdminClient()
+      .from('instructor_capabilities')
+      .select('category, role')
+      .eq('instructor_id', id),
+  ])
 
   const name = profile.first_name
     ? `${profile.first_name} ${profile.last_name ?? ''}`.trim()
@@ -66,7 +75,7 @@ export default async function AdminInstructorDetailPage({ params }: { params: Pr
           />
         </section>
 
-        <section>
+        <section className="mb-10">
           <h2 className="text-lg font-semibold mb-4">Certifications</h2>
           <CertGrid
             initialCerts={certs ?? []}
@@ -75,6 +84,17 @@ export default async function AdminInstructorDetailPage({ params }: { params: Pr
               deleteCert: adminDeleteCert.bind(null, id),
               addCertDocument: adminAddCertDocument.bind(null, id),
               deleteCertDocument: adminDeleteCertDocument.bind(null, id),
+            }}
+          />
+        </section>
+
+        <section>
+          <h2 className="text-lg font-semibold mb-4">Teaching Capabilities</h2>
+          <CapabilityPanel
+            initialCapabilities={(capabilities ?? []) as Parameters<typeof CapabilityPanel>[0]['initialCapabilities']}
+            actions={{
+              setCapability: adminSetCapability.bind(null, id),
+              removeCapability: adminRemoveCapability.bind(null, id),
             }}
           />
         </section>

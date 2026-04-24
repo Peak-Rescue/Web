@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef, useState } from 'react'
-import { CERT_META, certStatus, type CertType } from '@/lib/certs'
+import { CERT_META, CERT_GROUPS, certStatus, type CertType } from '@/lib/certs'
 
 type CertDoc = {
   id: string
@@ -24,13 +24,6 @@ type PendingDoc = {
   fileName: string
 }
 
-const CERT_CATEGORIES: { label: string; types: CertType[] }[] = [
-  { label: 'Medical',    types: ['cpr', 'wfr', 'emt', 'other_ems'] },
-  { label: 'Guiding',   types: ['amga_rock', 'amga_alpine', 'amga_ski', 'ifmga', 'avy', 'lnt'] },
-  { label: 'Industrial', types: ['sprat'] },
-  { label: 'Water & Canyon', types: ['swiftwater', 'canyoneering'] },
-  { label: 'Other',     types: ['other'] },
-]
 
 const STATUS_STYLES = {
   current:  'bg-green-900/40 border-green-700 text-green-400',
@@ -98,6 +91,17 @@ export default function CertGrid({ initialCerts, actions }: { initialCerts: DbCe
     currentExpiry !== originalExpiry
   )
 
+  const canSave = (() => {
+    if (!editing) return false
+    const savedDocs = certMap[editing]?.instructor_cert_documents ?? []
+    if (savedDocs.length === 0 && pendingDocs.length === 0) return false
+    if (CERT_META[editing].hasLevel && !currentLevel) return false
+    if (levelChanged && pendingDocs.length === 0) return false
+    if (expiryChanged && pendingDocs.length === 0) return false
+    if (levelChanged && CERT_META[editing].hasExpiry && !currentExpiry) return false
+    return true
+  })()
+
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>, certType: CertType) {
     const file = e.target.files?.[0]
     if (!file) return
@@ -144,6 +148,10 @@ export default function CertGrid({ initialCerts, actions }: { initialCerts: DbCe
     const savedDocs = certMap[certType]?.instructor_cert_documents ?? []
     if (savedDocs.length === 0 && pendingDocs.length === 0) {
       alert('Please upload at least one document before saving.')
+      return
+    }
+    if (CERT_META[certType].hasLevel && !currentLevel) {
+      alert('Please select a level before saving.')
       return
     }
     if (levelChanged) {
@@ -215,20 +223,20 @@ export default function CertGrid({ initialCerts, actions }: { initialCerts: DbCe
 
   return (
     <div className="space-y-4">
-      {CERT_CATEGORIES.map(category => {
-        const isCollapsed = collapsed[category.label]
-        const certsInCategory = category.types.map(t => certMap[t]).filter(Boolean)
-        const hasExpiring = certsInCategory.some(c => c && certStatus(c.expires_at) === 'expiring')
-        const hasExpired = certsInCategory.some(c => c && certStatus(c.expires_at) === 'expired')
+      {CERT_GROUPS.map(group => {
+        const isCollapsed = collapsed[group.label]
+        const certsInGroup = group.certs.map(t => certMap[t]).filter(Boolean)
+        const hasExpiring = certsInGroup.some(c => c && certStatus(c.expires_at) === 'expiring')
+        const hasExpired = certsInGroup.some(c => c && certStatus(c.expires_at) === 'expired')
 
         return (
-          <div key={category.label} className="rounded-lg border border-zinc-800 overflow-hidden">
+          <div key={group.label} className="rounded-lg border border-zinc-800 overflow-hidden">
             <button
               type="button"
-              onClick={() => setCollapsed(prev => ({ ...prev, [category.label]: !prev[category.label] }))}
+              onClick={() => setCollapsed(prev => ({ ...prev, [group.label]: !prev[group.label] }))}
               className="w-full flex items-center justify-between px-4 py-3 bg-zinc-900 hover:bg-zinc-800 transition-colors"
             >
-              <span className="font-semibold text-white">{category.label}</span>
+              <span className="font-semibold text-white">{group.label}</span>
               <div className="flex items-center gap-2">
                 {hasExpired && <span className="w-2 h-2 rounded-full bg-red-400" />}
                 {hasExpiring && !hasExpired && <span className="w-2 h-2 rounded-full bg-yellow-400" />}
@@ -239,7 +247,7 @@ export default function CertGrid({ initialCerts, actions }: { initialCerts: DbCe
             {!isCollapsed && (
               <div className="p-3 space-y-2">
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                  {category.types.map(type => {
+                  {group.certs.map(type => {
                     const meta = CERT_META[type]
                     const cert = certMap[type]
                     const status = cert ? certStatus(cert.expires_at) : 'missing'
@@ -276,7 +284,7 @@ export default function CertGrid({ initialCerts, actions }: { initialCerts: DbCe
                   })}
                 </div>
 
-                {editing && category.types.includes(editing) && (
+                {editing && group.certs.includes(editing) && (
                   <div className="mt-3 p-4 rounded-lg bg-zinc-950 border border-zinc-700">
                     <h3 className="font-semibold text-white mb-3">
                       {certMap[editing] ? 'Edit' : 'Add'} {CERT_META[editing].label}
@@ -387,7 +395,7 @@ export default function CertGrid({ initialCerts, actions }: { initialCerts: DbCe
                         type="button"
                         disabled={saving || uploading}
                         onClick={() => formRef.current?.requestSubmit()}
-                        className="px-4 py-2 bg-pr-red hover:bg-pr-red-light disabled:opacity-50 text-white rounded font-medium transition-colors"
+                        className={`px-4 py-2 bg-pr-red hover:bg-pr-red-light disabled:opacity-50 text-white rounded font-medium transition-colors ${!canSave ? 'cursor-not-allowed' : ''}`}
                       >
                         {saving ? 'Saving…' : 'Save'}
                       </button>

@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { type CertType } from '@/lib/certs'
+import { type CapabilityCategory, type CapabilityRole } from '@/lib/capabilities'
 import { normalizePhone } from '@/lib/phone'
 
 async function requireAdmin() {
@@ -147,4 +148,38 @@ export async function adminUpdateProfile(instructorId: string, { email, phone }:
 
   if (error) throw new Error(error.message)
   revalidatePath(`/admin/instructors/${instructorId}`)
+}
+
+export async function adminSetCapability(instructorId: string, category: CapabilityCategory, role: CapabilityRole) {
+  await requireAdmin()
+  const admin = createAdminClient()
+
+  // Delete first, then insert — avoids onConflict which requires extra schema cache lookups
+  await admin
+    .from('instructor_capabilities')
+    .delete()
+    .eq('instructor_id', instructorId)
+    .eq('category', category)
+
+  const { error } = await admin
+    .from('instructor_capabilities')
+    .insert({ instructor_id: instructorId, category, role })
+
+  if (error) throw new Error(error.message)
+  revalidatePath(`/admin/instructors/${instructorId}`)
+  revalidatePath('/admin/instructors')
+}
+
+export async function adminRemoveCapability(instructorId: string, category: CapabilityCategory) {
+  await requireAdmin()
+
+  const { error } = await createAdminClient()
+    .from('instructor_capabilities')
+    .delete()
+    .eq('instructor_id', instructorId)
+    .eq('category', category)
+
+  if (error) throw new Error(error.message)
+  revalidatePath(`/admin/instructors/${instructorId}`)
+  revalidatePath('/admin/instructors')
 }

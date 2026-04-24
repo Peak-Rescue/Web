@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import CertGrid from './CertGrid'
 import ProfileForm from './ProfileForm'
 import { upsertCert, deleteCert, addCertDocument, deleteCertDocument, updateProfile } from './actions'
+import { CAPABILITY_META, CAPABILITY_ORDER } from '@/lib/capabilities'
 
 export default async function InstructorPage() {
   const supabase = await createClient()
@@ -21,11 +22,17 @@ export default async function InstructorPage() {
     redirect('/dashboard')
   }
 
-  const { data: certs } = await createAdminClient()
-    .from('instructor_certs')
-    .select('id, cert_type, level, expires_at, notes, instructor_cert_documents(id, url, file_name, created_at)')
-    .eq('instructor_id', user.id)
-    .order('cert_type')
+  const [{ data: certs }, { data: capabilities }] = await Promise.all([
+    createAdminClient()
+      .from('instructor_certs')
+      .select('id, cert_type, level, expires_at, notes, instructor_cert_documents(id, url, file_name, created_at)')
+      .eq('instructor_id', user.id)
+      .order('cert_type'),
+    createAdminClient()
+      .from('instructor_capabilities')
+      .select('category, role')
+      .eq('instructor_id', user.id),
+  ])
 
   return (
     <main className="min-h-screen bg-zinc-950 text-white pt-16 md:pt-20">
@@ -45,10 +52,35 @@ export default async function InstructorPage() {
           <ProfileForm initialEmail={profile.email ?? null} initialPhone={profile.phone ?? null} onUpdateProfile={updateProfile} />
         </section>
 
-        <section>
+        <section className="mb-10">
           <h2 className="text-lg font-semibold mb-4">Certifications</h2>
           <CertGrid initialCerts={certs ?? []} actions={{ upsertCert, deleteCert, addCertDocument, deleteCertDocument }} />
         </section>
+
+        {(capabilities ?? []).length > 0 && (
+          <section>
+            <h2 className="text-lg font-semibold mb-4">Teaching Capabilities</h2>
+            <div className="flex flex-wrap gap-2">
+              {CAPABILITY_ORDER
+                .filter(cat => capabilities?.some(c => c.category === cat))
+                .map(cat => {
+                  const role = capabilities?.find(c => c.category === cat)?.role
+                  return (
+                    <span
+                      key={cat}
+                      className={`px-3 py-1.5 rounded text-sm font-medium border ${
+                        role === 'lead'
+                          ? 'bg-teal-900/40 border-teal-700 text-teal-300'
+                          : 'bg-blue-900/40 border-blue-700 text-blue-300'
+                      }`}
+                    >
+                      {CAPABILITY_META[cat].label} — {role}
+                    </span>
+                  )
+                })}
+            </div>
+          </section>
+        )}
       </div>
     </main>
   )
