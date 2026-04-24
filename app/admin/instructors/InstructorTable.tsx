@@ -111,6 +111,11 @@ export function InstructorTable({ instructors }: { instructors: Instructor[] }) 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [levelFilters, setLevelFilters] = useState<Map<CertType, number>>(new Map())
   const [showAdvanced, setShowAdvanced] = useState(false)
+  const [previewDoc, setPreviewDoc] = useState<{ url: string; name: string } | null>(null)
+
+  function isImage(url: string) {
+    return /\.(jpe?g|png|gif|webp|svg)(\?|$)/i.test(url)
+  }
 
   function toggleCert(type: CertType) {
     setRequiredCerts(prev => {
@@ -361,18 +366,16 @@ export function InstructorTable({ instructors }: { instructors: Instructor[] }) 
                           </div>
                           <div className="h-5 flex items-center justify-center gap-2">
                             {docs.map((doc, i) => (
-                              <a
+                              <button
                                 key={doc.id}
-                                href={doc.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-zinc-500 hover:text-orange-400"
+                                onClick={() => setPreviewDoc({ url: doc.url, name: doc.file_name ?? `Document ${i + 1}` })}
+                                className="text-zinc-500 hover:text-orange-400 cursor-pointer"
                                 title={doc.file_name ?? `Document ${i + 1}`}
                               >
                                 <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+                                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
                                 </svg>
-                              </a>
+                              </button>
                             ))}
                           </div>
                         </div>
@@ -385,6 +388,34 @@ export function InstructorTable({ instructors }: { instructors: Instructor[] }) 
           </tbody>
         </table>
       </div>
+
+      {previewDoc && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70"
+          onClick={() => setPreviewDoc(null)}
+        >
+          <div
+            className="relative bg-zinc-900 rounded-lg shadow-xl max-w-4xl w-full mx-4 overflow-hidden"
+            style={{ maxHeight: '90vh' }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-4 py-2 border-b border-zinc-700">
+              <span className="text-sm text-zinc-300 truncate">{previewDoc.name}</span>
+              <button onClick={() => setPreviewDoc(null)} className="text-zinc-400 hover:text-white ml-4 text-lg leading-none">&times;</button>
+            </div>
+            {isImage(previewDoc.url) ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={previewDoc.url} alt={previewDoc.name} className="max-w-full max-h-[80vh] object-contain mx-auto block p-4" />
+            ) : (
+              <iframe
+                src={`https://docs.google.com/viewer?url=${encodeURIComponent(previewDoc.url)}&embedded=true`}
+                className="w-full border-0"
+                style={{ height: '80vh' }}
+              />
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="mt-8 flex items-center gap-6 text-xs text-zinc-400">
         <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-green-400" /> Current</span>
