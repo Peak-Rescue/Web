@@ -16,7 +16,7 @@ export default async function DashboardPage() {
     .single()
 
   if (profile?.role === 'admin') redirect('/admin')
-  if (profile?.role === 'instructor') redirect('/instructor')
+  if (profile?.role === 'instructor') redirect('/admin')
 
   // Student fallback — placeholder until student portal is built
   return (

@@ -15,7 +15,7 @@ export default async function AdminInstructorsPage() {
     .eq('id', user.id)
     .single()
 
-  if (profile?.role !== 'admin') redirect('/dashboard')
+  if (!['admin', 'instructor'].includes(profile?.role ?? '')) redirect('/dashboard')
 
   const { data: instructors } = await createAdminClient()
     .from('profiles')
@@ -28,7 +28,7 @@ export default async function AdminInstructorsPage() {
       <div className="max-w-7xl mx-auto px-4 py-10">
         <h1 className="text-2xl font-bold mb-2">Instructor Certifications</h1>
         <p className="text-zinc-400 mb-8">All instructors — cert status overview</p>
-        <InstructorTable instructors={(instructors ?? []) as Parameters<typeof InstructorTable>[0]['instructors']} />
+        <InstructorTable instructors={(instructors ?? []) as Parameters<typeof InstructorTable>[0]['instructors']} isAdmin={profile?.role === 'admin'} />
       </div>
     </main>
   )

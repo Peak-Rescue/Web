@@ -108,7 +108,7 @@ function StatusDot({ status, level, certType, notes }: { status: string; level: 
 // levelFilters: map of certType -> minimum level index (instructors must be >= this level)
 // A cert type in levelFilters implicitly requires that cert.
 
-export function InstructorTable({ instructors }: { instructors: Instructor[] }) {
+export function InstructorTable({ instructors, isAdmin = false }: { instructors: Instructor[]; isAdmin?: boolean }) {
   const [requiredCerts, setRequiredCerts] = useState<Set<CertType>>(new Set())
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [levelFilters, setLevelFilters] = useState<Map<CertType, number>>(new Map())
@@ -350,9 +350,15 @@ export function InstructorTable({ instructors }: { instructors: Instructor[] }) 
               return (
                 <tr key={instructor.id} className="border-b border-zinc-900 hover:bg-zinc-900/50">
                   <td className="py-3 pr-6 whitespace-nowrap">
-                    <Link href={`/admin/instructors/${instructor.id}`} className="font-medium hover:text-pr-red-light transition-colors">
-                      {instructor.first_name ? `${instructor.first_name} ${instructor.last_name ?? ''}`.trim() : 'Unnamed'}
-                    </Link>
+                    {isAdmin ? (
+                      <Link href={`/admin/instructors/${instructor.id}`} className="font-medium hover:text-pr-red-light transition-colors">
+                        {instructor.first_name ? `${instructor.first_name} ${instructor.last_name ?? ''}`.trim() : 'Unnamed'}
+                      </Link>
+                    ) : (
+                      <span className="font-medium">
+                        {instructor.first_name ? `${instructor.first_name} ${instructor.last_name ?? ''}`.trim() : 'Unnamed'}
+                      </span>
+                    )}
                     {instructor.email && <div className="text-xs text-zinc-400 mt-0.5">{instructor.email}</div>}
                     {instructor.phone && <div className="text-xs text-zinc-500">{formatPhone(instructor.phone)}</div>}
                   </td>

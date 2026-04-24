@@ -15,7 +15,7 @@ export default async function AdminPage() {
     .eq('id', user.id)
     .single()
 
-  if (profile?.role !== 'admin') redirect('/dashboard')
+  if (!['admin', 'instructor'].includes(profile?.role ?? '')) redirect('/dashboard')
 
   return (
     <main className="min-h-screen bg-zinc-950 text-white pt-16 md:pt-20">
