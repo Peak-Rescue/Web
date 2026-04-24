@@ -43,8 +43,8 @@ export default function LoginPage() {
         <div className="max-w-md w-full mx-4 text-center">
           <h1 className="text-2xl font-bold text-white mb-4">Check your email</h1>
           <p className="text-zinc-400">
-            We sent a magic link to <span className="text-white">{email}</span>.
-            Click it to sign in.
+            We sent a sign-in link to <span className="text-white">{email}</span>.
+            Click it to access your portal.
           </p>
         </div>
       </main>
@@ -140,7 +140,7 @@ export default function LoginPage() {
             disabled={loading}
             className="w-full py-2.5 bg-pr-red hover:bg-pr-red-light disabled:opacity-50 text-white font-semibold rounded-lg transition-colors"
           >
-            {loading ? 'Sending…' : 'Send magic link'}
+            {loading ? 'Sending…' : 'Send sign-in link'}
           </button>
         </form>
       </div>
