@@ -141,9 +141,20 @@ export function InstructorTable({ instructors, isAdmin = false }: { instructors:
   const [requiredCerts, setRequiredCerts] = useState<Set<CertType>>(new Set())
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [levelFilters, setLevelFilters] = useState<Map<CertType, number>>(new Map())
+  const [expertiseFilter, setExpertiseFilter] = useState<Set<CapabilityCategory>>(new Set())
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
   const [previewDoc, setPreviewDoc] = useState<{ url: string; name: string } | null>(null)
+  const [emailsCopied, setEmailsCopied] = useState(false)
+
+  function toggleExpertise(cat: CapabilityCategory) {
+    setExpertiseFilter(prev => {
+      const next = new Set(prev)
+      if (next.has(cat)) next.delete(cat)
+      else next.add(cat)
+      return next
+    })
+  }
 
   function isImage(url: string) {
     return /\.(jpe?g|png|gif|webp|svg)(\?|$)/i.test(url)
@@ -214,16 +225,31 @@ export function InstructorTable({ instructors, isAdmin = false }: { instructors:
         if (!hasMatchingStatus) return false
       }
 
+      if (expertiseFilter.size > 0) {
+        const capMap = new Set(instructor.instructor_capabilities.map(c => c.category))
+        for (const cat of expertiseFilter) {
+          if (!capMap.has(cat)) return false
+        }
+      }
+
       return true
     })
-  }, [instructors, requiredCerts, levelFilters, statusFilter])
+  }, [instructors, requiredCerts, levelFilters, statusFilter, expertiseFilter])
 
-  const hasFilters = requiredCerts.size > 0 || statusFilter !== 'all' || levelFilters.size > 0
+  const hasFilters = requiredCerts.size > 0 || statusFilter !== 'all' || levelFilters.size > 0 || expertiseFilter.size > 0
 
   function clearAll() {
     setRequiredCerts(new Set())
     setStatusFilter('all')
     setLevelFilters(new Map())
+    setExpertiseFilter(new Set())
+  }
+
+  function copyEmails() {
+    const emails = filtered.map(i => i.email).filter(Boolean).join(', ')
+    navigator.clipboard.writeText(emails)
+    setEmailsCopied(true)
+    setTimeout(() => setEmailsCopied(false), 2000)
   }
 
   const certsWithLevels = CERT_ORDER.filter(type => LEVEL_ORDER[type])
@@ -278,6 +304,29 @@ export function InstructorTable({ instructors, isAdmin = false }: { instructors:
                 {s === 'all' ? 'Any' : s}
               </button>
             ))}
+          </div>
+        </div>
+
+        {/* Expertise */}
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="text-xs font-medium text-zinc-400 uppercase tracking-wider shrink-0">Expertise</span>
+          <div className="flex flex-wrap gap-1.5">
+            {CAPABILITY_ORDER.map(cat => {
+              const active = expertiseFilter.has(cat)
+              return (
+                <button
+                  key={cat}
+                  onClick={() => toggleExpertise(cat)}
+                  className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+                    active
+                      ? 'bg-teal-700 text-white'
+                      : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-white'
+                  }`}
+                >
+                  {CAPABILITY_META[cat].label}
+                </button>
+              )
+            })}
           </div>
         </div>
 
@@ -353,10 +402,22 @@ export function InstructorTable({ instructors, isAdmin = false }: { instructors:
         )}
       </div>
 
-      <div className="text-xs text-zinc-500 mb-3">
-        {filtered.length === instructors.length
-          ? `${instructors.length} instructors`
-          : `${filtered.length} of ${instructors.length} instructors`}
+      <div className="flex items-center justify-between mb-3">
+        <div className="text-xs text-zinc-500">
+          {filtered.length === instructors.length
+            ? `${instructors.length} instructors`
+            : `${filtered.length} of ${instructors.length} instructors`}
+        </div>
+        <button
+          onClick={copyEmails}
+          disabled={filtered.length === 0}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-white"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+          </svg>
+          {emailsCopied ? 'Copied!' : `Copy ${filtered.length} email${filtered.length === 1 ? '' : 's'}`}
+        </button>
       </div>
 
       {/* Table */}
@@ -417,7 +478,7 @@ export function InstructorTable({ instructors, isAdmin = false }: { instructors:
                     <button
                       onClick={() => toggleGroup('capabilities')}
                       className="flex items-center justify-center gap-1 mx-auto hover:text-white transition-colors"
-                      title={collapsed ? 'Expand Capabilities' : 'Collapse Capabilities'}
+                      title={collapsed ? 'Expand Expertise' : 'Collapse Expertise'}
                     >
                       <svg
                         xmlns="http://www.w3.org/2000/svg"
@@ -429,7 +490,7 @@ export function InstructorTable({ instructors, isAdmin = false }: { instructors:
                       >
                         <polyline points="6 9 12 15 18 9" />
                       </svg>
-                      <span className="text-xs">Capabilities</span>
+                      <span className="text-xs">Expertise</span>
                     </button>
                   </th>
                 )
@@ -590,8 +651,8 @@ export function InstructorTable({ instructors, isAdmin = false }: { instructors:
         <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-yellow-400" /> Expiring &lt;60 days</span>
         <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-red-400" /> Expired</span>
         <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-zinc-600" /> Not on file</span>
-        <span className="flex items-center gap-1.5"><span className="inline-flex items-center justify-center rounded px-1.5 py-0.5 text-[10px] font-bold leading-none bg-teal-900/60 text-teal-300">L</span> Capability: Lead</span>
-        <span className="flex items-center gap-1.5"><span className="inline-flex items-center justify-center rounded px-1.5 py-0.5 text-[10px] font-bold leading-none bg-blue-900/60 text-blue-300">A</span> Capability: Assist</span>
+        <span className="flex items-center gap-1.5"><span className="inline-flex items-center justify-center rounded px-1.5 py-0.5 text-[10px] font-bold leading-none bg-teal-900/60 text-teal-300">L</span> Expertise: Lead</span>
+        <span className="flex items-center gap-1.5"><span className="inline-flex items-center justify-center rounded px-1.5 py-0.5 text-[10px] font-bold leading-none bg-blue-900/60 text-blue-300">A</span> Expertise: Assist</span>
       </div>
     </div>
   )

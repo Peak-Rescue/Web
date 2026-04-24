@@ -89,7 +89,7 @@ export default async function AdminInstructorDetailPage({ params }: { params: Pr
         </section>
 
         <section>
-          <h2 className="text-lg font-semibold mb-4">Teaching Capabilities</h2>
+          <h2 className="text-lg font-semibold mb-4">Expertise</h2>
           <CapabilityPanel
             initialCapabilities={(capabilities ?? []) as Parameters<typeof CapabilityPanel>[0]['initialCapabilities']}
             actions={{
