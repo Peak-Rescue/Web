@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import CertGrid from './CertGrid'
 import ProfileForm from './ProfileForm'
 import { upsertCert, deleteCert, addCertDocument, deleteCertDocument, updateProfile } from './actions'
+import { signOut } from '@/app/actions'
 import { CAPABILITY_META, CAPABILITY_ORDER } from '@/lib/capabilities'
 
 export default async function InstructorPage() {
@@ -88,7 +89,7 @@ export default async function InstructorPage() {
 
 function SignOutButton() {
   return (
-    <form action="/auth/signout" method="post">
+    <form action={signOut}>
       <button
         type="submit"
         className="px-4 py-2 text-sm bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded transition-colors"

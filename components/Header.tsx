@@ -6,6 +6,7 @@ import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { createClient } from '@/lib/supabase/client'
+import { signOut } from '@/app/actions'
 
 function UserIcon() {
   return (
@@ -114,7 +115,7 @@ export default function Header() {
                     </Link>
                   )
                 })()}
-                <form action="/auth/signout" method="post">
+                <form action={signOut}>
                   <button
                     type="submit"
                     className="flex items-center gap-1.5 px-3 py-1.5 border border-white/20 hover:border-white/40 text-pr-muted hover:text-pr-text text-xs font-display font-600 tracking-widest uppercase transition-colors"
@@ -211,7 +212,7 @@ export default function Header() {
                       </Link>
                     )
                   })()}
-                  <form action="/auth/signout" method="post">
+                  <form action={signOut}>
                     <button
                       type="submit"
                       className="w-full py-3 flex items-center justify-center gap-2 border border-white/20 text-pr-muted text-sm font-display font-600 tracking-widest uppercase"
