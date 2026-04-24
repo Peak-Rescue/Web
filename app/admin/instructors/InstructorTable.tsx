@@ -1,7 +1,9 @@
 'use client'
 
 import { useState, useMemo } from 'react'
+import Link from 'next/link'
 import { CERT_META, CERT_ORDER, certStatus, type CertType } from '@/lib/certs'
+import { formatPhone } from '@/lib/phone'
 
 type RawCert = {
   id: string
@@ -348,11 +350,11 @@ export function InstructorTable({ instructors }: { instructors: Instructor[] }) 
               return (
                 <tr key={instructor.id} className="border-b border-zinc-900 hover:bg-zinc-900/50">
                   <td className="py-3 pr-6 whitespace-nowrap">
-                    <div className="font-medium">
+                    <Link href={`/admin/instructors/${instructor.id}`} className="font-medium hover:text-pr-red-light transition-colors">
                       {instructor.first_name ? `${instructor.first_name} ${instructor.last_name ?? ''}`.trim() : 'Unnamed'}
-                    </div>
+                    </Link>
                     {instructor.email && <div className="text-xs text-zinc-400 mt-0.5">{instructor.email}</div>}
-                    {instructor.phone && <div className="text-xs text-zinc-500">{instructor.phone}</div>}
+                    {instructor.phone && <div className="text-xs text-zinc-500">{formatPhone(instructor.phone)}</div>}
                   </td>
                   {CERT_ORDER.map(type => {
                     const cert = certMap[type as CertType]

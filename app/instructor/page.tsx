@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import CertGrid from './CertGrid'
 import ProfileForm from './ProfileForm'
+import { upsertCert, deleteCert, addCertDocument, deleteCertDocument, updateProfile } from './actions'
 
 export default async function InstructorPage() {
   const supabase = await createClient()
@@ -41,12 +42,12 @@ export default async function InstructorPage() {
 
         <section className="mb-10">
           <h2 className="text-lg font-semibold mb-4">Contact Info</h2>
-          <ProfileForm initialEmail={profile.email ?? null} initialPhone={profile.phone ?? null} />
+          <ProfileForm initialEmail={profile.email ?? null} initialPhone={profile.phone ?? null} onUpdateProfile={updateProfile} />
         </section>
 
         <section>
           <h2 className="text-lg font-semibold mb-4">Certifications</h2>
-          <CertGrid initialCerts={certs ?? []} />
+          <CertGrid initialCerts={certs ?? []} actions={{ upsertCert, deleteCert, addCertDocument, deleteCertDocument }} />
         </section>
       </div>
     </main>

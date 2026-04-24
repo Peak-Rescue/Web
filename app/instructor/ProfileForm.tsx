@@ -1,25 +1,26 @@
 'use client'
 
 import { useState } from 'react'
-import { updateProfile } from './actions'
+import { formatPhone } from '@/lib/phone'
 
 type Props = {
   initialEmail: string | null
   initialPhone: string | null
+  onUpdateProfile: (data: { email: string; phone: string }) => Promise<void>
 }
 
-export default function ProfileForm({ initialEmail, initialPhone }: Props) {
+export default function ProfileForm({ initialEmail, initialPhone, onUpdateProfile }: Props) {
   const [email, setEmail] = useState(initialEmail ?? '')
-  const [phone, setPhone] = useState(initialPhone ?? '')
+  const [phone, setPhone] = useState(formatPhone(initialPhone) ?? '')
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
-  const dirty = email !== (initialEmail ?? '') || phone !== (initialPhone ?? '')
+  const dirty = email !== (initialEmail ?? '') || phone !== (formatPhone(initialPhone) ?? '')
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setSaving(true)
     try {
-      await updateProfile({ email, phone })
+      await onUpdateProfile({ email, phone })
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)
     } catch (err) {

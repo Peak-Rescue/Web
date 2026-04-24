@@ -2,7 +2,6 @@
 
 import { useRef, useState } from 'react'
 import { CERT_META, certStatus, type CertType } from '@/lib/certs'
-import { upsertCert, deleteCert, addCertDocument, deleteCertDocument } from './actions'
 
 type CertDoc = {
   id: string
@@ -47,7 +46,15 @@ const STATUS_BADGE = {
   missing:  { label: 'Not on file', dot: 'bg-zinc-600' },
 }
 
-export default function CertGrid({ initialCerts }: { initialCerts: DbCert[] }) {
+type CertGridActions = {
+  upsertCert: (fd: FormData) => Promise<{ id: string; cert_type: CertType; level: string | null; expires_at: string | null; notes: string | null } | null>
+  deleteCert: (id: string) => Promise<void>
+  addCertDocument: (certId: string, url: string, fileName: string) => Promise<CertDoc | null>
+  deleteCertDocument: (docId: string) => Promise<void>
+}
+
+export default function CertGrid({ initialCerts, actions }: { initialCerts: DbCert[]; actions: CertGridActions }) {
+  const { upsertCert, deleteCert, addCertDocument, deleteCertDocument } = actions
   const [certs, setCerts] = useState(initialCerts)
   const [editing, setEditing] = useState<CertType | null>(null)
   const [saving, setSaving] = useState(false)

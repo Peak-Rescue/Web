@@ -6,10 +6,23 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { type CertType } from '@/lib/certs'
 import { normalizePhone } from '@/lib/phone'
 
-export async function upsertCert(formData: FormData) {
+async function requireAdmin() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('Not authenticated')
+
+  const { data: profile } = await createAdminClient()
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single()
+
+  if (profile?.role !== 'admin') throw new Error('Not authorized')
+  return user
+}
+
+export async function adminUpsertCert(instructorId: string, formData: FormData) {
+  await requireAdmin()
 
   const cert_type = formData.get('cert_type') as CertType
   const level = (formData.get('level') as string) || null
@@ -18,36 +31,45 @@ export async function upsertCert(formData: FormData) {
   const existingId = formData.get('id') as string | null
 
   const admin = createAdminClient()
-  let result
 
   if (existingId) {
     const { data, error } = await admin
       .from('instructor_certs')
       .update({ cert_type, level, expires_at, notes })
       .eq('id', existingId)
-      .eq('instructor_id', user.id)
+      .eq('instructor_id', instructorId)
       .select('id, cert_type, level, expires_at, notes')
       .single()
     if (error) throw new Error(error.message)
-    result = data
+    revalidatePath(`/admin/instructors/${instructorId}`)
+    return data
   } else {
     const { data, error } = await admin
       .from('instructor_certs')
-      .insert({ instructor_id: user.id, cert_type, level, expires_at, notes })
+      .insert({ instructor_id: instructorId, cert_type, level, expires_at, notes })
       .select('id, cert_type, level, expires_at, notes')
       .single()
     if (error) throw new Error(error.message)
-    result = data
+    revalidatePath(`/admin/instructors/${instructorId}`)
+    return data
   }
-
-  revalidatePath('/instructor')
-  return result
 }
 
-export async function addCertDocument(certId: string, url: string, fileName: string) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) throw new Error('Not authenticated')
+export async function adminDeleteCert(instructorId: string, certId: string) {
+  await requireAdmin()
+
+  const { error } = await createAdminClient()
+    .from('instructor_certs')
+    .delete()
+    .eq('id', certId)
+    .eq('instructor_id', instructorId)
+
+  if (error) throw new Error(error.message)
+  revalidatePath(`/admin/instructors/${instructorId}`)
+}
+
+export async function adminAddCertDocument(instructorId: string, certId: string, url: string, fileName: string) {
+  await requireAdmin()
 
   const admin = createAdminClient()
 
@@ -55,10 +77,10 @@ export async function addCertDocument(certId: string, url: string, fileName: str
     .from('instructor_certs')
     .select('id')
     .eq('id', certId)
-    .eq('instructor_id', user.id)
+    .eq('instructor_id', instructorId)
     .single()
 
-  if (!cert) throw new Error('Cert not found or not yours')
+  if (!cert) throw new Error('Cert not found')
 
   const { data, error } = await admin
     .from('instructor_cert_documents')
@@ -67,15 +89,12 @@ export async function addCertDocument(certId: string, url: string, fileName: str
     .single()
 
   if (error) throw new Error(error.message)
-
-  revalidatePath('/instructor')
+  revalidatePath(`/admin/instructors/${instructorId}`)
   return data
 }
 
-export async function deleteCertDocument(docId: string) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) throw new Error('Not authenticated')
+export async function adminDeleteCertDocument(instructorId: string, docId: string) {
+  await requireAdmin()
 
   const admin = createAdminClient()
 
@@ -91,7 +110,7 @@ export async function deleteCertDocument(docId: string) {
     .from('instructor_certs')
     .select('id')
     .eq('id', doc.cert_id)
-    .eq('instructor_id', user.id)
+    .eq('instructor_id', instructorId)
     .single()
 
   if (!cert) throw new Error('Not authorized')
@@ -103,7 +122,6 @@ export async function deleteCertDocument(docId: string) {
 
   if (error) throw new Error(error.message)
 
-  // Delete from storage — path follows publicUrl: /storage/v1/object/public/cert-documents/<path>
   try {
     const url = new URL(doc.url)
     const marker = '/object/public/cert-documents/'
@@ -113,37 +131,20 @@ export async function deleteCertDocument(docId: string) {
       await admin.storage.from('cert-documents').remove([storagePath])
     }
   } catch {
-    // non-fatal: DB row is already gone
+    // non-fatal
   }
 
-  revalidatePath('/instructor')
+  revalidatePath(`/admin/instructors/${instructorId}`)
 }
 
-export async function updateProfile({ email, phone }: { email: string; phone: string }) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) throw new Error('Not authenticated')
+export async function adminUpdateProfile(instructorId: string, { email, phone }: { email: string; phone: string }) {
+  await requireAdmin()
 
   const { error } = await createAdminClient()
     .from('profiles')
     .update({ email: email || null, phone: phone ? normalizePhone(phone) : null })
-    .eq('id', user.id)
+    .eq('id', instructorId)
 
   if (error) throw new Error(error.message)
-  revalidatePath('/instructor')
-}
-
-export async function deleteCert(id: string) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) throw new Error('Not authenticated')
-
-  const { error } = await createAdminClient()
-    .from('instructor_certs')
-    .delete()
-    .eq('id', id)
-    .eq('instructor_id', user.id)
-
-  if (error) throw new Error(error.message)
-  revalidatePath('/instructor')
+  revalidatePath(`/admin/instructors/${instructorId}`)
 }
