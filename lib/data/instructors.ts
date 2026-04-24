@@ -144,16 +144,6 @@ export const instructors: Instructor[] = [
     avatar: '/images/instructors/connor-greene.png',
   },
   {
-    slug: 'gray-grandy',
-    name: 'Gray Grandy',
-    role: 'aerial',
-    title: 'Aerial Evacuation Lead',
-    bio: 'Gray Grandy grew up playing with sticks in rural Vermont. While completing his B.S. in Forest Ecology, he started his career as a ski patroller. His experience in rope rescue began with patrol, and expanded into the wilderness setting working with El Dorado County Search and Rescue. During summers, he worked on commercial fishing boats, built zip lines, taught rope rescue & wilderness medical courses for Sierra Rescue, and helped build houses. After over a decade of patrolling and overseeing fall protection and rescue for the Western Region of Vail Resorts, Gray moved on from Kirkwood. He recently relocated to Utah, where he continues to help ski resorts and other organizations with aerial tramways with anything related to work at height. He holds EMT-B, SPRAT III, AAA Avalanche Pro II, and Confined Space Rescue certifications. With a passion for quality instruction, Gray strives to continually improve his teaching skills as much as his technical skills. He enjoys a long day of instructing as much as he enjoys splitting firewood for winter.',
-    certifications: ['EMT-B', 'SPRAT Level 3', 'Avalanche Professional II', 'Confined Space Rescue'],
-    specialties: ['aerial-assets', 'mountain-rope-rescue', 'aerial-tramway-rescue'],
-    avatar: '/images/instructors/gray-grandy.png',
-  },
-  {
     slug: 'erica-pacal',
     name: 'Erica Pacal',
     role: 'aerial',
