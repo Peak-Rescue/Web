@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import CertGrid from './CertGrid'
@@ -38,6 +39,7 @@ export default async function InstructorPage() {
   return (
     <main className="min-h-screen bg-zinc-950 text-white pt-16 md:pt-20">
       <div className="max-w-4xl mx-auto px-4 py-10">
+        <Link href="/admin" className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors mb-6 inline-block">← Portal</Link>
         <div className="mb-8 flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold">
@@ -83,8 +85,8 @@ export default async function InstructorPage() {
                             className={`flex-1 px-2 py-1 rounded text-xs font-medium capitalize text-center ${
                               role === r
                                 ? r === 'lead'
-                                  ? 'bg-green-900/40 border border-green-700 text-green-400'
-                                  : 'bg-blue-700 text-white'
+                                  ? 'bg-teal-900/40 border border-teal-700 text-teal-300'
+                                  : 'bg-blue-900/40 border border-blue-700 text-blue-300'
                                 : 'bg-zinc-800 text-zinc-600'
                             }`}
                           >
