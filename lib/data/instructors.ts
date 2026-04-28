@@ -91,16 +91,6 @@ export const instructors: Instructor[] = [
 
   // Specialized Leads
   {
-    slug: 'jon-bertsch',
-    name: 'Jon Bertsch',
-    role: 'specialized',
-    title: 'Instructor — Technical Rescue',
-    bio: 'With nearly two decades in the rescue industry, Jon has trained, instructed, competed and responded in nearly every terrain type available. He began his rescue career in 2006 when he entered the fire service and spent most of his time away from work in the Rocky Mountains or the canyons of the southwest. During that time, he has served on local and regional response teams participating as a team member, trainer, lead and manager. Jon\'s instructional focus is rooted in helping align an organizations profile with it\'s mission profile while emphasizing personal competencies melding skillsets from all types of technical rescue. Throughout his time in technical rescue Jon has committed to staying up to date with robust continuing education, field work and regularly responding to all types of technical emergencies. Jon holds certifications in rope rescue, confined space rescue, trench and collapse rescue as well as rope access.',
-    certifications: ['SPRAT Level 1', 'Rope Rescue Technician', 'Confined Space Rescue Technician', 'Trench & Collapse Rescue'],
-    specialties: ['mountain-rope-rescue', 'urban-mobility', 'fall-protection-rope-access'],
-    avatar: '/images/instructors/jon-bertsch.png',
-  },
-  {
     slug: 'cody-parke',
     name: 'Cody Parke',
     role: 'specialized',
