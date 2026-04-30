@@ -91,6 +91,17 @@ export const instructors: Instructor[] = [
 
   // Specialized Leads
   {
+    slug: 'hunter-sandell',
+    name: 'Hunter Sandell',
+    role: 'specialized',
+    title: 'Instructor — Technical Rescue',
+    bio: 'Hunter relocated to Casper, WY from Florida where he had five years of professional firefighting experience. Hunter is now a firefighter for the City of Casper. He has acquired certifications in rope rescue, confined space rescue, vehicle extrication, trench rescue, structural collapse rescue, arborist rescue, backcountry rescue, and SPRAT. Hunter has been part of multiple rescue teams including Florida USAR Task Force 6. He is dedicated to continuing to build his own skillset and has a passion for helping others develop their knowledge and rescue skills. When not at work, Hunter enjoys all things outdoors and spending time with his friends and family.',
+    certifications: ['Rope Rescue Technician', 'Confined Space Rescue Technician', 'Vehicle Extrication', 'Trench Rescue', 'Structural Collapse Rescue', 'Arborist Rescue', 'Backcountry Rescue', 'SPRAT'],
+    specialties: ['rope-rescue', 'confined-space-rescue', 'emergency-response-team', 'firefighter-survival', 'fall-protection-rope-access'],
+    avatar: '/images/instructors/hunter-sandell.png',
+    avatarPosition: 'object-[50%_43%]',
+  },
+  {
     slug: 'cody-parke',
     name: 'Cody Parke',
     role: 'specialized',
@@ -99,6 +110,7 @@ export const instructors: Instructor[] = [
     certifications: ['SPRAT Level 2', 'Rope Rescue Technician', 'Firefighter'],
     specialties: ['fall-protection-rope-access', 'urban-mobility', 'confined-space-rescue', 'firefighter-survival', 'emergency-response-team'],
     avatar: '/images/instructors/cody-parke.png',
+    avatarPosition: 'object-[50%_90%]',
   },
   {
     slug: 'kooper-adams',
@@ -122,7 +134,67 @@ export const instructors: Instructor[] = [
     avatarPosition: 'object-top',
   },
 
+  {
+    slug: 'taylor-herron',
+    name: 'Taylor Herron',
+    role: 'specialized',
+    title: 'Instructor — Tower, SPRAT & Backcountry',
+    bio: 'Taylor was born and raised in Casper, WY. He stays busy with his wife and two sons camping, climbing, running and hiking. Taylor brings a unique blend of rope expertise and educational background to his position as a lead instructor for Peak. He was a high school teacher for five years and now works for the Casper Fire Department as a senior firefighter on Truck 3. Taylor\'s positive energy and excitement make him fun to learn from when he is teaching industrial, tower, SPRAT, or backcountry classes.',
+    certifications: ['Firefighter', 'SPRAT', 'Tower Rescue', 'Rope Rescue Technician'],
+    specialties: ['fall-protection-rope-access', 'rope-rescue', 'mountain-rescue', 'emergency-response-team'],
+    avatar: '/images/instructors/taylor-herron.png',
+    avatarPosition: 'object-[50%_55%]',
+  },
+
+  {
+    slug: 'eric-brandon',
+    name: 'Eric Brandon',
+    role: 'specialized',
+    title: 'Instructor — Technical Rescue & Rope Access',
+    bio: 'Brando was born and raised in Casper, Wyoming, where he spent his childhood racing motocross, snowboarding, hunting, fishing and being outdoors. That passion for the outdoors and adventure led him to begin his career in the fire service with the BLM in 2008, transitioning to Fire EMS-Rescue in 2015, where he serves as a Captain/EMT-I at the Natrona County Fire Protection District. He is the technical rescue program lead for NCFD, a Wyoming Helicopter Hoist Rescue Team crew member, and a Peak Rescue team member since 2023. He is an accomplished ultramarathon runner and triathlete. When not working or teaching, he spends time skiing in the mountains of Montana, Wyoming, and Utah. In the summer, he enjoys camping with his wife and three daughters.',
+    certifications: ['Captain/EMT-I', 'Rope Rescue Technician', 'Rope Access', 'Confined Space Rescue Technician'],
+    specialties: ['rope-rescue', 'confined-space-rescue', 'fall-protection-rope-access', 'mountain-rescue'],
+    avatar: '/images/instructors/eric-brandon.JPG',
+    avatarPosition: 'object-[50%_0%]',
+  },
+
+  {
+    slug: 'mark-rickbeil',
+    name: 'Mark Rickbeil',
+    role: 'specialized',
+    title: 'Instructor — Technical Rescue & Aerial Evacuation',
+    bio: 'Mark began his career in rope and rescue in 1995, spending winters as a professional ski patroller at Red Lodge Mountain in Montana and summers guiding in the backcountry and working on high-ropes and challenge course facilitation and construction. He also worked with an arborist for two seasons, gaining experience operating on ropes in tree environments. From 1999 to 2006, Mark served as the Patrol Director at Red Lodge Mountain, during which time he was involved with Red Lodge Fire & EMS and Carbon County Search and Rescue. In 2006, Mark joined the Billings Fire Department and became a member of its technical rescue team in 2007, taking over as team coordinator in 2018 and retiring in October 2024. Mark continues to work part-time as a ski patroller at Red Lodge Mountain, marking over 30 years as a member of the National Ski Patrol – Pro Division. He now travels and teaches technical rescue and REMS (Rapid Extraction Module Support) courses, as well as aerial evacuation and other rescue disciplines for Peak Rescue, and serves as a team lead for REMS assignments on wildland fires.',
+    certifications: ['SPRAT Level 1', 'National Ski Patrol – Pro Division', 'Technical Rescue Technician', 'REMS Team Lead'],
+    specialties: ['aerial-tramway-rescue', 'rope-rescue', 'mountain-rescue', 'emergency-response-team'],
+    avatar: '/images/instructors/mark-rickbeil.png',
+    avatarPosition: 'object-[50%_30%]',
+
+  },
+
+  {
+    slug: 'dustin-fiero',
+    name: 'Dustin Fiero',
+    role: 'specialized',
+    title: 'Instructor — Water Rescue & Technical Rope',
+    bio: 'Dustin Fiero is a San Diego lifeguard with extensive experience in water safety and technical rescue. He has provided water safety for the Big Wave World Tour, working in high-risk environments such as Nazaré, Portugal, Mexico, and Cortez Bank. After operating at the highest levels of ocean safety, Dustin shifted his focus to technical rescue, where he has continued to build his expertise. He has completed California State Fire Training instructor task books in Rope Rescue Technician, Rope Rescue Awareness and Operations, and Water Rescue Technician, along with 15 specialized rope rescue courses with the state and private companies. Dustin is also a cliff rescue instructor and a member of the City of San Diego\'s swift water rescue team. Growing up with learning disabilities, he developed a strong commitment to teaching and takes pride in making complex rescue concepts accessible to students of all skill levels.',
+    certifications: ['Rope Rescue Technician', 'Water Rescue Technician', 'Cliff Rescue Instructor', 'CA State Fire Training Instructor'],
+    specialties: ['swiftwater-rescue', 'rope-rescue', 'water-mobility', 'mountain-rescue'],
+    avatar: '/images/instructors/dustin-fiero.png',
+    avatarPosition: 'object-[0%_top]',
+  },
+
   // Aerial Evacuation Leads
+  {
+    slug: 'jake-shultz',
+    name: 'Jake Shultz',
+    role: 'aerial',
+    title: 'Aerial Evacuation Lead',
+    bio: 'Jake began his career in rescue at age 16 as an Ocean Lifeguard in Southern California. He then received his EMT certification and transitioned to the San Bernardino Mountains, where he has worked as a Professional Ski Patroller for the past seven years. He currently leads his resort\'s Technical Rescue program and oversees all patrol training operations, with a focus on rope rescue, patient care, and team development. Jake also serves as a Team Lead on a REMS (Rapid Extraction Module Support) team, providing medical and technical rope rescue support on wildland fires throughout the western United States. With a background spanning ocean, mountain, and fireline environments, Jake brings a well-rounded, field-tested perspective to rescue operations and instruction.',
+    certifications: ['EMT', 'Professional Ski Patroller', 'Rope Rescue Technician', 'Ocean Lifeguard', 'REMS Team Lead'],
+    specialties: ['aerial-tramway-rescue', 'mountain-rescue', 'rope-rescue', 'emergency-response-team'],
+    avatar: '/images/instructors/jake-shultz.png',
+    avatarPosition: 'object-[100%_58%]',
+  },
   {
     slug: 'connor-greene',
     name: 'Connor Greene',
@@ -142,7 +214,7 @@ export const instructors: Instructor[] = [
     certifications: ['SPRAT Level 3', 'EMT', 'Confined Space Rescue Technician', 'Petzl PPE Competent Person Trainer'],
     specialties: ['aerial-assets', 'fall-protection-rope-access', 'aerial-tramway-rescue'],
     avatar: '/images/instructors/erica-pacal.jpg',
-    avatarPosition: 'object-top',
+    avatarPosition: 'object-[100%_25%]',
   },
   {
     slug: 'darcy-mcleish',
