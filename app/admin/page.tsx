@@ -31,8 +31,18 @@ export default async function AdminPage() {
               <circle cx="36" cy="7" r="4"/><path d="M44 21v-2a4 4 0 0 0-4-4H32a4 4 0 0 0-4 4v2"/>
               <circle cx="60" cy="7" r="4"/><path d="M68 21v-2a4 4 0 0 0-4-4H56a4 4 0 0 0-4 4v2"/>
             </svg>
-            <h2 className="font-semibold text-lg mb-1">All Instructors</h2>
-            <p className="text-zinc-400 text-sm">View all instructor cert status</p>
+            <h2 className="font-semibold text-lg mb-1">Instructor Profiles</h2>
+            <p className="text-zinc-400 text-sm">Certifications, expertise, and portal access</p>
+          </Link>
+          <Link
+            href="/admin/courses"
+            className="p-6 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-pr-red transition-colors"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="mb-3 text-pr-red">
+              <rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/>
+            </svg>
+            <h2 className="font-semibold text-lg mb-1">Courses</h2>
+            <p className="text-zinc-400 text-sm">Schedule and manage course instances</p>
           </Link>
           <Link
             href="/instructor"
@@ -41,8 +51,8 @@ export default async function AdminPage() {
             <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="mb-3 text-pr-red">
               <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
             </svg>
-            <h2 className="font-semibold text-lg mb-1">My Certifications</h2>
-            <p className="text-zinc-400 text-sm">Manage your own certs and profile</p>
+            <h2 className="font-semibold text-lg mb-1">My Profile</h2>
+            <p className="text-zinc-400 text-sm">Manage your bio, photo, and certifications</p>
           </Link>
         </div>
       </div>

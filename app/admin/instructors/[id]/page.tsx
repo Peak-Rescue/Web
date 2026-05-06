@@ -5,14 +5,13 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import CertGrid from '@/app/instructor/CertGrid'
 import ProfileForm from '@/app/instructor/ProfileForm'
 import CapabilityPanel from '@/app/admin/instructors/CapabilityPanel'
+import TeamPageToggle from '@/app/admin/instructors/TeamPageToggle'
 import {
   adminUpsertCert,
   adminDeleteCert,
   adminAddCertDocument,
   adminDeleteCertDocument,
   adminUpdateProfile,
-  adminSetCapability,
-  adminRemoveCapability,
 } from './actions'
 
 export default async function AdminInstructorDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -39,17 +38,22 @@ export default async function AdminInstructorDetailPage({ params }: { params: Pr
 
   if (!profile) notFound()
 
-  const [{ data: certs }, { data: capabilities }] = await Promise.all([
+  const [{ data: certs }, instructorRecord] = await Promise.all([
     createAdminClient()
       .from('instructor_certs')
       .select('id, cert_type, level, expires_at, notes, instructor_cert_documents(id, url, file_name, created_at)')
       .eq('instructor_id', id)
       .order('cert_type'),
     createAdminClient()
-      .from('instructor_capabilities')
-      .select('category, role')
-      .eq('instructor_id', id),
+      .from('instructors')
+      .select('id, show_on_team_page, instructor_capabilities(category, role)')
+      .eq('profile_id', id)
+      .maybeSingle(),
   ])
+
+  const capabilities = (instructorRecord?.data?.instructor_capabilities ?? []) as { category: string; role: string }[]
+  const instructorId = instructorRecord?.data?.id ?? null
+  const showOnTeamPage = instructorRecord?.data?.show_on_team_page ?? false
 
   const name = profile.first_name
     ? `${profile.first_name} ${profile.last_name ?? ''}`.trim()
@@ -60,7 +64,7 @@ export default async function AdminInstructorDetailPage({ params }: { params: Pr
       <div className="max-w-4xl mx-auto px-4 py-10">
         <div className="mb-8">
           <Link href="/admin/instructors" className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors">
-            ← Instructor Certifications
+            ← Instructor Profiles
           </Link>
           <h1 className="text-2xl font-bold mt-3">{name}</h1>
           {profile.email && <p className="text-zinc-400 mt-1">{profile.email}</p>}
@@ -91,15 +95,23 @@ export default async function AdminInstructorDetailPage({ params }: { params: Pr
           />
         </section>
 
+        {instructorId && (
+          <section className="mb-10">
+            <h2 className="text-lg font-semibold mb-4">Team Page</h2>
+            <TeamPageToggle instructorId={instructorId} initialValue={showOnTeamPage} />
+          </section>
+        )}
+
         <section>
           <h2 className="text-lg font-semibold mb-4">Expertise</h2>
-          <CapabilityPanel
-            initialCapabilities={(capabilities ?? []) as Parameters<typeof CapabilityPanel>[0]['initialCapabilities']}
-            actions={{
-              setCapability: adminSetCapability.bind(null, id),
-              removeCapability: adminRemoveCapability.bind(null, id),
-            }}
-          />
+          {instructorId ? (
+            <CapabilityPanel
+              instructorId={instructorId}
+              initialCapabilities={capabilities as Parameters<typeof CapabilityPanel>[0]['initialCapabilities']}
+            />
+          ) : (
+            <p className="text-sm text-zinc-500">No instructor record linked to this profile.</p>
+          )}
         </section>
       </div>
     </main>

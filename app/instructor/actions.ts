@@ -147,6 +147,49 @@ export async function updateProfile({
   revalidatePath('/instructor')
 }
 
+export async function updateInstructorProfile(formData: FormData) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Not authenticated')
+
+  const admin = createAdminClient()
+  const { data: instructor } = await admin
+    .from('instructors')
+    .select('id, avatar')
+    .eq('profile_id', user.id)
+    .single()
+
+  if (!instructor) throw new Error('No instructor record linked to this account')
+
+  const bio = (formData.get('bio') as string) || null
+  const photo = formData.get('photo') as File | null
+
+  let avatar = instructor.avatar
+
+  if (photo && photo.size > 0) {
+    const ext = photo.name.split('.').pop()?.toLowerCase() ?? 'jpg'
+    const storageKey = `${instructor.id}.${ext}`
+    const bytes = await photo.arrayBuffer()
+
+    const { error: uploadError } = await admin.storage
+      .from('instructor-photos')
+      .upload(storageKey, bytes, { contentType: photo.type, upsert: true })
+
+    if (uploadError) throw new Error(`Photo upload failed: ${uploadError.message}`)
+
+    const { data: { publicUrl } } = admin.storage.from('instructor-photos').getPublicUrl(storageKey)
+    avatar = publicUrl
+  }
+
+  const { error } = await admin
+    .from('instructors')
+    .update({ bio, avatar })
+    .eq('id', instructor.id)
+
+  if (error) throw new Error(error.message)
+  revalidatePath('/instructor')
+}
+
 export async function deleteCert(id: string) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()

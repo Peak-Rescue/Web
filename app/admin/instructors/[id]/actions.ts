@@ -164,11 +164,51 @@ export async function adminUpdateProfile(instructorId: string, {
   revalidatePath(`/admin/instructors/${instructorId}`)
 }
 
+export async function adminSendInvite(instructorId: string) {
+  await requireAdmin()
+  const admin = createAdminClient()
+
+  const { data: instructor } = await admin
+    .from('instructors')
+    .select('email')
+    .eq('id', instructorId)
+    .single()
+
+  if (!instructor?.email) throw new Error('No email on instructor record')
+
+  const { error } = await admin.auth.admin.inviteUserByEmail(instructor.email, {
+    redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/instructor`,
+  })
+
+  if (error) throw new Error(error.message)
+}
+
+export async function adminSetShowOnTeamPage(instructorId: string, show: boolean) {
+  await requireAdmin()
+
+  const { error } = await createAdminClient()
+    .from('instructors')
+    .update({ show_on_team_page: show })
+    .eq('id', instructorId)
+
+  if (error) throw new Error(error.message)
+  await revalidateInstructor(instructorId)
+}
+
+async function revalidateInstructor(instructorId: string) {
+  const { data } = await createAdminClient()
+    .from('instructors')
+    .select('profile_id')
+    .eq('id', instructorId)
+    .single()
+  if (data?.profile_id) revalidatePath(`/admin/instructors/${data.profile_id}`)
+  revalidatePath('/admin/instructors')
+}
+
 export async function adminSetCapability(instructorId: string, category: CapabilityCategory, role: CapabilityRole) {
   await requireAdmin()
   const admin = createAdminClient()
 
-  // Delete first, then insert — avoids onConflict which requires extra schema cache lookups
   await admin
     .from('instructor_capabilities')
     .delete()
@@ -180,7 +220,6 @@ export async function adminSetCapability(instructorId: string, category: Capabil
     .insert({ instructor_id: instructorId, category, role })
 
   if (error) throw new Error(error.message)
-  revalidatePath(`/admin/instructors/${instructorId}`)
   revalidatePath('/admin/instructors')
 }
 
@@ -194,6 +233,5 @@ export async function adminRemoveCapability(instructorId: string, category: Capa
     .eq('category', category)
 
   if (error) throw new Error(error.message)
-  revalidatePath(`/admin/instructors/${instructorId}`)
   revalidatePath('/admin/instructors')
 }

@@ -1,16 +1,18 @@
 'use client'
 
 import { useState } from 'react'
+import { createClient } from '@/lib/supabase/client'
 import { CAPABILITY_META, CAPABILITY_ORDER, type CapabilityCategory, type CapabilityRole } from '@/lib/capabilities'
 
 type Capability = { category: CapabilityCategory; role: CapabilityRole }
 
-type Actions = {
-  setCapability: (category: CapabilityCategory, role: CapabilityRole) => Promise<void>
-  removeCapability: (category: CapabilityCategory) => Promise<void>
-}
-
-export default function CapabilityPanel({ initialCapabilities, actions }: { initialCapabilities: Capability[]; actions: Actions }) {
+export default function CapabilityPanel({
+  instructorId,
+  initialCapabilities,
+}: {
+  instructorId: string
+  initialCapabilities: Capability[]
+}) {
   const [capabilities, setCapabilities] = useState(initialCapabilities)
   const [saving, setSaving] = useState<CapabilityCategory | null>(null)
 
@@ -19,14 +21,27 @@ export default function CapabilityPanel({ initialCapabilities, actions }: { init
   async function handleSet(category: CapabilityCategory, role: CapabilityRole) {
     if (saving) return
     setSaving(category)
+
+    const supabase = createClient()
+
     try {
       if (capMap[category] === role) {
-        await actions.removeCapability(category)
+        const { error } = await supabase
+          .from('instructor_capabilities')
+          .delete()
+          .eq('instructor_id', instructorId)
+          .eq('category', category)
+        if (error) throw error
         setCapabilities(prev => prev.filter(c => c.category !== category))
       } else {
-        await actions.setCapability(category, role)
+        const { error } = await supabase
+          .from('instructor_capabilities')
+          .upsert({ instructor_id: instructorId, category, role }, { onConflict: 'instructor_id,category' })
+        if (error) throw error
         setCapabilities(prev => [...prev.filter(c => c.category !== category), { category, role }])
       }
+    } catch (err) {
+      console.error('Failed to update capability:', JSON.stringify(err))
     } finally {
       setSaving(null)
     }
