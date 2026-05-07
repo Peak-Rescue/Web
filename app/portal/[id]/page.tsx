@@ -67,7 +67,7 @@ export default async function PortalPage({ params }: { params: Promise<{ id: str
       .eq('id', id)
       .single(),
     admin.from('instance_off_days')
-      .select('off_date')
+      .select('off_date, end_date')
       .eq('instance_id', id)
       .order('off_date'),
   ])
@@ -75,7 +75,7 @@ export default async function PortalPage({ params }: { params: Promise<{ id: str
   if (!inst) notFound()
 
   const blocks = inst.starts_at && inst.ends_at
-    ? computeBlocks(inst.starts_at, inst.ends_at, (offDays ?? []).map(o => o.off_date))
+    ? computeBlocks(inst.starts_at, inst.ends_at, offDays ?? [])
     : []
 
   // Modules: instructors + admins see all; students see student+both only

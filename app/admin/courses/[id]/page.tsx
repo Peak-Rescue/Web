@@ -2,8 +2,9 @@ import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { updateInstance, addOffDay, removeOffDay, addModule, deleteModule, addItem, deleteItem, assignInstructor, removeInstructor } from '../actions'
+import { updateInstanceDetails, updateInstanceDates, addOffDay, removeOffDay, addModule, deleteModule, addItem, deleteItem, removeInstructor } from '../actions'
 import { CourseTypeSelect } from '../CourseTypeSelect'
+import InstructorAssign from '../InstructorAssign'
 import { courseDisplayName, computeBlocks } from '@/lib/courses'
 import { CATEGORY_COURSE_TYPES } from '@/lib/capabilities'
 
@@ -30,9 +31,8 @@ function fmt(d: string) {
   return new Date(d + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
 }
 
-export default async function CourseInstancePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ [key: string]: string | string[] | undefined }> }) {
+export default async function CourseInstancePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const { all: allParam } = await searchParams
 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -44,7 +44,7 @@ export default async function CourseInstancePage({ params, searchParams }: { par
 
   const [{ data: inst }, { data: offDays }, { data: modules }, { data: assigned }, { data: allInstructors }] = await Promise.all([
     admin.from('course_instances').select('*, ref_number, slug').eq('id', id).single(),
-    admin.from('instance_off_days').select('id, off_date').eq('instance_id', id).order('off_date'),
+    admin.from('instance_off_days').select('id, off_date, end_date').eq('instance_id', id).order('off_date'),
     admin.from('course_modules').select('id, title, audience, order, course_items(id, title, type, url, description, order)').eq('instance_id', id).order('order'),
     admin.from('instance_instructors').select('instructor_id, role, instructors(name)').eq('instance_id', id),
     admin.from('instructors').select('id, name, instructor_role, instructor_capabilities(category, role)').eq('active', true).order('name'),
@@ -53,7 +53,6 @@ export default async function CourseInstancePage({ params, searchParams }: { par
   if (!inst) notFound()
 
   const courseType = inst.course_type
-  const showAll = allParam === '1' || courseType === 'custom'
 
   // Find which capability categories cover this course type
   const matchingCategories = Object.entries(CATEGORY_COURSE_TYPES)
@@ -65,15 +64,14 @@ export default async function CourseInstancePage({ params, searchParams }: { par
   const qualified = unassigned.filter(i =>
     (i.instructor_capabilities as { category: string; role: string }[]).some(c => matchingCategories.includes(c.category))
   )
-  const toShow = showAll ? unassigned : qualified
 
-  const updateInstanceWithId = updateInstance.bind(null, id)
+  const updateDetailsWithId = updateInstanceDetails.bind(null, id)
+  const updateDatesWithId = updateInstanceDates.bind(null, id)
   const addModuleWithId = addModule.bind(null, id)
   const addOffDayWithId = addOffDay.bind(null, id)
 
-  const offDayDates = (offDays ?? []).map(o => o.off_date)
   const blocks = inst.starts_at && inst.ends_at
-    ? computeBlocks(inst.starts_at, inst.ends_at, offDayDates)
+    ? computeBlocks(inst.starts_at, inst.ends_at, offDays ?? [])
     : []
 
   return (
@@ -96,7 +94,7 @@ export default async function CourseInstancePage({ params, searchParams }: { par
         {/* ── Details ─────────────────────────────────────────────── */}
         <section className="mb-10">
           <h2 className="text-lg font-semibold mb-4">Details</h2>
-          <form action={updateInstanceWithId} className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-6 bg-zinc-900 rounded-lg border border-zinc-800">
+          <form action={updateDetailsWithId} className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-6 bg-zinc-900 rounded-lg border border-zinc-800">
             <CourseTypeSelect
               defaultCategory={inst.course_category}
               defaultType={inst.course_type}
@@ -144,7 +142,7 @@ export default async function CourseInstancePage({ params, searchParams }: { par
               <textarea name="notes" rows={2} defaultValue={inst.notes ?? ''} className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500 resize-none" />
             </div>
             <div className="sm:col-span-2">
-              <button type="submit" className="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 text-white rounded text-sm font-medium transition-colors">Save details</button>
+              <button type="submit" className="px-4 py-2 bg-pr-red hover:bg-pr-red-dark text-white rounded text-sm font-medium transition-colors">Save details</button>
             </div>
           </form>
         </section>
@@ -154,19 +152,7 @@ export default async function CourseInstancePage({ params, searchParams }: { par
           <h2 className="text-lg font-semibold mb-4">Schedule</h2>
 
           {/* Overall window — saved via updateInstance */}
-          <form action={updateInstanceWithId} className="grid grid-cols-2 gap-4 p-4 bg-zinc-900 border border-zinc-800 rounded-lg mb-4">
-            <input type="hidden" name="course_category" value={inst.course_category} />
-            <input type="hidden" name="course_type" value={inst.course_type} />
-            <input type="hidden" name="custom_title" value={inst.custom_title ?? ''} />
-            <input type="hidden" name="status" value={inst.status} />
-            <input type="hidden" name="location" value={inst.location ?? ''} />
-            <input type="hidden" name="client_name" value={inst.client_name ?? ''} />
-            <input type="hidden" name="contact_name" value={inst.contact_name ?? ''} />
-            <input type="hidden" name="contact_phone" value={inst.contact_phone ?? ''} />
-            <input type="hidden" name="contact_email" value={inst.contact_email ?? ''} />
-            <input type="hidden" name="max_students" value={inst.max_students ?? ''} />
-            <input type="hidden" name="instructor_slots" value={inst.instructor_slots ?? ''} />
-            <input type="hidden" name="notes" value={inst.notes ?? ''} />
+          <form action={updateDatesWithId} className="grid grid-cols-2 gap-4 p-4 bg-zinc-900 border border-zinc-800 rounded-lg mb-4">
             <div>
               <label className="block text-xs text-zinc-400 mb-1">Course start</label>
               <input name="starts_at" type="date" defaultValue={inst.starts_at ?? ''} className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
@@ -176,37 +162,49 @@ export default async function CourseInstancePage({ params, searchParams }: { par
               <input name="ends_at" type="date" defaultValue={inst.ends_at ?? ''} className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
             </div>
             <div className="col-span-2">
-              <button type="submit" className="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 text-white rounded text-sm font-medium transition-colors">Save dates</button>
+              <button type="submit" className="px-4 py-2 bg-pr-red hover:bg-pr-red-dark text-white rounded text-sm font-medium transition-colors">Save dates</button>
             </div>
           </form>
 
           {/* Off days */}
-          {(offDays ?? []).length > 0 && (
-            <div className="mb-3 space-y-2">
-              <p className="text-xs text-zinc-500 mb-2">Off days (excluded from schedule)</p>
-              {(offDays ?? []).map(o => {
-                const removeOffDayWithArgs = removeOffDay.bind(null, id, o.id)
-                return (
-                  <div key={o.id} className="flex items-center justify-between px-4 py-2 bg-zinc-900 border border-zinc-800 rounded-lg">
-                    <span className="text-sm">{fmt(o.off_date)}</span>
-                    <form action={removeOffDayWithArgs}>
-                      <button type="submit" className="text-xs text-zinc-600 hover:text-red-400 transition-colors">Remove</button>
-                    </form>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-
-          <form action={addOffDayWithId} className="flex gap-2 flex-wrap items-end p-4 bg-zinc-900 border border-dashed border-zinc-700 rounded-lg mb-4">
-            <div>
-              <label className="block text-xs text-zinc-500 mb-1">Add off day</label>
-              <input name="off_date" type="date" required className="bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
-            </div>
-            <button type="submit" className="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 text-white rounded text-sm font-medium transition-colors">
-              Add
-            </button>
-          </form>
+          <div className="mb-4">
+            <h3 className="text-sm font-medium text-zinc-300 mb-2">Off Days</h3>
+            <p className="text-xs text-zinc-500 mb-3">Dates excluded from the schedule (holidays, travel days, etc.)</p>
+            {(offDays ?? []).length > 0 && (
+              <div className="space-y-2 mb-3">
+                {(offDays ?? []).map(o => {
+                  const removeOffDayWithArgs = removeOffDay.bind(null, id, o.id)
+                  const isRange = o.end_date && o.end_date !== o.off_date
+                  return (
+                    <div key={o.id} className="flex items-center justify-between px-4 py-2 bg-zinc-900 border border-zinc-800 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-zinc-500 font-medium">{isRange ? 'Range' : 'Day'}</span>
+                        <span className="text-sm">
+                          {isRange ? `${fmt(o.off_date)} → ${fmt(o.end_date!)}` : fmt(o.off_date)}
+                        </span>
+                      </div>
+                      <form action={removeOffDayWithArgs}>
+                        <button type="submit" className="text-xs text-zinc-600 hover:text-red-400 transition-colors">Remove</button>
+                      </form>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+            <form action={addOffDayWithId} className="flex gap-2 flex-wrap items-end p-4 bg-zinc-900 border border-dashed border-zinc-700 rounded-lg">
+              <div>
+                <label className="block text-xs text-zinc-500 mb-1">Start date</label>
+                <input name="off_date" type="date" required className="bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
+              </div>
+              <div>
+                <label className="block text-xs text-zinc-500 mb-1">End date <span className="text-zinc-600">(optional)</span></label>
+                <input name="end_date" type="date" className="bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
+              </div>
+              <button type="submit" className="px-4 py-2 bg-pr-red hover:bg-pr-red-dark text-white rounded text-sm font-medium transition-colors">
+                Add
+              </button>
+            </form>
+          </div>
 
           {/* Computed blocks preview */}
           {blocks.length > 0 && (
@@ -250,32 +248,11 @@ export default async function CourseInstancePage({ params, searchParams }: { par
             </div>
           )}
 
-          {toShow.length > 0 && (
-            <form action={assignInstructor.bind(null, id)} className="flex gap-2 flex-wrap">
-              <select name="instructor_id" className="bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500">
-                {!showAll && qualified.length > 0 ? (
-                  <>
-                    <optgroup label="Qualified">
-                      {qualified.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
-                    </optgroup>
-                  </>
-                ) : (
-                  toShow.map(i => <option key={i.id} value={i.id}>{i.name}</option>)
-                )}
-              </select>
-              <select name="role" className="bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500">
-                <option value="lead">Lead</option>
-                <option value="assist">Assist</option>
-              </select>
-              <button type="submit" className="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 text-white rounded text-sm font-medium transition-colors">Assign</button>
-            </form>
-          )}
-
-          {!showAll && unassigned.length > 0 && courseType !== 'custom' && (
-            <a href={`?all=1`} className="mt-2 inline-block text-xs text-zinc-500 hover:text-zinc-300 transition-colors">
-              {qualified.length === 0 ? 'No qualified instructors for this course type — ' : ''}Show all instructors
-            </a>
-          )}
+          <InstructorAssign
+            instanceId={id}
+            qualified={qualified}
+            unassigned={unassigned}
+          />
         </section>
 
         {/* ── Content modules ──────────────────────────────────────── */}
@@ -332,7 +309,7 @@ export default async function CourseInstancePage({ params, searchParams }: { par
                     </select>
                     <input name="url" required placeholder="https://…" className="flex-[2] bg-zinc-800 border border-zinc-700 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-zinc-500" />
                     <input name="description" placeholder="Description (optional)" className="flex-[2] bg-zinc-800 border border-zinc-700 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-zinc-500" />
-                    <button type="submit" className="px-3 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-white rounded text-sm font-medium transition-colors whitespace-nowrap">Add</button>
+                    <button type="submit" className="px-3 py-1.5 bg-pr-red hover:bg-pr-red-dark text-white rounded text-sm font-medium transition-colors whitespace-nowrap">Add</button>
                   </form>
                 </div>
               )
@@ -352,7 +329,7 @@ export default async function CourseInstancePage({ params, searchParams }: { par
                 <option value="instructor">Instructors only</option>
               </select>
             </div>
-            <button type="submit" className="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 text-white rounded text-sm font-medium transition-colors">Add section</button>
+            <button type="submit" className="px-4 py-2 bg-pr-red hover:bg-pr-red-dark text-white rounded text-sm font-medium transition-colors">Add section</button>
           </form>
         </section>
 

@@ -1,12 +1,23 @@
 import { services, categoryMeta, type ServiceCategory } from './data/services'
 
 export type DateBlock = { starts_at: string; ends_at: string }
+export type OffDayRange = { off_date: string; end_date?: string | null }
 
-export function computeBlocks(starts_at: string, ends_at: string, offDays: string[]): DateBlock[] {
-  const offSet = new Set(offDays)
+export function computeBlocks(starts_at: string, ends_at: string, offDays: OffDayRange[]): DateBlock[] {
+  // Build a set of all individual off dates, expanding ranges
+  const offSet = new Set<string>()
+  for (const { off_date, end_date } of offDays) {
+    const rangeEnd = end_date ?? off_date
+    const d = new Date(off_date + 'T00:00:00')
+    const e = new Date(rangeEnd + 'T00:00:00')
+    while (d <= e) {
+      offSet.add(d.toISOString().slice(0, 10))
+      d.setDate(d.getDate() + 1)
+    }
+  }
+
   const blocks: DateBlock[] = []
   const end = new Date(ends_at + 'T00:00:00')
-
   let blockStart: string | null = null
   let blockEnd: string | null = null
 

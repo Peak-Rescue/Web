@@ -71,7 +71,7 @@ export async function createInstance(formData: FormData) {
   redirect(`/admin/courses/${data.id}`)
 }
 
-export async function updateInstance(id: string, formData: FormData) {
+export async function updateInstanceDetails(id: string, formData: FormData) {
   await requireAdmin()
   const admin = createAdminClient()
 
@@ -88,12 +88,9 @@ export async function updateInstance(id: string, formData: FormData) {
   const max_students     = formData.get('max_students') ? Number(formData.get('max_students')) : null
   const instructor_slots = formData.get('instructor_slots') ? Number(formData.get('instructor_slots')) : null
 
-  const starts_at = (formData.get('starts_at') as string) || null
-  const ends_at   = (formData.get('ends_at') as string) || null
-
   const { error } = await admin
     .from('course_instances')
-    .update({ course_category, course_type, custom_title, status, starts_at, ends_at, location, client_name, contact_name, contact_phone, contact_email, notes, max_students, instructor_slots })
+    .update({ course_category, course_type, custom_title, status, location, client_name, contact_name, contact_phone, contact_email, notes, max_students, instructor_slots })
     .eq('id', id)
 
   if (error) throw new Error(error.message)
@@ -101,14 +98,30 @@ export async function updateInstance(id: string, formData: FormData) {
   revalidatePath('/admin/courses')
 }
 
+export async function updateInstanceDates(id: string, formData: FormData) {
+  await requireAdmin()
+
+  const starts_at = (formData.get('starts_at') as string) || null
+  const ends_at   = (formData.get('ends_at') as string) || null
+
+  const { error } = await createAdminClient()
+    .from('course_instances')
+    .update({ starts_at, ends_at })
+    .eq('id', id)
+
+  if (error) throw new Error(error.message)
+  revalidatePath(`/admin/courses/${id}`)
+}
+
 export async function addOffDay(instanceId: string, formData: FormData) {
   await requireAdmin()
   const off_date = formData.get('off_date') as string
+  const end_date = (formData.get('end_date') as string) || null
   if (!off_date) throw new Error('Date is required')
 
   const { error } = await createAdminClient()
     .from('instance_off_days')
-    .upsert({ instance_id: instanceId, off_date }, { onConflict: 'instance_id,off_date' })
+    .insert({ instance_id: instanceId, off_date, end_date: end_date ?? null })
 
   if (error) throw new Error(error.message)
   revalidatePath(`/admin/courses/${instanceId}`)
