@@ -13,9 +13,10 @@ export const metadata: Metadata = {
 export default async function InstructorsPage() {
   const { data: instructors } = await createAdminClient()
     .from('instructors')
-    .select('slug, name, avatar, avatar_position, avatar_scale')
+    .select('slug, name, avatar, avatar_position, avatar_scale, sort_order')
     .eq('show_on_team_page', true)
     .eq('active', true)
+    .order('sort_order', { ascending: true, nullsFirst: false })
     .order('name')
 
   return (
