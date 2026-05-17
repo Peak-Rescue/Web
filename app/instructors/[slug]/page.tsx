@@ -14,13 +14,13 @@ export async function generateMetadata({
   const { slug } = await params
   const { data } = await createAdminClient()
     .from('instructors')
-    .select('name, title, certifications')
+    .select('name, title')
     .eq('slug', slug)
     .single()
   if (!data) return {}
   return {
     title: data.name,
-    description: `${data.title} — ${(data.certifications as string[]).join(', ')}`,
+    description: data.title,
   }
 }
 
@@ -33,7 +33,7 @@ export default async function InstructorPage({
 
   const { data: instructor } = await createAdminClient()
     .from('instructors')
-    .select('name, title, bio, avatar, avatar_position, avatar_scale, certifications')
+    .select('name, title, bio, avatar, avatar_position, avatar_scale')
     .eq('slug', slug)
     .eq('active', true)
     .single()
@@ -72,16 +72,6 @@ export default async function InstructorPage({
 
             <div>
               <h1 className="display-lg mt-2 text-pr-text">{instructor.name}</h1>
-              <div className="mt-4 flex flex-wrap gap-2">
-                {(instructor.certifications as string[]).map((cert) => (
-                  <span
-                    key={cert}
-                    className="px-3 py-1 text-xs font-display tracking-widest uppercase border border-white/15 text-pr-muted"
-                  >
-                    {cert}
-                  </span>
-                ))}
-              </div>
             </div>
           </div>
         </div>
