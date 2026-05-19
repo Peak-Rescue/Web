@@ -26,7 +26,7 @@ export default function TeamPageToggle({
     <div className="flex items-center justify-between px-4 py-3 bg-zinc-900 border border-zinc-800 rounded-lg">
       <div>
         <p className="text-sm font-medium">Show on public team page</p>
-        <p className="text-xs text-zinc-500 mt-0.5">Controls whether this instructor appears at /instructors</p>
+        <p className="text-xs text-zinc-500 mt-0.5">Controls whether this instructor appears at /team</p>
       </div>
       <button
         onClick={handleToggle}

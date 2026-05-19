@@ -39,7 +39,7 @@ export default async function InstructorsPage() {
             {(instructors ?? []).map((instructor) => (
               <Link
                 key={instructor.slug}
-                href={`/instructors/${instructor.slug}`}
+                href={`/team/${instructor.slug}`}
                 className="group flex flex-col glass-card hover:border-pr-red/30 transition-all duration-300 overflow-hidden"
               >
                 <div className="relative aspect-[4/3] bg-pr-surface overflow-hidden">

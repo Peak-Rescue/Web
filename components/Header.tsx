@@ -26,7 +26,7 @@ function SignOutIcon() {
 
 const navLinks = [
   { href: '/services', label: 'Training' },
-  { href: '/instructors', label: 'Team' },
+  { href: '/team', label: 'Team' },
   { href: '/gallery', label: 'Gallery' },
   { href: '/blog', label: 'Blog' },
   { href: '/contact', label: 'Contact' },

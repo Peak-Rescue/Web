@@ -203,8 +203,8 @@ async function revalidateInstructor(instructorId: string) {
     .single()
   if (data?.profile_id) revalidatePath(`/admin/instructors/${data.profile_id}`)
   revalidatePath('/admin/instructors')
-  revalidatePath('/instructors')
-  if (data?.slug) revalidatePath(`/instructors/${data.slug}`)
+  revalidatePath('/team')
+  if (data?.slug) revalidatePath(`/team/${data.slug}`)
 }
 
 export async function adminSetCapability(instructorId: string, category: CapabilityCategory, role: CapabilityRole) {

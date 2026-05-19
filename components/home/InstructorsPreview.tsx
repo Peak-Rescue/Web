@@ -27,7 +27,7 @@ export default function InstructorsPreview() {
             </h2>
           </div>
           <Link
-            href="/instructors"
+            href="/team"
             className="shrink-0 text-sm font-display font-600 tracking-widest uppercase text-pr-red hover:text-pr-red-light transition-colors"
           >
             All 16 Instructors →
@@ -45,7 +45,7 @@ export default function InstructorsPreview() {
               viewport={{ once: true }}
               transition={{ duration: 0.4, delay: i * 0.07 }}
             >
-              <Link href={`/instructors/${instructor.slug}`} className="group flex flex-col">
+              <Link href={`/team/${instructor.slug}`} className="group flex flex-col">
                 {/* Photo */}
                 <div className="relative aspect-[3/4] bg-pr-surface overflow-hidden mb-4">
                   {instructor.avatar ? (

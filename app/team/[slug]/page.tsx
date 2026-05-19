@@ -48,7 +48,7 @@ export default async function InstructorPage({
         <div className="absolute top-0 left-0 w-[3px] h-16 bg-pr-red" />
         <div className="site-container">
           <div className="flex items-center gap-2 text-xs font-display tracking-widest uppercase text-pr-muted mb-8">
-            <Link href="/instructors" className="hover:text-pr-text transition-colors">Team</Link>
+            <Link href="/team" className="hover:text-pr-text transition-colors">Team</Link>
             <span>/</span>
             <span className="text-pr-red">{instructor.name}</span>
           </div>
