@@ -198,11 +198,13 @@ export async function adminSetShowOnTeamPage(instructorId: string, show: boolean
 async function revalidateInstructor(instructorId: string) {
   const { data } = await createAdminClient()
     .from('instructors')
-    .select('profile_id')
+    .select('slug, profile_id')
     .eq('id', instructorId)
     .single()
   if (data?.profile_id) revalidatePath(`/admin/instructors/${data.profile_id}`)
   revalidatePath('/admin/instructors')
+  revalidatePath('/instructors')
+  if (data?.slug) revalidatePath(`/instructors/${data.slug}`)
 }
 
 export async function adminSetCapability(instructorId: string, category: CapabilityCategory, role: CapabilityRole) {

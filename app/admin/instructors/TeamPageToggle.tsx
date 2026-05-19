@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { adminSetShowOnTeamPage } from './[id]/actions'
 
 export default function TeamPageToggle({
   instructorId,
@@ -17,8 +17,7 @@ export default function TeamPageToggle({
     if (saving) return
     setSaving(true)
     const next = !visible
-    const supabase = createClient()
-    await supabase.from('instructors').update({ show_on_team_page: next }).eq('id', instructorId)
+    await adminSetShowOnTeamPage(instructorId, next)
     setVisible(next)
     setSaving(false)
   }
