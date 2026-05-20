@@ -21,11 +21,13 @@ type RawCapability = {
 }
 
 type Instructor = {
-  id: string
+  id: string  // instructors.id
+  name: string
   first_name: string | null
   last_name: string | null
   email: string | null
   phone: string | null
+  invite_status: 'active' | 'invited' | 'not_invited'
   instructor_certs: RawCert[]
   instructor_capabilities: RawCapability[]
 }
@@ -520,12 +522,23 @@ export function InstructorTable({ instructors, isAdmin = false }: { instructors:
                   <td className="py-3 pr-6 whitespace-nowrap">
                     {isAdmin ? (
                       <Link href={`/admin/instructors/${instructor.id}`} className="font-medium hover:text-pr-red-light transition-colors">
-                        {instructor.first_name ? `${instructor.first_name} ${instructor.last_name ?? ''}`.trim() : 'Unnamed'}
+                        {instructor.first_name ? `${instructor.first_name} ${instructor.last_name ?? ''}`.trim() : instructor.name}
                       </Link>
                     ) : (
                       <span className="font-medium">
-                        {instructor.first_name ? `${instructor.first_name} ${instructor.last_name ?? ''}`.trim() : 'Unnamed'}
+                        {instructor.first_name ? `${instructor.first_name} ${instructor.last_name ?? ''}`.trim() : instructor.name}
                       </span>
+                    )}
+                    {isAdmin && instructor.invite_status !== 'active' && (
+                      <div className="mt-0.5">
+                        <span className={`inline-block px-1.5 py-0.5 text-[9px] font-medium rounded ${
+                          instructor.invite_status === 'invited'
+                            ? 'bg-yellow-900/60 text-yellow-300'
+                            : 'bg-zinc-800 text-zinc-500'
+                        }`}>
+                          {instructor.invite_status === 'invited' ? 'Invite sent' : 'Not invited'}
+                        </span>
+                      </div>
                     )}
                     {instructor.email && <div className="text-xs text-zinc-400 mt-0.5">{instructor.email}</div>}
                     {instructor.phone && <div className="text-xs text-zinc-500">{formatPhone(instructor.phone)}</div>}

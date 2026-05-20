@@ -22,7 +22,35 @@ async function requireAdmin() {
   return user
 }
 
-export async function adminUpsertCert(instructorId: string, formData: FormData) {
+// Revalidate all paths affected by an instructor record change (by instructors.id)
+async function revalidateInstructor(instructorId: string) {
+  const { data } = await createAdminClient()
+    .from('instructors')
+    .select('slug')
+    .eq('id', instructorId)
+    .single()
+  revalidatePath(`/admin/instructors/${instructorId}`)
+  revalidatePath('/admin/instructors')
+  revalidatePath('/team')
+  if (data?.slug) revalidatePath(`/team/${data.slug}`)
+}
+
+// Revalidate paths when we only have a profile UUID (cert/profile actions)
+async function revalidateByProfileId(profileId: string) {
+  const { data } = await createAdminClient()
+    .from('instructors')
+    .select('id, slug')
+    .eq('profile_id', profileId)
+    .maybeSingle()
+  revalidatePath('/admin/instructors')
+  if (data?.id) {
+    revalidatePath(`/admin/instructors/${data.id}`)
+    revalidatePath('/team')
+    if (data?.slug) revalidatePath(`/team/${data.slug}`)
+  }
+}
+
+export async function adminUpsertCert(profileId: string, formData: FormData) {
   await requireAdmin()
 
   const cert_type = formData.get('cert_type') as CertType
@@ -38,38 +66,38 @@ export async function adminUpsertCert(instructorId: string, formData: FormData) 
       .from('instructor_certs')
       .update({ cert_type, level, expires_at, notes })
       .eq('id', existingId)
-      .eq('instructor_id', instructorId)
+      .eq('instructor_id', profileId)
       .select('id, cert_type, level, expires_at, notes')
       .single()
     if (error) throw new Error(error.message)
-    revalidatePath(`/admin/instructors/${instructorId}`)
+    await revalidateByProfileId(profileId)
     return data
   } else {
     const { data, error } = await admin
       .from('instructor_certs')
-      .insert({ instructor_id: instructorId, cert_type, level, expires_at, notes })
+      .insert({ instructor_id: profileId, cert_type, level, expires_at, notes })
       .select('id, cert_type, level, expires_at, notes')
       .single()
     if (error) throw new Error(error.message)
-    revalidatePath(`/admin/instructors/${instructorId}`)
+    await revalidateByProfileId(profileId)
     return data
   }
 }
 
-export async function adminDeleteCert(instructorId: string, certId: string) {
+export async function adminDeleteCert(profileId: string, certId: string) {
   await requireAdmin()
 
   const { error } = await createAdminClient()
     .from('instructor_certs')
     .delete()
     .eq('id', certId)
-    .eq('instructor_id', instructorId)
+    .eq('instructor_id', profileId)
 
   if (error) throw new Error(error.message)
-  revalidatePath(`/admin/instructors/${instructorId}`)
+  await revalidateByProfileId(profileId)
 }
 
-export async function adminAddCertDocument(instructorId: string, certId: string, url: string, fileName: string) {
+export async function adminAddCertDocument(profileId: string, certId: string, url: string, fileName: string) {
   await requireAdmin()
 
   const admin = createAdminClient()
@@ -78,7 +106,7 @@ export async function adminAddCertDocument(instructorId: string, certId: string,
     .from('instructor_certs')
     .select('id')
     .eq('id', certId)
-    .eq('instructor_id', instructorId)
+    .eq('instructor_id', profileId)
     .single()
 
   if (!cert) throw new Error('Cert not found')
@@ -90,11 +118,11 @@ export async function adminAddCertDocument(instructorId: string, certId: string,
     .single()
 
   if (error) throw new Error(error.message)
-  revalidatePath(`/admin/instructors/${instructorId}`)
+  await revalidateByProfileId(profileId)
   return data
 }
 
-export async function adminDeleteCertDocument(instructorId: string, docId: string) {
+export async function adminDeleteCertDocument(profileId: string, docId: string) {
   await requireAdmin()
 
   const admin = createAdminClient()
@@ -111,7 +139,7 @@ export async function adminDeleteCertDocument(instructorId: string, docId: strin
     .from('instructor_certs')
     .select('id')
     .eq('id', doc.cert_id)
-    .eq('instructor_id', instructorId)
+    .eq('instructor_id', profileId)
     .single()
 
   if (!cert) throw new Error('Not authorized')
@@ -135,10 +163,10 @@ export async function adminDeleteCertDocument(instructorId: string, docId: strin
     // non-fatal
   }
 
-  revalidatePath(`/admin/instructors/${instructorId}`)
+  await revalidateByProfileId(profileId)
 }
 
-export async function adminUpdateProfile(instructorId: string, {
+export async function adminUpdateProfile(profileId: string, {
   email, phone, emergency_name, emergency_relationship, emergency_phone,
 }: {
   email: string
@@ -158,10 +186,64 @@ export async function adminUpdateProfile(instructorId: string, {
       emergency_relationship: emergency_relationship || null,
       emergency_phone: emergency_phone ? normalizePhone(emergency_phone) : null,
     })
+    .eq('id', profileId)
+
+  if (error) throw new Error(error.message)
+  await revalidateByProfileId(profileId)
+}
+
+export async function adminUpdateInstructorEmail(instructorId: string, formData: FormData) {
+  await requireAdmin()
+  const email = (formData.get('email') as string).trim() || null
+
+  const { error } = await createAdminClient()
+    .from('instructors')
+    .update({ email })
     .eq('id', instructorId)
 
   if (error) throw new Error(error.message)
-  revalidatePath(`/admin/instructors/${instructorId}`)
+  await revalidateInstructor(instructorId)
+}
+
+export async function adminUpdateInstructorProfile(instructorId: string, formData: FormData) {
+  await requireAdmin()
+  const admin = createAdminClient()
+
+  const { data: instructor } = await admin
+    .from('instructors')
+    .select('id, avatar')
+    .eq('id', instructorId)
+    .single()
+
+  if (!instructor) throw new Error('Instructor not found')
+
+  const bio = (formData.get('bio') as string) || null
+  const photo = formData.get('photo') as File | null
+
+  let avatar = instructor.avatar
+
+  if (photo && photo.size > 0) {
+    const ext = photo.name.split('.').pop()?.toLowerCase() ?? 'jpg'
+    const storageKey = `${instructor.id}.${ext}`
+    const bytes = await photo.arrayBuffer()
+
+    const { error: uploadError } = await admin.storage
+      .from('instructor-photos')
+      .upload(storageKey, bytes, { contentType: photo.type, upsert: true })
+
+    if (uploadError) throw new Error(`Photo upload failed: ${uploadError.message}`)
+
+    const { data: { publicUrl } } = admin.storage.from('instructor-photos').getPublicUrl(storageKey)
+    avatar = publicUrl
+  }
+
+  const { error } = await admin
+    .from('instructors')
+    .update({ bio, avatar })
+    .eq('id', instructorId)
+
+  if (error) throw new Error(error.message)
+  await revalidateInstructor(instructorId)
 }
 
 export async function adminSendInvite(instructorId: string) {
@@ -181,6 +263,14 @@ export async function adminSendInvite(instructorId: string) {
   })
 
   if (error) throw new Error(error.message)
+
+  await admin
+    .from('instructors')
+    .update({ invite_sent_at: new Date().toISOString() })
+    .eq('id', instructorId)
+
+  revalidatePath(`/admin/instructors/${instructorId}`)
+  revalidatePath('/admin/instructors')
 }
 
 export async function adminSetShowOnTeamPage(instructorId: string, show: boolean) {
@@ -193,18 +283,6 @@ export async function adminSetShowOnTeamPage(instructorId: string, show: boolean
 
   if (error) throw new Error(error.message)
   await revalidateInstructor(instructorId)
-}
-
-async function revalidateInstructor(instructorId: string) {
-  const { data } = await createAdminClient()
-    .from('instructors')
-    .select('slug, profile_id')
-    .eq('id', instructorId)
-    .single()
-  if (data?.profile_id) revalidatePath(`/admin/instructors/${data.profile_id}`)
-  revalidatePath('/admin/instructors')
-  revalidatePath('/team')
-  if (data?.slug) revalidatePath(`/team/${data.slug}`)
 }
 
 export async function adminSetCapability(instructorId: string, category: CapabilityCategory, role: CapabilityRole) {
@@ -236,4 +314,77 @@ export async function adminRemoveCapability(instructorId: string, category: Capa
 
   if (error) throw new Error(error.message)
   revalidatePath('/admin/instructors')
+}
+
+export async function adminCreateInstructor(firstName: string, lastName: string, email: string): Promise<{ id: string }> {
+  await requireAdmin()
+  const admin = createAdminClient()
+
+  const fullName = `${firstName.trim()} ${lastName.trim()}`.trim()
+  const slugBase = fullName
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9\s-]/g, '')
+    .trim()
+    .replace(/\s+/g, '-')
+
+  let finalSlug = slugBase
+  let attempt = 1
+  while (true) {
+    const { data: existing } = await admin
+      .from('instructors')
+      .select('id')
+      .eq('slug', finalSlug)
+      .maybeSingle()
+    if (!existing) break
+    attempt++
+    finalSlug = `${slugBase}-${attempt}`
+  }
+
+  const { data, error } = await admin
+    .from('instructors')
+    .insert({
+      slug: finalSlug,
+      name: fullName,
+      email: email.trim() || null,
+      instructor_role: 'specialized',
+      title: fullName,
+      bio: '',
+      show_on_team_page: false,
+    })
+    .select('id')
+    .single()
+
+  if (error) throw new Error(error.message)
+  revalidatePath('/admin/instructors')
+  return { id: data.id }
+}
+
+export async function adminDeleteInstructor(instructorId: string): Promise<void> {
+  await requireAdmin()
+  const admin = createAdminClient()
+
+  const { data: instructor } = await admin
+    .from('instructors')
+    .select('slug, profile_id')
+    .eq('id', instructorId)
+    .single()
+
+  if (!instructor) throw new Error('Instructor not found')
+
+  const { error } = await admin
+    .from('instructors')
+    .delete()
+    .eq('id', instructorId)
+
+  if (error) throw new Error(error.message)
+
+  if (instructor.profile_id) {
+    await admin.auth.admin.deleteUser(instructor.profile_id)
+  }
+
+  revalidatePath('/admin/instructors')
+  revalidatePath('/team')
+  if (instructor.slug) revalidatePath(`/team/${instructor.slug}`)
 }
