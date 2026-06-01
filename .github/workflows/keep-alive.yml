@@ -1,0 +1,19 @@
+name: Keep Supabase Project Alive
+
+on:
+  schedule:
+    - cron: '0 12 */3 * *'  # every 3 days at noon UTC
+  workflow_dispatch:         # allow manual trigger
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase
+        env:
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          curl -fsS -o /dev/null \
+            -H "apikey: $SUPABASE_ANON_KEY" \
+            -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
+            "https://qejyeetwurhszyirhpxd.supabase.co/rest/v1/?limit=1"
