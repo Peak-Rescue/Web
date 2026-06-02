@@ -1,11 +1,11 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
 import { linkInstructorProfile } from './actions'
 
-export default function ConfirmPage() {
+function ConfirmInner() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [failed, setFailed] = useState(false)
@@ -52,5 +52,17 @@ export default function ConfirmPage() {
     <main className="min-h-screen bg-zinc-950 flex items-center justify-center">
       <p className="text-zinc-400">Signing you in…</p>
     </main>
+  )
+}
+
+export default function ConfirmPage() {
+  return (
+    <Suspense fallback={
+      <main className="min-h-screen bg-zinc-950 flex items-center justify-center">
+        <p className="text-zinc-400">Signing you in…</p>
+      </main>
+    }>
+      <ConfirmInner />
+    </Suspense>
   )
 }
