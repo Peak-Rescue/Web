@@ -253,14 +253,19 @@ export async function adminSendInvite(instructorId: string) {
 
   const { data: instructor } = await admin
     .from('instructors')
-    .select('email')
+    .select('email, name')
     .eq('id', instructorId)
     .single()
 
   if (!instructor?.email) throw new Error('No email on instructor record')
 
+  const nameParts = instructor.name.trim().split(/\s+/)
+  const firstName = nameParts[0] ?? ''
+  const lastName = nameParts.slice(1).join(' ')
+
   const { error } = await admin.auth.admin.inviteUserByEmail(instructor.email, {
     redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback?next=/instructor`,
+    data: { first_name: firstName, last_name: lastName },
   })
 
   if (error) {
