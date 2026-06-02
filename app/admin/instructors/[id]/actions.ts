@@ -411,7 +411,8 @@ export async function adminDeleteInstructor(instructorId: string): Promise<void>
   if (error) throw new Error(error.message)
 
   if (instructor.profile_id) {
-    await admin.auth.admin.deleteUser(instructor.profile_id)
+    const { error: deleteUserError } = await admin.auth.admin.deleteUser(instructor.profile_id)
+    if (deleteUserError) console.error('Failed to delete auth user:', deleteUserError.message)
   }
 
   revalidatePath('/admin/instructors')
