@@ -30,16 +30,14 @@ export async function GET(request: Request) {
           .eq('email', data.user.email)
           .maybeSingle()
 
-        if (instructor && !instructor.profile_id) {
+        if (instructor) {
           await Promise.all([
-            admin
-              .from('instructors')
-              .update({ profile_id: data.user.id })
-              .eq('id', instructor.id),
-            admin
-              .from('profiles')
-              .update({ role: 'instructor' })
-              .eq('id', data.user.id),
+            // Link profile_id if not already set
+            ...(!instructor.profile_id ? [
+              admin.from('instructors').update({ profile_id: data.user.id }).eq('id', instructor.id),
+            ] : []),
+            // Always ensure role is instructor
+            admin.from('profiles').update({ role: 'instructor' }).eq('id', data.user.id),
           ])
         }
       }

@@ -279,10 +279,10 @@ export async function adminSendInvite(instructorId: string) {
     })
     if (linkError || !linkData?.user?.id) throw new Error(linkError?.message ?? 'Could not resolve existing user')
 
-    await admin
-      .from('instructors')
-      .update({ profile_id: linkData.user.id, invite_sent_at: new Date().toISOString() })
-      .eq('id', instructorId)
+    await Promise.all([
+      admin.from('instructors').update({ profile_id: linkData.user.id, invite_sent_at: new Date().toISOString() }).eq('id', instructorId),
+      admin.from('profiles').update({ role: 'instructor' }).eq('id', linkData.user.id),
+    ])
 
     // Send a magic link email via the anon client (generateLink only returns the URL, doesn't send)
     const anon = createAnonClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)
