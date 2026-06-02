@@ -253,7 +253,7 @@ export async function adminSendInvite(instructorId: string) {
 
   const { data: instructor } = await admin
     .from('instructors')
-    .select('email, name')
+    .select('email, name, profile_id')
     .eq('id', instructorId)
     .single()
 
@@ -263,6 +263,29 @@ export async function adminSendInvite(instructorId: string) {
   const firstName = nameParts[0] ?? ''
   const lastName = nameParts.slice(1).join(' ')
 
+  const sendOtp = async () => {
+    const anon = createAnonClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      { auth: { flowType: 'implicit' } }
+    )
+    await anon.auth.signInWithOtp({
+      email: instructor.email!,
+      options: {
+        emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/confirm`,
+        shouldCreateUser: false,
+      },
+    })
+  }
+
+  // Active instructor (already has a portal account) — send sign-in link directly
+  if (instructor.profile_id) {
+    await sendOtp()
+    revalidatePath(`/admin/instructors/${instructorId}`)
+    revalidatePath('/admin/instructors')
+    return
+  }
+
   const { error } = await admin.auth.admin.inviteUserByEmail(instructor.email, {
     redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback?next=/instructor`,
     data: { first_name: firstName, last_name: lastName },
@@ -271,11 +294,11 @@ export async function adminSendInvite(instructorId: string) {
   if (error) {
     if (!error.message.includes('already been registered')) throw new Error(error.message)
 
-    // User already exists in auth (e.g. a prior invite) — resolve their ID and link directly
+    // User exists in auth but profile not linked yet — resolve their ID and link
     const { data: linkData, error: linkError } = await admin.auth.admin.generateLink({
       type: 'magiclink',
       email: instructor.email,
-      options: { redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback?next=/instructor` },
+      options: { redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/confirm` },
     })
     if (linkError || !linkData?.user?.id) throw new Error(linkError?.message ?? 'Could not resolve existing user')
 
@@ -284,19 +307,7 @@ export async function adminSendInvite(instructorId: string) {
       admin.from('profiles').update({ role: 'instructor' }).eq('id', linkData.user.id),
     ])
 
-    // Send a magic link via implicit flow so it works in any mobile browser
-    const anon = createAnonClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      { auth: { flowType: 'implicit' } }
-    )
-    await anon.auth.signInWithOtp({
-      email: instructor.email,
-      options: {
-        emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/confirm`,
-        shouldCreateUser: false,
-      },
-    })
+    await sendOtp()
 
     revalidatePath(`/admin/instructors/${instructorId}`)
     revalidatePath('/admin/instructors')
