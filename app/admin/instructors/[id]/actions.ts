@@ -262,7 +262,26 @@ export async function adminSendInvite(instructorId: string) {
     redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback?next=/instructor`,
   })
 
-  if (error) throw new Error(error.message)
+  if (error) {
+    if (!error.message.includes('already been registered')) throw new Error(error.message)
+
+    // User already exists in auth (e.g. a prior invite) — resolve their ID and link directly
+    const { data: linkData, error: linkError } = await admin.auth.admin.generateLink({
+      type: 'magiclink',
+      email: instructor.email,
+      options: { redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback?next=/instructor` },
+    })
+    if (linkError || !linkData?.user?.id) throw new Error(linkError?.message ?? 'Could not resolve existing user')
+
+    await admin
+      .from('instructors')
+      .update({ profile_id: linkData.user.id, invite_sent_at: new Date().toISOString() })
+      .eq('id', instructorId)
+
+    revalidatePath(`/admin/instructors/${instructorId}`)
+    revalidatePath('/admin/instructors')
+    return
+  }
 
   await admin
     .from('instructors')
