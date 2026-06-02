@@ -259,7 +259,7 @@ export async function adminSendInvite(instructorId: string) {
   if (!instructor?.email) throw new Error('No email on instructor record')
 
   const { error } = await admin.auth.admin.inviteUserByEmail(instructor.email, {
-    redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/instructor`,
+    redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback?next=/instructor`,
   })
 
   if (error) throw new Error(error.message)
