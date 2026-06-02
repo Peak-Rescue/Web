@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
 
 export default function LoginPage() {
   const [mode, setMode] = useState<'signin' | 'signup'>('signin')
@@ -18,10 +17,17 @@ export default function LoginPage() {
     setError('')
 
     const redirectUrl = mode === 'signup'
-      ? `${window.location.origin}/auth/callback?first_name=${encodeURIComponent(firstName.trim())}&last_name=${encodeURIComponent(lastName.trim())}`
-      : `${window.location.origin}/auth/callback`
+      ? `${window.location.origin}/auth/confirm?first_name=${encodeURIComponent(firstName.trim())}&last_name=${encodeURIComponent(lastName.trim())}`
+      : `${window.location.origin}/auth/confirm`
 
-    const supabase = createClient()
+    // Use implicit flow so the magic link works regardless of which browser
+    // the user opens it in (avoids PKCE cookie cross-context failure on mobile)
+    const { createClient: createImplicitClient } = await import('@supabase/supabase-js')
+    const supabase = createImplicitClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      { auth: { flowType: 'implicit' } }
+    )
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: { emailRedirectTo: redirectUrl },
