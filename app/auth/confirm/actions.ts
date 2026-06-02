@@ -10,12 +10,10 @@ export async function linkInstructorProfile(firstName?: string, lastName?: strin
 
   const admin = createAdminClient()
 
-  const updates: Promise<unknown>[] = [
-    admin.from('profiles').upsert(
-      { id: user.id, ...(firstName ? { first_name: firstName } : {}), ...(lastName ? { last_name: lastName } : {}) },
-      { onConflict: 'id', ignoreDuplicates: false }
-    ),
-  ]
+  await admin.from('profiles').upsert(
+    { id: user.id, ...(firstName ? { first_name: firstName } : {}), ...(lastName ? { last_name: lastName } : {}) },
+    { onConflict: 'id', ignoreDuplicates: false }
+  )
 
   const { data: instructor } = await admin
     .from('instructors')
@@ -24,15 +22,11 @@ export async function linkInstructorProfile(firstName?: string, lastName?: strin
     .maybeSingle()
 
   if (instructor) {
-    if (!instructor.profile_id) {
-      updates.push(
-        admin.from('instructors').update({ profile_id: user.id }).eq('id', instructor.id)
-      )
-    }
-    updates.push(
-      admin.from('profiles').update({ role: 'instructor' }).eq('id', user.id)
-    )
+    await Promise.all([
+      ...(!instructor.profile_id
+        ? [admin.from('instructors').update({ profile_id: user.id }).eq('id', instructor.id)]
+        : []),
+      admin.from('profiles').update({ role: 'instructor' }).eq('id', user.id),
+    ])
   }
-
-  await Promise.all(updates)
 }
