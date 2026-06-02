@@ -98,6 +98,21 @@ export default async function AdminInstructorDetailPage({ params }: { params: Pr
           {instructor.email && <p className="text-zinc-400 mt-1">{instructor.email}</p>}
         </div>
 
+        {/* Active — option to send a sign-in link */}
+        {inviteStatus === 'active' && instructor.email && (
+          <div className="mb-10 px-4 py-4 bg-zinc-900 border border-zinc-700 rounded-lg flex items-center justify-between gap-4">
+            <div>
+              <p className="text-sm font-medium">Portal account active</p>
+              <p className="text-xs text-zinc-500 mt-0.5">Send a sign-in link if they need access to their account.</p>
+            </div>
+            <InviteButton
+              action={adminSendInvite.bind(null, instructor.id)}
+              label="Send sign-in link"
+              className="shrink-0 px-4 py-2 text-sm font-medium bg-zinc-700 hover:bg-zinc-600 disabled:opacity-50 text-white rounded transition-colors"
+            />
+          </div>
+        )}
+
         {/* Invite banner for instructors without a portal account */}
         {inviteStatus !== 'active' && (
           <div className="mb-10 px-4 py-4 bg-zinc-900 border border-zinc-700 rounded-lg flex items-center justify-between gap-4">

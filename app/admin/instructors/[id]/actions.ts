@@ -284,12 +284,16 @@ export async function adminSendInvite(instructorId: string) {
       admin.from('profiles').update({ role: 'instructor' }).eq('id', linkData.user.id),
     ])
 
-    // Send a magic link email via the anon client (generateLink only returns the URL, doesn't send)
-    const anon = createAnonClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)
+    // Send a magic link via implicit flow so it works in any mobile browser
+    const anon = createAnonClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      { auth: { flowType: 'implicit' } }
+    )
     await anon.auth.signInWithOtp({
       email: instructor.email,
       options: {
-        emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback?next=/instructor`,
+        emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/confirm`,
         shouldCreateUser: false,
       },
     })
