@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { createClient as createAnonClient } from '@supabase/supabase-js'
 import { type CertType } from '@/lib/certs'
 import { type CapabilityCategory, type CapabilityRole } from '@/lib/capabilities'
 import { normalizePhone } from '@/lib/phone'
@@ -277,6 +278,16 @@ export async function adminSendInvite(instructorId: string) {
       .from('instructors')
       .update({ profile_id: linkData.user.id, invite_sent_at: new Date().toISOString() })
       .eq('id', instructorId)
+
+    // Send a magic link email via the anon client (generateLink only returns the URL, doesn't send)
+    const anon = createAnonClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)
+    await anon.auth.signInWithOtp({
+      email: instructor.email,
+      options: {
+        emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback?next=/instructor`,
+        shouldCreateUser: false,
+      },
+    })
 
     revalidatePath(`/admin/instructors/${instructorId}`)
     revalidatePath('/admin/instructors')
