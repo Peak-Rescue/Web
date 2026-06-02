@@ -31,10 +31,16 @@ export async function GET(request: Request) {
           .maybeSingle()
 
         if (instructor && !instructor.profile_id) {
-          await admin
-            .from('instructors')
-            .update({ profile_id: data.user.id })
-            .eq('id', instructor.id)
+          await Promise.all([
+            admin
+              .from('instructors')
+              .update({ profile_id: data.user.id })
+              .eq('id', instructor.id),
+            admin
+              .from('profiles')
+              .update({ role: 'instructor' })
+              .eq('id', data.user.id),
+          ])
         }
       }
 
