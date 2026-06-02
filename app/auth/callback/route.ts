@@ -9,7 +9,6 @@ export async function GET(request: Request) {
 
   if (code) {
     const supabase = await createClient()
-    await supabase.auth.signOut()
     const { data, error } = await supabase.auth.exchangeCodeForSession(code)
     if (!error && data.user) {
       const first_name = searchParams.get('first_name') || undefined
