@@ -48,7 +48,12 @@ export default async function InstructorsPage() {
                       src={instructor.avatar}
                       alt={instructor.name}
                       fill
-                      className={`object-cover ${instructor.avatar_position ?? 'object-center'} ${instructor.avatar_scale ?? ''} grayscale group-hover:grayscale-0 transition-all duration-500`}
+                      className="object-cover grayscale group-hover:grayscale-0 transition-all duration-500"
+                      style={{
+                        objectPosition: instructor.avatar_position ?? 'center',
+                        transform: instructor.avatar_scale ? `scale(${instructor.avatar_scale})` : undefined,
+                        transformOrigin: instructor.avatar_position ?? 'center',
+                      }}
                       sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
                     />
                   ) : (
