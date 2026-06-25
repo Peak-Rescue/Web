@@ -13,6 +13,10 @@ jobs:
         env:
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: |
+          # Query a real table via PostgREST so the request actually hits
+          # Postgres. The auth /health endpoint does not touch the database,
+          # so it does not count as activity for Supabase's auto-pause check.
           curl -fsS -o /dev/null \
             -H "apikey: $SUPABASE_ANON_KEY" \
-            "https://qejyeetwurhszyirhpxd.supabase.co/auth/v1/health"
+            -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
+            "https://qejyeetwurhszyirhpxd.supabase.co/rest/v1/instructors?select=id&limit=1"
