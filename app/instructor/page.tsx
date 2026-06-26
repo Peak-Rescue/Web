@@ -63,7 +63,7 @@ export default async function InstructorPage() {
                 placeholder="Write a short bio for your public profile…"
               />
             </div>
-            <button type="submit" className="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 text-white rounded text-sm font-medium transition-colors">
+            <button type="submit" className="px-4 py-2 bg-pr-red hover:bg-pr-red-dark text-white rounded text-sm font-medium transition-colors">
               Save profile
             </button>
           </form>
