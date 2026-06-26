@@ -54,7 +54,7 @@ export default async function InstructorPage({
           </div>
 
           <div className="flex flex-col md:flex-row gap-10 items-start">
-            <div className="relative w-40 h-40 md:w-56 md:h-56 flex-shrink-0 overflow-hidden bg-pr-surface-raised border border-white/[0.06]">
+            <div className="relative w-40 md:w-56 aspect-[3/4] flex-shrink-0 overflow-hidden bg-pr-surface-raised border border-white/[0.06]">
               {instructor.avatar ? (
                 <Image
                   src={instructor.avatar}

@@ -1,10 +1,10 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import Image from 'next/image'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import CertGrid from './CertGrid'
 import ProfileForm from './ProfileForm'
+import AvatarEditor from '@/components/AvatarEditor'
 import { upsertCert, deleteCert, addCertDocument, deleteCertDocument, updateProfile, updateInstructorProfile } from './actions'
 import { signOut } from '@/app/actions'
 import { CAPABILITY_META, CAPABILITY_ORDER } from '@/lib/capabilities'
@@ -18,7 +18,7 @@ export default async function InstructorPage() {
 
   const [{ data: profile }, { data: instructor }] = await Promise.all([
     admin.from('profiles').select('first_name, last_name, email, phone, emergency_name, emergency_relationship, emergency_phone').eq('id', user.id).single(),
-    admin.from('instructors').select('id, name, bio, avatar, instructor_capabilities(category, role)').eq('profile_id', user.id).maybeSingle(),
+    admin.from('instructors').select('id, name, bio, avatar, avatar_position, avatar_scale, instructor_capabilities(category, role)').eq('profile_id', user.id).maybeSingle(),
   ])
 
   if (!instructor) redirect('/dashboard')
@@ -46,28 +46,13 @@ export default async function InstructorPage() {
         {/* Public profile (bio + photo) */}
         <section className="mb-10">
           <h2 className="text-lg font-semibold mb-4">Public Profile</h2>
-          <form action={updateInstructorProfile} encType="multipart/form-data" className="space-y-4 p-6 bg-zinc-900 rounded-lg border border-zinc-800">
-            <div className="flex gap-6 items-start">
-              <div className="relative w-24 h-24 flex-shrink-0 rounded-lg overflow-hidden bg-zinc-800 border border-zinc-700">
-                {instructor.avatar ? (
-                  <Image src={instructor.avatar} alt={instructor.name} fill className="object-cover object-top" sizes="96px" />
-                ) : (
-                  <span className="absolute inset-0 flex items-center justify-center text-2xl text-zinc-600 font-bold">
-                    {instructor.name.split(' ').map((n: string) => n[0]).join('').slice(0, 2)}
-                  </span>
-                )}
-              </div>
-              <div className="flex-1 space-y-1">
-                <label className="block text-xs text-zinc-400 mb-1">Profile photo</label>
-                <input
-                  type="file"
-                  name="photo"
-                  accept="image/*"
-                  className="block text-sm text-zinc-400 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:font-medium file:bg-zinc-700 file:text-white hover:file:bg-zinc-600 transition-colors"
-                />
-                <p className="text-xs text-zinc-600">JPG or PNG, max 5 MB</p>
-              </div>
-            </div>
+          <form action={updateInstructorProfile} className="space-y-4 p-6 bg-zinc-900 rounded-lg border border-zinc-800">
+            <AvatarEditor
+              name={instructor.name}
+              currentAvatar={instructor.avatar}
+              currentPosition={instructor.avatar_position}
+              currentScale={instructor.avatar_scale}
+            />
             <div>
               <label className="block text-xs text-zinc-400 mb-1">Bio</label>
               <textarea

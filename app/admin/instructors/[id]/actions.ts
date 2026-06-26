@@ -220,6 +220,8 @@ export async function adminUpdateInstructorProfile(instructorId: string, formDat
 
   const bio = (formData.get('bio') as string) || null
   const photo = formData.get('photo') as File | null
+  const avatarPosition = ((formData.get('avatar_position') as string) || '').trim() || null
+  const avatarScale = ((formData.get('avatar_scale') as string) || '').trim() || null
 
   let avatar = instructor.avatar
 
@@ -240,7 +242,7 @@ export async function adminUpdateInstructorProfile(instructorId: string, formDat
 
   const { error } = await admin
     .from('instructors')
-    .update({ bio, avatar })
+    .update({ bio, avatar, avatar_position: avatarPosition, avatar_scale: avatarScale })
     .eq('id', instructorId)
 
   if (error) throw new Error(error.message)

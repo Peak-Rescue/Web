@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import CertGrid from '@/app/instructor/CertGrid'
 import ProfileForm from '@/app/instructor/ProfileForm'
+import AvatarEditor from '@/components/AvatarEditor'
 import CapabilityPanel from '@/app/admin/instructors/CapabilityPanel'
 import TeamPageToggle from '@/app/admin/instructors/TeamPageToggle'
 import DeleteInstructorButton from '@/app/admin/instructors/DeleteInstructorButton'
@@ -41,7 +42,7 @@ export default async function AdminInstructorDetailPage({ params }: { params: Pr
   // Look up by instructors.id (the URL param)
   const { data: instructor } = await admin
     .from('instructors')
-    .select('id, name, email, slug, profile_id, invite_sent_at, show_on_team_page, bio, avatar, instructor_capabilities(category, role)')
+    .select('id, name, email, slug, profile_id, invite_sent_at, show_on_team_page, bio, avatar, avatar_position, avatar_scale, instructor_capabilities(category, role)')
     .eq('id', id)
     .single()
 
@@ -167,28 +168,12 @@ export default async function AdminInstructorDetailPage({ params }: { params: Pr
         <section className="mb-10">
           <h2 className="text-lg font-semibold mb-4">Public Profile</h2>
           <form action={adminUpdateInstructorProfile.bind(null, instructor.id)} className="space-y-4 p-6 bg-zinc-900 rounded-lg border border-zinc-800">
-            <div className="flex gap-6 items-start">
-              <div className="relative w-24 h-24 flex-shrink-0 rounded-lg overflow-hidden bg-zinc-800 border border-zinc-700">
-                {instructor.avatar ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={instructor.avatar} alt={instructor.name} className="w-full h-full object-cover object-top" />
-                ) : (
-                  <span className="absolute inset-0 flex items-center justify-center text-2xl text-zinc-600 font-bold">
-                    {instructor.name.split(' ').map((n: string) => n[0]).join('').slice(0, 2)}
-                  </span>
-                )}
-              </div>
-              <div className="flex-1 space-y-1">
-                <label className="block text-xs text-zinc-400 mb-1">Profile photo</label>
-                <input
-                  type="file"
-                  name="photo"
-                  accept="image/*"
-                  className="block text-sm text-zinc-400 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:font-medium file:bg-zinc-700 file:text-white hover:file:bg-zinc-600 transition-colors"
-                />
-                <p className="text-xs text-zinc-600">JPG or PNG, max 5 MB</p>
-              </div>
-            </div>
+            <AvatarEditor
+              name={instructor.name}
+              currentAvatar={instructor.avatar}
+              currentPosition={instructor.avatar_position}
+              currentScale={instructor.avatar_scale}
+            />
             <div>
               <label className="block text-xs text-zinc-400 mb-1">Bio</label>
               <textarea
