@@ -158,7 +158,7 @@ export default async function AdminInstructorDetailPage({ params }: { params: Pr
                 className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500"
               />
             </div>
-            <button type="submit" className="px-3 py-2 bg-pr-red hover:bg-pr-red-dark text-white rounded text-sm font-medium transition-colors shrink-0">
+            <button type="submit" className="px-3 py-2 bg-pr-red hover:bg-pr-red-light text-white rounded text-sm font-medium transition-colors shrink-0">
               Save
             </button>
           </form>
@@ -184,7 +184,7 @@ export default async function AdminInstructorDetailPage({ params }: { params: Pr
                 placeholder="Write a short bio for the public profile…"
               />
             </div>
-            <button type="submit" className="px-4 py-2 bg-pr-red hover:bg-pr-red-dark text-white rounded text-sm font-medium transition-colors">
+            <button type="submit" className="px-4 py-2 bg-pr-red hover:bg-pr-red-light text-white rounded text-sm font-medium transition-colors">
               Save profile
             </button>
           </form>

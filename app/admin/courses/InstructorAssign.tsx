@@ -37,7 +37,7 @@ export default function InstructorAssign({
           <option value="lead">Lead</option>
           <option value="assist">Assist</option>
         </select>
-        <button type="submit" className="px-4 py-2 bg-pr-red hover:bg-pr-red-dark text-white rounded text-sm font-medium transition-colors">Assign</button>
+        <button type="submit" className="px-4 py-2 bg-pr-red hover:bg-pr-red-light text-white rounded text-sm font-medium transition-colors">Assign</button>
       </form>
 
       {hasUnqualified && (
