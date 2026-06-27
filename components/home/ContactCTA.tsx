@@ -48,7 +48,7 @@ export default function ContactCTA() {
           >
             <Link
               href="/contact"
-              className="px-8 py-4 bg-pr-red text-white font-display font-700 text-sm tracking-widest uppercase hover:bg-pr-red-light transition-colors"
+              className="px-8 py-4 bg-pr-red text-white font-display font-700 text-sm tracking-widest uppercase hover:bg-pr-red-dark transition-colors"
             >
               Get in Touch
             </Link>

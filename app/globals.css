@@ -7,6 +7,7 @@
   --color-pr-surface-raised: #1a1d24;
   --color-pr-red: #cc1f1a;
   --color-pr-red-light: #e8332e;
+  --color-pr-red-dark: #8f1512;
   --color-pr-text: #f0f0f0;
   --color-pr-muted: #8a8f9a;
 
@@ -22,6 +23,13 @@
 html {
   scroll-behavior: smooth;
   scrollbar-width: none;
+}
+
+/* Buttons should use the hand cursor like links do (Tailwind v4 preflight
+   leaves them as the default arrow). Disabled buttons keep their own cursor. */
+button:not(:disabled),
+[role="button"]:not([aria-disabled="true"]) {
+  cursor: pointer;
 }
 
 html::-webkit-scrollbar {

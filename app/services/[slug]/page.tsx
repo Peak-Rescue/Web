@@ -74,7 +74,7 @@ export default async function ServicePage({
                 <div className="mt-8">
                   <Link
                     href="/contact"
-                    className="inline-block px-8 py-4 bg-pr-red text-white font-display font-700 text-sm tracking-widest uppercase hover:bg-pr-red-light transition-colors"
+                    className="inline-block px-8 py-4 bg-pr-red text-white font-display font-700 text-sm tracking-widest uppercase hover:bg-pr-red-dark transition-colors"
                   >
                     Inquire About This Program
                   </Link>
@@ -97,7 +97,7 @@ export default async function ServicePage({
             <div className="mt-10">
               <Link
                 href="/contact"
-                className="inline-block px-8 py-4 bg-pr-red text-white font-display font-700 text-sm tracking-widest uppercase hover:bg-pr-red-light transition-colors"
+                className="inline-block px-8 py-4 bg-pr-red text-white font-display font-700 text-sm tracking-widest uppercase hover:bg-pr-red-dark transition-colors"
               >
                 Inquire About This Program
               </Link>
@@ -138,7 +138,7 @@ export default async function ServicePage({
                 </p>
                 <Link
                   href="/contact"
-                  className="block text-center px-6 py-3 bg-pr-red text-white font-display font-700 text-sm tracking-widest uppercase hover:bg-pr-red-light transition-colors mb-4"
+                  className="block text-center px-6 py-3 bg-pr-red text-white font-display font-700 text-sm tracking-widest uppercase hover:bg-pr-red-dark transition-colors mb-4"
                 >
                   Get in Touch
                 </Link>

@@ -144,7 +144,7 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-2.5 bg-pr-red hover:bg-pr-red-light disabled:opacity-50 text-white font-semibold rounded-lg transition-colors"
+            className="w-full py-2.5 bg-pr-red hover:bg-pr-red-dark disabled:opacity-50 text-white font-semibold rounded-lg transition-colors"
           >
             {loading ? 'Sending…' : 'Send sign-in link'}
           </button>

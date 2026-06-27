@@ -395,7 +395,7 @@ export default function CertGrid({ initialCerts, actions }: { initialCerts: DbCe
                         type="button"
                         disabled={saving || uploading}
                         onClick={() => formRef.current?.requestSubmit()}
-                        className={`px-4 py-2 bg-pr-red hover:bg-pr-red-light disabled:opacity-50 text-white rounded font-medium transition-colors ${!canSave ? 'cursor-not-allowed' : ''}`}
+                        className={`px-4 py-2 bg-pr-red hover:bg-pr-red-dark disabled:opacity-50 text-white rounded font-medium transition-colors ${!canSave ? 'cursor-not-allowed' : ''}`}
                       >
                         {saving ? 'Saving…' : 'Save'}
                       </button>

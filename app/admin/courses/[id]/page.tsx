@@ -142,7 +142,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
               <textarea name="notes" rows={2} defaultValue={inst.notes ?? ''} className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500 resize-none" />
             </div>
             <div className="sm:col-span-2">
-              <button type="submit" className="px-4 py-2 bg-pr-red hover:bg-pr-red-light text-white rounded text-sm font-medium transition-colors">Save details</button>
+              <button type="submit" className="px-4 py-2 bg-pr-red hover:bg-pr-red-dark text-white rounded text-sm font-medium transition-colors">Save details</button>
             </div>
           </form>
         </section>
@@ -162,7 +162,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
               <input name="ends_at" type="date" defaultValue={inst.ends_at ?? ''} className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
             </div>
             <div className="col-span-2">
-              <button type="submit" className="px-4 py-2 bg-pr-red hover:bg-pr-red-light text-white rounded text-sm font-medium transition-colors">Save dates</button>
+              <button type="submit" className="px-4 py-2 bg-pr-red hover:bg-pr-red-dark text-white rounded text-sm font-medium transition-colors">Save dates</button>
             </div>
           </form>
 
@@ -200,7 +200,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
                 <label className="block text-xs text-zinc-500 mb-1">End date <span className="text-zinc-600">(optional)</span></label>
                 <input name="end_date" type="date" className="bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
               </div>
-              <button type="submit" className="px-4 py-2 bg-pr-red hover:bg-pr-red-light text-white rounded text-sm font-medium transition-colors">
+              <button type="submit" className="px-4 py-2 bg-pr-red hover:bg-pr-red-dark text-white rounded text-sm font-medium transition-colors">
                 Add
               </button>
             </form>
@@ -309,7 +309,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
                     </select>
                     <input name="url" required placeholder="https://…" className="flex-[2] bg-zinc-800 border border-zinc-700 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-zinc-500" />
                     <input name="description" placeholder="Description (optional)" className="flex-[2] bg-zinc-800 border border-zinc-700 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-zinc-500" />
-                    <button type="submit" className="px-3 py-1.5 bg-pr-red hover:bg-pr-red-light text-white rounded text-sm font-medium transition-colors whitespace-nowrap">Add</button>
+                    <button type="submit" className="px-3 py-1.5 bg-pr-red hover:bg-pr-red-dark text-white rounded text-sm font-medium transition-colors whitespace-nowrap">Add</button>
                   </form>
                 </div>
               )
@@ -329,7 +329,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
                 <option value="instructor">Instructors only</option>
               </select>
             </div>
-            <button type="submit" className="px-4 py-2 bg-pr-red hover:bg-pr-red-light text-white rounded text-sm font-medium transition-colors">Add section</button>
+            <button type="submit" className="px-4 py-2 bg-pr-red hover:bg-pr-red-dark text-white rounded text-sm font-medium transition-colors">Add section</button>
           </form>
         </section>
 
