@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import CertGrid from './CertGrid'
 import ProfileForm from './ProfileForm'
 import AvatarEditor from '@/components/AvatarEditor'
+import SaveButton from '@/components/SaveButton'
 import { upsertCert, deleteCert, addCertDocument, deleteCertDocument, updateProfile, updateInstructorProfile } from './actions'
 import { signOut } from '@/app/actions'
 import { CAPABILITY_META, CAPABILITY_ORDER } from '@/lib/capabilities'
@@ -63,9 +64,9 @@ export default async function InstructorPage() {
                 placeholder="Write a short bio for your public profile…"
               />
             </div>
-            <button type="submit" className="px-4 py-2 bg-pr-red hover:bg-pr-red-dark text-white rounded text-sm font-medium transition-colors">
+            <SaveButton className="px-4 py-2 bg-pr-red hover:bg-pr-red-dark text-white rounded text-sm font-medium transition-colors">
               Save profile
-            </button>
+            </SaveButton>
           </form>
         </section>
 

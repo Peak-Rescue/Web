@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 type Props = {
   name: string
@@ -26,6 +26,8 @@ export default function AvatarEditor({ name, currentAvatar, currentPosition, cur
     return Number.isFinite(n) && n >= 1 ? n : 1
   })
   const posStart = useRef({ x: 50, y: 50, px: 0, py: 0, w: 1, h: 1 })
+  const posInputRef = useRef<HTMLInputElement>(null)
+  const mounted = useRef(false)
 
   const initials = name.split(' ').map((n) => n[0]).join('').slice(0, 2)
 
@@ -33,6 +35,14 @@ export default function AvatarEditor({ name, currentAvatar, currentPosition, cur
   const objectPosition = `${Math.round(pos.x)}% ${Math.round(pos.y)}%`
   // Mirror the public render: scale of exactly 1 means "no transform" → store empty
   const scaleValue = scale > 1.0001 ? String(Math.round(scale * 100) / 100) : ''
+
+  // React sets hidden-input values directly without firing DOM events, so
+  // dispatch a bubbling input event when framing changes — this lets an
+  // enclosing form (e.g. SaveButton's dirty check) notice drag/zoom edits.
+  useEffect(() => {
+    if (!mounted.current) { mounted.current = true; return }
+    posInputRef.current?.dispatchEvent(new Event('input', { bubbles: true }))
+  }, [objectPosition, scaleValue])
 
   function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -67,7 +77,7 @@ export default function AvatarEditor({ name, currentAvatar, currentPosition, cur
   return (
     <div className="space-y-4">
       {/* Hidden inputs submitted with the form */}
-      <input type="hidden" name="avatar_position" value={objectPosition} />
+      <input ref={posInputRef} type="hidden" name="avatar_position" value={objectPosition} />
       <input type="hidden" name="avatar_scale" value={scaleValue} />
 
       <div className="flex flex-col sm:flex-row gap-6">

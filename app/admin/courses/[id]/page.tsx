@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { updateInstanceDetails, updateInstanceDates, addOffDay, removeOffDay, addModule, deleteModule, addItem, deleteItem, removeInstructor } from '../actions'
 import { CourseTypeSelect } from '../CourseTypeSelect'
 import InstructorAssign from '../InstructorAssign'
+import SaveButton from '@/components/SaveButton'
 import { courseDisplayName, computeBlocks } from '@/lib/courses'
 import { CATEGORY_COURSE_TYPES } from '@/lib/capabilities'
 
@@ -142,7 +143,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
               <textarea name="notes" rows={2} defaultValue={inst.notes ?? ''} className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500 resize-none" />
             </div>
             <div className="sm:col-span-2">
-              <button type="submit" className="px-4 py-2 bg-pr-red hover:bg-pr-red-dark text-white rounded text-sm font-medium transition-colors">Save details</button>
+              <SaveButton className="px-4 py-2 bg-pr-red hover:bg-pr-red-dark text-white rounded text-sm font-medium transition-colors">Save details</SaveButton>
             </div>
           </form>
         </section>
@@ -162,7 +163,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
               <input name="ends_at" type="date" defaultValue={inst.ends_at ?? ''} className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
             </div>
             <div className="col-span-2">
-              <button type="submit" className="px-4 py-2 bg-pr-red hover:bg-pr-red-dark text-white rounded text-sm font-medium transition-colors">Save dates</button>
+              <SaveButton className="px-4 py-2 bg-pr-red hover:bg-pr-red-dark text-white rounded text-sm font-medium transition-colors">Save dates</SaveButton>
             </div>
           </form>
 
