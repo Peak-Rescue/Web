@@ -20,3 +20,10 @@ export async function setSubmissionArchived(id: string, archived: boolean) {
   if (error) throw new Error(error.message)
   revalidatePath('/admin/contact')
 }
+
+export async function deleteSubmission(id: string) {
+  const admin = await requireAdmin()
+  const { error } = await admin.from('contact_submissions').delete().eq('id', id)
+  if (error) throw new Error(error.message)
+  revalidatePath('/admin/contact')
+}

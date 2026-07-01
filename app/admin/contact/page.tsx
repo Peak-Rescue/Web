@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { setSubmissionArchived } from './actions'
+import { DeleteButton } from './DeleteButton'
 
 const INTEREST_LABELS: Record<string, string> = {
   tactical: 'Military & Tactical',
@@ -54,12 +55,13 @@ function SubmissionCard({ s }: { s: Submission }) {
         </div>
       )}
       <p className="text-sm text-zinc-300 mt-3 whitespace-pre-wrap leading-relaxed">{s.message}</p>
-      <div className="mt-4 flex justify-end">
+      <div className="mt-4 flex justify-end gap-4">
         <form action={setSubmissionArchived.bind(null, s.id, !s.archived)}>
           <button type="submit" className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">
             {s.archived ? 'Unarchive' : 'Archive'}
           </button>
         </form>
+        <DeleteButton id={s.id} name={`${s.first_name} ${s.last_name}`} />
       </div>
     </div>
   )
