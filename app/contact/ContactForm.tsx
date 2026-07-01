@@ -25,7 +25,7 @@ export default function ContactForm() {
       organization: String(fd.get('organization') ?? ''),
       interest: String(fd.get('interest') ?? ''),
       message: String(fd.get('message') ?? ''),
-      company_website: String(fd.get('company_website') ?? ''),
+      company_website: String(fd.get('hp_field') ?? ''),
     })
     if (res.ok) {
       setState('sent')
@@ -61,13 +61,16 @@ export default function ContactForm() {
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-6">
-      {/* Honeypot — hidden from users, catches bots */}
-      <div className="absolute -left-[9999px]" aria-hidden="true">
-        <label>
-          Company website
-          <input type="text" name="company_website" tabIndex={-1} autoComplete="off" />
-        </label>
-      </div>
+      {/* Honeypot — display:none so real browsers (and their autofill) skip it;
+          naive bots that fill every field populate it and get dropped server-side. */}
+      <input
+        type="text"
+        name="hp_field"
+        tabIndex={-1}
+        autoComplete="off"
+        aria-hidden="true"
+        style={{ display: 'none' }}
+      />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
         <div className="flex flex-col gap-2">
