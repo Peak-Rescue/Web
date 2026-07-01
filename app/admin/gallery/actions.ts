@@ -23,11 +23,6 @@ function cleanCategories(input: string[]): string[] {
   return [...new Set(input.filter(c => VALID_CATEGORIES.has(c)))]
 }
 
-// Read checked category boxes from a form (used by the per-image edit).
-function parseCategories(formData: FormData): string[] {
-  return cleanCategories(formData.getAll('categories').map(String))
-}
-
 function revalidate() {
   revalidatePath('/admin/gallery')
   revalidatePath('/gallery')
@@ -82,15 +77,20 @@ export async function finalizeGalleryUpload(
   revalidate()
 }
 
-export async function updateGalleryImage(id: string, formData: FormData) {
+// Save edits to several images in one request (used by the "Save all" button).
+export async function updateGalleryImages(
+  updates: { id: string; caption: string; categories: string[] }[]
+) {
   const admin = await requireAdmin()
-  const caption = ((formData.get('caption') as string) || '').trim() || null
-  const categories = parseCategories(formData)
-  const { error } = await admin
-    .from('gallery_images')
-    .update({ caption, categories })
-    .eq('id', id)
-  if (error) throw new Error(error.message)
+  for (const u of updates) {
+    const caption = (u.caption || '').trim() || null
+    const categories = cleanCategories(u.categories)
+    const { error } = await admin
+      .from('gallery_images')
+      .update({ caption, categories })
+      .eq('id', u.id)
+    if (error) throw new Error(error.message)
+  }
   revalidate()
 }
 
