@@ -4,8 +4,8 @@ import Image from 'next/image'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { categoryMeta, type ServiceCategory } from '@/lib/data/services'
-import { uploadGalleryImages, updateGalleryImage, deleteGalleryImage } from './actions'
-import { UploadButton } from './UploadButton'
+import { updateGalleryImage, deleteGalleryImage } from './actions'
+import { GalleryUploader } from './GalleryUploader'
 
 const CATEGORY_KEYS = Object.keys(categoryMeta) as ServiceCategory[]
 
@@ -66,26 +66,8 @@ export default async function AdminGalleryPage() {
           </div>
         )}
 
-        {/* Upload */}
-        <form action={uploadGalleryImages} className="p-6 bg-zinc-900 rounded-lg border border-zinc-800 mb-10 space-y-4">
-          <div className="space-y-2">
-            <label className="block text-sm font-medium">Add photos</label>
-            <input
-              type="file"
-              name="photos"
-              accept="image/*"
-              multiple
-              required
-              className="block text-sm text-zinc-400 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:font-medium file:bg-zinc-700 file:text-white hover:file:bg-zinc-600 file:cursor-pointer transition-colors"
-            />
-            <p className="text-xs text-zinc-600">JPG or PNG, up to 15 MB each. You can select multiple.</p>
-          </div>
-          <div className="space-y-1.5">
-            <span className="block text-xs text-zinc-400">Categories (applied to all uploaded photos)</span>
-            <CategoryCheckboxes />
-          </div>
-          <UploadButton />
-        </form>
+        {/* Upload — direct-to-storage so large/bulk uploads bypass the request size limit */}
+        <GalleryUploader />
 
         {/* Existing images */}
         {images.length === 0 ? (

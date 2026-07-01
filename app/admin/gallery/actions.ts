@@ -7,7 +7,6 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { categoryMeta } from '@/lib/data/services'
 
 const BUCKET = 'gallery'
-const MAX_BYTES = 15 * 1024 * 1024 // 15 MB per image
 const VALID_CATEGORIES = new Set(Object.keys(categoryMeta))
 
 async function requireAdmin() {
@@ -20,9 +19,13 @@ async function requireAdmin() {
   return admin
 }
 
-// Read checked category boxes, keeping only known keys.
+function cleanCategories(input: string[]): string[] {
+  return [...new Set(input.filter(c => VALID_CATEGORIES.has(c)))]
+}
+
+// Read checked category boxes from a form (used by the per-image edit).
 function parseCategories(formData: FormData): string[] {
-  return [...new Set(formData.getAll('categories').map(String).filter(c => VALID_CATEGORIES.has(c)))]
+  return cleanCategories(formData.getAll('categories').map(String))
 }
 
 function revalidate() {
@@ -30,33 +33,34 @@ function revalidate() {
   revalidatePath('/gallery')
 }
 
-export async function uploadGalleryImages(formData: FormData) {
+// Mint signed upload URLs so the browser can upload directly to Storage,
+// bypassing the server-action / serverless request body size limits.
+export async function createGalleryUploadTargets(
+  files: { name: string }[]
+): Promise<{ path: string; token: string }[]> {
   const admin = await requireAdmin()
-  const categories = parseCategories(formData)
-  const files = formData
-    .getAll('photos')
-    .filter((f): f is File => f instanceof File && f.size > 0)
-
+  const targets: { path: string; token: string }[] = []
   for (const file of files) {
-    if (!file.type.startsWith('image/')) throw new Error(`"${file.name}" is not an image.`)
-    if (file.size > MAX_BYTES) throw new Error(`"${file.name}" is larger than 15 MB.`)
-
-    const ext = file.name.split('.').pop()?.toLowerCase() ?? 'jpg'
-    const key = `${randomUUID()}.${ext}`
-    const bytes = await file.arrayBuffer()
-
-    const { error: uploadError } = await admin.storage
-      .from(BUCKET)
-      .upload(key, bytes, { contentType: file.type, upsert: false })
-    if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`)
-
-    const { data: { publicUrl } } = admin.storage.from(BUCKET).getPublicUrl(key)
-    const { error: insertError } = await admin
-      .from('gallery_images')
-      .insert({ url: publicUrl, categories })
-    if (insertError) throw new Error(insertError.message)
+    const ext = (file.name.split('.').pop() ?? 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg'
+    const path = `${randomUUID()}.${ext}`
+    const { data, error } = await admin.storage.from(BUCKET).createSignedUploadUrl(path)
+    if (error || !data) throw new Error(error?.message ?? 'Could not create upload URL')
+    targets.push({ path: data.path, token: data.token })
   }
+  return targets
+}
 
+// Record rows for files the browser already uploaded to Storage.
+export async function finalizeGalleryUpload(paths: string[], categoryList: string[]) {
+  const admin = await requireAdmin()
+  const categories = cleanCategories(categoryList)
+  const rows = paths.map(path => {
+    const { data: { publicUrl } } = admin.storage.from(BUCKET).getPublicUrl(path)
+    return { url: publicUrl, categories }
+  })
+  if (rows.length === 0) return
+  const { error } = await admin.from('gallery_images').insert(rows)
+  if (error) throw new Error(error.message)
   revalidate()
 }
 
