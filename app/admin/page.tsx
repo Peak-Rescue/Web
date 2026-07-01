@@ -54,6 +54,18 @@ export default async function AdminPage() {
             <h2 className="font-semibold text-lg mb-1">My Profile</h2>
             <p className="text-zinc-400 text-sm">Manage your bio, photo, and certifications</p>
           </Link>
+          {profile?.role === 'admin' && (
+            <Link
+              href="/admin/contact"
+              className="p-6 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-pr-red transition-colors"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="mb-3 text-pr-red">
+                <rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
+              </svg>
+              <h2 className="font-semibold text-lg mb-1">Contact Submissions</h2>
+              <p className="text-zinc-400 text-sm">Messages from the public contact form</p>
+            </Link>
+          )}
         </div>
       </div>
     </main>
