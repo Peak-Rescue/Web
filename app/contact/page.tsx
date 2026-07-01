@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import ContactForm from './ContactForm'
 
 export const metadata: Metadata = {
   title: 'Contact',
@@ -26,97 +27,7 @@ export default function ContactPage() {
           {/* Contact form */}
           <div className="lg:col-span-3">
             <h2 className="section-label mb-8">Send a Message</h2>
-            <form className="flex flex-col gap-6">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                <div className="flex flex-col gap-2">
-                  <label className="text-xs font-display font-600 tracking-widest uppercase text-pr-muted">
-                    First Name
-                  </label>
-                  <input
-                    type="text"
-                    name="firstName"
-                    required
-                    className="bg-pr-surface border border-white/10 text-pr-text px-4 py-3 text-sm placeholder-pr-muted/50 focus:outline-none focus:border-pr-red/50 transition-colors"
-                    placeholder="John"
-                  />
-                </div>
-                <div className="flex flex-col gap-2">
-                  <label className="text-xs font-display font-600 tracking-widest uppercase text-pr-muted">
-                    Last Name
-                  </label>
-                  <input
-                    type="text"
-                    name="lastName"
-                    required
-                    className="bg-pr-surface border border-white/10 text-pr-text px-4 py-3 text-sm placeholder-pr-muted/50 focus:outline-none focus:border-pr-red/50 transition-colors"
-                    placeholder="Smith"
-                  />
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-2">
-                <label className="text-xs font-display font-600 tracking-widest uppercase text-pr-muted">
-                  Email
-                </label>
-                <input
-                  type="email"
-                  name="email"
-                  required
-                  className="bg-pr-surface border border-white/10 text-pr-text px-4 py-3 text-sm placeholder-pr-muted/50 focus:outline-none focus:border-pr-red/50 transition-colors"
-                  placeholder="you@organization.com"
-                />
-              </div>
-
-              <div className="flex flex-col gap-2">
-                <label className="text-xs font-display font-600 tracking-widest uppercase text-pr-muted">
-                  Organization / Team
-                </label>
-                <input
-                  type="text"
-                  name="organization"
-                  className="bg-pr-surface border border-white/10 text-pr-text px-4 py-3 text-sm placeholder-pr-muted/50 focus:outline-none focus:border-pr-red/50 transition-colors"
-                  placeholder="Company, unit, or agency name"
-                />
-              </div>
-
-              <div className="flex flex-col gap-2">
-                <label className="text-xs font-display font-600 tracking-widest uppercase text-pr-muted">
-                  Training Interest
-                </label>
-                <select
-                  name="interest"
-                  className="bg-pr-surface border border-white/10 text-pr-text px-4 py-3 text-sm focus:outline-none focus:border-pr-red/50 transition-colors appearance-none"
-                >
-                  <option value="">Select a program area</option>
-                  <option value="tactical">Military &amp; Tactical</option>
-                  <option value="sar">Backcountry &amp; SAR</option>
-                  <option value="industrial">Industrial &amp; Facilities</option>
-                  <option value="specialty">Specialty &amp; Commercial</option>
-                  <option value="custom">Custom / Multiple Programs</option>
-                  <option value="courses">Online Courses</option>
-                </select>
-              </div>
-
-              <div className="flex flex-col gap-2">
-                <label className="text-xs font-display font-600 tracking-widest uppercase text-pr-muted">
-                  Message
-                </label>
-                <textarea
-                  name="message"
-                  rows={5}
-                  required
-                  className="bg-pr-surface border border-white/10 text-pr-text px-4 py-3 text-sm placeholder-pr-muted/50 focus:outline-none focus:border-pr-red/50 transition-colors resize-none"
-                  placeholder="Tell us about your team, your training goals, and any relevant timeline or location details."
-                />
-              </div>
-
-              <button
-                type="submit"
-                className="px-8 py-4 bg-pr-red text-white font-display font-700 text-sm tracking-widest uppercase hover:bg-pr-red-dark transition-colors self-start"
-              >
-                Send Message
-              </button>
-            </form>
+            <ContactForm />
           </div>
 
           {/* Contact info sidebar */}
@@ -154,13 +65,6 @@ export default function ContactPage() {
                 </p>
               </div>
 
-              <div className="glass-card p-6 mt-4">
-                <p className="text-xs text-pr-muted font-display tracking-widest uppercase mb-3">Response Time</p>
-                <p className="text-sm text-pr-muted leading-relaxed">
-                  We typically respond within one business day. For urgent training needs or
-                  existing course inquiries, calling is fastest.
-                </p>
-              </div>
             </div>
           </div>
         </div>
