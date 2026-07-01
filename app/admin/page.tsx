@@ -11,16 +11,35 @@ export default async function AdminPage() {
 
   const { data: profile } = await createAdminClient()
     .from('profiles')
-    .select('role')
+    .select('role, first_name, last_name, email')
     .eq('id', user.id)
     .single()
 
   if (!['admin', 'instructor'].includes(profile?.role ?? '')) redirect('/dashboard')
 
+  const isAdmin = profile?.role === 'admin'
+  const displayName = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ').trim()
+    || profile?.email
+    || user.email
+
   return (
     <main className="min-h-screen bg-zinc-950 text-white pt-16 md:pt-20">
       <div className="max-w-4xl mx-auto px-4 py-10">
-        <h1 className="text-2xl font-bold mb-8">Admin</h1>
+        <div className="mb-8 flex flex-wrap items-center gap-3">
+          <h1 className="text-2xl font-bold">Portal</h1>
+          <span
+            className={`px-2.5 py-1 rounded-full text-xs font-semibold uppercase tracking-wider border ${
+              isAdmin
+                ? 'bg-pr-red/15 border-pr-red/40 text-pr-red'
+                : 'bg-teal-900/40 border-teal-700 text-teal-300'
+            }`}
+          >
+            {isAdmin ? 'Admin' : 'Instructor'}
+          </span>
+          {displayName && (
+            <span className="text-sm text-zinc-500">Signed in as {displayName}</span>
+          )}
+        </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Link
             href="/admin/instructors"
