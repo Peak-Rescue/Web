@@ -36,8 +36,9 @@ export async function GET(request: Request) {
             ...(!instructor.profile_id ? [
               admin.from('instructors').update({ profile_id: data.user.id }).eq('id', instructor.id),
             ] : []),
-            // Always ensure role is instructor
-            admin.from('profiles').update({ role: 'instructor' }).eq('id', data.user.id),
+            // Ensure instructors have the instructor role — but never demote an
+            // admin (e.g. an operator who is also listed as an instructor).
+            admin.from('profiles').update({ role: 'instructor' }).eq('id', data.user.id).neq('role', 'admin'),
           ])
         }
       }

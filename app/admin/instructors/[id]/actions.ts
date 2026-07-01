@@ -306,7 +306,8 @@ export async function adminSendInvite(instructorId: string) {
 
     await Promise.all([
       admin.from('instructors').update({ profile_id: linkData.user.id, invite_sent_at: new Date().toISOString() }).eq('id', instructorId),
-      admin.from('profiles').update({ role: 'instructor' }).eq('id', linkData.user.id),
+      // Never demote an admin who is also being linked as an instructor.
+      admin.from('profiles').update({ role: 'instructor' }).eq('id', linkData.user.id).neq('role', 'admin'),
     ])
 
     await sendOtp()

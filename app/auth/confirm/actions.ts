@@ -26,7 +26,8 @@ export async function linkInstructorProfile(firstName?: string, lastName?: strin
       ...(!instructor.profile_id
         ? [admin.from('instructors').update({ profile_id: user.id }).eq('id', instructor.id)]
         : []),
-      admin.from('profiles').update({ role: 'instructor' }).eq('id', user.id),
+      // Never demote an admin who is also listed as an instructor.
+      admin.from('profiles').update({ role: 'instructor' }).eq('id', user.id).neq('role', 'admin'),
     ])
   }
 }
