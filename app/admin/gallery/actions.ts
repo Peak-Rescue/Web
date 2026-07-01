@@ -35,12 +35,26 @@ function revalidate() {
 
 // Mint signed upload URLs so the browser can upload directly to Storage,
 // bypassing the server-action / serverless request body size limits.
+// Returns a target per input file, or null where the file's hash already
+// exists (duplicate) — including duplicates within the same batch.
 export async function createGalleryUploadTargets(
-  files: { name: string }[]
-): Promise<{ path: string; token: string }[]> {
+  files: { name: string; hash: string }[]
+): Promise<({ path: string; token: string } | null)[]> {
   const admin = await requireAdmin()
-  const targets: { path: string; token: string }[] = []
+
+  const hashes = files.map(f => f.hash).filter(Boolean)
+  const { data: existing } = hashes.length
+    ? await admin.from('gallery_images').select('hash').in('hash', hashes)
+    : { data: [] as { hash: string | null }[] }
+  const seen = new Set((existing ?? []).map(r => r.hash))
+
+  const targets: ({ path: string; token: string } | null)[] = []
   for (const file of files) {
+    if (file.hash && seen.has(file.hash)) {
+      targets.push(null) // duplicate
+      continue
+    }
+    if (file.hash) seen.add(file.hash)
     const ext = (file.name.split('.').pop() ?? 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg'
     const path = `${randomUUID()}.${ext}`
     const { data, error } = await admin.storage.from(BUCKET).createSignedUploadUrl(path)
@@ -51,15 +65,19 @@ export async function createGalleryUploadTargets(
 }
 
 // Record rows for files the browser already uploaded to Storage.
-export async function finalizeGalleryUpload(paths: string[], categoryList: string[]) {
+export async function finalizeGalleryUpload(
+  items: { path: string; hash: string }[],
+  categoryList: string[]
+) {
   const admin = await requireAdmin()
   const categories = cleanCategories(categoryList)
-  const rows = paths.map(path => {
+  const rows = items.map(({ path, hash }) => {
     const { data: { publicUrl } } = admin.storage.from(BUCKET).getPublicUrl(path)
-    return { url: publicUrl, categories }
+    return { url: publicUrl, hash, categories }
   })
   if (rows.length === 0) return
-  const { error } = await admin.from('gallery_images').insert(rows)
+  // ignoreDuplicates guards against a rare race between the check and insert.
+  const { error } = await admin.from('gallery_images').upsert(rows, { onConflict: 'hash', ignoreDuplicates: true })
   if (error) throw new Error(error.message)
   revalidate()
 }
