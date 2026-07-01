@@ -85,6 +85,18 @@ export default async function AdminPage() {
               <p className="text-zinc-400 text-sm">Messages from the public contact form</p>
             </Link>
           )}
+          {profile?.role === 'admin' && (
+            <Link
+              href="/admin/gallery"
+              className="p-6 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-pr-red transition-colors"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="mb-3 text-pr-red">
+                <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/>
+              </svg>
+              <h2 className="font-semibold text-lg mb-1">Gallery</h2>
+              <p className="text-zinc-400 text-sm">Upload and manage public gallery photos</p>
+            </Link>
+          )}
         </div>
       </div>
     </main>
