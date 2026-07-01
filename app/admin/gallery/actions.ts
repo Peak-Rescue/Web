@@ -4,9 +4,11 @@ import { randomUUID } from 'crypto'
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { categoryMeta } from '@/lib/data/services'
 
 const BUCKET = 'gallery'
 const MAX_BYTES = 15 * 1024 * 1024 // 15 MB per image
+const VALID_CATEGORIES = new Set(Object.keys(categoryMeta))
 
 async function requireAdmin() {
   const supabase = await createClient()
@@ -18,6 +20,11 @@ async function requireAdmin() {
   return admin
 }
 
+// Read checked category boxes, keeping only known keys.
+function parseCategories(formData: FormData): string[] {
+  return [...new Set(formData.getAll('categories').map(String).filter(c => VALID_CATEGORIES.has(c)))]
+}
+
 function revalidate() {
   revalidatePath('/admin/gallery')
   revalidatePath('/gallery')
@@ -25,6 +32,7 @@ function revalidate() {
 
 export async function uploadGalleryImages(formData: FormData) {
   const admin = await requireAdmin()
+  const categories = parseCategories(formData)
   const files = formData
     .getAll('photos')
     .filter((f): f is File => f instanceof File && f.size > 0)
@@ -43,17 +51,23 @@ export async function uploadGalleryImages(formData: FormData) {
     if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`)
 
     const { data: { publicUrl } } = admin.storage.from(BUCKET).getPublicUrl(key)
-    const { error: insertError } = await admin.from('gallery_images').insert({ url: publicUrl })
+    const { error: insertError } = await admin
+      .from('gallery_images')
+      .insert({ url: publicUrl, categories })
     if (insertError) throw new Error(insertError.message)
   }
 
   revalidate()
 }
 
-export async function updateGalleryCaption(id: string, formData: FormData) {
+export async function updateGalleryImage(id: string, formData: FormData) {
   const admin = await requireAdmin()
   const caption = ((formData.get('caption') as string) || '').trim() || null
-  const { error } = await admin.from('gallery_images').update({ caption }).eq('id', id)
+  const categories = parseCategories(formData)
+  const { error } = await admin
+    .from('gallery_images')
+    .update({ caption, categories })
+    .eq('id', id)
   if (error) throw new Error(error.message)
   revalidate()
 }
