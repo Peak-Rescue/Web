@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { track } from '@vercel/analytics'
 import { submitContactForm } from './actions'
 
 const inputClass =
@@ -28,6 +29,7 @@ export default function ContactForm() {
       company_website: String(fd.get('hp_field') ?? ''),
     })
     if (res.ok) {
+      track('contact_submitted', { interest: String(fd.get('interest') ?? '') || 'unspecified' })
       setState('sent')
       form.reset()
     } else {
