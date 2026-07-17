@@ -8,6 +8,7 @@ import AvatarEditor from '@/components/AvatarEditor'
 import SaveButton from '@/components/SaveButton'
 import CapabilityPanel from '@/app/admin/instructors/CapabilityPanel'
 import TeamPageToggle from '@/app/admin/instructors/TeamPageToggle'
+import ExemptToggle from '@/app/admin/instructors/ExemptToggle'
 import DeleteInstructorButton from '@/app/admin/instructors/DeleteInstructorButton'
 import { InviteButton } from '@/app/admin/instructors/InviteButton'
 import {
@@ -53,7 +54,7 @@ export default async function AdminInstructorDetailPage({ params }: { params: Pr
   const profile = instructor.profile_id
     ? (await admin
         .from('profiles')
-        .select('id, first_name, last_name, email, phone, role, emergency_name, emergency_relationship, emergency_phone')
+        .select('id, first_name, last_name, email, phone, role, emergency_name, emergency_relationship, emergency_phone, is_exempt')
         .eq('id', instructor.profile_id)
         .single()).data
     : null
@@ -228,6 +229,13 @@ export default async function AdminInstructorDetailPage({ params }: { params: Pr
           <h2 className="text-lg font-semibold mb-4">Team Page</h2>
           <TeamPageToggle instructorId={instructor.id} initialValue={instructor.show_on_team_page} />
         </section>
+
+        {profile && (
+          <section className="mb-10">
+            <h2 className="text-lg font-semibold mb-4">Employment</h2>
+            <ExemptToggle profileId={profile.id} initialValue={profile.is_exempt ?? false} />
+          </section>
+        )}
 
         <section className="mb-10">
           <h2 className="text-lg font-semibold mb-4">Expertise</h2>

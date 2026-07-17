@@ -73,6 +73,28 @@ export default async function AdminPage() {
             <h2 className="font-semibold text-lg mb-1">My Profile</h2>
             <p className="text-zinc-400 text-sm">Manage your bio, photo, and certifications</p>
           </Link>
+          <Link
+            href="/instructor/expenses"
+            className="p-6 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-pr-red transition-colors"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="mb-3 text-pr-red">
+              <rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/><line x1="6" y1="15" x2="10" y2="15"/>
+            </svg>
+            <h2 className="font-semibold text-lg mb-1">Expense Reports</h2>
+            <p className="text-zinc-400 text-sm">File reimbursement requests with receipts</p>
+          </Link>
+          {profile?.role === 'admin' && (
+            <Link
+              href="/admin/expenses"
+              className="p-6 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-pr-red transition-colors"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="mb-3 text-pr-red">
+                <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+              </svg>
+              <h2 className="font-semibold text-lg mb-1">Expenses Admin</h2>
+              <p className="text-zinc-400 text-sm">All reports, rates, and per-course spending</p>
+            </Link>
+          )}
           {profile?.role === 'admin' && (
             <Link
               href="/admin/contact"

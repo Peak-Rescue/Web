@@ -20,6 +20,9 @@
 # production
 /build
 
+# local reference docs (may contain personal expense data)
+/downloads/
+
 # misc
 .DS_Store
 *.pem

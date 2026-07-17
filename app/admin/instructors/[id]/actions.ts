@@ -442,3 +442,18 @@ export async function adminDeleteInstructor(instructorId: string): Promise<void>
   revalidatePath('/team')
   if (instructor.slug) revalidatePath(`/team/${instructor.slug}`)
 }
+
+// FLSA exemption controls per-diem eligibility on expense reports.
+export async function adminSetExempt(profileId: string, isExempt: boolean) {
+  await requireAdmin()
+
+  const { error } = await createAdminClient()
+    .from('profiles')
+    .update({ is_exempt: isExempt })
+    .eq('id', profileId)
+
+  if (error) throw new Error(error.message)
+
+  await revalidateByProfileId(profileId)
+  revalidatePath('/instructor/expenses')
+}
