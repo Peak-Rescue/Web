@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { courseDisplayName, computeBlocks } from '@/lib/courses'
+import CourseTasksPanel, { type CourseTask, type TaskPerson } from '@/components/CourseTasksPanel'
 
 const STATUS_LABEL: Record<string, string> = {
   tentative: 'Tentative',
@@ -46,11 +47,12 @@ export default async function PortalPage({ params }: { params: Promise<{ id: str
   // Check if user is assigned as an instructor to this instance (via instructors.profile_id)
   const { data: instructorAssignment } = await admin
     .from('instance_instructors')
-    .select('id, instructors!inner(profile_id)')
+    .select('id, role, instructors!inner(profile_id)')
     .eq('instance_id', id)
     .eq('instructors.profile_id', user.id)
     .maybeSingle()
   const isInstructor = !!instructorAssignment
+  const canManageTasks = isAdmin || instructorAssignment?.role === 'lead'
 
   // Check access: admin always in, assigned instructors and enrolled students only
   let hasAccess = isAdmin || isInstructor
@@ -98,6 +100,30 @@ export default async function PortalPage({ params }: { params: Promise<{ id: str
     .from('instance_instructors')
     .select('role, instructors(name)')
     .eq('instance_id', id)
+
+  // Course tasks (team only — students never see them)
+  const showTasks = isAdmin || isInstructor
+  let tasks: CourseTask[] = []
+  let taskPeople: TaskPerson[] = []
+  if (showTasks) {
+    const [{ data: taskRows }, { data: peopleRows }] = await Promise.all([
+      admin
+        .from('course_tasks')
+        .select('id, title, notes, assigned_to, due_date, status')
+        .eq('instance_id', id)
+        .order('sort_order')
+        .order('created_at'),
+      admin
+        .from('profiles')
+        .select('id, first_name, last_name')
+        .in('role', ['admin', 'instructor'])
+        .order('first_name'),
+    ])
+    tasks = (taskRows ?? []) as CourseTask[]
+    taskPeople = (peopleRows ?? [])
+      .map((p) => ({ id: p.id, name: [p.first_name, p.last_name].filter(Boolean).join(' ') }))
+      .filter((p) => p.name)
+  }
 
   const fmtLong = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'long', day: 'numeric', year: 'numeric' })
 
@@ -152,6 +178,20 @@ export default async function PortalPage({ params }: { params: Promise<{ id: str
           <div className="mb-8 p-4 bg-zinc-900 border border-zinc-700 rounded-lg text-sm text-zinc-300 whitespace-pre-wrap">
             {inst.notes}
           </div>
+        )}
+
+        {/* Course tasks (team only) */}
+        {showTasks && (
+          <section className="mb-10">
+            <h2 className="font-semibold text-lg mb-3">Course Tasks</h2>
+            <CourseTasksPanel
+              instanceId={id}
+              tasks={tasks}
+              people={taskPeople}
+              canManage={canManageTasks}
+              currentUserId={user.id}
+            />
+          </section>
         )}
 
         {/* Content modules */}

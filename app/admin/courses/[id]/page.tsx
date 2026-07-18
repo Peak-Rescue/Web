@@ -7,6 +7,7 @@ import { CourseTypeSelect } from '../CourseTypeSelect'
 import InstructorAssign from '../InstructorAssign'
 import SaveButton from '@/components/SaveButton'
 import DeleteInstanceButton from '../DeleteInstanceButton'
+import CourseTasksPanel, { type CourseTask, type TaskPerson } from '@/components/CourseTasksPanel'
 import { courseDisplayName, computeBlocks } from '@/lib/courses'
 import { CATEGORY_COURSE_TYPES } from '@/lib/capabilities'
 
@@ -54,10 +55,16 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
 
   if (!inst) notFound()
 
-  const [{ count: enrollmentCount }, { count: expenseCount }] = await Promise.all([
+  const [{ count: enrollmentCount }, { count: expenseCount }, { data: taskRows }, { data: peopleRows }] = await Promise.all([
     admin.from('enrollments').select('id', { count: 'exact', head: true }).eq('instance_id', id),
     admin.from('expense_items').select('id', { count: 'exact', head: true }).eq('instance_id', id),
+    admin.from('course_tasks').select('id, title, notes, assigned_to, due_date, status').eq('instance_id', id).order('sort_order').order('created_at'),
+    admin.from('profiles').select('id, first_name, last_name').in('role', ['admin', 'instructor']).order('first_name'),
   ])
+  const tasks = (taskRows ?? []) as CourseTask[]
+  const taskPeople: TaskPerson[] = (peopleRows ?? [])
+    .map((p) => ({ id: p.id, name: [p.first_name, p.last_name].filter(Boolean).join(' ') }))
+    .filter((p) => p.name)
 
   const courseType = inst.course_type
 
@@ -338,6 +345,20 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
             </div>
             <button type="submit" className="px-4 py-2 bg-pr-red hover:bg-pr-red-dark text-white rounded text-sm font-medium transition-colors">Add section</button>
           </form>
+        </section>
+
+        <section className="mb-12">
+          <h2 className="text-lg font-semibold mb-1">Tasks</h2>
+          <p className="text-xs text-zinc-500 mb-4">
+            Course prep checklist — assignees are notified by email and see their tasks on the portal home page.
+          </p>
+          <CourseTasksPanel
+            instanceId={id}
+            tasks={tasks}
+            people={taskPeople}
+            canManage
+            currentUserId={user.id}
+          />
         </section>
 
         <div className="pt-4 border-t border-zinc-800">

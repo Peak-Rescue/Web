@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { insertTemplateTasks } from '@/lib/course-tasks'
 
 function toSlugPart(s: string) {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
@@ -68,6 +69,10 @@ export async function createInstance(formData: FormData) {
     .single()
 
   if (error) throw new Error(error.message)
+
+  // Every new course starts with the standard ops checklist.
+  await insertTemplateTasks(admin, data.id, null)
+
   redirect(`/admin/courses/${data.id}`)
 }
 
