@@ -80,6 +80,12 @@ export async function updateInstanceDetails(id: string, formData: FormData) {
   await requireAdmin()
   const admin = createAdminClient()
 
+  const { data: before } = await admin
+    .from('course_instances')
+    .select('status')
+    .eq('id', id)
+    .single()
+
   const course_category  = (formData.get('course_category') as string) || 'tactical'
   const course_type      = (formData.get('course_type') as string) || 'custom'
   const custom_title     = (formData.get('custom_title') as string) || null
@@ -99,8 +105,57 @@ export async function updateInstanceDetails(id: string, formData: FormData) {
     .eq('id', id)
 
   if (error) throw new Error(error.message)
+
+  // Course cancelled → tell every assigned instructor (best-effort). It
+  // disappears from their portal home, so silence would leave them planning
+  // around a course that no longer exists.
+  if (status === 'cancelled' && before?.status !== 'cancelled' && process.env.RESEND_API_KEY) {
+    try {
+      const { data: assigned } = await admin
+        .from('instance_instructors')
+        .select('instructors(name, email)')
+        .eq('instance_id', id)
+      const recipients = (assigned ?? [])
+        .map((a) => (a.instructors as unknown as { name: string; email: string | null } | null)?.email)
+        .filter((e): e is string => Boolean(e))
+
+      if (recipients.length > 0) {
+        const { courseShortName } = await import('@/lib/courses')
+        const courseName = courseShortName(course_type, custom_title)
+        const { data: dates } = await admin
+          .from('course_instances')
+          .select('starts_at, ends_at')
+          .eq('id', id)
+          .single()
+        const when = dates?.starts_at
+          ? `${dates.starts_at}${dates.ends_at && dates.ends_at !== dates.starts_at ? ` – ${dates.ends_at}` : ''}`
+          : 'dates TBD'
+        const { Resend } = await import('resend')
+        const resend = new Resend(process.env.RESEND_API_KEY)
+        await resend.emails.send({
+          from: 'Peak Rescue Portal <noreply@peak-rescue.com>',
+          to: recipients,
+          subject: `Cancelled — ${courseName} (${when})`,
+          text: [
+            `The following course has been cancelled:`,
+            '',
+            `Course: ${courseName}${client_name ? ` · ${client_name}` : ''}`,
+            `Dates: ${when}`,
+            location ? `Location: ${location}` : null,
+            '',
+            'It has been removed from your upcoming courses in the portal. Any open tasks for it no longer need to be done.',
+          ].filter((l): l is string => l !== null).join('\n'),
+        })
+      }
+    } catch (e) {
+      console.error('Course cancellation email failed:', e)
+    }
+  }
+
   revalidatePath(`/admin/courses/${id}`)
   revalidatePath('/admin/courses')
+  revalidatePath(`/portal/${id}`)
+  revalidatePath('/admin')
 }
 
 export async function updateInstanceDates(id: string, formData: FormData) {

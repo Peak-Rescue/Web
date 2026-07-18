@@ -46,7 +46,7 @@ export default async function AdminPage() {
       .eq('instructors.profile_id', user.id),
     admin
       .from('course_tasks')
-      .select('id, title, due_date, instance_id, course_instances(course_type, custom_title)')
+      .select('id, title, due_date, instance_id, course_instances(course_type, custom_title, status)')
       .eq('assigned_to', user.id)
       .eq('status', 'open')
       .order('due_date', { ascending: true, nullsFirst: false })
@@ -58,15 +58,17 @@ export default async function AdminPage() {
     .filter((c) => c.inst && c.inst.status !== 'cancelled' && (!c.inst.ends_at || c.inst.ends_at >= today))
     .sort((a, b) => (a.inst.starts_at ?? '9999').localeCompare(b.inst.starts_at ?? '9999'))
 
-  const myTasks = (taskRows ?? []).map((t) => ({
-    ...t,
-    courseName: t.course_instances
-      ? courseShortName(
-          (t.course_instances as unknown as { course_type: string }).course_type,
-          (t.course_instances as unknown as { custom_title: string | null }).custom_title
-        )
-      : null,
-  }))
+  const myTasks = (taskRows ?? [])
+    .filter((t) => (t.course_instances as unknown as { status: string } | null)?.status !== 'cancelled')
+    .map((t) => ({
+      ...t,
+      courseName: t.course_instances
+        ? courseShortName(
+            (t.course_instances as unknown as { course_type: string }).course_type,
+            (t.course_instances as unknown as { custom_title: string | null }).custom_title
+          )
+        : null,
+    }))
 
   const fmtRange = (c: InstRow) => {
     const f = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
