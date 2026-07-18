@@ -130,7 +130,7 @@ export default async function AdminInstructorsPage() {
             <div className="flex items-center gap-3 mb-4">
               <h2 className="text-lg font-semibold">Not Invited</h2>
             </div>
-            <p className="text-sm text-zinc-500 mb-4">These instructors don't have a portal account yet.</p>
+            <p className="text-sm text-zinc-500 mb-4">These instructors don&apos;t have a portal account yet.</p>
             {notInvited.length > 0 ? (
               <div className="space-y-2">
                 {notInvited.map(instr => (
