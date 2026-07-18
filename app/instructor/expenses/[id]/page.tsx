@@ -75,15 +75,39 @@ export default async function ExpenseReportPage({ params }: { params: Promise<{ 
     .select('id, rate_type, rate, effective_date')
   const rates = (rateRows ?? []).map((r) => ({ ...r, rate: Number(r.rate) })) as ExpenseRate[]
 
-  const { data: instanceRows } = await admin
-    .from('course_instances')
-    .select('id, ref_number, course_type, custom_title, client_name, starts_at')
-    .neq('status', 'cancelled')
-    .order('starts_at', { ascending: false, nullsFirst: false })
-    .limit(60)
-  const courses: CourseOption[] = (instanceRows ?? []).map((c) => ({
+  // The dropdown stays small forever: a rolling 12-month window (plus
+  // unscheduled instances), with the caller's own assigned courses grouped
+  // first. Instances already referenced by this report are always included so
+  // old drafts keep their options.
+  const cutoffDate = new Date()
+  cutoffDate.setDate(cutoffDate.getDate() - 365)
+  const cutoff = cutoffDate.toISOString().slice(0, 10)
+  const instanceCols = 'id, ref_number, course_type, custom_title, client_name, starts_at'
+
+  const [{ data: instanceRows }, { data: myAssignments }] = await Promise.all([
+    admin
+      .from('course_instances')
+      .select(instanceCols)
+      .neq('status', 'cancelled')
+      .or(`starts_at.gte.${cutoff},starts_at.is.null`)
+      .order('starts_at', { ascending: false, nullsFirst: false })
+      .limit(100),
+    admin.from('instance_instructors').select('instance_id').eq('instructor_id', user.id),
+  ])
+
+  const windowRows = instanceRows ?? []
+  const referencedIds = [
+    ...new Set([report.default_instance_id, ...items.map((i) => i.instance_id)].filter((v): v is string => Boolean(v))),
+  ].filter((rid) => !windowRows.some((c) => c.id === rid))
+  const { data: referencedRows } = referencedIds.length
+    ? await admin.from('course_instances').select(instanceCols).in('id', referencedIds)
+    : { data: [] }
+
+  const mine = new Set((myAssignments ?? []).map((a) => a.instance_id))
+  const courses: CourseOption[] = [...windowRows, ...(referencedRows ?? [])].map((c) => ({
     id: c.id,
     label: instanceLabel(c),
+    mine: mine.has(c.id),
   }))
 
   if (report.status === 'draft') {

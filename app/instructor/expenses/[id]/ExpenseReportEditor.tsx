@@ -45,7 +45,30 @@ export type EditorItem = {
   receipts: { id: string; filename: string; url: string }[]
 }
 
-export type CourseOption = { id: string; label: string }
+export type CourseOption = { id: string; label: string; mine?: boolean }
+
+// "Your courses" (assigned to the caller) first, then the rest of the
+// rolling window — keeps the common pick one glance away as history grows.
+function CourseOptions({ courses }: { courses: CourseOption[] }) {
+  const mine = courses.filter((c) => c.mine)
+  const others = courses.filter((c) => !c.mine)
+  return (
+    <>
+      {mine.length > 0 && (
+        <optgroup label="Your courses">
+          {mine.map((c) => (
+            <option key={c.id} value={c.id}>{c.label}</option>
+          ))}
+        </optgroup>
+      )}
+      <optgroup label={mine.length > 0 ? 'Other courses (last 12 months)' : 'Courses (last 12 months)'}>
+        {others.map((c) => (
+          <option key={c.id} value={c.id}>{c.label}</option>
+        ))}
+      </optgroup>
+    </>
+  )
+}
 
 type FormState = {
   category: ExpenseCategory
@@ -584,9 +607,7 @@ export default function ExpenseReportEditor({
               <label className={labelCls}>Course (default for all expenses)</label>
               <select value={defaultCourse} onChange={(e) => changeMeta(reason, e.target.value)} className={inputCls}>
                 <option value="">— none / general —</option>
-                {courses.map((c) => (
-                  <option key={c.id} value={c.id}>{c.label}</option>
-                ))}
+                <CourseOptions courses={courses} />
               </select>
             </div>
           </div>
@@ -750,9 +771,7 @@ export default function ExpenseReportEditor({
                   <label className={labelCls}>Course (overrides default)</label>
                   <select value={form.instance_id} onChange={(e) => setFormAndSchedule({ ...form, instance_id: e.target.value })} className={inputCls}>
                     <option value="">— report default —</option>
-                    {courses.map((c) => (
-                      <option key={c.id} value={c.id}>{c.label}</option>
-                    ))}
+                    <CourseOptions courses={courses} />
                   </select>
                 </div>
 
