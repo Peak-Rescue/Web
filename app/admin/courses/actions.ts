@@ -227,12 +227,59 @@ export async function assignInstructor(instanceId: string, formData: FormData) {
   const instructor_id = formData.get('instructor_id') as string
   const role          = (formData.get('role') as string) || 'assist'
 
+  // Distinguish a new assignment from a role change so only the former emails.
+  const { data: existing } = await admin
+    .from('instance_instructors')
+    .select('id')
+    .eq('instance_id', instanceId)
+    .eq('instructor_id', instructor_id)
+    .maybeSingle()
+
   const { error } = await admin
     .from('instance_instructors')
     .upsert({ instance_id: instanceId, instructor_id, role }, { onConflict: 'instance_id,instructor_id' })
 
   if (error) throw new Error(error.message)
+
+  // Best-effort notification on new assignments; never fails the action.
+  if (!existing && process.env.RESEND_API_KEY) {
+    try {
+      const [{ data: instructor }, { data: inst }] = await Promise.all([
+        admin.from('instructors').select('name, email').eq('id', instructor_id).single(),
+        admin.from('course_instances').select('course_type, custom_title, client_name, location, starts_at, ends_at').eq('id', instanceId).single(),
+      ])
+      if (instructor?.email && inst) {
+        const { courseShortName } = await import('@/lib/courses')
+        const courseName = courseShortName(inst.course_type, inst.custom_title)
+        const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.peakrescuemountainguides.com'
+        const dates = inst.starts_at
+          ? `${inst.starts_at}${inst.ends_at && inst.ends_at !== inst.starts_at ? ` – ${inst.ends_at}` : ''}`
+          : 'dates TBD'
+        const { Resend } = await import('resend')
+        const resend = new Resend(process.env.RESEND_API_KEY)
+        await resend.emails.send({
+          from: 'Peak Rescue Portal <noreply@peak-rescue.com>',
+          to: [instructor.email],
+          subject: `You're assigned to ${courseName} (${role})`,
+          text: [
+            `${instructor.name}, you've been assigned as ${role} instructor.`,
+            '',
+            `Course: ${courseName}${inst.client_name ? ` · ${inst.client_name}` : ''}`,
+            `Dates: ${dates}`,
+            inst.location ? `Location: ${inst.location}` : null,
+            '',
+            `Course details and tasks: ${siteUrl}/portal/${instanceId}`,
+          ].filter((l): l is string => l !== null).join('\n'),
+        })
+      }
+    } catch (e) {
+      console.error('Instructor assignment email failed:', e)
+    }
+  }
+
   revalidatePath(`/admin/courses/${instanceId}`)
+  revalidatePath(`/portal/${instanceId}`)
+  revalidatePath('/admin')
 }
 
 export async function removeInstructor(instanceId: string, instructorId: string) {
