@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import DeleteReportButton from './DeleteReportButton'
 import { fmtMoney, round2 } from '@/lib/expenses'
+import { instanceLabel } from '@/lib/courses'
 
 export default async function AdminExpensesPage() {
   const supabase = await createClient()
@@ -49,19 +50,17 @@ export default async function AdminExpensesPage() {
   }
   const instanceIds = [...courseTotals.keys()].filter((k) => k !== 'none')
   const { data: instances } = instanceIds.length
-    ? await admin.from('course_instances').select('id, title, starts_at').in('id', instanceIds)
+    ? await admin
+        .from('course_instances')
+        .select('id, ref_number, course_type, custom_title, client_name, starts_at')
+        .in('id', instanceIds)
     : { data: [] }
-  const instanceMap = new Map((instances ?? []).map((i) => [i.id, i]))
+  const instanceMap = new Map((instances ?? []).map((i) => [i.id, instanceLabel(i)]))
   const rollup = [...courseTotals.entries()]
     .map(([key, total]) => ({
       key,
       total,
-      label:
-        key === 'none'
-          ? 'No course / general'
-          : instanceMap.get(key)
-            ? `${instanceMap.get(key)!.title}${instanceMap.get(key)!.starts_at ? ` (${new Date(instanceMap.get(key)!.starts_at + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', year: 'numeric' })})` : ''}`
-            : 'Unknown course',
+      label: key === 'none' ? 'No course / general' : instanceMap.get(key) ?? 'Unknown course',
     }))
     .sort((a, b) => b.total - a.total)
 

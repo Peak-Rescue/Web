@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import ExpenseReportEditor, { type EditorItem, type CourseOption } from './ExpenseReportEditor'
 import { type ExpenseRate, fmtMoney, computeTotals, CATEGORY_LABELS, fmtDateRange, type ExpenseCategory } from '@/lib/expenses'
+import { instanceLabel } from '@/lib/courses'
 
 export default async function ExpenseReportPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -76,15 +77,13 @@ export default async function ExpenseReportPage({ params }: { params: Promise<{ 
 
   const { data: instanceRows } = await admin
     .from('course_instances')
-    .select('id, title, starts_at')
+    .select('id, ref_number, course_type, custom_title, client_name, starts_at')
     .neq('status', 'cancelled')
     .order('starts_at', { ascending: false, nullsFirst: false })
     .limit(60)
   const courses: CourseOption[] = (instanceRows ?? []).map((c) => ({
     id: c.id,
-    label: c.starts_at
-      ? `${c.title} (${new Date(c.starts_at + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', year: 'numeric' })})`
-      : c.title,
+    label: instanceLabel(c),
   }))
 
   if (report.status === 'draft') {

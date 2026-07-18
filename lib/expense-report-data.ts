@@ -3,6 +3,7 @@
 
 import { createAdminClient } from '@/lib/supabase/admin'
 import { type ExpenseCategory } from '@/lib/expenses'
+import { instanceLabel } from '@/lib/courses'
 import { type PdfReport } from '@/lib/expense-pdf'
 
 export type LoadedReport = {
@@ -70,9 +71,12 @@ export async function loadReport(reportId: string): Promise<{
     ),
   ]
   const { data: instances } = instanceIds.length
-    ? await admin.from('course_instances').select('id, title').in('id', instanceIds)
+    ? await admin
+        .from('course_instances')
+        .select('id, ref_number, course_type, custom_title, client_name, starts_at')
+        .in('id', instanceIds)
     : { data: [] }
-  const titleMap = new Map((instances ?? []).map((i) => [i.id, i.title]))
+  const titleMap = new Map((instances ?? []).map((i) => [i.id, instanceLabel(i)]))
 
   const employeeName = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ') || 'Unknown'
 

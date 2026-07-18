@@ -60,3 +60,23 @@ export function courseShortName(course_type: string, custom_title: string | null
   if (course_type === 'custom') return custom_title ?? 'Custom Course'
   return services.find(s => s.slug === course_type)?.shortTitle ?? custom_title ?? course_type
 }
+
+// Compact display label for a course instance, e.g.
+// "PR-0002 · Jungle Mobility · Peak Rescue (Jul 2026)"
+export type InstanceLabelFields = {
+  ref_number: number
+  course_type: string
+  custom_title: string | null
+  client_name: string | null
+  starts_at: string | null
+}
+
+export function instanceLabel(i: InstanceLabelFields): string {
+  const ref = `PR-${String(i.ref_number).padStart(4, '0')}`
+  const name = courseShortName(i.course_type, i.custom_title)
+  const when = i.starts_at
+    ? ` (${new Date(i.starts_at + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', year: 'numeric' })})`
+    : ''
+  const client = i.client_name ? ` · ${i.client_name}` : ''
+  return `${ref} · ${name}${client}${when}`
+}
