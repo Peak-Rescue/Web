@@ -229,17 +229,17 @@ export default function ExpenseReportEditor({
     }
   }
 
-  async function flushItem() {
+  async function flushItem(): Promise<boolean> {
     if (itemTimer.current) {
       clearTimeout(itemTimer.current)
       itemTimer.current = null
     }
     const f = formRef.current
-    if (!f) return
-    if (missingFields(f).length > 0) return // stays 'pending' until required fields are in
+    if (!f) return true
+    if (missingFields(f).length > 0) return true // stays 'pending' until required fields are in
     if (itemSaving.current) {
       itemRerun.current = true
-      return
+      return true
     }
     itemSaving.current = true
     setItemStatus('saving')
@@ -281,9 +281,11 @@ export default function ExpenseReportEditor({
       }
       setItemStatus('saved')
       router.refresh()
+      return true
     } catch (e) {
       setItemStatus('error')
       setFormError(e instanceof Error ? e.message : 'Could not save this line')
+      return false
     } finally {
       itemSaving.current = false
       if (itemRerun.current) {
@@ -293,14 +295,23 @@ export default function ExpenseReportEditor({
     }
   }
 
+  // A save may be mid-flight when the user switches lines; let it settle so
+  // its completion can't re-attach the editor to the item being closed out.
+  async function waitForItemIdle() {
+    while (itemSaving.current) {
+      await new Promise((r) => setTimeout(r, 50))
+    }
+  }
+
   // Closes the line form. Auto-save means a valid line is already stored (or
   // will be by the flush here); an invalid half-filled one needs a confirm.
   async function closeForm(): Promise<boolean> {
+    if (!formRef.current) return true
+    await waitForItemIdle()
     const f = formRef.current
     if (!f) return true
     if (missingFields(f).length === 0) {
-      await flushItem()
-      if (formRef.current && itemStatus === 'error') return false
+      if (!(await flushItem())) return false
     } else if (!editingIdRef.current) {
       const touched = JSON.stringify({ ...f, instance_id: '' }) !== JSON.stringify({ ...EMPTY_FORM })
       if (touched && !confirm(`This line is missing ${missingFields(f).join(' and ')} and won't be kept. Discard it?`)) {
@@ -470,7 +481,9 @@ export default function ExpenseReportEditor({
     if (submitting) return
     setSubmitError(null)
     await flushMeta()
+    await waitForItemIdle()
     if (formRef.current && missingFields(formRef.current).length === 0) await flushItem()
+    await waitForItemIdle()
     const hasSig = (await sigRef.current?.saveIfDrawn()) ?? signatureSaved
     setSignatureSaved(hasSig)
     setReviewOpen(true)
