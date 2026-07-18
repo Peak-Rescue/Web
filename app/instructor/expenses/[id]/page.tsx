@@ -82,7 +82,7 @@ export default async function ExpenseReportPage({ params }: { params: Promise<{ 
   const cutoffDate = new Date()
   cutoffDate.setDate(cutoffDate.getDate() - 365)
   const cutoff = cutoffDate.toISOString().slice(0, 10)
-  const instanceCols = 'id, ref_number, course_type, custom_title, client_name, starts_at'
+  const instanceCols = 'id, ref_number, course_type, custom_title, client_name, location, starts_at'
 
   const [{ data: instanceRows }, { data: myAssignments }] = await Promise.all([
     admin

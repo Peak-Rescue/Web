@@ -73,7 +73,7 @@ export async function loadReport(reportId: string): Promise<{
   const { data: instances } = instanceIds.length
     ? await admin
         .from('course_instances')
-        .select('id, ref_number, course_type, custom_title, client_name, starts_at')
+        .select('id, ref_number, course_type, custom_title, client_name, location, starts_at')
         .in('id', instanceIds)
     : { data: [] }
   const titleMap = new Map((instances ?? []).map((i) => [i.id, instanceLabel(i)]))
