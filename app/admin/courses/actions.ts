@@ -242,3 +242,20 @@ export async function removeInstructor(instanceId: string, instructorId: string)
   if (error) throw new Error(error.message)
   revalidatePath(`/admin/courses/${instanceId}`)
 }
+
+// Deletes a course instance. Enrollments, instructor assignments, date
+// ranges, and modules cascade away; expense items keep their rows but lose
+// the course link (instance_id is on delete set null).
+export async function deleteInstance(instanceId: string) {
+  await requireAdmin()
+  const admin = createAdminClient()
+
+  const { error } = await admin
+    .from('course_instances')
+    .delete()
+    .eq('id', instanceId)
+
+  if (error) throw new Error(error.message)
+  revalidatePath('/admin/courses')
+  revalidatePath('/admin/expenses')
+}

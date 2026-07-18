@@ -6,6 +6,7 @@ import { updateInstanceDetails, updateInstanceDates, addOffDay, removeOffDay, ad
 import { CourseTypeSelect } from '../CourseTypeSelect'
 import InstructorAssign from '../InstructorAssign'
 import SaveButton from '@/components/SaveButton'
+import DeleteInstanceButton from '../DeleteInstanceButton'
 import { courseDisplayName, computeBlocks } from '@/lib/courses'
 import { CATEGORY_COURSE_TYPES } from '@/lib/capabilities'
 
@@ -52,6 +53,11 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
   ])
 
   if (!inst) notFound()
+
+  const [{ count: enrollmentCount }, { count: expenseCount }] = await Promise.all([
+    admin.from('enrollments').select('id', { count: 'exact', head: true }).eq('instance_id', id),
+    admin.from('expense_items').select('id', { count: 'exact', head: true }).eq('instance_id', id),
+  ])
 
   const courseType = inst.course_type
 
@@ -338,6 +344,21 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
           <Link href={`/portal/${id}`} className="text-sm text-zinc-400 hover:text-white transition-colors">
             View student/instructor portal →
           </Link>
+        </div>
+
+        <div className="mt-16 pt-8 border-t border-zinc-800 flex items-center justify-between gap-4">
+          <div>
+            <p className="text-sm font-medium text-zinc-400">Delete course</p>
+            <p className="text-xs text-zinc-600 mt-0.5">
+              Removes this course instance, its schedule, materials, and enrollments. Cannot be undone.
+            </p>
+          </div>
+          <DeleteInstanceButton
+            instanceId={id}
+            displayName={courseDisplayName(inst.course_type, inst.custom_title)}
+            enrollmentCount={enrollmentCount ?? 0}
+            expenseCount={expenseCount ?? 0}
+          />
         </div>
       </div>
     </main>
