@@ -34,14 +34,24 @@ export default async function ExpenseReportPage({ params }: { params: Promise<{ 
     .order('start_date')
     .order('created_at')
 
-  // Signed URLs so receipt files (private bucket) can be viewed.
+  // Signed URLs so receipt files (private bucket) can be viewed — one batched
+  // call for the whole report instead of a round trip per receipt.
+  type ReceiptRow = { id: string; path: string; filename: string | null }
+  const allPaths = (itemRows ?? []).flatMap((row) =>
+    ((row.expense_receipts ?? []) as ReceiptRow[]).map((r) => r.path)
+  )
+  const { data: signedAll } = allPaths.length
+    ? await admin.storage.from('expense-receipts').createSignedUrls(allPaths, 3600)
+    : { data: [] }
+  const urlByPath = new Map((signedAll ?? []).map((s) => [s.path, s.signedUrl]))
+
   const items: EditorItem[] = []
   for (const row of itemRows ?? []) {
-    const receipts = []
-    for (const r of (row.expense_receipts ?? []) as { id: string; path: string; filename: string | null }[]) {
-      const { data: signed } = await admin.storage.from('expense-receipts').createSignedUrl(r.path, 3600)
-      receipts.push({ id: r.id, filename: r.filename ?? 'receipt', url: signed?.signedUrl ?? '#' })
-    }
+    const receipts = ((row.expense_receipts ?? []) as ReceiptRow[]).map((r) => ({
+      id: r.id,
+      filename: r.filename ?? 'receipt',
+      url: urlByPath.get(r.path) ?? '#',
+    }))
     items.push({
       id: row.id,
       start_date: row.start_date,

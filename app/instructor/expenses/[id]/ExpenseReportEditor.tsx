@@ -101,6 +101,24 @@ export default function ExpenseReportEditor({
 }) {
   const router = useRouter()
 
+  // Optimistic copy of the line items: saved/deleted lines show up instantly;
+  // the server refresh reconciles in the background (receipt URLs, ordering).
+  const [localItems, setLocalItems] = useState(items)
+  const [syncedItems, setSyncedItems] = useState(items)
+  if (syncedItems !== items) {
+    setSyncedItems(items)
+    setLocalItems(items)
+  }
+
+  function upsertLocalItem(next: EditorItem) {
+    setLocalItems((prev) => {
+      const existing = prev.find((i) => i.id === next.id)
+      const merged = { ...next, receipts: existing?.receipts ?? next.receipts }
+      const rest = prev.filter((i) => i.id !== next.id)
+      return [...rest, merged].sort((a, b) => (a.start_date < b.start_date ? -1 : 1))
+    })
+  }
+
   // ── Trip info (auto-saved) ──────────────────────────────────────────────────
   const [reason, setReason] = useState(report.reason ?? '')
   const [defaultCourse, setDefaultCourse] = useState(report.default_instance_id ?? '')
@@ -169,7 +187,7 @@ export default function ExpenseReportEditor({
   const uploadItemRef = useRef<string | null>(null)
 
   const categories = categoriesFor(isExempt)
-  const totals = useMemo(() => computeTotals(items), [items])
+  const totals = useMemo(() => computeTotals(localItems), [localItems])
 
   // What's still needed before this line can persist (empty array = valid).
   function missingFields(f: FormState): string[] {
@@ -229,6 +247,32 @@ export default function ExpenseReportEditor({
       const saved = await saveItem(report.id, editingIdRef.current, toPayload(f))
       editingIdRef.current = saved.id
       setEditingId(saved.id)
+      const computed = computeItem(
+        {
+          category: f.category,
+          start_date: f.start_date,
+          end_date: f.end_date || null,
+          miles: f.miles ? Number(f.miles) : null,
+          meal_count: f.meal_count ? Number(f.meal_count) : null,
+          amount: f.amount ? Number(f.amount) : null,
+        },
+        rates
+      )
+      upsertLocalItem({
+        id: saved.id,
+        start_date: f.start_date,
+        end_date: f.end_date || null,
+        category: f.category,
+        paid_by: f.paid_by,
+        description: f.description || null,
+        details: f.details || null,
+        paid_for_others: f.paid_for_others,
+        miles: f.category === 'personal_auto' && f.miles ? Number(f.miles) : null,
+        meal_count: f.category === 'per_diem' && f.meal_count ? Number(f.meal_count) : null,
+        amount: computed.amount,
+        instance_id: f.instance_id || null,
+        receipts: [],
+      })
       if (stagedRef.current.length > 0) {
         const files = stagedRef.current
         stagedRef.current = []
@@ -399,12 +443,16 @@ export default function ExpenseReportEditor({
   }
 
   async function removeReceipt(receiptId: string) {
+    setLocalItems((prev) =>
+      prev.map((i) => ({ ...i, receipts: i.receipts.filter((r) => r.id !== receiptId) }))
+    )
     await deleteReceipt(report.id, receiptId)
     router.refresh()
   }
 
   async function removeItem(itemId: string) {
     if (!confirm('Delete this expense?')) return
+    setLocalItems((prev) => prev.filter((i) => i.id !== itemId))
     if (editingIdRef.current === itemId) {
       setForm(null)
       formRef.current = null
@@ -446,7 +494,7 @@ export default function ExpenseReportEditor({
   }
 
   const tripInfoOk = Boolean(reason.trim() || defaultCourse)
-  const receiptCount = items.reduce((s, i) => s + i.receipts.length, 0)
+  const receiptCount = localItems.reduce((s, i) => s + i.receipts.length, 0)
 
   const statusText: Record<SaveStatus, string> = {
     idle: '',
@@ -511,9 +559,9 @@ export default function ExpenseReportEditor({
             </button>
           </div>
 
-          {items.filter((i) => i.id !== editingId).length > 0 && (
+          {localItems.filter((i) => i.id !== editingId).length > 0 && (
             <div className="bg-zinc-900 rounded-lg border border-zinc-800 divide-y divide-zinc-800 mb-4">
-              {items.filter((i) => i.id !== editingId).map((item) => (
+              {localItems.filter((i) => i.id !== editingId).map((item) => (
                 <div key={item.id} className="px-4 py-3">
                   <div className="flex items-center justify-between gap-4">
                     <div className="min-w-0">
@@ -562,7 +610,7 @@ export default function ExpenseReportEditor({
               ))}
             </div>
           )}
-          {items.length === 0 && !form && (
+          {localItems.length === 0 && !form && (
             <p className="py-8 text-center text-sm text-zinc-500 border border-zinc-800 rounded-lg mb-4">
               No expenses yet — add your first one.
             </p>
@@ -693,7 +741,7 @@ export default function ExpenseReportEditor({
                   <label className={labelCls}>Receipts</label>
                   <div className="flex items-center flex-wrap gap-2">
                     {editingId &&
-                      items.find((i) => i.id === editingId)?.receipts.map((r) => (
+                      localItems.find((i) => i.id === editingId)?.receipts.map((r) => (
                         <span key={r.id} className="inline-flex items-center gap-1.5 px-2 py-1 bg-zinc-800 rounded text-xs">
                           <a href={r.url} target="_blank" rel="noreferrer" className="text-zinc-300 hover:text-white max-w-40 truncate">
                             {r.filename}
@@ -771,7 +819,7 @@ export default function ExpenseReportEditor({
           )}
 
           {/* Totals */}
-          {items.length > 0 && (
+          {localItems.length > 0 && (
             <div className="flex justify-between items-end gap-8 text-sm px-4 mt-4">
               <p className="text-xs text-zinc-500">
                 <span className="text-teal-400">✓</span> Everything saves automatically. You can leave and finish
@@ -799,7 +847,7 @@ export default function ExpenseReportEditor({
               </p>
               <button
                 onClick={() => void openReview()}
-                disabled={submitting || items.length === 0}
+                disabled={submitting || localItems.length === 0}
                 className="px-5 py-2.5 bg-pr-red hover:bg-pr-red-dark text-white rounded text-sm font-semibold transition-colors disabled:opacity-50 shrink-0"
               >
                 Review &amp; submit
@@ -825,16 +873,16 @@ export default function ExpenseReportEditor({
               {/* Anything blocking submission, called out specifically. */}
               {(items.length === 0 || !tripInfoOk || !signatureSaved) && (
                 <div className="space-y-1.5 mb-4 text-sm text-pr-red-light">
-                  {items.length === 0 && <p>✗ No expenses added yet</p>}
+                  {localItems.length === 0 && <p>✗ No expenses added yet</p>}
                   {!tripInfoOk && <p>✗ Trip info is empty — fill in the reason for travel or pick a course</p>}
                   {!signatureSaved && <p>✗ No signature saved — draw one in the Sign &amp; submit section</p>}
                 </div>
               )}
 
               {/* The line items exactly as they'll appear on the report. */}
-              {items.length > 0 && (
+              {localItems.length > 0 && (
                 <div className="border border-zinc-800 rounded-lg divide-y divide-zinc-800 mb-3">
-                  {items.map((item) => (
+                  {localItems.map((item) => (
                     <div key={item.id} className="px-3 py-2 flex items-center justify-between gap-3 text-sm">
                       <div className="min-w-0">
                         <p className="truncate">
@@ -883,7 +931,7 @@ export default function ExpenseReportEditor({
                 </button>
                 <button
                   onClick={() => void confirmSubmit()}
-                  disabled={submitting || items.length === 0 || !signatureSaved || !tripInfoOk}
+                  disabled={submitting || localItems.length === 0 || !signatureSaved || !tripInfoOk}
                   className="px-5 py-2.5 bg-pr-red hover:bg-pr-red-dark text-white rounded text-sm font-semibold transition-colors disabled:opacity-50"
                 >
                   {submitting ? 'Submitting…' : 'Submit report'}
