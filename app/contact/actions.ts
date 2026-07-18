@@ -1,6 +1,7 @@
 'use server'
 
 import { createAdminClient } from '@/lib/supabase/admin'
+import { isLikelyContactSpam } from '@/lib/contact-spam'
 
 export type ContactInput = {
   firstName: string
@@ -38,6 +39,8 @@ export async function submitContactForm(input: ContactInput): Promise<ContactRes
     return { ok: false, error: 'That message is a bit too long — please shorten it.' }
   }
 
+  const spam = isLikelyContactSpam({ firstName, lastName, organization, message })
+
   // Durable capture first — this must succeed for the form to "work".
   const { error } = await createAdminClient().from('contact_submissions').insert({
     first_name: firstName,
@@ -46,6 +49,7 @@ export async function submitContactForm(input: ContactInput): Promise<ContactRes
     organization,
     interest,
     message,
+    spam,
   })
   if (error) {
     return { ok: false, error: 'Something went wrong. Please email info@peak-rescue.com directly.' }
@@ -53,7 +57,8 @@ export async function submitContactForm(input: ContactInput): Promise<ContactRes
 
   // Best-effort notification. If Resend isn't configured (or fails), the
   // submission is already stored, so we never fail the request over email.
-  if (process.env.RESEND_API_KEY) {
+  // Spam-flagged submissions stay reviewable in the admin but don't notify.
+  if (!spam && process.env.RESEND_API_KEY) {
     try {
       const { Resend } = await import('resend')
       const resend = new Resend(process.env.RESEND_API_KEY)

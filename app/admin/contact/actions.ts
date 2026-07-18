@@ -21,6 +21,13 @@ export async function setSubmissionArchived(id: string, archived: boolean) {
   revalidatePath('/admin/contact')
 }
 
+export async function setSubmissionSpam(id: string, spam: boolean) {
+  const admin = await requireAdmin()
+  const { error } = await admin.from('contact_submissions').update({ spam }).eq('id', id)
+  if (error) throw new Error(error.message)
+  revalidatePath('/admin/contact')
+}
+
 export async function deleteSubmission(id: string) {
   const admin = await requireAdmin()
   const { error } = await admin.from('contact_submissions').delete().eq('id', id)

@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { setSubmissionArchived } from './actions'
+import { setSubmissionArchived, setSubmissionSpam } from './actions'
 import { DeleteButton } from './DeleteButton'
 
 const INTEREST_LABELS: Record<string, string> = {
@@ -24,6 +24,7 @@ type Submission = {
   interest: string | null
   message: string
   archived: boolean
+  spam: boolean
 }
 
 function fmtDate(iso: string) {
@@ -56,11 +57,18 @@ function SubmissionCard({ s }: { s: Submission }) {
       )}
       <p className="text-sm text-zinc-300 mt-3 whitespace-pre-wrap leading-relaxed">{s.message}</p>
       <div className="mt-4 flex justify-end gap-4">
-        <form action={setSubmissionArchived.bind(null, s.id, !s.archived)}>
+        <form action={setSubmissionSpam.bind(null, s.id, !s.spam)}>
           <button type="submit" className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">
-            {s.archived ? 'Unarchive' : 'Archive'}
+            {s.spam ? 'Not spam' : 'Spam'}
           </button>
         </form>
+        {!s.spam && (
+          <form action={setSubmissionArchived.bind(null, s.id, !s.archived)}>
+            <button type="submit" className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">
+              {s.archived ? 'Unarchive' : 'Archive'}
+            </button>
+          </form>
+        )}
         <DeleteButton id={s.id} name={`${s.first_name} ${s.last_name}`} />
       </div>
     </div>
@@ -82,8 +90,9 @@ export default async function AdminContactPage() {
     .order('created_at', { ascending: false })
 
   const submissions = (data ?? []) as Submission[]
-  const active = submissions.filter(s => !s.archived)
-  const archived = submissions.filter(s => s.archived)
+  const active = submissions.filter(s => !s.archived && !s.spam)
+  const archived = submissions.filter(s => s.archived && !s.spam)
+  const spam = submissions.filter(s => s.spam)
 
   return (
     <main className="min-h-screen bg-zinc-950 text-white pt-16 md:pt-20">
@@ -114,6 +123,17 @@ export default async function AdminContactPage() {
             <h2 className="text-sm font-medium text-zinc-500 uppercase tracking-wide mt-10 mb-4">Archived</h2>
             <div className="space-y-4 opacity-60">
               {archived.map(s => <SubmissionCard key={s.id} s={s} />)}
+            </div>
+          </>
+        )}
+
+        {spam.length > 0 && (
+          <>
+            <h2 className="text-sm font-medium text-zinc-500 uppercase tracking-wide mt-10 mb-4">
+              Spam ({spam.length})
+            </h2>
+            <div className="space-y-4 opacity-60">
+              {spam.map(s => <SubmissionCard key={s.id} s={s} />)}
             </div>
           </>
         )}
