@@ -175,6 +175,7 @@ export default function ExpenseReportEditor({
 
   const [stagedFiles, setStagedFiles] = useState<File[]>([])
   const stagedRef = useRef<File[]>([])
+  const bgSaves = useRef(0) // detached saves still in flight (line handed off via "Add another"/"Done")
   const stagedInputRef = useRef<HTMLInputElement>(null)
   const [uploadingFor, setUploadingFor] = useState<string | null>(null)
 
@@ -229,6 +230,55 @@ export default function ExpenseReportEditor({
     }
   }
 
+  function optimisticFromForm(f: FormState, id: string): EditorItem {
+    const computed = computeItem(
+      {
+        category: f.category,
+        start_date: f.start_date,
+        end_date: f.end_date || null,
+        miles: f.miles ? Number(f.miles) : null,
+        meal_count: f.meal_count ? Number(f.meal_count) : null,
+        amount: f.amount ? Number(f.amount) : null,
+      },
+      rates
+    )
+    return {
+      id,
+      start_date: f.start_date,
+      end_date: f.end_date || null,
+      category: f.category,
+      paid_by: f.paid_by,
+      description: f.description || null,
+      details: f.details || null,
+      paid_for_others: f.paid_for_others,
+      miles: f.category === 'personal_auto' && f.miles ? Number(f.miles) : null,
+      meal_count: f.category === 'per_diem' && f.meal_count ? Number(f.meal_count) : null,
+      amount: computed.amount,
+      instance_id: f.instance_id || null,
+      receipts: [],
+    }
+  }
+
+  // Saves a line the user has already moved on from ("Add another" / "Done").
+  // Runs fully in the background so the UI never waits on the round trip;
+  // failures surface via alert since the form is gone.
+  async function flushItemDetached(f: FormState, itemId: string | null, staged: File[]) {
+    bgSaves.current++
+    try {
+      const saved = await saveItem(report.id, itemId, toPayload(f))
+      upsertLocalItem(optimisticFromForm(f, saved.id))
+      if (staged.length > 0) await uploadReceipts(saved.id, staged)
+      router.refresh()
+    } catch (e) {
+      alert(
+        `Couldn't save "${f.description || CATEGORY_LABELS[f.category]}" — please re-add it.` +
+          (e instanceof Error ? ` (${e.message})` : '')
+      )
+    } finally {
+      bgSaves.current--
+    }
+  }
+
   async function flushItem(): Promise<boolean> {
     if (itemTimer.current) {
       clearTimeout(itemTimer.current)
@@ -247,32 +297,7 @@ export default function ExpenseReportEditor({
       const saved = await saveItem(report.id, editingIdRef.current, toPayload(f))
       editingIdRef.current = saved.id
       setEditingId(saved.id)
-      const computed = computeItem(
-        {
-          category: f.category,
-          start_date: f.start_date,
-          end_date: f.end_date || null,
-          miles: f.miles ? Number(f.miles) : null,
-          meal_count: f.meal_count ? Number(f.meal_count) : null,
-          amount: f.amount ? Number(f.amount) : null,
-        },
-        rates
-      )
-      upsertLocalItem({
-        id: saved.id,
-        start_date: f.start_date,
-        end_date: f.end_date || null,
-        category: f.category,
-        paid_by: f.paid_by,
-        description: f.description || null,
-        details: f.details || null,
-        paid_for_others: f.paid_for_others,
-        miles: f.category === 'personal_auto' && f.miles ? Number(f.miles) : null,
-        meal_count: f.category === 'per_diem' && f.meal_count ? Number(f.meal_count) : null,
-        amount: computed.amount,
-        instance_id: f.instance_id || null,
-        receipts: [],
-      })
+      upsertLocalItem(optimisticFromForm(f, saved.id))
       if (stagedRef.current.length > 0) {
         const files = stagedRef.current
         stagedRef.current = []
@@ -298,20 +323,30 @@ export default function ExpenseReportEditor({
   // A save may be mid-flight when the user switches lines; let it settle so
   // its completion can't re-attach the editor to the item being closed out.
   async function waitForItemIdle() {
-    while (itemSaving.current) {
+    while (itemSaving.current || bgSaves.current > 0) {
       await new Promise((r) => setTimeout(r, 50))
     }
   }
 
-  // Closes the line form. Auto-save means a valid line is already stored (or
-  // will be by the flush here); an invalid half-filled one needs a confirm.
+  // Closes the line form. A complete line is handed to a background save so
+  // the UI moves on instantly (it appears in the list optimistically); an
+  // invalid half-filled one needs a confirm.
   async function closeForm(): Promise<boolean> {
-    if (!formRef.current) return true
-    await waitForItemIdle()
     const f = formRef.current
     if (!f) return true
     if (missingFields(f).length === 0) {
-      if (!(await flushItem())) return false
+      if (itemTimer.current) {
+        clearTimeout(itemTimer.current)
+        itemTimer.current = null
+      }
+      // If a debounced save is mid-flight, let it finish (it holds this line's
+      // id assignment); usually there is none and this is instant.
+      while (itemSaving.current) {
+        await new Promise((r) => setTimeout(r, 50))
+      }
+      void flushItemDetached(f, editingIdRef.current, stagedRef.current)
+      stagedRef.current = []
+      setStagedFiles([])
     } else if (!editingIdRef.current) {
       const touched = JSON.stringify({ ...f, instance_id: '' }) !== JSON.stringify({ ...EMPTY_FORM })
       if (touched && !confirm(`This line is missing ${missingFields(f).join(' and ')} and won't be kept. Discard it?`)) {
