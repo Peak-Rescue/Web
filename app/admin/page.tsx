@@ -3,9 +3,11 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import Link from 'next/link'
 import MyTaskCheckbox from '@/components/MyTaskCheckbox'
+import CourseCalendar, { type CalendarCourse } from '@/components/CourseCalendar'
 import { courseShortName } from '@/lib/courses'
 
-export default async function AdminPage() {
+export default async function AdminPage({ searchParams }: { searchParams: Promise<{ cal?: string }> }) {
+  const { cal } = await searchParams
   const supabase = await createClient()
 
   const { data: { user } } = await supabase.auth.getUser()
@@ -57,6 +59,20 @@ export default async function AdminPage() {
     .map((a) => ({ role: a.role as string, inst: a.course_instances as unknown as InstRow }))
     .filter((c) => c.inst && c.inst.status !== 'cancelled' && (!c.inst.ends_at || c.inst.ends_at >= today))
     .sort((a, b) => (a.inst.starts_at ?? '9999').localeCompare(b.inst.starts_at ?? '9999'))
+
+  // Personal calendar: every assigned course with dates (past months included
+  // so back-navigation isn't empty), cancelled excluded.
+  const calendarCourses: CalendarCourse[] = (assignmentRows ?? [])
+    .map((a) => a.course_instances as unknown as InstRow)
+    .filter((i) => i && i.status !== 'cancelled' && i.starts_at && i.ends_at)
+    .map((i) => ({
+      id: i.id,
+      label: courseShortName(i.course_type, i.custom_title),
+      status: i.status,
+      starts_at: i.starts_at!,
+      ends_at: i.ends_at! >= i.starts_at! ? i.ends_at! : i.starts_at!,
+      href: `/portal/${i.id}`,
+    }))
 
   const myTasks = (taskRows ?? [])
     .filter((t) => (t.course_instances as unknown as { status: string } | null)?.status !== 'cancelled')
@@ -127,6 +143,17 @@ export default async function AdminPage() {
                 </Link>
               ))}
             </div>
+          </section>
+        )}
+
+        {calendarCourses.length > 0 && (
+          <section className="mb-10">
+            <h2 className="text-sm font-medium text-zinc-500 uppercase tracking-wide mb-3">Your calendar</h2>
+            <CourseCalendar
+              month={/^\d{4}-\d{2}$/.test(cal ?? '') ? cal! : today.slice(0, 7)}
+              basePath="/admin"
+              courses={calendarCourses}
+            />
           </section>
         )}
 
