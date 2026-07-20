@@ -109,7 +109,7 @@ export default async function PortalPage({ params }: { params: Promise<{ id: str
     const [{ data: taskRows }, { data: peopleRows }] = await Promise.all([
       admin
         .from('course_tasks')
-        .select('id, title, notes, assigned_to, due_date, status')
+        .select('id, title, notes, assigned_to, assigned_by, due_date, status')
         .eq('instance_id', id)
         .order('sort_order')
         .order('created_at'),

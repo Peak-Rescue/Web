@@ -96,6 +96,7 @@ export async function addTask(instanceId: string, input: TaskInput) {
     title,
     notes: input.notes?.trim() || null,
     assigned_to: input.assigned_to || null,
+    assigned_by: input.assigned_to ? user.id : null,
     due_date: input.due_date || null,
     created_by: user.id,
     sort_order: 1000, // custom tasks after the template checklist
@@ -121,9 +122,14 @@ export async function updateTask(
     .single()
   if (!before) throw new Error('Task not found')
 
+  const assigneeChanged = (patch.assigned_to || null) !== before.assigned_to
   const { error } = await admin
     .from('course_tasks')
-    .update({ assigned_to: patch.assigned_to || null, due_date: patch.due_date || null })
+    .update({
+      assigned_to: patch.assigned_to || null,
+      due_date: patch.due_date || null,
+      ...(assigneeChanged ? { assigned_by: patch.assigned_to ? user.id : null } : {}),
+    })
     .eq('id', taskId)
     .eq('instance_id', instanceId)
   if (error) throw new Error(error.message)
@@ -151,6 +157,30 @@ export async function setTaskStatus(instanceId: string, taskId: string, done: bo
   const { error } = await admin
     .from('course_tasks')
     .update({ status: done ? 'done' : 'open', completed_at: done ? new Date().toISOString() : null })
+    .eq('id', taskId)
+  if (error) throw new Error(error.message)
+  revalidateTaskViews(instanceId)
+}
+
+// Notes are working state ("called hotel, waiting on callback") — editable by
+// managers and by the task's assignee.
+export async function updateTaskNotes(instanceId: string, taskId: string, notes: string) {
+  const { user, admin, isAdmin } = await getCaller()
+
+  const { data: task } = await admin
+    .from('course_tasks')
+    .select('assigned_to')
+    .eq('id', taskId)
+    .eq('instance_id', instanceId)
+    .single()
+  if (!task) throw new Error('Task not found')
+
+  const allowed = isAdmin || task.assigned_to === user.id || (await isLeadOf(admin, instanceId, user.id))
+  if (!allowed) throw new Error('Not authorized')
+
+  const { error } = await admin
+    .from('course_tasks')
+    .update({ notes: notes.trim() || null })
     .eq('id', taskId)
   if (error) throw new Error(error.message)
   revalidateTaskViews(instanceId)

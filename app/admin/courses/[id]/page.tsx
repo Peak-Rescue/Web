@@ -58,7 +58,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
   const [{ count: enrollmentCount }, { count: expenseCount }, { data: taskRows }, { data: peopleRows }] = await Promise.all([
     admin.from('enrollments').select('id', { count: 'exact', head: true }).eq('instance_id', id),
     admin.from('expense_items').select('id', { count: 'exact', head: true }).eq('instance_id', id),
-    admin.from('course_tasks').select('id, title, notes, assigned_to, due_date, status').eq('instance_id', id).order('sort_order').order('created_at'),
+    admin.from('course_tasks').select('id, title, notes, assigned_to, assigned_by, due_date, status').eq('instance_id', id).order('sort_order').order('created_at'),
     admin.from('profiles').select('id, first_name, last_name').in('role', ['admin', 'instructor']).order('first_name'),
   ])
   const tasks = (taskRows ?? []) as CourseTask[]

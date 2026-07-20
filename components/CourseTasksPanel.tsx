@@ -2,13 +2,14 @@
 
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { addTask, updateTask, setTaskStatus, deleteTask, applyTaskTemplate } from '@/app/admin/courses/task-actions'
+import { addTask, updateTask, setTaskStatus, deleteTask, applyTaskTemplate, updateTaskNotes } from '@/app/admin/courses/task-actions'
 
 export type CourseTask = {
   id: string
   title: string
   notes: string | null
   assigned_to: string | null
+  assigned_by: string | null
   due_date: string | null
   status: 'open' | 'done'
 }
@@ -42,7 +43,10 @@ export default function CourseTasksPanel({
   const [newTitle, setNewTitle] = useState('')
   const [newAssignee, setNewAssignee] = useState('')
   const [newDue, setNewDue] = useState('')
+  const [newNotes, setNewNotes] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [openDetailsId, setOpenDetailsId] = useState<string | null>(null)
+  const [notesDraft, setNotesDraft] = useState('')
 
   const personName = (id: string | null) => people.find((p) => p.id === id)?.name ?? null
   const today = new Date().toISOString().slice(0, 10)
@@ -65,12 +69,24 @@ export default function CourseTasksPanel({
     })
   }
 
+  function toggleDetails(t: CourseTask) {
+    if (openDetailsId === t.id) {
+      setOpenDetailsId(null)
+    } else {
+      setOpenDetailsId(t.id)
+      setNotesDraft(t.notes ?? '')
+    }
+  }
+
   function TaskRow({ t }: { t: CourseTask }) {
     const isDone = t.status === 'done'
     const canToggle = canManage || t.assigned_to === currentUserId
+    const canEditNotes = canManage || t.assigned_to === currentUserId
     const overdue = !isDone && t.due_date && t.due_date < today
+    const detailsOpen = openDetailsId === t.id
     return (
-      <div className="px-4 py-2.5 flex items-center gap-3">
+      <div className="px-4 py-2.5">
+      <div className="flex items-center gap-3">
         <input
           type="checkbox"
           checked={isDone}
@@ -78,10 +94,12 @@ export default function CourseTasksPanel({
           onChange={(e) => run(() => setTaskStatus(instanceId, t.id, e.target.checked), t.id)}
           className="accent-teal-600 size-4 shrink-0 disabled:opacity-40"
         />
-        <div className="min-w-0 flex-1">
-          <p className={`text-sm ${isDone ? 'text-zinc-500 line-through' : ''}`}>{t.title}</p>
-          {t.notes && <p className="text-xs text-zinc-500 truncate">{t.notes}</p>}
-        </div>
+        <button onClick={() => toggleDetails(t)} className="min-w-0 flex-1 text-left group">
+          <p className={`text-sm group-hover:text-pr-red-light transition-colors ${isDone ? 'text-zinc-500 line-through' : ''}`}>
+            {t.title}
+            {t.notes && !detailsOpen && <span className="ml-1.5 text-zinc-500">📝</span>}
+          </p>
+        </button>
         {overdue && (
           <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-red-900/60 text-red-300 shrink-0">
             overdue
@@ -127,6 +145,43 @@ export default function CourseTasksPanel({
             {t.due_date ? ` · ${fmtDue(t.due_date)}` : ''}
           </span>
         )}
+      </div>
+
+      {detailsOpen && (
+        <div className="mt-2 ml-7 mr-1">
+          <p className="text-xs text-zinc-500 mb-2">
+            {t.assigned_to
+              ? `Assigned to ${personName(t.assigned_to) ?? 'someone'}${t.assigned_by ? ` by ${personName(t.assigned_by)}` : ''}`
+              : 'Unassigned'}
+            {t.due_date ? ` · due ${fmtDue(t.due_date)}` : ''}
+          </p>
+          {canEditNotes ? (
+            <div>
+              <textarea
+                value={notesDraft}
+                onChange={(e) => setNotesDraft(e.target.value)}
+                rows={2}
+                placeholder="Notes — status, phone numbers, confirmation codes…"
+                className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500 resize-y"
+              />
+              <div className="flex gap-3 mt-1.5">
+                <button
+                  onClick={() => run(() => updateTaskNotes(instanceId, t.id, notesDraft), t.id)}
+                  disabled={busyId === t.id || notesDraft === (t.notes ?? '')}
+                  className="text-xs text-zinc-400 hover:text-white transition-colors disabled:opacity-40"
+                >
+                  {busyId === t.id ? 'Saving…' : 'Save notes'}
+                </button>
+                <button onClick={() => setOpenDetailsId(null)} className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors">
+                  Close
+                </button>
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-zinc-400 whitespace-pre-wrap">{t.notes || 'No notes.'}</p>
+          )}
+        </div>
+      )}
       </div>
     )
   }
@@ -189,13 +244,23 @@ export default function CourseTasksPanel({
                   className="bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm"
                 />
               </div>
+              <div className="w-full">
+                <label className="block text-xs text-zinc-500 mb-1">Notes (optional)</label>
+                <input
+                  value={newNotes}
+                  onChange={(e) => setNewNotes(e.target.value)}
+                  placeholder="Any context the assignee needs"
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500"
+                />
+              </div>
               <button
                 onClick={() => {
                   if (!newTitle.trim()) return
-                  run(() => addTask(instanceId, { title: newTitle, assigned_to: newAssignee || null, due_date: newDue || null, notes: null }))
+                  run(() => addTask(instanceId, { title: newTitle, assigned_to: newAssignee || null, due_date: newDue || null, notes: newNotes || null }))
                   setNewTitle('')
                   setNewAssignee('')
                   setNewDue('')
+                  setNewNotes('')
                   setAdding(false)
                 }}
                 disabled={isPending || !newTitle.trim()}
