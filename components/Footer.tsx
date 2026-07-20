@@ -30,6 +30,7 @@ export default function Footer() {
                 height={52}
                 className="object-contain"
                 style={{ filter: 'invert(1)' }}
+                unoptimized
               />
             </div>
             <div className="flex flex-col gap-1 text-sm text-pr-muted">

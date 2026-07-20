@@ -55,6 +55,7 @@ export default function Intro() {
                     alt={cert.alt}
                     fill
                     className="object-contain"
+                    unoptimized
                   />
                 </div>
               </div>

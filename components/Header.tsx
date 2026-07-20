@@ -80,6 +80,7 @@ export default function Header() {
                 className="object-cover object-top"
                 style={{ filter: 'invert(1)' }}
                 priority
+                unoptimized
               />
             </div>
           </Link>

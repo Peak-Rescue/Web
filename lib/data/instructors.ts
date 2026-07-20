@@ -22,7 +22,7 @@ export const instructors: Instructor[] = [
     bio: 'Micah Rush brings over 20 years of experience in mountain and technical rescue to the field. A licensed IFMGA/UIAGM Mountain Guide, Micah is a key member of Natrona County Search and Rescue and the Wyoming Hoist Team, where he performs critical aerial rescue operations in challenging environments. His expertise also extends to swift water rescue and avalanche education, underscoring his commitment to advancing backcountry safety. An accomplished Level 3 SPRAT-certified technician, Micah has run remote rigging and safety for television productions and is known for his precision in high-stakes settings. He has earned top honors in three international rescue competitions, showcasing his skills on a global stage. Additionally, Micah has instructed military special operations units worldwide, sharing his advanced rescue techniques and safety protocols. His experience, from technical rigging to elite instruction, makes him a respected instructor and a vital asset to any rescue or safety program.',
     certifications: ['IFMGA/UIAGM Mountain Guide', 'SPRAT Level 3', 'Swiftwater Rescue Technician', 'Avalanche Educator', 'International Canyon Academy'],
     specialties: ['mountain-rescue', 'canyoneering', 'aerial-assets', 'small-team-rescue', 'fall-protection-rope-access'],
-    avatar: '/images/instructors/micah-rush.png',
+    avatar: '/images/instructors/micah-rush.jpg',
   },
   {
     slug: 'eric-christensen',
@@ -32,7 +32,7 @@ export const instructors: Instructor[] = [
     bio: 'Eric Christensen graduated from Colorado State University with a Bachelors Degree in Chemistry. In addition to his chemistry degree, he also holds an Associates from Casper College in Biology and many technical certifications in industrial and fire based rescue services. Eric started his career in chemistry but made a career change in Jan 2006 when he pursued a career involving firefighting, hazmat, confined space and high angle rescue with the Los Alamos County Fire Department in New Mexico. After obtaining a Department of Defense Federal Q Security Clearance, Eric was able to provide ALS ambulance services, confined space, high angle rescue, and other firefighter services for the city of Los Alamos and the Los Alamos National Laboratory. Eric later relocated back to his home town of Casper, WY and currently serves as a Firefighter/EMT-I for the Casper Fire Department. He is now the department\'s lead trainer in high angle and confined space rescue and serves as an instructor here at Peak Rescue.',
     certifications: ['Firefighter/EMT-I', 'SPRAT Level 3', 'Hazmat Technician', 'Confined Space Rescue Technician', 'High Angle Rescue Technician', 'International Canyon Academy'],
     specialties: ['confined-space-rescue', 'fall-protection-rope-access', 'emergency-response-team', 'mountain-rescue', 'canyoneering'],
-    avatar: '/images/instructors/eric-christensen.png',
+    avatar: '/images/instructors/eric-christensen.webp',
   },
   {
     slug: 'tye-herron',
@@ -42,7 +42,7 @@ export const instructors: Instructor[] = [
     bio: 'Tye is a Casper native and has grown up exploring the Wyoming mountains and wilderness. He enjoys camping, skiing, hiking, climbing, and mountaineering in his spare time. Tye has two sons and a daughter with whom he loves to teach and share his passion for outdoor sports and nature. Tye is a 23 year veteran on the Casper Fire-EMS department in Casper, WY. He is a Captain EMT-I on Rescue 1 where his experience responding to various rescue emergencies, including High Angle, Structure and Trench incidents, brings "real world" know how to Peak Rescue. Shortly after finding his calling as a Firefighter, Tye began teaching Technical Rescue to aspiring Firefighters at Casper College. His expertise led him to positions of leadership on the rescue teams with the fire department and eventually he teamed up with Micah and Peak Rescue around 2010. Tye holds several certifications in the field of technical and wilderness rescue, and he still loves learning about new techniques and equipment.',
     certifications: ['Captain EMT-I', 'SPRAT Level 2', 'High Angle Rescue Technician', 'Trench Rescue Technician', 'Technical Rescue Instructor'],
     specialties: ['firefighter-survival', 'emergency-response-team', 'confined-space-rescue'],
-    avatar: '/images/instructors/tye-herron.png',
+    avatar: '/images/instructors/tye-herron.webp',
   },
   {
     slug: 'toph-steinhoff',
@@ -64,7 +64,7 @@ export const instructors: Instructor[] = [
     bio: 'Cody spent over 23 years in the military, most of it as a Force Recon Marine. After he retired, he spent a year on the Loveland Fire Department in Colorado as a Firefighter/EMT-W, before transitioning back to work as a military training provider. During his time in the military, he deployed to lovely places like Iraq, Afghanistan and PACOM. He has held billets from team member to platoon commander and has in-depth knowledge of team tactics and the application of mountaineering skills to the military mountaineering team. He holds the military qualifications of Mountain Leader, Free-Fall Parachutist, Combat Diver, Dive Supervisor and currently moonlights as a SOF Level 1 Sniper Instructor. He is a current TS/SCI clearance holder and a deployable advisor. For the last several years he has worked extensively in jungle terrain, developing mobility and jungle warfare programs for the Tactical Tracking Operations School, where he currently holds the title of VP and delivers jungle specific training to special operations teams. Cody is passionate about transferring the technical mountaineering and rope related skills to our military clients. He believes that these skills give commanders access to terrain that would be considered "denied" by most and that these skills open the playbook for operational access.',
     certifications: ['Mountain Leader', 'Free-Fall Parachutist', 'Combat Diver', 'Dive Supervisor', 'SOF Level 1 Sniper Instructor'],
     specialties: ['jungle-mobility', 'small-team-rescue', 'mountain-mobility-training', 'cold-weather-arctic-operations'],
-    avatar: '/images/instructors/cody-carroll.png',
+    avatar: '/images/instructors/cody-carroll.webp',
   },
   {
     slug: 'nadav-oakes',
@@ -98,7 +98,7 @@ export const instructors: Instructor[] = [
     bio: 'Hunter relocated to Casper, WY from Florida where he had five years of professional firefighting experience. Hunter is now a firefighter for the City of Casper. He has acquired certifications in rope rescue, confined space rescue, vehicle extrication, trench rescue, structural collapse rescue, arborist rescue, backcountry rescue, and SPRAT. Hunter has been part of multiple rescue teams including Florida USAR Task Force 6. He is dedicated to continuing to build his own skillset and has a passion for helping others develop their knowledge and rescue skills. When not at work, Hunter enjoys all things outdoors and spending time with his friends and family.',
     certifications: ['Rope Rescue Technician', 'Confined Space Rescue Technician', 'Vehicle Extrication', 'Trench Rescue', 'Structural Collapse Rescue', 'Arborist Rescue', 'Backcountry Rescue', 'SPRAT'],
     specialties: ['rope-rescue', 'confined-space-rescue', 'emergency-response-team', 'firefighter-survival', 'fall-protection-rope-access'],
-    avatar: '/images/instructors/hunter-sandell.png',
+    avatar: '/images/instructors/hunter-sandell.jpg',
     avatarPosition: 'object-[50%_43%]',
   },
   {
@@ -109,7 +109,7 @@ export const instructors: Instructor[] = [
     bio: 'Cody Parke is a passionate and enthusiastic instructor at Peak Rescue. His love for teaching, coupled with his deep-rooted passions for rope rescue and firefighting, keeps him energized and always having fun. Cody\'s hands-on approach and excitement for sharing knowledge make him a dynamic and engaging instructor, inspiring those around him to push their limits and learn with confidence.',
     certifications: ['SPRAT Level 2', 'Rope Rescue Technician', 'Firefighter'],
     specialties: ['fall-protection-rope-access', 'urban-mobility', 'confined-space-rescue', 'firefighter-survival', 'emergency-response-team'],
-    avatar: '/images/instructors/cody-parke.png',
+    avatar: '/images/instructors/cody-parke.webp',
     avatarPosition: 'object-[50%_90%]',
   },
   {
@@ -120,7 +120,7 @@ export const instructors: Instructor[] = [
     bio: 'Kooper Adams was born and raised in Casper, Wyoming. He grew up deeply involved in athletics and team sports, which fostered his strong teamwork skills. In college, Kooper found his passion for firefighting, beginning his career in wildland fire service. Soon after, he had the opportunity to serve his community at the Casper Fire Department (CFD), where he continues to work alongside and learn from some of the most skilled firefighters and rescue technicians in the world. Kooper also teaches confined space rescue, rope rescue, SPRAT, and mountain rescue, sharing his knowledge and experience to help others develop their skills in these challenging disciplines. When he\'s not at work, Kooper enjoys the outdoors with his wife and son, often hunting, fishing, hiking, and occasionally tackling ultra runs in the mountains they love.',
     certifications: ['SPRAT Level 2', 'Confined Space Rescue Technician', 'Rope Rescue Technician', 'Mountain Rescue Technician'],
     specialties: ['swiftwater-rescue', 'mountain-rescue', 'firefighter-survival', 'confined-space-rescue', 'fall-protection-rope-access'],
-    avatar: '/images/instructors/kooper-adams.png',
+    avatar: '/images/instructors/kooper-adams.webp',
   },
   {
     slug: 'brent-roth',
@@ -142,7 +142,7 @@ export const instructors: Instructor[] = [
     bio: 'Taylor was born and raised in Casper, WY. He stays busy with his wife and two sons camping, climbing, running and hiking. Taylor brings a unique blend of rope expertise and educational background to his position as a lead instructor for Peak. He was a high school teacher for five years and now works for the Casper Fire Department as a senior firefighter on Truck 3. Taylor\'s positive energy and excitement make him fun to learn from when he is teaching industrial, tower, SPRAT, or backcountry classes.',
     certifications: ['Firefighter', 'SPRAT', 'Tower Rescue', 'Rope Rescue Technician'],
     specialties: ['fall-protection-rope-access', 'rope-rescue', 'mountain-rescue', 'emergency-response-team'],
-    avatar: '/images/instructors/taylor-herron.png',
+    avatar: '/images/instructors/taylor-herron.jpg',
     avatarPosition: 'object-[50%_55%]',
   },
 
@@ -179,7 +179,7 @@ export const instructors: Instructor[] = [
     bio: 'Dustin Fiero is a San Diego lifeguard with extensive experience in water safety and technical rescue. He has provided water safety for the Big Wave World Tour, working in high-risk environments such as Nazaré, Portugal, Mexico, and Cortez Bank. After operating at the highest levels of ocean safety, Dustin shifted his focus to technical rescue, where he has continued to build his expertise. He has completed California State Fire Training instructor task books in Rope Rescue Technician, Rope Rescue Awareness and Operations, and Water Rescue Technician, along with 15 specialized rope rescue courses with the state and private companies. Dustin is also a cliff rescue instructor and a member of the City of San Diego\'s swift water rescue team. Growing up with learning disabilities, he developed a strong commitment to teaching and takes pride in making complex rescue concepts accessible to students of all skill levels.',
     certifications: ['Rope Rescue Technician', 'Water Rescue Technician', 'Cliff Rescue Instructor', 'CA State Fire Training Instructor'],
     specialties: ['swiftwater-rescue', 'rope-rescue', 'water-mobility', 'mountain-rescue'],
-    avatar: '/images/instructors/dustin-fiero.png',
+    avatar: '/images/instructors/dustin-fiero.jpg',
     avatarPosition: 'object-[0%_top]',
   },
 
@@ -192,7 +192,7 @@ export const instructors: Instructor[] = [
     bio: 'Jake began his career in rescue at age 16 as an Ocean Lifeguard in Southern California. He then received his EMT certification and transitioned to the San Bernardino Mountains, where he has worked as a Professional Ski Patroller for the past seven years. He currently leads his resort\'s Technical Rescue program and oversees all patrol training operations, with a focus on rope rescue, patient care, and team development. Jake also serves as a Team Lead on a REMS (Rapid Extraction Module Support) team, providing medical and technical rope rescue support on wildland fires throughout the western United States. With a background spanning ocean, mountain, and fireline environments, Jake brings a well-rounded, field-tested perspective to rescue operations and instruction.',
     certifications: ['EMT', 'Professional Ski Patroller', 'Rope Rescue Technician', 'Ocean Lifeguard', 'REMS Team Lead'],
     specialties: ['aerial-tramway-rescue', 'mountain-rescue', 'rope-rescue', 'emergency-response-team'],
-    avatar: '/images/instructors/jake-shultz.png',
+    avatar: '/images/instructors/jake-shultz.jpg',
     avatarPosition: 'object-[100%_58%]',
   },
   {
@@ -203,7 +203,7 @@ export const instructors: Instructor[] = [
     bio: 'Connor, originally from Bridgewater, Connecticut, moved to Colorado after high school and quickly immersed himself in the world of skiing and rock climbing. His passion for the mountains led him to Keystone Resort in 2014, where he started his career as a first responder Ski Patroller. During this time, he developed a deep understanding of backcountry rope rescue and aerial ski lift evacuation. Seeking to broaden his skills, Connor spent two winters at Mt Hotham in Australia, where he honed his abilities in backcountry rescue on steep, icy slopes and the rugged terrain of the Australian Alps. His international experience complements his work across North America, where he has collaborated with various teams to design and implement rescue systems for aerial tramways and ski lifts. A dedicated instructor, Connor specializes in aerial ski lift evacuation and is passionate about pushing industry standards in worker safety and rescue readiness. His love for sharing knowledge drives his commitment to helping others master the skills needed for successful rescue operations in challenging environments.',
     certifications: ['Ski Patroller', 'Aerial Tramway Evacuation Technician', 'Backcountry Rope Rescue'],
     specialties: ['aerial-assets', 'aerial-tramway-rescue', 'mountain-rope-rescue'],
-    avatar: '/images/instructors/connor-greene.png',
+    avatar: '/images/instructors/connor-greene.webp',
   },
   {
     slug: 'erica-pacal',

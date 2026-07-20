@@ -14,7 +14,7 @@ export const posts: Post[] = [
     date: 'March 18, 2023',
     excerpt:
       'On expertise, social media, and why the mountains don\'t care about your follower count.',
-    image: '/images/blog/influencers-in-the-wild.png',
+    image: '/images/blog/influencers-in-the-wild.jpg',
     body: [
       'In today\'s social media-driven world, it\'s common to see people trying to become influencers in various fields, including the technical rescue world. However, the pursuit of likes and followers does not necessarily make one an expert in the craft. In fact, the focus on social media can distract from the real work of becoming proficient in tech rescue.',
       'While there is nothing inherently wrong with wanting to be an influencer, it is important to consider whether the pursuit of likes and followers aligns with the values of the rescue world. Technical rescue is a specialized field that requires extensive training, experience, and expertise. It involves saving lives and helping people in some of the most challenging and dangerous situations.',
@@ -59,7 +59,7 @@ export const posts: Post[] = [
     date: 'March 15, 2019',
     excerpt:
       'One of the most versatile pieces of rescue gear on the market — and why it\'s become a staple on every operation.',
-    image: '/images/blog/my-gear-mance-asap.png',
+    image: '/images/blog/my-gear-mance-asap.jpg',
     body: [
       'You read that right, I have basically fallen in love with the Petzl ASAP. Why you might ask? It is simply one of the most versatile pieces of rescue gear on the market. It was first introduced to the Rope Access world, and due to its versatility and user-friendly design, it quickly moved into every aspect of rescue, including confined space, backcountry, and industry to name a few. Any piece of equipment that can span all the various forms of rescue immediately has my attention. Not only is this piece of gear adaptable, but it also has two different options.',
       'Now let\'s talk about safety because that\'s why we\'re all here! This ingenious invention has allowed teams to run safer trainings and rescues with fewer people. You need training on how to use these to their full capability, and to learn the limitations of the ASAP (just ask at your next training, we can customize part of a class using these). You will quickly see, however, that it is one of the easiest, most useful pieces of rescue gear. I have found it can take "most" of the human error out of belays. I like to refer to it as my second instructor when I\'m teaching because I know this fool-proof design won\'t make errors, as I\'m watching the other safety dynamics such as technique and rigging during a busy class. It also passes the BCCTR Belay Competence Drop Test (as do many more products which I will discuss in later blogs) and seems to be a backcountry "must" with high lines, wenches and small teams working to make safe rescues.',
