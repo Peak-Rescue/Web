@@ -213,8 +213,13 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
           </form>
         </details>
 
-        {/* ── Calendar ─────────────────────────────────────────────── */}
-        <section className="mb-16">
+        {/* ── Calendar (collapsed by default; auto-open while navigating months) ── */}
+        <details open={Boolean(cal)} className="mb-16 group">
+          <summary className="cursor-pointer list-none flex items-center gap-2 text-lg font-semibold select-none">
+            <span className="text-zinc-600 text-sm transition-transform group-open:rotate-90">▶</span>
+            Calendar
+          </summary>
+          <div className="mt-4">
           <CourseCalendar
             month={/^\d{4}-\d{2}$/.test(cal ?? '') ? cal! : today.slice(0, 7)}
             basePath="/admin/courses"
@@ -231,7 +236,8 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
                 })) as CalendarCourse[]
             }
           />
-        </section>
+          </div>
+        </details>
 
         {/* ── Upcoming ─────────────────────────────────────────────── */}
         <section className="mb-10">

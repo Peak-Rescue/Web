@@ -147,14 +147,19 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         )}
 
         {calendarCourses.length > 0 && (
-          <section className="mb-10">
-            <h2 className="text-sm font-medium text-zinc-500 uppercase tracking-wide mb-3">Your calendar</h2>
-            <CourseCalendar
-              month={/^\d{4}-\d{2}$/.test(cal ?? '') ? cal! : today.slice(0, 7)}
-              basePath="/admin"
-              courses={calendarCourses}
-            />
-          </section>
+          <details open={Boolean(cal)} className="mb-10 group">
+            <summary className="cursor-pointer list-none flex items-center gap-2 text-sm font-medium text-zinc-500 uppercase tracking-wide select-none">
+              <span className="text-zinc-600 text-xs transition-transform group-open:rotate-90">▶</span>
+              Your calendar
+            </summary>
+            <div className="mt-3">
+              <CourseCalendar
+                month={/^\d{4}-\d{2}$/.test(cal ?? '') ? cal! : today.slice(0, 7)}
+                basePath="/admin"
+                courses={calendarCourses}
+              />
+            </div>
+          </details>
         )}
 
         {myTasks.length > 0 && (
