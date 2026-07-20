@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { createInstance } from './actions'
 import { CourseTypeSelect } from './CourseTypeSelect'
 import { courseShortName } from '@/lib/courses'
+import CourseCalendar, { type CalendarCourse } from '@/components/CourseCalendar'
 
 const STATUS_STYLES: Record<string, string> = {
   tentative: 'bg-yellow-900/40 text-yellow-300 border-yellow-700',
@@ -75,7 +76,8 @@ function InstanceCard({ inst }: { inst: Instance }) {
   )
 }
 
-export default async function CoursesPage() {
+export default async function CoursesPage({ searchParams }: { searchParams: Promise<{ cal?: string }> }) {
+  const { cal } = await searchParams
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
@@ -210,6 +212,26 @@ export default async function CoursesPage() {
             </div>
           </form>
         </details>
+
+        {/* ── Calendar ─────────────────────────────────────────────── */}
+        <section className="mb-16">
+          <CourseCalendar
+            month={/^\d{4}-\d{2}$/.test(cal ?? '') ? cal! : today.slice(0, 7)}
+            basePath="/admin/courses"
+            courses={
+              instances
+                .filter((i) => i.starts_at && i.ends_at && i.status !== 'cancelled')
+                .map((i) => ({
+                  id: i.id,
+                  label: courseShortName(i.course_type, i.custom_title),
+                  status: i.status,
+                  starts_at: i.starts_at!,
+                  ends_at: i.ends_at! >= i.starts_at! ? i.ends_at! : i.starts_at!,
+                  href: `/admin/courses/${i.id}`,
+                })) as CalendarCourse[]
+            }
+          />
+        </section>
 
         {/* ── Upcoming ─────────────────────────────────────────────── */}
         <section className="mb-10">
