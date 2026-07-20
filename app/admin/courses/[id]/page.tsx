@@ -8,6 +8,7 @@ import InstructorAssign from '../InstructorAssign'
 import SaveButton from '@/components/SaveButton'
 import DeleteInstanceButton from '../DeleteInstanceButton'
 import CourseTasksPanel, { type TaskPerson } from '@/components/CourseTasksPanel'
+import EstimatePanel, { type PricingRate } from '@/components/EstimatePanel'
 import { loadTasksWithDocs } from '@/lib/course-tasks'
 import { courseDisplayName, computeBlocks } from '@/lib/courses'
 import { CATEGORY_COURSE_TYPES } from '@/lib/capabilities'
@@ -66,6 +67,19 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
   const taskPeople: TaskPerson[] = (peopleRows ?? [])
     .map((p) => ({ id: p.id, name: [p.first_name, p.last_name].filter(Boolean).join(' ') }))
     .filter((p) => p.name)
+
+  const [{ data: estimateRow }, { data: pricingRateRows }] = await Promise.all([
+    admin
+      .from('course_estimates')
+      .select('margin, estimate_items(label, qty, rate, sort_order)')
+      .eq('instance_id', id)
+      .maybeSingle(),
+    admin.from('pricing_rates').select('id, label, unit, rate').eq('active', true).order('sort_order'),
+  ])
+  const estimateItems = ((estimateRow?.estimate_items ?? []) as { label: string; qty: number; rate: number; sort_order: number }[])
+    .sort((a, b) => a.sort_order - b.sort_order)
+    .map((i) => ({ label: i.label, qty: Number(i.qty), rate: Number(i.rate) }))
+  const pricingRates: PricingRate[] = (pricingRateRows ?? []).map((r) => ({ ...r, rate: Number(r.rate) }))
 
   const courseType = inst.course_type
 
@@ -347,6 +361,17 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
             </div>
             <button type="submit" className="px-4 py-2 bg-pr-red hover:bg-pr-red-dark text-white rounded text-sm font-medium transition-colors">Add section</button>
           </form>
+        </section>
+
+        <section className="mb-12">
+          <h2 className="text-lg font-semibold mb-1">Financials — Estimate</h2>
+          <EstimatePanel
+            key={`${id}-estimate`}
+            instanceId={id}
+            initialMargin={Number(estimateRow?.margin ?? 0.25)}
+            initialItems={estimateItems}
+            rates={pricingRates}
+          />
         </section>
 
         <section className="mb-12">
