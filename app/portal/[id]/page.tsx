@@ -116,7 +116,9 @@ export default async function PortalPage({ params }: { params: Promise<{ id: str
         .in('role', ['admin', 'instructor'])
         .order('first_name'),
     ])
-    tasks = taskRows
+    // Managers see the full checklist (they assign from it); everyone else
+    // sees only tasks that have actually been assigned to someone.
+    tasks = canManageTasks ? taskRows : taskRows.filter((t) => t.assigned_to)
     taskPeople = (peopleRows ?? [])
       .map((p) => ({ id: p.id, name: [p.first_name, p.last_name].filter(Boolean).join(' ') }))
       .filter((p) => p.name)
@@ -178,7 +180,7 @@ export default async function PortalPage({ params }: { params: Promise<{ id: str
         )}
 
         {/* Course tasks (team only) */}
-        {showTasks && (
+        {showTasks && (tasks.length > 0 || canManageTasks) && (
           <section className="mb-10">
             <h2 className="font-semibold text-lg mb-3">Course Tasks</h2>
             <CourseTasksPanel
