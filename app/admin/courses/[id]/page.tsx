@@ -74,12 +74,32 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
       .select('margin, estimate_items(label, qty, rate, sort_order)')
       .eq('instance_id', id)
       .maybeSingle(),
-    admin.from('pricing_rates').select('id, label, unit, rate').eq('active', true).order('sort_order'),
+    admin.from('pricing_rates').select('id, label, unit, rate, default_line').eq('active', true).order('sort_order'),
   ])
-  const estimateItems = ((estimateRow?.estimate_items ?? []) as { label: string; qty: number; rate: number; sort_order: number }[])
+  const pricingRates: PricingRate[] = (pricingRateRows ?? []).map((r) => ({ ...r, rate: Number(r.rate) }))
+
+  let estimateItems = ((estimateRow?.estimate_items ?? []) as { label: string; qty: number; rate: number; sort_order: number }[])
     .sort((a, b) => a.sort_order - b.sort_order)
     .map((i) => ({ label: i.label, qty: Number(i.qty), rate: Number(i.rate) }))
-  const pricingRates: PricingRate[] = (pricingRateRows ?? []).map((r) => ({ ...r, rate: Number(r.rate) }))
+
+  // New estimate: pre-populate the always-recurring lines, with quantities
+  // guessed from the course itself (editable, and nothing saves until touched).
+  if (!estimateRow) {
+    const instructorCount = Math.max((assigned ?? []).length, 1)
+    const courseDays =
+      inst.starts_at && inst.ends_at
+        ? Math.max(Math.round((Date.parse(inst.ends_at) - Date.parse(inst.starts_at)) / 86_400_000) + 1, 1)
+        : 1
+    const guessQty = (label: string): number => {
+      if (label === 'Instructor field day') return instructorCount * courseDays
+      if (label === 'Instructor travel day') return instructorCount * 2
+      if (label === 'Lodging') return instructorCount * courseDays
+      return 1
+    }
+    estimateItems = (pricingRateRows ?? [])
+      .filter((r) => r.default_line)
+      .map((r) => ({ label: r.label, qty: guessQty(r.label), rate: Number(r.rate) }))
+  }
 
   const courseType = inst.course_type
 

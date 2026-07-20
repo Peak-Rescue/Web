@@ -7,6 +7,7 @@ import { adminAddRate } from '../actions'
 import { addPricingRate, updatePricingRate } from '@/app/admin/courses/finance-actions'
 import DeleteRateButton from './DeleteRateButton'
 import DeletePricingRateButton from './DeletePricingRateButton'
+import DefaultLineToggle from './DefaultLineToggle'
 import { type ExpenseRate, type RateType, fmtMoney } from '@/lib/expenses'
 
 const TYPE_LABELS: Record<RateType, { title: string; unit: string; hint: string }> = {
@@ -41,7 +42,7 @@ export default async function AdminExpenseRatesPage() {
 
   const { data: pricingRateRows } = await admin
     .from('pricing_rates')
-    .select('id, label, unit, rate')
+    .select('id, label, unit, rate, default_line')
     .eq('active', true)
     .order('sort_order')
   const pricingRates = (pricingRateRows ?? []).map((r) => ({ ...r, rate: Number(r.rate) }))
@@ -139,6 +140,7 @@ export default async function AdminExpenseRatesPage() {
                   {r.unit && <p className="text-xs text-zinc-500">{r.unit}</p>}
                 </div>
                 <div className="flex items-center gap-3 shrink-0">
+                  <DefaultLineToggle rateId={r.id} initialValue={r.default_line} />
                   <form action={updatePricingRate.bind(null, r.id)} className="flex items-center gap-2">
                     <input
                       type="number"

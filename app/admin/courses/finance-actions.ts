@@ -84,3 +84,10 @@ export async function deletePricingRate(rateId: string) {
   if (error) throw new Error(error.message)
   revalidatePath('/admin/expenses/rates')
 }
+
+export async function setPricingRateDefault(rateId: string, defaultLine: boolean) {
+  const admin = await requireAdmin()
+  const { error } = await admin.from('pricing_rates').update({ default_line: defaultLine }).eq('id', rateId)
+  if (error) throw new Error(error.message)
+  revalidatePath('/admin/expenses/rates')
+}
