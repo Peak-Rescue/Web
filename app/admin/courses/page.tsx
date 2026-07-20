@@ -8,6 +8,7 @@ import { courseShortName } from '@/lib/courses'
 
 const STATUS_STYLES: Record<string, string> = {
   tentative: 'bg-yellow-900/40 text-yellow-300 border-yellow-700',
+  quoted:    'bg-blue-900/40 text-blue-300 border-blue-700',
   confirmed:  'bg-teal-900/40 text-teal-300 border-teal-700',
   completed:  'bg-zinc-700 text-zinc-300 border-zinc-600',
   cancelled:  'bg-red-900/40 text-red-300 border-red-700',
@@ -147,6 +148,7 @@ export default async function CoursesPage() {
               <label className="block text-xs text-zinc-400 mb-1">Status</label>
               <select name="status" defaultValue="tentative" className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500">
                 <option value="tentative">Tentative</option>
+                <option value="quoted">Quoted</option>
                 <option value="confirmed">Confirmed</option>
               </select>
             </div>

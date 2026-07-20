@@ -7,12 +7,14 @@ import { CourseTypeSelect } from '../CourseTypeSelect'
 import InstructorAssign from '../InstructorAssign'
 import SaveButton from '@/components/SaveButton'
 import DeleteInstanceButton from '../DeleteInstanceButton'
-import CourseTasksPanel, { type CourseTask, type TaskPerson } from '@/components/CourseTasksPanel'
+import CourseTasksPanel, { type TaskPerson } from '@/components/CourseTasksPanel'
+import { loadTasksWithDocs } from '@/lib/course-tasks'
 import { courseDisplayName, computeBlocks } from '@/lib/courses'
 import { CATEGORY_COURSE_TYPES } from '@/lib/capabilities'
 
 const STATUS_STYLES: Record<string, string> = {
   tentative: 'bg-yellow-900/40 text-yellow-300 border-yellow-700',
+  quoted: 'bg-blue-900/40 text-blue-300 border-blue-700',
   confirmed: 'bg-teal-900/40 text-teal-300 border-teal-700',
   completed: 'bg-zinc-700 text-zinc-300 border-zinc-600',
   cancelled: 'bg-red-900/40 text-red-300 border-red-700',
@@ -55,13 +57,12 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
 
   if (!inst) notFound()
 
-  const [{ count: enrollmentCount }, { count: expenseCount }, { data: taskRows }, { data: peopleRows }] = await Promise.all([
+  const [{ count: enrollmentCount }, { count: expenseCount }, tasks, { data: peopleRows }] = await Promise.all([
     admin.from('enrollments').select('id', { count: 'exact', head: true }).eq('instance_id', id),
     admin.from('expense_items').select('id', { count: 'exact', head: true }).eq('instance_id', id),
-    admin.from('course_tasks').select('id, title, notes, assigned_to, assigned_by, due_date, status').eq('instance_id', id).order('sort_order').order('created_at'),
+    loadTasksWithDocs(admin, id),
     admin.from('profiles').select('id, first_name, last_name').in('role', ['admin', 'instructor']).order('first_name'),
   ])
-  const tasks = (taskRows ?? []) as CourseTask[]
   const taskPeople: TaskPerson[] = (peopleRows ?? [])
     .map((p) => ({ id: p.id, name: [p.first_name, p.last_name].filter(Boolean).join(' ') }))
     .filter((p) => p.name)
@@ -118,6 +119,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
               <label className="block text-xs text-zinc-400 mb-1">Status</label>
               <select name="status" defaultValue={inst.status} className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500">
                 <option value="tentative">Tentative</option>
+                <option value="quoted">Quoted</option>
                 <option value="confirmed">Confirmed</option>
                 <option value="completed">Completed</option>
                 <option value="cancelled">Cancelled</option>

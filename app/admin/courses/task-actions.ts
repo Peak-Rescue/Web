@@ -186,6 +186,78 @@ export async function updateTaskNotes(instanceId: string, taskId: string, notes:
   revalidateTaskViews(instanceId)
 }
 
+// ─── Task documents (signed contracts, permits, confirmations…) ─────────────
+// Managers and the task's assignee can attach files. Uploads go direct to the
+// private task-documents bucket via server-minted signed URLs.
+
+const DOC_BUCKET = 'task-documents'
+const MAX_DOC_BYTES = 20 * 1024 * 1024
+
+async function requireTaskParticipant(instanceId: string, taskId: string) {
+  const { user, admin, isAdmin } = await getCaller()
+  const { data: task } = await admin
+    .from('course_tasks')
+    .select('assigned_to')
+    .eq('id', taskId)
+    .eq('instance_id', instanceId)
+    .single()
+  if (!task) throw new Error('Task not found')
+  const allowed = isAdmin || task.assigned_to === user.id || (await isLeadOf(admin, instanceId, user.id))
+  if (!allowed) throw new Error('Not authorized')
+  return { user, admin }
+}
+
+export async function createTaskDocUploadTargets(
+  instanceId: string,
+  taskId: string,
+  files: { name: string; size: number }[]
+): Promise<{ path: string; token: string }[]> {
+  const { admin } = await requireTaskParticipant(instanceId, taskId)
+  const { randomUUID } = await import('crypto')
+
+  const targets: { path: string; token: string }[] = []
+  for (const file of files) {
+    if (file.size > MAX_DOC_BYTES) throw new Error(`"${file.name}" is over the 20 MB limit`)
+    const ext = (file.name.split('.').pop() ?? 'pdf').toLowerCase().replace(/[^a-z0-9]/g, '') || 'pdf'
+    const path = `tasks/${instanceId}/${taskId}/${randomUUID()}.${ext}`
+    const { data, error } = await admin.storage.from(DOC_BUCKET).createSignedUploadUrl(path)
+    if (error || !data) throw new Error(error?.message ?? 'Could not create upload URL')
+    targets.push({ path: data.path, token: data.token })
+  }
+  return targets
+}
+
+export async function finalizeTaskDocs(
+  instanceId: string,
+  taskId: string,
+  uploads: { path: string; filename: string }[]
+) {
+  const { user, admin } = await requireTaskParticipant(instanceId, taskId)
+  const prefix = `tasks/${instanceId}/${taskId}/`
+  const rows = uploads
+    .filter((u) => u.path.startsWith(prefix))
+    .map((u) => ({ task_id: taskId, path: u.path, filename: u.filename.slice(0, 200), uploaded_by: user.id }))
+  if (rows.length === 0) return
+  const { error } = await admin.from('course_task_documents').insert(rows)
+  if (error) throw new Error(error.message)
+  revalidateTaskViews(instanceId)
+}
+
+export async function deleteTaskDoc(instanceId: string, taskId: string, docId: string) {
+  const { admin } = await requireTaskParticipant(instanceId, taskId)
+  const { data: doc } = await admin
+    .from('course_task_documents')
+    .select('path')
+    .eq('id', docId)
+    .eq('task_id', taskId)
+    .single()
+  if (!doc) return
+  await admin.storage.from(DOC_BUCKET).remove([doc.path])
+  const { error } = await admin.from('course_task_documents').delete().eq('id', docId)
+  if (error) throw new Error(error.message)
+  revalidateTaskViews(instanceId)
+}
+
 export async function deleteTask(instanceId: string, taskId: string) {
   const { admin } = await requireManager(instanceId)
   const { error } = await admin.from('course_tasks').delete().eq('id', taskId).eq('instance_id', instanceId)

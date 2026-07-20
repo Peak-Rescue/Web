@@ -5,9 +5,11 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { courseDisplayName, computeBlocks } from '@/lib/courses'
 import CourseTasksPanel, { type CourseTask, type TaskPerson } from '@/components/CourseTasksPanel'
+import { loadTasksWithDocs } from '@/lib/course-tasks'
 
 const STATUS_LABEL: Record<string, string> = {
   tentative: 'Tentative',
+  quoted:     'Quoted',
   confirmed:  'Confirmed',
   completed:  'Completed',
   cancelled:  'Cancelled',
@@ -106,20 +108,15 @@ export default async function PortalPage({ params }: { params: Promise<{ id: str
   let tasks: CourseTask[] = []
   let taskPeople: TaskPerson[] = []
   if (showTasks) {
-    const [{ data: taskRows }, { data: peopleRows }] = await Promise.all([
-      admin
-        .from('course_tasks')
-        .select('id, title, notes, assigned_to, assigned_by, due_date, status')
-        .eq('instance_id', id)
-        .order('sort_order')
-        .order('created_at'),
+    const [taskRows, { data: peopleRows }] = await Promise.all([
+      loadTasksWithDocs(admin, id),
       admin
         .from('profiles')
         .select('id, first_name, last_name')
         .in('role', ['admin', 'instructor'])
         .order('first_name'),
     ])
-    tasks = (taskRows ?? []) as CourseTask[]
+    tasks = taskRows
     taskPeople = (peopleRows ?? [])
       .map((p) => ({ id: p.id, name: [p.first_name, p.last_name].filter(Boolean).join(' ') }))
       .filter((p) => p.name)

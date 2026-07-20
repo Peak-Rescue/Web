@@ -1,8 +1,19 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { addTask, updateTask, setTaskStatus, deleteTask, applyTaskTemplate, updateTaskNotes } from '@/app/admin/courses/task-actions'
+import { createClient } from '@/lib/supabase/client'
+import {
+  addTask,
+  updateTask,
+  setTaskStatus,
+  deleteTask,
+  applyTaskTemplate,
+  updateTaskNotes,
+  createTaskDocUploadTargets,
+  finalizeTaskDocs,
+  deleteTaskDoc,
+} from '@/app/admin/courses/task-actions'
 
 export type CourseTask = {
   id: string
@@ -12,6 +23,7 @@ export type CourseTask = {
   assigned_by: string | null
   due_date: string | null
   status: 'open' | 'done'
+  documents: { id: string; filename: string; url: string }[]
 }
 
 export type TaskPerson = { id: string; name: string }
@@ -47,6 +59,9 @@ export default function CourseTasksPanel({
   const [error, setError] = useState<string | null>(null)
   const [openDetailsId, setOpenDetailsId] = useState<string | null>(null)
   const [notesDraft, setNotesDraft] = useState('')
+  const [uploadingDocsFor, setUploadingDocsFor] = useState<string | null>(null)
+  const docInputRef = useRef<HTMLInputElement>(null)
+  const docTaskRef = useRef<string | null>(null)
 
   const personName = (id: string | null) => people.find((p) => p.id === id)?.name ?? null
   const today = new Date().toISOString().slice(0, 10)
@@ -67,6 +82,37 @@ export default function CourseTasksPanel({
         setBusyId(null)
       }
     })
+  }
+
+  async function handleDocFiles(e: React.ChangeEvent<HTMLInputElement>) {
+    const taskId = docTaskRef.current
+    const files = Array.from(e.target.files ?? [])
+    e.target.value = ''
+    if (!taskId || files.length === 0) return
+    setUploadingDocsFor(taskId)
+    setError(null)
+    try {
+      const targets = await createTaskDocUploadTargets(
+        instanceId,
+        taskId,
+        files.map((f) => ({ name: f.name, size: f.size }))
+      )
+      const supabase = createClient()
+      const uploads: { path: string; filename: string }[] = []
+      for (let i = 0; i < files.length; i++) {
+        const { error: upErr } = await supabase.storage
+          .from('task-documents')
+          .uploadToSignedUrl(targets[i].path, targets[i].token, files[i], { contentType: files[i].type })
+        if (upErr) throw new Error(`Upload failed for "${files[i].name}": ${upErr.message}`)
+        uploads.push({ path: targets[i].path, filename: files[i].name })
+      }
+      await finalizeTaskDocs(instanceId, taskId, uploads)
+      router.refresh()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Document upload failed')
+    } finally {
+      setUploadingDocsFor(null)
+    }
   }
 
   function toggleDetails(t: CourseTask) {
@@ -98,6 +144,9 @@ export default function CourseTasksPanel({
           <p className={`text-sm group-hover:text-pr-red-light transition-colors ${isDone ? 'text-zinc-500 line-through' : ''}`}>
             {t.title}
             {t.notes && !detailsOpen && <span className="ml-1.5 text-zinc-500">📝</span>}
+            {t.documents.length > 0 && !detailsOpen && (
+              <span className="ml-1.5 text-xs text-zinc-500">📎{t.documents.length}</span>
+            )}
           </p>
         </button>
         {overdue && (
@@ -155,6 +204,35 @@ export default function CourseTasksPanel({
               : 'Unassigned'}
             {t.due_date ? ` · due ${fmtDue(t.due_date)}` : ''}
           </p>
+          <div className="flex items-center flex-wrap gap-2 mb-2">
+            {t.documents.map((d) => (
+              <span key={d.id} className="inline-flex items-center gap-1.5 px-2 py-1 bg-zinc-800 rounded text-xs">
+                <a href={d.url} target="_blank" rel="noreferrer" className="text-zinc-300 hover:text-white max-w-44 truncate">
+                  {d.filename}
+                </a>
+                {canEditNotes && (
+                  <button
+                    onClick={() => run(() => deleteTaskDoc(instanceId, t.id, d.id), t.id)}
+                    className="text-zinc-500 hover:text-pr-red-light"
+                  >
+                    ×
+                  </button>
+                )}
+              </span>
+            ))}
+            {canEditNotes && (
+              <button
+                onClick={() => {
+                  docTaskRef.current = t.id
+                  docInputRef.current?.click()
+                }}
+                disabled={uploadingDocsFor === t.id}
+                className="inline-flex items-center gap-1 px-2 py-1 border border-dashed border-zinc-700 hover:border-zinc-500 text-zinc-400 hover:text-zinc-200 rounded text-xs transition-colors disabled:opacity-50"
+              >
+                {uploadingDocsFor === t.id ? 'Uploading…' : '+ Attach document'}
+              </button>
+            )}
+          </div>
           {canEditNotes ? (
             <div>
               <textarea
@@ -188,6 +266,7 @@ export default function CourseTasksPanel({
 
   return (
     <div>
+      <input ref={docInputRef} type="file" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" multiple className="hidden" onChange={handleDocFiles} />
       <div className="bg-zinc-900 rounded-lg border border-zinc-800 divide-y divide-zinc-800">
         {open.map((t) => <TaskRow key={t.id} t={t} />)}
         {open.length === 0 && (
