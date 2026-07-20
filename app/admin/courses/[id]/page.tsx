@@ -2,9 +2,10 @@ import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { updateInstanceDetails, updateInstanceDates, addOffDay, removeOffDay, addModule, deleteModule, addItem, deleteItem, removeInstructor } from '../actions'
+import { updateInstanceDetails, updateInstanceDates, addOffDay, removeOffDay, addModule, deleteModule, addItem, deleteItem, removeInstructor, removeEnrollment } from '../actions'
 import { CourseTypeSelect } from '../CourseTypeSelect'
 import InstructorAssign from '../InstructorAssign'
+import StudentInvitePanel from '../StudentInvitePanel'
 import SaveButton from '@/components/SaveButton'
 import DeleteInstanceButton from '../DeleteInstanceButton'
 import CourseTasksPanel, { type TaskPerson } from '@/components/CourseTasksPanel'
@@ -58,12 +59,13 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
 
   if (!inst) notFound()
 
-  const [{ count: enrollmentCount }, { count: expenseCount }, tasks, { data: peopleRows }] = await Promise.all([
-    admin.from('enrollments').select('id', { count: 'exact', head: true }).eq('instance_id', id),
+  const [{ data: enrollmentRows }, { count: expenseCount }, tasks, { data: peopleRows }] = await Promise.all([
+    admin.from('enrollments').select('id, enrolled_at, profiles(first_name, last_name, email)').eq('instance_id', id).order('enrolled_at'),
     admin.from('expense_items').select('id', { count: 'exact', head: true }).eq('instance_id', id),
     loadTasksWithDocs(admin, id),
     admin.from('profiles').select('id, first_name, last_name').in('role', ['admin', 'instructor']).order('first_name'),
   ])
+  const enrollments = enrollmentRows ?? []
   const taskPeople: TaskPerson[] = (peopleRows ?? [])
     .map((p) => ({ id: p.id, name: [p.first_name, p.last_name].filter(Boolean).join(' ') }))
     .filter((p) => p.name)
@@ -305,6 +307,48 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
           />
         </section>
 
+        {/* ── Students ─────────────────────────────────────────────── */}
+        <section className="mb-10">
+          <h2 className="text-lg font-semibold mb-1">
+            Students
+            <span className="ml-2 text-sm font-normal text-zinc-500">
+              {enrollments.length}{inst.max_students ? ` / ${inst.max_students}` : ''} enrolled
+            </span>
+          </h2>
+          <p className="text-xs text-zinc-500 mb-4">
+            Portal accounts are invite-only — share this course&rsquo;s link with the client contact
+            and students enroll themselves.
+          </p>
+
+          {enrollments.length > 0 && (
+            <div className="mb-4 space-y-2">
+              {enrollments.map(e => {
+                const p = e.profiles as unknown as { first_name: string | null; last_name: string | null; email: string | null } | null
+                const name = [p?.first_name, p?.last_name].filter(Boolean).join(' ') || 'Unnamed'
+                const removeWithArgs = removeEnrollment.bind(null, id, e.id)
+                return (
+                  <div key={e.id} className="flex items-center justify-between px-4 py-2 bg-zinc-900 border border-zinc-800 rounded-lg">
+                    <div>
+                      <span className="font-medium text-sm">{name}</span>
+                      {p?.email && <span className="ml-3 text-xs text-zinc-500">{p.email}</span>}
+                    </div>
+                    <form action={removeWithArgs}>
+                      <button type="submit" className="text-xs text-zinc-500 hover:text-red-400 transition-colors">Remove</button>
+                    </form>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
+          <StudentInvitePanel
+            instanceId={id}
+            inviteUrl={inst.invite_token ? `${process.env.NEXT_PUBLIC_SITE_URL}/join/${inst.invite_token}` : null}
+            expiresAt={inst.invite_expires_at ?? null}
+            expired={!!inst.invite_expires_at && new Date(inst.invite_expires_at).getTime() < Date.now()}
+          />
+        </section>
+
         {/* ── Content modules ──────────────────────────────────────── */}
         <section className="mb-10">
           <h2 className="text-lg font-semibold mb-1">Content</h2>
@@ -424,7 +468,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
           <DeleteInstanceButton
             instanceId={id}
             displayName={courseDisplayName(inst.course_type, inst.custom_title)}
-            enrollmentCount={enrollmentCount ?? 0}
+            enrollmentCount={enrollments.length}
             expenseCount={expenseCount ?? 0}
           />
         </div>

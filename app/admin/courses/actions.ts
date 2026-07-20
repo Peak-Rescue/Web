@@ -366,3 +366,61 @@ export async function deleteInstance(instanceId: string) {
   revalidatePath('/admin/courses')
   revalidatePath('/admin/expenses')
 }
+
+// ─── Student invite links ─────────────────────────────────────────────────────
+
+// Creates (or rotates) the unique student signup link for a course instance.
+// The link stays valid through the course plus a week of margin; 30 days from
+// now when the course has no end date or already ended.
+export async function generateInviteLink(instanceId: string) {
+  await requireAdmin()
+  const admin = createAdminClient()
+
+  const { data: inst } = await admin
+    .from('course_instances')
+    .select('ends_at')
+    .eq('id', instanceId)
+    .single()
+  if (!inst) throw new Error('Course not found')
+
+  const dayMs = 24 * 60 * 60 * 1000
+  const fromCourseEnd = inst.ends_at
+    ? new Date(new Date(inst.ends_at + 'T00:00:00').getTime() + 7 * dayMs)
+    : null
+  const expires = fromCourseEnd && fromCourseEnd.getTime() > Date.now()
+    ? fromCourseEnd
+    : new Date(Date.now() + 30 * dayMs)
+
+  const { error } = await admin
+    .from('course_instances')
+    .update({ invite_token: crypto.randomUUID(), invite_expires_at: expires.toISOString() })
+    .eq('id', instanceId)
+
+  if (error) throw new Error(error.message)
+  revalidatePath(`/admin/courses/${instanceId}`)
+}
+
+export async function revokeInviteLink(instanceId: string) {
+  await requireAdmin()
+
+  const { error } = await createAdminClient()
+    .from('course_instances')
+    .update({ invite_token: null, invite_expires_at: null })
+    .eq('id', instanceId)
+
+  if (error) throw new Error(error.message)
+  revalidatePath(`/admin/courses/${instanceId}`)
+}
+
+export async function removeEnrollment(instanceId: string, enrollmentId: string) {
+  await requireAdmin()
+
+  const { error } = await createAdminClient()
+    .from('enrollments')
+    .delete()
+    .eq('id', enrollmentId)
+    .eq('instance_id', instanceId)
+
+  if (error) throw new Error(error.message)
+  revalidatePath(`/admin/courses/${instanceId}`)
+}
