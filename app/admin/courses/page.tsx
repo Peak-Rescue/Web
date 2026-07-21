@@ -144,13 +144,46 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
               New Course Instance
             </div>
           </summary>
-          <form action={createInstance} className="mt-4 p-6 bg-zinc-900 rounded-lg border border-zinc-800 flex items-end gap-4 flex-wrap">
-            <div className="flex-1 min-w-64 grid sm:grid-cols-2 gap-4">
-              <CourseTypeSelect />
+          <form action={createInstance} className="mt-4 p-6 bg-zinc-900 rounded-lg border border-zinc-800 grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <p className="sm:col-span-2 text-xs text-zinc-500 -mb-1">
+              Capture what the inquiry gave you — only course type is required. Everything stays editable on the
+              course page, where scheduling, staffing, estimates, and quotes live.
+            </p>
+
+            <CourseTypeSelect />
+
+            <div>
+              <label className="block text-xs text-zinc-400 mb-1">Client / organization</label>
+              <input name="client_name" placeholder="e.g. 24th STS" className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
             </div>
-            <button type="submit" className="px-5 py-2 bg-pr-red hover:bg-pr-red-dark text-white rounded font-medium text-sm transition-colors shrink-0">
-              Create →
-            </button>
+            <div>
+              <label className="block text-xs text-zinc-400 mb-1">Point of contact</label>
+              <input name="contact_name" placeholder="Name" className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
+            </div>
+            <div>
+              <label className="block text-xs text-zinc-400 mb-1">POC email</label>
+              <input name="contact_email" type="email" placeholder="poc@unit.mil" className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
+            </div>
+
+            <div>
+              <label className="block text-xs text-zinc-400 mb-1">Potential start date (optional)</label>
+              <input name="starts_at" type="date" className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
+            </div>
+            <div>
+              <label className="block text-xs text-zinc-400 mb-1">Potential end date (optional)</label>
+              <input name="ends_at" type="date" className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
+            </div>
+
+            <div className="sm:col-span-2">
+              <label className="block text-xs text-zinc-400 mb-1">Inquiry notes</label>
+              <textarea name="notes" rows={2} placeholder="What they asked for, rough timing ('sometime June'), budget signals, follow-ups…" className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500 resize-y" />
+            </div>
+
+            <div className="sm:col-span-2">
+              <button type="submit" className="px-5 py-2 bg-pr-red hover:bg-pr-red-dark text-white rounded font-medium text-sm transition-colors">
+                Create course →
+              </button>
+            </div>
           </form>
         </details>
 
