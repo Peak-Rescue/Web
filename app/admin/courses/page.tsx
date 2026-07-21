@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createInstance } from './actions'
+import { CourseTypeSelect } from './CourseTypeSelect'
 import { courseShortName } from '@/lib/courses'
 import CourseCalendar, { type CalendarCourse } from '@/components/CourseCalendar'
 
@@ -132,15 +133,26 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
           <p className="text-zinc-400 mt-1">Schedule and manage course instances</p>
         </div>
 
-        {/* One-click create: lands on the full course page with everything editable */}
-        <form action={createInstance} className="mb-10">
-          <button type="submit" className="inline-flex items-center gap-2 px-4 py-2 bg-pr-red hover:bg-pr-red-dark text-white rounded font-medium text-sm transition-colors">
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-            </svg>
-            New Course Instance
-          </button>
-        </form>
+        {/* Minimal-intent create: pick the course type, everything else on the
+            full page (which auto-saves against the created instance). */}
+        <details className="mb-10 group">
+          <summary className="cursor-pointer list-none">
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-pr-red hover:bg-pr-red-dark text-white rounded font-medium text-sm transition-colors">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+              </svg>
+              New Course Instance
+            </div>
+          </summary>
+          <form action={createInstance} className="mt-4 p-6 bg-zinc-900 rounded-lg border border-zinc-800 flex items-end gap-4 flex-wrap">
+            <div className="flex-1 min-w-64 grid sm:grid-cols-2 gap-4">
+              <CourseTypeSelect />
+            </div>
+            <button type="submit" className="px-5 py-2 bg-pr-red hover:bg-pr-red-dark text-white rounded font-medium text-sm transition-colors shrink-0">
+              Create →
+            </button>
+          </form>
+        </details>
 
         {/* ── Calendar (collapsed by default; auto-open while navigating months) ── */}
         <details open={Boolean(cal)} className="mb-16 group">
