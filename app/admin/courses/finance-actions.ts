@@ -161,7 +161,7 @@ export async function updateQuote(instanceId: string, quoteId: string, formData:
   const preparedBy = String(formData.get('prepared_by') ?? '')
   let preparerPatch: Record<string, unknown> = {}
   if (preparedBy) {
-    const { data: p } = await admin.from('profiles').select('first_name, last_name, email').eq('id', preparedBy).single()
+    const { data: p } = await admin.from('profiles').select('first_name, last_name, email').eq('id', preparedBy).eq('role', 'admin').single()
     if (p) {
       preparerPatch = {
         prepared_by: preparedBy,
