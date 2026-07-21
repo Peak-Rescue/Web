@@ -263,7 +263,7 @@ export default function EstimatePanel({
                   title="Quantity calculator — build qty from people × days × units"
                   className={`text-sm shrink-0 transition-colors ${r.factors || calcOpen.has(r.key) ? 'text-zinc-300' : 'text-zinc-600 hover:text-zinc-400'}`}
                 >
-                  🧮
+                  🔢
                 </button>
                 <input
                   value={r.label}
