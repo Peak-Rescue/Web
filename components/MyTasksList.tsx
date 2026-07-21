@@ -21,6 +21,26 @@ export default function MyTasksList({ tasks }: { tasks: MyOpenTask[] }) {
   const [busyId, setBusyId] = useState<string | null>(null)
   const [openId, setOpenId] = useState<string | null>(null)
   const [notesDraft, setNotesDraft] = useState('')
+  const [notesStatus, setNotesStatus] = useState<'idle' | 'pending' | 'saving' | 'saved' | 'error'>('idle')
+  const notesTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  function scheduleNotes(instId: string, taskId: string, value: string) {
+    setNotesDraft(value)
+    setNotesStatus('pending')
+    if (notesTimer.current) clearTimeout(notesTimer.current)
+    notesTimer.current = setTimeout(() => void flushNotes(instId, taskId, value), 800)
+  }
+
+  async function flushNotes(instId: string, taskId: string, value: string) {
+    setNotesStatus('saving')
+    try {
+      await updateTaskNotes(instId, taskId, value)
+      setNotesStatus('saved')
+      router.refresh()
+    } catch {
+      setNotesStatus('error')
+    }
+  }
   const [uploadingFor, setUploadingFor] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -147,20 +167,16 @@ export default function MyTasksList({ tasks }: { tasks: MyOpenTask[] }) {
               </div>
               <textarea
                 value={notesDraft}
-                onChange={(e) => setNotesDraft(e.target.value)}
+                onChange={(e) => scheduleNotes(t.instance_id, t.id, e.target.value)}
                 rows={2}
                 placeholder="Notes — status, phone numbers, confirmation codes…"
                 className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500 resize-y"
               />
-              <div className="flex gap-3 mt-1.5">
-                <button
-                  onClick={() => run(() => updateTaskNotes(t.instance_id, t.id, notesDraft), t.id)}
-                  disabled={busyId === t.id || notesDraft === (t.notes ?? '')}
-                  className="text-xs text-zinc-400 hover:text-white transition-colors disabled:opacity-40"
-                >
-                  {busyId === t.id ? 'Saving…' : 'Save notes'}
-                </button>
-                <button onClick={() => setOpenId(null)} className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors">
+              <div className="flex items-center gap-3 mt-1.5">
+                <span className={`text-xs ${notesStatus === 'error' ? 'text-pr-red-light' : notesStatus === 'saved' ? 'text-teal-400' : 'text-zinc-500'}`}>
+                  {notesStatus === 'saving' ? 'Saving…' : notesStatus === 'saved' ? 'Saved ✓' : notesStatus === 'error' ? 'Save failed' : notesStatus === 'pending' ? '…' : ''}
+                </span>
+                <button onClick={() => setOpenId(null)} className="ml-auto text-xs text-zinc-600 hover:text-zinc-400 transition-colors">
                   Close
                 </button>
               </div>
