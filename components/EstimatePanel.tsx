@@ -9,12 +9,18 @@ export type PricingRate = { id: string; label: string; unit: string | null; rate
 
 export type CourseCounts = { instructors: number; students: number | null; days: number | null }
 
-type Row = { key: number; label: string; qty: string; rate: string; notes: string; factors: Factors | null }
-type Factors = [string, string, string]
-
-function padFactors(nums: number[]): Factors {
-  return [String(nums[0] ?? 1), String(nums[1] ?? 1), String(nums[2] ?? 1)]
+type Row = {
+  key: number
+  label: string
+  qty: string
+  rate: string
+  notes: string
+  factors: Factors | null
+  flabels: (string | null)[]
 }
+// Variable-length: as many boxes as the rate's unit has dimensions, plus any
+// explicitly added multipliers (max 4).
+type Factors = string[]
 
 // Drop trailing ×1 factors; a breakdown needs ≥2 left to mean anything.
 function trimFactors(f: Factors): string[] {
@@ -47,7 +53,7 @@ export default function EstimatePanel({
   estimateId: string | null // null = not yet persisted (first COA, untouched)
   initialTitle: string
   initialMargin: number
-  initialItems: { label: string; qty: number; rate: number; notes: string | null; factors: number[] | null }[]
+  initialItems: { label: string; qty: number; rate: number; notes: string | null; factors: number[] | null; factor_labels: (string | null)[] | null }[]
   rates: PricingRate[]
   canDelete: boolean
   solo: boolean // only COA on the course — the default "COA n" title stays hidden until a second exists
@@ -66,7 +72,8 @@ export default function EstimatePanel({
       qty: String(i.qty),
       rate: String(i.rate),
       notes: i.notes ?? '',
-      factors: i.factors && i.factors.length >= 2 ? padFactors(i.factors) : null,
+      factors: i.factors && i.factors.length >= 2 ? i.factors.map(String) : null,
+      flabels: i.factor_labels ?? [],
     }))
   )
   const [notesOpen, setNotesOpen] = useState<Set<number>>(
@@ -107,12 +114,14 @@ export default function EstimatePanel({
         .filter((row) => row.label.trim())
         .map((row) => {
           const trimmed = row.factors ? trimFactors(row.factors).map((f) => Number(f) || 0) : []
+          const trimmedLabels = trimmed.map((_, i) => row.flabels[i] ?? null)
           return {
             label: row.label,
             qty: Number(row.qty) || 0,
             rate: Number(row.rate) || 0,
             notes: row.notes || null,
             factors: trimmed.length >= 2 ? trimmed : null,
+            factor_labels: trimmed.length >= 2 ? trimmedLabels : null,
           }
         })
       const saved = await saveEstimate(instanceId, estimateIdRef.current, { title: t, margin: m, items })
@@ -133,11 +142,11 @@ export default function EstimatePanel({
   function addFromLibrary(rateId: string) {
     const lib = rates.find((r) => r.id === rateId)
     if (!lib) return
-    schedule([...rows, { key: nextKey.current++, label: lib.label, qty: '1', rate: String(lib.rate), notes: '', factors: null }], margin)
+    schedule([...rows, { key: nextKey.current++, label: lib.label, qty: '1', rate: String(lib.rate), notes: '', factors: null, flabels: [] }], margin)
   }
 
   function addCustom() {
-    schedule([...rows, { key: nextKey.current++, label: '', qty: '1', rate: '', notes: '', factors: null }], margin)
+    schedule([...rows, { key: nextKey.current++, label: '', qty: '1', rate: '', notes: '', factors: null, flabels: [] }], margin)
   }
 
   function toggleNotes(key: number) {
@@ -153,7 +162,26 @@ export default function EstimatePanel({
   // line (qty_factors) so the math behind a quantity is visible later;
   // typing a qty directly clears it.
   function rowFactors(r: Row): Factors {
-    return r.factors ?? [r.qty.trim() || '1', '1', '1']
+    if (r.factors) return r.factors
+    const n = Math.max(factorLabels(r.label).length, 2)
+    return [r.qty.trim() || '1', ...Array.from({ length: n - 1 }, () => '1')]
+  }
+
+  function addFactor(key: number) {
+    const row = rows.find((r) => r.key === key)
+    if (!row) return
+    const current = rowFactors(row)
+    if (current.length >= 4) return
+    updateRow(key, { factors: [...current, '1'] })
+  }
+
+  function setFactorLabel(key: number, idx: number, value: string) {
+    const row = rows.find((r) => r.key === key)
+    if (!row) return
+    const next = [...row.flabels]
+    while (next.length <= idx) next.push(null)
+    next[idx] = value || null
+    updateRow(key, { flabels: next })
   }
 
   function toggleCalc(key: number) {
@@ -168,7 +196,7 @@ export default function EstimatePanel({
   function setFactor(key: number, idx: number, value: string) {
     const row = rows.find((r) => r.key === key)
     if (!row) return
-    const next = [...rowFactors(row)] as Factors
+    const next: Factors = [...rowFactors(row)]
     next[idx] = value
     const product = next.reduce((p, f) => p * (f.trim() === '' ? 1 : Number(f) || 0), 1)
     updateRow(key, { qty: String(round2(product)), factors: next })
@@ -336,12 +364,28 @@ export default function EstimatePanel({
                         onChange={(e) => setFactor(r.key, i, e.target.value)}
                         className={`${inputCls} w-16 text-right`}
                       />
-                      <span className="mt-0.5 text-[10px] text-zinc-600">
-                        {factorLabels(r.label)[i] ?? (Number(f) === 1 ? 'unused' : 'extra')}
-                      </span>
+                      {factorLabels(r.label)[i] ? (
+                        <span className="mt-0.5 text-[10px] text-zinc-600">{factorLabels(r.label)[i]}</span>
+                      ) : (
+                        <input
+                          value={r.flabels[i] ?? ''}
+                          onChange={(e) => setFactorLabel(r.key, i, e.target.value)}
+                          placeholder="name"
+                          className="mt-0.5 w-16 bg-transparent border-b border-zinc-800 focus:border-zinc-500 focus:outline-none text-[10px] text-zinc-400 text-center"
+                        />
+                      )}
                     </span>
                   </span>
                 ))}
+                {rowFactors(r).length < 4 && (
+                  <button
+                    onClick={() => addFactor(r.key)}
+                    title="Add another multiplier"
+                    className="text-xs text-zinc-600 hover:text-zinc-300 transition-colors px-1"
+                  >
+                    + ×
+                  </button>
+                )}
                 <span className="text-xs text-zinc-400 font-medium">= {Number(r.qty) || 0}</span>
                 <span className="ml-auto text-[11px] text-zinc-600 whitespace-nowrap">
                   This course:{' '}

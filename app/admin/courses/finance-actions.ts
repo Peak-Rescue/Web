@@ -14,13 +14,30 @@ async function requireAdmin() {
   return admin
 }
 
-export type EstimateItemInput = { label: string; qty: number; rate: number; notes: string | null; factors: number[] | null }
+export type EstimateItemInput = {
+  label: string
+  qty: number
+  rate: number
+  notes: string | null
+  factors: number[] | null
+  factor_labels: (string | null)[] | null
+}
 
 // A breakdown is only meaningful with ≥2 factors; anything else stores null.
-function cleanFactors(factors: number[] | null): number[] | null {
+// Stored as { f: numbers, l: labels } — labels name explicitly added
+// multipliers (null where the rate's unit already provides the name).
+function cleanFactors(
+  factors: number[] | null,
+  labels: (string | null)[] | null
+): { f: number[]; l: (string | null)[] } | null {
   if (!Array.isArray(factors)) return null
   const nums = factors.slice(0, 4).map(Number).filter((n) => Number.isFinite(n))
-  return nums.length >= 2 ? nums : null
+  if (nums.length < 2) return null
+  const l = nums.map((_, i) => {
+    const raw = labels?.[i]
+    return raw ? String(raw).trim().slice(0, 40) || null : null
+  })
+  return { f: nums, l }
 }
 
 // Replace-style save keeps the action simple and the client authoritative
@@ -66,7 +83,7 @@ export async function saveEstimate(
       qty: Number.isFinite(i.qty) ? i.qty : 0,
       rate: Number.isFinite(i.rate) ? i.rate : 0,
       notes: i.notes?.trim().slice(0, 500) || null,
-      qty_factors: cleanFactors(i.factors),
+      qty_factors: cleanFactors(i.factors, i.factor_labels),
       sort_order: idx,
     }))
   if (rows.length > 0) {

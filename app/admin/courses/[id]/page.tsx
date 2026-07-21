@@ -99,6 +99,14 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
   )
 
   type EstimateItemRow = { label: string; qty: number; rate: number; notes: string | null; qty_factors: unknown; sort_order: number }
+  const normalizeFactors = (qf: unknown): { f: number[]; l: (string | null)[] } | null => {
+    if (Array.isArray(qf)) return { f: qf.map(Number), l: [] }
+    if (qf && typeof qf === 'object' && Array.isArray((qf as { f?: unknown }).f)) {
+      const o = qf as { f: number[]; l?: (string | null)[] }
+      return { f: o.f.map(Number), l: o.l ?? [] }
+    }
+    return null
+  }
   let estimatePanels = (estimateRows ?? []).map((e) => ({
     id: e.id as string | null,
     title: e.title as string,
@@ -110,7 +118,8 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
         qty: Number(i.qty),
         rate: Number(i.rate),
         notes: i.notes,
-        factors: Array.isArray(i.qty_factors) ? i.qty_factors.map(Number) : null,
+        factors: normalizeFactors(i.qty_factors)?.f ?? null,
+        factor_labels: normalizeFactors(i.qty_factors)?.l ?? null,
       })),
   }))
 
@@ -141,7 +150,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
         .filter((r) => r.default_line)
         .map((r) => {
           const guess = guessQty(r.label)
-          return { label: r.label, qty: guess.qty, rate: Number(r.rate), notes: null, factors: guess.factors }
+          return { label: r.label, qty: guess.qty, rate: Number(r.rate), notes: null, factors: guess.factors, factor_labels: null }
         }),
     }]
   }
