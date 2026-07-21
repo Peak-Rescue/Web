@@ -1,6 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { after } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { courseShortName } from '@/lib/courses'
@@ -103,7 +104,8 @@ export async function addTask(instanceId: string, input: TaskInput) {
   })
   if (error) throw new Error(error.message)
 
-  if (input.assigned_to) await notifyAssignee(admin, title, instanceId, input.assigned_to, user.id)
+  const assignee = input.assigned_to
+  if (assignee) after(() => notifyAssignee(admin, title, instanceId, assignee, user.id))
   revalidateTaskViews(instanceId)
 }
 
@@ -134,8 +136,9 @@ export async function updateTask(
     .eq('instance_id', instanceId)
   if (error) throw new Error(error.message)
 
-  if (patch.assigned_to && patch.assigned_to !== before.assigned_to) {
-    await notifyAssignee(admin, before.title, instanceId, patch.assigned_to, user.id)
+  const newAssignee = patch.assigned_to
+  if (newAssignee && newAssignee !== before.assigned_to) {
+    after(() => notifyAssignee(admin, before.title, instanceId, newAssignee, user.id))
   }
   revalidateTaskViews(instanceId)
 }

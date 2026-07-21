@@ -61,50 +61,39 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
 
   if (!inst) notFound()
 
-  const [{ data: enrollmentRows }, { count: expenseCount }, tasks, { data: peopleRows }] = await Promise.all([
+  // One parallel round for everything section-shaped (all keyed by id only).
+  const [
+    { data: enrollmentRows },
+    { count: expenseCount },
+    tasks,
+    { data: peopleRows },
+    { data: adminRows },
+    { data: estimateRows },
+    { data: pricingRateRows },
+    { data: quoteRows },
+    { data: estimateSourceRows },
+  ] = await Promise.all([
     admin.from('enrollments').select('id, enrolled_at, profiles(first_name, last_name, email)').eq('instance_id', id).order('enrolled_at'),
     admin.from('expense_items').select('id', { count: 'exact', head: true }).eq('instance_id', id),
     loadTasksWithDocs(admin, id),
     admin.from('profiles').select('id, first_name, last_name, email').in('role', ['admin', 'instructor']).order('first_name'),
+    admin.from('profiles').select('id, first_name, last_name, email').eq('role', 'admin').order('first_name'),
+    admin.from('course_estimates').select('id, title, margin, created_at, estimate_items(label, qty, rate, notes, sort_order)').eq('instance_id', id).order('created_at'),
+    admin.from('pricing_rates').select('id, label, unit, rate, default_line').eq('active', true).order('sort_order'),
+    admin.from('course_quotes').select('id, accept_token, prepared_by, prepared_by_name, quote_seq, status, issue_date, valid_until, total, unit_rate_note, scope_bullets, course_blurb, sent_at, accepted_at, accepted_name').eq('instance_id', id).order('quote_seq', { ascending: false }),
+    admin.from('course_instances').select('id, ref_number, course_type, custom_title, client_name, starts_at, course_estimates(count)').neq('id', id).order('starts_at', { ascending: false, nullsFirst: false }).limit(60),
   ])
+
   const enrollments = enrollmentRows ?? []
   const taskPeople: TaskPerson[] = (peopleRows ?? [])
     .map((p) => ({ id: p.id, name: [p.first_name, p.last_name].filter(Boolean).join(' ') }))
     .filter((p) => p.name)
   // Quotes are only ever issued by admins.
-  const { data: adminRows } = await admin
-    .from('profiles')
-    .select('id, first_name, last_name, email')
-    .eq('role', 'admin')
-    .order('first_name')
   const quotePeople = (adminRows ?? [])
     .map((p) => ({ id: p.id, name: [p.first_name, p.last_name].filter(Boolean).join(' '), email: p.email ?? null }))
     .filter((p) => p.name)
-
-  const [{ data: estimateRows }, { data: pricingRateRows }] = await Promise.all([
-    admin
-      .from('course_estimates')
-      .select('id, title, margin, created_at, estimate_items(label, qty, rate, notes, sort_order)')
-      .eq('instance_id', id)
-      .order('created_at'),
-    admin.from('pricing_rates').select('id, label, unit, rate, default_line').eq('active', true).order('sort_order'),
-  ])
   const pricingRates: PricingRate[] = (pricingRateRows ?? []).map((r) => ({ ...r, rate: Number(r.rate) }))
-
-  const { data: quoteRows } = await admin
-    .from('course_quotes')
-    .select('id, accept_token, prepared_by, prepared_by_name, quote_seq, status, issue_date, valid_until, total, unit_rate_note, scope_bullets, course_blurb, sent_at, accepted_at, accepted_name')
-    .eq('instance_id', id)
-    .order('quote_seq', { ascending: false })
   const quotes: QuoteRow[] = (quoteRows ?? []).map((q) => ({ ...q, total: Number(q.total) }))
-
-  // Other courses whose estimates can be copied in as starting points.
-  const { data: estimateSourceRows } = await admin
-    .from('course_instances')
-    .select('id, ref_number, course_type, custom_title, client_name, starts_at, course_estimates(count)')
-    .neq('id', id)
-    .order('starts_at', { ascending: false, nullsFirst: false })
-    .limit(60)
   const copySources = (estimateSourceRows ?? []).filter(
     (s) => ((s.course_estimates as unknown as { count: number }[])?.[0]?.count ?? 0) > 0
   )

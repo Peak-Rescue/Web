@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
+import { after } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { insertTemplateTasks } from '@/lib/course-tasks'
@@ -110,6 +111,7 @@ export async function updateInstanceDetails(id: string, formData: FormData) {
   // disappears from their portal home, so silence would leave them planning
   // around a course that no longer exists.
   if (status === 'cancelled' && before?.status !== 'cancelled' && process.env.RESEND_API_KEY) {
+    after(async () => {
     try {
       const { data: assigned } = await admin
         .from('instance_instructors')
@@ -150,6 +152,7 @@ export async function updateInstanceDetails(id: string, formData: FormData) {
     } catch (e) {
       console.error('Course cancellation email failed:', e)
     }
+    })
   }
 
   revalidatePath(`/admin/courses/${id}`)
@@ -298,8 +301,10 @@ export async function assignInstructor(instanceId: string, formData: FormData) {
 
   if (error) throw new Error(error.message)
 
-  // Best-effort notification on new assignments; never fails the action.
+  // Best-effort notification on new assignments — deferred with after() so
+  // the assign click doesn't wait on the email provider.
   if (!existing && process.env.RESEND_API_KEY) {
+    after(async () => {
     try {
       const [{ data: instructor }, { data: inst }] = await Promise.all([
         admin.from('instructors').select('name, email').eq('id', instructor_id).single(),
@@ -332,6 +337,7 @@ export async function assignInstructor(instanceId: string, formData: FormData) {
     } catch (e) {
       console.error('Instructor assignment email failed:', e)
     }
+    })
   }
 
   revalidatePath(`/admin/courses/${instanceId}`)
