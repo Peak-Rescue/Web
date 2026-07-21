@@ -66,6 +66,15 @@ export default async function QuotePage({
   return (
     <main className="min-h-screen bg-zinc-950 text-white print:bg-white print:text-zinc-900">
       {print === '1' && <PrintTrigger />}
+
+      {/* Print letterhead — the nav (and its logo) doesn't print, so the
+          document gets a bold typographic wordmark instead. */}
+      <div className="hidden print:block max-w-3xl mx-auto px-6 pt-8">
+        <p className="text-2xl font-black tracking-tight text-zinc-900">
+          PEAK RESCUE <span className="text-pr-red">MOUNTAIN GUIDES</span>
+        </p>
+        <div className="mt-2 h-[3px] w-24 bg-pr-red" />
+      </div>
       {/* ── Hero ── */}
       <div className="relative overflow-hidden border-b border-white/[0.06] print:border-zinc-300">
         <div className="absolute top-0 left-0 w-16 h-[3px] bg-pr-red z-10" />
@@ -76,8 +85,7 @@ export default async function QuotePage({
         </div>
         <div className="absolute inset-x-0 bottom-0">
           <div className="max-w-3xl mx-auto px-6 pb-10">
-            <div className="flex items-center justify-between mb-4">
-              <Image src="/logo.png" alt="Peak Rescue" width={150} height={54} className="h-11 w-auto invert print:hidden" />
+            <div className="flex items-center justify-end mb-4">
               <span className="font-mono text-xs text-zinc-400">{qNum}</span>
             </div>
             <p className="text-pr-red font-semibold tracking-[0.2em] text-sm uppercase mb-2">
