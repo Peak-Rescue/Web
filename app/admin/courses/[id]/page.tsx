@@ -10,6 +10,7 @@ import SaveButton from '@/components/SaveButton'
 import DeleteInstanceButton from '../DeleteInstanceButton'
 import CourseTasksPanel, { type TaskPerson } from '@/components/CourseTasksPanel'
 import EstimatePanel, { type PricingRate } from '@/components/EstimatePanel'
+import QuotesSection, { type QuoteRow } from '../QuotesSection'
 import { loadTasksWithDocs } from '@/lib/course-tasks'
 import { courseDisplayName, computeBlocks } from '@/lib/courses'
 import { CATEGORY_COURSE_TYPES } from '@/lib/capabilities'
@@ -79,6 +80,13 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
     admin.from('pricing_rates').select('id, label, unit, rate, default_line').eq('active', true).order('sort_order'),
   ])
   const pricingRates: PricingRate[] = (pricingRateRows ?? []).map((r) => ({ ...r, rate: Number(r.rate) }))
+
+  const { data: quoteRows } = await admin
+    .from('course_quotes')
+    .select('id, quote_seq, status, issue_date, valid_until, total, unit_rate_note, scope_bullets, course_blurb, sent_at, accepted_at, accepted_name')
+    .eq('instance_id', id)
+    .order('quote_seq', { ascending: false })
+  const quotes: QuoteRow[] = (quoteRows ?? []).map((q) => ({ ...q, total: Number(q.total) }))
 
   let estimateItems = ((estimateRow?.estimate_items ?? []) as { label: string; qty: number; rate: number; sort_order: number }[])
     .sort((a, b) => a.sort_order - b.sort_order)
@@ -345,7 +353,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
             instanceId={id}
             inviteUrl={inst.invite_token ? `${process.env.NEXT_PUBLIC_SITE_URL}/join/${inst.invite_token}` : null}
             expiresAt={inst.invite_expires_at ?? null}
-            expired={!!inst.invite_expires_at && new Date(inst.invite_expires_at).getTime() < Date.now()}
+            expired={!!inst.invite_expires_at && new Date(inst.invite_expires_at) < new Date()}
           />
         </section>
 
@@ -436,6 +444,15 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
             initialItems={estimateItems}
             rates={pricingRates}
           />
+        </section>
+
+        <section className="mb-12">
+          <h2 className="text-lg font-semibold mb-1">Financials — Quotes</h2>
+          <p className="text-xs text-zinc-500 mb-4">
+            Client-facing lump sum generated from the estimate. Marking sent/accepted moves the course to
+            Quoted/Confirmed automatically.
+          </p>
+          <QuotesSection instanceId={id} refNumber={inst.ref_number} quotes={quotes} />
         </section>
 
         <section className="mb-12">

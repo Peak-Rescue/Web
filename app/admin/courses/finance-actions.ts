@@ -91,3 +91,122 @@ export async function setPricingRateDefault(rateId: string, defaultLine: boolean
   if (error) throw new Error(error.message)
   revalidatePath('/admin/expenses/rates')
 }
+
+// ─── Quotes ──────────────────────────────────────────────────────────────────
+
+export async function createQuote(instanceId: string) {
+  const admin = await requireAdmin()
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  const [{ data: inst }, { data: estimate }, { data: lastQuote }, { data: profile }] = await Promise.all([
+    admin
+      .from('course_instances')
+      .select('course_type, custom_title, client_name, location, starts_at, ends_at, max_students')
+      .eq('id', instanceId)
+      .single(),
+    admin.from('course_estimates').select('margin, estimate_items(qty, rate)').eq('instance_id', instanceId).maybeSingle(),
+    admin.from('course_quotes').select('quote_seq').eq('instance_id', instanceId).order('quote_seq', { ascending: false }).limit(1).maybeSingle(),
+    user ? admin.from('profiles').select('first_name, last_name, email').eq('id', user.id).single() : { data: null },
+  ])
+  if (!inst) throw new Error('Course not found')
+
+  const items = (estimate?.estimate_items ?? []) as { qty: number; rate: number }[]
+  const subtotal = items.reduce((s, i) => s + Number(i.qty) * Number(i.rate), 0)
+  const total = Math.round(subtotal * (1 + Number(estimate?.margin ?? 0.25)) * 100) / 100
+
+  const days =
+    inst.starts_at && inst.ends_at
+      ? Math.max(Math.round((Date.parse(inst.ends_at) - Date.parse(inst.starts_at)) / 86_400_000) + 1, 1)
+      : null
+  const bullets = [
+    days ? `Duration: ${days} days of training` : null,
+    inst.max_students ? `Participants: up to ${inst.max_students} students` : null,
+    inst.location ? `Location: ${inst.location}` : null,
+  ].filter((b): b is string => Boolean(b))
+
+  const { services } = await import('@/lib/data/services')
+  const blurb = services.find((s) => s.slug === inst.course_type)?.description ?? null
+
+  const { QUOTE_VALIDITY_DAYS } = await import('@/lib/quotes')
+  const validUntil = new Date()
+  validUntil.setDate(validUntil.getDate() + QUOTE_VALIDITY_DAYS)
+
+  const { error } = await admin.from('course_quotes').insert({
+    instance_id: instanceId,
+    quote_seq: (lastQuote?.quote_seq ?? 0) + 1,
+    total,
+    valid_until: validUntil.toISOString().slice(0, 10),
+    scope_bullets: bullets,
+    course_blurb: blurb,
+    prepared_by: user?.id ?? null,
+    prepared_by_name: [profile?.first_name, profile?.last_name].filter(Boolean).join(' ') || null,
+    prepared_by_email: profile?.email ?? null,
+  })
+  if (error) throw new Error(error.message)
+  revalidatePath(`/admin/courses/${instanceId}`)
+}
+
+export async function updateQuote(instanceId: string, quoteId: string, formData: FormData) {
+  const admin = await requireAdmin()
+  const total = Number(formData.get('total'))
+  if (!Number.isFinite(total) || total < 0) throw new Error('Total must be a non-negative number')
+
+  const bullets = String(formData.get('scope_bullets') ?? '')
+    .split('\n')
+    .map((b) => b.trim())
+    .filter(Boolean)
+
+  const { error } = await admin
+    .from('course_quotes')
+    .update({
+      total,
+      valid_until: String(formData.get('valid_until') ?? '') || null,
+      unit_rate_note: String(formData.get('unit_rate_note') ?? '').trim() || null,
+      scope_bullets: bullets,
+      course_blurb: String(formData.get('course_blurb') ?? '').trim() || null,
+    })
+    .eq('id', quoteId)
+    .eq('instance_id', instanceId)
+    .eq('status', 'draft')
+  if (error) throw new Error(error.message)
+  revalidatePath(`/admin/courses/${instanceId}`)
+}
+
+// Manual transitions for now (the send/accept flow automates these later).
+// Sent syncs the course to 'quoted'; accepted syncs it to 'confirmed'.
+export async function setQuoteStatus(instanceId: string, quoteId: string, status: 'sent' | 'accepted' | 'declined') {
+  const admin = await requireAdmin()
+
+  const patch: Record<string, unknown> = { status }
+  if (status === 'sent') patch.sent_at = new Date().toISOString()
+  if (status === 'accepted') patch.accepted_at = new Date().toISOString()
+  if (status === 'declined') patch.declined_at = new Date().toISOString()
+
+  const { error } = await admin.from('course_quotes').update(patch).eq('id', quoteId).eq('instance_id', instanceId)
+  if (error) throw new Error(error.message)
+
+  const { data: inst } = await admin.from('course_instances').select('status').eq('id', instanceId).single()
+  if (status === 'sent' && inst?.status === 'tentative') {
+    await admin.from('course_instances').update({ status: 'quoted' }).eq('id', instanceId)
+  }
+  if (status === 'accepted' && inst && ['tentative', 'quoted'].includes(inst.status)) {
+    await admin.from('course_instances').update({ status: 'confirmed' }).eq('id', instanceId)
+  }
+
+  revalidatePath(`/admin/courses/${instanceId}`)
+  revalidatePath('/admin/courses')
+  revalidatePath('/admin')
+}
+
+export async function deleteQuote(instanceId: string, quoteId: string) {
+  const admin = await requireAdmin()
+  const { error } = await admin
+    .from('course_quotes')
+    .delete()
+    .eq('id', quoteId)
+    .eq('instance_id', instanceId)
+    .eq('status', 'draft')
+  if (error) throw new Error(error.message)
+  revalidatePath(`/admin/courses/${instanceId}`)
+}
