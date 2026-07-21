@@ -32,7 +32,7 @@ export const CATEGORY_LABELS: Record<ExpenseCategory, string> = {
   breakfast: 'Breakfast',
   lunch: 'Lunch',
   dinner: 'Dinner',
-  per_diem: 'Meals covered',
+  per_diem: 'Meals',
   other: 'Other',
 }
 

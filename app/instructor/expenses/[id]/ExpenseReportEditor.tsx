@@ -744,7 +744,7 @@ export default function ExpenseReportEditor({
                 )}
                 {form.category === 'per_diem' && (
                   <div>
-                    <label className={labelCls}>Meals covered</label>
+                    <label className={labelCls}>Meals</label>
                     <input
                       type="number" min="0" step="1"
                       value={form.meal_count}
