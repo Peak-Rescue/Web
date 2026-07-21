@@ -70,7 +70,13 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
   const taskPeople: TaskPerson[] = (peopleRows ?? [])
     .map((p) => ({ id: p.id, name: [p.first_name, p.last_name].filter(Boolean).join(' ') }))
     .filter((p) => p.name)
-  const quotePeople = (peopleRows ?? [])
+  // Quotes are only ever issued by admins.
+  const { data: adminRows } = await admin
+    .from('profiles')
+    .select('id, first_name, last_name, email')
+    .eq('role', 'admin')
+    .order('first_name')
+  const quotePeople = (adminRows ?? [])
     .map((p) => ({ id: p.id, name: [p.first_name, p.last_name].filter(Boolean).join(' '), email: p.email ?? null }))
     .filter((p) => p.name)
 
