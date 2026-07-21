@@ -10,6 +10,7 @@ import SaveButton from '@/components/SaveButton'
 import DeleteInstanceButton from '../DeleteInstanceButton'
 import CourseTasksPanel, { type TaskPerson } from '@/components/CourseTasksPanel'
 import EstimatePanel, { type PricingRate } from '@/components/EstimatePanel'
+import { createEstimateCoa } from '../finance-actions'
 import QuotesSection, { type QuoteRow } from '../QuotesSection'
 import { loadTasksWithDocs } from '@/lib/course-tasks'
 import { courseDisplayName, computeBlocks } from '@/lib/courses'
@@ -80,12 +81,12 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
     .map((p) => ({ id: p.id, name: [p.first_name, p.last_name].filter(Boolean).join(' '), email: p.email ?? null }))
     .filter((p) => p.name)
 
-  const [{ data: estimateRow }, { data: pricingRateRows }] = await Promise.all([
+  const [{ data: estimateRows }, { data: pricingRateRows }] = await Promise.all([
     admin
       .from('course_estimates')
-      .select('margin, estimate_items(label, qty, rate, notes, sort_order)')
+      .select('id, title, margin, created_at, estimate_items(label, qty, rate, notes, sort_order)')
       .eq('instance_id', id)
-      .maybeSingle(),
+      .order('created_at'),
     admin.from('pricing_rates').select('id, label, unit, rate, default_line').eq('active', true).order('sort_order'),
   ])
   const pricingRates: PricingRate[] = (pricingRateRows ?? []).map((r) => ({ ...r, rate: Number(r.rate) }))
@@ -97,13 +98,20 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
     .order('quote_seq', { ascending: false })
   const quotes: QuoteRow[] = (quoteRows ?? []).map((q) => ({ ...q, total: Number(q.total) }))
 
-  let estimateItems = ((estimateRow?.estimate_items ?? []) as { label: string; qty: number; rate: number; notes: string | null; sort_order: number }[])
-    .sort((a, b) => a.sort_order - b.sort_order)
-    .map((i) => ({ label: i.label, qty: Number(i.qty), rate: Number(i.rate), notes: i.notes }))
+  type EstimateItemRow = { label: string; qty: number; rate: number; notes: string | null; sort_order: number }
+  let estimatePanels = (estimateRows ?? []).map((e) => ({
+    id: e.id as string | null,
+    title: e.title as string,
+    margin: Number(e.margin),
+    items: ((e.estimate_items ?? []) as EstimateItemRow[])
+      .sort((a, b) => a.sort_order - b.sort_order)
+      .map((i) => ({ label: i.label, qty: Number(i.qty), rate: Number(i.rate), notes: i.notes })),
+  }))
 
-  // New estimate: pre-populate the always-recurring lines, with quantities
-  // guessed from the course itself (editable, and nothing saves until touched).
-  if (!estimateRow) {
+  // No estimates yet: show a virtual first COA pre-populated with the
+  // always-recurring lines, quantities guessed from the course (nothing
+  // saves until touched).
+  if (estimatePanels.length === 0) {
     const instructorCount = Math.max((assigned ?? []).length, 1)
     const courseDays =
       inst.starts_at && inst.ends_at
@@ -116,9 +124,14 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
       if (label === 'Permits' && inst.max_students) return inst.max_students * courseDays
       return 1
     }
-    estimateItems = (pricingRateRows ?? [])
-      .filter((r) => r.default_line)
-      .map((r) => ({ label: r.label, qty: guessQty(r.label), rate: Number(r.rate), notes: null }))
+    estimatePanels = [{
+      id: null,
+      title: 'COA 1',
+      margin: 0.25,
+      items: (pricingRateRows ?? [])
+        .filter((r) => r.default_line)
+        .map((r) => ({ label: r.label, qty: guessQty(r.label), rate: Number(r.rate), notes: null })),
+    }]
   }
 
   const courseType = inst.course_type
@@ -447,14 +460,30 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
         </section>
 
         <section className="mb-12">
-          <h2 className="text-lg font-semibold mb-1">Financials — Estimate</h2>
-          <EstimatePanel
-            key={`${id}-estimate`}
-            instanceId={id}
-            initialMargin={Number(estimateRow?.margin ?? 0.25)}
-            initialItems={estimateItems}
-            rates={pricingRates}
-          />
+          <h2 className="text-lg font-semibold mb-1">Financials — Estimates</h2>
+          <p className="text-xs text-zinc-500 mb-4">
+            Internal cost build-up — never shown to instructors or clients. Add alternate COAs to price different
+            ways of running the course; quotes are generated from the COA you pick.
+          </p>
+          <div className="space-y-8">
+            {estimatePanels.map((e) => (
+              <EstimatePanel
+                key={e.id ?? `${id}-new`}
+                instanceId={id}
+                estimateId={e.id}
+                initialTitle={e.title}
+                initialMargin={e.margin}
+                initialItems={e.items}
+                rates={pricingRates}
+                canDelete={estimatePanels.length > 1}
+              />
+            ))}
+          </div>
+          <form action={createEstimateCoa.bind(null, id)} className="mt-4">
+            <button className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded text-sm font-medium transition-colors">
+              + Add another COA
+            </button>
+          </form>
         </section>
 
         <section className="mb-12">
@@ -463,7 +492,14 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
             Client-facing lump sum generated from the estimate. Marking sent/accepted moves the course to
             Quoted/Confirmed automatically.
           </p>
-          <QuotesSection instanceId={id} refNumber={inst.ref_number} quotes={quotes} contactEmail={inst.contact_email ?? null} people={quotePeople} />
+          <QuotesSection
+            instanceId={id}
+            refNumber={inst.ref_number}
+            quotes={quotes}
+            contactEmail={inst.contact_email ?? null}
+            people={quotePeople}
+            estimates={estimatePanels.filter((e) => e.id).map((e) => ({ id: e.id!, title: e.title }))}
+          />
         </section>
 
         <section className="mb-12">

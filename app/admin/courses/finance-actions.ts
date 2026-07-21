@@ -18,29 +18,43 @@ export type EstimateItemInput = { label: string; qty: number; rate: number; note
 
 // Replace-style save keeps the action simple and the client authoritative
 // while typing (the panel debounces calls, expense-editor style).
+// estimateId null = first save of a not-yet-persisted COA; returns the id.
 export async function saveEstimate(
   instanceId: string,
-  input: { margin: number; items: EstimateItemInput[] }
-) {
+  estimateId: string | null,
+  input: { title: string; margin: number; items: EstimateItemInput[] }
+): Promise<{ id: string }> {
   const admin = await requireAdmin()
   if (!Number.isFinite(input.margin) || input.margin < 0 || input.margin > 5) {
     throw new Error('Invalid margin')
   }
+  const title = input.title.trim().slice(0, 80) || 'COA 1'
 
-  const { data: estimate, error: upsertError } = await admin
-    .from('course_estimates')
-    .upsert({ instance_id: instanceId, margin: input.margin }, { onConflict: 'instance_id' })
-    .select('id')
-    .single()
-  if (upsertError || !estimate) throw new Error(upsertError?.message ?? 'Could not save estimate')
+  let id = estimateId
+  if (id) {
+    const { error } = await admin
+      .from('course_estimates')
+      .update({ margin: input.margin, title })
+      .eq('id', id)
+      .eq('instance_id', instanceId)
+    if (error) throw new Error(error.message)
+  } else {
+    const { data, error } = await admin
+      .from('course_estimates')
+      .insert({ instance_id: instanceId, margin: input.margin, title })
+      .select('id')
+      .single()
+    if (error || !data) throw new Error(error?.message ?? 'Could not save estimate')
+    id = data.id
+  }
 
-  const { error: delError } = await admin.from('estimate_items').delete().eq('estimate_id', estimate.id)
+  const { error: delError } = await admin.from('estimate_items').delete().eq('estimate_id', id)
   if (delError) throw new Error(delError.message)
 
   const rows = input.items
     .filter((i) => i.label.trim())
     .map((i, idx) => ({
-      estimate_id: estimate.id,
+      estimate_id: id,
       label: i.label.trim().slice(0, 200),
       qty: Number.isFinite(i.qty) ? i.qty : 0,
       rate: Number.isFinite(i.rate) ? i.rate : 0,
@@ -52,6 +66,63 @@ export async function saveEstimate(
     if (error) throw new Error(error.message)
   }
 
+  revalidatePath(`/admin/courses/${instanceId}`)
+  return { id: id! }
+}
+
+// Adds another COA, seeded with the default-line rates (quantities guessed
+// from the course, same as a fresh estimate).
+export async function createEstimateCoa(instanceId: string) {
+  const admin = await requireAdmin()
+
+  const [{ data: inst }, { count }, { data: defaults }, { count: assignedCount }] = await Promise.all([
+    admin.from('course_instances').select('starts_at, ends_at, max_students').eq('id', instanceId).single(),
+    admin.from('course_estimates').select('id', { count: 'exact', head: true }).eq('instance_id', instanceId),
+    admin.from('pricing_rates').select('label, rate').eq('active', true).eq('default_line', true).order('sort_order'),
+    admin.from('instance_instructors').select('id', { count: 'exact', head: true }).eq('instance_id', instanceId),
+  ])
+  if (!inst) throw new Error('Course not found')
+
+  const instructorCount = Math.max(assignedCount ?? 0, 1)
+  const courseDays =
+    inst.starts_at && inst.ends_at
+      ? Math.max(Math.round((Date.parse(inst.ends_at) - Date.parse(inst.starts_at)) / 86_400_000) + 1, 1)
+      : 1
+  const guessQty = (label: string): number => {
+    if (label === 'Instructor field day') return instructorCount * courseDays
+    if (label === 'Instructor travel day') return instructorCount * 2
+    if (label === 'Lodging') return instructorCount * courseDays
+    if (label === 'Permits' && inst.max_students) return inst.max_students * courseDays
+    return 1
+  }
+
+  const { data: estimate, error } = await admin
+    .from('course_estimates')
+    .insert({ instance_id: instanceId, title: `COA ${(count ?? 0) + 1}` })
+    .select('id')
+    .single()
+  if (error || !estimate) throw new Error(error?.message ?? 'Could not create estimate')
+
+  const rows = (defaults ?? []).map((r, idx) => ({
+    estimate_id: estimate.id,
+    label: r.label,
+    qty: guessQty(r.label),
+    rate: Number(r.rate),
+    sort_order: idx,
+  }))
+  if (rows.length > 0) await admin.from('estimate_items').insert(rows)
+
+  revalidatePath(`/admin/courses/${instanceId}`)
+}
+
+export async function deleteEstimateCoa(instanceId: string, estimateId: string) {
+  const admin = await requireAdmin()
+  const { error } = await admin
+    .from('course_estimates')
+    .delete()
+    .eq('id', estimateId)
+    .eq('instance_id', instanceId)
+  if (error) throw new Error(error.message)
   revalidatePath(`/admin/courses/${instanceId}`)
 }
 
@@ -100,22 +171,35 @@ export async function setPricingRateDefault(rateId: string, defaultLine: boolean
 
 // ─── Quotes ──────────────────────────────────────────────────────────────────
 
-export async function createQuote(instanceId: string) {
+export async function createQuote(instanceId: string, formData: FormData) {
   const admin = await requireAdmin()
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
-  const [{ data: inst }, { data: estimate }, { data: lastQuote }, { data: profile }] = await Promise.all([
+  // Which COA prices this quote: explicit choice, else the newest estimate.
+  const estimateId = String(formData.get('estimate_id') ?? '')
+  let estimateQuery = admin
+    .from('course_estimates')
+    .select('margin, estimate_items(qty, rate)')
+    .eq('instance_id', instanceId)
+  if (estimateId) {
+    estimateQuery = estimateQuery.eq('id', estimateId)
+  } else {
+    estimateQuery = estimateQuery.order('created_at', { ascending: false }).limit(1)
+  }
+
+  const [{ data: inst }, { data: estimates }, { data: lastQuote }, { data: profile }] = await Promise.all([
     admin
       .from('course_instances')
       .select('course_type, custom_title, client_name, location, starts_at, ends_at, max_students')
       .eq('id', instanceId)
       .single(),
-    admin.from('course_estimates').select('margin, estimate_items(qty, rate)').eq('instance_id', instanceId).maybeSingle(),
+    estimateQuery,
     admin.from('course_quotes').select('quote_seq').eq('instance_id', instanceId).order('quote_seq', { ascending: false }).limit(1).maybeSingle(),
     user ? admin.from('profiles').select('first_name, last_name, email').eq('id', user.id).single() : { data: null },
   ])
   if (!inst) throw new Error('Course not found')
+  const estimate = (estimates ?? [])[0] ?? null
 
   const items = (estimate?.estimate_items ?? []) as { qty: number; rate: number }[]
   const subtotal = items.reduce((s, i) => s + Number(i.qty) * Number(i.rate), 0)

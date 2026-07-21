@@ -2,7 +2,8 @@
 
 import { useRef, useState } from 'react'
 import { fmtMoney, round2 } from '@/lib/expenses'
-import { saveEstimate, type EstimateItemInput } from '@/app/admin/courses/finance-actions'
+import { saveEstimate, deleteEstimateCoa, type EstimateItemInput } from '@/app/admin/courses/finance-actions'
+import { useRouter } from 'next/navigation'
 
 export type PricingRate = { id: string; label: string; unit: string | null; rate: number }
 
@@ -15,15 +16,26 @@ const SAVE_DEBOUNCE_MS = 900
 // cost-estimate spreadsheets. Admin-only; auto-saves as you type.
 export default function EstimatePanel({
   instanceId,
+  estimateId,
+  initialTitle,
   initialMargin,
   initialItems,
   rates,
+  canDelete,
 }: {
   instanceId: string
+  estimateId: string | null // null = not yet persisted (first COA, untouched)
+  initialTitle: string
   initialMargin: number
   initialItems: { label: string; qty: number; rate: number; notes: string | null }[]
   rates: PricingRate[]
+  canDelete: boolean
 }) {
+  const router = useRouter()
+  const estimateIdRef = useRef<string | null>(estimateId)
+  const [persistedId, setPersistedId] = useState<string | null>(estimateId)
+  const [title, setTitle] = useState(initialTitle)
+  const [deleting, setDeleting] = useState(false)
   const nextKey = useRef(initialItems.length)
   const [rows, setRows] = useState<Row[]>(
     initialItems.map((i, idx) => ({ key: idx, label: i.label, qty: String(i.qty), rate: String(i.rate), notes: i.notes ?? '' }))
@@ -33,15 +45,16 @@ export default function EstimatePanel({
   )
   const [margin, setMargin] = useState(initialMargin)
   const [status, setStatus] = useState<'idle' | 'pending' | 'saving' | 'saved' | 'error'>('idle')
-  const stateRef = useRef({ rows, margin })
+  const stateRef = useRef({ rows, margin, title: initialTitle })
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const saving = useRef(false)
   const rerun = useRef(false)
 
-  function schedule(nextRows: Row[], nextMargin: number) {
+  function schedule(nextRows: Row[], nextMargin: number, nextTitle?: string) {
     setRows(nextRows)
     setMargin(nextMargin)
-    stateRef.current = { rows: nextRows, margin: nextMargin }
+    if (nextTitle !== undefined) setTitle(nextTitle)
+    stateRef.current = { rows: nextRows, margin: nextMargin, title: nextTitle ?? stateRef.current.title }
     setStatus('pending')
     if (timer.current) clearTimeout(timer.current)
     timer.current = setTimeout(() => void flush(), SAVE_DEBOUNCE_MS)
@@ -59,11 +72,13 @@ export default function EstimatePanel({
     saving.current = true
     setStatus('saving')
     try {
-      const { rows: r, margin: m } = stateRef.current
+      const { rows: r, margin: m, title: t } = stateRef.current
       const items: EstimateItemInput[] = r
         .filter((row) => row.label.trim())
         .map((row) => ({ label: row.label, qty: Number(row.qty) || 0, rate: Number(row.rate) || 0, notes: row.notes || null }))
-      await saveEstimate(instanceId, { margin: m, items })
+      const saved = await saveEstimate(instanceId, estimateIdRef.current, { title: t, margin: m, items })
+      estimateIdRef.current = saved.id
+      setPersistedId(saved.id)
       setStatus('saved')
     } catch {
       setStatus('error')
@@ -125,13 +140,36 @@ export default function EstimatePanel({
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-2">
-        <p className="text-xs text-zinc-500">
-          Internal cost build-up — never shown to instructors or clients. The quote gets only the final price.
-        </p>
-        <span className={`text-xs ${status === 'error' ? 'text-pr-red-light' : status === 'saved' ? 'text-teal-400' : 'text-zinc-500'}`}>
-          {status === 'saving' ? 'Saving…' : status === 'saved' ? 'Saved ✓' : status === 'error' ? 'Save failed' : status === 'pending' ? '…' : ''}
-        </span>
+      <div className="flex items-center justify-between gap-3 mb-2">
+        <input
+          value={title}
+          onChange={(e) => schedule(rows, margin, e.target.value)}
+          className="bg-transparent border-b border-transparent hover:border-zinc-700 focus:border-zinc-500 focus:outline-none text-sm font-semibold w-52"
+          title="Name this COA (e.g. 'Drive team', 'Fly-in option')"
+        />
+        <div className="flex items-center gap-3">
+          <span className={`text-xs ${status === 'error' ? 'text-pr-red-light' : status === 'saved' ? 'text-teal-400' : 'text-zinc-500'}`}>
+            {status === 'saving' ? 'Saving…' : status === 'saved' ? 'Saved ✓' : status === 'error' ? 'Save failed' : status === 'pending' ? '…' : ''}
+          </span>
+          {canDelete && persistedId && (
+            <button
+              onClick={async () => {
+                if (deleting || !confirm(`Delete estimate "${title}"?`)) return
+                setDeleting(true)
+                try {
+                  await deleteEstimateCoa(instanceId, estimateIdRef.current!)
+                  router.refresh()
+                } finally {
+                  setDeleting(false)
+                }
+              }}
+              disabled={deleting}
+              className="text-xs text-zinc-600 hover:text-pr-red-light transition-colors disabled:opacity-50"
+            >
+              Delete COA
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="bg-zinc-900 rounded-lg border border-zinc-800">

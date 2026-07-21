@@ -47,12 +47,14 @@ export default function QuotesSection({
   quotes,
   contactEmail,
   people,
+  estimates,
 }: {
   instanceId: string
   refNumber: number
   quotes: QuoteRow[]
   contactEmail: string | null
   people: QuotePerson[]
+  estimates: { id: string; title: string }[]
 }) {
   return (
     <div>
@@ -173,9 +175,18 @@ export default function QuotesSection({
         )}
       </div>
 
-      <form action={createQuote.bind(null, instanceId)} className="mt-3">
+      <form action={createQuote.bind(null, instanceId)} className="mt-3 flex items-center gap-2 flex-wrap">
+        {estimates.length > 1 ? (
+          <select name="estimate_id" className="bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm">
+            {estimates.map((e) => (
+              <option key={e.id} value={e.id}>{e.title}</option>
+            ))}
+          </select>
+        ) : (
+          estimates[0] && <input type="hidden" name="estimate_id" value={estimates[0].id} />
+        )}
         <button className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded text-sm font-medium transition-colors">
-          New quote from estimate
+          New quote from {estimates.length > 1 ? 'selected COA' : 'estimate'}
         </button>
       </form>
     </div>
