@@ -86,7 +86,7 @@ export default async function PortalPage({
     modulesQuery = modulesQuery.in('audience', audienceFilter)
   }
 
-  const [{ data: inst }, { data: offDays }, { data: modules }, { data: instructors }, taskRows, { data: peopleRows }] =
+  const [{ data: inst }, { data: offDays }, { data: modules }, { data: instructors }, taskRows, { data: peopleRows }, { data: templateRows }] =
     await Promise.all([
       admin.from('course_instances')
         .select('course_type, custom_title, status, location, client_name, notes, ref_number, starts_at, ends_at')
@@ -101,6 +101,9 @@ export default async function PortalPage({
       showTasks ? loadTasksWithDocs(admin, id) : Promise.resolve([]),
       showTasks
         ? admin.from('profiles').select('id, first_name, last_name').in('role', ['admin', 'instructor']).order('first_name')
+        : Promise.resolve({ data: [] }),
+      showTasks
+        ? admin.from('course_task_templates').select('id, title').eq('active', true).order('sort_order')
         : Promise.resolve({ data: [] }),
     ])
 
@@ -201,6 +204,7 @@ export default async function PortalPage({
               instanceId={id}
               tasks={tasks}
               people={taskPeople}
+              suggestions={canManageTasks ? templateRows ?? [] : []}
               canManage={canManageTasks}
               currentUserId={user.id}
             />

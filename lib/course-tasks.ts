@@ -10,7 +10,7 @@ export async function insertTemplateTasks(
   createdBy: string | null
 ) {
   const [{ data: templates }, { data: existing }] = await Promise.all([
-    admin.from('course_task_templates').select('title, sort_order').eq('active', true).order('sort_order'),
+    admin.from('course_task_templates').select('title, sort_order').eq('active', true).eq('default_line', true).order('sort_order'),
     admin.from('course_tasks').select('title').eq('instance_id', instanceId),
   ])
   const have = new Set((existing ?? []).map((t) => t.title))

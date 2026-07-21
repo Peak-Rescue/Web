@@ -28,6 +28,8 @@ export type CourseTask = {
 
 export type TaskPerson = { id: string; name: string }
 
+export type TaskSuggestion = { id: string; title: string }
+
 function fmtDue(d: string): string {
   return new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
@@ -41,12 +43,14 @@ export default function CourseTasksPanel({
   people,
   canManage,
   currentUserId,
+  suggestions = [],
 }: {
   instanceId: string
   tasks: CourseTask[]
   people: TaskPerson[]
   canManage: boolean
   currentUserId: string
+  suggestions?: TaskSuggestion[]
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -352,10 +356,31 @@ export default function CourseTasksPanel({
               </button>
             </div>
           ) : (
-            <div className="flex gap-4">
+            <div className="flex gap-4 items-center flex-wrap">
               <button onClick={() => setAdding(true)} className="text-sm text-zinc-400 hover:text-white transition-colors">
                 + Add task
               </button>
+              {(() => {
+                const have = new Set(tasks.map((t) => t.title))
+                const available = suggestions.filter((s) => !have.has(s.title))
+                if (available.length === 0) return null
+                return (
+                  <select
+                    value=""
+                    disabled={isPending}
+                    onChange={(e) => {
+                      const pick = available.find((s) => s.id === e.target.value)
+                      if (pick) run(() => addTask(instanceId, { title: pick.title, assigned_to: null, due_date: null, notes: null }))
+                    }}
+                    className="bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-zinc-400"
+                  >
+                    <option value="">+ Add from suggestions…</option>
+                    {available.map((s) => (
+                      <option key={s.id} value={s.id}>{s.title}</option>
+                    ))}
+                  </select>
+                )
+              })()}
               {tasks.length === 0 && (
                 <button
                   onClick={() => run(() => applyTaskTemplate(instanceId))}

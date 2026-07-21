@@ -72,6 +72,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
     { data: pricingRateRows },
     { data: quoteRows },
     { data: estimateSourceRows },
+    { data: templateRows },
   ] = await Promise.all([
     admin.from('enrollments').select('id, enrolled_at, profiles(first_name, last_name, email)').eq('instance_id', id).order('enrolled_at'),
     admin.from('expense_items').select('id', { count: 'exact', head: true }).eq('instance_id', id),
@@ -82,6 +83,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
     admin.from('pricing_rates').select('id, label, unit, rate, default_line').eq('active', true).order('sort_order'),
     admin.from('course_quotes').select('id, accept_token, prepared_by, prepared_by_name, quote_seq, status, issue_date, valid_until, total, unit_rate_note, scope_bullets, course_blurb, sent_at, accepted_at, accepted_name').eq('instance_id', id).order('quote_seq', { ascending: false }),
     admin.from('course_instances').select('id, ref_number, course_type, custom_title, client_name, starts_at, course_estimates(count)').neq('id', id).order('starts_at', { ascending: false, nullsFirst: false }).limit(60),
+    admin.from('course_task_templates').select('id, title').eq('active', true).order('sort_order'),
   ])
 
   const enrollments = enrollmentRows ?? []
@@ -322,7 +324,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
         </details>
 
         {/* ── Instructors ──────────────────────────────────────────── */}
-        <details className="mb-8 group">
+        <details open className="mb-8 group">
           <summary className="cursor-pointer list-none text-lg font-semibold select-none mb-3"><span className="text-zinc-600 text-sm mr-2 inline-block transition-transform group-open:rotate-90">▶</span>Instructors</summary>
 
           {(assigned ?? []).length > 0 && (
@@ -355,7 +357,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
         </details>
 
         {/* ── Students ─────────────────────────────────────────────── */}
-        <details className="mb-8 group">
+        <details open className="mb-8 group">
           <summary className="cursor-pointer list-none text-lg font-semibold select-none mb-3"><span className="text-zinc-600 text-sm mr-2 inline-block transition-transform group-open:rotate-90">▶</span>
             Students
             <span className="ml-2 text-sm font-normal text-zinc-500">
@@ -397,7 +399,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
         </details>
 
         {/* ── Content modules ──────────────────────────────────────── */}
-        <details className="mb-8 group">
+        <details open className="mb-8 group">
           <summary className="cursor-pointer list-none text-lg font-semibold select-none mb-3"><span className="text-zinc-600 text-sm mr-2 inline-block transition-transform group-open:rotate-90">▶</span>Content</summary>
           <p className="text-xs text-zinc-500 mb-4">Sections visible to <span className="text-blue-400">students</span>, <span className="text-teal-400">instructors</span>, or <span className="text-zinc-400">both</span>.</p>
 
@@ -474,7 +476,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
           </form>
         </details>
 
-        <details className="mb-8 group">
+        <details open className="mb-8 group">
           <summary className="cursor-pointer list-none text-lg font-semibold select-none mb-3"><span className="text-zinc-600 text-sm mr-2 inline-block transition-transform group-open:rotate-90">▶</span>Financials — Estimates</summary>
           <p className="text-xs text-zinc-500 mb-4">
             Internal cost build-up — never shown to instructors or clients. Add alternate COAs to price different
@@ -521,7 +523,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
           </div>
         </details>
 
-        <details className="mb-8 group">
+        <details open className="mb-8 group">
           <summary className="cursor-pointer list-none text-lg font-semibold select-none mb-3"><span className="text-zinc-600 text-sm mr-2 inline-block transition-transform group-open:rotate-90">▶</span>Financials — Quotes</summary>
           <p className="text-xs text-zinc-500 mb-4">
             Client-facing lump sum generated from the estimate. Marking sent/accepted moves the course to
@@ -537,7 +539,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
           />
         </details>
 
-        <details className="mb-8 group">
+        <details open className="mb-8 group">
           <summary className="cursor-pointer list-none text-lg font-semibold select-none mb-3"><span className="text-zinc-600 text-sm mr-2 inline-block transition-transform group-open:rotate-90">▶</span>Tasks</summary>
           <p className="text-xs text-zinc-500 mb-4">
             Course prep checklist — assignees are notified by email and see their tasks on the portal home page.
@@ -548,6 +550,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
             people={taskPeople}
             canManage
             currentUserId={user.id}
+            suggestions={templateRows ?? []}
           />
         </details>
 
