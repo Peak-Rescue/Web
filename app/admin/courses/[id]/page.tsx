@@ -108,20 +108,23 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
       .map((i) => ({ label: i.label, qty: Number(i.qty), rate: Number(i.rate), notes: i.notes })),
   }))
 
+  const instructorCount = Math.max((assigned ?? []).length, 1)
+  const courseDays =
+    inst.starts_at && inst.ends_at
+      ? Math.max(Math.round((Date.parse(inst.ends_at) - Date.parse(inst.starts_at)) / 86_400_000) + 1, 1)
+      : null
+  const estimateCounts = { instructors: instructorCount, students: (inst.max_students as number | null) ?? null, days: courseDays }
+
   // No estimates yet: show a virtual first COA pre-populated with the
   // always-recurring lines, quantities guessed from the course (nothing
   // saves until touched).
   if (estimatePanels.length === 0) {
-    const instructorCount = Math.max((assigned ?? []).length, 1)
-    const courseDays =
-      inst.starts_at && inst.ends_at
-        ? Math.max(Math.round((Date.parse(inst.ends_at) - Date.parse(inst.starts_at)) / 86_400_000) + 1, 1)
-        : 1
     const guessQty = (label: string): number => {
-      if (label === 'Instructor field day') return instructorCount * courseDays
+      const days = courseDays ?? 1
+      if (label === 'Instructor field day') return instructorCount * days
       if (label === 'Instructor travel day') return instructorCount * 2
-      if (label === 'Lodging') return instructorCount * courseDays
-      if (label === 'Permits' && inst.max_students) return inst.max_students * courseDays
+      if (label === 'Lodging') return instructorCount * days
+      if (label === 'Permits' && inst.max_students) return inst.max_students * days
       return 1
     }
     estimatePanels = [{
@@ -470,6 +473,8 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
                 initialItems={e.items}
                 rates={pricingRates}
                 canDelete={estimatePanels.length > 1}
+                solo={estimatePanels.length === 1}
+                counts={estimateCounts}
               />
             ))}
           </div>

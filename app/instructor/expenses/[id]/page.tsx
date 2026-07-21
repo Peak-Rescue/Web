@@ -23,18 +23,36 @@ export default async function ExpenseReportPage({ params }: { params: Promise<{ 
     .single()
   if (!report || report.profile_id !== user.id) notFound()
 
-  const { data: profile } = await admin
-    .from('profiles')
-    .select('is_exempt, signature_data_url')
-    .eq('id', user.id)
-    .single()
+  const cutoffDate = new Date()
+  cutoffDate.setDate(cutoffDate.getDate() - 365)
+  const cutoff = cutoffDate.toISOString().slice(0, 10)
+  const instanceCols = 'id, ref_number, course_type, custom_title, client_name, location, starts_at'
 
-  const { data: itemRows } = await admin
-    .from('expense_items')
-    .select('id, start_date, end_date, category, paid_by, description, details, paid_for_others, miles, meal_count, amount, instance_id, expense_receipts(id, path, filename)')
-    .eq('report_id', id)
-    .order('start_date')
-    .order('created_at')
+  // Everything independent of the item list, in one parallel round.
+  const [{ data: profile }, { data: itemRows }, rates, { data: instanceRows }, { data: myAssignments }] =
+    await Promise.all([
+      admin.from('profiles').select('is_exempt, signature_data_url').eq('id', user.id).single(),
+      admin
+        .from('expense_items')
+        .select('id, start_date, end_date, category, paid_by, description, details, paid_for_others, miles, meal_count, amount, instance_id, expense_receipts(id, path, filename)')
+        .eq('report_id', id)
+        .order('start_date')
+        .order('created_at'),
+      loadCurrentRates(),
+      admin
+        .from('course_instances')
+        .select(instanceCols)
+        .neq('status', 'cancelled')
+        .or(`starts_at.gte.${cutoff},starts_at.is.null`)
+        .order('starts_at', { ascending: false, nullsFirst: false })
+        .limit(100),
+      // "Your courses": via instructors.profile_id — instance_instructors
+      // points at the instructors table, not profiles.
+      admin
+        .from('instance_instructors')
+        .select('instance_id, instructors!inner(profile_id)')
+        .eq('instructors.profile_id', user.id),
+    ])
 
   // Signed URLs so receipt files (private bucket) can be viewed — one batched
   // call for the whole report instead of a round trip per receipt.
@@ -71,28 +89,10 @@ export default async function ExpenseReportPage({ params }: { params: Promise<{ 
     })
   }
 
-  const rates = await loadCurrentRates()
-
   // The dropdown stays small forever: a rolling 12-month window (plus
   // unscheduled instances), with the caller's own assigned courses grouped
   // first. Instances already referenced by this report are always included so
   // old drafts keep their options.
-  const cutoffDate = new Date()
-  cutoffDate.setDate(cutoffDate.getDate() - 365)
-  const cutoff = cutoffDate.toISOString().slice(0, 10)
-  const instanceCols = 'id, ref_number, course_type, custom_title, client_name, location, starts_at'
-
-  const [{ data: instanceRows }, { data: myAssignments }] = await Promise.all([
-    admin
-      .from('course_instances')
-      .select(instanceCols)
-      .neq('status', 'cancelled')
-      .or(`starts_at.gte.${cutoff},starts_at.is.null`)
-      .order('starts_at', { ascending: false, nullsFirst: false })
-      .limit(100),
-    admin.from('instance_instructors').select('instance_id').eq('instructor_id', user.id),
-  ])
-
   const windowRows = instanceRows ?? []
   const referencedIds = [
     ...new Set([report.default_instance_id, ...items.map((i) => i.instance_id)].filter((v): v is string => Boolean(v))),

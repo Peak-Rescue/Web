@@ -7,7 +7,10 @@ import { useRouter } from 'next/navigation'
 
 export type PricingRate = { id: string; label: string; unit: string | null; rate: number }
 
+export type CourseCounts = { instructors: number; students: number | null; days: number | null }
+
 type Row = { key: number; label: string; qty: string; rate: string; notes: string }
+type Factors = [string, string, string]
 
 const MARGIN_PRESETS = [0.2, 0.25, 0.3]
 const SAVE_DEBOUNCE_MS = 900
@@ -22,6 +25,8 @@ export default function EstimatePanel({
   initialItems,
   rates,
   canDelete,
+  solo,
+  counts,
 }: {
   instanceId: string
   estimateId: string | null // null = not yet persisted (first COA, untouched)
@@ -30,6 +35,8 @@ export default function EstimatePanel({
   initialItems: { label: string; qty: number; rate: number; notes: string | null }[]
   rates: PricingRate[]
   canDelete: boolean
+  solo: boolean // only COA on the course — the default "COA n" title stays hidden until a second exists
+  counts: CourseCounts
 }) {
   const router = useRouter()
   const estimateIdRef = useRef<string | null>(estimateId)
@@ -43,6 +50,8 @@ export default function EstimatePanel({
   const [notesOpen, setNotesOpen] = useState<Set<number>>(
     () => new Set(initialItems.map((i, idx) => (i.notes ? idx : -1)).filter((k) => k >= 0))
   )
+  const [calcOpen, setCalcOpen] = useState<Set<number>>(new Set())
+  const [calcFactors, setCalcFactors] = useState<Record<number, Factors>>({})
   const [margin, setMargin] = useState(initialMargin)
   const [status, setStatus] = useState<'idle' | 'pending' | 'saving' | 'saved' | 'error'>('idle')
   const stateRef = useRef({ rows, margin, title: initialTitle })
@@ -110,6 +119,28 @@ export default function EstimatePanel({
     })
   }
 
+  // The qty calculator is a scratch multiplier (people × days × anything) —
+  // only the resulting qty persists, the breakdown lives in component state.
+  function toggleCalc(key: number) {
+    setCalcFactors((prev) =>
+      prev[key] ? prev : { ...prev, [key]: [rows.find((r) => r.key === key)?.qty || '1', '1', '1'] }
+    )
+    setCalcOpen((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
+
+  function setFactor(key: number, idx: number, value: string) {
+    const next = [...(calcFactors[key] ?? ['1', '1', '1'])] as Factors
+    next[idx] = value
+    setCalcFactors((prev) => ({ ...prev, [key]: next }))
+    const product = next.reduce((p, f) => p * (f.trim() === '' ? 1 : Number(f) || 0), 1)
+    updateRow(key, { qty: String(round2(product)) })
+  }
+
   function updateRow(key: number, patch: Partial<Row>) {
     schedule(rows.map((r) => (r.key === key ? { ...r, ...patch } : r)), margin)
   }
@@ -142,9 +173,10 @@ export default function EstimatePanel({
     <div>
       <div className="flex items-center justify-between gap-3 mb-2">
         <input
-          value={title}
+          value={solo && title === 'COA 1' ? '' : title}
           onChange={(e) => schedule(rows, margin, e.target.value)}
-          className="bg-transparent border-b border-transparent hover:border-zinc-700 focus:border-zinc-500 focus:outline-none text-sm font-semibold w-52"
+          placeholder={solo ? 'Estimate name (optional)' : ''}
+          className="bg-transparent border-b border-transparent hover:border-zinc-700 focus:border-zinc-500 focus:outline-none text-sm font-semibold w-52 placeholder:text-zinc-600 placeholder:font-normal"
           title="Name this COA (e.g. 'Drive team', 'Fly-in option')"
         />
         <div className="flex items-center gap-3">
@@ -184,6 +216,13 @@ export default function EstimatePanel({
                   className={`text-sm shrink-0 transition-colors ${r.notes || notesOpen.has(r.key) ? 'text-zinc-300' : 'text-zinc-600 hover:text-zinc-400'}`}
                 >
                   📝
+                </button>
+                <button
+                  onClick={() => toggleCalc(r.key)}
+                  title="Quantity calculator — build qty from people × days × units"
+                  className={`text-sm shrink-0 transition-colors ${calcOpen.has(r.key) ? 'text-zinc-300' : 'text-zinc-600 hover:text-zinc-400'}`}
+                >
+                  🧮
                 </button>
                 <input
                   value={r.label}
@@ -230,6 +269,35 @@ export default function EstimatePanel({
                 </button>
               </div>
             </div>
+            {calcOpen.has(r.key) && (
+              <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
+                <span className="text-xs text-zinc-500">Qty =</span>
+                {(calcFactors[r.key] ?? ['1', '1', '1']).map((f, i) => (
+                  <span key={i} className="flex items-center gap-1.5">
+                    {i > 0 && <span className="text-xs text-zinc-600">×</span>}
+                    <input
+                      type="number"
+                      value={f}
+                      min="0"
+                      step="0.5"
+                      onChange={(e) => setFactor(r.key, i, e.target.value)}
+                      className={`${inputCls} w-16 text-right`}
+                    />
+                  </span>
+                ))}
+                <span className="text-xs text-zinc-400 font-medium">= {Number(r.qty) || 0}</span>
+                <span className="ml-auto text-[11px] text-zinc-600 whitespace-nowrap">
+                  This course:{' '}
+                  {[
+                    `${counts.instructors} instructor${counts.instructors === 1 ? '' : 's'}`,
+                    counts.students != null ? `${counts.students} students max` : null,
+                    counts.days != null ? `${counts.days} day${counts.days === 1 ? '' : 's'}` : null,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </span>
+              </div>
+            )}
             {notesOpen.has(r.key) && (
               <input
                 value={r.notes}

@@ -13,20 +13,6 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: profile } = await createAdminClient()
-    .from('profiles')
-    .select('role, first_name, last_name, email')
-    .eq('id', user.id)
-    .single()
-
-  if (!['admin', 'instructor'].includes(profile?.role ?? '')) redirect('/dashboard')
-
-  const isAdmin = profile?.role === 'admin'
-  const displayName = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ').trim()
-    || profile?.email
-    || user.email
-
-  // Personalized: courses you're assigned to teach + tasks assigned to you.
   const admin = createAdminClient()
   const today = new Date().toISOString().slice(0, 10)
 
@@ -41,7 +27,9 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     ends_at: string | null
     status: string
   }
-  const [{ data: assignmentRows }, { data: taskRows }] = await Promise.all([
+  // Profile gate + personalized data in one parallel round.
+  const [{ data: profile }, { data: assignmentRows }, { data: taskRows }] = await Promise.all([
+    admin.from('profiles').select('role, first_name, last_name, email').eq('id', user.id).single(),
     admin
       .from('instance_instructors')
       .select('role, course_instances!inner(id, ref_number, course_type, custom_title, client_name, location, starts_at, ends_at, status), instructors!inner(profile_id)')
@@ -54,6 +42,13 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       .order('due_date', { ascending: true, nullsFirst: false })
       .limit(12),
   ])
+
+  if (!['admin', 'instructor'].includes(profile?.role ?? '')) redirect('/dashboard')
+
+  const isAdmin = profile?.role === 'admin'
+  const displayName = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ').trim()
+    || profile?.email
+    || user.email
 
   const myCourses = (assignmentRows ?? [])
     .map((a) => ({ role: a.role as string, inst: a.course_instances as unknown as InstRow }))
