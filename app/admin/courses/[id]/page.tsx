@@ -113,6 +113,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
       if (label === 'Instructor field day') return instructorCount * courseDays
       if (label === 'Instructor travel day') return instructorCount * 2
       if (label === 'Lodging') return instructorCount * courseDays
+      if (label === 'Permits' && inst.max_students) return inst.max_students * courseDays
       return 1
     }
     estimateItems = (pricingRateRows ?? [])

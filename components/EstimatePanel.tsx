@@ -103,6 +103,15 @@ export default function EstimatePanel({
     schedule(rows.filter((r) => r.key !== key), margin)
   }
 
+  // Tooltip explaining what the quantity means for library items:
+  // "per mile" → qty is miles; "per student per day" → qty is students × days.
+  function qtyHint(label: string): string {
+    const unit = rates.find((r) => r.label === label)?.unit
+    if (!unit) return 'Quantity'
+    const factors = unit.replace(/^per\s+/, '').split(/\s+per\s+/)
+    return factors.length > 1 ? `Quantity = ${factors.join(' × ')}` : `Quantity = ${factors[0]}s`
+  }
+
   const subtotal = round2(rows.reduce((s, r) => s + (Number(r.qty) || 0) * (Number(r.rate) || 0), 0))
   const marginAmount = round2(subtotal * margin)
   const quotePrice = round2(subtotal + marginAmount)
@@ -145,7 +154,7 @@ export default function EstimatePanel({
                 step="0.5"
                 onChange={(e) => updateRow(r.key, { qty: e.target.value })}
                 className={`${inputCls} w-20 text-right`}
-                title="Quantity"
+                title={qtyHint(r.label)}
               />
               <span className="text-zinc-600 text-xs">×</span>
               <input
@@ -164,6 +173,9 @@ export default function EstimatePanel({
                 ×
               </button>
             </div>
+            {qtyHint(r.label) !== 'Quantity' && (
+              <p className="mt-0.5 text-[10px] text-zinc-600 text-right pr-40">{qtyHint(r.label).toLowerCase()}</p>
+            )}
             {notesOpen.has(r.key) && (
               <input
                 value={r.notes}
