@@ -145,13 +145,20 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
             </div>
           </summary>
           <form action={createInstance} className="mt-4 p-6 bg-zinc-900 rounded-lg border border-zinc-800 grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <p className="sm:col-span-2 text-xs text-zinc-500 -mb-1">
-              Capture what the inquiry gave you — only course type is required. Everything stays editable on the
-              course page, where scheduling, staffing, estimates, and quotes live.
-            </p>
-
             <CourseTypeSelect />
 
+            <div>
+              <label className="block text-xs text-zinc-400 mb-1">Status</label>
+              <select name="status" defaultValue="tentative" className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500">
+                <option value="tentative">Tentative</option>
+                <option value="quoted">Quoted</option>
+                <option value="confirmed">Confirmed</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-zinc-400 mb-1">Location</label>
+              <input name="location" className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
+            </div>
             <div>
               <label className="block text-xs text-zinc-400 mb-1">Client / organization</label>
               <input name="client_name" placeholder="e.g. 24th STS" className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
@@ -161,22 +168,33 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
               <input name="contact_name" placeholder="Name" className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
             </div>
             <div>
+              <label className="block text-xs text-zinc-400 mb-1">POC phone</label>
+              <input name="contact_phone" type="tel" className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
+            </div>
+            <div>
               <label className="block text-xs text-zinc-400 mb-1">POC email</label>
               <input name="contact_email" type="email" placeholder="poc@unit.mil" className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
             </div>
-
             <div>
-              <label className="block text-xs text-zinc-400 mb-1">Potential start date (optional)</label>
+              <label className="block text-xs text-zinc-400 mb-1">Start date (optional)</label>
               <input name="starts_at" type="date" className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
             </div>
             <div>
-              <label className="block text-xs text-zinc-400 mb-1">Potential end date (optional)</label>
+              <label className="block text-xs text-zinc-400 mb-1">End date (optional)</label>
               <input name="ends_at" type="date" className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
+            </div>
+            <div>
+              <label className="block text-xs text-zinc-400 mb-1">Number of students</label>
+              <input name="max_students" type="number" min="1" placeholder="e.g. 10" className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
+            </div>
+            <div>
+              <label className="block text-xs text-zinc-400 mb-1">Instructor slots</label>
+              <input name="instructor_slots" type="number" min="1" placeholder="e.g. 3" className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
             </div>
 
             <div className="sm:col-span-2">
-              <label className="block text-xs text-zinc-400 mb-1">Inquiry notes</label>
-              <textarea name="notes" rows={2} placeholder="What they asked for, rough timing ('sometime June'), budget signals, follow-ups…" className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500 resize-y" />
+              <label className="block text-xs text-zinc-400 mb-1">Notes</label>
+              <textarea name="notes" rows={2} placeholder="What they asked for, rough timing, budget signals, follow-ups…" className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm resize-y focus:outline-none focus:border-zinc-500" />
             </div>
 
             <div className="sm:col-span-2">
