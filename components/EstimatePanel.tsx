@@ -139,13 +139,28 @@ export default function EstimatePanel({
     }
   }
 
-  // A known unit dimension prefills from the course itself.
-  function countForFactor(name: string): number | null {
+  // Whether a rate's day/night dimension tracks the course duration. Travel
+  // days follow their own logic (out and back), so the course's length says
+  // nothing about them — they neither prefill from it nor drift against it.
+  function isDurationDriven(rateLabel: string): boolean {
+    return !/travel/i.test(rateLabel)
+  }
+
+  // The course-derived value for a factor, or null when the course can't
+  // know it. Used for both prefill and drift detection.
+  function countForFactor(name: string, rateLabel: string): number | null {
     const n = name.toLowerCase()
     if (n.startsWith('instructor') || n.startsWith('person')) return counts.instructors || null
-    if (n.startsWith('day') || n.startsWith('night')) return counts.days
+    if (n.startsWith('day') || n.startsWith('night')) return isDurationDriven(rateLabel) ? counts.days : null
     if (n.startsWith('student')) return counts.students
     return null
+  }
+
+  // Creation-time default when the course can't supply the number.
+  function prefillForFactor(name: string, rateLabel: string): number {
+    const n = name.toLowerCase()
+    if ((n.startsWith('day') || n.startsWith('night')) && !isDurationDriven(rateLabel)) return 2 // out + back
+    return countForFactor(name, rateLabel) ?? 1
   }
 
   // Factors whose label maps to a course count but no longer matches it —
@@ -157,7 +172,7 @@ export default function EstimatePanel({
     r.factors.forEach((f, idx) => {
       const label = labels[idx]
       if (!label) return
-      const actual = countForFactor(label)
+      const actual = countForFactor(label, r.label)
       const current = Number(f) || 0
       if (actual != null && actual > 0 && actual !== current) {
         drift.push({ idx, label, from: current, to: actual })
@@ -179,7 +194,7 @@ export default function EstimatePanel({
     const lib = rates.find((r) => r.id === rateId)
     if (!lib) return
     const labels = factorLabels(lib.label)
-    const values = labels.map((l) => countForFactor(l) ?? 1)
+    const values = labels.map((l) => prefillForFactor(l, lib.label))
     const qty = values.reduce((p, v) => p * v, 1)
     schedule(
       [...rows, {
