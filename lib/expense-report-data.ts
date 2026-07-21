@@ -2,9 +2,22 @@
 // report. Used by the submit action (email attachment) and the download route.
 
 import { createAdminClient } from '@/lib/supabase/admin'
-import { type ExpenseCategory } from '@/lib/expenses'
+import { type CurrentRates, type ExpenseCategory } from '@/lib/expenses'
 import { instanceLabel } from '@/lib/courses'
 import { type PdfReport } from '@/lib/expense-pdf'
+
+// Current reimbursement prices from the pricing library (rows tagged
+// reimb_type). Service-role read — instructors never see the rest of the
+// library, only these two numbers reach the client.
+export async function loadCurrentRates(): Promise<CurrentRates> {
+  const { data } = await createAdminClient()
+    .from('pricing_rates')
+    .select('reimb_type, rate')
+    .eq('active', true)
+    .not('reimb_type', 'is', null)
+  const byType = new Map((data ?? []).map((r) => [r.reimb_type as string, Number(r.rate)]))
+  return { mileage: byType.get('mileage') ?? 0, meal: byType.get('meal') ?? 0 }
+}
 
 export type LoadedReport = {
   id: string

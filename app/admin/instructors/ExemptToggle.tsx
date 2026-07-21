@@ -27,7 +27,7 @@ export default function ExemptToggle({
       <div>
         <p className="text-sm font-medium">FLSA exempt</p>
         <p className="text-xs text-zinc-500 mt-0.5">
-          Exempt employees can claim per diem on expense reports. Non-exempt (overtime-eligible) employees cannot.
+          Exempt employees can claim covered meals (no receipts) on expense reports. Non-exempt (overtime-eligible) employees cannot.
         </p>
       </div>
       <button

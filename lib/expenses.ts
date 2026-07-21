@@ -3,13 +3,12 @@
 // for live preview in the form. The server always recomputes; the client
 // preview is cosmetic.
 
-export type RateType = 'mileage' | 'per_diem_meal'
-
-export type ExpenseRate = {
-  id: string
-  rate_type: RateType
-  rate: number
-  effective_date: string // yyyy-mm-dd
+// Current reimbursement prices, read from the pricing_rates library
+// (rows tagged reimb_type). Items snapshot rate_used at save time, so
+// changing a library rate never rewrites existing reports.
+export type CurrentRates = {
+  mileage: number // $ per mile
+  meal: number // $ per meal
 }
 
 export type ExpenseCategory =
@@ -33,7 +32,7 @@ export const CATEGORY_LABELS: Record<ExpenseCategory, string> = {
   breakfast: 'Breakfast',
   lunch: 'Lunch',
   dinner: 'Dinner',
-  per_diem: 'Per diem',
+  per_diem: 'Meals covered',
   other: 'Other',
 }
 
@@ -42,18 +41,10 @@ export const MEAL_CATEGORIES: ExpenseCategory[] = ['breakfast', 'lunch', 'dinner
 // Categories whose amount is computed from a quantity × rate, not typed in.
 export const COMPUTED_CATEGORIES: ExpenseCategory[] = ['personal_auto', 'per_diem']
 
-// Per diem is restricted to FLSA-exempt employees.
+// Flat meal coverage is restricted to FLSA-exempt employees.
 export function categoriesFor(isExempt: boolean): ExpenseCategory[] {
   const all = Object.keys(CATEGORY_LABELS) as ExpenseCategory[]
   return isExempt ? all : all.filter((c) => c !== 'per_diem')
-}
-
-// Latest rate whose effective_date is on or before the expense date.
-export function rateFor(rates: ExpenseRate[], type: RateType, date: string): ExpenseRate | null {
-  const applicable = rates
-    .filter((r) => r.rate_type === type && r.effective_date <= date)
-    .sort((a, b) => (a.effective_date < b.effective_date ? 1 : -1))
-  return applicable[0] ?? null
 }
 
 export function daysInRange(startDate: string, endDate: string | null): number {
@@ -71,21 +62,20 @@ export type ItemInput = {
   amount: number | null // user-entered amount for non-computed categories
 }
 
-// Authoritative amount + rate snapshot for an item. Mirrors the sheet's
-// ROUND(miles * rate, 2); per diem is meals × per-meal rate.
+// Authoritative amount + rate snapshot for an item, at the current library
+// rates. Mirrors the sheet's ROUND(miles * rate, 2); covered meals are
+// meals × per-meal rate.
 export function computeItem(
   item: ItemInput,
-  rates: ExpenseRate[]
+  rates: CurrentRates
 ): { amount: number; rate_used: number | null } {
   if (item.category === 'personal_auto') {
-    const rate = rateFor(rates, 'mileage', item.start_date)
     const miles = item.miles ?? 0
-    return { amount: round2(miles * (rate?.rate ?? 0)), rate_used: rate?.rate ?? null }
+    return { amount: round2(miles * rates.mileage), rate_used: rates.mileage }
   }
   if (item.category === 'per_diem') {
-    const rate = rateFor(rates, 'per_diem_meal', item.start_date)
     const meals = item.meal_count ?? 0
-    return { amount: round2(meals * (rate?.rate ?? 0)), rate_used: rate?.rate ?? null }
+    return { amount: round2(meals * rates.meal), rate_used: rates.meal }
   }
   return { amount: round2(item.amount ?? 0), rate_used: null }
 }

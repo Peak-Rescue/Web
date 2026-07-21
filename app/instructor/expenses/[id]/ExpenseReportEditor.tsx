@@ -7,7 +7,7 @@ import { createClient } from '@/lib/supabase/client'
 import SignaturePad, { type SignaturePadHandle } from '@/components/SignaturePad'
 import {
   type ExpenseCategory,
-  type ExpenseRate,
+  type CurrentRates,
   CATEGORY_LABELS,
   MEAL_CATEGORIES,
   categoriesFor,
@@ -117,7 +117,7 @@ export default function ExpenseReportEditor({
 }: {
   report: { id: string; reason: string | null; default_instance_id: string | null }
   items: EditorItem[]
-  rates: ExpenseRate[]
+  rates: CurrentRates
   courses: CourseOption[]
   isExempt: boolean
   hasSignature: boolean
@@ -423,7 +423,7 @@ export default function ExpenseReportEditor({
     setFormError(null)
   }
 
-  // Per diem: recompute meals (3/day) whenever the category or dates change.
+  // Covered meals: recompute the count (3/day) whenever the category or dates change.
   function withAutoMeals(f: FormState): FormState {
     if (f.category !== 'per_diem' || !f.start_date) return f
     return { ...f, meal_count: String(daysInRange(f.start_date, f.end_date || null) * 3) }

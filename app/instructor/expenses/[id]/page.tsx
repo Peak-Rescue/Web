@@ -3,7 +3,8 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import ExpenseReportEditor, { type EditorItem, type CourseOption } from './ExpenseReportEditor'
-import { type ExpenseRate, fmtMoney, computeTotals, CATEGORY_LABELS, fmtDateRange, type ExpenseCategory } from '@/lib/expenses'
+import { fmtMoney, computeTotals, CATEGORY_LABELS, fmtDateRange, type ExpenseCategory } from '@/lib/expenses'
+import { loadCurrentRates } from '@/lib/expense-report-data'
 import { instanceLabel } from '@/lib/courses'
 
 export default async function ExpenseReportPage({ params }: { params: Promise<{ id: string }> }) {
@@ -70,10 +71,7 @@ export default async function ExpenseReportPage({ params }: { params: Promise<{ 
     })
   }
 
-  const { data: rateRows } = await admin
-    .from('expense_rates')
-    .select('id, rate_type, rate, effective_date')
-  const rates = (rateRows ?? []).map((r) => ({ ...r, rate: Number(r.rate) })) as ExpenseRate[]
+  const rates = await loadCurrentRates()
 
   // The dropdown stays small forever: a rolling 12-month window (plus
   // unscheduled instances), with the caller's own assigned courses grouped

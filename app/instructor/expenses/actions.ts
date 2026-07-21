@@ -7,14 +7,13 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import {
   type ExpenseCategory,
-  type ExpenseRate,
   categoriesFor,
   computeItem,
   computeTotals,
   fmtMoney,
 } from '@/lib/expenses'
 import { generateExpensePdf } from '@/lib/expense-pdf'
-import { loadReport } from '@/lib/expense-report-data'
+import { loadCurrentRates, loadReport } from '@/lib/expense-report-data'
 
 const BUCKET = 'expense-receipts'
 const MAX_RECEIPT_BYTES = 15 * 1024 * 1024
@@ -38,13 +37,6 @@ async function requireOwnedReport(reportId: string, opts: { draftOnly?: boolean 
   if (!report || report.profile_id !== user.id) throw new Error('Report not found')
   if (opts.draftOnly && report.status !== 'draft') throw new Error('Report has already been submitted')
   return { user, admin, report }
-}
-
-async function getRates(): Promise<ExpenseRate[]> {
-  const { data } = await createAdminClient()
-    .from('expense_rates')
-    .select('id, rate_type, rate, effective_date')
-  return (data ?? []).map((r) => ({ ...r, rate: Number(r.rate) })) as ExpenseRate[]
 }
 
 function revalidateReport(reportId: string) {
@@ -120,7 +112,7 @@ function validateItem(p: ItemPayload, isExempt: boolean) {
   if (p.end_date && p.end_date < p.start_date) throw new Error('End date must be on or after the start date')
   if (!categoriesFor(isExempt).includes(p.category)) throw new Error('Invalid category')
   if (p.category === 'personal_auto' && !(p.miles && p.miles > 0)) throw new Error('Miles are required for personal auto')
-  if (p.category === 'per_diem' && !(p.meal_count && p.meal_count > 0)) throw new Error('Number of meals is required for per diem')
+  if (p.category === 'per_diem' && !(p.meal_count && p.meal_count > 0)) throw new Error('Number of meals covered is required')
   if (p.category === 'other' && !p.details?.trim()) throw new Error('Details are required for "Other" expenses')
   if (p.paid_for_others && !p.details?.trim()) throw new Error('List who was included when paying for others')
 }
@@ -131,7 +123,7 @@ export async function saveItem(reportId: string, itemId: string | null, payload:
   const { data: profile } = await admin.from('profiles').select('is_exempt').eq('id', user.id).single()
   validateItem(payload, profile?.is_exempt ?? false)
 
-  const rates = await getRates()
+  const rates = await loadCurrentRates()
   const { amount, rate_used } = computeItem(payload, rates)
 
   const row = {

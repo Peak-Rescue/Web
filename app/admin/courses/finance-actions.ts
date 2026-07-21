@@ -81,6 +81,11 @@ export async function updatePricingRate(rateId: string, formData: FormData) {
 
 export async function deletePricingRate(rateId: string) {
   const admin = await requireAdmin()
+
+  // Mileage/meal rows drive expense-report math — they can be re-priced but not removed.
+  const { data: target } = await admin.from('pricing_rates').select('reimb_type').eq('id', rateId).single()
+  if (target?.reimb_type) throw new Error('This rate is used for expense reports and cannot be deleted')
+
   const { error } = await admin.from('pricing_rates').update({ active: false }).eq('id', rateId)
   if (error) throw new Error(error.message)
   revalidatePath('/admin/expenses/rates')
