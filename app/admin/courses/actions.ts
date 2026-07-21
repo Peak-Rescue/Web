@@ -73,6 +73,17 @@ export async function createInstance(formData: FormData) {
   // Every new course starts with the standard ops checklist.
   await insertTemplateTasks(admin, data.id, null)
 
+  // Optionally seed the cost estimate from a similar past course.
+  const copyFrom = (formData.get('copy_estimate_from') as string) || null
+  if (copyFrom) {
+    try {
+      const { cloneEstimates } = await import('@/lib/estimates')
+      await cloneEstimates(admin, copyFrom, data.id)
+    } catch (e) {
+      console.error('Estimate copy failed (course still created):', e)
+    }
+  }
+
   redirect(`/admin/courses/${data.id}`)
 }
 

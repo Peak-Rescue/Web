@@ -91,7 +91,8 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
     .select(`
       id, ref_number, slug, course_type, custom_title, status, location, client_name, starts_at, ends_at, max_students,
       instance_instructors(count),
-      enrollments(count)
+      enrollments(count),
+      course_estimates(count)
     `)
 
   const instances = (raw ?? []) as unknown as Instance[]
@@ -203,6 +204,23 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
             <div className="sm:col-span-2">
               <label className="block text-xs text-zinc-400 mb-1">Notes</label>
               <textarea name="notes" rows={2} placeholder="Contract number, special requirements, logistics…" className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500 resize-none" />
+            </div>
+
+            <div className="sm:col-span-2">
+              <label className="block text-xs text-zinc-400 mb-1">Copy cost estimate from a previous course (optional)</label>
+              <select name="copy_estimate_from" defaultValue="" className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500">
+                <option value="">— start fresh —</option>
+                {instances
+                  .filter((i) => ((i as unknown as { course_estimates?: { count: number }[] }).course_estimates?.[0]?.count ?? 0) > 0)
+                  .map((i) => (
+                    <option key={i.id} value={i.id}>
+                      {courseShortName(i.course_type, i.custom_title)}
+                      {i.client_name ? ` · ${i.client_name}` : ''}
+                      {i.starts_at ? ` · ${i.starts_at.slice(0, 7)}` : ''}
+                      {` (PR-${String(i.ref_number).padStart(4, '0')})`}
+                    </option>
+                  ))}
+              </select>
             </div>
 
             <div className="sm:col-span-2">

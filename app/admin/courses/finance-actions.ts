@@ -373,3 +373,22 @@ export async function sendQuote(instanceId: string, quoteId: string) {
   revalidatePath('/admin/courses')
   revalidatePath('/admin')
 }
+
+// Copies all COAs from another course into this one (for pricing a course
+// similar to one already run).
+export async function copyEstimatesFrom(instanceId: string, formData: FormData) {
+  const admin = await requireAdmin()
+  const sourceId = String(formData.get('source_instance_id') ?? '')
+  if (!sourceId || sourceId === instanceId) throw new Error('Pick a course to copy from')
+
+  const { data: source } = await admin
+    .from('course_instances')
+    .select('ref_number')
+    .eq('id', sourceId)
+    .single()
+  if (!source) throw new Error('Source course not found')
+
+  const { cloneEstimates } = await import('@/lib/estimates')
+  await cloneEstimates(admin, sourceId, instanceId, ` (from PR-${String(source.ref_number).padStart(4, '0')})`)
+  revalidatePath(`/admin/courses/${instanceId}`)
+}

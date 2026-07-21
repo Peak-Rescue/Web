@@ -10,10 +10,10 @@ import SaveButton from '@/components/SaveButton'
 import DeleteInstanceButton from '../DeleteInstanceButton'
 import CourseTasksPanel, { type TaskPerson } from '@/components/CourseTasksPanel'
 import EstimatePanel, { type PricingRate } from '@/components/EstimatePanel'
-import { createEstimateCoa } from '../finance-actions'
+import { createEstimateCoa, copyEstimatesFrom } from '../finance-actions'
 import QuotesSection, { type QuoteRow } from '../QuotesSection'
 import { loadTasksWithDocs } from '@/lib/course-tasks'
-import { courseDisplayName, computeBlocks } from '@/lib/courses'
+import { courseDisplayName, courseShortName, computeBlocks } from '@/lib/courses'
 import { CATEGORY_COURSE_TYPES } from '@/lib/capabilities'
 
 const STATUS_STYLES: Record<string, string> = {
@@ -97,6 +97,17 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
     .eq('instance_id', id)
     .order('quote_seq', { ascending: false })
   const quotes: QuoteRow[] = (quoteRows ?? []).map((q) => ({ ...q, total: Number(q.total) }))
+
+  // Other courses whose estimates can be copied in as starting points.
+  const { data: estimateSourceRows } = await admin
+    .from('course_instances')
+    .select('id, ref_number, course_type, custom_title, client_name, starts_at, course_estimates(count)')
+    .neq('id', id)
+    .order('starts_at', { ascending: false, nullsFirst: false })
+    .limit(60)
+  const copySources = (estimateSourceRows ?? []).filter(
+    (s) => ((s.course_estimates as unknown as { count: number }[])?.[0]?.count ?? 0) > 0
+  )
 
   type EstimateItemRow = { label: string; qty: number; rate: number; notes: string | null; sort_order: number }
   let estimatePanels = (estimateRows ?? []).map((e) => ({
@@ -479,11 +490,29 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
               />
             ))}
           </div>
-          <form action={createEstimateCoa.bind(null, id)} className="mt-4">
-            <button className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded text-sm font-medium transition-colors">
-              + Add another COA
-            </button>
-          </form>
+          <div className="mt-4 flex items-center gap-3 flex-wrap">
+            <form action={createEstimateCoa.bind(null, id)}>
+              <button className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded text-sm font-medium transition-colors">
+                + Add another COA
+              </button>
+            </form>
+            {copySources.length > 0 && (
+              <form action={copyEstimatesFrom.bind(null, id)} className="flex items-center gap-2">
+                <select name="source_instance_id" className="bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm text-zinc-300">
+                  {copySources.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {courseShortName(s.course_type, s.custom_title)}
+                      {s.client_name ? ` · ${s.client_name}` : ''}
+                      {s.starts_at ? ` · ${s.starts_at.slice(0, 7)}` : ''}
+                    </option>
+                  ))}
+                </select>
+                <button className="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded text-sm transition-colors">
+                  Copy estimate from course
+                </button>
+              </form>
+            )}
+          </div>
         </section>
 
         <section className="mb-12">
