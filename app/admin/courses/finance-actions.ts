@@ -210,3 +210,61 @@ export async function deleteQuote(instanceId: string, quoteId: string) {
   if (error) throw new Error(error.message)
   revalidatePath(`/admin/courses/${instanceId}`)
 }
+
+// Emails the quote link to the course's point of contact and marks it sent.
+export async function sendQuote(instanceId: string, quoteId: string) {
+  const admin = await requireAdmin()
+
+  const [{ data: quote }, { data: inst }] = await Promise.all([
+    admin.from('course_quotes').select('quote_seq, status, accept_token, total, prepared_by_name, prepared_by_email').eq('id', quoteId).eq('instance_id', instanceId).single(),
+    admin.from('course_instances').select('ref_number, course_type, custom_title, client_name, contact_name, contact_email, starts_at, ends_at').eq('id', instanceId).single(),
+  ])
+  if (!quote || !inst) throw new Error('Quote not found')
+  if (quote.status !== 'draft') throw new Error('Only draft quotes can be sent')
+  if (!inst.contact_email) throw new Error('The course has no point-of-contact email — add one in Details first')
+  if (!process.env.RESEND_API_KEY) throw new Error('Email is not configured in this environment')
+
+  const { quoteNumber } = await import('@/lib/quotes')
+  const { courseShortName } = await import('@/lib/courses')
+  const qNum = quoteNumber(inst.ref_number, quote.quote_seq)
+  const courseName = courseShortName(inst.course_type, inst.custom_title)
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.peakrescuemountainguides.com'
+  const link = `${siteUrl}/quote/${quote.accept_token}`
+  const dates = inst.starts_at
+    ? `${inst.starts_at}${inst.ends_at && inst.ends_at !== inst.starts_at ? ` – ${inst.ends_at}` : ''}`
+    : 'dates TBD'
+
+  const { Resend } = await import('resend')
+  const resend = new Resend(process.env.RESEND_API_KEY)
+  const { error: sendError } = await resend.emails.send({
+    from: 'Peak Rescue Mountain Guides <noreply@peak-rescue.com>',
+    to: [inst.contact_email],
+    cc: quote.prepared_by_email ? [quote.prepared_by_email] : undefined,
+    replyTo: quote.prepared_by_email ?? undefined,
+    subject: `Peak Rescue Quote ${qNum} — ${courseName}`,
+    text: [
+      `${inst.contact_name ?? 'Hello'},`,
+      '',
+      `Thank you for the opportunity — your quote for ${courseName}${inst.client_name ? ` (${inst.client_name})` : ''}, ${dates}, is ready:`,
+      '',
+      link,
+      '',
+      'The page has the full details and a button to accept and lock in your dates. You can also print or save it as a PDF from your browser.',
+      '',
+      `Questions? Just reply to this email.`,
+      '',
+      quote.prepared_by_name ?? 'Peak Rescue Mountain Guides',
+    ].join('\n'),
+  })
+  if (sendError) throw new Error(`Email failed: ${sendError.message}`)
+
+  await admin.from('course_quotes').update({ status: 'sent', sent_at: new Date().toISOString() }).eq('id', quoteId)
+  const { data: cur } = await admin.from('course_instances').select('status').eq('id', instanceId).single()
+  if (cur?.status === 'tentative') {
+    await admin.from('course_instances').update({ status: 'quoted' }).eq('id', instanceId)
+  }
+
+  revalidatePath(`/admin/courses/${instanceId}`)
+  revalidatePath('/admin/courses')
+  revalidatePath('/admin')
+}

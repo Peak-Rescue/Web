@@ -83,7 +83,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
 
   const { data: quoteRows } = await admin
     .from('course_quotes')
-    .select('id, quote_seq, status, issue_date, valid_until, total, unit_rate_note, scope_bullets, course_blurb, sent_at, accepted_at, accepted_name')
+    .select('id, accept_token, quote_seq, status, issue_date, valid_until, total, unit_rate_note, scope_bullets, course_blurb, sent_at, accepted_at, accepted_name')
     .eq('instance_id', id)
     .order('quote_seq', { ascending: false })
   const quotes: QuoteRow[] = (quoteRows ?? []).map((q) => ({ ...q, total: Number(q.total) }))
@@ -452,7 +452,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
             Client-facing lump sum generated from the estimate. Marking sent/accepted moves the course to
             Quoted/Confirmed automatically.
           </p>
-          <QuotesSection instanceId={id} refNumber={inst.ref_number} quotes={quotes} />
+          <QuotesSection instanceId={id} refNumber={inst.ref_number} quotes={quotes} contactEmail={inst.contact_email ?? null} />
         </section>
 
         <section className="mb-12">

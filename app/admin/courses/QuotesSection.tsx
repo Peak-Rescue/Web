@@ -1,10 +1,11 @@
 import SaveButton from '@/components/SaveButton'
-import { createQuote, updateQuote, setQuoteStatus, deleteQuote } from './finance-actions'
+import { createQuote, updateQuote, setQuoteStatus, deleteQuote, sendQuote } from './finance-actions'
 import { quoteNumber } from '@/lib/quotes'
 import { fmtMoney } from '@/lib/expenses'
 
 export type QuoteRow = {
   id: string
+  accept_token: string
   quote_seq: number
   status: string
   issue_date: string
@@ -40,10 +41,12 @@ export default function QuotesSection({
   instanceId,
   refNumber,
   quotes,
+  contactEmail,
 }: {
   instanceId: string
   refNumber: number
   quotes: QuoteRow[]
+  contactEmail: string | null
 }) {
   return (
     <div>
@@ -65,14 +68,32 @@ export default function QuotesSection({
               </div>
               <div className="flex items-center gap-3">
                 <a
-                  href={`/admin/courses/${instanceId}/quote/${q.id}/pdf`}
+                  href={`/quote/${q.accept_token}`}
                   target="_blank"
                   className="text-xs text-zinc-300 underline hover:text-white transition-colors"
+                >
+                  View page
+                </a>
+                <a
+                  href={`/admin/courses/${instanceId}/quote/${q.id}/pdf`}
+                  target="_blank"
+                  className="text-xs text-zinc-500 underline hover:text-white transition-colors"
                 >
                   PDF
                 </a>
                 {q.status === 'draft' && (
                   <>
+                    {contactEmail ? (
+                      <form action={sendQuote.bind(null, instanceId, q.id)}>
+                        <button className="text-xs px-2.5 py-1 bg-pr-red hover:bg-pr-red-dark text-white rounded transition-colors">
+                          Send to {contactEmail}
+                        </button>
+                      </form>
+                    ) : (
+                      <span className="text-xs text-zinc-600" title="Add a point-of-contact email in Details to send from here">
+                        no POC email
+                      </span>
+                    )}
                     <form action={setQuoteStatus.bind(null, instanceId, q.id, 'sent')}>
                       <button className="text-xs px-2.5 py-1 bg-zinc-700 hover:bg-zinc-600 text-white rounded transition-colors">
                         Mark sent
