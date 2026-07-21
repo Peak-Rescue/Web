@@ -103,13 +103,18 @@ export default function EstimatePanel({
     schedule(rows.filter((r) => r.key !== key), margin)
   }
 
-  // Tooltip explaining what the quantity means for library items:
-  // "per mile" → qty is miles; "per student per day" → qty is students × days.
-  function qtyHint(label: string): string {
+  // What the quantity means for library items: "per mile" → "miles",
+  // "per student per day" → "student × day". Null for custom lines.
+  function qtyFactors(label: string): string | null {
     const unit = rates.find((r) => r.label === label)?.unit
-    if (!unit) return 'Quantity'
+    if (!unit) return null
     const factors = unit.replace(/^per\s+/, '').split(/\s+per\s+/)
-    return factors.length > 1 ? `Quantity = ${factors.join(' × ')}` : `Quantity = ${factors[0]}s`
+    return factors.length > 1 ? factors.join(' × ') : `${factors[0]}s`
+  }
+
+  // The rate's unit text, e.g. "per mile", "per person per night".
+  function rateUnit(label: string): string | null {
+    return rates.find((r) => r.label === label)?.unit ?? null
   }
 
   const subtotal = round2(rows.reduce((s, r) => s + (Number(r.qty) || 0) * (Number(r.rate) || 0), 0))
@@ -133,49 +138,60 @@ export default function EstimatePanel({
         <div className="divide-y divide-zinc-800">
           {rows.map((r) => (
             <div key={r.key} className="px-3 py-2">
-            <div className="flex items-center gap-2">
-              <input
-                value={r.label}
-                onChange={(e) => updateRow(r.key, { label: e.target.value })}
-                placeholder="Line item"
-                className={`${inputCls} flex-1 min-w-0`}
-              />
-              <button
-                onClick={() => toggleNotes(r.key)}
-                title="Notes for this line"
-                className={`text-sm shrink-0 transition-colors ${r.notes || notesOpen.has(r.key) ? 'text-zinc-300' : 'text-zinc-600 hover:text-zinc-400'}`}
-              >
-                📝
-              </button>
-              <input
-                type="number"
-                value={r.qty}
-                min="0"
-                step="0.5"
-                onChange={(e) => updateRow(r.key, { qty: e.target.value })}
-                className={`${inputCls} w-20 text-right`}
-                title={qtyHint(r.label)}
-              />
-              <span className="text-zinc-600 text-xs">×</span>
-              <input
-                type="number"
-                value={r.rate}
-                min="0"
-                step="0.01"
-                onChange={(e) => updateRow(r.key, { rate: e.target.value })}
-                className={`${inputCls} w-24 text-right`}
-                title="Rate"
-              />
-              <span className="text-sm w-24 text-right shrink-0">
-                {fmtMoney(round2((Number(r.qty) || 0) * (Number(r.rate) || 0)))}
-              </span>
-              <button onClick={() => removeRow(r.key)} className="text-zinc-600 hover:text-pr-red-light text-sm shrink-0">
-                ×
-              </button>
+            <div className="flex flex-wrap items-start gap-2">
+              <div className="flex items-center gap-2 w-full sm:w-auto sm:flex-1 min-w-0">
+                <button
+                  onClick={() => toggleNotes(r.key)}
+                  title="Notes for this line"
+                  className={`text-sm shrink-0 transition-colors ${r.notes || notesOpen.has(r.key) ? 'text-zinc-300' : 'text-zinc-600 hover:text-zinc-400'}`}
+                >
+                  📝
+                </button>
+                <input
+                  value={r.label}
+                  onChange={(e) => updateRow(r.key, { label: e.target.value })}
+                  placeholder="Line item"
+                  className={`${inputCls} flex-1 min-w-0`}
+                />
+              </div>
+              <div className="flex items-start gap-2 ml-auto">
+                <div className="flex flex-col items-center">
+                  <input
+                    type="number"
+                    value={r.qty}
+                    min="0"
+                    step="0.5"
+                    onChange={(e) => updateRow(r.key, { qty: e.target.value })}
+                    className={`${inputCls} w-20 text-right`}
+                    title={qtyFactors(r.label) ? `Quantity = ${qtyFactors(r.label)}` : 'Quantity'}
+                  />
+                  {qtyFactors(r.label) && (
+                    <span className="mt-0.5 text-[10px] text-zinc-600 whitespace-nowrap">{qtyFactors(r.label)}</span>
+                  )}
+                </div>
+                <span className="text-zinc-600 text-xs mt-2.5">×&nbsp;&nbsp;$</span>
+                <div className="flex flex-col items-center">
+                  <input
+                    type="number"
+                    value={r.rate}
+                    min="0"
+                    step="0.01"
+                    onChange={(e) => updateRow(r.key, { rate: e.target.value })}
+                    className={`${inputCls} w-24 text-right`}
+                    title={rateUnit(r.label) ? `Dollars ${rateUnit(r.label)}` : 'Dollar rate'}
+                  />
+                  <span className="mt-0.5 text-[10px] text-zinc-600 whitespace-nowrap">
+                    {rateUnit(r.label) ?? 'dollars'}
+                  </span>
+                </div>
+                <span className="text-sm w-24 text-right shrink-0 mt-2">
+                  {fmtMoney(round2((Number(r.qty) || 0) * (Number(r.rate) || 0)))}
+                </span>
+                <button onClick={() => removeRow(r.key)} className="text-zinc-600 hover:text-pr-red-light text-sm shrink-0 mt-1.5">
+                  ×
+                </button>
+              </div>
             </div>
-            {qtyHint(r.label) !== 'Quantity' && (
-              <p className="mt-0.5 text-[10px] text-zinc-600 text-right pr-40">{qtyHint(r.label).toLowerCase()}</p>
-            )}
             {notesOpen.has(r.key) && (
               <input
                 value={r.notes}
