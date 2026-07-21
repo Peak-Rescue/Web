@@ -6,7 +6,7 @@ import { updateInstanceDetails, updateInstanceDates, addOffDay, removeOffDay, ad
 import { CourseTypeSelect } from '../CourseTypeSelect'
 import InstructorAssign from '../InstructorAssign'
 import StudentInvitePanel from '../StudentInvitePanel'
-import SaveButton from '@/components/SaveButton'
+import AutoSaveForm from '@/components/AutoSaveForm'
 import DeleteInstanceButton from '../DeleteInstanceButton'
 import CourseTasksPanel, { type TaskPerson } from '@/components/CourseTasksPanel'
 import EstimatePanel, { type PricingRate } from '@/components/EstimatePanel'
@@ -187,7 +187,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
         {/* ── Details ─────────────────────────────────────────────── */}
         <details open className="mb-8 group">
           <summary className="cursor-pointer list-none text-lg font-semibold select-none mb-3"><span className="text-zinc-600 text-sm mr-2 inline-block transition-transform group-open:rotate-90">▶</span>Details</summary>
-          <form action={updateDetailsWithId} className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-6 bg-zinc-900 rounded-lg border border-zinc-800">
+          <AutoSaveForm action={updateDetailsWithId} className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-6 bg-zinc-900 rounded-lg border border-zinc-800">
             <CourseTypeSelect
               defaultCategory={inst.course_category}
               defaultType={inst.course_type}
@@ -235,18 +235,15 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
               <label className="block text-xs text-zinc-400 mb-1">Notes</label>
               <textarea name="notes" rows={2} defaultValue={inst.notes ?? ''} className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500 resize-none" />
             </div>
-            <div className="sm:col-span-2">
-              <SaveButton className="px-4 py-2 bg-pr-red hover:bg-pr-red-dark text-white rounded text-sm font-medium transition-colors">Save details</SaveButton>
-            </div>
-          </form>
+          </AutoSaveForm>
         </details>
 
         {/* ── Schedule ─────────────────────────────────────────────── */}
         <details open className="mb-8 group">
           <summary className="cursor-pointer list-none text-lg font-semibold select-none mb-3"><span className="text-zinc-600 text-sm mr-2 inline-block transition-transform group-open:rotate-90">▶</span>Schedule</summary>
 
-          {/* Overall window — saved via updateInstance */}
-          <form action={updateDatesWithId} className="grid grid-cols-2 gap-4 p-4 bg-zinc-900 border border-zinc-800 rounded-lg mb-4">
+          {/* Overall window — auto-saved */}
+          <AutoSaveForm action={updateDatesWithId} className="grid grid-cols-2 gap-4 p-4 bg-zinc-900 border border-zinc-800 rounded-lg mb-4">
             <div>
               <label className="block text-xs text-zinc-400 mb-1">Course start</label>
               <input name="starts_at" type="date" defaultValue={inst.starts_at ?? ''} className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
@@ -255,10 +252,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
               <label className="block text-xs text-zinc-400 mb-1">Course end</label>
               <input name="ends_at" type="date" defaultValue={inst.ends_at ?? ''} className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
             </div>
-            <div className="col-span-2">
-              <SaveButton className="px-4 py-2 bg-pr-red hover:bg-pr-red-dark text-white rounded text-sm font-medium transition-colors">Save dates</SaveButton>
-            </div>
-          </form>
+          </AutoSaveForm>
 
           {/* Off days */}
           <div className="mb-4">
