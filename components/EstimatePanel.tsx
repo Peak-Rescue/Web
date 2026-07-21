@@ -213,8 +213,19 @@ export default function EstimatePanel({
   // typing a qty directly clears it.
   function rowFactors(r: Row): Factors {
     if (r.factors) return r.factors
-    const n = Math.max(factorLabels(r.label).length, 2)
+    const n = Math.max(factorLabels(r.label).length, 1)
     return [r.qty.trim() || '1', ...Array.from({ length: n - 1 }, () => '1')]
+  }
+
+  function removeFactor(key: number, idx: number) {
+    const row = rows.find((r) => r.key === key)
+    if (!row) return
+    const current = rowFactors(row)
+    if (current.length <= 1) return
+    const next = current.filter((_, i) => i !== idx)
+    const nextLabels = row.flabels.filter((_, i) => i !== idx)
+    const product = next.reduce((p, f) => p * (f.trim() === '' ? 1 : Number(f) || 0), 1)
+    updateRow(key, { factors: next.length >= 2 ? next : null, flabels: nextLabels, qty: String(round2(product)) })
   }
 
   function addFactor(key: number) {
@@ -417,12 +428,23 @@ export default function EstimatePanel({
                       {factorLabels(r.label)[i] ? (
                         <span className="mt-0.5 text-[10px] text-zinc-600">{factorLabels(r.label)[i]}</span>
                       ) : (
-                        <input
-                          value={r.flabels[i] ?? ''}
-                          onChange={(e) => setFactorLabel(r.key, i, e.target.value)}
-                          placeholder="name"
-                          className="mt-0.5 w-16 bg-transparent border-b border-zinc-800 focus:border-zinc-500 focus:outline-none text-[10px] text-zinc-400 text-center"
-                        />
+                        <span className="mt-0.5 flex items-center gap-1">
+                          <input
+                            value={r.flabels[i] ?? ''}
+                            onChange={(e) => setFactorLabel(r.key, i, e.target.value)}
+                            placeholder="name"
+                            className="w-14 bg-transparent border-b border-zinc-800 focus:border-zinc-500 focus:outline-none text-[10px] text-zinc-400 text-center"
+                          />
+                          {i >= factorLabels(r.label).length && rowFactors(r).length > 1 && (
+                            <button
+                              onClick={() => removeFactor(r.key, i)}
+                              title="Remove this multiplier"
+                              className="text-[10px] text-zinc-600 hover:text-pr-red-light"
+                            >
+                              ×
+                            </button>
+                          )}
+                        </span>
                       )}
                     </span>
                   </span>
