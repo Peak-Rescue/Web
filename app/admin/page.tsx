@@ -2,7 +2,8 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import Link from 'next/link'
-import MyTaskCheckbox from '@/components/MyTaskCheckbox'
+import MyTasksList from '@/components/MyTasksList'
+import { loadMyOpenTasks } from '@/lib/course-tasks'
 import CourseCalendar, { type CalendarCourse } from '@/components/CourseCalendar'
 import { courseShortName } from '@/lib/courses'
 
@@ -28,19 +29,13 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     status: string
   }
   // Profile gate + personalized data in one parallel round.
-  const [{ data: profile }, { data: assignmentRows }, { data: taskRows }] = await Promise.all([
+  const [{ data: profile }, { data: assignmentRows }, myTasks] = await Promise.all([
     admin.from('profiles').select('role, first_name, last_name, email').eq('id', user.id).single(),
     admin
       .from('instance_instructors')
       .select('role, course_instances!inner(id, ref_number, course_type, custom_title, client_name, location, starts_at, ends_at, status), instructors!inner(profile_id)')
       .eq('instructors.profile_id', user.id),
-    admin
-      .from('course_tasks')
-      .select('id, title, due_date, instance_id, course_instances(course_type, custom_title, status)')
-      .eq('assigned_to', user.id)
-      .eq('status', 'open')
-      .order('due_date', { ascending: true, nullsFirst: false })
-      .limit(12),
+    loadMyOpenTasks(admin, user.id),
   ])
 
   if (!['admin', 'instructor'].includes(profile?.role ?? '')) redirect('/dashboard')
@@ -69,24 +64,12 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       href: `/portal/${i.id}`,
     }))
 
-  const myTasks = (taskRows ?? [])
-    .filter((t) => (t.course_instances as unknown as { status: string } | null)?.status !== 'cancelled')
-    .map((t) => ({
-      ...t,
-      courseName: t.course_instances
-        ? courseShortName(
-            (t.course_instances as unknown as { course_type: string }).course_type,
-            (t.course_instances as unknown as { custom_title: string | null }).custom_title
-          )
-        : null,
-    }))
 
   const fmtRange = (c: InstRow) => {
     const f = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
     if (!c.starts_at) return 'dates TBD'
     return c.ends_at && c.ends_at !== c.starts_at ? `${f(c.starts_at)} – ${f(c.ends_at)}` : f(c.starts_at)
   }
-  const fmtDue = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 
   return (
     <main className="min-h-screen bg-zinc-950 text-white pt-16 md:pt-20">
@@ -141,6 +124,13 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
           </section>
         )}
 
+        {myTasks.length > 0 && (
+          <section className="mb-10">
+            <h2 className="text-sm font-medium text-zinc-500 uppercase tracking-wide mb-3">Your open tasks</h2>
+            <MyTasksList tasks={myTasks} />
+          </section>
+        )}
+
         {calendarCourses.length > 0 && (
           <details open={Boolean(cal)} className="mb-10 group">
             <summary className="cursor-pointer list-none flex items-center gap-2 text-sm font-medium text-zinc-500 uppercase tracking-wide select-none">
@@ -157,27 +147,6 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
           </details>
         )}
 
-        {myTasks.length > 0 && (
-          <section className="mb-10">
-            <h2 className="text-sm font-medium text-zinc-500 uppercase tracking-wide mb-3">Your open tasks</h2>
-            <div className="bg-zinc-900 rounded-lg border border-zinc-800 divide-y divide-zinc-800">
-              {myTasks.map((t) => (
-                <div key={t.id} className="px-4 py-2.5 flex items-center gap-3">
-                  <MyTaskCheckbox instanceId={t.instance_id} taskId={t.id} />
-                  <Link href={`/portal/${t.instance_id}`} className="min-w-0 flex-1 group">
-                    <p className="text-sm group-hover:text-pr-red-light transition-colors truncate">{t.title}</p>
-                    {t.courseName && <p className="text-xs text-zinc-500 truncate">{t.courseName}</p>}
-                  </Link>
-                  {t.due_date && (
-                    <span className={`text-xs shrink-0 ${t.due_date < today ? 'text-red-400' : 'text-zinc-500'}`}>
-                      {t.due_date < today ? 'overdue · ' : ''}{fmtDue(t.due_date)}
-                    </span>
-                  )}
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Link

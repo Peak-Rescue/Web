@@ -69,3 +69,58 @@ export async function loadTasksWithDocs(
     })),
   }))
 }
+
+export type MyOpenTask = {
+  id: string
+  instance_id: string
+  title: string
+  notes: string | null
+  due_date: string | null
+  courseName: string | null
+  courseStatus: string | null
+  documents: { id: string; filename: string; url: string }[]
+}
+
+// A user's open tasks across courses, with notes and signed document URLs —
+// the same task data the course pages show, surfaced on the portal home.
+export async function loadMyOpenTasks(
+  admin: ReturnType<typeof createAdminClient>,
+  userId: string
+): Promise<MyOpenTask[]> {
+  const { data } = await admin
+    .from('course_tasks')
+    .select('id, instance_id, title, notes, due_date, course_instances(course_type, custom_title, status), course_task_documents(id, path, filename)')
+    .eq('assigned_to', userId)
+    .eq('status', 'open')
+    .order('due_date', { ascending: true, nullsFirst: false })
+    .limit(20)
+
+  type DocRow = { id: string; path: string; filename: string | null }
+  const rows = (data ?? []).filter(
+    (r) => (r.course_instances as unknown as { status: string } | null)?.status !== 'cancelled'
+  )
+  const allPaths = rows.flatMap((r) => ((r.course_task_documents ?? []) as DocRow[]).map((d) => d.path))
+  const { data: signed } = allPaths.length
+    ? await admin.storage.from('task-documents').createSignedUrls(allPaths, 3600)
+    : { data: [] }
+  const urlByPath = new Map((signed ?? []).map((s) => [s.path, s.signedUrl]))
+
+  const { courseShortName } = await import('@/lib/courses')
+  return rows.map((r) => {
+    const inst = r.course_instances as unknown as { course_type: string; custom_title: string | null; status: string } | null
+    return {
+      id: r.id,
+      instance_id: r.instance_id,
+      title: r.title,
+      notes: r.notes,
+      due_date: r.due_date,
+      courseName: inst ? courseShortName(inst.course_type, inst.custom_title) : null,
+      courseStatus: inst?.status ?? null,
+      documents: ((r.course_task_documents ?? []) as DocRow[]).map((d) => ({
+        id: d.id,
+        filename: d.filename ?? 'document',
+        url: urlByPath.get(d.path) ?? '#',
+      })),
+    }
+  })
+}
