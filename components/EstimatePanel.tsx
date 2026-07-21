@@ -148,6 +148,33 @@ export default function EstimatePanel({
     return null
   }
 
+  // Factors whose label maps to a course count but no longer matches it —
+  // details changed after this line was created. Never auto-applied.
+  function factorDrift(r: Row): { idx: number; label: string; from: number; to: number }[] {
+    if (!r.factors) return []
+    const labels = factorLabels(r.label)
+    const drift: { idx: number; label: string; from: number; to: number }[] = []
+    r.factors.forEach((f, idx) => {
+      const label = labels[idx]
+      if (!label) return
+      const actual = countForFactor(label)
+      const current = Number(f) || 0
+      if (actual != null && actual > 0 && actual !== current) {
+        drift.push({ idx, label, from: current, to: actual })
+      }
+    })
+    return drift
+  }
+
+  function applyDrift(key: number) {
+    const row = rows.find((r) => r.key === key)
+    if (!row || !row.factors) return
+    const next = [...row.factors]
+    for (const d of factorDrift(row)) next[d.idx] = String(d.to)
+    const product = next.reduce((p, f) => p * (f.trim() === '' ? 1 : Number(f) || 0), 1)
+    updateRow(key, { factors: next, qty: String(round2(product)) })
+  }
+
   function addFromLibrary(rateId: string) {
     const lib = rates.find((r) => r.id === rateId)
     if (!lib) return
@@ -410,6 +437,20 @@ export default function EstimatePanel({
                   </button>
                 )}
                 <span className="text-xs text-zinc-400 font-medium">= {Number(r.qty) || 0}</span>
+              </div>
+            )}
+            {factorDrift(r).length > 0 && (
+              <div className="mt-1 flex items-center gap-2 text-[11px] text-yellow-500/90">
+                <span>
+                  Course details changed:{' '}
+                  {factorDrift(r).map((d) => `${d.label} ${d.from} → ${d.to}`).join(', ')}
+                </span>
+                <button
+                  onClick={() => applyDrift(r.key)}
+                  className="px-1.5 py-0.5 rounded border border-yellow-700/60 hover:bg-yellow-900/30 transition-colors"
+                >
+                  Update line
+                </button>
               </div>
             )}
             {notesOpen.has(r.key) && (
