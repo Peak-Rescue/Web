@@ -33,8 +33,15 @@ const ITEM_ICON: Record<string, React.ReactElement> = {
   ),
 }
 
-export default async function PortalPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function PortalPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>
+  searchParams: Promise<{ as?: string }>
+}) {
   const { id } = await params
+  const { as } = await searchParams
 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -56,13 +63,19 @@ export default async function PortalPage({ params }: { params: Promise<{ id: str
 
   const isAdmin = profile?.role === 'admin'
   const isInstructor = !!instructorAssignment
-  const canManageTasks = isAdmin || instructorAssignment?.role === 'lead'
   const hasAccess = isAdmin || isInstructor || !!enrollment
   if (!hasAccess) redirect('/dashboard')
 
+  // Admins can preview the page as a student or a (non-lead) instructor via
+  // ?as=… — purely a display role; the access check above uses the real one.
+  const viewAs = isAdmin && (as === 'student' || as === 'instructor') ? as : null
+  const showAsAdmin = viewAs ? false : isAdmin
+  const showAsInstructor = viewAs ? viewAs === 'instructor' : isInstructor
+  const canManageTasks = viewAs ? false : isAdmin || instructorAssignment?.role === 'lead'
+
   // Everything else in a second parallel round (roles known, filters set).
-  const showTasks = isAdmin || isInstructor
-  const audienceFilter = isAdmin || isInstructor ? null : ['student', 'both']
+  const showTasks = showAsAdmin || showAsInstructor
+  const audienceFilter = showTasks ? null : ['student', 'both']
 
   let modulesQuery = admin
     .from('course_modules')
@@ -111,7 +124,28 @@ export default async function PortalPage({ params }: { params: Promise<{ id: str
       <div className="max-w-3xl mx-auto px-4 py-10">
 
         {isAdmin && (
-          <Link href={`/admin/courses/${id}`} className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors mb-6 inline-block">← Edit course</Link>
+          <div className="mb-6 flex items-center justify-between gap-3 flex-wrap">
+            <Link href={`/admin/courses/${id}`} className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors">← Edit course</Link>
+            <div className="flex items-center gap-1 text-xs">
+              <span className="text-zinc-600 mr-1">Viewing as</span>
+              {([
+                ['', 'Admin', 'Everything, unfiltered'],
+                ['instructor', 'Instructor', 'What an assigned (non-lead) instructor sees'],
+                ['student', 'Student', 'What an enrolled student sees'],
+              ] as const).map(([key, label, hint]) => (
+                <Link
+                  key={label}
+                  href={key ? `/portal/${id}?as=${key}` : `/portal/${id}`}
+                  title={hint}
+                  className={`px-2 py-1 rounded font-medium transition-colors ${
+                    (viewAs ?? '') === key ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:text-zinc-300'
+                  }`}
+                >
+                  {label}
+                </Link>
+              ))}
+            </div>
+          </div>
         )}
 
         {/* Header */}
@@ -153,7 +187,7 @@ export default async function PortalPage({ params }: { params: Promise<{ id: str
         )}
 
         {/* Notes (instructors + admin only) */}
-        {(isAdmin || isInstructor) && inst.notes && (
+        {(showAsAdmin || showAsInstructor) && inst.notes && (
           <div className="mb-8 p-4 bg-zinc-900 border border-zinc-700 rounded-lg text-sm text-zinc-300 whitespace-pre-wrap">
             {inst.notes}
           </div>
@@ -184,7 +218,7 @@ export default async function PortalPage({ params }: { params: Promise<{ id: str
                 <section key={mod.id}>
                   <div className="flex items-center gap-2 mb-3">
                     <h2 className="font-semibold text-lg">{mod.title}</h2>
-                    {(isAdmin || isInstructor) && mod.audience !== 'both' && (
+                    {(showAsAdmin || showAsInstructor) && mod.audience !== 'both' && (
                       <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${
                         mod.audience === 'instructor'
                           ? 'border-teal-800 text-teal-400'
