@@ -14,7 +14,14 @@ async function requireAdmin() {
   return admin
 }
 
-export type EstimateItemInput = { label: string; qty: number; rate: number; notes: string | null }
+export type EstimateItemInput = { label: string; qty: number; rate: number; notes: string | null; factors: number[] | null }
+
+// A breakdown is only meaningful with ≥2 factors; anything else stores null.
+function cleanFactors(factors: number[] | null): number[] | null {
+  if (!Array.isArray(factors)) return null
+  const nums = factors.slice(0, 4).map(Number).filter((n) => Number.isFinite(n))
+  return nums.length >= 2 ? nums : null
+}
 
 // Replace-style save keeps the action simple and the client authoritative
 // while typing (the panel debounces calls, expense-editor style).
@@ -59,6 +66,7 @@ export async function saveEstimate(
       qty: Number.isFinite(i.qty) ? i.qty : 0,
       rate: Number.isFinite(i.rate) ? i.rate : 0,
       notes: i.notes?.trim().slice(0, 500) || null,
+      qty_factors: cleanFactors(i.factors),
       sort_order: idx,
     }))
   if (rows.length > 0) {
@@ -88,12 +96,12 @@ export async function createEstimateCoa(instanceId: string) {
     inst.starts_at && inst.ends_at
       ? Math.max(Math.round((Date.parse(inst.ends_at) - Date.parse(inst.starts_at)) / 86_400_000) + 1, 1)
       : 1
-  const guessQty = (label: string): number => {
-    if (label === 'Instructor field day') return instructorCount * courseDays
-    if (label === 'Instructor travel day') return instructorCount * 2
-    if (label === 'Lodging') return instructorCount * courseDays
-    if (label === 'Permits' && inst.max_students) return inst.max_students * courseDays
-    return 1
+  const guessQty = (label: string): { qty: number; factors: number[] | null } => {
+    if (label === 'Instructor field day') return { qty: instructorCount * courseDays, factors: [instructorCount, courseDays] }
+    if (label === 'Instructor travel day') return { qty: instructorCount * 2, factors: [instructorCount, 2] }
+    if (label === 'Lodging') return { qty: instructorCount * courseDays, factors: [instructorCount, courseDays] }
+    if (label === 'Permits' && inst.max_students) return { qty: inst.max_students * courseDays, factors: [inst.max_students, courseDays] }
+    return { qty: 1, factors: null }
   }
 
   const { data: estimate, error } = await admin
@@ -103,13 +111,17 @@ export async function createEstimateCoa(instanceId: string) {
     .single()
   if (error || !estimate) throw new Error(error?.message ?? 'Could not create estimate')
 
-  const rows = (defaults ?? []).map((r, idx) => ({
-    estimate_id: estimate.id,
-    label: r.label,
-    qty: guessQty(r.label),
-    rate: Number(r.rate),
-    sort_order: idx,
-  }))
+  const rows = (defaults ?? []).map((r, idx) => {
+    const guess = guessQty(r.label)
+    return {
+      estimate_id: estimate.id,
+      label: r.label,
+      qty: guess.qty,
+      qty_factors: guess.factors,
+      rate: Number(r.rate),
+      sort_order: idx,
+    }
+  })
   if (rows.length > 0) await admin.from('estimate_items').insert(rows)
 
   revalidatePath(`/admin/courses/${instanceId}`)

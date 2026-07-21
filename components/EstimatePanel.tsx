@@ -9,8 +9,23 @@ export type PricingRate = { id: string; label: string; unit: string | null; rate
 
 export type CourseCounts = { instructors: number; students: number | null; days: number | null }
 
-type Row = { key: number; label: string; qty: string; rate: string; notes: string }
+type Row = { key: number; label: string; qty: string; rate: string; notes: string; factors: Factors | null }
 type Factors = [string, string, string]
+
+function padFactors(nums: number[]): Factors {
+  return [String(nums[0] ?? 1), String(nums[1] ?? 1), String(nums[2] ?? 1)]
+}
+
+// Drop trailing ×1 factors; a breakdown needs ≥2 left to mean anything.
+function trimFactors(f: Factors): string[] {
+  const out: string[] = [...f]
+  while (out.length > 1) {
+    const last = out[out.length - 1].trim()
+    if (last === '' || Number(last) === 1) out.pop()
+    else break
+  }
+  return out
+}
 
 const MARGIN_PRESETS = [0.2, 0.25, 0.3]
 const SAVE_DEBOUNCE_MS = 900
@@ -32,7 +47,7 @@ export default function EstimatePanel({
   estimateId: string | null // null = not yet persisted (first COA, untouched)
   initialTitle: string
   initialMargin: number
-  initialItems: { label: string; qty: number; rate: number; notes: string | null }[]
+  initialItems: { label: string; qty: number; rate: number; notes: string | null; factors: number[] | null }[]
   rates: PricingRate[]
   canDelete: boolean
   solo: boolean // only COA on the course — the default "COA n" title stays hidden until a second exists
@@ -45,13 +60,19 @@ export default function EstimatePanel({
   const [deleting, setDeleting] = useState(false)
   const nextKey = useRef(initialItems.length)
   const [rows, setRows] = useState<Row[]>(
-    initialItems.map((i, idx) => ({ key: idx, label: i.label, qty: String(i.qty), rate: String(i.rate), notes: i.notes ?? '' }))
+    initialItems.map((i, idx) => ({
+      key: idx,
+      label: i.label,
+      qty: String(i.qty),
+      rate: String(i.rate),
+      notes: i.notes ?? '',
+      factors: i.factors && i.factors.length >= 2 ? padFactors(i.factors) : null,
+    }))
   )
   const [notesOpen, setNotesOpen] = useState<Set<number>>(
     () => new Set(initialItems.map((i, idx) => (i.notes ? idx : -1)).filter((k) => k >= 0))
   )
   const [calcOpen, setCalcOpen] = useState<Set<number>>(new Set())
-  const [calcFactors, setCalcFactors] = useState<Record<number, Factors>>({})
   const [margin, setMargin] = useState(initialMargin)
   const [status, setStatus] = useState<'idle' | 'pending' | 'saving' | 'saved' | 'error'>('idle')
   const stateRef = useRef({ rows, margin, title: initialTitle })
@@ -84,7 +105,16 @@ export default function EstimatePanel({
       const { rows: r, margin: m, title: t } = stateRef.current
       const items: EstimateItemInput[] = r
         .filter((row) => row.label.trim())
-        .map((row) => ({ label: row.label, qty: Number(row.qty) || 0, rate: Number(row.rate) || 0, notes: row.notes || null }))
+        .map((row) => {
+          const trimmed = row.factors ? trimFactors(row.factors).map((f) => Number(f) || 0) : []
+          return {
+            label: row.label,
+            qty: Number(row.qty) || 0,
+            rate: Number(row.rate) || 0,
+            notes: row.notes || null,
+            factors: trimmed.length >= 2 ? trimmed : null,
+          }
+        })
       const saved = await saveEstimate(instanceId, estimateIdRef.current, { title: t, margin: m, items })
       estimateIdRef.current = saved.id
       setPersistedId(saved.id)
@@ -103,11 +133,11 @@ export default function EstimatePanel({
   function addFromLibrary(rateId: string) {
     const lib = rates.find((r) => r.id === rateId)
     if (!lib) return
-    schedule([...rows, { key: nextKey.current++, label: lib.label, qty: '1', rate: String(lib.rate), notes: '' }], margin)
+    schedule([...rows, { key: nextKey.current++, label: lib.label, qty: '1', rate: String(lib.rate), notes: '', factors: null }], margin)
   }
 
   function addCustom() {
-    schedule([...rows, { key: nextKey.current++, label: '', qty: '1', rate: '', notes: '' }], margin)
+    schedule([...rows, { key: nextKey.current++, label: '', qty: '1', rate: '', notes: '', factors: null }], margin)
   }
 
   function toggleNotes(key: number) {
@@ -119,12 +149,14 @@ export default function EstimatePanel({
     })
   }
 
-  // The qty calculator is a scratch multiplier (people × days × anything) —
-  // only the resulting qty persists, the breakdown lives in component state.
+  // The qty calculator: people × days × units. The breakdown saves with the
+  // line (qty_factors) so the math behind a quantity is visible later;
+  // typing a qty directly clears it.
+  function rowFactors(r: Row): Factors {
+    return r.factors ?? [r.qty.trim() || '1', '1', '1']
+  }
+
   function toggleCalc(key: number) {
-    setCalcFactors((prev) =>
-      prev[key] ? prev : { ...prev, [key]: [rows.find((r) => r.key === key)?.qty || '1', '1', '1'] }
-    )
     setCalcOpen((prev) => {
       const next = new Set(prev)
       if (next.has(key)) next.delete(key)
@@ -134,11 +166,12 @@ export default function EstimatePanel({
   }
 
   function setFactor(key: number, idx: number, value: string) {
-    const next = [...(calcFactors[key] ?? ['1', '1', '1'])] as Factors
+    const row = rows.find((r) => r.key === key)
+    if (!row) return
+    const next = [...rowFactors(row)] as Factors
     next[idx] = value
-    setCalcFactors((prev) => ({ ...prev, [key]: next }))
     const product = next.reduce((p, f) => p * (f.trim() === '' ? 1 : Number(f) || 0), 1)
-    updateRow(key, { qty: String(round2(product)) })
+    updateRow(key, { qty: String(round2(product)), factors: next })
   }
 
   function updateRow(key: number, patch: Partial<Row>) {
@@ -161,6 +194,14 @@ export default function EstimatePanel({
   // The rate's unit text, e.g. "per mile", "per person per night".
   function rateUnit(label: string): string | null {
     return rates.find((r) => r.label === label)?.unit ?? null
+  }
+
+  // Hint under the qty box: the saved breakdown ("= 3 × 5") when there is
+  // one, else what the quantity means for the rate's unit.
+  function qtyHint(r: Row): string | null {
+    const breakdown = r.factors ? trimFactors(r.factors) : []
+    if (breakdown.length >= 2) return `= ${breakdown.join(' × ')}`
+    return qtyFactors(r.label)
   }
 
   const subtotal = round2(rows.reduce((s, r) => s + (Number(r.qty) || 0) * (Number(r.rate) || 0), 0))
@@ -220,7 +261,7 @@ export default function EstimatePanel({
                 <button
                   onClick={() => toggleCalc(r.key)}
                   title="Quantity calculator — build qty from people × days × units"
-                  className={`text-sm shrink-0 transition-colors ${calcOpen.has(r.key) ? 'text-zinc-300' : 'text-zinc-600 hover:text-zinc-400'}`}
+                  className={`text-sm shrink-0 transition-colors ${r.factors || calcOpen.has(r.key) ? 'text-zinc-300' : 'text-zinc-600 hover:text-zinc-400'}`}
                 >
                   🧮
                 </button>
@@ -238,12 +279,12 @@ export default function EstimatePanel({
                     value={r.qty}
                     min="0"
                     step="0.5"
-                    onChange={(e) => updateRow(r.key, { qty: e.target.value })}
+                    onChange={(e) => updateRow(r.key, { qty: e.target.value, factors: null })}
                     className={`${inputCls} w-20 text-right`}
                     title={qtyFactors(r.label) ? `Quantity = ${qtyFactors(r.label)}` : 'Quantity'}
                   />
-                  {qtyFactors(r.label) && (
-                    <span className="mt-0.5 text-[10px] text-zinc-600 whitespace-nowrap">{qtyFactors(r.label)}</span>
+                  {qtyHint(r) && (
+                    <span className="mt-0.5 text-[10px] text-zinc-600 whitespace-nowrap">{qtyHint(r)}</span>
                   )}
                 </div>
                 <span className="text-zinc-600 text-xs mt-2.5">×&nbsp;&nbsp;$</span>
@@ -272,7 +313,7 @@ export default function EstimatePanel({
             {calcOpen.has(r.key) && (
               <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
                 <span className="text-xs text-zinc-500">Qty =</span>
-                {(calcFactors[r.key] ?? ['1', '1', '1']).map((f, i) => (
+                {rowFactors(r).map((f, i) => (
                   <span key={i} className="flex items-center gap-1.5">
                     {i > 0 && <span className="text-xs text-zinc-600">×</span>}
                     <input

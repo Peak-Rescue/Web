@@ -78,7 +78,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
     loadTasksWithDocs(admin, id),
     admin.from('profiles').select('id, first_name, last_name, email').in('role', ['admin', 'instructor']).order('first_name'),
     admin.from('profiles').select('id, first_name, last_name, email').eq('role', 'admin').order('first_name'),
-    admin.from('course_estimates').select('id, title, margin, created_at, estimate_items(label, qty, rate, notes, sort_order)').eq('instance_id', id).order('created_at'),
+    admin.from('course_estimates').select('id, title, margin, created_at, estimate_items(label, qty, rate, notes, qty_factors, sort_order)').eq('instance_id', id).order('created_at'),
     admin.from('pricing_rates').select('id, label, unit, rate, default_line').eq('active', true).order('sort_order'),
     admin.from('course_quotes').select('id, accept_token, prepared_by, prepared_by_name, quote_seq, status, issue_date, valid_until, total, unit_rate_note, scope_bullets, course_blurb, sent_at, accepted_at, accepted_name').eq('instance_id', id).order('quote_seq', { ascending: false }),
     admin.from('course_instances').select('id, ref_number, course_type, custom_title, client_name, starts_at, course_estimates(count)').neq('id', id).order('starts_at', { ascending: false, nullsFirst: false }).limit(60),
@@ -98,14 +98,20 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
     (s) => ((s.course_estimates as unknown as { count: number }[])?.[0]?.count ?? 0) > 0
   )
 
-  type EstimateItemRow = { label: string; qty: number; rate: number; notes: string | null; sort_order: number }
+  type EstimateItemRow = { label: string; qty: number; rate: number; notes: string | null; qty_factors: unknown; sort_order: number }
   let estimatePanels = (estimateRows ?? []).map((e) => ({
     id: e.id as string | null,
     title: e.title as string,
     margin: Number(e.margin),
     items: ((e.estimate_items ?? []) as EstimateItemRow[])
       .sort((a, b) => a.sort_order - b.sort_order)
-      .map((i) => ({ label: i.label, qty: Number(i.qty), rate: Number(i.rate), notes: i.notes })),
+      .map((i) => ({
+        label: i.label,
+        qty: Number(i.qty),
+        rate: Number(i.rate),
+        notes: i.notes,
+        factors: Array.isArray(i.qty_factors) ? i.qty_factors.map(Number) : null,
+      })),
   }))
 
   const instructorCount = Math.max((assigned ?? []).length, 1)
@@ -119,13 +125,13 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
   // always-recurring lines, quantities guessed from the course (nothing
   // saves until touched).
   if (estimatePanels.length === 0) {
-    const guessQty = (label: string): number => {
+    const guessQty = (label: string): { qty: number; factors: number[] | null } => {
       const days = courseDays ?? 1
-      if (label === 'Instructor field day') return instructorCount * days
-      if (label === 'Instructor travel day') return instructorCount * 2
-      if (label === 'Lodging') return instructorCount * days
-      if (label === 'Permits' && inst.max_students) return inst.max_students * days
-      return 1
+      if (label === 'Instructor field day') return { qty: instructorCount * days, factors: [instructorCount, days] }
+      if (label === 'Instructor travel day') return { qty: instructorCount * 2, factors: [instructorCount, 2] }
+      if (label === 'Lodging') return { qty: instructorCount * days, factors: [instructorCount, days] }
+      if (label === 'Permits' && inst.max_students) return { qty: inst.max_students * days, factors: [inst.max_students, days] }
+      return { qty: 1, factors: null }
     }
     estimatePanels = [{
       id: null,
@@ -133,7 +139,10 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
       margin: 0.25,
       items: (pricingRateRows ?? [])
         .filter((r) => r.default_line)
-        .map((r) => ({ label: r.label, qty: guessQty(r.label), rate: Number(r.rate), notes: null })),
+        .map((r) => {
+          const guess = guessQty(r.label)
+          return { label: r.label, qty: guess.qty, rate: Number(r.rate), notes: null, factors: guess.factors }
+        }),
     }]
   }
 
