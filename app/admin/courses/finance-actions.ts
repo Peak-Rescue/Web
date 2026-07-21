@@ -157,9 +157,24 @@ export async function updateQuote(instanceId: string, quoteId: string, formData:
     .map((b) => b.trim())
     .filter(Boolean)
 
+  // "From" — re-snapshot name/email when a different preparer is chosen.
+  const preparedBy = String(formData.get('prepared_by') ?? '')
+  let preparerPatch: Record<string, unknown> = {}
+  if (preparedBy) {
+    const { data: p } = await admin.from('profiles').select('first_name, last_name, email').eq('id', preparedBy).single()
+    if (p) {
+      preparerPatch = {
+        prepared_by: preparedBy,
+        prepared_by_name: [p.first_name, p.last_name].filter(Boolean).join(' ') || null,
+        prepared_by_email: p.email ?? null,
+      }
+    }
+  }
+
   const { error } = await admin
     .from('course_quotes')
     .update({
+      ...preparerPatch,
       total,
       valid_until: String(formData.get('valid_until') ?? '') || null,
       unit_rate_note: String(formData.get('unit_rate_note') ?? '').trim() || null,

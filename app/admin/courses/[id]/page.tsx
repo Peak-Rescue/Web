@@ -64,11 +64,14 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
     admin.from('enrollments').select('id, enrolled_at, profiles(first_name, last_name, email)').eq('instance_id', id).order('enrolled_at'),
     admin.from('expense_items').select('id', { count: 'exact', head: true }).eq('instance_id', id),
     loadTasksWithDocs(admin, id),
-    admin.from('profiles').select('id, first_name, last_name').in('role', ['admin', 'instructor']).order('first_name'),
+    admin.from('profiles').select('id, first_name, last_name, email').in('role', ['admin', 'instructor']).order('first_name'),
   ])
   const enrollments = enrollmentRows ?? []
   const taskPeople: TaskPerson[] = (peopleRows ?? [])
     .map((p) => ({ id: p.id, name: [p.first_name, p.last_name].filter(Boolean).join(' ') }))
+    .filter((p) => p.name)
+  const quotePeople = (peopleRows ?? [])
+    .map((p) => ({ id: p.id, name: [p.first_name, p.last_name].filter(Boolean).join(' '), email: p.email ?? null }))
     .filter((p) => p.name)
 
   const [{ data: estimateRow }, { data: pricingRateRows }] = await Promise.all([
@@ -83,7 +86,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
 
   const { data: quoteRows } = await admin
     .from('course_quotes')
-    .select('id, accept_token, quote_seq, status, issue_date, valid_until, total, unit_rate_note, scope_bullets, course_blurb, sent_at, accepted_at, accepted_name')
+    .select('id, accept_token, prepared_by, prepared_by_name, quote_seq, status, issue_date, valid_until, total, unit_rate_note, scope_bullets, course_blurb, sent_at, accepted_at, accepted_name')
     .eq('instance_id', id)
     .order('quote_seq', { ascending: false })
   const quotes: QuoteRow[] = (quoteRows ?? []).map((q) => ({ ...q, total: Number(q.total) }))
@@ -452,7 +455,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
             Client-facing lump sum generated from the estimate. Marking sent/accepted moves the course to
             Quoted/Confirmed automatically.
           </p>
-          <QuotesSection instanceId={id} refNumber={inst.ref_number} quotes={quotes} contactEmail={inst.contact_email ?? null} />
+          <QuotesSection instanceId={id} refNumber={inst.ref_number} quotes={quotes} contactEmail={inst.contact_email ?? null} people={quotePeople} />
         </section>
 
         <section className="mb-12">

@@ -3,9 +3,13 @@ import { createQuote, updateQuote, setQuoteStatus, deleteQuote, sendQuote } from
 import { quoteNumber } from '@/lib/quotes'
 import { fmtMoney } from '@/lib/expenses'
 
+export type QuotePerson = { id: string; name: string; email: string | null }
+
 export type QuoteRow = {
   id: string
   accept_token: string
+  prepared_by: string | null
+  prepared_by_name: string | null
   quote_seq: number
   status: string
   issue_date: string
@@ -42,11 +46,13 @@ export default function QuotesSection({
   refNumber,
   quotes,
   contactEmail,
+  people,
 }: {
   instanceId: string
   refNumber: number
   quotes: QuoteRow[]
   contactEmail: string | null
+  people: QuotePerson[]
 }) {
   return (
     <div>
@@ -133,6 +139,15 @@ export default function QuotesSection({
                 <div>
                   <label className={labelCls}>Unit rate note (optional)</label>
                   <input name="unit_rate_note" defaultValue={q.unit_rate_note ?? ''} placeholder="e.g. $440 per student per day" className={inputCls} />
+                </div>
+                <div>
+                  <label className={labelCls}>From (contact &amp; signature on the quote)</label>
+                  <select name="prepared_by" defaultValue={q.prepared_by ?? ''} className={inputCls}>
+                    {!q.prepared_by && <option value="">— choose —</option>}
+                    {people.map((p) => (
+                      <option key={p.id} value={p.id}>{p.name}{p.email ? ` (${p.email})` : ''}</option>
+                    ))}
+                  </select>
                 </div>
                 <div className="sm:col-span-3">
                   <label className={labelCls}>Scope bullets (one per line — shown under the price)</label>
