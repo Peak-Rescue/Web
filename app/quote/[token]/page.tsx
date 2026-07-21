@@ -6,6 +6,7 @@ import { services, categoryMeta, type ServiceCategory } from '@/lib/data/service
 import { QUOTE_MISSION, QUOTE_COMMITMENT, QUOTE_CONTACT, quoteNumber } from '@/lib/quotes'
 import { fmtMoney } from '@/lib/expenses'
 import AcceptForm from './AcceptForm'
+import PrintTrigger from './PrintTrigger'
 
 // Public, tokenized quote page — the client-facing deliverable. Styled to
 // match the public site (dark, red accents, course photography). Printing
@@ -13,8 +14,15 @@ import AcceptForm from './AcceptForm'
 
 export const metadata = { robots: { index: false, follow: false } }
 
-export default async function QuotePage({ params }: { params: Promise<{ token: string }> }) {
+export default async function QuotePage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ token: string }>
+  searchParams: Promise<{ print?: string }>
+}) {
   const { token } = await params
+  const { print } = await searchParams
   if (!/^[0-9a-f-]{36}$/.test(token)) notFound()
 
   const admin = createAdminClient()
@@ -57,6 +65,7 @@ export default async function QuotePage({ params }: { params: Promise<{ token: s
 
   return (
     <main className="min-h-screen bg-zinc-950 text-white print:bg-white print:text-zinc-900">
+      {print === '1' && <PrintTrigger />}
       {/* ── Hero ── */}
       <div className="relative overflow-hidden border-b border-white/[0.06] print:border-zinc-300">
         <div className="absolute top-0 left-0 w-16 h-[3px] bg-pr-red z-10" />

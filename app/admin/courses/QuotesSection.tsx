@@ -75,11 +75,12 @@ export default function QuotesSection({
                   View page
                 </a>
                 <a
-                  href={`/admin/courses/${instanceId}/quote/${q.id}/pdf`}
+                  href={`/quote/${q.accept_token}?print=1`}
                   target="_blank"
                   className="text-xs text-zinc-500 underline hover:text-white transition-colors"
+                  title="Opens the quote page and the print dialog — save as PDF from there"
                 >
-                  PDF
+                  Print / PDF
                 </a>
                 {q.status === 'draft' && (
                   <>
