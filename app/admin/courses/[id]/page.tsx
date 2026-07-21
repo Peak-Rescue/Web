@@ -321,6 +321,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
             instanceId={id}
             qualified={qualified}
             unassigned={unassigned}
+            hasLead={(assigned ?? []).some(a => a.role === 'lead')}
           />
         </section>
 

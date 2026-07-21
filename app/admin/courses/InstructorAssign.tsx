@@ -9,10 +9,12 @@ export default function InstructorAssign({
   instanceId,
   qualified,
   unassigned,
+  hasLead,
 }: {
   instanceId: string
   qualified: Instructor[]
   unassigned: Instructor[]
+  hasLead: boolean
 }) {
   const [showAll, setShowAll] = useState(false)
 
@@ -24,7 +26,8 @@ export default function InstructorAssign({
   return (
     <div>
       <form action={assignInstructor.bind(null, instanceId)} className="flex gap-2 flex-wrap">
-        <select name="instructor_id" className="bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500">
+        <select name="instructor_id" required defaultValue="" className="bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500">
+          <option value="" disabled>Select instructor…</option>
           {!showAll && qualified.length > 0 ? (
             <optgroup label="Qualified">
               {qualified.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
@@ -33,7 +36,7 @@ export default function InstructorAssign({
             toShow.map(i => <option key={i.id} value={i.id}>{i.name}</option>)
           )}
         </select>
-        <select name="role" className="bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500">
+        <select name="role" defaultValue={hasLead ? 'assist' : 'lead'} className="bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500">
           <option value="lead">Lead</option>
           <option value="assist">Assist</option>
         </select>

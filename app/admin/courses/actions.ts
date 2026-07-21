@@ -282,6 +282,8 @@ export async function assignInstructor(instanceId: string, formData: FormData) {
   const instructor_id = formData.get('instructor_id') as string
   const role          = (formData.get('role') as string) || 'assist'
 
+  if (!instructor_id) return
+
   // Distinguish a new assignment from a role change so only the former emails.
   const { data: existing } = await admin
     .from('instance_instructors')
