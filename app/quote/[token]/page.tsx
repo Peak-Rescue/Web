@@ -77,7 +77,7 @@ export default async function QuotePage({
         <div className="absolute inset-x-0 bottom-0">
           <div className="max-w-3xl mx-auto px-6 pb-10">
             <div className="flex items-center justify-between mb-4">
-              <Image src="/logo.png" alt="Peak Rescue" width={150} height={54} className="h-11 w-auto print:hidden" />
+              <Image src="/logo.png" alt="Peak Rescue" width={150} height={54} className="h-11 w-auto invert print:hidden" />
               <span className="font-mono text-xs text-zinc-400">{qNum}</span>
             </div>
             <p className="text-pr-red font-semibold tracking-[0.2em] text-sm uppercase mb-2">
