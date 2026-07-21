@@ -372,10 +372,10 @@ export async function deleteInstance(instanceId: string) {
 // ─── Student invite links ─────────────────────────────────────────────────────
 
 // Creates (or rotates) the unique student signup link for a course instance.
-// With expiresInDays set, the link expires that many days from now. Otherwise
-// it stays valid through the course plus a week of margin; 30 days from now
-// when the course has no end date or already ended.
-export async function generateInviteLink(instanceId: string, expiresInDays?: number) {
+// expiresIn: days from now, 'never' for no expiry, or omitted for the default —
+// valid through the course plus a week of margin; 30 days from now when the
+// course has no end date or already ended.
+export async function generateInviteLink(instanceId: string, expiresIn?: number | 'never') {
   await requireAdmin()
   const admin = createAdminClient()
 
@@ -387,12 +387,14 @@ export async function generateInviteLink(instanceId: string, expiresInDays?: num
   if (!inst) throw new Error('Course not found')
 
   const dayMs = 24 * 60 * 60 * 1000
-  let expires: Date
-  if (expiresInDays != null) {
-    if (!Number.isInteger(expiresInDays) || expiresInDays < 1 || expiresInDays > 365) {
+  let expires: Date | null
+  if (expiresIn === 'never') {
+    expires = null
+  } else if (expiresIn != null) {
+    if (!Number.isInteger(expiresIn) || expiresIn < 1 || expiresIn > 365) {
       throw new Error('Expiry must be between 1 and 365 days')
     }
-    expires = new Date(Date.now() + expiresInDays * dayMs)
+    expires = new Date(Date.now() + expiresIn * dayMs)
   } else {
     const fromCourseEnd = inst.ends_at
       ? new Date(new Date(inst.ends_at + 'T00:00:00').getTime() + 7 * dayMs)
@@ -404,7 +406,7 @@ export async function generateInviteLink(instanceId: string, expiresInDays?: num
 
   const { error } = await admin
     .from('course_instances')
-    .update({ invite_token: crypto.randomUUID(), invite_expires_at: expires.toISOString() })
+    .update({ invite_token: crypto.randomUUID(), invite_expires_at: expires ? expires.toISOString() : null })
     .eq('id', instanceId)
 
   if (error) throw new Error(error.message)

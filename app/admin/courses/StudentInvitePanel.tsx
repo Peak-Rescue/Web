@@ -19,7 +19,7 @@ export default function StudentInvitePanel({
   const [error, setError] = useState<string | null>(null)
   const [duration, setDuration] = useState('')
 
-  const expiresInDays = duration ? Number(duration) : undefined
+  const expiresIn = duration === 'never' ? ('never' as const) : duration ? Number(duration) : undefined
 
   const durationSelect = (
     <select
@@ -33,6 +33,7 @@ export default function StudentInvitePanel({
       <option value="30">Valid for 30 days</option>
       <option value="60">Valid for 60 days</option>
       <option value="90">Valid for 90 days</option>
+      <option value="never">Never expires</option>
     </select>
   )
 
@@ -64,7 +65,7 @@ export default function StudentInvitePanel({
         <div className="flex items-center gap-2 flex-wrap">
           {durationSelect}
           <button
-            onClick={() => run(() => generateInviteLink(instanceId, expiresInDays))}
+            onClick={() => run(() => generateInviteLink(instanceId, expiresIn))}
             disabled={isPending}
             className="px-4 py-2 bg-pr-red hover:bg-pr-red-dark disabled:opacity-50 text-white rounded text-sm font-medium transition-colors"
           >
@@ -93,12 +94,12 @@ export default function StudentInvitePanel({
         <p className={`text-xs ${expired ? 'text-red-400' : 'text-zinc-500'}`}>
           {expiresAt
             ? `${expired ? 'Expired' : 'Expires'} ${new Date(expiresAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
-            : 'No expiry set'}
+            : 'Never expires'}
         </p>
         <div className="flex items-center gap-3">
           {durationSelect}
           <button
-            onClick={() => run(() => generateInviteLink(instanceId, expiresInDays))}
+            onClick={() => run(() => generateInviteLink(instanceId, expiresIn))}
             disabled={isPending}
             className="text-xs text-zinc-400 hover:text-white transition-colors disabled:opacity-50"
           >
