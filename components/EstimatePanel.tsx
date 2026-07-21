@@ -139,10 +139,33 @@ export default function EstimatePanel({
     }
   }
 
+  // A known unit dimension prefills from the course itself.
+  function countForFactor(name: string): number | null {
+    const n = name.toLowerCase()
+    if (n.startsWith('instructor') || n.startsWith('person')) return counts.instructors || null
+    if (n.startsWith('day') || n.startsWith('night')) return counts.days
+    if (n.startsWith('student')) return counts.students
+    return null
+  }
+
   function addFromLibrary(rateId: string) {
     const lib = rates.find((r) => r.id === rateId)
     if (!lib) return
-    schedule([...rows, { key: nextKey.current++, label: lib.label, qty: '1', rate: String(lib.rate), notes: '', factors: null, flabels: [] }], margin)
+    const labels = factorLabels(lib.label)
+    const values = labels.map((l) => countForFactor(l) ?? 1)
+    const qty = values.reduce((p, v) => p * v, 1)
+    schedule(
+      [...rows, {
+        key: nextKey.current++,
+        label: lib.label,
+        qty: String(qty || 1),
+        rate: String(lib.rate),
+        notes: '',
+        factors: labels.length >= 2 ? values.map(String) : null,
+        flabels: [],
+      }],
+      margin
+    )
   }
 
   function addCustom() {
@@ -387,16 +410,6 @@ export default function EstimatePanel({
                   </button>
                 )}
                 <span className="text-xs text-zinc-400 font-medium">= {Number(r.qty) || 0}</span>
-                <span className="ml-auto text-[11px] text-zinc-600 whitespace-nowrap">
-                  This course:{' '}
-                  {[
-                    `${counts.instructors} instructor${counts.instructors === 1 ? '' : 's'}`,
-                    counts.students != null ? `${counts.students} students max` : null,
-                    counts.days != null ? `${counts.days} day${counts.days === 1 ? '' : 's'}` : null,
-                  ]
-                    .filter(Boolean)
-                    .join(' · ')}
-                </span>
               </div>
             )}
             {notesOpen.has(r.key) && (
