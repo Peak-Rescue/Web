@@ -14,7 +14,7 @@ async function requireAdmin() {
   return admin
 }
 
-export type EstimateItemInput = { label: string; qty: number; rate: number }
+export type EstimateItemInput = { label: string; qty: number; rate: number; notes: string | null }
 
 // Replace-style save keeps the action simple and the client authoritative
 // while typing (the panel debounces calls, expense-editor style).
@@ -44,6 +44,7 @@ export async function saveEstimate(
       label: i.label.trim().slice(0, 200),
       qty: Number.isFinite(i.qty) ? i.qty : 0,
       rate: Number.isFinite(i.rate) ? i.rate : 0,
+      notes: i.notes?.trim().slice(0, 500) || null,
       sort_order: idx,
     }))
   if (rows.length > 0) {

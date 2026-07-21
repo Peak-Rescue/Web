@@ -6,7 +6,7 @@ import { saveEstimate, type EstimateItemInput } from '@/app/admin/courses/financ
 
 export type PricingRate = { id: string; label: string; unit: string | null; rate: number }
 
-type Row = { key: number; label: string; qty: string; rate: string }
+type Row = { key: number; label: string; qty: string; rate: string; notes: string }
 
 const MARGIN_PRESETS = [0.2, 0.25, 0.3]
 const SAVE_DEBOUNCE_MS = 900
@@ -21,12 +21,15 @@ export default function EstimatePanel({
 }: {
   instanceId: string
   initialMargin: number
-  initialItems: { label: string; qty: number; rate: number }[]
+  initialItems: { label: string; qty: number; rate: number; notes: string | null }[]
   rates: PricingRate[]
 }) {
   const nextKey = useRef(initialItems.length)
   const [rows, setRows] = useState<Row[]>(
-    initialItems.map((i, idx) => ({ key: idx, label: i.label, qty: String(i.qty), rate: String(i.rate) }))
+    initialItems.map((i, idx) => ({ key: idx, label: i.label, qty: String(i.qty), rate: String(i.rate), notes: i.notes ?? '' }))
+  )
+  const [notesOpen, setNotesOpen] = useState<Set<number>>(
+    () => new Set(initialItems.map((i, idx) => (i.notes ? idx : -1)).filter((k) => k >= 0))
   )
   const [margin, setMargin] = useState(initialMargin)
   const [status, setStatus] = useState<'idle' | 'pending' | 'saving' | 'saved' | 'error'>('idle')
@@ -59,7 +62,7 @@ export default function EstimatePanel({
       const { rows: r, margin: m } = stateRef.current
       const items: EstimateItemInput[] = r
         .filter((row) => row.label.trim())
-        .map((row) => ({ label: row.label, qty: Number(row.qty) || 0, rate: Number(row.rate) || 0 }))
+        .map((row) => ({ label: row.label, qty: Number(row.qty) || 0, rate: Number(row.rate) || 0, notes: row.notes || null }))
       await saveEstimate(instanceId, { margin: m, items })
       setStatus('saved')
     } catch {
@@ -76,11 +79,20 @@ export default function EstimatePanel({
   function addFromLibrary(rateId: string) {
     const lib = rates.find((r) => r.id === rateId)
     if (!lib) return
-    schedule([...rows, { key: nextKey.current++, label: lib.label, qty: '1', rate: String(lib.rate) }], margin)
+    schedule([...rows, { key: nextKey.current++, label: lib.label, qty: '1', rate: String(lib.rate), notes: '' }], margin)
   }
 
   function addCustom() {
-    schedule([...rows, { key: nextKey.current++, label: '', qty: '1', rate: '' }], margin)
+    schedule([...rows, { key: nextKey.current++, label: '', qty: '1', rate: '', notes: '' }], margin)
+  }
+
+  function toggleNotes(key: number) {
+    setNotesOpen((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
   }
 
   function updateRow(key: number, patch: Partial<Row>) {
@@ -111,13 +123,21 @@ export default function EstimatePanel({
       <div className="bg-zinc-900 rounded-lg border border-zinc-800">
         <div className="divide-y divide-zinc-800">
           {rows.map((r) => (
-            <div key={r.key} className="px-3 py-2 flex items-center gap-2">
+            <div key={r.key} className="px-3 py-2">
+            <div className="flex items-center gap-2">
               <input
                 value={r.label}
                 onChange={(e) => updateRow(r.key, { label: e.target.value })}
                 placeholder="Line item"
                 className={`${inputCls} flex-1 min-w-0`}
               />
+              <button
+                onClick={() => toggleNotes(r.key)}
+                title="Notes for this line"
+                className={`text-sm shrink-0 transition-colors ${r.notes || notesOpen.has(r.key) ? 'text-zinc-300' : 'text-zinc-600 hover:text-zinc-400'}`}
+              >
+                📝
+              </button>
               <input
                 type="number"
                 value={r.qty}
@@ -143,6 +163,15 @@ export default function EstimatePanel({
               <button onClick={() => removeRow(r.key)} className="text-zinc-600 hover:text-pr-red-light text-sm shrink-0">
                 ×
               </button>
+            </div>
+            {notesOpen.has(r.key) && (
+              <input
+                value={r.notes}
+                onChange={(e) => updateRow(r.key, { notes: e.target.value })}
+                placeholder="Notes — vendor, assumptions, confirm rate…"
+                className={`${inputCls} w-full mt-1.5 text-xs text-zinc-300`}
+              />
+            )}
             </div>
           ))}
           {rows.length === 0 && (

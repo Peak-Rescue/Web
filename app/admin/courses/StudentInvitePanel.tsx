@@ -17,6 +17,24 @@ export default function StudentInvitePanel({
   const [isPending, startTransition] = useTransition()
   const [copied, setCopied] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [duration, setDuration] = useState('')
+
+  const expiresInDays = duration ? Number(duration) : undefined
+
+  const durationSelect = (
+    <select
+      value={duration}
+      onChange={e => setDuration(e.target.value)}
+      className="bg-zinc-800 border border-zinc-700 rounded px-2 py-2 text-xs text-zinc-300 focus:outline-none focus:border-zinc-500"
+    >
+      <option value="">Valid until course end + 1 week</option>
+      <option value="7">Valid for 7 days</option>
+      <option value="14">Valid for 14 days</option>
+      <option value="30">Valid for 30 days</option>
+      <option value="60">Valid for 60 days</option>
+      <option value="90">Valid for 90 days</option>
+    </select>
+  )
 
   function run(action: () => Promise<void>) {
     setError(null)
@@ -43,13 +61,16 @@ export default function StudentInvitePanel({
           No invite link yet. Generate one and send it to the client contact — students use it to
           create their accounts and land enrolled in this course.
         </p>
-        <button
-          onClick={() => run(() => generateInviteLink(instanceId))}
-          disabled={isPending}
-          className="px-4 py-2 bg-pr-red hover:bg-pr-red-dark disabled:opacity-50 text-white rounded text-sm font-medium transition-colors"
-        >
-          {isPending ? 'Generating…' : 'Generate invite link'}
-        </button>
+        <div className="flex items-center gap-2 flex-wrap">
+          {durationSelect}
+          <button
+            onClick={() => run(() => generateInviteLink(instanceId, expiresInDays))}
+            disabled={isPending}
+            className="px-4 py-2 bg-pr-red hover:bg-pr-red-dark disabled:opacity-50 text-white rounded text-sm font-medium transition-colors"
+          >
+            {isPending ? 'Generating…' : 'Generate invite link'}
+          </button>
+        </div>
         {error && <p className="text-red-400 text-xs mt-2">{error}</p>}
       </div>
     )
@@ -74,9 +95,10 @@ export default function StudentInvitePanel({
             ? `${expired ? 'Expired' : 'Expires'} ${new Date(expiresAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
             : 'No expiry set'}
         </p>
-        <div className="flex gap-3">
+        <div className="flex items-center gap-3">
+          {durationSelect}
           <button
-            onClick={() => run(() => generateInviteLink(instanceId))}
+            onClick={() => run(() => generateInviteLink(instanceId, expiresInDays))}
             disabled={isPending}
             className="text-xs text-zinc-400 hover:text-white transition-colors disabled:opacity-50"
           >

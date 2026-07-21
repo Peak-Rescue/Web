@@ -372,9 +372,10 @@ export async function deleteInstance(instanceId: string) {
 // ─── Student invite links ─────────────────────────────────────────────────────
 
 // Creates (or rotates) the unique student signup link for a course instance.
-// The link stays valid through the course plus a week of margin; 30 days from
-// now when the course has no end date or already ended.
-export async function generateInviteLink(instanceId: string) {
+// With expiresInDays set, the link expires that many days from now. Otherwise
+// it stays valid through the course plus a week of margin; 30 days from now
+// when the course has no end date or already ended.
+export async function generateInviteLink(instanceId: string, expiresInDays?: number) {
   await requireAdmin()
   const admin = createAdminClient()
 
@@ -386,12 +387,20 @@ export async function generateInviteLink(instanceId: string) {
   if (!inst) throw new Error('Course not found')
 
   const dayMs = 24 * 60 * 60 * 1000
-  const fromCourseEnd = inst.ends_at
-    ? new Date(new Date(inst.ends_at + 'T00:00:00').getTime() + 7 * dayMs)
-    : null
-  const expires = fromCourseEnd && fromCourseEnd.getTime() > Date.now()
-    ? fromCourseEnd
-    : new Date(Date.now() + 30 * dayMs)
+  let expires: Date
+  if (expiresInDays != null) {
+    if (!Number.isInteger(expiresInDays) || expiresInDays < 1 || expiresInDays > 365) {
+      throw new Error('Expiry must be between 1 and 365 days')
+    }
+    expires = new Date(Date.now() + expiresInDays * dayMs)
+  } else {
+    const fromCourseEnd = inst.ends_at
+      ? new Date(new Date(inst.ends_at + 'T00:00:00').getTime() + 7 * dayMs)
+      : null
+    expires = fromCourseEnd && fromCourseEnd.getTime() > Date.now()
+      ? fromCourseEnd
+      : new Date(Date.now() + 30 * dayMs)
+  }
 
   const { error } = await admin
     .from('course_instances')

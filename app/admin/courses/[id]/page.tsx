@@ -83,7 +83,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
   const [{ data: estimateRow }, { data: pricingRateRows }] = await Promise.all([
     admin
       .from('course_estimates')
-      .select('margin, estimate_items(label, qty, rate, sort_order)')
+      .select('margin, estimate_items(label, qty, rate, notes, sort_order)')
       .eq('instance_id', id)
       .maybeSingle(),
     admin.from('pricing_rates').select('id, label, unit, rate, default_line').eq('active', true).order('sort_order'),
@@ -97,9 +97,9 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
     .order('quote_seq', { ascending: false })
   const quotes: QuoteRow[] = (quoteRows ?? []).map((q) => ({ ...q, total: Number(q.total) }))
 
-  let estimateItems = ((estimateRow?.estimate_items ?? []) as { label: string; qty: number; rate: number; sort_order: number }[])
+  let estimateItems = ((estimateRow?.estimate_items ?? []) as { label: string; qty: number; rate: number; notes: string | null; sort_order: number }[])
     .sort((a, b) => a.sort_order - b.sort_order)
-    .map((i) => ({ label: i.label, qty: Number(i.qty), rate: Number(i.rate) }))
+    .map((i) => ({ label: i.label, qty: Number(i.qty), rate: Number(i.rate), notes: i.notes }))
 
   // New estimate: pre-populate the always-recurring lines, with quantities
   // guessed from the course itself (editable, and nothing saves until touched).
@@ -117,7 +117,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
     }
     estimateItems = (pricingRateRows ?? [])
       .filter((r) => r.default_line)
-      .map((r) => ({ label: r.label, qty: guessQty(r.label), rate: Number(r.rate) }))
+      .map((r) => ({ label: r.label, qty: guessQty(r.label), rate: Number(r.rate), notes: null }))
   }
 
   const courseType = inst.course_type
