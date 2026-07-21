@@ -226,7 +226,7 @@ export const services: Service[] = [
     heroImage: '/images/services/Canyon.jpeg',
     tagline: 'Technical rescue in swiftwater canyon environments — moving water meets vertical terrain.',
     description:
-      'A five-day collaborative program training rescue team members in the fundamental skills required for swiftwater canyoning rescue operations. Combines technical canyon rope systems with moving-water rescue techniques for teams operating in technical drainages.',
+      'A five-day collaborative program training rescue team members in the fundamental skills required for swiftwater canyon rescue operations. Combines technical canyon rope systems with moving-water rescue techniques for teams operating in technical drainages.',
     details: [
       'Reading canyon hydrology — identifying hydraulics in confined terrain',
       'Rope systems adapted for canyon anchor placements in wet conditions',

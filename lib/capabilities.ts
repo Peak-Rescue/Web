@@ -8,7 +8,7 @@ export const CAPABILITY_META: Record<CapabilityCategory, { label: string }> = {
   industry:       { label: 'Industry' },
   rope_access:    { label: 'Rope Access' },
   aerial_evac:    { label: 'Aerial Evac' },
-  canyoning:      { label: 'Canyoning' },
+  canyoning:      { label: 'Canyon' },
   swift_water:    { label: 'Swift Water' },
   backcountry:    { label: 'Backcountry' },
   confined_space: { label: 'Confined Space' },
