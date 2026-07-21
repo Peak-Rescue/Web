@@ -36,6 +36,8 @@ export const CATEGORY_LABELS: Record<ExpenseCategory, string> = {
   other: 'Other',
 }
 
+// Retired receipt-based meal categories: no longer selectable (meal receipts
+// go under 'Other'), kept so existing reports and PDFs still render.
 export const MEAL_CATEGORIES: ExpenseCategory[] = ['breakfast', 'lunch', 'dinner']
 
 // Categories whose amount is computed from a quantity × rate, not typed in.
@@ -43,7 +45,9 @@ export const COMPUTED_CATEGORIES: ExpenseCategory[] = ['personal_auto', 'per_die
 
 // Flat meal coverage is restricted to FLSA-exempt employees.
 export function categoriesFor(isExempt: boolean): ExpenseCategory[] {
-  const all = Object.keys(CATEGORY_LABELS) as ExpenseCategory[]
+  const all = (Object.keys(CATEGORY_LABELS) as ExpenseCategory[]).filter(
+    (c) => !MEAL_CATEGORIES.includes(c)
+  )
   return isExempt ? all : all.filter((c) => c !== 'per_diem')
 }
 

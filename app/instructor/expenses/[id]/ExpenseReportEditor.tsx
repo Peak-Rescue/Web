@@ -444,7 +444,8 @@ export default function ExpenseReportEditor({
     : null
 
   const isComputed = form && (form.category === 'personal_auto' || form.category === 'per_diem')
-  const isMeal = form && MEAL_CATEGORIES.includes(form.category)
+  // Meal receipts now live under 'Other'; legacy meal lines keep the checkbox too.
+  const showPaidForOthers = form && (form.category === 'other' || MEAL_CATEGORIES.includes(form.category))
   const needsDetails = form && (form.category === 'other' || form.paid_for_others)
   const showDetails = form && (form.category === 'other' || form.category === 'per_diem' || form.paid_for_others)
 
@@ -704,7 +705,7 @@ export default function ExpenseReportEditor({
                     onChange={(e) => setFormAndSchedule(withAutoMeals({ ...form, category: e.target.value as ExpenseCategory, paid_for_others: false }))}
                     className={inputCls}
                   >
-                    {categories.map((c) => (
+                    {(categories.includes(form.category) ? categories : [...categories, form.category]).map((c) => (
                       <option key={c} value={c}>{CATEGORY_LABELS[c]}</option>
                     ))}
                   </select>
@@ -775,7 +776,7 @@ export default function ExpenseReportEditor({
                   </select>
                 </div>
 
-                {isMeal && (
+                {showPaidForOthers && (
                   <div className="flex items-end pb-2">
                     <label className="flex items-center gap-2 text-sm text-zinc-300">
                       <input

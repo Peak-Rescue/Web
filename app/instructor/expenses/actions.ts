@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import {
   type ExpenseCategory,
+  MEAL_CATEGORIES,
   categoriesFor,
   computeItem,
   computeTotals,
@@ -110,7 +111,11 @@ export type ItemPayload = {
 function validateItem(p: ItemPayload, isExempt: boolean) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(p.start_date)) throw new Error('Start date is required')
   if (p.end_date && p.end_date < p.start_date) throw new Error('End date must be on or after the start date')
-  if (!categoriesFor(isExempt).includes(p.category)) throw new Error('Invalid category')
+  // MEAL_CATEGORIES are retired from the picker but stay valid so pre-existing
+  // draft lines can still be edited and re-saved.
+  if (!categoriesFor(isExempt).includes(p.category) && !MEAL_CATEGORIES.includes(p.category)) {
+    throw new Error('Invalid category')
+  }
   if (p.category === 'personal_auto' && !(p.miles && p.miles > 0)) throw new Error('Miles are required for personal auto')
   if (p.category === 'per_diem' && !(p.meal_count && p.meal_count > 0)) throw new Error('Number of meals covered is required')
   if (p.category === 'other' && !p.details?.trim()) throw new Error('Details are required for "Other" expenses')
