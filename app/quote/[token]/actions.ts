@@ -1,6 +1,7 @@
 'use server'
 
 import { headers } from 'next/headers'
+import { after } from 'next/server'
 import { revalidatePath } from 'next/cache'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { quoteNumber } from '@/lib/quotes'
@@ -55,8 +56,10 @@ export async function acceptQuote(
     await admin.from('course_instances').update({ status: 'confirmed' }).eq('id', quote.instance_id)
   }
 
-  // Tell the admins the moment it happens (best-effort).
+  // Tell the admins the moment it happens (best-effort, deferred so the
+  // client's Accept click doesn't wait on the email provider).
   if (process.env.RESEND_API_KEY && inst) {
+    after(async () => {
     try {
       const { data: admins } = await admin.from('profiles').select('email').eq('role', 'admin')
       const recipients = (admins ?? []).map((a) => a.email).filter((e): e is string => Boolean(e))
@@ -80,6 +83,7 @@ export async function acceptQuote(
     } catch (e) {
       console.error('Quote acceptance notification failed:', e)
     }
+    })
   }
 
   revalidatePath(`/admin/courses/${quote.instance_id}`)

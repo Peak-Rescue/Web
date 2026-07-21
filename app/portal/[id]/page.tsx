@@ -42,47 +42,26 @@ export default async function PortalPage({ params }: { params: Promise<{ id: str
 
   const admin = createAdminClient()
 
-  const { data: profile } = await admin.from('profiles').select('role, first_name').eq('id', user.id).single()
-
-  const isAdmin = profile?.role === 'admin'
-
-  // Check if user is assigned as an instructor to this instance (via instructors.profile_id)
-  const { data: instructorAssignment } = await admin
-    .from('instance_instructors')
-    .select('id, role, instructors!inner(profile_id)')
-    .eq('instance_id', id)
-    .eq('instructors.profile_id', user.id)
-    .maybeSingle()
-  const isInstructor = !!instructorAssignment
-  const canManageTasks = isAdmin || instructorAssignment?.role === 'lead'
-
-  // Check access: admin always in, assigned instructors and enrolled students only
-  let hasAccess = isAdmin || isInstructor
-  if (!hasAccess) {
-    const { data } = await admin.from('enrollments').select('id').eq('instance_id', id).eq('user_id', user.id).single()
-    hasAccess = !!data
-  }
-
-  if (!hasAccess) redirect('/dashboard')
-
-  const [{ data: inst }, { data: offDays }] = await Promise.all([
-    admin.from('course_instances')
-      .select('course_type, custom_title, status, location, client_name, notes, ref_number, starts_at, ends_at')
-      .eq('id', id)
-      .single(),
-    admin.from('instance_off_days')
-      .select('off_date, end_date')
+  // Access inputs in one parallel round.
+  const [{ data: profile }, { data: instructorAssignment }, { data: enrollment }] = await Promise.all([
+    admin.from('profiles').select('role, first_name').eq('id', user.id).single(),
+    admin
+      .from('instance_instructors')
+      .select('id, role, instructors!inner(profile_id)')
       .eq('instance_id', id)
-      .order('off_date'),
+      .eq('instructors.profile_id', user.id)
+      .maybeSingle(),
+    admin.from('enrollments').select('id').eq('instance_id', id).eq('user_id', user.id).maybeSingle(),
   ])
 
-  if (!inst) notFound()
+  const isAdmin = profile?.role === 'admin'
+  const isInstructor = !!instructorAssignment
+  const canManageTasks = isAdmin || instructorAssignment?.role === 'lead'
+  const hasAccess = isAdmin || isInstructor || !!enrollment
+  if (!hasAccess) redirect('/dashboard')
 
-  const blocks = inst.starts_at && inst.ends_at
-    ? computeBlocks(inst.starts_at, inst.ends_at, offDays ?? [])
-    : []
-
-  // Modules: instructors + admins see all; students see student+both only
+  // Everything else in a second parallel round (roles known, filters set).
+  const showTasks = isAdmin || isInstructor
   const audienceFilter = isAdmin || isInstructor ? null : ['student', 'both']
 
   let modulesQuery = admin
@@ -90,39 +69,40 @@ export default async function PortalPage({ params }: { params: Promise<{ id: str
     .select('id, title, audience, order, course_items(id, title, type, url, description, order)')
     .eq('instance_id', id)
     .order('order')
-
   if (audienceFilter) {
     modulesQuery = modulesQuery.in('audience', audienceFilter)
   }
 
-  const { data: modules } = await modulesQuery
-
-  // Assigned instructors
-  const { data: instructors } = await admin
-    .from('instance_instructors')
-    .select('role, instructors(name)')
-    .eq('instance_id', id)
-
-  // Course tasks (team only — students never see them)
-  const showTasks = isAdmin || isInstructor
-  let tasks: CourseTask[] = []
-  let taskPeople: TaskPerson[] = []
-  if (showTasks) {
-    const [taskRows, { data: peopleRows }] = await Promise.all([
-      loadTasksWithDocs(admin, id),
-      admin
-        .from('profiles')
-        .select('id, first_name, last_name')
-        .in('role', ['admin', 'instructor'])
-        .order('first_name'),
+  const [{ data: inst }, { data: offDays }, { data: modules }, { data: instructors }, taskRows, { data: peopleRows }] =
+    await Promise.all([
+      admin.from('course_instances')
+        .select('course_type, custom_title, status, location, client_name, notes, ref_number, starts_at, ends_at')
+        .eq('id', id)
+        .single(),
+      admin.from('instance_off_days')
+        .select('off_date, end_date')
+        .eq('instance_id', id)
+        .order('off_date'),
+      modulesQuery,
+      admin.from('instance_instructors').select('role, instructors(name)').eq('instance_id', id),
+      showTasks ? loadTasksWithDocs(admin, id) : Promise.resolve([]),
+      showTasks
+        ? admin.from('profiles').select('id, first_name, last_name').in('role', ['admin', 'instructor']).order('first_name')
+        : Promise.resolve({ data: [] }),
     ])
-    // Managers see the full checklist (they assign from it); everyone else
-    // sees only tasks that have actually been assigned to someone.
-    tasks = canManageTasks ? taskRows : taskRows.filter((t) => t.assigned_to)
-    taskPeople = (peopleRows ?? [])
-      .map((p) => ({ id: p.id, name: [p.first_name, p.last_name].filter(Boolean).join(' ') }))
-      .filter((p) => p.name)
-  }
+
+  if (!inst) notFound()
+
+  const blocks = inst.starts_at && inst.ends_at
+    ? computeBlocks(inst.starts_at, inst.ends_at, offDays ?? [])
+    : []
+
+  // Managers see the full checklist (they assign from it); everyone else
+  // sees only tasks that have actually been assigned to someone.
+  const tasks: CourseTask[] = canManageTasks ? taskRows : taskRows.filter((t) => t.assigned_to)
+  const taskPeople: TaskPerson[] = (peopleRows ?? [])
+    .map((p) => ({ id: p.id, name: [p.first_name, p.last_name].filter(Boolean).join(' ') }))
+    .filter((p) => p.name)
 
   const fmtLong = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'long', day: 'numeric', year: 'numeric' })
 
