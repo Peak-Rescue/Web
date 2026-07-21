@@ -3,7 +3,6 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createInstance } from './actions'
-import { CourseTypeSelect } from './CourseTypeSelect'
 import { courseShortName } from '@/lib/courses'
 import CourseCalendar, { type CalendarCourse } from '@/components/CourseCalendar'
 
@@ -133,103 +132,15 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
           <p className="text-zinc-400 mt-1">Schedule and manage course instances</p>
         </div>
 
-        {/* New instance form */}
-        <details className="mb-10 group">
-          <summary className="cursor-pointer list-none">
-            <div className="inline-flex items-center gap-2 px-4 py-2 bg-pr-red hover:bg-pr-red-dark text-white rounded font-medium text-sm transition-colors">
-              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-              </svg>
-              New Course Instance
-            </div>
-          </summary>
-
-          <form action={createInstance} className="mt-4 p-6 bg-zinc-900 rounded-lg border border-zinc-800 grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <CourseTypeSelect />
-
-            <div>
-              <label className="block text-xs text-zinc-400 mb-1">Status</label>
-              <select name="status" defaultValue="tentative" className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500">
-                <option value="tentative">Tentative</option>
-                <option value="quoted">Quoted</option>
-                <option value="confirmed">Confirmed</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-xs text-zinc-400 mb-1">Location</label>
-              <input name="location" placeholder="City, base, venue…" className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
-            </div>
-
-            <div>
-              <label className="block text-xs text-zinc-400 mb-1">Start date</label>
-              <input name="starts_at" type="date" className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
-            </div>
-
-            <div>
-              <label className="block text-xs text-zinc-400 mb-1">End date</label>
-              <input name="ends_at" type="date" className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
-            </div>
-
-            <div>
-              <label className="block text-xs text-zinc-400 mb-1">Client / organization</label>
-              <input name="client_name" placeholder="e.g. 75th Ranger Regiment" className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
-            </div>
-
-            <div>
-              <label className="block text-xs text-zinc-400 mb-1">Point of contact</label>
-              <input name="contact_name" placeholder="Full name" className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
-            </div>
-
-            <div>
-              <label className="block text-xs text-zinc-400 mb-1">Contact phone</label>
-              <input name="contact_phone" type="tel" placeholder="+1 555 000 0000" className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
-            </div>
-
-            <div>
-              <label className="block text-xs text-zinc-400 mb-1">Contact email</label>
-              <input name="contact_email" type="email" placeholder="poc@example.mil" className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
-            </div>
-
-            <div>
-              <label className="block text-xs text-zinc-400 mb-1">Max students</label>
-              <input name="max_students" type="number" min="1" placeholder="e.g. 20" className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
-            </div>
-
-            <div>
-              <label className="block text-xs text-zinc-400 mb-1">Instructor slots</label>
-              <input name="instructor_slots" type="number" min="1" placeholder="e.g. 3" className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
-            </div>
-
-            <div className="sm:col-span-2">
-              <label className="block text-xs text-zinc-400 mb-1">Notes</label>
-              <textarea name="notes" rows={2} placeholder="Contract number, special requirements, logistics…" className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500 resize-none" />
-            </div>
-
-            <div className="sm:col-span-2">
-              <label className="block text-xs text-zinc-400 mb-1">Copy cost estimate from a previous course (optional)</label>
-              <select name="copy_estimate_from" defaultValue="" className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500">
-                <option value="">— start fresh —</option>
-                {instances
-                  .filter((i) => ((i as unknown as { course_estimates?: { count: number }[] }).course_estimates?.[0]?.count ?? 0) > 0)
-                  .map((i) => (
-                    <option key={i.id} value={i.id}>
-                      {courseShortName(i.course_type, i.custom_title)}
-                      {i.client_name ? ` · ${i.client_name}` : ''}
-                      {i.starts_at ? ` · ${i.starts_at.slice(0, 7)}` : ''}
-                      {` (PR-${String(i.ref_number).padStart(4, '0')})`}
-                    </option>
-                  ))}
-              </select>
-            </div>
-
-            <div className="sm:col-span-2">
-              <button type="submit" className="px-5 py-2 bg-pr-red hover:bg-pr-red-dark text-white rounded font-medium text-sm transition-colors">
-                Create &amp; edit content →
-              </button>
-            </div>
-          </form>
-        </details>
+        {/* One-click create: lands on the full course page with everything editable */}
+        <form action={createInstance} className="mb-10">
+          <button type="submit" className="inline-flex items-center gap-2 px-4 py-2 bg-pr-red hover:bg-pr-red-dark text-white rounded font-medium text-sm transition-colors">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+            New Course Instance
+          </button>
+        </form>
 
         {/* ── Calendar (collapsed by default; auto-open while navigating months) ── */}
         <details open={Boolean(cal)} className="mb-16 group">

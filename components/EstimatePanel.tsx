@@ -258,9 +258,6 @@ export default function EstimatePanel({
               </option>
             ))}
           </select>
-          <button onClick={addCustom} className="text-sm text-zinc-400 hover:text-white transition-colors">
-            + Custom item
-          </button>
           <a
             href="/admin/expenses/rates"
             target="_blank"
@@ -268,6 +265,12 @@ export default function EstimatePanel({
           >
             Edit library rates →
           </a>
+        </div>
+
+        <div className="px-3 py-2.5 border-t border-zinc-800">
+          <button onClick={addCustom} className="text-sm text-zinc-400 hover:text-white transition-colors">
+            + Custom item
+          </button>
         </div>
 
         <div className="px-4 py-3 border-t border-zinc-800 flex items-end justify-between gap-4 flex-wrap">

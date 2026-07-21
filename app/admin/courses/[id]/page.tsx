@@ -185,8 +185,8 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
         </div>
 
         {/* ── Details ─────────────────────────────────────────────── */}
-        <section className="mb-10">
-          <h2 className="text-lg font-semibold mb-4">Details</h2>
+        <details open className="mb-8 group">
+          <summary className="cursor-pointer list-none text-lg font-semibold select-none mb-3"><span className="text-zinc-600 text-sm mr-2 inline-block transition-transform group-open:rotate-90">▶</span>Details</summary>
           <form action={updateDetailsWithId} className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-6 bg-zinc-900 rounded-lg border border-zinc-800">
             <CourseTypeSelect
               defaultCategory={inst.course_category}
@@ -239,11 +239,11 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
               <SaveButton className="px-4 py-2 bg-pr-red hover:bg-pr-red-dark text-white rounded text-sm font-medium transition-colors">Save details</SaveButton>
             </div>
           </form>
-        </section>
+        </details>
 
         {/* ── Schedule ─────────────────────────────────────────────── */}
-        <section className="mb-10">
-          <h2 className="text-lg font-semibold mb-4">Schedule</h2>
+        <details open className="mb-8 group">
+          <summary className="cursor-pointer list-none text-lg font-semibold select-none mb-3"><span className="text-zinc-600 text-sm mr-2 inline-block transition-transform group-open:rotate-90">▶</span>Schedule</summary>
 
           {/* Overall window — saved via updateInstance */}
           <form action={updateDatesWithId} className="grid grid-cols-2 gap-4 p-4 bg-zinc-900 border border-zinc-800 rounded-lg mb-4">
@@ -315,11 +315,11 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
               </div>
             </div>
           )}
-        </section>
+        </details>
 
         {/* ── Instructors ──────────────────────────────────────────── */}
-        <section className="mb-10">
-          <h2 className="text-lg font-semibold mb-4">Instructors</h2>
+        <details className="mb-8 group">
+          <summary className="cursor-pointer list-none text-lg font-semibold select-none mb-3"><span className="text-zinc-600 text-sm mr-2 inline-block transition-transform group-open:rotate-90">▶</span>Instructors</summary>
 
           {(assigned ?? []).length > 0 && (
             <div className="mb-4 space-y-2">
@@ -348,16 +348,16 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
             unassigned={unassigned}
             hasLead={(assigned ?? []).some(a => a.role === 'lead')}
           />
-        </section>
+        </details>
 
         {/* ── Students ─────────────────────────────────────────────── */}
-        <section className="mb-10">
-          <h2 className="text-lg font-semibold mb-1">
+        <details className="mb-8 group">
+          <summary className="cursor-pointer list-none text-lg font-semibold select-none mb-3"><span className="text-zinc-600 text-sm mr-2 inline-block transition-transform group-open:rotate-90">▶</span>
             Students
             <span className="ml-2 text-sm font-normal text-zinc-500">
               {enrollments.length}{inst.max_students ? ` / ${inst.max_students}` : ''} enrolled
             </span>
-          </h2>
+          </summary>
           <p className="text-xs text-zinc-500 mb-4">
             Portal accounts are invite-only — share this course&rsquo;s link with the client contact
             and students enroll themselves.
@@ -390,11 +390,11 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
             expiresAt={inst.invite_expires_at ?? null}
             expired={!!inst.invite_expires_at && new Date(inst.invite_expires_at) < new Date()}
           />
-        </section>
+        </details>
 
         {/* ── Content modules ──────────────────────────────────────── */}
-        <section className="mb-10">
-          <h2 className="text-lg font-semibold mb-1">Content</h2>
+        <details className="mb-8 group">
+          <summary className="cursor-pointer list-none text-lg font-semibold select-none mb-3"><span className="text-zinc-600 text-sm mr-2 inline-block transition-transform group-open:rotate-90">▶</span>Content</summary>
           <p className="text-xs text-zinc-500 mb-4">Sections visible to <span className="text-blue-400">students</span>, <span className="text-teal-400">instructors</span>, or <span className="text-zinc-400">both</span>.</p>
 
           <div className="space-y-6 mb-6">
@@ -468,10 +468,10 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
             </div>
             <button type="submit" className="px-4 py-2 bg-pr-red hover:bg-pr-red-dark text-white rounded text-sm font-medium transition-colors">Add section</button>
           </form>
-        </section>
+        </details>
 
-        <section className="mb-12">
-          <h2 className="text-lg font-semibold mb-1">Financials — Estimates</h2>
+        <details className="mb-8 group">
+          <summary className="cursor-pointer list-none text-lg font-semibold select-none mb-3"><span className="text-zinc-600 text-sm mr-2 inline-block transition-transform group-open:rotate-90">▶</span>Financials — Estimates</summary>
           <p className="text-xs text-zinc-500 mb-4">
             Internal cost build-up — never shown to instructors or clients. Add alternate COAs to price different
             ways of running the course; quotes are generated from the COA you pick.
@@ -513,10 +513,10 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
               </form>
             )}
           </div>
-        </section>
+        </details>
 
-        <section className="mb-12">
-          <h2 className="text-lg font-semibold mb-1">Financials — Quotes</h2>
+        <details className="mb-8 group">
+          <summary className="cursor-pointer list-none text-lg font-semibold select-none mb-3"><span className="text-zinc-600 text-sm mr-2 inline-block transition-transform group-open:rotate-90">▶</span>Financials — Quotes</summary>
           <p className="text-xs text-zinc-500 mb-4">
             Client-facing lump sum generated from the estimate. Marking sent/accepted moves the course to
             Quoted/Confirmed automatically.
@@ -529,10 +529,10 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
             people={quotePeople}
             estimates={estimatePanels.filter((e) => e.id).map((e) => ({ id: e.id!, title: e.title }))}
           />
-        </section>
+        </details>
 
-        <section className="mb-12">
-          <h2 className="text-lg font-semibold mb-1">Tasks</h2>
+        <details className="mb-8 group">
+          <summary className="cursor-pointer list-none text-lg font-semibold select-none mb-3"><span className="text-zinc-600 text-sm mr-2 inline-block transition-transform group-open:rotate-90">▶</span>Tasks</summary>
           <p className="text-xs text-zinc-500 mb-4">
             Course prep checklist — assignees are notified by email and see their tasks on the portal home page.
           </p>
@@ -543,7 +543,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
             canManage
             currentUserId={user.id}
           />
-        </section>
+        </details>
 
         <div className="pt-4 border-t border-zinc-800">
           <Link href={`/portal/${id}`} className="text-sm text-zinc-400 hover:text-white transition-colors">
