@@ -192,6 +192,17 @@ export default function EstimatePanel({
   }
 
   // The rate's unit text, e.g. "per mile", "per person per night".
+  // Labels for the factor boxes, from the rate's unit: "per instructor per
+  // day" → ['instructors', 'days']. Extra boxes beyond the unit are spares.
+  function factorLabels(label: string): string[] {
+    const unit = rates.find((r) => r.label === label)?.unit
+    if (!unit) return []
+    return unit
+      .replace(/^per\s+/, '')
+      .split(/\s+per\s+/)
+      .map((f) => (f.endsWith('s') ? f : `${f}s`))
+  }
+
   function rateUnit(label: string): string | null {
     return rates.find((r) => r.label === label)?.unit ?? null
   }
@@ -314,16 +325,21 @@ export default function EstimatePanel({
               <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
                 <span className="text-xs text-zinc-500">Qty =</span>
                 {rowFactors(r).map((f, i) => (
-                  <span key={i} className="flex items-center gap-1.5">
-                    {i > 0 && <span className="text-xs text-zinc-600">×</span>}
-                    <input
-                      type="number"
-                      value={f}
-                      min="0"
-                      step="0.5"
-                      onChange={(e) => setFactor(r.key, i, e.target.value)}
-                      className={`${inputCls} w-16 text-right`}
-                    />
+                  <span key={i} className="flex items-start gap-1.5">
+                    {i > 0 && <span className="text-xs text-zinc-600 mt-2">×</span>}
+                    <span className="flex flex-col items-center">
+                      <input
+                        type="number"
+                        value={f}
+                        min="0"
+                        step="0.5"
+                        onChange={(e) => setFactor(r.key, i, e.target.value)}
+                        className={`${inputCls} w-16 text-right`}
+                      />
+                      <span className="mt-0.5 text-[10px] text-zinc-600">
+                        {factorLabels(r.label)[i] ?? (Number(f) === 1 ? 'unused' : 'extra')}
+                      </span>
+                    </span>
                   </span>
                 ))}
                 <span className="text-xs text-zinc-400 font-medium">= {Number(r.qty) || 0}</span>
