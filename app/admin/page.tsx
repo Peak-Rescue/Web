@@ -30,7 +30,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     status: string
   }
   // Profile gate + personalized data in one parallel round.
-  const [{ data: profile }, { data: assignmentRows }, myTasks, allInstancesRes] = await Promise.all([
+  const [{ data: profile }, { data: assignmentRows }, myTasks, allInstancesRes, { data: inviteRows }] = await Promise.all([
     admin.from('profiles').select('role, first_name, last_name, email').eq('id', user.id).single(),
     admin
       .from('instance_instructors')
@@ -43,6 +43,12 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
           .select('id, ref_number, course_type, custom_title, client_name, location, starts_at, ends_at, status')
           .neq('status', 'cancelled')
       : Promise.resolve({ data: null }),
+    admin
+      .from('course_interest_invites')
+      .select('token, course_instances!inner(id, ref_number, course_type, custom_title, client_name, location, starts_at, ends_at, status), instructors!inner(profile_id)')
+      .eq('instructors.profile_id', user.id)
+      .is('interested', null)
+      .not('sent_at', 'is', null),
   ])
 
   if (!['admin', 'instructor'].includes(profile?.role ?? '')) redirect('/dashboard')
@@ -63,6 +69,12 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   const myCourses = (assignmentRows ?? [])
     .map((a) => ({ role: a.role as string, inst: a.course_instances as unknown as InstRow }))
     .filter((c) => c.inst && c.inst.status !== 'cancelled' && (!c.inst.ends_at || c.inst.ends_at >= today))
+    .sort((a, b) => (a.inst.starts_at ?? '9999').localeCompare(b.inst.starts_at ?? '9999'))
+
+  // Unanswered staffing-interest invites for upcoming courses.
+  const openInvites = (inviteRows ?? [])
+    .map((r) => ({ token: r.token as string, inst: r.course_instances as unknown as InstRow }))
+    .filter((r) => r.inst && r.inst.status !== 'cancelled' && (!r.inst.ends_at || r.inst.ends_at >= today))
     .sort((a, b) => (a.inst.starts_at ?? '9999').localeCompare(b.inst.starts_at ?? '9999'))
 
   // Calendar: assigned courses by default, every course when scope=all (past
@@ -174,6 +186,35 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
                     }`}
                   >
                     {c.role}
+                  </span>
+                </Link>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {openInvites.length > 0 && (
+          <section className="mb-10">
+            <h2 className="text-sm font-medium text-zinc-500 uppercase tracking-wide mb-3">Courses looking for staff</h2>
+            <div className="space-y-2">
+              {openInvites.map((r) => (
+                <Link
+                  key={r.token}
+                  href={`/staffing/${r.token}`}
+                  className="flex items-center justify-between px-4 py-3 bg-zinc-900 border border-yellow-900/50 rounded-lg hover:border-pr-red transition-colors"
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium truncate">
+                      {courseShortName(r.inst.course_type, r.inst.custom_title)}
+                      {r.inst.client_name && <span className="text-zinc-400 font-normal"> · {r.inst.client_name}</span>}
+                    </p>
+                    <p className="text-xs text-zinc-500 mt-0.5">
+                      {fmtRange(r.inst)}
+                      {r.inst.location ? ` · ${r.inst.location}` : ''}
+                    </p>
+                  </div>
+                  <span className="shrink-0 text-[10px] font-medium px-2 py-0.5 rounded-full border border-yellow-800 bg-yellow-900/20 text-yellow-300/90">
+                    interested?
                   </span>
                 </Link>
               ))}

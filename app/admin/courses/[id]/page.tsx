@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { updateInstanceDetails, updateInstanceDates, addOffDay, removeOffDay, addModule, deleteModule, addItem, deleteItem, removeInstructor, removeEnrollment } from '../actions'
 import { CourseTypeSelect } from '../CourseTypeSelect'
 import InstructorAssign from '../InstructorAssign'
+import StaffingInterest from '../StaffingInterest'
 import StudentInvitePanel from '../StudentInvitePanel'
 import AutoSaveForm from '@/components/AutoSaveForm'
 import DeleteInstanceButton from '../DeleteInstanceButton'
@@ -56,7 +57,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
     admin.from('instance_off_days').select('id, off_date, end_date').eq('instance_id', id).order('off_date'),
     admin.from('course_modules').select('id, title, audience, order, course_items(id, title, type, url, description, order)').eq('instance_id', id).order('order'),
     admin.from('instance_instructors').select('instructor_id, role, instructors(name)').eq('instance_id', id),
-    admin.from('instructors').select('id, name, instructor_role, instructor_capabilities(category, role)').eq('active', true).order('name'),
+    admin.from('instructors').select('id, name, email, instructor_role, instructor_capabilities(category, role)').eq('active', true).order('name'),
   ])
 
   if (!inst) notFound()
@@ -73,6 +74,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
     { data: quoteRows },
     { data: estimateSourceRows },
     { data: templateRows },
+    { data: interestInviteRows },
   ] = await Promise.all([
     admin.from('enrollments').select('id, enrolled_at, profiles(first_name, last_name, email)').eq('instance_id', id).order('enrolled_at'),
     admin.from('expense_items').select('id', { count: 'exact', head: true }).eq('instance_id', id),
@@ -84,6 +86,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
     admin.from('course_quotes').select('id, accept_token, prepared_by, prepared_by_name, quote_seq, status, issue_date, valid_until, total, unit_rate_note, scope_bullets, course_blurb, sent_at, accepted_at, accepted_name').eq('instance_id', id).order('quote_seq', { ascending: false }),
     admin.from('course_instances').select('id, ref_number, course_type, custom_title, client_name, starts_at, course_estimates(count)').neq('id', id).order('starts_at', { ascending: false, nullsFirst: false }).limit(60),
     admin.from('course_task_templates').select('id, title').eq('active', true).order('sort_order'),
+    admin.from('course_interest_invites').select('id, instructor_id, sent_at, responded_at, interested, note').eq('instance_id', id).order('created_at'),
   ])
 
   const enrollments = enrollmentRows ?? []
@@ -169,6 +172,28 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
   const qualified = unassigned.filter(i =>
     (i.instructor_capabilities as { category: string; role: string }[]).some(c => matchingCategories.includes(c.category))
   )
+
+  const instructorById = new Map((allInstructors ?? []).map(i => [i.id, i]))
+  const interestCandidates = unassigned.map(i => {
+    const caps = i.instructor_capabilities as { category: string; role: string }[]
+    return {
+      id: i.id,
+      name: i.name,
+      hasEmail: Boolean(i.email),
+      qualified: caps.some(c => matchingCategories.includes(c.category)),
+      leadQualified: caps.some(c => matchingCategories.includes(c.category) && c.role === 'lead'),
+    }
+  })
+  const interestInvites = (interestInviteRows ?? []).map(r => ({
+    id: r.id,
+    instructorId: r.instructor_id,
+    name: instructorById.get(r.instructor_id)?.name ?? 'Former instructor',
+    sentAt: r.sent_at,
+    respondedAt: r.responded_at,
+    interested: r.interested,
+    note: r.note,
+    assigned: assignedIds.has(r.instructor_id),
+  }))
 
   const updateDetailsWithId = updateInstanceDetails.bind(null, id)
   const updateDatesWithId = updateInstanceDates.bind(null, id)
@@ -362,6 +387,13 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
             instanceId={id}
             qualified={qualified}
             unassigned={unassigned}
+            hasLead={(assigned ?? []).some(a => a.role === 'lead')}
+          />
+
+          <StaffingInterest
+            instanceId={id}
+            candidates={interestCandidates}
+            invites={interestInvites}
             hasLead={(assigned ?? []).some(a => a.role === 'lead')}
           />
         </details>
