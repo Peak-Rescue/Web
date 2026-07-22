@@ -39,8 +39,8 @@ function fmtDate(d: string) {
 }
 
 // Server-rendered quotes list: drafts are editable and deletable, every quote
-// has a PDF, and status moves via explicit buttons (send/accept automation
-// comes with the acceptance-page slice).
+// links to its client-facing page, and status moves via explicit buttons
+// (send/accept automation comes with the acceptance-page slice).
 export default function QuotesSection({
   instanceId,
   refNumber,
@@ -81,14 +81,6 @@ export default function QuotesSection({
                   className="text-xs text-zinc-300 underline hover:text-white transition-colors"
                 >
                   View page
-                </a>
-                <a
-                  href={`/quote/${q.accept_token}?print=1`}
-                  target="_blank"
-                  className="text-xs text-zinc-500 underline hover:text-white transition-colors"
-                  title="Opens the quote page and the print dialog — save as PDF from there"
-                >
-                  Print / PDF
                 </a>
                 {q.status === 'draft' && (
                   <>
@@ -156,7 +148,7 @@ export default function QuotesSection({
                   <textarea name="scope_bullets" rows={3} defaultValue={(q.scope_bullets ?? []).join('\n')} className={`${inputCls} resize-y`} />
                 </div>
                 <div className="sm:col-span-3">
-                  <label className={labelCls}>Course overview (page 2 of the PDF; leave empty to skip the page)</label>
+                  <label className={labelCls}>Course overview (shown above the price on the quote page; leave empty to skip it)</label>
                   <textarea name="course_blurb" rows={4} defaultValue={q.course_blurb ?? ''} className={`${inputCls} resize-y`} />
                 </div>
                 <div className="sm:col-span-3">

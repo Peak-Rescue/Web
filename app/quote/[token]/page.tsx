@@ -6,23 +6,18 @@ import { services, categoryMeta, type ServiceCategory } from '@/lib/data/service
 import { QUOTE_MISSION, QUOTE_COMMITMENT, QUOTE_CONTACT, quoteNumber } from '@/lib/quotes'
 import { fmtMoney } from '@/lib/expenses'
 import AcceptForm from './AcceptForm'
-import PrintTrigger from './PrintTrigger'
 
 // Public, tokenized quote page — the client-facing deliverable. Styled to
-// match the public site (dark, red accents, course photography). Printing
-// gets a light theme via print: variants so save-as-PDF comes out clean.
+// match the public site (dark, red accents, course photography).
 
 export const metadata = { robots: { index: false, follow: false } }
 
 export default async function QuotePage({
   params,
-  searchParams,
 }: {
   params: Promise<{ token: string }>
-  searchParams: Promise<{ print?: string }>
 }) {
   const { token } = await params
-  const { print } = await searchParams
   if (!/^[0-9a-f-]{36}$/.test(token)) notFound()
 
   const admin = createAdminClient()
@@ -64,24 +59,14 @@ export default async function QuotePage({
   const accepted = quote.status === 'accepted'
 
   return (
-    <main className="min-h-screen bg-zinc-950 text-white print:bg-white print:text-zinc-900">
-      {print === '1' && <PrintTrigger />}
-
-      {/* Print letterhead — the nav (and its logo) doesn't print, so the
-          document gets a bold typographic wordmark instead. */}
-      <div className="hidden print:block max-w-3xl mx-auto px-6 pt-8">
-        <p className="text-2xl font-black tracking-tight text-zinc-900">
-          PEAK RESCUE <span className="text-pr-red">MOUNTAIN GUIDES</span>
-        </p>
-        <div className="mt-2 h-[3px] w-24 bg-pr-red" />
-      </div>
+    <main className="min-h-screen bg-zinc-950 text-white">
       {/* ── Hero ── */}
-      <div className="relative overflow-hidden border-b border-white/[0.06] print:border-zinc-300">
+      <div className="relative overflow-hidden border-b border-white/[0.06]">
         <div className="absolute top-0 left-0 w-16 h-[3px] bg-pr-red z-10" />
         <div className="absolute top-0 left-0 w-[3px] h-16 bg-pr-red z-10" />
-        <div className="relative w-full h-72 md:h-[420px] print:h-40">
+        <div className="relative w-full h-72 md:h-[420px]">
           <Image src={heroImage} alt={courseName} fill priority className="object-cover object-center" />
-          <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/60 to-zinc-950/20 print:hidden" />
+          <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/60 to-zinc-950/20" />
         </div>
         <div className="absolute inset-x-0 bottom-0">
           <div className="max-w-3xl mx-auto px-6 pb-10">
@@ -106,19 +91,19 @@ export default async function QuotePage({
       <div className="max-w-3xl mx-auto px-6">
         {/* ── Status banners ── */}
         {accepted && (
-          <div className="mt-8 p-4 bg-teal-900/30 border border-teal-800 rounded-lg text-teal-200 text-sm print:hidden">
+          <div className="mt-8 p-4 bg-teal-900/30 border border-teal-800 rounded-lg text-teal-200 text-sm">
             ✅ This quote was accepted{quote.accepted_name ? ` by ${quote.accepted_name}` : ''}
             {quote.accepted_at ? ` on ${fmtLong(quote.accepted_at.slice(0, 10))}` : ''}. We&apos;ll be in touch about
             next steps — thank you!
           </div>
         )}
         {expired && !accepted && (
-          <div className="mt-8 p-4 bg-yellow-900/30 border border-yellow-800 rounded-lg text-yellow-200 text-sm print:hidden">
+          <div className="mt-8 p-4 bg-yellow-900/30 border border-yellow-800 rounded-lg text-yellow-200 text-sm">
             This quote expired on {fmtLong(quote.valid_until!)}. Contact us for an updated quote — details below.
           </div>
         )}
         {quote.status === 'draft' && (
-          <div className="mt-8 p-4 bg-zinc-900 border border-zinc-700 rounded-lg text-zinc-400 text-sm print:hidden">
+          <div className="mt-8 p-4 bg-zinc-900 border border-zinc-700 rounded-lg text-zinc-400 text-sm">
             Draft preview — this quote hasn&apos;t been sent yet, so acceptance is disabled.
           </div>
         )}
@@ -127,19 +112,19 @@ export default async function QuotePage({
         {quote.course_blurb && (
           <section className="mt-12">
             <h2 className="text-2xl font-bold mb-4">{courseName}</h2>
-            <p className="text-zinc-300 leading-relaxed whitespace-pre-wrap print:text-zinc-700">{quote.course_blurb}</p>
+            <p className="text-zinc-300 leading-relaxed whitespace-pre-wrap">{quote.course_blurb}</p>
           </section>
         )}
 
         {/* ── The quote ── */}
-        <section className="mt-12 p-8 bg-zinc-900 border border-zinc-800 rounded-xl print:bg-white print:border-zinc-300">
+        <section className="mt-12 p-8 bg-zinc-900 border border-zinc-800 rounded-xl">
           <p className="text-pr-red font-semibold tracking-[0.2em] text-xs uppercase mb-3">Total Price</p>
           <p className="text-5xl font-bold tracking-tight mb-2">{fmtMoney(Number(quote.total))}</p>
           {quote.unit_rate_note && <p className="text-zinc-400 mb-4">{quote.unit_rate_note}</p>}
           {(quote.scope_bullets ?? []).length > 0 && (
             <ul className="mt-6 space-y-2.5">
               {(quote.scope_bullets as string[]).map((b, i) => (
-                <li key={i} className="flex gap-3 text-zinc-200 print:text-zinc-700">
+                <li key={i} className="flex gap-3 text-zinc-200">
                   <span className="text-pr-red mt-0.5">▸</span>
                   <span>{b}</span>
                 </li>
@@ -153,7 +138,7 @@ export default async function QuotePage({
 
         {/* ── Accept ── */}
         {!accepted && !expired && quote.status === 'sent' && (
-          <section className="mt-8 p-8 bg-zinc-900 border border-pr-red/40 rounded-xl print:hidden">
+          <section className="mt-8 p-8 bg-zinc-900 border border-pr-red/40 rounded-xl">
             <h2 className="text-xl font-bold mb-1">Ready to lock in these dates?</h2>
             <p className="text-sm text-zinc-400 mb-6">
               Accepting reserves your training dates. Contracting paperwork can follow through your normal channels.
@@ -166,12 +151,12 @@ export default async function QuotePage({
         <section className="mt-12 grid md:grid-cols-2 gap-10">
           <div>
             <p className="text-pr-red font-semibold tracking-[0.2em] text-xs uppercase mb-3">Our Company</p>
-            <p className="text-sm text-zinc-400 leading-relaxed print:text-zinc-700">{QUOTE_MISSION}</p>
+            <p className="text-sm text-zinc-400 leading-relaxed">{QUOTE_MISSION}</p>
           </div>
           <div>
             <p className="text-pr-red font-semibold tracking-[0.2em] text-xs uppercase mb-3">Contact Us</p>
-            <div className="text-sm text-zinc-300 space-y-1.5 print:text-zinc-700">
-              {quote.prepared_by_name && <p className="font-medium text-white print:text-zinc-900">{quote.prepared_by_name}</p>}
+            <div className="text-sm text-zinc-300 space-y-1.5">
+              {quote.prepared_by_name && <p className="font-medium text-white">{quote.prepared_by_name}</p>}
               {quote.prepared_by_email && (
                 <p>
                   <a href={`mailto:${quote.prepared_by_email}?subject=${encodeURIComponent(`Quote ${qNum}`)}`} className="hover:text-white underline decoration-zinc-700">
@@ -186,9 +171,9 @@ export default async function QuotePage({
         </section>
 
         {/* ── Commitment ── */}
-        <section className="mt-12 mb-20 pt-10 border-t border-zinc-800 print:border-zinc-300">
+        <section className="mt-12 mb-20 pt-10 border-t border-zinc-800">
           <h2 className="text-xl font-bold mb-4">Our Commitment to You</h2>
-          <p className="text-zinc-300 leading-relaxed print:text-zinc-700">{QUOTE_COMMITMENT}</p>
+          <p className="text-zinc-300 leading-relaxed">{QUOTE_COMMITMENT}</p>
           {quote.prepared_by_name && (
             <div className="mt-8">
               <p className="font-semibold">{quote.prepared_by_name}</p>

@@ -383,7 +383,7 @@ export async function sendQuote(instanceId: string, quoteId: string) {
       '',
       link,
       '',
-      'The page has the full details and a button to accept and lock in your dates. You can also print or save it as a PDF from your browser.',
+      'The page has the full details and a button to accept and lock in your dates.',
       '',
       `Questions? Just reply to this email.`,
       '',
