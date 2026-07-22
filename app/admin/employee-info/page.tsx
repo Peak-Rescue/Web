@@ -33,7 +33,8 @@ function linkKind(url: string): string {
 const inputClass =
   'w-full bg-zinc-900 border border-zinc-700 rounded px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500 transition-colors'
 
-export default async function EmployeeInfoPage() {
+export default async function EmployeeInfoPage({ searchParams }: { searchParams: Promise<{ as?: string }> }) {
+  const { as } = await searchParams
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
@@ -42,6 +43,10 @@ export default async function EmployeeInfoPage() {
   const { data: profile } = await admin.from('profiles').select('role').eq('id', user.id).single()
   if (!['admin', 'instructor'].includes(profile?.role ?? '')) redirect('/dashboard')
   const isAdmin = profile?.role === 'admin'
+  // Admins can preview this page as an instructor via ?as=instructor — purely
+  // a display role; the access gate above and the actions use the real one.
+  const viewAs = isAdmin && as === 'instructor' ? ('instructor' as const) : null
+  const showAsAdmin = viewAs ? false : isAdmin
 
   const { data: rows } = await admin
     .from('employee_resources')
@@ -56,7 +61,29 @@ export default async function EmployeeInfoPage() {
   return (
     <main className="min-h-screen bg-zinc-950 text-white pt-16 md:pt-20">
       <div className="max-w-4xl mx-auto px-4 py-10">
-        <Link href="/admin" className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors mb-6 inline-block">← Portal</Link>
+        <div className="mb-6 flex items-center justify-between gap-3 flex-wrap">
+          <Link href={viewAs ? `/admin?as=${viewAs}` : '/admin'} className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors">← Portal</Link>
+          {isAdmin && (
+            <div className="flex items-center gap-1 text-xs">
+              <span className="text-zinc-600 mr-1">Viewing as</span>
+              {([
+                [null, 'Admin', 'Everything, unfiltered'],
+                ['instructor', 'Instructor', 'What an instructor sees'],
+              ] as const).map(([key, label, hint]) => (
+                <Link
+                  key={label}
+                  href={key ? `/admin/employee-info?as=${key}` : '/admin/employee-info'}
+                  title={hint}
+                  className={`px-2 py-1 rounded font-medium transition-colors ${
+                    viewAs === key ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:text-zinc-300'
+                  }`}
+                >
+                  {label}
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
         <h1 className="text-2xl font-bold mb-2">Employee Information</h1>
         <p className="text-zinc-400 text-sm mb-8">Handbook, policies, and employment documents</p>
 
@@ -87,7 +114,7 @@ export default async function EmployeeInfoPage() {
                       {linkKind(r.url)}
                     </span>
                   </a>
-                  {isAdmin && (
+                  {showAsAdmin && (
                     <form action={deleteResource.bind(null, r.id)}>
                       <button
                         type="submit"
@@ -106,7 +133,7 @@ export default async function EmployeeInfoPage() {
           </section>
         ))}
 
-        {isAdmin && (
+        {showAsAdmin && (
           <section className="mt-12 pt-8 border-t border-zinc-800">
             <h2 className="text-sm font-medium text-zinc-500 uppercase tracking-wide mb-4">Add a document link</h2>
             <form action={addResource} className="space-y-3 max-w-xl">

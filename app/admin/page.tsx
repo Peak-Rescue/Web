@@ -289,7 +289,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
             </Link>
           )}
           <Link
-            href="/admin/employee-info"
+            href={viewAs ? `/admin/employee-info?as=${viewAs}` : '/admin/employee-info'}
             className="p-6 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-pr-red transition-colors"
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="mb-3 text-pr-red">
