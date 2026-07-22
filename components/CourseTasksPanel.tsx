@@ -15,6 +15,25 @@ import {
   deleteTaskDoc,
 } from '@/app/admin/courses/task-actions'
 
+function NotesIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="size-3.5">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <polyline points="14 2 14 8 20 8" />
+      <line x1="16" y1="13" x2="8" y2="13" />
+      <line x1="16" y1="17" x2="8" y2="17" />
+    </svg>
+  )
+}
+
+function PaperclipIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="size-3.5">
+      <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+    </svg>
+  )
+}
+
 export type CourseTask = {
   id: string
   title: string
@@ -159,11 +178,24 @@ export default function CourseTasksPanel({
         <button onClick={() => toggleDetails(t)} className="min-w-0 flex-1 text-left group">
           <p className={`text-sm group-hover:text-pr-red-light transition-colors ${isDone ? 'text-zinc-500 line-through' : ''}`}>
             {t.title}
-            {t.notes && !detailsOpen && <span className="ml-1.5 text-zinc-500">📝</span>}
-            {t.documents.length > 0 && !detailsOpen && (
-              <span className="ml-1.5 text-xs text-zinc-500">📎{t.documents.length}</span>
-            )}
           </p>
+        </button>
+        {/* Always-visible affordances: dimmed when empty, lit when the task
+            has notes/attachments — either way they open the details. */}
+        <button
+          onClick={() => toggleDetails(t)}
+          title={t.notes ? 'View notes' : 'Add notes'}
+          className={`shrink-0 transition-colors hover:text-white ${t.notes ? 'text-zinc-300' : 'text-zinc-700'}`}
+        >
+          <NotesIcon />
+        </button>
+        <button
+          onClick={() => toggleDetails(t)}
+          title={t.documents.length > 0 ? `${t.documents.length} attached` : 'Attach documents'}
+          className={`shrink-0 inline-flex items-center gap-0.5 transition-colors hover:text-white ${t.documents.length > 0 ? 'text-zinc-300' : 'text-zinc-700'}`}
+        >
+          <PaperclipIcon />
+          {t.documents.length > 0 && <span className="text-[10px]">{t.documents.length}</span>}
         </button>
         {canManage ? (
           <>
