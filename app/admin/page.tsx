@@ -213,12 +213,11 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
             <h2 className="text-sm font-medium text-zinc-500 uppercase tracking-wide mb-3">Your upcoming courses</h2>
             <div className="space-y-2">
               {myCourses.map((c) => (
-                <Link
+                <div
                   key={c.inst.id}
-                  href={portalHref(c.inst.id)}
-                  className="flex items-center justify-between px-4 py-3 bg-zinc-900 border border-zinc-800 rounded-lg hover:border-pr-red transition-colors"
+                  className="flex items-center justify-between gap-3 px-4 py-3 bg-zinc-900 border border-zinc-800 rounded-lg hover:border-pr-red transition-colors"
                 >
-                  <div className="min-w-0">
+                  <Link href={portalHref(c.inst.id)} className="min-w-0 flex-1">
                     <p className="text-sm font-medium truncate">
                       {courseShortName(c.inst.course_type, c.inst.custom_title)}
                       {c.inst.client_name && <span className="text-zinc-400 font-normal"> · {c.inst.client_name}</span>}
@@ -227,31 +226,28 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
                       {fmtRange(c.inst)}
                       {c.inst.location ? ` · ${c.inst.location}` : ''}
                     </p>
-                  </div>
-                  <span className="flex items-center gap-2 shrink-0">
-                    {gcalHref(c.inst) && (
-                      <a
-                        href={gcalHref(c.inst)!}
-                        target="_blank"
-                        rel="noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                        title="Add to your Google Calendar (one-time copy — it won't update if the course changes)"
-                        className="text-[10px] px-2 py-0.5 rounded-full border border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500 transition-colors"
-                      >
-                        + GCal
-                      </a>
-                    )}
-                    <span
-                      className={`text-[10px] font-medium px-2 py-0.5 rounded-full border ${
-                        c.role === 'lead'
-                          ? 'border-teal-700 bg-teal-900/30 text-teal-300'
-                          : 'border-blue-800 bg-blue-900/20 text-blue-300'
-                      }`}
+                  </Link>
+                  {gcalHref(c.inst) && (
+                    <a
+                      href={gcalHref(c.inst)!}
+                      target="_blank"
+                      rel="noreferrer"
+                      title="Add to your Google Calendar (one-time copy — it won't update if the course changes)"
+                      className="shrink-0 text-[10px] px-2 py-0.5 rounded-full border border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500 transition-colors"
                     >
-                      {c.role}
-                    </span>
+                      + GCal
+                    </a>
+                  )}
+                  <span
+                    className={`shrink-0 text-[10px] font-medium px-2 py-0.5 rounded-full border ${
+                      c.role === 'lead'
+                        ? 'border-teal-700 bg-teal-900/30 text-teal-300'
+                        : 'border-blue-800 bg-blue-900/20 text-blue-300'
+                    }`}
+                  >
+                    {c.role}
                   </span>
-                </Link>
+                </div>
               ))}
             </div>
           </section>
