@@ -70,6 +70,10 @@ export default function StaffingInterest({
     setSelected(new Set(candidates.filter((c) => c.qualified && c.hasEmail).map((c) => c.id)))
   }
 
+  function selectAll() {
+    setSelected(new Set(candidates.filter((c) => c.hasEmail).map((c) => c.id)))
+  }
+
   async function send() {
     if (busy || selected.size === 0) return
     setBusy(true)
@@ -197,6 +201,9 @@ export default function StaffingInterest({
             </button>
             <button onClick={selectLeadsOnly} className="px-2 py-0.5 rounded border border-zinc-700 text-zinc-400 hover:text-zinc-200 transition-colors">
               Lead-qualified only
+            </button>
+            <button onClick={selectAll} className="px-2 py-0.5 rounded border border-zinc-700 text-zinc-400 hover:text-zinc-200 transition-colors">
+              All instructors
             </button>
           </div>
           <div className="space-y-1 max-h-64 overflow-y-auto pr-1">

@@ -89,7 +89,7 @@ export async function sendInterestInvites(
         to: [instructor.email!],
         subject: `Interested in working ${courseName}? (${dates})`,
         text: [
-          `${instructor.name}, we're staffing an upcoming course and you're qualified for it.`,
+          `${instructor.name}, we're staffing an upcoming course and want to check your availability.`,
           '',
           `Course: ${courseName}${inst.client_name ? ` · ${inst.client_name}` : ''}`,
           `Dates: ${dates}`,
