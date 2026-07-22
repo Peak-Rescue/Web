@@ -247,6 +247,16 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
               <p className="text-zinc-400 text-sm">All reports, rates, and per-course spending</p>
             </Link>
           )}
+          <Link
+            href="/admin/employee-info"
+            className="p-6 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-pr-red transition-colors"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="mb-3 text-pr-red">
+              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+            </svg>
+            <h2 className="font-semibold text-lg mb-1">Employee Information</h2>
+            <p className="text-zinc-400 text-sm">Handbook, policies, and employment documents</p>
+          </Link>
           {profile?.role === 'admin' && (
             <Link
               href="/admin/contact"
