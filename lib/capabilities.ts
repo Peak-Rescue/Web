@@ -32,3 +32,16 @@ export const CATEGORY_COURSE_TYPES: Record<CapabilityCategory, string[]> = {
   confined_space: ['confined-space-rescue'],
   military:       ['jungle-mobility', 'urban-mobility', 'small-team-rescue', 'cold-weather-arctic-operations'],
 }
+
+// Capability categories that cover a course instance — the reverse of
+// CATEGORY_COURSE_TYPES. Custom courses have no type slug, so they use the
+// categories the admin tagged them with (course_instances.custom_categories).
+export function courseCapabilityCategories(
+  course_type: string,
+  custom_categories: string[] | null | undefined,
+): CapabilityCategory[] {
+  if (course_type === 'custom') {
+    return (custom_categories ?? []).filter((c): c is CapabilityCategory => c in CATEGORY_COURSE_TYPES)
+  }
+  return CAPABILITY_ORDER.filter((cat) => CATEGORY_COURSE_TYPES[cat].includes(course_type))
+}

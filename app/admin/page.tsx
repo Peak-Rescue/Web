@@ -5,7 +5,9 @@ import Link from 'next/link'
 import MyTasksList from '@/components/MyTasksList'
 import { loadMyOpenTasks } from '@/lib/course-tasks'
 import CourseCalendar, { type CalendarCourse } from '@/components/CourseCalendar'
+import StaffingInterestList from '@/components/StaffingInterestList'
 import { courseShortName } from '@/lib/courses'
+import { courseCapabilityCategories } from '@/lib/capabilities'
 
 export default async function AdminPage({ searchParams }: { searchParams: Promise<{ cal?: string; scope?: string; as?: string }> }) {
   const { cal, scope, as } = await searchParams
@@ -28,9 +30,10 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     starts_at: string | null
     ends_at: string | null
     status: string
+    custom_categories?: string[] | null
   }
   // Profile gate + personalized data in one parallel round.
-  const [{ data: profile }, { data: assignmentRows }, myTasks, allInstancesRes, { data: inviteRows }] = await Promise.all([
+  const [{ data: profile }, { data: assignmentRows }, myTasks, allInstancesRes, { data: inviteRows }, { data: capRow }] = await Promise.all([
     admin.from('profiles').select('role, first_name, last_name, email').eq('id', user.id).single(),
     admin
       .from('instance_instructors')
@@ -40,15 +43,17 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     showAllCourses
       ? admin
           .from('course_instances')
-          .select('id, ref_number, course_type, custom_title, client_name, location, starts_at, ends_at, status')
+          .select('id, ref_number, course_type, custom_title, custom_categories, client_name, location, starts_at, ends_at, status')
           .neq('status', 'cancelled')
       : Promise.resolve({ data: null }),
     admin
       .from('course_interest_invites')
-      .select('token, course_instances!inner(id, ref_number, course_type, custom_title, client_name, location, starts_at, ends_at, status), instructors!inner(profile_id)')
+      .select('token, interested, note, course_instances!inner(id, ref_number, course_type, custom_title, client_name, location, starts_at, ends_at, status), instructors!inner(profile_id)')
       .eq('instructors.profile_id', user.id)
-      .is('interested', null)
       .not('sent_at', 'is', null),
+    showAllCourses
+      ? admin.from('instructors').select('instructor_capabilities(category)').eq('profile_id', user.id).maybeSingle()
+      : Promise.resolve({ data: null }),
   ])
 
   if (!['admin', 'instructor'].includes(profile?.role ?? '')) redirect('/dashboard')
@@ -71,20 +76,48 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     .filter((c) => c.inst && c.inst.status !== 'cancelled' && (!c.inst.ends_at || c.inst.ends_at >= today))
     .sort((a, b) => (a.inst.starts_at ?? '9999').localeCompare(b.inst.starts_at ?? '9999'))
 
-  // Unanswered staffing-interest invites for upcoming courses.
-  const openInvites = (inviteRows ?? [])
-    .map((r) => ({ token: r.token as string, inst: r.course_instances as unknown as InstRow }))
-    .filter((r) => r.inst && r.inst.status !== 'cancelled' && (!r.inst.ends_at || r.inst.ends_at >= today))
-    .sort((a, b) => (a.inst.starts_at ?? '9999').localeCompare(b.inst.starts_at ?? '9999'))
-
-  // Calendar: assigned courses by default, every course when scope=all (past
-  // months included so back-navigation isn't empty), cancelled excluded.
-  // Chips only link where the viewer can actually open the course portal.
   const assignedIds = new Set(
     (assignmentRows ?? []).map((a) => (a.course_instances as unknown as InstRow).id)
   )
+
+  // Live staffing-interest invites (answered or not) for upcoming courses the
+  // viewer isn't already assigned to — answers stay changeable until then.
+  const liveInvites = (inviteRows ?? [])
+    .map((r) => ({
+      token: r.token as string,
+      interested: r.interested as boolean | null,
+      note: r.note as string | null,
+      inst: r.course_instances as unknown as InstRow,
+    }))
+    .filter(
+      (r) =>
+        r.inst &&
+        r.inst.status !== 'cancelled' &&
+        (!r.inst.ends_at || r.inst.ends_at >= today) &&
+        !assignedIds.has(r.inst.id)
+    )
+    .sort(
+      (a, b) =>
+        Number(a.interested !== null) - Number(b.interested !== null) ||
+        (a.inst.starts_at ?? '9999').localeCompare(b.inst.starts_at ?? '9999')
+    )
+
+  // Calendar: assigned courses by default, every course when scope=all (past
+  // months included so back-navigation isn't empty), cancelled excluded.
+  // Instructors' "All courses" is scoped to their teaching expertise: courses
+  // whose type falls under a category they hold (lead or assist), plus
+  // anything they're assigned to. Admins see everything.
+  // Chips only link where the viewer can actually open the course portal.
+  const myCategories = new Set(
+    ((capRow?.instructor_capabilities ?? []) as { category: string }[]).map((c) => c.category)
+  )
   const calendarSource: InstRow[] = showAllCourses
-    ? ((allInstancesRes.data ?? []) as InstRow[])
+    ? ((allInstancesRes.data ?? []) as InstRow[]).filter(
+        (i) =>
+          showAsAdmin ||
+          assignedIds.has(i.id) ||
+          courseCapabilityCategories(i.course_type, i.custom_categories).some((c) => myCategories.has(c))
+      )
     : (assignmentRows ?? []).map((a) => a.course_instances as unknown as InstRow)
   const calendarCourses: CalendarCourse[] = calendarSource
     .filter((i) => i && i.status !== 'cancelled' && i.starts_at && i.ends_at)
@@ -193,32 +226,19 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
           </section>
         )}
 
-        {openInvites.length > 0 && (
+        {liveInvites.length > 0 && (
           <section className="mb-10">
             <h2 className="text-sm font-medium text-zinc-500 uppercase tracking-wide mb-3">Courses looking for staff</h2>
-            <div className="space-y-2">
-              {openInvites.map((r) => (
-                <Link
-                  key={r.token}
-                  href={`/staffing/${r.token}`}
-                  className="flex items-center justify-between px-4 py-3 bg-zinc-900 border border-yellow-900/50 rounded-lg hover:border-pr-red transition-colors"
-                >
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium truncate">
-                      {courseShortName(r.inst.course_type, r.inst.custom_title)}
-                      {r.inst.client_name && <span className="text-zinc-400 font-normal"> · {r.inst.client_name}</span>}
-                    </p>
-                    <p className="text-xs text-zinc-500 mt-0.5">
-                      {fmtRange(r.inst)}
-                      {r.inst.location ? ` · ${r.inst.location}` : ''}
-                    </p>
-                  </div>
-                  <span className="shrink-0 text-[10px] font-medium px-2 py-0.5 rounded-full border border-yellow-800 bg-yellow-900/20 text-yellow-300/90">
-                    interested?
-                  </span>
-                </Link>
-              ))}
-            </div>
+            <StaffingInterestList
+              items={liveInvites.map((r) => ({
+                token: r.token,
+                title: courseShortName(r.inst.course_type, r.inst.custom_title),
+                client: r.inst.client_name,
+                meta: `${fmtRange(r.inst)}${r.inst.location ? ` · ${r.inst.location}` : ''}`,
+                interested: r.interested,
+                note: r.note,
+              }))}
+            />
           </section>
         )}
 

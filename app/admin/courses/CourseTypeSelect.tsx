@@ -2,15 +2,18 @@
 
 import { useState } from 'react'
 import { COURSE_TYPE_OPTIONS } from '@/lib/courses'
+import { CAPABILITY_META, CAPABILITY_ORDER } from '@/lib/capabilities'
 
 export function CourseTypeSelect({
   defaultCategory = '',
   defaultType = '',
   defaultCustomTitle = '',
+  defaultCustomCategories = [],
 }: {
   defaultCategory?: string
   defaultType?: string
   defaultCustomTitle?: string
+  defaultCustomCategories?: string[]
 }) {
   const [category, setCategory] = useState(defaultCategory)
   const [courseType, setCourseType] = useState(defaultType)
@@ -67,6 +70,32 @@ export function CourseTypeSelect({
             placeholder="e.g. Canyon Course — Taiwan"
             className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500"
           />
+        </div>
+      )}
+
+      {/* Step 4 — expertise categories (custom only). Standard courses derive
+          these from their type; custom courses need an explicit tag so the
+          right instructors see them on their calendar and count as qualified. */}
+      {isCustom && (
+        <div className="sm:col-span-2">
+          <label className="block text-xs text-zinc-400 mb-1">Expertise categories</label>
+          <div className="flex flex-wrap gap-x-4 gap-y-2 p-3 bg-zinc-800/50 border border-zinc-700 rounded">
+            {CAPABILITY_ORDER.map(cat => (
+              <label key={cat} className="flex items-center gap-1.5 text-sm text-zinc-300 cursor-pointer">
+                <input
+                  type="checkbox"
+                  name="custom_categories"
+                  value={cat}
+                  defaultChecked={defaultCustomCategories.includes(cat)}
+                  className="accent-red-600"
+                />
+                {CAPABILITY_META[cat].label}
+              </label>
+            ))}
+          </div>
+          <p className="text-[11px] text-zinc-500 mt-1">
+            Instructors with expertise in a checked category see this course in their “All courses” calendar and count as qualified for staffing.
+          </p>
         </div>
       )}
     </div>

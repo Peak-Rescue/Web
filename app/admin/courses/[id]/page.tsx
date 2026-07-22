@@ -17,7 +17,7 @@ import CourseContactsEditor from '@/components/CourseContactsEditor'
 import { parseContacts, primaryContactEmail, ccEmailOptions } from '@/lib/contacts'
 import { loadTasksWithDocs } from '@/lib/course-tasks'
 import { courseDisplayName, courseShortName, computeBlocks } from '@/lib/courses'
-import { CATEGORY_COURSE_TYPES } from '@/lib/capabilities'
+import { courseCapabilityCategories } from '@/lib/capabilities'
 
 const STATUS_STYLES: Record<string, string> = {
   tentative: 'bg-yellow-900/40 text-yellow-300 border-yellow-700',
@@ -166,10 +166,9 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
 
   const courseType = inst.course_type
 
-  // Find which capability categories cover this course type
-  const matchingCategories = Object.entries(CATEGORY_COURSE_TYPES)
-    .filter(([, slugs]) => slugs.includes(courseType))
-    .map(([cat]) => cat)
+  // Find which capability categories cover this course type (custom courses
+  // use their admin-tagged categories)
+  const matchingCategories: string[] = courseCapabilityCategories(courseType, inst.custom_categories)
 
   const assignedIds = new Set((assigned ?? []).map(a => a.instructor_id))
   const unassigned = (allInstructors ?? []).filter(i => !assignedIds.has(i.id))
@@ -233,6 +232,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
               defaultCategory={inst.course_category}
               defaultType={inst.course_type}
               defaultCustomTitle={inst.custom_title ?? ''}
+              defaultCustomCategories={inst.custom_categories ?? []}
             />
             <div>
               <label className="block text-xs text-zinc-400 mb-1">Status</label>
