@@ -54,6 +54,9 @@ export async function createInstance(formData: FormData) {
   const contact_name     = (formData.get('contact_name') as string) || null
   const contact_phone    = (formData.get('contact_phone') as string) || null
   const contact_email    = (formData.get('contact_email') as string) || null
+  const contact2_name    = (formData.get('contact2_name') as string) || null
+  const contact2_phone   = (formData.get('contact2_phone') as string) || null
+  const contact2_email   = (formData.get('contact2_email') as string) || null
   const notes            = (formData.get('notes') as string) || null
   const max_students     = formData.get('max_students') ? Number(formData.get('max_students')) : null
   const instructor_slots = formData.get('instructor_slots') ? Number(formData.get('instructor_slots')) : null
@@ -65,7 +68,7 @@ export async function createInstance(formData: FormData) {
 
   const { data, error } = await admin
     .from('course_instances')
-    .insert({ course_category, course_type, custom_title, status, starts_at, ends_at, location, client_name, contact_name, contact_phone, contact_email, notes, max_students, instructor_slots, slug })
+    .insert({ course_category, course_type, custom_title, status, starts_at, ends_at, location, client_name, contact_name, contact_phone, contact_email, contact2_name, contact2_phone, contact2_email, notes, max_students, instructor_slots, slug })
     .select('id')
     .single()
 
@@ -96,13 +99,16 @@ export async function updateInstanceDetails(id: string, formData: FormData) {
   const contact_name     = (formData.get('contact_name') as string) || null
   const contact_phone    = (formData.get('contact_phone') as string) || null
   const contact_email    = (formData.get('contact_email') as string) || null
+  const contact2_name    = (formData.get('contact2_name') as string) || null
+  const contact2_phone   = (formData.get('contact2_phone') as string) || null
+  const contact2_email   = (formData.get('contact2_email') as string) || null
   const notes            = (formData.get('notes') as string) || null
   const max_students     = formData.get('max_students') ? Number(formData.get('max_students')) : null
   const instructor_slots = formData.get('instructor_slots') ? Number(formData.get('instructor_slots')) : null
 
   const { error } = await admin
     .from('course_instances')
-    .update({ course_category, course_type, custom_title, status, location, client_name, contact_name, contact_phone, contact_email, notes, max_students, instructor_slots })
+    .update({ course_category, course_type, custom_title, status, location, client_name, contact_name, contact_phone, contact_email, contact2_name, contact2_phone, contact2_email, notes, max_students, instructor_slots })
     .eq('id', id)
 
   if (error) throw new Error(error.message)

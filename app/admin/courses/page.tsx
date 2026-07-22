@@ -176,6 +176,18 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
               <input name="contact_email" type="email" placeholder="poc@unit.mil" className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
             </div>
             <div>
+              <label className="block text-xs text-zinc-400 mb-1">Secondary POC (optional)</label>
+              <input name="contact2_name" placeholder="Name" className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
+            </div>
+            <div>
+              <label className="block text-xs text-zinc-400 mb-1">Secondary phone</label>
+              <input name="contact2_phone" type="tel" className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
+            </div>
+            <div>
+              <label className="block text-xs text-zinc-400 mb-1">Secondary email</label>
+              <input name="contact2_email" type="email" className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
+            </div>
+            <div>
               <label className="block text-xs text-zinc-400 mb-1">Start date (optional)</label>
               <input name="starts_at" type="date" className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
             </div>

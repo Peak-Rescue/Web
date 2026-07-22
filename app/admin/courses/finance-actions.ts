@@ -346,12 +346,13 @@ export async function deleteQuote(instanceId: string, quoteId: string) {
 }
 
 // Emails the quote link to the course's point of contact and marks it sent.
-export async function sendQuote(instanceId: string, quoteId: string) {
+// The form's "cc secondary" checkbox adds the instance's secondary POC email.
+export async function sendQuote(instanceId: string, quoteId: string, formData?: FormData) {
   const admin = await requireAdmin()
 
   const [{ data: quote }, { data: inst }] = await Promise.all([
     admin.from('course_quotes').select('quote_seq, status, accept_token, total, prepared_by_name, prepared_by_email').eq('id', quoteId).eq('instance_id', instanceId).single(),
-    admin.from('course_instances').select('ref_number, course_type, custom_title, client_name, contact_name, contact_email, starts_at, ends_at').eq('id', instanceId).single(),
+    admin.from('course_instances').select('ref_number, course_type, custom_title, client_name, contact_name, contact_email, contact2_email, starts_at, ends_at').eq('id', instanceId).single(),
   ])
   if (!quote || !inst) throw new Error('Quote not found')
   if (quote.status !== 'draft') throw new Error('Only draft quotes can be sent')
@@ -368,12 +369,18 @@ export async function sendQuote(instanceId: string, quoteId: string) {
     ? `${inst.starts_at}${inst.ends_at && inst.ends_at !== inst.starts_at ? ` – ${inst.ends_at}` : ''}`
     : 'dates TBD'
 
+  const ccSecondary = formData?.get('cc_secondary') === 'on' && inst.contact2_email
+  const cc = [
+    ...(quote.prepared_by_email ? [quote.prepared_by_email] : []),
+    ...(ccSecondary ? [inst.contact2_email as string] : []),
+  ]
+
   const { Resend } = await import('resend')
   const resend = new Resend(process.env.RESEND_API_KEY)
   const { error: sendError } = await resend.emails.send({
     from: 'Peak Rescue Mountain Guides <noreply@peak-rescue.com>',
     to: [inst.contact_email],
-    cc: quote.prepared_by_email ? [quote.prepared_by_email] : undefined,
+    cc: cc.length > 0 ? cc : undefined,
     replyTo: quote.prepared_by_email ?? undefined,
     subject: `Peak Rescue Quote ${qNum} — ${courseName}`,
     text: [

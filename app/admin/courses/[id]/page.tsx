@@ -261,6 +261,18 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
               <input name="contact_email" type="email" defaultValue={inst.contact_email ?? ''} className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
             </div>
             <div>
+              <label className="block text-xs text-zinc-400 mb-1">Secondary POC (or alt contact)</label>
+              <input name="contact2_name" defaultValue={inst.contact2_name ?? ''} className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
+            </div>
+            <div>
+              <label className="block text-xs text-zinc-400 mb-1">Secondary phone</label>
+              <input name="contact2_phone" type="tel" defaultValue={inst.contact2_phone ?? ''} className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
+            </div>
+            <div>
+              <label className="block text-xs text-zinc-400 mb-1">Secondary email</label>
+              <input name="contact2_email" type="email" defaultValue={inst.contact2_email ?? ''} className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
+            </div>
+            <div>
               <label className="block text-xs text-zinc-400 mb-1">Max students</label>
               <input name="max_students" type="number" min="1" defaultValue={inst.max_students ?? ''} className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
             </div>
@@ -576,6 +588,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
             refNumber={inst.ref_number}
             quotes={quotes}
             contactEmail={inst.contact_email ?? null}
+            contact2Email={inst.contact2_email ?? null}
             people={quotePeople}
             estimates={estimatePanels.filter((e) => e.id).map((e) => ({ id: e.id!, title: e.title }))}
           />
