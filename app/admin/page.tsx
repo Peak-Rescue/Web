@@ -147,6 +147,23 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     </span>
   )
 
+  // Google Calendar "add event" template link — a manual snapshot for anyone
+  // who wants a course on a personal calendar. The synced version of this is
+  // the automatic assignment invite (service-account integration).
+  const gcalHref = (c: InstRow) => {
+    if (!c.starts_at) return null
+    const compact = (d: string) => d.replaceAll('-', '')
+    const endExclusive = new Date(Date.parse(c.ends_at ?? c.starts_at) + 86_400_000).toISOString().slice(0, 10)
+    const params = new URLSearchParams({
+      action: 'TEMPLATE',
+      text: `${courseShortName(c.course_type, c.custom_title)}${c.client_name ? ` — ${c.client_name}` : ''}`,
+      dates: `${compact(c.starts_at)}/${compact(endExclusive)}`,
+      details: `Peak Rescue course · PR-${String(c.ref_number).padStart(4, '0')}`,
+      ...(c.location ? { location: c.location } : {}),
+    })
+    return `https://calendar.google.com/calendar/render?${params}`
+  }
+
   const fmtRange = (c: InstRow) => {
     const f = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
     if (!c.starts_at) return 'dates TBD'
@@ -211,14 +228,28 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
                       {c.inst.location ? ` · ${c.inst.location}` : ''}
                     </p>
                   </div>
-                  <span
-                    className={`shrink-0 text-[10px] font-medium px-2 py-0.5 rounded-full border ${
-                      c.role === 'lead'
-                        ? 'border-teal-700 bg-teal-900/30 text-teal-300'
-                        : 'border-blue-800 bg-blue-900/20 text-blue-300'
-                    }`}
-                  >
-                    {c.role}
+                  <span className="flex items-center gap-2 shrink-0">
+                    {gcalHref(c.inst) && (
+                      <a
+                        href={gcalHref(c.inst)!}
+                        target="_blank"
+                        rel="noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        title="Add to your Google Calendar (one-time copy — it won't update if the course changes)"
+                        className="text-[10px] px-2 py-0.5 rounded-full border border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500 transition-colors"
+                      >
+                        + GCal
+                      </a>
+                    )}
+                    <span
+                      className={`text-[10px] font-medium px-2 py-0.5 rounded-full border ${
+                        c.role === 'lead'
+                          ? 'border-teal-700 bg-teal-900/30 text-teal-300'
+                          : 'border-blue-800 bg-blue-900/20 text-blue-300'
+                      }`}
+                    >
+                      {c.role}
+                    </span>
                   </span>
                 </Link>
               ))}
