@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { parseContacts, primaryContactEmail, ccEmailOptions } from '@/lib/contacts'
 
 async function requireAdmin() {
   const supabase = await createClient()
@@ -345,18 +346,20 @@ export async function deleteQuote(instanceId: string, quoteId: string) {
   revalidatePath(`/admin/courses/${instanceId}`)
 }
 
-// Emails the quote link to the course's point of contact and marks it sent.
-// The form's "cc secondary" checkbox adds the instance's secondary POC email.
+// Emails the quote link to the course's primary POC and marks it sent. The
+// form's "cc" checkboxes add any of the course's other contact emails.
 export async function sendQuote(instanceId: string, quoteId: string, formData?: FormData) {
   const admin = await requireAdmin()
 
   const [{ data: quote }, { data: inst }] = await Promise.all([
     admin.from('course_quotes').select('quote_seq, status, accept_token, total, prepared_by_name, prepared_by_email').eq('id', quoteId).eq('instance_id', instanceId).single(),
-    admin.from('course_instances').select('ref_number, course_type, custom_title, client_name, contact_name, contact_email, contact2_email, starts_at, ends_at').eq('id', instanceId).single(),
+    admin.from('course_instances').select('ref_number, course_type, custom_title, client_name, contacts, starts_at, ends_at').eq('id', instanceId).single(),
   ])
   if (!quote || !inst) throw new Error('Quote not found')
   if (quote.status !== 'draft') throw new Error('Only draft quotes can be sent')
-  if (!inst.contact_email) throw new Error('The course has no point-of-contact email — add one in Details first')
+  const contacts = parseContacts(inst.contacts)
+  const toEmail = primaryContactEmail(contacts)
+  if (!toEmail) throw new Error('The course has no point-of-contact email — add one in Details first')
   if (!process.env.RESEND_API_KEY) throw new Error('Email is not configured in this environment')
 
   const { quoteNumber } = await import('@/lib/quotes')
@@ -369,22 +372,21 @@ export async function sendQuote(instanceId: string, quoteId: string, formData?: 
     ? `${inst.starts_at}${inst.ends_at && inst.ends_at !== inst.starts_at ? ` – ${inst.ends_at}` : ''}`
     : 'dates TBD'
 
-  const ccSecondary = formData?.get('cc_secondary') === 'on' && inst.contact2_email
-  const cc = [
-    ...(quote.prepared_by_email ? [quote.prepared_by_email] : []),
-    ...(ccSecondary ? [inst.contact2_email as string] : []),
-  ]
+  // Only emails actually on the course's contacts can be CC'd.
+  const allowedCc = new Set(ccEmailOptions(contacts))
+  const requestedCc = (formData?.getAll('cc_extra') ?? []).map(String).filter((e) => allowedCc.has(e))
+  const cc = [...new Set([...(quote.prepared_by_email ? [quote.prepared_by_email] : []), ...requestedCc])]
 
   const { Resend } = await import('resend')
   const resend = new Resend(process.env.RESEND_API_KEY)
   const { error: sendError } = await resend.emails.send({
     from: 'Peak Rescue Mountain Guides <noreply@peak-rescue.com>',
-    to: [inst.contact_email],
+    to: [toEmail],
     cc: cc.length > 0 ? cc : undefined,
     replyTo: quote.prepared_by_email ?? undefined,
     subject: `Peak Rescue Quote ${qNum} — ${courseName}`,
     text: [
-      `${inst.contact_name ?? 'Hello'},`,
+      `${contacts[0]?.name || 'Hello'},`,
       '',
       `Thank you for the opportunity — your quote for ${courseName}${inst.client_name ? ` (${inst.client_name})` : ''}, ${dates}, is ready:`,
       '',

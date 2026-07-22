@@ -46,7 +46,7 @@ export default function QuotesSection({
   refNumber,
   quotes,
   contactEmail,
-  contact2Email,
+  ccOptions,
   people,
   estimates,
 }: {
@@ -54,7 +54,7 @@ export default function QuotesSection({
   refNumber: number
   quotes: QuoteRow[]
   contactEmail: string | null
-  contact2Email: string | null
+  ccOptions: string[]
   people: QuotePerson[]
   estimates: { id: string; title: string }[]
 }) {
@@ -87,13 +87,13 @@ export default function QuotesSection({
                 {q.status === 'draft' && (
                   <>
                     {contactEmail ? (
-                      <form action={sendQuote.bind(null, instanceId, q.id)} className="flex items-center gap-2.5">
-                        {contact2Email && (
-                          <label className="flex items-center gap-1.5 text-xs text-zinc-400 cursor-pointer" title={`Also send a copy to ${contact2Email}`}>
-                            <input type="checkbox" name="cc_secondary" className="accent-pr-red size-3.5" />
-                            cc {contact2Email}
+                      <form action={sendQuote.bind(null, instanceId, q.id)} className="flex items-center gap-2.5 flex-wrap">
+                        {ccOptions.map((email) => (
+                          <label key={email} className="flex items-center gap-1.5 text-xs text-zinc-400 cursor-pointer" title={`Also send a copy to ${email}`}>
+                            <input type="checkbox" name="cc_extra" value={email} className="accent-pr-red size-3.5" />
+                            cc {email}
                           </label>
-                        )}
+                        ))}
                         <button className="text-xs px-2.5 py-1 bg-pr-red hover:bg-pr-red-dark text-white rounded transition-colors">
                           Send to {contactEmail}
                         </button>

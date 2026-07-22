@@ -6,6 +6,7 @@ import { createInstance } from './actions'
 import { CourseTypeSelect } from './CourseTypeSelect'
 import { courseShortName } from '@/lib/courses'
 import CourseCalendar, { type CalendarCourse } from '@/components/CourseCalendar'
+import CourseContactsEditor from '@/components/CourseContactsEditor'
 
 const STATUS_STYLES: Record<string, string> = {
   tentative: 'bg-yellow-900/40 text-yellow-300 border-yellow-700',
@@ -163,30 +164,7 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
               <label className="block text-xs text-zinc-400 mb-1">Client / organization</label>
               <input name="client_name" placeholder="e.g. 24th STS" className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
             </div>
-            <div>
-              <label className="block text-xs text-zinc-400 mb-1">Point of contact</label>
-              <input name="contact_name" placeholder="Name" className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
-            </div>
-            <div>
-              <label className="block text-xs text-zinc-400 mb-1">POC phone</label>
-              <input name="contact_phone" type="tel" className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
-            </div>
-            <div>
-              <label className="block text-xs text-zinc-400 mb-1">POC email</label>
-              <input name="contact_email" type="email" placeholder="poc@unit.mil" className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
-            </div>
-            <div>
-              <label className="block text-xs text-zinc-400 mb-1">Secondary POC (optional)</label>
-              <input name="contact2_name" placeholder="Name" className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
-            </div>
-            <div>
-              <label className="block text-xs text-zinc-400 mb-1">Secondary phone</label>
-              <input name="contact2_phone" type="tel" className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
-            </div>
-            <div>
-              <label className="block text-xs text-zinc-400 mb-1">Secondary email</label>
-              <input name="contact2_email" type="email" className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
-            </div>
+            <CourseContactsEditor initial={[]} />
             <div>
               <label className="block text-xs text-zinc-400 mb-1">Start date (optional)</label>
               <input name="starts_at" type="date" className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />

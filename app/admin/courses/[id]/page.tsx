@@ -13,6 +13,8 @@ import CourseTasksPanel, { type TaskPerson } from '@/components/CourseTasksPanel
 import EstimatePanel, { type PricingRate } from '@/components/EstimatePanel'
 import { createEstimateCoa, copyEstimatesFrom } from '../finance-actions'
 import QuotesSection, { type QuoteRow } from '../QuotesSection'
+import CourseContactsEditor from '@/components/CourseContactsEditor'
+import { parseContacts, primaryContactEmail, ccEmailOptions } from '@/lib/contacts'
 import { loadTasksWithDocs } from '@/lib/course-tasks'
 import { courseDisplayName, courseShortName, computeBlocks } from '@/lib/courses'
 import { CATEGORY_COURSE_TYPES } from '@/lib/capabilities'
@@ -61,6 +63,8 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
   ])
 
   if (!inst) notFound()
+
+  const contacts = parseContacts(inst.contacts)
 
   // One parallel round for everything section-shaped (all keyed by id only).
   const [
@@ -248,30 +252,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
               <label className="block text-xs text-zinc-400 mb-1">Client / organization</label>
               <input name="client_name" defaultValue={inst.client_name ?? ''} className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
             </div>
-            <div>
-              <label className="block text-xs text-zinc-400 mb-1">Point of contact</label>
-              <input name="contact_name" defaultValue={inst.contact_name ?? ''} className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
-            </div>
-            <div>
-              <label className="block text-xs text-zinc-400 mb-1">Contact phone</label>
-              <input name="contact_phone" type="tel" defaultValue={inst.contact_phone ?? ''} className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
-            </div>
-            <div>
-              <label className="block text-xs text-zinc-400 mb-1">Contact email</label>
-              <input name="contact_email" type="email" defaultValue={inst.contact_email ?? ''} className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
-            </div>
-            <div>
-              <label className="block text-xs text-zinc-400 mb-1">Secondary POC (or alt contact)</label>
-              <input name="contact2_name" defaultValue={inst.contact2_name ?? ''} className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
-            </div>
-            <div>
-              <label className="block text-xs text-zinc-400 mb-1">Secondary phone</label>
-              <input name="contact2_phone" type="tel" defaultValue={inst.contact2_phone ?? ''} className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
-            </div>
-            <div>
-              <label className="block text-xs text-zinc-400 mb-1">Secondary email</label>
-              <input name="contact2_email" type="email" defaultValue={inst.contact2_email ?? ''} className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
-            </div>
+            <CourseContactsEditor initial={contacts} />
             <div>
               <label className="block text-xs text-zinc-400 mb-1">Max students</label>
               <input name="max_students" type="number" min="1" defaultValue={inst.max_students ?? ''} className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
@@ -587,8 +568,8 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
             instanceId={id}
             refNumber={inst.ref_number}
             quotes={quotes}
-            contactEmail={inst.contact_email ?? null}
-            contact2Email={inst.contact2_email ?? null}
+            contactEmail={primaryContactEmail(contacts)}
+            ccOptions={ccEmailOptions(contacts)}
             people={quotePeople}
             estimates={estimatePanels.filter((e) => e.id).map((e) => ({ id: e.id!, title: e.title }))}
           />
