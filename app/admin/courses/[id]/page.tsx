@@ -334,8 +334,9 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
             </div>
           </details>
 
-          {/* Computed blocks preview */}
-          {blocks.length > 0 && (
+          {/* Computed blocks preview — only when off-days split the course; a
+              single block just repeats the start/end dates above */}
+          {blocks.length > 1 && (
             <div className="p-4 bg-zinc-900 border border-zinc-800 rounded-lg">
               <p className="text-xs text-zinc-500 mb-2">Calendar blocks ({blocks.length})</p>
               <div className="space-y-1">

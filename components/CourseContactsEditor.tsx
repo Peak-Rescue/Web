@@ -7,6 +7,8 @@ const inputCls =
   'w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500'
 const miniBtnCls =
   'px-1.5 text-xs leading-5 text-zinc-500 hover:text-white border border-zinc-700 hover:border-zinc-500 rounded transition-colors shrink-0'
+const removeBtnCls =
+  'px-1.5 text-xs leading-5 text-zinc-500 hover:text-red-400 border border-zinc-700 hover:border-red-400 rounded transition-colors shrink-0'
 
 function ListField({
   label,
@@ -25,19 +27,19 @@ function ListField({
 }) {
   return (
     <div>
-      <label className="block text-xs text-zinc-400 mb-1">{label}</label>
+      <div className="flex items-center justify-between mb-1">
+        <label className="block text-xs text-zinc-400">{label}</label>
+        <button type="button" title={`Add another ${label.toLowerCase()}`} onClick={onAdd} className={miniBtnCls}>
+          +
+        </button>
+      </div>
       <div className="space-y-2">
         {values.map((v, j) => (
           <div key={j} className="flex items-center gap-1.5">
             <input type={type} value={v} onChange={(e) => onEdit(j, e.target.value)} className={inputCls} />
             {j > 0 && (
-              <button type="button" title={`Remove this ${label.toLowerCase()}`} onClick={() => onRemove(j)} className={miniBtnCls}>
+              <button type="button" title={`Remove this ${label.toLowerCase()}`} onClick={() => onRemove(j)} className={removeBtnCls}>
                 ×
-              </button>
-            )}
-            {j === values.length - 1 && (
-              <button type="button" title={`Add another ${label.toLowerCase()}`} onClick={onAdd} className={miniBtnCls}>
-                +
               </button>
             )}
           </div>
@@ -98,7 +100,7 @@ export default function CourseContactsEditor({ initial }: { initial: CoursePOC[]
                     type="button"
                     title="Remove this POC"
                     onClick={() => update((n) => void n.splice(i, 1), { notify: true })}
-                    className={miniBtnCls}
+                    className={removeBtnCls}
                   >
                     ×
                   </button>
