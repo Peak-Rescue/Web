@@ -21,7 +21,6 @@ export type CourseTask = {
   notes: string | null
   assigned_to: string | null
   assigned_by: string | null
-  due_date: string | null
   status: 'open' | 'done'
   documents: { id: string; filename: string; url: string }[]
 }
@@ -30,12 +29,8 @@ export type TaskPerson = { id: string; name: string }
 
 export type TaskSuggestion = { id: string; title: string }
 
-function fmtDue(d: string): string {
-  return new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-}
-
 // Checklist for one course instance. `canManage` (admin or lead instructor)
-// unlocks assignment, due dates, add/delete, and the template button;
+// unlocks assignment, add/delete, and the template button;
 // everyone on the course can see it, and assignees can check off their own.
 export default function CourseTasksPanel({
   instanceId,
@@ -58,7 +53,6 @@ export default function CourseTasksPanel({
   const [adding, setAdding] = useState(false)
   const [newTitle, setNewTitle] = useState('')
   const [newAssignee, setNewAssignee] = useState('')
-  const [newDue, setNewDue] = useState('')
   const [newNotes, setNewNotes] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [openDetailsId, setOpenDetailsId] = useState<string | null>(null)
@@ -88,7 +82,6 @@ export default function CourseTasksPanel({
   const docTaskRef = useRef<string | null>(null)
 
   const personName = (id: string | null) => people.find((p) => p.id === id)?.name ?? null
-  const today = new Date().toISOString().slice(0, 10)
 
   const open = tasks.filter((t) => t.status === 'open')
   const done = tasks.filter((t) => t.status === 'done')
@@ -152,7 +145,6 @@ export default function CourseTasksPanel({
     const isDone = t.status === 'done'
     const canToggle = canManage || t.assigned_to === currentUserId
     const canEditNotes = canManage || t.assigned_to === currentUserId
-    const overdue = !isDone && t.due_date && t.due_date < today
     const detailsOpen = openDetailsId === t.id
     return (
       <div className="px-4 py-2.5">
@@ -173,18 +165,13 @@ export default function CourseTasksPanel({
             )}
           </p>
         </button>
-        {overdue && (
-          <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-red-900/60 text-red-300 shrink-0">
-            overdue
-          </span>
-        )}
         {canManage ? (
           <>
             <select
               value={t.assigned_to ?? ''}
               disabled={busyId === t.id}
               onChange={(e) =>
-                run(() => updateTask(instanceId, t.id, { assigned_to: e.target.value || null, due_date: t.due_date }), t.id)
+                run(() => updateTask(instanceId, t.id, { assigned_to: e.target.value || null }), t.id)
               }
               className="bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-xs text-zinc-300 shrink-0 max-w-32"
             >
@@ -193,15 +180,6 @@ export default function CourseTasksPanel({
                 <option key={p.id} value={p.id}>{p.name}</option>
               ))}
             </select>
-            <input
-              type="date"
-              value={t.due_date ?? ''}
-              disabled={busyId === t.id}
-              onChange={(e) =>
-                run(() => updateTask(instanceId, t.id, { assigned_to: t.assigned_to, due_date: e.target.value || null }), t.id)
-              }
-              className="bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-xs text-zinc-300 shrink-0 w-32"
-            />
             <button
               onClick={() => {
                 if (confirm(`Delete task "${t.title}"?`)) run(() => deleteTask(instanceId, t.id), t.id)
@@ -215,7 +193,6 @@ export default function CourseTasksPanel({
         ) : (
           <span className="text-xs text-zinc-500 shrink-0">
             {personName(t.assigned_to) ?? 'unassigned'}
-            {t.due_date ? ` · ${fmtDue(t.due_date)}` : ''}
           </span>
         )}
       </div>
@@ -226,7 +203,6 @@ export default function CourseTasksPanel({
             {t.assigned_to
               ? `Assigned to ${personName(t.assigned_to) ?? 'someone'}${t.assigned_by ? ` by ${personName(t.assigned_by)}` : ''}`
               : 'Unassigned'}
-            {t.due_date ? ` · due ${fmtDue(t.due_date)}` : ''}
           </p>
           <div className="flex items-center flex-wrap gap-2 mb-2">
             {t.documents.map((d) => (
@@ -334,15 +310,6 @@ export default function CourseTasksPanel({
                   ))}
                 </select>
               </div>
-              <div>
-                <label className="block text-xs text-zinc-500 mb-1">Due</label>
-                <input
-                  type="date"
-                  value={newDue}
-                  onChange={(e) => setNewDue(e.target.value)}
-                  className="bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm"
-                />
-              </div>
               <div className="w-full">
                 <label className="block text-xs text-zinc-500 mb-1">Notes (optional)</label>
                 <input
@@ -355,10 +322,9 @@ export default function CourseTasksPanel({
               <button
                 onClick={() => {
                   if (!newTitle.trim()) return
-                  run(() => addTask(instanceId, { title: newTitle, assigned_to: newAssignee || null, due_date: newDue || null, notes: newNotes || null }))
+                  run(() => addTask(instanceId, { title: newTitle, assigned_to: newAssignee || null, notes: newNotes || null }))
                   setNewTitle('')
                   setNewAssignee('')
-                  setNewDue('')
                   setNewNotes('')
                   setAdding(false)
                 }}
@@ -386,7 +352,7 @@ export default function CourseTasksPanel({
                     disabled={isPending}
                     onChange={(e) => {
                       const pick = available.find((s) => s.id === e.target.value)
-                      if (pick) run(() => addTask(instanceId, { title: pick.title, assigned_to: null, due_date: null, notes: null }))
+                      if (pick) run(() => addTask(instanceId, { title: pick.title, assigned_to: null, notes: null }))
                     }}
                     className="bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-zinc-400"
                   >

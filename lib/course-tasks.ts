@@ -28,7 +28,6 @@ export type LoadedTask = {
   notes: string | null
   assigned_to: string | null
   assigned_by: string | null
-  due_date: string | null
   status: 'open' | 'done'
   documents: { id: string; filename: string; url: string }[]
 }
@@ -41,7 +40,7 @@ export async function loadTasksWithDocs(
 ): Promise<LoadedTask[]> {
   const { data } = await admin
     .from('course_tasks')
-    .select('id, title, notes, assigned_to, assigned_by, due_date, status, course_task_documents(id, path, filename)')
+    .select('id, title, notes, assigned_to, assigned_by, status, course_task_documents(id, path, filename)')
     .eq('instance_id', instanceId)
     .order('sort_order')
     .order('created_at')
@@ -60,7 +59,6 @@ export async function loadTasksWithDocs(
     notes: r.notes,
     assigned_to: r.assigned_to,
     assigned_by: r.assigned_by,
-    due_date: r.due_date,
     status: r.status as 'open' | 'done',
     documents: ((r.course_task_documents ?? []) as DocRow[]).map((d) => ({
       id: d.id,
@@ -75,7 +73,6 @@ export type MyOpenTask = {
   instance_id: string
   title: string
   notes: string | null
-  due_date: string | null
   courseName: string | null
   courseStatus: string | null
   documents: { id: string; filename: string; url: string }[]
@@ -89,10 +86,10 @@ export async function loadMyOpenTasks(
 ): Promise<MyOpenTask[]> {
   const { data } = await admin
     .from('course_tasks')
-    .select('id, instance_id, title, notes, due_date, course_instances(course_type, custom_title, status), course_task_documents(id, path, filename)')
+    .select('id, instance_id, title, notes, course_instances(course_type, custom_title, status), course_task_documents(id, path, filename)')
     .eq('assigned_to', userId)
     .eq('status', 'open')
-    .order('due_date', { ascending: true, nullsFirst: false })
+    .order('created_at', { ascending: true })
     .limit(20)
 
   type DocRow = { id: string; path: string; filename: string | null }
@@ -113,7 +110,6 @@ export async function loadMyOpenTasks(
       instance_id: r.instance_id,
       title: r.title,
       notes: r.notes,
-      due_date: r.due_date,
       courseName: inst ? courseShortName(inst.course_type, inst.custom_title) : null,
       courseStatus: inst?.status ?? null,
       documents: ((r.course_task_documents ?? []) as DocRow[]).map((d) => ({

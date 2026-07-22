@@ -46,10 +46,6 @@ export default function MyTasksList({ tasks }: { tasks: MyOpenTask[] }) {
   const fileRef = useRef<HTMLInputElement>(null)
   const uploadTaskRef = useRef<MyOpenTask | null>(null)
 
-  const today = new Date().toISOString().slice(0, 10)
-  const fmtDue = (d: string) =>
-    new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-
   function run(fn: () => Promise<void>, id?: string) {
     setError(null)
     if (id) setBusyId(id)
@@ -128,11 +124,6 @@ export default function MyTasksList({ tasks }: { tasks: MyOpenTask[] }) {
               </p>
               {t.courseName && <p className="text-xs text-zinc-500 truncate">{t.courseName}</p>}
             </button>
-            {t.due_date && (
-              <span className={`text-xs shrink-0 ${t.due_date < today ? 'text-red-400' : 'text-zinc-500'}`}>
-                {t.due_date < today ? 'overdue · ' : ''}{fmtDue(t.due_date)}
-              </span>
-            )}
           </div>
 
           {openId === t.id && (

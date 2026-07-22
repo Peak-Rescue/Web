@@ -83,7 +83,6 @@ async function notifyAssignee(
 export type TaskInput = {
   title: string
   assigned_to: string | null
-  due_date: string | null
   notes: string | null
 }
 
@@ -98,7 +97,6 @@ export async function addTask(instanceId: string, input: TaskInput) {
     notes: input.notes?.trim() || null,
     assigned_to: input.assigned_to || null,
     assigned_by: input.assigned_to ? user.id : null,
-    due_date: input.due_date || null,
     created_by: user.id,
     sort_order: 1000, // custom tasks after the template checklist
   })
@@ -112,7 +110,7 @@ export async function addTask(instanceId: string, input: TaskInput) {
 export async function updateTask(
   instanceId: string,
   taskId: string,
-  patch: { assigned_to: string | null; due_date: string | null }
+  patch: { assigned_to: string | null }
 ) {
   const { user, admin } = await requireManager(instanceId)
 
@@ -129,7 +127,6 @@ export async function updateTask(
     .from('course_tasks')
     .update({
       assigned_to: patch.assigned_to || null,
-      due_date: patch.due_date || null,
       ...(assigneeChanged ? { assigned_by: patch.assigned_to ? user.id : null } : {}),
     })
     .eq('id', taskId)
