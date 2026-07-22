@@ -6,7 +6,7 @@ export type CalendarCourse = {
   status: string
   starts_at: string // yyyy-mm-dd
   ends_at: string
-  href: string
+  href?: string // absent → rendered as a non-clickable chip
 }
 
 const STATUS_CHIP: Record<string, string> = {
@@ -27,11 +27,19 @@ export default function CourseCalendar({
   month, // 'yyyy-mm'
   courses,
   basePath,
+  params,
 }: {
   month: string
   courses: CalendarCourse[]
   basePath: string
+  params?: Record<string, string> // extra query params to preserve in month-nav links
 }) {
+  const navHref = (m?: string) => {
+    const q = new URLSearchParams(params)
+    if (m) q.set('cal', m)
+    const s = q.toString()
+    return s ? `${basePath}?${s}` : basePath
+  }
   const [y, m] = month.split('-').map(Number)
   const first = new Date(Date.UTC(y, m - 1, 1))
   const daysInMonth = new Date(Date.UTC(y, m, 0)).getUTCDate()
@@ -55,9 +63,9 @@ export default function CourseCalendar({
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-sm font-semibold">{fmtMonth(first)}</h3>
         <div className="flex gap-2 text-sm">
-          <Link href={`${basePath}?cal=${ymd(prev).slice(0, 7)}`} className="px-2 py-1 bg-zinc-800 hover:bg-zinc-700 rounded text-zinc-300 transition-colors">←</Link>
-          <Link href={basePath} className="px-2 py-1 bg-zinc-800 hover:bg-zinc-700 rounded text-zinc-300 transition-colors text-xs leading-5">Today</Link>
-          <Link href={`${basePath}?cal=${ymd(next).slice(0, 7)}`} className="px-2 py-1 bg-zinc-800 hover:bg-zinc-700 rounded text-zinc-300 transition-colors">→</Link>
+          <Link href={navHref(ymd(prev).slice(0, 7))} className="px-2 py-1 bg-zinc-800 hover:bg-zinc-700 rounded text-zinc-300 transition-colors">←</Link>
+          <Link href={navHref()} className="px-2 py-1 bg-zinc-800 hover:bg-zinc-700 rounded text-zinc-300 transition-colors text-xs leading-5">Today</Link>
+          <Link href={navHref(ymd(next).slice(0, 7))} className="px-2 py-1 bg-zinc-800 hover:bg-zinc-700 rounded text-zinc-300 transition-colors">→</Link>
         </div>
       </div>
 
@@ -78,16 +86,19 @@ export default function CourseCalendar({
                 </p>
               )}
               <div className="space-y-0.5">
-                {active.map((c) => (
-                  <Link
-                    key={c.id}
-                    href={c.href}
-                    title={c.label}
-                    className={`block px-1 py-0.5 rounded border text-[10px] leading-tight truncate hover:brightness-125 transition ${STATUS_CHIP[c.status] ?? STATUS_CHIP.completed}`}
-                  >
-                    {day === c.starts_at || i % 7 === 0 ? c.label : '·'}
-                  </Link>
-                ))}
+                {active.map((c) => {
+                  const chipClass = `block px-1 py-0.5 rounded border text-[10px] leading-tight truncate ${STATUS_CHIP[c.status] ?? STATUS_CHIP.completed}`
+                  const text = day === c.starts_at || i % 7 === 0 ? c.label : '·'
+                  return c.href ? (
+                    <Link key={c.id} href={c.href} title={c.label} className={`${chipClass} hover:brightness-125 transition`}>
+                      {text}
+                    </Link>
+                  ) : (
+                    <span key={c.id} title={c.label} className={chipClass}>
+                      {text}
+                    </span>
+                  )
+                })}
               </div>
             </div>
           )

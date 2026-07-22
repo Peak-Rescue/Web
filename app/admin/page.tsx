@@ -7,8 +7,9 @@ import { loadMyOpenTasks } from '@/lib/course-tasks'
 import CourseCalendar, { type CalendarCourse } from '@/components/CourseCalendar'
 import { courseShortName } from '@/lib/courses'
 
-export default async function AdminPage({ searchParams }: { searchParams: Promise<{ cal?: string }> }) {
-  const { cal } = await searchParams
+export default async function AdminPage({ searchParams }: { searchParams: Promise<{ cal?: string; scope?: string }> }) {
+  const { cal, scope } = await searchParams
+  const showAllCourses = scope === 'all'
   const supabase = await createClient()
 
   const { data: { user } } = await supabase.auth.getUser()
@@ -29,13 +30,19 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     status: string
   }
   // Profile gate + personalized data in one parallel round.
-  const [{ data: profile }, { data: assignmentRows }, myTasks] = await Promise.all([
+  const [{ data: profile }, { data: assignmentRows }, myTasks, allInstancesRes] = await Promise.all([
     admin.from('profiles').select('role, first_name, last_name, email').eq('id', user.id).single(),
     admin
       .from('instance_instructors')
       .select('role, course_instances!inner(id, ref_number, course_type, custom_title, client_name, location, starts_at, ends_at, status), instructors!inner(profile_id)')
       .eq('instructors.profile_id', user.id),
     loadMyOpenTasks(admin, user.id),
+    showAllCourses
+      ? admin
+          .from('course_instances')
+          .select('id, ref_number, course_type, custom_title, client_name, location, starts_at, ends_at, status')
+          .neq('status', 'cancelled')
+      : Promise.resolve({ data: null }),
   ])
 
   if (!['admin', 'instructor'].includes(profile?.role ?? '')) redirect('/dashboard')
@@ -50,10 +57,16 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     .filter((c) => c.inst && c.inst.status !== 'cancelled' && (!c.inst.ends_at || c.inst.ends_at >= today))
     .sort((a, b) => (a.inst.starts_at ?? '9999').localeCompare(b.inst.starts_at ?? '9999'))
 
-  // Personal calendar: every assigned course with dates (past months included
-  // so back-navigation isn't empty), cancelled excluded.
-  const calendarCourses: CalendarCourse[] = (assignmentRows ?? [])
-    .map((a) => a.course_instances as unknown as InstRow)
+  // Calendar: assigned courses by default, every course when scope=all (past
+  // months included so back-navigation isn't empty), cancelled excluded.
+  // Chips only link where the viewer can actually open the course portal.
+  const assignedIds = new Set(
+    (assignmentRows ?? []).map((a) => (a.course_instances as unknown as InstRow).id)
+  )
+  const calendarSource: InstRow[] = showAllCourses
+    ? ((allInstancesRes.data ?? []) as InstRow[])
+    : (assignmentRows ?? []).map((a) => a.course_instances as unknown as InstRow)
+  const calendarCourses: CalendarCourse[] = calendarSource
     .filter((i) => i && i.status !== 'cancelled' && i.starts_at && i.ends_at)
     .map((i) => ({
       id: i.id,
@@ -61,8 +74,16 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       status: i.status,
       starts_at: i.starts_at!,
       ends_at: i.ends_at! >= i.starts_at! ? i.ends_at! : i.starts_at!,
-      href: `/portal/${i.id}`,
+      href: isAdmin || assignedIds.has(i.id) ? `/portal/${i.id}` : undefined,
     }))
+
+  const calScopeHref = (all: boolean) => {
+    const q = new URLSearchParams()
+    if (cal) q.set('cal', cal)
+    if (all) q.set('scope', 'all')
+    const s = q.toString()
+    return s ? `/admin?${s}` : '/admin'
+  }
 
 
   const fmtRange = (c: InstRow) => {
@@ -131,21 +152,42 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
           </section>
         )}
 
-        {calendarCourses.length > 0 && (
-          <details open={Boolean(cal)} className="mb-10 group">
-            <summary className="cursor-pointer list-none flex items-center gap-2 text-sm font-medium text-zinc-500 uppercase tracking-wide select-none">
-              <span className="text-zinc-600 text-xs transition-transform group-open:rotate-90">▶</span>
-              Your calendar
-            </summary>
-            <div className="mt-3">
-              <CourseCalendar
-                month={/^\d{4}-\d{2}$/.test(cal ?? '') ? cal! : today.slice(0, 7)}
-                basePath="/admin"
-                courses={calendarCourses}
-              />
+        <details open={Boolean(cal) || showAllCourses} className="mb-10 group">
+          <summary className="cursor-pointer list-none flex items-center gap-2 text-sm font-medium text-zinc-500 uppercase tracking-wide select-none">
+            <span className="text-zinc-600 text-xs transition-transform group-open:rotate-90">▶</span>
+            Your calendar
+          </summary>
+          <div className="mt-3">
+            <div className="flex gap-1 mb-3 text-xs">
+              <Link
+                href={calScopeHref(false)}
+                className={`px-2.5 py-1 rounded-full border transition-colors ${
+                  !showAllCourses
+                    ? 'bg-zinc-800 border-zinc-600 text-white'
+                    : 'border-zinc-800 text-zinc-500 hover:text-zinc-300'
+                }`}
+              >
+                My courses
+              </Link>
+              <Link
+                href={calScopeHref(true)}
+                className={`px-2.5 py-1 rounded-full border transition-colors ${
+                  showAllCourses
+                    ? 'bg-zinc-800 border-zinc-600 text-white'
+                    : 'border-zinc-800 text-zinc-500 hover:text-zinc-300'
+                }`}
+              >
+                All courses
+              </Link>
             </div>
-          </details>
-        )}
+            <CourseCalendar
+              month={/^\d{4}-\d{2}$/.test(cal ?? '') ? cal! : today.slice(0, 7)}
+              basePath="/admin"
+              courses={calendarCourses}
+              params={showAllCourses ? { scope: 'all' } : undefined}
+            />
+          </div>
+        </details>
 
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -161,16 +203,18 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
             <h2 className="font-semibold text-lg mb-1">Instructor Profiles</h2>
             <p className="text-zinc-400 text-sm">Certifications, expertise, and portal access</p>
           </Link>
-          <Link
-            href="/admin/courses"
-            className="p-6 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-pr-red transition-colors"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="mb-3 text-pr-red">
-              <rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/>
-            </svg>
-            <h2 className="font-semibold text-lg mb-1">Courses</h2>
-            <p className="text-zinc-400 text-sm">Schedule and manage course instances</p>
-          </Link>
+          {profile?.role === 'admin' && (
+            <Link
+              href="/admin/courses"
+              className="p-6 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-pr-red transition-colors"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="mb-3 text-pr-red">
+                <rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/>
+              </svg>
+              <h2 className="font-semibold text-lg mb-1">Courses</h2>
+              <p className="text-zinc-400 text-sm">Schedule and manage course instances</p>
+            </Link>
+          )}
           <Link
             href="/instructor"
             className="p-6 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-pr-red transition-colors"
