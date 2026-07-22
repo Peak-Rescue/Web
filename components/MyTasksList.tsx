@@ -12,6 +12,7 @@ import {
   deleteTaskDoc,
 } from '@/app/admin/courses/task-actions'
 import { type MyOpenTask } from '@/lib/course-tasks'
+import { NotesIcon, PaperclipIcon, taskIconClass } from '@/components/TaskIcons'
 
 // "Your open tasks" on the portal home — same task rows as the course pages,
 // with the same notes and attachments (shared data, so edits show both places).
@@ -45,6 +46,7 @@ export default function MyTasksList({ tasks }: { tasks: MyOpenTask[] }) {
   const [error, setError] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const uploadTaskRef = useRef<MyOpenTask | null>(null)
+  const notesFieldRef = useRef<HTMLTextAreaElement>(null)
 
   function run(fn: () => Promise<void>, id?: string) {
     setError(null)
@@ -67,6 +69,26 @@ export default function MyTasksList({ tasks }: { tasks: MyOpenTask[] }) {
     } else {
       setOpenId(t.id)
       setNotesDraft(t.notes ?? '')
+    }
+  }
+
+  function openDetails(t: MyOpenTask) {
+    if (openId !== t.id) {
+      setOpenId(t.id)
+      setNotesDraft(t.notes ?? '')
+    }
+  }
+
+  function openNotes(t: MyOpenTask) {
+    openDetails(t)
+    requestAnimationFrame(() => notesFieldRef.current?.focus())
+  }
+
+  function openAttachments(t: MyOpenTask) {
+    openDetails(t)
+    if (t.documents.length === 0) {
+      uploadTaskRef.current = t
+      fileRef.current?.click()
     }
   }
 
@@ -117,12 +139,23 @@ export default function MyTasksList({ tasks }: { tasks: MyOpenTask[] }) {
             <button onClick={() => toggle(t)} className="min-w-0 flex-1 text-left group">
               <p className="text-sm group-hover:text-pr-red-light transition-colors truncate">
                 {t.title}
-                {t.notes && openId !== t.id && <span className="ml-1.5 text-zinc-500">📝</span>}
-                {t.documents.length > 0 && openId !== t.id && (
-                  <span className="ml-1.5 text-xs text-zinc-500">📎{t.documents.length}</span>
-                )}
               </p>
               {t.courseName && <p className="text-xs text-zinc-500 truncate">{t.courseName}</p>}
+            </button>
+            <button
+              onClick={() => openNotes(t)}
+              title={t.notes ? 'View notes' : 'Add notes'}
+              className={taskIconClass(!!t.notes)}
+            >
+              <NotesIcon />
+            </button>
+            <button
+              onClick={() => openAttachments(t)}
+              title={t.documents.length > 0 ? `${t.documents.length} attached` : 'Attach documents'}
+              className={`inline-flex items-center gap-0.5 ${taskIconClass(t.documents.length > 0)}`}
+            >
+              <PaperclipIcon />
+              {t.documents.length > 0 && <span className="text-[10px]">{t.documents.length}</span>}
             </button>
           </div>
 
@@ -157,6 +190,7 @@ export default function MyTasksList({ tasks }: { tasks: MyOpenTask[] }) {
                 </Link>
               </div>
               <textarea
+                ref={notesFieldRef}
                 value={notesDraft}
                 onChange={(e) => scheduleNotes(t.instance_id, t.id, e.target.value)}
                 rows={2}

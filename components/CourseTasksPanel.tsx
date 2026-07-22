@@ -15,24 +15,7 @@ import {
   deleteTaskDoc,
 } from '@/app/admin/courses/task-actions'
 
-function NotesIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="size-3.5">
-      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-      <polyline points="14 2 14 8 20 8" />
-      <line x1="16" y1="13" x2="8" y2="13" />
-      <line x1="16" y1="17" x2="8" y2="17" />
-    </svg>
-  )
-}
-
-function PaperclipIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="size-3.5">
-      <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
-    </svg>
-  )
-}
+import { NotesIcon, PaperclipIcon, taskIconClass } from '@/components/TaskIcons'
 
 export type CourseTask = {
   id: string
@@ -99,6 +82,7 @@ export default function CourseTasksPanel({
   const [uploadingDocsFor, setUploadingDocsFor] = useState<string | null>(null)
   const docInputRef = useRef<HTMLInputElement>(null)
   const docTaskRef = useRef<string | null>(null)
+  const notesFieldRef = useRef<HTMLTextAreaElement>(null)
 
   const personName = (id: string | null) => people.find((p) => p.id === id)?.name ?? null
 
@@ -160,13 +144,34 @@ export default function CourseTasksPanel({
     }
   }
 
-  function TaskRow({ t }: { t: CourseTask }) {
+  function openDetails(t: CourseTask) {
+    if (openDetailsId !== t.id) {
+      setOpenDetailsId(t.id)
+      setNotesDraft(t.notes ?? '')
+    }
+  }
+
+  function openNotes(t: CourseTask) {
+    openDetails(t)
+    requestAnimationFrame(() => notesFieldRef.current?.focus())
+  }
+
+  function openAttachments(t: CourseTask) {
+    openDetails(t)
+    const canEdit = canManage || t.assigned_to === currentUserId
+    if (t.documents.length === 0 && canEdit) {
+      docTaskRef.current = t.id
+      docInputRef.current?.click()
+    }
+  }
+
+  function renderTaskRow(t: CourseTask) {
     const isDone = t.status === 'done'
     const canToggle = canManage || t.assigned_to === currentUserId
     const canEditNotes = canManage || t.assigned_to === currentUserId
     const detailsOpen = openDetailsId === t.id
     return (
-      <div className="px-4 py-2.5">
+      <div key={t.id} className="px-4 py-2.5">
       <div className="flex items-center gap-3">
         <input
           type="checkbox"
@@ -181,18 +186,19 @@ export default function CourseTasksPanel({
           </p>
         </button>
         {/* Always-visible affordances: dimmed when empty, lit when the task
-            has notes/attachments — either way they open the details. */}
+            has notes/attachments. Notes jumps to the notes box; the paperclip
+            opens the file picker when nothing is attached yet. */}
         <button
-          onClick={() => toggleDetails(t)}
+          onClick={() => openNotes(t)}
           title={t.notes ? 'View notes' : 'Add notes'}
-          className={`shrink-0 transition-colors hover:text-white ${t.notes ? 'text-zinc-300' : 'text-zinc-700'}`}
+          className={taskIconClass(!!t.notes)}
         >
           <NotesIcon />
         </button>
         <button
-          onClick={() => toggleDetails(t)}
+          onClick={() => openAttachments(t)}
           title={t.documents.length > 0 ? `${t.documents.length} attached` : 'Attach documents'}
-          className={`shrink-0 inline-flex items-center gap-0.5 transition-colors hover:text-white ${t.documents.length > 0 ? 'text-zinc-300' : 'text-zinc-700'}`}
+          className={`inline-flex items-center gap-0.5 ${taskIconClass(t.documents.length > 0)}`}
         >
           <PaperclipIcon />
           {t.documents.length > 0 && <span className="text-[10px]">{t.documents.length}</span>}
@@ -268,6 +274,7 @@ export default function CourseTasksPanel({
           {canEditNotes ? (
             <div>
               <textarea
+                ref={notesFieldRef}
                 value={notesDraft}
                 onChange={(e) => scheduleNotes(instanceId, t.id, e.target.value)}
                 rows={2}
@@ -296,7 +303,7 @@ export default function CourseTasksPanel({
     <div>
       <input ref={docInputRef} type="file" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" multiple className="hidden" onChange={handleDocFiles} />
       <div className="bg-zinc-900 rounded-lg border border-zinc-800 divide-y divide-zinc-800">
-        {open.map((t) => <TaskRow key={t.id} t={t} />)}
+        {open.map((t) => renderTaskRow(t))}
         {open.length === 0 && (
           <p className="px-4 py-3 text-sm text-zinc-500">
             {tasks.length === 0 ? 'No tasks yet.' : 'All tasks done ✓'}
@@ -308,7 +315,7 @@ export default function CourseTasksPanel({
               {done.length} completed
             </summary>
             <div className="divide-y divide-zinc-800 border-t border-zinc-800">
-              {done.map((t) => <TaskRow key={t.id} t={t} />)}
+              {done.map((t) => renderTaskRow(t))}
             </div>
           </details>
         )}

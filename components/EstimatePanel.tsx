@@ -4,6 +4,7 @@ import { useRef, useState } from 'react'
 import { fmtMoney, round2 } from '@/lib/expenses'
 import { saveEstimate, deleteEstimateCoa, type EstimateItemInput } from '@/app/admin/courses/finance-actions'
 import { useRouter } from 'next/navigation'
+import { CalculatorIcon, NotesIcon } from '@/components/TaskIcons'
 
 export type PricingRate = { id: string; label: string; unit: string | null; rate: number }
 
@@ -369,16 +370,16 @@ export default function EstimatePanel({
                 <button
                   onClick={() => toggleNotes(r.key)}
                   title="Notes for this line"
-                  className={`text-sm shrink-0 transition-colors ${r.notes || notesOpen.has(r.key) ? 'text-zinc-300' : 'text-zinc-600 hover:text-zinc-400'}`}
+                  className={`shrink-0 transition-colors ${r.notes || notesOpen.has(r.key) ? 'text-zinc-300 hover:text-white' : 'text-zinc-600 hover:text-zinc-400'}`}
                 >
-                  📝
+                  <NotesIcon />
                 </button>
                 <button
                   onClick={() => toggleCalc(r.key)}
                   title="Quantity calculator — build qty from people × days × units"
-                  className={`text-sm shrink-0 transition-colors ${r.factors || calcOpen.has(r.key) ? 'text-zinc-300' : 'text-zinc-600 hover:text-zinc-400'}`}
+                  className={`shrink-0 transition-colors ${r.factors || calcOpen.has(r.key) ? 'text-zinc-300 hover:text-white' : 'text-zinc-600 hover:text-zinc-400'}`}
                 >
-                  🔢
+                  <CalculatorIcon />
                 </button>
                 <input
                   value={r.label}
