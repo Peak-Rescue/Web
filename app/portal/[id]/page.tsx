@@ -71,7 +71,11 @@ export default async function PortalPage({
   const viewAs = isAdmin && (as === 'student' || as === 'instructor') ? as : null
   const showAsAdmin = viewAs ? false : isAdmin
   const showAsInstructor = viewAs ? viewAs === 'instructor' : isInstructor
-  const canManageTasks = viewAs ? false : isAdmin || instructorAssignment?.role === 'lead'
+  // Instructor preview keeps your real course role, so a lead previewing
+  // still gets the lead's manage controls (just not the admin-only rows).
+  const canManageTasks = viewAs
+    ? viewAs === 'instructor' && instructorAssignment?.role === 'lead'
+    : isAdmin || instructorAssignment?.role === 'lead'
 
   // Everything else in a second parallel round (roles known, filters set).
   const showTasks = showAsAdmin || showAsInstructor
@@ -113,9 +117,9 @@ export default async function PortalPage({
     ? computeBlocks(inst.starts_at, inst.ends_at, offDays ?? [])
     : []
 
-  // Managers see the full checklist (they assign from it); everyone else
-  // sees only tasks that have actually been assigned to someone.
-  const tasks: CourseTask[] = canManageTasks ? taskRows : taskRows.filter((t) => t.assigned_to)
+  // Admins see the full checklist (unassigned rows are their cue to assign);
+  // instructors — leads included — see only tasks assigned to someone.
+  const tasks: CourseTask[] = showAsAdmin ? taskRows : taskRows.filter((t) => t.assigned_to)
   const taskPeople: TaskPerson[] = (peopleRows ?? [])
     .map((p) => ({ id: p.id, name: [p.first_name, p.last_name].filter(Boolean).join(' ') }))
     .filter((p) => p.name)
@@ -133,7 +137,7 @@ export default async function PortalPage({
               <span className="text-zinc-600 mr-1">Viewing as</span>
               {([
                 ['', 'Admin', 'Everything, unfiltered'],
-                ['instructor', 'Instructor', 'What an assigned (non-lead) instructor sees'],
+                ['instructor', 'Instructor', 'What an assigned instructor sees (uses your real role on this course)'],
                 ['student', 'Student', 'What an enrolled student sees'],
               ] as const).map(([key, label, hint]) => (
                 <Link
