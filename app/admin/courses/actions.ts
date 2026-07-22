@@ -178,11 +178,31 @@ export async function updateInstanceDates(id: string, formData: FormData) {
 
 export async function addOffDay(instanceId: string, formData: FormData) {
   await requireAdmin()
+  const admin = createAdminClient()
   const off_date = formData.get('off_date') as string
   const end_date = (formData.get('end_date') as string) || null
   if (!off_date) throw new Error('Date is required')
+  if (end_date && end_date < off_date) throw new Error('Off-day end date must be on or after its start date')
 
-  const { error } = await createAdminClient()
+  // Guard against the classic mistake: entering the course dates here.
+  // Off-days must fall strictly inside the course window.
+  const { data: inst } = await admin
+    .from('course_instances')
+    .select('starts_at, ends_at')
+    .eq('id', instanceId)
+    .single()
+  if (!inst?.starts_at || !inst?.ends_at) {
+    throw new Error('Set the course start and end dates first — off-days are breaks inside that window')
+  }
+  const last = end_date ?? off_date
+  if (off_date <= inst.starts_at || last >= inst.ends_at) {
+    throw new Error(
+      `Off-days must fall inside the course (${inst.starts_at} – ${inst.ends_at}), not on its first/last day. ` +
+        'If you meant to set the course dates, use Course start/end above.'
+    )
+  }
+
+  const { error } = await admin
     .from('instance_off_days')
     .insert({ instance_id: instanceId, off_date, end_date: end_date ?? null })
 

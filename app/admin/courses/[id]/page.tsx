@@ -266,10 +266,19 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
             </div>
           </AutoSaveForm>
 
-          {/* Off days */}
-          <div className="mb-4">
-            <h3 className="text-sm font-medium text-zinc-300 mb-2">Off Days</h3>
-            <p className="text-xs text-zinc-500 mb-3">Dates excluded from the schedule (holidays, travel days, etc.)</p>
+          {/* Off days — folded behind a deliberate reveal: most courses run
+              straight through, and an exposed date form here invites people
+              to mistake it for the course dates. */}
+          <details open={(offDays ?? []).length > 0} className="mb-4 group/off">
+            <summary className="cursor-pointer list-none text-sm text-zinc-400 hover:text-zinc-200 transition-colors select-none">
+              <span className="text-zinc-600 text-xs mr-1.5 inline-block transition-transform group-open/off:rotate-90">▶</span>
+              This course has a break in the middle (off-days)…
+            </summary>
+            <div className="mt-3">
+            <p className="text-xs text-zinc-500 mb-3">
+              Off-days are dates <span className="text-zinc-300">excluded from within the course window</span> (a rest
+              day, a mid-course pause) — not the course dates themselves, which go in Course start/end above.
+            </p>
             {(offDays ?? []).length > 0 && (
               <div className="space-y-2 mb-3">
                 {(offDays ?? []).map(o => {
@@ -304,7 +313,8 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
                 Add
               </button>
             </form>
-          </div>
+            </div>
+          </details>
 
           {/* Computed blocks preview */}
           {blocks.length > 0 && (
