@@ -7,6 +7,7 @@ import { createClient as createAnonClient } from '@supabase/supabase-js'
 import { type CertType } from '@/lib/certs'
 import { type CapabilityCategory, type CapabilityRole } from '@/lib/capabilities'
 import { normalizePhone } from '@/lib/phone'
+import { normalizeEmail } from '@/lib/email'
 
 async function requireAdmin() {
   const supabase = await createClient()
@@ -195,7 +196,7 @@ export async function adminUpdateProfile(profileId: string, {
 
 export async function adminUpdateInstructorEmail(instructorId: string, formData: FormData) {
   await requireAdmin()
-  const email = (formData.get('email') as string).trim() || null
+  const email = normalizeEmail(formData.get('email') as string) || null
 
   const { error } = await createAdminClient()
     .from('instructors')
@@ -400,7 +401,7 @@ export async function adminCreateInstructor(firstName: string, lastName: string,
     .insert({
       slug: finalSlug,
       name: fullName,
-      email: email.trim() || null,
+      email: normalizeEmail(email) || null,
       instructor_role: 'specialized',
       title: fullName,
       bio: '',

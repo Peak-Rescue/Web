@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { ilikeExact } from '@/lib/email'
 
 export async function linkInstructorProfile(firstName?: string, lastName?: string) {
   const supabase = await createClient()
@@ -18,7 +19,7 @@ export async function linkInstructorProfile(firstName?: string, lastName?: strin
   const { data: instructor } = await admin
     .from('instructors')
     .select('id, profile_id')
-    .eq('email', user.email)
+    .ilike('email', ilikeExact(user.email))
     .maybeSingle()
 
   if (instructor) {

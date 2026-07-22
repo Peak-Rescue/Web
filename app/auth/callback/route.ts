@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { ilikeExact } from '@/lib/email'
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url)
@@ -27,7 +28,7 @@ export async function GET(request: Request) {
         const { data: instructor } = await admin
           .from('instructors')
           .select('id, profile_id')
-          .eq('email', data.user.email)
+          .ilike('email', ilikeExact(data.user.email))
           .maybeSingle()
 
         if (instructor) {
