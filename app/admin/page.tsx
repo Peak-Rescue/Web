@@ -7,8 +7,8 @@ import { loadMyOpenTasks } from '@/lib/course-tasks'
 import CourseCalendar, { type CalendarCourse } from '@/components/CourseCalendar'
 import { courseShortName } from '@/lib/courses'
 
-export default async function AdminPage({ searchParams }: { searchParams: Promise<{ cal?: string; scope?: string }> }) {
-  const { cal, scope } = await searchParams
+export default async function AdminPage({ searchParams }: { searchParams: Promise<{ cal?: string; scope?: string; as?: string }> }) {
+  const { cal, scope, as } = await searchParams
   const showAllCourses = scope === 'all'
   const supabase = await createClient()
 
@@ -48,9 +48,17 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   if (!['admin', 'instructor'].includes(profile?.role ?? '')) redirect('/dashboard')
 
   const isAdmin = profile?.role === 'admin'
+  // Admins can preview this page as an instructor via ?as=instructor — purely
+  // a display role; the access gate above uses the real one.
+  const viewAs = isAdmin && as === 'instructor' ? ('instructor' as const) : null
+  const showAsAdmin = viewAs ? false : isAdmin
   const displayName = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ').trim()
     || profile?.email
     || user.email
+
+  // Course-portal links keep the preview role, so the whole click-through
+  // stays in instructor view.
+  const portalHref = (id: string) => (viewAs ? `/portal/${id}?as=${viewAs}` : `/portal/${id}`)
 
   const myCourses = (assignmentRows ?? [])
     .map((a) => ({ role: a.role as string, inst: a.course_instances as unknown as InstRow }))
@@ -74,13 +82,14 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       status: i.status,
       starts_at: i.starts_at!,
       ends_at: i.ends_at! >= i.starts_at! ? i.ends_at! : i.starts_at!,
-      href: isAdmin || assignedIds.has(i.id) ? `/portal/${i.id}` : undefined,
+      href: showAsAdmin || assignedIds.has(i.id) ? portalHref(i.id) : undefined,
     }))
 
-  const calScopeHref = (all: boolean) => {
+  const homeHref = ({ all = showAllCourses, view = viewAs }: { all?: boolean; view?: string | null } = {}) => {
     const q = new URLSearchParams()
     if (cal) q.set('cal', cal)
     if (all) q.set('scope', 'all')
+    if (view) q.set('as', view)
     const s = q.toString()
     return s ? `/admin?${s}` : '/admin'
   }
@@ -106,15 +115,35 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
           <h1 className="text-2xl font-bold">Portal</h1>
           <span
             className={`px-2.5 py-1 rounded-full text-xs font-semibold uppercase tracking-wider border ${
-              isAdmin
+              showAsAdmin
                 ? 'bg-pr-red/15 border-pr-red/40 text-pr-red'
                 : 'bg-teal-900/40 border-teal-700 text-teal-300'
             }`}
           >
-            {isAdmin ? 'Admin' : 'Instructor'}
+            {showAsAdmin ? 'Admin' : 'Instructor'}
           </span>
           {displayName && (
             <span className="text-sm text-zinc-500">Signed in as {displayName}</span>
+          )}
+          {isAdmin && (
+            <div className="ml-auto flex items-center gap-1 text-xs">
+              <span className="text-zinc-600 mr-1">Viewing as</span>
+              {([
+                [null, 'Admin', 'Everything, unfiltered'],
+                ['instructor', 'Instructor', 'What an instructor sees'],
+              ] as const).map(([key, label, hint]) => (
+                <Link
+                  key={label}
+                  href={homeHref({ view: key })}
+                  title={hint}
+                  className={`px-2 py-1 rounded font-medium transition-colors ${
+                    viewAs === key ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:text-zinc-300'
+                  }`}
+                >
+                  {label}
+                </Link>
+              ))}
+            </div>
           )}
         </div>
         {myCourses.length > 0 && (
@@ -124,7 +153,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
               {myCourses.map((c) => (
                 <Link
                   key={c.inst.id}
-                  href={`/portal/${c.inst.id}`}
+                  href={portalHref(c.inst.id)}
                   className="flex items-center justify-between px-4 py-3 bg-zinc-900 border border-zinc-800 rounded-lg hover:border-pr-red transition-colors"
                 >
                   <div className="min-w-0">
@@ -167,7 +196,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
           <div className="mt-3">
             <div className="flex gap-1 mb-3 text-xs">
               <Link
-                href={calScopeHref(false)}
+                href={homeHref({ all: false })}
                 className={`px-2.5 py-1 rounded-full border transition-colors ${
                   !showAllCourses
                     ? 'bg-zinc-800 border-zinc-600 text-white'
@@ -177,7 +206,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
                 My courses
               </Link>
               <Link
-                href={calScopeHref(true)}
+                href={homeHref({ all: true })}
                 className={`px-2.5 py-1 rounded-full border transition-colors ${
                   showAllCourses
                     ? 'bg-zinc-800 border-zinc-600 text-white'
@@ -191,7 +220,10 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
               month={/^\d{4}-\d{2}$/.test(cal ?? '') ? cal! : today.slice(0, 7)}
               basePath="/admin"
               courses={calendarCourses}
-              params={showAllCourses ? { scope: 'all' } : undefined}
+              params={{
+                ...(showAllCourses ? { scope: 'all' } : {}),
+                ...(viewAs ? { as: viewAs } : {}),
+              }}
             />
           </div>
         </details>
@@ -210,7 +242,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
             <h2 className="font-semibold text-lg mb-1">Instructor Profiles</h2>
             <p className="text-zinc-400 text-sm">Certifications, expertise, and portal access</p>
           </Link>
-          {profile?.role === 'admin' && (
+          {showAsAdmin && (
             <Link
               href="/admin/courses"
               className="relative p-6 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-pr-red transition-colors"
@@ -243,7 +275,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
             <h2 className="font-semibold text-lg mb-1">Expense Reports</h2>
             <p className="text-zinc-400 text-sm">File reimbursement requests with receipts</p>
           </Link>
-          {profile?.role === 'admin' && (
+          {showAsAdmin && (
             <Link
               href="/admin/expenses"
               className="relative p-6 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-pr-red transition-colors"
@@ -266,7 +298,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
             <h2 className="font-semibold text-lg mb-1">Employee Information</h2>
             <p className="text-zinc-400 text-sm">Handbook, policies, and employment documents</p>
           </Link>
-          {profile?.role === 'admin' && (
+          {showAsAdmin && (
             <Link
               href="/admin/contact"
               className="relative p-6 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-pr-red transition-colors"
@@ -279,7 +311,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
               <p className="text-zinc-400 text-sm">Messages from the public contact form</p>
             </Link>
           )}
-          {profile?.role === 'admin' && (
+          {showAsAdmin && (
             <Link
               href="/admin/gallery"
               className="relative p-6 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-pr-red transition-colors"
