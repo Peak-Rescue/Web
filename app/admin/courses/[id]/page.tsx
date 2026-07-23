@@ -214,7 +214,8 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
       const days = courseDays ?? 1
       if (label === 'Instructor field day') return { qty: instructorCount * days, factors: [instructorCount, days] }
       if (label === 'Instructor travel day') return { qty: instructorCount * 2, factors: [instructorCount, 2] }
-      if (label === 'Lodging') return { qty: instructorCount * days, factors: [instructorCount, days] }
+      // Lodging nights: course days plus a travel night on each end
+      if (label === 'Lodging') return { qty: instructorCount * (days + 2), factors: [instructorCount, days + 2] }
       if (label === 'Permits' && inst.max_students) return { qty: inst.max_students * days, factors: [inst.max_students, days] }
       return { qty: 1, factors: null }
     }

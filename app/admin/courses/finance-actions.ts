@@ -119,7 +119,8 @@ export async function createEstimateCoa(instanceId: string) {
   const guessQty = (label: string): { qty: number; factors: number[] | null } => {
     if (label === 'Instructor field day') return { qty: instructorCount * courseDays, factors: [instructorCount, courseDays] }
     if (label === 'Instructor travel day') return { qty: instructorCount * 2, factors: [instructorCount, 2] }
-    if (label === 'Lodging') return { qty: instructorCount * courseDays, factors: [instructorCount, courseDays] }
+    // Lodging nights: course days plus a travel night on each end
+    if (label === 'Lodging') return { qty: instructorCount * (courseDays + 2), factors: [instructorCount, courseDays + 2] }
     if (label === 'Permits' && inst.max_students) return { qty: inst.max_students * courseDays, factors: [inst.max_students, courseDays] }
     return { qty: 1, factors: null }
   }
