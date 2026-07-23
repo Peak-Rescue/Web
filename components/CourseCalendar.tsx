@@ -10,21 +10,37 @@ export type CalendarCourse = {
   category?: string | null // course_category; 'tactical' → military, anything else → civilian
 }
 
-// Military vs civilian accent — same designation rule as the Google Calendar
-// sync (course_category 'tactical' → military, everything else → civilian).
-const CATEGORY_DOT = {
-  military: 'bg-orange-400',
-  civilian: 'bg-cyan-400',
+// Chips are colored by designation like the Google calendars — military vs
+// civilian, same rule as the sync (course_category 'tactical' → military,
+// everything else → civilian) — while status shows as solidity: confirmed
+// filled, quoted outlined, tentative dashed, completed dimmed.
+const CATEGORY_STYLE = {
+  military: {
+    swatch: 'bg-orange-400',
+    solid: 'bg-orange-900/80 text-orange-100 border-orange-700',
+    outline: 'border-orange-700 text-orange-300',
+  },
+  civilian: {
+    swatch: 'bg-cyan-400',
+    solid: 'bg-cyan-900/80 text-cyan-100 border-cyan-700',
+    outline: 'border-cyan-700 text-cyan-300',
+  },
 }
 
-// Solidity mirrors certainty: confirmed/completed chips are filled, quoted is
-// outline-only, tentative is a dashed outline.
-const STATUS_CHIP: Record<string, string> = {
-  tentative: 'border-dashed border-yellow-700 text-yellow-300',
-  quoted: 'border-blue-700 text-blue-300',
-  confirmed: 'bg-teal-800/80 text-teal-100 border-teal-700',
-  completed: 'bg-zinc-800 text-zinc-400 border-zinc-700',
-  cancelled: 'bg-red-900/50 text-red-300 border-red-900 line-through',
+function chipStyle(c: CalendarCourse): string {
+  const s = CATEGORY_STYLE[c.category === 'tactical' ? 'military' : 'civilian']
+  switch (c.status) {
+    case 'tentative':
+      return `${s.outline} border-dashed`
+    case 'quoted':
+      return s.outline
+    case 'completed':
+      return `${s.solid} opacity-60`
+    case 'cancelled':
+      return 'bg-red-900/50 text-red-300 border-red-900 line-through'
+    default:
+      return s.solid // confirmed
+  }
 }
 
 function ymd(d: Date): string {
@@ -60,13 +76,13 @@ export default function CourseCalendar({
     return s ? `${basePath}?${s}` : basePath
   }
 
-  // Legend-pill links: set the filter, or clear it when already active.
-  // Always carry the shown month so pages whose calendar panel opens off the
-  // ?cal param keep it expanded.
-  const catHref = (next: 'military' | 'civilian') => {
+  // Legend-checkbox links: next is the category to show alone, or null for
+  // both. Always carry the shown month so pages whose calendar panel opens
+  // off the ?cal param keep it expanded.
+  const catHref = (nextFilter: 'military' | 'civilian' | null) => {
     const q = new URLSearchParams(params)
     q.set('cal', month)
-    if (catFilter !== next) q.set('cat', next)
+    if (nextFilter) q.set('cat', nextFilter)
     return `${basePath}?${q.toString()}`
   }
   const [y, m] = month.split('-').map(Number)
@@ -150,26 +166,17 @@ export default function CourseCalendar({
                   const contRight = day! < c.ends_at && i % 7 !== 6
                   const chipClass = [
                     'block px-1 py-0.5 border text-[10px] leading-tight truncate',
-                    STATUS_CHIP[c.status] ?? STATUS_CHIP.completed,
+                    chipStyle(c),
                     contLeft ? 'rounded-l-none border-l-0 -ml-[5px]' : 'rounded-l',
                     contRight ? 'rounded-r-none border-r-0 -mr-1' : 'rounded-r',
                   ].join(' ')
                   const text = contLeft ? ' ' : c.label
-                  const dot = !contLeft && c.category !== undefined && (
-                    <span
-                      className={`inline-block w-1.5 h-1.5 rounded-full mr-1 align-middle ${
-                        c.category === 'tactical' ? CATEGORY_DOT.military : CATEGORY_DOT.civilian
-                      }`}
-                    />
-                  )
                   return c.href ? (
                     <Link key={c.id} href={c.href} title={c.label} className={`${chipClass} hover:brightness-125 transition`}>
-                      {dot}
                       {text}
                     </Link>
                   ) : (
                     <span key={c.id} title={c.label} className={chipClass}>
-                      {dot}
                       {text}
                     </span>
                   )
@@ -181,26 +188,37 @@ export default function CourseCalendar({
       </div>
 
       {courses.some((c) => c.category !== undefined) && (
-        <div className="flex items-center gap-1.5 mt-2 text-[10px]">
-          {(['military', 'civilian'] as const).map((k) => (
-            <Link
-              key={k}
-              href={catHref(k)}
-              title={catFilter === k ? 'Show all courses' : `Show only ${k} courses`}
-              className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full border transition-colors ${
-                catFilter === k
-                  ? 'bg-zinc-800 border-zinc-600 text-white'
-                  : 'border-transparent text-zinc-500 hover:text-zinc-300'
-              }`}
-            >
-              <span
-                className={`w-1.5 h-1.5 rounded-full ${CATEGORY_DOT[k]} ${
-                  catFilter && catFilter !== k ? 'opacity-40' : ''
+        <div className="flex items-center gap-4 mt-2 text-[10px]">
+          {/* Checkbox semantics: both checked by default; unchecking one
+              leaves the other. Unchecking the last checked box flips to the
+              other category instead of an empty calendar. */}
+          {(['military', 'civilian'] as const).map((k) => {
+            const other = k === 'military' ? ('civilian' as const) : ('military' as const)
+            const checked = catFilter !== other
+            return (
+              <Link
+                key={k}
+                href={catHref(checked ? other : null)}
+                title={checked ? `Hide ${k} courses` : `Show ${k} courses`}
+                className={`flex items-center gap-1.5 transition-colors ${
+                  checked ? 'text-zinc-300 hover:text-white' : 'text-zinc-600 hover:text-zinc-400'
                 }`}
-              />
-              {k === 'military' ? 'Military' : 'Civilian'}
-            </Link>
-          ))}
+              >
+                <span
+                  className={`flex items-center justify-center w-3 h-3 rounded-sm border ${
+                    checked ? `${CATEGORY_STYLE[k].swatch} border-transparent text-zinc-950` : 'border-zinc-600'
+                  }`}
+                >
+                  {checked && (
+                    <svg xmlns="http://www.w3.org/2000/svg" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M20 6 9 17l-5-5" />
+                    </svg>
+                  )}
+                </span>
+                {k === 'military' ? 'Military' : 'Civilian'}
+              </Link>
+            )
+          })}
         </div>
       )}
     </div>
