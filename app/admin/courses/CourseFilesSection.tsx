@@ -6,8 +6,11 @@ import { createClient } from '@/lib/supabase/client'
 import {
   createCourseDocUploadTargets,
   finalizeCourseDocs,
+  renameCourseDoc,
   deleteCourseDoc,
 } from './document-actions'
+import { PencilIcon } from '@/components/TaskIcons'
+import UploadNameDialog from '@/components/UploadNameDialog'
 
 export type CourseFile = {
   id: string
@@ -32,11 +35,22 @@ export default function CourseFilesSection({
   const [uploading, setUploading] = useState(false)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [renamingId, setRenamingId] = useState<string | null>(null)
+  const [renameDraft, setRenameDraft] = useState('')
+  const [pending, setPending] = useState<File[]>([])
   const fileRef = useRef<HTMLInputElement>(null)
+  const renameCancelled = useRef(false)
 
-  async function handleFiles(e: React.ChangeEvent<HTMLInputElement>) {
+  function handleFiles(e: React.ChangeEvent<HTMLInputElement>) {
     const picked = Array.from(e.target.files ?? [])
     e.target.value = ''
+    if (picked.length === 0) return
+    setError(null)
+    setPending(picked)
+  }
+
+  async function uploadNamed(names: string[]) {
+    const picked = pending
     if (picked.length === 0) return
     setUploading(true)
     setError(null)
@@ -52,14 +66,33 @@ export default function CourseFilesSection({
           .from('task-documents')
           .uploadToSignedUrl(targets[i].path, targets[i].token, picked[i], { contentType: picked[i].type })
         if (upErr) throw new Error(`Upload failed for "${picked[i].name}": ${upErr.message}`)
-        uploads.push({ path: targets[i].path, filename: picked[i].name })
+        uploads.push({ path: targets[i].path, filename: names[i]?.trim() || picked[i].name })
       }
       await finalizeCourseDocs(instanceId, uploads)
+      setPending([])
       router.refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Upload failed')
     } finally {
       setUploading(false)
+    }
+  }
+
+  async function rename(f: CourseFile) {
+    const skip = renameCancelled.current
+    renameCancelled.current = false
+    setRenamingId(null)
+    const name = renameDraft.trim()
+    if (skip || !name || name === f.filename) return
+    setBusyId(f.id)
+    setError(null)
+    try {
+      await renameCourseDoc(instanceId, f.id, name)
+      router.refresh()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Rename failed')
+    } finally {
+      setBusyId(null)
     }
   }
 
@@ -106,25 +139,56 @@ export default function CourseFilesSection({
         <div className="divide-y divide-zinc-800">
           {files.map((f) => (
             <div key={`${f.source}-${f.id}`} className="flex items-center gap-3 py-2">
-              <a
-                href={f.url}
-                target="_blank"
-                rel="noreferrer"
-                className="text-sm text-zinc-200 hover:text-white truncate max-w-64"
-              >
-                {f.filename}
-              </a>
+              {renamingId === f.id ? (
+                <input
+                  autoFocus
+                  value={renameDraft}
+                  onChange={(e) => setRenameDraft(e.target.value)}
+                  onFocus={(e) => e.currentTarget.select()}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') e.currentTarget.blur()
+                    if (e.key === 'Escape') {
+                      renameCancelled.current = true
+                      e.currentTarget.blur()
+                    }
+                  }}
+                  onBlur={() => rename(f)}
+                  className="max-w-64 flex-1 bg-zinc-800 border border-zinc-600 rounded px-2 py-1 text-sm text-zinc-200 focus:outline-none focus:border-zinc-400"
+                />
+              ) : (
+                <a
+                  href={f.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-sm text-zinc-200 hover:text-white truncate max-w-64"
+                >
+                  {f.filename}
+                </a>
+              )}
               <span className="text-xs text-zinc-500 truncate flex-1">
                 {f.source === 'course' ? 'Course file' : f.source === 'task' ? `Task: ${f.label ?? '—'}` : `Expense receipt${f.label ? ` · ${f.label}` : ''}`}
               </span>
               {f.source === 'course' && (
-                <button
-                  onClick={() => remove(f)}
-                  disabled={busyId === f.id}
-                  className="text-xs text-zinc-600 hover:text-pr-red-light transition-colors shrink-0"
-                >
-                  ×
-                </button>
+                <>
+                  <button
+                    onClick={() => {
+                      setRenameDraft(f.filename)
+                      setRenamingId(f.id)
+                    }}
+                    disabled={busyId === f.id}
+                    title="Rename"
+                    className="text-zinc-600 hover:text-zinc-300 transition-colors shrink-0"
+                  >
+                    <PencilIcon />
+                  </button>
+                  <button
+                    onClick={() => remove(f)}
+                    disabled={busyId === f.id}
+                    className="text-xs text-zinc-600 hover:text-pr-red-light transition-colors shrink-0"
+                  >
+                    ×
+                  </button>
+                </>
               )}
             </div>
           ))}
@@ -132,6 +196,13 @@ export default function CourseFilesSection({
       )}
 
       {error && <p className="mt-2 text-xs text-pr-red-light">{error}</p>}
+
+      <UploadNameDialog
+        files={pending}
+        uploading={uploading}
+        onSubmit={uploadNamed}
+        onCancel={() => !uploading && setPending([])}
+      />
     </div>
   )
 }

@@ -9,10 +9,13 @@ import {
   updateTaskNotes,
   createTaskDocUploadTargets,
   finalizeTaskDocs,
+  renameTaskDoc,
   deleteTaskDoc,
 } from '@/app/admin/courses/task-actions'
 import { type MyOpenTask } from '@/lib/course-tasks'
 import { NotesIcon, PaperclipIcon, taskIconClass } from '@/components/TaskIcons'
+import TaskDocChip from '@/components/TaskDocChip'
+import UploadNameDialog from '@/components/UploadNameDialog'
 
 // "Your open tasks" on the portal home — same task rows as the course pages,
 // with the same notes and attachments (shared data, so edits show both places).
@@ -43,6 +46,7 @@ export default function MyTasksList({ tasks }: { tasks: MyOpenTask[] }) {
     }
   }
   const [uploadingFor, setUploadingFor] = useState<string | null>(null)
+  const [pending, setPending] = useState<{ task: MyOpenTask; files: File[] } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const uploadTaskRef = useRef<MyOpenTask | null>(null)
@@ -92,11 +96,18 @@ export default function MyTasksList({ tasks }: { tasks: MyOpenTask[] }) {
     }
   }
 
-  async function handleFiles(e: React.ChangeEvent<HTMLInputElement>) {
+  function handleFiles(e: React.ChangeEvent<HTMLInputElement>) {
     const task = uploadTaskRef.current
     const files = Array.from(e.target.files ?? [])
     e.target.value = ''
     if (!task || files.length === 0) return
+    setError(null)
+    setPending({ task, files })
+  }
+
+  async function uploadNamed(names: string[]) {
+    if (!pending) return
+    const { task, files } = pending
     setUploadingFor(task.id)
     setError(null)
     try {
@@ -112,9 +123,10 @@ export default function MyTasksList({ tasks }: { tasks: MyOpenTask[] }) {
           .from('task-documents')
           .uploadToSignedUrl(targets[i].path, targets[i].token, files[i], { contentType: files[i].type })
         if (upErr) throw new Error(`Upload failed for "${files[i].name}": ${upErr.message}`)
-        uploads.push({ path: targets[i].path, filename: files[i].name })
+        uploads.push({ path: targets[i].path, filename: names[i]?.trim() || files[i].name })
       }
       await finalizeTaskDocs(task.instance_id, task.id, uploads)
+      setPending(null)
       router.refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Upload failed')
@@ -174,17 +186,13 @@ export default function MyTasksList({ tasks }: { tasks: MyOpenTask[] }) {
             <div className="mt-2 ml-7 mr-1">
               <div className="flex items-center flex-wrap gap-2 mb-2">
                 {t.documents.map((d) => (
-                  <span key={d.id} className="inline-flex items-center gap-1.5 px-2 py-1 bg-zinc-800 rounded text-xs">
-                    <a href={d.url} target="_blank" rel="noreferrer" className="text-zinc-300 hover:text-white max-w-44 truncate">
-                      {d.filename}
-                    </a>
-                    <button
-                      onClick={() => run(() => deleteTaskDoc(t.instance_id, t.id, d.id), t.id)}
-                      className="text-zinc-500 hover:text-pr-red-light"
-                    >
-                      ×
-                    </button>
-                  </span>
+                  <TaskDocChip
+                    key={d.id}
+                    doc={d}
+                    canEdit
+                    onRename={(name) => run(() => renameTaskDoc(t.instance_id, t.id, d.id, name), t.id)}
+                    onDelete={() => run(() => deleteTaskDoc(t.instance_id, t.id, d.id), t.id)}
+                  />
                 ))}
                 <button
                   onClick={() => {
@@ -224,6 +232,12 @@ export default function MyTasksList({ tasks }: { tasks: MyOpenTask[] }) {
   return (
     <div className="bg-zinc-900 rounded-lg border border-zinc-800 divide-y divide-zinc-800">
       <input ref={fileRef} type="file" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" multiple className="hidden" onChange={handleFiles} />
+      <UploadNameDialog
+        files={pending?.files ?? []}
+        uploading={uploadingFor !== null}
+        onSubmit={uploadNamed}
+        onCancel={() => uploadingFor === null && setPending(null)}
+      />
       {groups.map((g) => (
         <div key={g.instanceId} className="divide-y divide-zinc-800">
           <div className="px-4 py-2 bg-zinc-950/50 flex items-baseline gap-x-2 flex-wrap">

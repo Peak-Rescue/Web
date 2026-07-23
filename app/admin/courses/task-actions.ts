@@ -273,6 +273,19 @@ export async function finalizeTaskDocs(
   revalidateTaskViews(instanceId)
 }
 
+export async function renameTaskDoc(instanceId: string, taskId: string, docId: string, filename: string) {
+  const { admin } = await requireTaskParticipant(instanceId, taskId)
+  const name = filename.trim().slice(0, 200)
+  if (!name) throw new Error('File name cannot be empty')
+  const { error } = await admin
+    .from('course_task_documents')
+    .update({ filename: name })
+    .eq('id', docId)
+    .eq('task_id', taskId)
+  if (error) throw new Error(error.message)
+  revalidateTaskViews(instanceId)
+}
+
 export async function deleteTaskDoc(instanceId: string, taskId: string, docId: string) {
   const { admin } = await requireTaskParticipant(instanceId, taskId)
   const { data: doc } = await admin

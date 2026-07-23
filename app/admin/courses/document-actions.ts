@@ -58,6 +58,19 @@ export async function finalizeCourseDocs(
   revalidatePath(`/admin/courses/${instanceId}`)
 }
 
+export async function renameCourseDoc(instanceId: string, docId: string, filename: string) {
+  const { admin } = await requireAdmin()
+  const name = filename.trim().slice(0, 200)
+  if (!name) throw new Error('File name cannot be empty')
+  const { error } = await admin
+    .from('course_documents')
+    .update({ filename: name })
+    .eq('id', docId)
+    .eq('instance_id', instanceId)
+  if (error) throw new Error(error.message)
+  revalidatePath(`/admin/courses/${instanceId}`)
+}
+
 export async function deleteCourseDoc(instanceId: string, docId: string) {
   const { admin } = await requireAdmin()
   const { data: doc } = await admin

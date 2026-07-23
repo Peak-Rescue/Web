@@ -12,10 +12,13 @@ import {
   updateTaskNotes,
   createTaskDocUploadTargets,
   finalizeTaskDocs,
+  renameTaskDoc,
   deleteTaskDoc,
 } from '@/app/admin/courses/task-actions'
 
 import { NotesIcon, PaperclipIcon, taskIconClass } from '@/components/TaskIcons'
+import TaskDocChip from '@/components/TaskDocChip'
+import UploadNameDialog from '@/components/UploadNameDialog'
 import { useUnsavedGuard, withSaveTimeout } from '@/components/useUnsavedGuard'
 
 export type CourseTask = {
@@ -134,6 +137,7 @@ export default function CourseTasksPanel({
     },
   })
   const [uploadingDocsFor, setUploadingDocsFor] = useState<string | null>(null)
+  const [pendingDocs, setPendingDocs] = useState<{ taskId: string; files: File[] } | null>(null)
   const docInputRef = useRef<HTMLInputElement>(null)
   const docTaskRef = useRef<string | null>(null)
   const notesFieldRef = useRef<HTMLTextAreaElement>(null)
@@ -175,11 +179,18 @@ export default function CourseTasksPanel({
     })
   }
 
-  async function handleDocFiles(e: React.ChangeEvent<HTMLInputElement>) {
+  function handleDocFiles(e: React.ChangeEvent<HTMLInputElement>) {
     const taskId = docTaskRef.current
     const files = Array.from(e.target.files ?? [])
     e.target.value = ''
     if (!taskId || files.length === 0) return
+    setError(null)
+    setPendingDocs({ taskId, files })
+  }
+
+  async function uploadNamedDocs(names: string[]) {
+    if (!pendingDocs) return
+    const { taskId, files } = pendingDocs
     setUploadingDocsFor(taskId)
     setError(null)
     try {
@@ -195,9 +206,10 @@ export default function CourseTasksPanel({
           .from('task-documents')
           .uploadToSignedUrl(targets[i].path, targets[i].token, files[i], { contentType: files[i].type })
         if (upErr) throw new Error(`Upload failed for "${files[i].name}": ${upErr.message}`)
-        uploads.push({ path: targets[i].path, filename: files[i].name })
+        uploads.push({ path: targets[i].path, filename: names[i]?.trim() || files[i].name })
       }
       await finalizeTaskDocs(instanceId, taskId, uploads)
+      setPendingDocs(null)
       router.refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Document upload failed')
@@ -314,19 +326,13 @@ export default function CourseTasksPanel({
           </p>
           <div className="flex items-center flex-wrap gap-2 mb-2">
             {t.documents.map((d) => (
-              <span key={d.id} className="inline-flex items-center gap-1.5 px-2 py-1 bg-zinc-800 rounded text-xs">
-                <a href={d.url} target="_blank" rel="noreferrer" className="text-zinc-300 hover:text-white max-w-44 truncate">
-                  {d.filename}
-                </a>
-                {canEditNotes && (
-                  <button
-                    onClick={() => run(() => deleteTaskDoc(instanceId, t.id, d.id), t.id)}
-                    className="text-zinc-500 hover:text-pr-red-light"
-                  >
-                    ×
-                  </button>
-                )}
-              </span>
+              <TaskDocChip
+                key={d.id}
+                doc={d}
+                canEdit={canEditNotes}
+                onRename={(name) => run(() => renameTaskDoc(instanceId, t.id, d.id, name), t.id)}
+                onDelete={() => run(() => deleteTaskDoc(instanceId, t.id, d.id), t.id)}
+              />
             ))}
             {canEditNotes && (
               <button
@@ -379,6 +385,12 @@ export default function CourseTasksPanel({
   return (
     <div>
       <input ref={docInputRef} type="file" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" multiple className="hidden" onChange={handleDocFiles} />
+      <UploadNameDialog
+        files={pendingDocs?.files ?? []}
+        uploading={uploadingDocsFor !== null}
+        onSubmit={uploadNamedDocs}
+        onCancel={() => uploadingDocsFor === null && setPendingDocs(null)}
+      />
       <div className="bg-zinc-900 rounded-lg border border-zinc-800 divide-y divide-zinc-800">
         {open.map((t) => renderTaskRow(t))}
         {open.length === 0 && (
