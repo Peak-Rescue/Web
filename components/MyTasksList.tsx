@@ -123,10 +123,22 @@ export default function MyTasksList({ tasks }: { tasks: MyOpenTask[] }) {
     }
   }
 
-  return (
-    <div className="bg-zinc-900 rounded-lg border border-zinc-800 divide-y divide-zinc-800">
-      <input ref={fileRef} type="file" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" multiple className="hidden" onChange={handleFiles} />
-      {tasks.map((t) => (
+  // Tasks arrive sorted by course start date, so consecutive rows for the
+  // same course collapse into one header group.
+  const groups: { instanceId: string; first: MyOpenTask; items: MyOpenTask[] }[] = []
+  for (const t of tasks) {
+    const last = groups[groups.length - 1]
+    if (last && last.instanceId === t.instance_id) last.items.push(t)
+    else groups.push({ instanceId: t.instance_id, first: t, items: [t] })
+  }
+
+  const fmtRange = (t: MyOpenTask) => {
+    const f = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    if (!t.startsAt) return 'dates TBD'
+    return t.endsAt && t.endsAt !== t.startsAt ? `${f(t.startsAt)} – ${f(t.endsAt)}` : f(t.startsAt)
+  }
+
+  const renderTask = (t: MyOpenTask) => (
         <div key={t.id} className="px-4 py-2.5">
           <div className="flex items-center gap-3">
             <input
@@ -140,7 +152,6 @@ export default function MyTasksList({ tasks }: { tasks: MyOpenTask[] }) {
               <p className="text-sm group-hover:text-pr-red-light transition-colors truncate">
                 {t.title}
               </p>
-              {t.courseName && <p className="text-xs text-zinc-500 truncate">{t.courseName}</p>}
             </button>
             <button
               onClick={() => openNotes(t)}
@@ -207,6 +218,26 @@ export default function MyTasksList({ tasks }: { tasks: MyOpenTask[] }) {
               </div>
             </div>
           )}
+        </div>
+  )
+
+  return (
+    <div className="bg-zinc-900 rounded-lg border border-zinc-800 divide-y divide-zinc-800">
+      <input ref={fileRef} type="file" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" multiple className="hidden" onChange={handleFiles} />
+      {groups.map((g) => (
+        <div key={g.instanceId} className="divide-y divide-zinc-800">
+          <div className="px-4 py-2 bg-zinc-950/50 flex items-baseline gap-x-2 flex-wrap">
+            <Link
+              href={`/portal/${g.instanceId}`}
+              className="text-xs font-semibold uppercase tracking-wide text-zinc-300 hover:text-white transition-colors"
+            >
+              {g.first.courseName ?? 'Course'}
+            </Link>
+            <span className="text-xs text-zinc-500 truncate">
+              {[g.first.clientName, g.first.location, fmtRange(g.first)].filter(Boolean).join(' · ')}
+            </span>
+          </div>
+          {g.items.map(renderTask)}
         </div>
       ))}
       {error && <p className="px-4 py-2 text-xs text-pr-red-light">{error}</p>}

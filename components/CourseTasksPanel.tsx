@@ -5,10 +5,10 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import {
   addTask,
+  addTasks,
   updateTask,
   setTaskStatus,
   deleteTask,
-  applyTaskTemplate,
   updateTaskNotes,
   createTaskDocUploadTargets,
   finalizeTaskDocs,
@@ -29,10 +29,10 @@ export type CourseTask = {
 
 export type TaskPerson = { id: string; name: string }
 
-export type TaskSuggestion = { id: string; title: string }
+export type TaskSuggestion = { id: string; title: string; default_line: boolean; sort_order: number }
 
 // Checklist for one course instance. `canManage` (admin or lead instructor)
-// unlocks assignment, add/delete, and the template button;
+// unlocks assignment, add/delete, and the suggestions dropdown;
 // everyone on the course can see it, and assignees can check off their own.
 export default function CourseTasksPanel({
   instanceId,
@@ -53,6 +53,9 @@ export default function CourseTasksPanel({
   const [isPending, startTransition] = useTransition()
   const [busyId, setBusyId] = useState<string | null>(null)
   const [adding, setAdding] = useState(false)
+  const [picking, setPicking] = useState(false)
+  // Suggestion id -> assignee profile id ('' = checked but nobody picked yet)
+  const [picks, setPicks] = useState<Record<string, string>>({})
   const [newTitle, setNewTitle] = useState('')
   const [newAssignee, setNewAssignee] = useState('')
   const [newNotes, setNewNotes] = useState('')
@@ -376,41 +379,113 @@ export default function CourseTasksPanel({
                 Cancel
               </button>
             </div>
+          ) : picking ? (
+            (() => {
+              const have = new Set(tasks.map((t) => t.title))
+              const available = suggestions.filter((s) => !have.has(s.title))
+              const standard = available.filter((s) => s.default_line)
+              const other = available.filter((s) => !s.default_line)
+              const checked = available.filter((s) => s.id in picks)
+              const unassignedPicks = checked.filter((s) => !picks[s.id]).length
+              const close = () => {
+                setPicking(false)
+                setPicks({})
+              }
+              const renderPickRow = (s: TaskSuggestion) => (
+                <div key={s.id} className="flex items-center gap-3 py-1">
+                  <label className="flex items-center gap-3 min-w-0 flex-1 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={s.id in picks}
+                      onChange={(e) =>
+                        setPicks((p) => {
+                          const next = { ...p }
+                          if (e.target.checked) next[s.id] = ''
+                          else delete next[s.id]
+                          return next
+                        })
+                      }
+                      className="accent-teal-600 size-4 shrink-0"
+                    />
+                    <span className="text-sm truncate">{s.title}</span>
+                  </label>
+                  {s.id in picks && (
+                    <select
+                      value={picks[s.id]}
+                      onChange={(e) => setPicks((p) => ({ ...p, [s.id]: e.target.value }))}
+                      className="bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-xs text-zinc-300 shrink-0 max-w-36"
+                    >
+                      <option value="">assign to…</option>
+                      {people.map((p) => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+              )
+              return (
+                <div className="p-4 bg-zinc-900 border border-dashed border-zinc-700 rounded-lg">
+                  <p className="text-xs text-zinc-500 mb-2">
+                    Check the tasks this course needs and who owns each — only assigned tasks show on the course.
+                  </p>
+                  {standard.length > 0 && (
+                    <>
+                      <p className="text-[11px] uppercase tracking-wide text-zinc-600">Common</p>
+                      {standard.map(renderPickRow)}
+                    </>
+                  )}
+                  {other.length > 0 && (
+                    <>
+                      <p className={`text-[11px] uppercase tracking-wide text-zinc-600 ${standard.length > 0 ? 'mt-2 pt-2 border-t border-zinc-800' : ''}`}>
+                        Additional
+                      </p>
+                      {other.map(renderPickRow)}
+                    </>
+                  )}
+                  <div className="flex items-center gap-3 mt-3">
+                    <button
+                      onClick={() => {
+                        run(() =>
+                          addTasks(
+                            instanceId,
+                            checked.map((s) => ({
+                              title: s.title,
+                              assigned_to: picks[s.id] || null,
+                              sort_order: s.sort_order,
+                            }))
+                          )
+                        )
+                        close()
+                      }}
+                      disabled={isPending || checked.length === 0 || unassignedPicks > 0}
+                      className="px-4 py-2 bg-pr-red hover:bg-pr-red-dark text-white rounded text-sm font-medium transition-colors disabled:opacity-50"
+                    >
+                      {checked.length === 0
+                        ? 'Add tasks'
+                        : `Add ${checked.length} task${checked.length === 1 ? '' : 's'}`}
+                    </button>
+                    {unassignedPicks > 0 && (
+                      <span className="text-xs text-zinc-500">
+                        {unassignedPicks === 1 ? '1 task still needs' : `${unassignedPicks} tasks still need`} an assignee
+                      </span>
+                    )}
+                    <button onClick={close} className="ml-auto px-3 py-2 text-zinc-400 hover:text-zinc-200 text-sm">
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )
+            })()
           ) : (
             <div className="flex gap-4 items-center flex-wrap">
-              <button onClick={() => setAdding(true)} className="text-sm text-zinc-400 hover:text-white transition-colors">
-                + Add task
-              </button>
-              {(() => {
-                const have = new Set(tasks.map((t) => t.title))
-                const available = suggestions.filter((s) => !have.has(s.title))
-                if (available.length === 0) return null
-                return (
-                  <select
-                    value=""
-                    disabled={isPending}
-                    onChange={(e) => {
-                      const pick = available.find((s) => s.id === e.target.value)
-                      if (pick) run(() => addTask(instanceId, { title: pick.title, assigned_to: null, notes: null }))
-                    }}
-                    className="bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-zinc-400"
-                  >
-                    <option value="">+ Add from suggestions…</option>
-                    {available.map((s) => (
-                      <option key={s.id} value={s.id}>{s.title}</option>
-                    ))}
-                  </select>
-                )
-              })()}
-              {tasks.length === 0 && (
-                <button
-                  onClick={() => run(() => applyTaskTemplate(instanceId))}
-                  disabled={isPending}
-                  className="text-sm text-zinc-400 hover:text-white transition-colors disabled:opacity-50"
-                >
-                  Add standard checklist
+              {suggestions.some((s) => !tasks.some((t) => t.title === s.title)) && (
+                <button onClick={() => setPicking(true)} className="text-sm text-zinc-400 hover:text-white transition-colors">
+                  + Add from checklist
                 </button>
               )}
+              <button onClick={() => setAdding(true)} className="text-sm text-zinc-400 hover:text-white transition-colors">
+                + Add custom task
+              </button>
             </div>
           )}
         </div>

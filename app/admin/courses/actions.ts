@@ -5,7 +5,6 @@ import { redirect } from 'next/navigation'
 import { after } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { insertTemplateTasks } from '@/lib/course-tasks'
 import { contactsFromForm } from '@/lib/contacts'
 
 function toSlugPart(s: string) {
@@ -70,9 +69,6 @@ export async function createInstance(formData: FormData) {
     .single()
 
   if (error) throw new Error(error.message)
-
-  // Every new course starts with the standard ops checklist.
-  await insertTemplateTasks(admin, data.id, null)
 
   redirect(`/admin/courses/${data.id}`)
 }

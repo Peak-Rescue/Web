@@ -107,7 +107,7 @@ export default async function PortalPage({
         ? admin.from('profiles').select('id, first_name, last_name').in('role', ['admin', 'instructor']).order('first_name')
         : Promise.resolve({ data: [] }),
       showTasks
-        ? admin.from('course_task_templates').select('id, title').eq('active', true).order('sort_order')
+        ? admin.from('course_task_templates').select('id, title, default_line, sort_order').eq('active', true).order('sort_order')
         : Promise.resolve({ data: [] }),
     ])
 
@@ -117,9 +117,8 @@ export default async function PortalPage({
     ? computeBlocks(inst.starts_at, inst.ends_at, offDays ?? [])
     : []
 
-  // Admins see the full checklist (unassigned rows are their cue to assign);
-  // instructors — leads included — see only tasks assigned to someone.
-  const tasks: CourseTask[] = showAsAdmin ? taskRows : taskRows.filter((t) => t.assigned_to)
+  // Only tasks assigned to someone show on the course page, for everyone.
+  const tasks: CourseTask[] = taskRows.filter((t) => t.assigned_to)
   const taskPeople: TaskPerson[] = (peopleRows ?? [])
     .map((p) => ({ id: p.id, name: [p.first_name, p.last_name].filter(Boolean).join(' ') }))
     .filter((p) => p.name)

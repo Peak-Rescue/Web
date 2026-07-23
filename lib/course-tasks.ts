@@ -1,26 +1,4 @@
-// Server-side helper: seed an instance with the standard task checklist,
-// skipping titles it already has. Called on instance creation and from the
-// manual "Add standard checklist" action.
-
 import { type createAdminClient } from '@/lib/supabase/admin'
-
-export async function insertTemplateTasks(
-  admin: ReturnType<typeof createAdminClient>,
-  instanceId: string,
-  createdBy: string | null
-) {
-  const [{ data: templates }, { data: existing }] = await Promise.all([
-    admin.from('course_task_templates').select('title, sort_order').eq('active', true).eq('default_line', true).order('sort_order'),
-    admin.from('course_tasks').select('title').eq('instance_id', instanceId),
-  ])
-  const have = new Set((existing ?? []).map((t) => t.title))
-  const rows = (templates ?? [])
-    .filter((t) => !have.has(t.title))
-    .map((t) => ({ instance_id: instanceId, title: t.title, sort_order: t.sort_order, created_by: createdBy }))
-  if (rows.length === 0) return
-  const { error } = await admin.from('course_tasks').insert(rows)
-  if (error) throw new Error(error.message)
-}
 
 export type LoadedTask = {
   id: string
@@ -75,27 +53,49 @@ export type MyOpenTask = {
   notes: string | null
   courseName: string | null
   courseStatus: string | null
+  clientName: string | null
+  location: string | null
+  startsAt: string | null
+  endsAt: string | null
   documents: { id: string; filename: string; url: string }[]
 }
 
 // A user's open tasks across courses, with notes and signed document URLs —
 // the same task data the course pages show, surfaced on the portal home.
+// Sorted by course start date so the list groups cleanly by course.
 export async function loadMyOpenTasks(
   admin: ReturnType<typeof createAdminClient>,
   userId: string
 ): Promise<MyOpenTask[]> {
   const { data } = await admin
     .from('course_tasks')
-    .select('id, instance_id, title, notes, course_instances(course_type, custom_title, status), course_task_documents(id, path, filename)')
+    .select('id, instance_id, title, notes, created_at, course_instances(course_type, custom_title, status, client_name, location, starts_at, ends_at), course_task_documents(id, path, filename)')
     .eq('assigned_to', userId)
     .eq('status', 'open')
     .order('created_at', { ascending: true })
     .limit(20)
 
+  type InstRow = {
+    course_type: string
+    custom_title: string | null
+    status: string
+    client_name: string | null
+    location: string | null
+    starts_at: string | null
+    ends_at: string | null
+  }
   type DocRow = { id: string; path: string; filename: string | null }
-  const rows = (data ?? []).filter(
-    (r) => (r.course_instances as unknown as { status: string } | null)?.status !== 'cancelled'
-  )
+  const rows = (data ?? [])
+    .filter((r) => (r.course_instances as unknown as InstRow | null)?.status !== 'cancelled')
+    .sort((a, b) => {
+      const ia = a.course_instances as unknown as InstRow | null
+      const ib = b.course_instances as unknown as InstRow | null
+      return (
+        (ia?.starts_at ?? '9999').localeCompare(ib?.starts_at ?? '9999') ||
+        a.instance_id.localeCompare(b.instance_id) ||
+        (a.created_at as string).localeCompare(b.created_at as string)
+      )
+    })
   const allPaths = rows.flatMap((r) => ((r.course_task_documents ?? []) as DocRow[]).map((d) => d.path))
   const { data: signed } = allPaths.length
     ? await admin.storage.from('task-documents').createSignedUrls(allPaths, 3600)
@@ -104,7 +104,7 @@ export async function loadMyOpenTasks(
 
   const { courseShortName } = await import('@/lib/courses')
   return rows.map((r) => {
-    const inst = r.course_instances as unknown as { course_type: string; custom_title: string | null; status: string } | null
+    const inst = r.course_instances as unknown as InstRow | null
     return {
       id: r.id,
       instance_id: r.instance_id,
@@ -112,6 +112,10 @@ export async function loadMyOpenTasks(
       notes: r.notes,
       courseName: inst ? courseShortName(inst.course_type, inst.custom_title) : null,
       courseStatus: inst?.status ?? null,
+      clientName: inst?.client_name ?? null,
+      location: inst?.location ?? null,
+      startsAt: inst?.starts_at ?? null,
+      endsAt: inst?.ends_at ?? null,
       documents: ((r.course_task_documents ?? []) as DocRow[]).map((d) => ({
         id: d.id,
         filename: d.filename ?? 'document',

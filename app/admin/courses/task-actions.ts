@@ -5,7 +5,6 @@ import { after } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { courseShortName } from '@/lib/courses'
-import { insertTemplateTasks } from '@/lib/course-tasks'
 
 // Admins manage tasks everywhere; a lead instructor manages tasks on their
 // own course. Assignees may toggle their own task's status.
@@ -104,6 +103,37 @@ export async function addTask(instanceId: string, input: TaskInput) {
 
   const assignee = input.assigned_to
   if (assignee) after(() => notifyAssignee(admin, title, instanceId, assignee, user.id))
+  revalidateTaskViews(instanceId)
+}
+
+// Bulk add from the suggestions picker. Template sort_order keeps the
+// checklist in its canonical order regardless of when tasks were added.
+export async function addTasks(
+  instanceId: string,
+  items: { title: string; assigned_to: string | null; sort_order?: number }[]
+) {
+  const { user, admin } = await requireManager(instanceId)
+  const rows = items
+    .map((i) => ({ ...i, title: i.title.trim() }))
+    .filter((i) => i.title)
+  if (rows.length === 0) throw new Error('No tasks selected')
+
+  const { error } = await admin.from('course_tasks').insert(
+    rows.map((i) => ({
+      instance_id: instanceId,
+      title: i.title,
+      assigned_to: i.assigned_to || null,
+      assigned_by: i.assigned_to ? user.id : null,
+      created_by: user.id,
+      sort_order: i.sort_order ?? 1000,
+    }))
+  )
+  if (error) throw new Error(error.message)
+
+  for (const i of rows) {
+    const assignee = i.assigned_to
+    if (assignee) after(() => notifyAssignee(admin, i.title, instanceId, assignee, user.id))
+  }
   revalidateTaskViews(instanceId)
 }
 
@@ -262,13 +292,5 @@ export async function deleteTask(instanceId: string, taskId: string) {
   const { admin } = await requireManager(instanceId)
   const { error } = await admin.from('course_tasks').delete().eq('id', taskId).eq('instance_id', instanceId)
   if (error) throw new Error(error.message)
-  revalidateTaskViews(instanceId)
-}
-
-// Adds the standard checklist to an instance, skipping titles it already has.
-// Used automatically on instance creation and manually for older instances.
-export async function applyTaskTemplate(instanceId: string) {
-  const { user, admin } = await requireManager(instanceId)
-  await insertTemplateTasks(admin, instanceId, user.id)
   revalidateTaskViews(instanceId)
 }
