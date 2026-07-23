@@ -134,14 +134,23 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
             <h1 className="text-2xl font-bold">Courses</h1>
             <p className="text-zinc-400 mt-1">Schedule and manage course instances</p>
           </div>
-          <form action={syncAllCoursesToCalendar}>
-            <button
+          <div className="flex items-center gap-2">
+            <Link
+              href="/admin/courses/import"
               className="text-xs px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded transition-colors"
-              title="Push every course to its Google calendar (military / civilian / prospective)"
+              title="Bring existing Google Calendar events in as portal courses"
             >
-              Sync Google Calendars
-            </button>
-          </form>
+              Calendar Import
+            </Link>
+            <form action={syncAllCoursesToCalendar}>
+              <button
+                className="text-xs px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded transition-colors"
+                title="Push every course to its Google calendar (military / civilian / prospective)"
+              >
+                Sync Google Calendars
+              </button>
+            </form>
+          </div>
         </div>
 
         {/* Minimal-intent create: pick the course type, everything else on the

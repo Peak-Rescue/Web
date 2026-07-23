@@ -242,3 +242,68 @@ async function deleteEvent(calendarId: string, eventId: string): Promise<void> {
     console.error(`gcal delete failed (${res.status}): ${await res.text()}`)
   }
 }
+
+// ─── Import support (read-only listing + manual-event cleanup) ──────────────
+
+export type GcalEvent = {
+  id: string
+  summary: string
+  start: string // yyyy-mm-dd
+  end: string // inclusive
+  location: string | null
+  description: string | null
+}
+
+// Upcoming events on a calendar, normalized to all-day date ranges. Returns
+// null when the calendar isn't readable (not shared with the service account).
+export async function listUpcomingEvents(calendarId: string): Promise<GcalEvent[] | null> {
+  try {
+    const params = new URLSearchParams({
+      timeMin: new Date().toISOString(),
+      singleEvents: 'true',
+      orderBy: 'startTime',
+      maxResults: '100',
+    })
+    const res = await gcal('GET', `/calendars/${encodeURIComponent(calendarId)}/events?${params}`)
+    if (!res.ok) return null
+    const data = (await res.json()) as {
+      items?: {
+        id: string
+        summary?: string
+        location?: string
+        description?: string
+        start?: { date?: string; dateTime?: string }
+        end?: { date?: string; dateTime?: string }
+      }[]
+    }
+    return (data.items ?? [])
+      .filter((e) => e.start && e.end)
+      .map((e) => {
+        const startDate = e.start!.date ?? e.start!.dateTime!.slice(0, 10)
+        // All-day ends are exclusive; timed events end same day.
+        const endRaw = e.end!.date
+          ? new Date(Date.parse(e.end!.date) - 86_400_000).toISOString().slice(0, 10)
+          : e.end!.dateTime!.slice(0, 10)
+        return {
+          id: e.id,
+          summary: e.summary ?? '(untitled)',
+          start: startDate,
+          end: endRaw >= startDate ? endRaw : startDate,
+          location: e.location ?? null,
+          description: e.description ?? null,
+        }
+      })
+  } catch (e) {
+    console.error('gcal list failed:', e)
+    return null
+  }
+}
+
+// Removes a manual event after it has been imported as a portal course.
+export async function deleteImportedEvent(calendarId: string, eventId: string): Promise<void> {
+  try {
+    await deleteEvent(calendarId, eventId)
+  } catch (e) {
+    console.error('imported event cleanup failed:', e)
+  }
+}
