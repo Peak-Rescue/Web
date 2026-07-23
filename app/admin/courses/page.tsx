@@ -7,35 +7,7 @@ import { CourseTypeSelect } from './CourseTypeSelect'
 import { courseShortName } from '@/lib/courses'
 import CourseCalendar, { type CalendarCourse } from '@/components/CourseCalendar'
 import CourseContactsEditor from '@/components/CourseContactsEditor'
-
-const STATUS_STYLES: Record<string, string> = {
-  tentative: 'bg-yellow-900/40 text-yellow-300 border-yellow-700',
-  quoted:    'bg-blue-900/40 text-blue-300 border-blue-700',
-  confirmed:  'bg-teal-900/40 text-teal-300 border-teal-700',
-  completed:  'bg-zinc-700 text-zinc-300 border-zinc-600',
-  cancelled:  'bg-red-900/40 text-red-300 border-red-700',
-}
-
-function formatDateRange(starts_at: string, ends_at: string) {
-  const fmt = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-  return starts_at === ends_at ? fmt(starts_at) : `${fmt(starts_at)} – ${fmt(ends_at)}`
-}
-
-type Instance = {
-  id: string
-  ref_number: number
-  slug: string | null
-  course_type: string
-  custom_title: string | null
-  status: string
-  location: string | null
-  client_name: string | null
-  starts_at: string | null
-  ends_at: string | null
-  max_students: number | null
-  instance_instructors: { count: number }[]
-  enrollments: { count: number }[]
-}
+import CourseList, { type Instance } from './CourseList'
 
 function firstStartDate(inst: Instance): string | null {
   return inst.starts_at ?? null
@@ -43,38 +15,6 @@ function firstStartDate(inst: Instance): string | null {
 
 function lastEndDate(inst: Instance): string | null {
   return inst.ends_at ?? null
-}
-
-function InstanceCard({ inst }: { inst: Instance }) {
-  const instructorCount = inst.instance_instructors?.[0]?.count ?? 0
-  const studentCount    = inst.enrollments?.[0]?.count ?? 0
-  const displayName = courseShortName(inst.course_type, inst.custom_title)
-
-  return (
-    <Link
-      href={`/admin/courses/${inst.id}`}
-      className="flex items-start justify-between gap-4 p-4 bg-zinc-900 border border-zinc-800 rounded-lg hover:border-zinc-600 transition-colors"
-    >
-      <div className="min-w-0">
-        <div className="flex items-center gap-2 mb-1 flex-wrap">
-          <span className={`text-[10px] font-bold px-2 py-0.5 rounded border uppercase tracking-wide ${STATUS_STYLES[inst.status] ?? ''}`}>
-            {inst.status}
-          </span>
-          <span className="text-xs font-mono text-zinc-500">PR-{String(inst.ref_number).padStart(4, '0')}</span>
-          <span className="font-medium truncate">{displayName}</span>
-        </div>
-        <div className="text-sm text-zinc-400 flex flex-wrap gap-x-4 gap-y-0.5">
-          {inst.starts_at && inst.ends_at && <span>{formatDateRange(inst.starts_at, inst.ends_at)}</span>}
-          {inst.location && <span>{inst.location}</span>}
-          {inst.client_name && <span>{inst.client_name}</span>}
-        </div>
-      </div>
-      <div className="text-xs text-zinc-500 whitespace-nowrap text-right shrink-0">
-        {instructorCount > 0 && <div>{instructorCount} instructor{instructorCount !== 1 ? 's' : ''}</div>}
-        {inst.max_students && <div>{studentCount}/{inst.max_students} students</div>}
-      </div>
-    </Link>
-  )
 }
 
 export default async function CoursesPage({ searchParams }: { searchParams: Promise<{ cal?: string }> }) {
@@ -240,40 +180,8 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
           </div>
         </details>
 
-        {/* ── Upcoming ─────────────────────────────────────────────── */}
-        <section className="mb-10">
-          <h2 className="text-xs font-semibold uppercase tracking-widest text-zinc-500 mb-3">
-            Upcoming & Active
-            <span className="ml-2 font-normal normal-case tracking-normal text-zinc-600">({upcoming.length})</span>
-          </h2>
-          {upcoming.length === 0 ? (
-            <p className="text-zinc-600 text-sm">No upcoming courses.</p>
-          ) : (
-            <div className="space-y-3">
-              {upcoming.map(inst => <InstanceCard key={inst.id} inst={inst} />)}
-            </div>
-          )}
-        </section>
-
-        {/* ── Past ─────────────────────────────────────────────────── */}
-        {past.length > 0 && (
-          <section>
-            <details>
-              <summary className="cursor-pointer list-none group/past">
-                <h2 className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-zinc-600 hover:text-zinc-400 transition-colors mb-3">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="transition-transform [[open]_&]:rotate-90">
-                    <polyline points="9 18 15 12 9 6"/>
-                  </svg>
-                  Past
-                  <span className="font-normal normal-case tracking-normal text-zinc-700">({past.length})</span>
-                </h2>
-              </summary>
-              <div className="space-y-3 mt-3">
-                {past.map(inst => <InstanceCard key={inst.id} inst={inst} />)}
-              </div>
-            </details>
-          </section>
-        )}
+        {/* ── Course list with filters ─────────────────────────────── */}
+        <CourseList upcoming={upcoming} past={past} />
       </div>
     </main>
   )
