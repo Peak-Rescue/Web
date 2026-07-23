@@ -5,6 +5,7 @@ import { fmtMoney, round2 } from '@/lib/expenses'
 import { saveEstimate, deleteEstimateCoa, type EstimateItemInput } from '@/app/admin/courses/finance-actions'
 import { useRouter } from 'next/navigation'
 import { CalculatorIcon, NotesIcon } from '@/components/TaskIcons'
+import { useUnsavedGuard, withSaveTimeout } from '@/components/useUnsavedGuard'
 
 export type PricingRate = { id: string; label: string; unit: string | null; rate: number }
 
@@ -87,6 +88,25 @@ export default function EstimatePanel({
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const saving = useRef(false)
   const rerun = useRef(false)
+  const rootRef = useRef<HTMLDivElement>(null)
+  const [highlight, setHighlight] = useState(false)
+
+  const dirty = status === 'pending' || status === 'saving' || status === 'error'
+  useUnsavedGuard({
+    dirty,
+    message:
+      status === 'error'
+        ? 'This estimate failed to save. Leave anyway and lose the changes?'
+        : 'This estimate is still saving. Leave anyway? Changes may be lost.',
+    onLeaveAttempt: () => {
+      if (status === 'pending' || status === 'error') void flush()
+    },
+    onBlocked: () => {
+      setHighlight(true)
+      setTimeout(() => setHighlight(false), 2500)
+      rootRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    },
+  })
 
   function schedule(nextRows: Row[], nextMargin: number, nextTitle?: string) {
     setRows(nextRows)
@@ -125,7 +145,7 @@ export default function EstimatePanel({
             factor_labels: trimmed.length >= 2 ? trimmedLabels : null,
           }
         })
-      const saved = await saveEstimate(instanceId, estimateIdRef.current, { title: t, margin: m, items })
+      const saved = await withSaveTimeout(saveEstimate(instanceId, estimateIdRef.current, { title: t, margin: m, items }))
       estimateIdRef.current = saved.id
       setPersistedId(saved.id)
       setStatus('saved')
@@ -327,7 +347,7 @@ export default function EstimatePanel({
   const inputCls = 'bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-zinc-500'
 
   return (
-    <div>
+    <div ref={rootRef} className={highlight ? 'ring-1 ring-pr-red-light rounded' : undefined}>
       <div className="flex items-center justify-between gap-3 mb-2">
         <input
           value={solo && title === 'COA 1' ? '' : title}
@@ -338,8 +358,13 @@ export default function EstimatePanel({
         />
         <div className="flex items-center gap-3">
           <span className={`text-xs ${status === 'error' ? 'text-pr-red-light' : status === 'saved' ? 'text-teal-400' : 'text-zinc-500'}`}>
-            {status === 'saving' ? 'Saving…' : status === 'saved' ? 'Saved ✓' : status === 'error' ? 'Save failed' : status === 'pending' ? '…' : ''}
+            {status === 'saving' ? 'Saving…' : status === 'saved' ? 'Saved ✓' : status === 'error' ? 'Save failed — not saved' : status === 'pending' ? '…' : ''}
           </span>
+          {status === 'error' && (
+            <button onClick={() => void flush()} className="text-xs text-zinc-300 underline hover:text-white">
+              Retry
+            </button>
+          )}
           {canDelete && persistedId && (
             <button
               onClick={async () => {

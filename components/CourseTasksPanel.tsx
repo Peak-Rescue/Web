@@ -16,6 +16,7 @@ import {
 } from '@/app/admin/courses/task-actions'
 
 import { NotesIcon, PaperclipIcon, taskIconClass } from '@/components/TaskIcons'
+import { useUnsavedGuard, withSaveTimeout } from '@/components/useUnsavedGuard'
 
 export type CourseTask = {
   id: string
@@ -67,25 +68,71 @@ export default function CourseTasksPanel({
   const [openDetailsId, setOpenDetailsId] = useState<string | null>(null)
   const [notesDraft, setNotesDraft] = useState('')
   const [notesStatus, setNotesStatus] = useState<'idle' | 'pending' | 'saving' | 'saved' | 'error'>('idle')
+  const [notesHighlight, setNotesHighlight] = useState(false)
   const notesTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Latest unconfirmed edit; seq lets a slow save recognise it's been
+  // superseded so it neither clears the dirty flag nor clobbers the status.
+  const notesSeq = useRef(0)
+  const dirtyNotes = useRef<{ taskId: string; value: string } | null>(null)
 
   function scheduleNotes(instId: string, taskId: string, value: string) {
     setNotesDraft(value)
     setNotesStatus('pending')
+    notesSeq.current++
+    dirtyNotes.current = { taskId, value }
     if (notesTimer.current) clearTimeout(notesTimer.current)
     notesTimer.current = setTimeout(() => void flushNotes(instId, taskId, value), 800)
   }
 
   async function flushNotes(instId: string, taskId: string, value: string) {
+    const seq = notesSeq.current
     setNotesStatus('saving')
     try {
-      await updateTaskNotes(instId, taskId, value)
-      setNotesStatus('saved')
-      router.refresh()
+      await withSaveTimeout(updateTaskNotes(instId, taskId, value))
+      if (seq === notesSeq.current) {
+        dirtyNotes.current = null
+        setNotesStatus('saved')
+        router.refresh()
+      }
     } catch {
-      setNotesStatus('error')
+      if (seq === notesSeq.current) setNotesStatus('error')
     }
   }
+
+  function flushDirtyNotes() {
+    const d = dirtyNotes.current
+    if (!d) return
+    if (notesTimer.current) {
+      clearTimeout(notesTimer.current)
+      notesTimer.current = null
+    }
+    void flushNotes(instanceId, d.taskId, d.value)
+  }
+
+  const notesDirty = notesStatus === 'pending' || notesStatus === 'saving' || notesStatus === 'error'
+  useUnsavedGuard({
+    dirty: notesDirty,
+    message:
+      notesStatus === 'error'
+        ? 'Your task notes failed to save. Leave anyway and lose them?'
+        : 'Your task notes are still saving. Leave anyway? They may be lost.',
+    onLeaveAttempt: () => {
+      if (notesStatus === 'pending' || notesStatus === 'error') flushDirtyNotes()
+    },
+    onBlocked: () => {
+      const d = dirtyNotes.current
+      if (d) {
+        setOpenDetailsId(d.taskId)
+        setNotesDraft(d.value)
+      }
+      setNotesHighlight(true)
+      setTimeout(() => setNotesHighlight(false), 2500)
+      requestAnimationFrame(() => {
+        notesFieldRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        notesFieldRef.current?.focus({ preventScroll: true })
+      })
+    },
+  })
   const [uploadingDocsFor, setUploadingDocsFor] = useState<string | null>(null)
   const docInputRef = useRef<HTMLInputElement>(null)
   const docTaskRef = useRef<string | null>(null)
@@ -302,12 +349,19 @@ export default function CourseTasksPanel({
                 onChange={(e) => scheduleNotes(instanceId, t.id, e.target.value)}
                 rows={2}
                 placeholder="Notes — status, phone numbers, confirmation codes…"
-                className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500 resize-y"
+                className={`w-full bg-zinc-800 border rounded px-3 py-2 text-sm focus:outline-none resize-y ${
+                  notesHighlight ? 'border-pr-red-light ring-1 ring-pr-red-light' : 'border-zinc-700 focus:border-zinc-500'
+                }`}
               />
               <div className="flex items-center gap-3 mt-1.5">
                 <span className={`text-xs ${notesStatus === 'error' ? 'text-pr-red-light' : notesStatus === 'saved' ? 'text-teal-400' : 'text-zinc-500'}`}>
-                  {notesStatus === 'saving' ? 'Saving…' : notesStatus === 'saved' ? 'Saved ✓' : notesStatus === 'error' ? 'Save failed' : notesStatus === 'pending' ? '…' : ''}
+                  {notesStatus === 'saving' ? 'Saving…' : notesStatus === 'saved' ? 'Saved ✓' : notesStatus === 'error' ? 'Save failed — notes not saved' : notesStatus === 'pending' ? '…' : ''}
                 </span>
+                {notesStatus === 'error' && (
+                  <button onClick={flushDirtyNotes} className="text-xs text-zinc-300 underline hover:text-white">
+                    Retry
+                  </button>
+                )}
                 <button onClick={() => setOpenDetailsId(null)} className="ml-auto text-xs text-zinc-600 hover:text-zinc-400 transition-colors">
                   Close
                 </button>

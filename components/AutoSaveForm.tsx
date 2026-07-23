@@ -1,6 +1,7 @@
 'use client'
 
 import { useRef, useState } from 'react'
+import { useUnsavedGuard, withSaveTimeout } from '@/components/useUnsavedGuard'
 
 // Wraps server-rendered form fields and auto-saves them: any input/change
 // debounces, then the bound server action is called with the form's data.
@@ -21,6 +22,24 @@ export default function AutoSaveForm({
   const saving = useRef(false)
   const rerun = useRef(false)
   const [status, setStatus] = useState<'idle' | 'pending' | 'saving' | 'saved' | 'error'>('idle')
+  const [highlight, setHighlight] = useState(false)
+
+  const dirty = status === 'pending' || status === 'saving' || status === 'error'
+  useUnsavedGuard({
+    dirty,
+    message:
+      status === 'error'
+        ? 'Changes on this page failed to save. Leave anyway and lose them?'
+        : 'Changes on this page are still saving. Leave anyway? They may be lost.',
+    onLeaveAttempt: () => {
+      if (status === 'pending' || status === 'error') void flush()
+    },
+    onBlocked: () => {
+      setHighlight(true)
+      setTimeout(() => setHighlight(false), 2500)
+      formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    },
+  })
 
   function schedule() {
     setStatus('pending')
@@ -41,7 +60,7 @@ export default function AutoSaveForm({
     saving.current = true
     setStatus('saving')
     try {
-      await action(new FormData(formRef.current))
+      await withSaveTimeout(action(new FormData(formRef.current)))
       setStatus('saved')
     } catch {
       setStatus('error')
@@ -63,13 +82,18 @@ export default function AutoSaveForm({
         e.preventDefault()
         void flush()
       }}
-      className={className}
+      className={`${className ?? ''} ${highlight ? 'ring-1 ring-pr-red-light rounded' : ''}`}
     >
       {children}
       <div className="sm:col-span-2 col-span-full h-4 text-right">
         <span className={`text-xs ${status === 'error' ? 'text-pr-red-light' : status === 'saved' ? 'text-teal-400' : 'text-zinc-500'}`}>
-          {status === 'saving' ? 'Saving…' : status === 'saved' ? 'Saved ✓' : status === 'error' ? 'Save failed — check your connection' : status === 'pending' ? '…' : ''}
+          {status === 'saving' ? 'Saving…' : status === 'saved' ? 'Saved ✓' : status === 'error' ? 'Save failed — changes not saved' : status === 'pending' ? '…' : ''}
         </span>
+        {status === 'error' && (
+          <button type="button" onClick={() => void flush()} className="ml-2 text-xs text-zinc-300 underline hover:text-white">
+            Retry
+          </button>
+        )}
       </div>
     </form>
   )
