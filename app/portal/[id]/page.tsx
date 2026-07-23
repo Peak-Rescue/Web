@@ -140,7 +140,15 @@ export default async function PortalPage({
 
         {isAdmin && (
           <div className="mb-6 flex items-center justify-between gap-3 flex-wrap">
-            <Link href={`/admin/courses/${id}`} className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors">← Edit course</Link>
+            <Link
+              href={`/admin/courses/${id}`}
+              className="flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 rounded-lg border border-zinc-700 bg-zinc-900 text-zinc-300 hover:text-white hover:border-zinc-500 transition-colors"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>
+              </svg>
+              Edit course
+            </Link>
             <div className="flex items-center gap-1 text-xs">
               <span className="text-zinc-600 mr-1">Viewing as</span>
               {([
