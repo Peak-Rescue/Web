@@ -118,11 +118,15 @@ export default function CourseList({ upcoming, past }: { upcoming: Instance[]; p
 
   const filtering = query.trim() !== '' || categories.size > 0 || types.size > 0 || statuses.size > 0
 
-  // Check-all-that-apply: OR within each row, AND across rows (mirrors the
-  // instructor filter).
+  // Check-all-that-apply: a checked category counts as all of its types, so
+  // category and type picks OR together; status ANDs against that (mirrors
+  // the instructor filter).
   const matches = (inst: Instance) => {
-    if (categories.size > 0 && !categories.has(instCategory(inst))) return false
-    if (types.size > 0 && !types.has(inst.course_type)) return false
+    if (
+      (categories.size > 0 || types.size > 0) &&
+      !categories.has(instCategory(inst)) &&
+      !types.has(inst.course_type)
+    ) return false
     if (statuses.size > 0 && !statuses.has(inst.status)) return false
     const q = query.trim().toLowerCase()
     if (!q) return true
@@ -165,56 +169,62 @@ export default function CourseList({ upcoming, past }: { upcoming: Instance[]; p
           )}
         </div>
 
-        {/* Category */}
-        <div className="flex flex-wrap items-center gap-3">
-          <span className="text-xs font-medium text-zinc-400 uppercase tracking-wider w-20 shrink-0">Category</span>
-          <div className="flex flex-wrap gap-2">
-            {COURSE_TYPE_OPTIONS.map(g => (
-              <button
-                key={g.category}
-                onClick={() => toggleCategory(g.category)}
-                className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
-                  categories.has(g.category)
-                    ? 'bg-pr-red-light text-white'
-                    : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-white'
-                }`}
-              >
-                {g.label}
-              </button>
-            ))}
+        {/* Course type — one row per category; the category label is itself a
+            toggle that selects everything in the row, type chips refine. */}
+        {typeGroups.map(group => (
+          <div key={group.category} className="flex flex-wrap items-center gap-3">
+            <button
+              onClick={() => toggleCategory(group.category)}
+              title={`All ${CATEGORY_SHORT[group.category] ?? group.category} courses`}
+              className={`w-24 shrink-0 px-2.5 py-1 rounded text-xs font-semibold text-left transition-colors ${
+                categories.has(group.category)
+                  ? 'bg-pr-red-light text-white'
+                  : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-white'
+              }`}
+            >
+              {CATEGORY_SHORT[group.category] ?? group.category}
+            </button>
+            <div className="flex flex-wrap gap-2">
+              {group.types.map(([value, label]) => (
+                <button
+                  key={`${group.category}:${value}`}
+                  onClick={() => {
+                    if (categories.has(group.category)) {
+                      // Unchecking one type of a fully-selected category:
+                      // swap the category pick for its other types.
+                      setCategories(prev => {
+                        const n = new Set(prev)
+                        n.delete(group.category)
+                        return n
+                      })
+                      setTypes(prev => {
+                        const n = new Set(prev)
+                        for (const [v] of group.types) {
+                          if (v === value) n.delete(v)
+                          else n.add(v)
+                        }
+                        return n
+                      })
+                    } else {
+                      toggleType(value)
+                    }
+                  }}
+                  className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+                    types.has(value) || categories.has(group.category)
+                      ? 'bg-teal-700 text-white'
+                      : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-white'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
-
-        {/* Course type — grouped by category */}
-        {typeGroups.length > 0 && (
-          <div className="space-y-2">
-            <span className="text-xs font-medium text-zinc-400 uppercase tracking-wider">Course type</span>
-            {typeGroups.map(group => (
-              <div key={group.category} className="flex flex-wrap items-center gap-3">
-                <span className="text-xs text-zinc-500 w-20 shrink-0">{CATEGORY_SHORT[group.category] ?? group.category}</span>
-                <div className="flex flex-wrap gap-2">
-                  {group.types.map(([value, label]) => (
-                    <button
-                      key={`${group.category}:${value}`}
-                      onClick={() => toggleType(value)}
-                      className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
-                        types.has(value)
-                          ? 'bg-teal-700 text-white'
-                          : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-white'
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+        ))}
 
         {/* Status */}
         <div className="flex flex-wrap items-center gap-3">
-          <span className="text-xs font-medium text-zinc-400 uppercase tracking-wider w-20 shrink-0">Status</span>
+          <span className="text-xs font-medium text-zinc-400 uppercase tracking-wider w-24 shrink-0">Status</span>
           <div className="flex flex-wrap gap-2">
             {STATUS_OPTIONS.map(s => (
               <button
