@@ -477,7 +477,7 @@ export default function EstimatePanel({
                 <span className="text-xs text-zinc-400 font-medium">= {Number(r.qty) || 0}</span>
               </div>
             )}
-            {factorDrift(r).length > 0 && (
+            {calcOpen.has(r.key) && factorDrift(r).length > 0 && (
               <div className="mt-1 flex items-center gap-2 text-[11px] text-yellow-500/90">
                 <span>
                   Course details changed:{' '}
