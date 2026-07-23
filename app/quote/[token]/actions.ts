@@ -4,6 +4,7 @@ import { headers } from 'next/headers'
 import { after } from 'next/server'
 import { revalidatePath } from 'next/cache'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { syncCourseCalendar } from '@/lib/google-calendar'
 import { quoteNumber } from '@/lib/quotes'
 import { courseShortName } from '@/lib/courses'
 
@@ -54,6 +55,7 @@ export async function acceptQuote(
     .single()
   if (inst && ['tentative', 'quoted'].includes(inst.status)) {
     await admin.from('course_instances').update({ status: 'confirmed' }).eq('id', quote.instance_id)
+    after(() => syncCourseCalendar(admin, quote.instance_id))
   }
 
   // Tell the admins the moment it happens (best-effort, deferred so the

@@ -3,6 +3,8 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { after } from 'next/server'
+import { syncCourseCalendar } from '@/lib/google-calendar'
 import { parseContacts, primaryContactEmail, ccEmailOptions } from '@/lib/contacts'
 
 async function requireAdmin() {
@@ -324,9 +326,11 @@ export async function setQuoteStatus(instanceId: string, quoteId: string, status
   const { data: inst } = await admin.from('course_instances').select('status').eq('id', instanceId).single()
   if (status === 'sent' && inst?.status === 'tentative') {
     await admin.from('course_instances').update({ status: 'quoted' }).eq('id', instanceId)
+    after(() => syncCourseCalendar(admin, instanceId))
   }
   if (status === 'accepted' && inst && ['tentative', 'quoted'].includes(inst.status)) {
     await admin.from('course_instances').update({ status: 'confirmed' }).eq('id', instanceId)
+    after(() => syncCourseCalendar(admin, instanceId))
   }
 
   revalidatePath(`/admin/courses/${instanceId}`)
@@ -405,6 +409,7 @@ export async function sendQuote(instanceId: string, quoteId: string, formData?: 
   const { data: cur } = await admin.from('course_instances').select('status').eq('id', instanceId).single()
   if (cur?.status === 'tentative') {
     await admin.from('course_instances').update({ status: 'quoted' }).eq('id', instanceId)
+    after(() => syncCourseCalendar(admin, instanceId))
   }
 
   revalidatePath(`/admin/courses/${instanceId}`)

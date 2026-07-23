@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { createInstance } from './actions'
+import { createInstance, syncAllCoursesToCalendar } from './actions'
 import { CourseTypeSelect } from './CourseTypeSelect'
 import { courseShortName } from '@/lib/courses'
 import CourseCalendar, { type CalendarCourse } from '@/components/CourseCalendar'
@@ -129,9 +129,19 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
       <div className="max-w-5xl mx-auto px-4 py-10">
         <Link href="/admin" className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors mb-6 inline-block">← Portal</Link>
 
-        <div className="mb-8">
-          <h1 className="text-2xl font-bold">Courses</h1>
-          <p className="text-zinc-400 mt-1">Schedule and manage course instances</p>
+        <div className="mb-8 flex items-end justify-between gap-4 flex-wrap">
+          <div>
+            <h1 className="text-2xl font-bold">Courses</h1>
+            <p className="text-zinc-400 mt-1">Schedule and manage course instances</p>
+          </div>
+          <form action={syncAllCoursesToCalendar}>
+            <button
+              className="text-xs px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded transition-colors"
+              title="Push every course to its Google calendar (military / civilian / prospective)"
+            >
+              Sync Google Calendars
+            </button>
+          </form>
         </div>
 
         {/* Minimal-intent create: pick the course type, everything else on the

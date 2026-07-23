@@ -6,6 +6,7 @@ import { after } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { contactsFromForm } from '@/lib/contacts'
+import { syncCourseCalendar, removeCourseEvent } from '@/lib/google-calendar'
 
 function toSlugPart(s: string) {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
@@ -69,6 +70,8 @@ export async function createInstance(formData: FormData) {
     .single()
 
   if (error) throw new Error(error.message)
+
+  after(() => syncCourseCalendar(admin, data.id))
 
   redirect(`/admin/courses/${data.id}`)
 }
@@ -150,6 +153,8 @@ export async function updateInstanceDetails(id: string, formData: FormData) {
     })
   }
 
+  after(() => syncCourseCalendar(admin, id))
+
   revalidatePath(`/admin/courses/${id}`)
   revalidatePath('/admin/courses')
   revalidatePath(`/portal/${id}`)
@@ -168,6 +173,7 @@ export async function updateInstanceDates(id: string, formData: FormData) {
     .eq('id', id)
 
   if (error) throw new Error(error.message)
+  after(() => syncCourseCalendar(createAdminClient(), id))
   revalidatePath(`/admin/courses/${id}`)
 }
 
@@ -380,6 +386,9 @@ export async function deleteInstance(instanceId: string) {
   await requireAdmin()
   const admin = createAdminClient()
 
+  // Remove the mirrored Google event before the row (and its pointers) go.
+  await removeCourseEvent(admin, instanceId)
+
   const { error } = await admin
     .from('course_instances')
     .delete()
@@ -457,4 +466,25 @@ export async function removeEnrollment(instanceId: string, enrollmentId: string)
 
   if (error) throw new Error(error.message)
   revalidatePath(`/admin/courses/${instanceId}`)
+}
+
+// One-click backfill/repair: pushes every course to its correct calendar.
+// Used after initial setup and any time the mirrors need reconciling.
+export async function syncAllCoursesToCalendar() {
+  await requireAdmin()
+  const admin = createAdminClient()
+
+  const { calendarSyncEnabled } = await import('@/lib/google-calendar')
+  if (!calendarSyncEnabled()) {
+    throw new Error('Calendar sync is not configured yet (service account key and calendar IDs)')
+  }
+
+  const { data: instances } = await admin
+    .from('course_instances')
+    .select('id')
+    .order('created_at')
+  for (const i of instances ?? []) {
+    await syncCourseCalendar(admin, i.id)
+  }
+  revalidatePath('/admin/courses')
 }
