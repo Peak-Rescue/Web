@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
-import { courseShortName } from '@/lib/courses'
+import { courseShortName, COURSE_TYPE_OPTIONS } from '@/lib/courses'
 
 const STATUS_STYLES: Record<string, string> = {
   tentative: 'bg-yellow-900/40 text-yellow-300 border-yellow-700',
@@ -69,24 +69,61 @@ function InstanceCard({ inst }: { inst: Instance }) {
   )
 }
 
+// Short row labels for the course-type groups (the full categoryMeta labels
+// are too wide for the filter-bar gutter).
+const CATEGORY_SHORT: Record<string, string> = {
+  tactical: 'Tactical',
+  sar: 'SAR',
+  industrial: 'Industrial',
+  specialty: 'Specialty',
+}
+
 export default function CourseList({ upcoming, past }: { upcoming: Instance[]; past: Instance[] }) {
   const [query, setQuery] = useState('')
-  const [status, setStatus] = useState('')
-  const [courseType, setCourseType] = useState('')
+  const [categories, setCategories] = useState<Set<string>>(new Set())
+  const [types, setTypes] = useState<Set<string>>(new Set())
+  const [statuses, setStatuses] = useState<Set<string>>(new Set())
 
-  const typeOptions = useMemo(() => {
-    const seen = new Map<string, string>()
+  const toggleIn = (setter: React.Dispatch<React.SetStateAction<Set<string>>>) => (value: string) =>
+    setter(prev => {
+      const next = new Set(prev)
+      if (next.has(value)) next.delete(value)
+      else next.add(value)
+      return next
+    })
+  const toggleCategory = toggleIn(setCategories)
+  const toggleType = toggleIn(setTypes)
+  const toggleStatus = toggleIn(setStatuses)
+
+  // Actions default a missing category to tactical, so filters treat null the
+  // same way.
+  const instCategory = (i: Instance) => i.course_category ?? 'tactical'
+
+  // Course types present in the data, grouped by category — the same
+  // category → type structure used when a course is created.
+  const typeGroups = useMemo(() => {
+    const byCat = new Map<string, Map<string, string>>()
     for (const i of [...upcoming, ...past]) {
-      if (!seen.has(i.course_type)) seen.set(i.course_type, courseShortName(i.course_type, null))
+      const m = byCat.get(instCategory(i)) ?? new Map<string, string>()
+      if (!m.has(i.course_type)) {
+        m.set(i.course_type, i.course_type === 'custom' ? 'Custom' : courseShortName(i.course_type, null))
+      }
+      byCat.set(instCategory(i), m)
     }
-    return [...seen.entries()].sort((a, b) => a[1].localeCompare(b[1]))
+    return COURSE_TYPE_OPTIONS.filter(g => byCat.has(g.category)).map(g => ({
+      category: g.category as string,
+      types: [...byCat.get(g.category)!.entries()].sort((a, b) => a[1].localeCompare(b[1])),
+    }))
   }, [upcoming, past])
 
-  const filtering = query.trim() !== '' || status !== '' || courseType !== ''
+  const filtering = query.trim() !== '' || categories.size > 0 || types.size > 0 || statuses.size > 0
 
+  // Check-all-that-apply: OR within each row, AND across rows (mirrors the
+  // instructor filter).
   const matches = (inst: Instance) => {
-    if (status && inst.status !== status) return false
-    if (courseType && inst.course_type !== courseType) return false
+    if (categories.size > 0 && !categories.has(instCategory(inst))) return false
+    if (types.size > 0 && !types.has(inst.course_type)) return false
+    if (statuses.size > 0 && !statuses.has(inst.status)) return false
     const q = query.trim().toLowerCase()
     if (!q) return true
     const haystack = [
@@ -104,43 +141,96 @@ export default function CourseList({ upcoming, past }: { upcoming: Instance[]; p
 
   return (
     <>
-      {/* ── Filters ─────────────────────────────────────────────── */}
-      <div className="mb-6 flex items-center gap-2 flex-wrap">
-        <div className="relative flex-1 min-w-[200px]">
-          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none">
-            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-          </svg>
-          <input
-            value={query}
-            onChange={e => setQuery(e.target.value)}
-            placeholder="Search name, ref, client, location…"
-            className="w-full bg-zinc-900 border border-zinc-800 rounded pl-9 pr-3 py-2 text-sm focus:outline-none focus:border-zinc-500 placeholder:text-zinc-600"
-          />
+      {/* ── Filters — check all that apply, like the instructor filter ── */}
+      <div className="mb-6 p-4 bg-zinc-900 rounded-lg border border-zinc-800 space-y-4">
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1 min-w-[200px]">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none">
+              <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+            <input
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              placeholder="Search name, ref, client, location…"
+              className="w-full bg-zinc-800 border border-zinc-700 rounded pl-9 pr-3 py-2 text-sm focus:outline-none focus:border-zinc-500 placeholder:text-zinc-600"
+            />
+          </div>
+          {filtering && (
+            <button
+              onClick={() => { setQuery(''); setCategories(new Set()); setTypes(new Set()); setStatuses(new Set()) }}
+              className="text-xs px-3 py-2 text-zinc-400 hover:text-white transition-colors shrink-0"
+            >
+              Clear
+            </button>
+          )}
         </div>
-        <select
-          value={status}
-          onChange={e => setStatus(e.target.value)}
-          className={`bg-zinc-900 border border-zinc-800 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500 ${status ? 'text-white' : 'text-zinc-500'}`}
-        >
-          <option value="">All statuses</option>
-          {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s[0].toUpperCase() + s.slice(1)}</option>)}
-        </select>
-        <select
-          value={courseType}
-          onChange={e => setCourseType(e.target.value)}
-          className={`max-w-[220px] bg-zinc-900 border border-zinc-800 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500 ${courseType ? 'text-white' : 'text-zinc-500'}`}
-        >
-          <option value="">All course types</option>
-          {typeOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-        </select>
-        {filtering && (
-          <button
-            onClick={() => { setQuery(''); setStatus(''); setCourseType('') }}
-            className="text-xs px-3 py-2 text-zinc-400 hover:text-white transition-colors"
-          >
-            Clear
-          </button>
+
+        {/* Category */}
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="text-xs font-medium text-zinc-400 uppercase tracking-wider w-20 shrink-0">Category</span>
+          <div className="flex flex-wrap gap-2">
+            {COURSE_TYPE_OPTIONS.map(g => (
+              <button
+                key={g.category}
+                onClick={() => toggleCategory(g.category)}
+                className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+                  categories.has(g.category)
+                    ? 'bg-pr-red-light text-white'
+                    : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-white'
+                }`}
+              >
+                {g.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Course type — grouped by category */}
+        {typeGroups.length > 0 && (
+          <div className="space-y-2">
+            <span className="text-xs font-medium text-zinc-400 uppercase tracking-wider">Course type</span>
+            {typeGroups.map(group => (
+              <div key={group.category} className="flex flex-wrap items-center gap-3">
+                <span className="text-xs text-zinc-500 w-20 shrink-0">{CATEGORY_SHORT[group.category] ?? group.category}</span>
+                <div className="flex flex-wrap gap-2">
+                  {group.types.map(([value, label]) => (
+                    <button
+                      key={`${group.category}:${value}`}
+                      onClick={() => toggleType(value)}
+                      className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+                        types.has(value)
+                          ? 'bg-teal-700 text-white'
+                          : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-white'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
         )}
+
+        {/* Status */}
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="text-xs font-medium text-zinc-400 uppercase tracking-wider w-20 shrink-0">Status</span>
+          <div className="flex flex-wrap gap-2">
+            {STATUS_OPTIONS.map(s => (
+              <button
+                key={s}
+                onClick={() => toggleStatus(s)}
+                className={`px-2.5 py-1 rounded text-xs font-medium transition-colors capitalize border ${
+                  statuses.has(s)
+                    ? STATUS_STYLES[s]
+                    : 'border-transparent bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-white'
+                }`}
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
       {/* ── Upcoming ─────────────────────────────────────────────── */}
