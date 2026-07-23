@@ -662,6 +662,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
             canManage
             currentUserId={user.id}
             suggestions={templateRows ?? []}
+            completedOpen
           />
         </details>
 

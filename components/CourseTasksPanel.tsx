@@ -43,6 +43,7 @@ export default function CourseTasksPanel({
   canManage,
   currentUserId,
   suggestions = [],
+  completedOpen = false,
 }: {
   instanceId: string
   tasks: CourseTask[]
@@ -50,6 +51,7 @@ export default function CourseTasksPanel({
   canManage: boolean
   currentUserId: string
   suggestions?: TaskSuggestion[]
+  completedOpen?: boolean
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -331,7 +333,7 @@ export default function CourseTasksPanel({
           </p>
         )}
         {done.length > 0 && (
-          <details>
+          <details open={completedOpen}>
             <summary className="px-4 py-2 text-xs text-zinc-500 cursor-pointer hover:text-zinc-300">
               {done.length} completed
             </summary>
