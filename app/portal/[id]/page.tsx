@@ -101,10 +101,10 @@ export default async function PortalPage({
         .eq('instance_id', id)
         .order('off_date'),
       modulesQuery,
-      admin.from('instance_instructors').select('role, instructors(name)').eq('instance_id', id),
+      admin.from('instance_instructors').select('role, instructors(name, profile_id)').eq('instance_id', id),
       showTasks ? loadTasksWithDocs(admin, id) : Promise.resolve([]),
       showTasks
-        ? admin.from('profiles').select('id, first_name, last_name').in('role', ['admin', 'instructor']).order('first_name')
+        ? admin.from('profiles').select('id, first_name, last_name, role').in('role', ['admin', 'instructor']).order('first_name')
         : Promise.resolve({ data: [] }),
       showTasks
         ? admin.from('course_task_templates').select('id, title, default_line, sort_order').eq('active', true).order('sort_order')
@@ -119,8 +119,17 @@ export default async function PortalPage({
 
   // Only tasks assigned to someone show on the course page, for everyone.
   const tasks: CourseTask[] = taskRows.filter((t) => t.assigned_to)
+  const staffedProfileIds = new Set(
+    (instructors ?? [])
+      .map((r) => (r.instructors as unknown as { profile_id: string | null } | null)?.profile_id)
+      .filter(Boolean)
+  )
   const taskPeople: TaskPerson[] = (peopleRows ?? [])
-    .map((p) => ({ id: p.id, name: [p.first_name, p.last_name].filter(Boolean).join(' ') }))
+    .map((p) => ({
+      id: p.id,
+      name: [p.first_name, p.last_name].filter(Boolean).join(' '),
+      onCourse: p.role === 'admin' || staffedProfileIds.has(p.id),
+    }))
     .filter((p) => p.name)
 
   const fmtLong = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'long', day: 'numeric', year: 'numeric' })

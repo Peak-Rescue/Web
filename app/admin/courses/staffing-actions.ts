@@ -117,6 +117,46 @@ export async function sendInterestInvites(
   return { sent, skipped }
 }
 
+// One-off guest instructor: staff someone who isn't in the instructor roster
+// yet. Reuses the roster flow — create the instructor record, assign them to
+// this course, and email a portal invite so they can create their login.
+// If the email already belongs to an instructor, that record is used instead
+// of creating a duplicate.
+export async function addGuestInstructor(
+  instanceId: string,
+  input: { firstName: string; lastName: string; email: string; role: 'lead' | 'assist' }
+): Promise<{ name: string; existed: boolean }> {
+  await requireAdmin()
+  const admin = createAdminClient()
+
+  const email = input.email.trim().toLowerCase()
+  const firstName = input.firstName.trim()
+  const lastName = input.lastName.trim()
+  if (!firstName || !lastName) throw new Error('First and last name are required')
+  if (!email) throw new Error('Email is required — the invite is sent there')
+
+  const { adminCreateInstructor, adminSendInvite } = await import('@/app/admin/instructors/[id]/actions')
+
+  const { data: existing } = await admin
+    .from('instructors')
+    .select('id, name')
+    .ilike('email', email)
+    .maybeSingle()
+
+  const instructorId = existing?.id ?? (await adminCreateInstructor(firstName, lastName, email)).id
+
+  const { error } = await admin
+    .from('instance_instructors')
+    .upsert({ instance_id: instanceId, instructor_id: instructorId, role: input.role }, { onConflict: 'instance_id,instructor_id' })
+  if (error) throw new Error(error.message)
+
+  // Portal invite (or a sign-in link if they already have an account).
+  await adminSendInvite(instructorId)
+
+  revalidatePath(`/admin/courses/${instanceId}`)
+  return { name: existing?.name ?? `${firstName} ${lastName}`, existed: Boolean(existing) }
+}
+
 export async function deleteInterestInvite(instanceId: string, inviteId: string) {
   await requireAdmin()
   const { error } = await createAdminClient()

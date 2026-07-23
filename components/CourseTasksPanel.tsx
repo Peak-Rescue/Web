@@ -27,7 +27,9 @@ export type CourseTask = {
   documents: { id: string; filename: string; url: string }[]
 }
 
-export type TaskPerson = { id: string; name: string }
+// onCourse: admins and instructors staffed on this course — the default
+// assignee list; everyone else appears only after "Show all instructors…".
+export type TaskPerson = { id: string; name: string; onCourse: boolean }
 
 export type TaskSuggestion = { id: string; title: string; default_line: boolean; sort_order: number }
 
@@ -88,6 +90,23 @@ export default function CourseTasksPanel({
   const notesFieldRef = useRef<HTMLTextAreaElement>(null)
 
   const personName = (id: string | null) => people.find((p) => p.id === id)?.name ?? null
+
+  // Assignee dropdowns default to the course team; picking the sentinel
+  // expands every dropdown in the panel to the full instructor list.
+  const SHOW_ALL = '__show_all__'
+  const [showAllPeople, setShowAllPeople] = useState(false)
+  const hasMorePeople = people.some((p) => !p.onCourse)
+  const assigneeOptions = (currentId?: string | null) => {
+    const shown = showAllPeople ? people : people.filter((p) => p.onCourse || p.id === currentId)
+    return (
+      <>
+        {shown.map((p) => (
+          <option key={p.id} value={p.id}>{p.name}</option>
+        ))}
+        {!showAllPeople && hasMorePeople && <option value={SHOW_ALL}>Show all instructors…</option>}
+      </>
+    )
+  }
 
   const open = tasks.filter((t) => t.status === 'open')
   const done = tasks.filter((t) => t.status === 'done')
@@ -211,15 +230,14 @@ export default function CourseTasksPanel({
             <select
               value={t.assigned_to ?? ''}
               disabled={busyId === t.id}
-              onChange={(e) =>
+              onChange={(e) => {
+                if (e.target.value === SHOW_ALL) return setShowAllPeople(true)
                 run(() => updateTask(instanceId, t.id, { assigned_to: e.target.value || null }), t.id)
-              }
+              }}
               className="bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-xs text-zinc-300 shrink-0 max-w-32"
             >
               <option value="">unassigned</option>
-              {people.map((p) => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
+              {assigneeOptions(t.assigned_to)}
             </select>
             <button
               onClick={() => {
@@ -343,13 +361,14 @@ export default function CourseTasksPanel({
                 <label className="block text-xs text-zinc-500 mb-1">Assign to</label>
                 <select
                   value={newAssignee}
-                  onChange={(e) => setNewAssignee(e.target.value)}
+                  onChange={(e) => {
+                    if (e.target.value === SHOW_ALL) return setShowAllPeople(true)
+                    setNewAssignee(e.target.value)
+                  }}
                   className="bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm"
                 >
                   <option value="">unassigned</option>
-                  {people.map((p) => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
-                  ))}
+                  {assigneeOptions(newAssignee)}
                 </select>
               </div>
               <div className="w-full">
@@ -412,13 +431,14 @@ export default function CourseTasksPanel({
                   {s.id in picks && (
                     <select
                       value={picks[s.id]}
-                      onChange={(e) => setPicks((p) => ({ ...p, [s.id]: e.target.value }))}
+                      onChange={(e) => {
+                        if (e.target.value === SHOW_ALL) return setShowAllPeople(true)
+                        setPicks((p) => ({ ...p, [s.id]: e.target.value }))
+                      }}
                       className="bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-xs text-zinc-300 shrink-0 max-w-36"
                     >
                       <option value="">assign to…</option>
-                      {people.map((p) => (
-                        <option key={p.id} value={p.id}>{p.name}</option>
-                      ))}
+                      {assigneeOptions(picks[s.id])}
                     </select>
                   )}
                 </div>

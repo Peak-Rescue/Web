@@ -6,6 +6,8 @@ import { updateInstanceDetails, updateInstanceDates, addOffDay, removeOffDay, ad
 import { CourseTypeSelect } from '../CourseTypeSelect'
 import InstructorAssign from '../InstructorAssign'
 import StaffingInterest from '../StaffingInterest'
+import GuestInstructorButton from '../GuestInstructorButton'
+import CourseFilesSection, { type CourseFile } from '../CourseFilesSection'
 import StudentInvitePanel from '../StudentInvitePanel'
 import AutoSaveForm from '@/components/AutoSaveForm'
 import DeleteInstanceButton from '../DeleteInstanceButton'
@@ -58,7 +60,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
     admin.from('course_instances').select('*, ref_number, slug').eq('id', id).single(),
     admin.from('instance_off_days').select('id, off_date, end_date').eq('instance_id', id).order('off_date'),
     admin.from('course_modules').select('id, title, audience, order, course_items(id, title, type, url, description, order)').eq('instance_id', id).order('order'),
-    admin.from('instance_instructors').select('instructor_id, role, instructors(name)').eq('instance_id', id),
+    admin.from('instance_instructors').select('instructor_id, role, instructors(name, profile_id)').eq('instance_id', id),
     admin.from('instructors').select('id, name, email, instructor_role, instructor_capabilities(category, role)').eq('active', true).order('name'),
   ])
 
@@ -79,11 +81,14 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
     { data: estimateSourceRows },
     { data: templateRows },
     { data: interestInviteRows },
+    { data: courseDocRows },
+    { data: taskDocRows },
+    { data: receiptRows },
   ] = await Promise.all([
     admin.from('enrollments').select('id, enrolled_at, profiles(first_name, last_name, email)').eq('instance_id', id).order('enrolled_at'),
     admin.from('expense_items').select('id', { count: 'exact', head: true }).eq('instance_id', id),
     loadTasksWithDocs(admin, id),
-    admin.from('profiles').select('id, first_name, last_name, email').in('role', ['admin', 'instructor']).order('first_name'),
+    admin.from('profiles').select('id, first_name, last_name, email, role').in('role', ['admin', 'instructor']).order('first_name'),
     admin.from('profiles').select('id, first_name, last_name, email').eq('role', 'admin').order('first_name'),
     admin.from('course_estimates').select('id, title, margin, created_at, estimate_items(label, qty, rate, notes, qty_factors, sort_order)').eq('instance_id', id).order('created_at'),
     admin.from('pricing_rates').select('id, label, unit, rate, default_line').eq('active', true).order('sort_order'),
@@ -91,11 +96,73 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
     admin.from('course_instances').select('id, ref_number, course_type, custom_title, client_name, starts_at, course_estimates(count)').neq('id', id).order('starts_at', { ascending: false, nullsFirst: false }).limit(60),
     admin.from('course_task_templates').select('id, title, default_line, sort_order').eq('active', true).order('sort_order'),
     admin.from('course_interest_invites').select('id, instructor_id, sent_at, responded_at, interested, note').eq('instance_id', id).order('created_at'),
+    admin.from('course_documents').select('id, path, filename, created_at').eq('instance_id', id),
+    admin.from('course_task_documents').select('id, path, filename, created_at, course_tasks!inner(title, instance_id)').eq('course_tasks.instance_id', id),
+    admin.from('expense_receipts').select('id, path, filename, created_at, expense_items!inner(category, instance_id, expense_reports(profiles(first_name, last_name)))').eq('expense_items.instance_id', id),
   ])
 
+  // One "Files" view across every attachment on the course: general uploads,
+  // task documents, and expense receipts — signed per-bucket in two calls.
+  const docRows = [...(courseDocRows ?? []), ...(taskDocRows ?? [])]
+  const [{ data: signedDocs }, { data: signedReceipts }] = await Promise.all([
+    docRows.length
+      ? admin.storage.from('task-documents').createSignedUrls(docRows.map((r) => r.path), 3600)
+      : Promise.resolve({ data: [] }),
+    (receiptRows ?? []).length
+      ? admin.storage.from('expense-receipts').createSignedUrls((receiptRows ?? []).map((r) => r.path), 3600)
+      : Promise.resolve({ data: [] }),
+  ])
+  const fileUrl = new Map(
+    [...(signedDocs ?? []), ...(signedReceipts ?? [])].map((s) => [s.path, s.signedUrl])
+  )
+  const courseFiles: (CourseFile & { created_at: string })[] = [
+    ...(courseDocRows ?? []).map((r) => ({
+      id: r.id,
+      filename: r.filename ?? 'document',
+      url: fileUrl.get(r.path) ?? '#',
+      source: 'course' as const,
+      label: null,
+      created_at: r.created_at,
+    })),
+    ...(taskDocRows ?? []).map((r) => ({
+      id: r.id,
+      filename: r.filename ?? 'document',
+      url: fileUrl.get(r.path) ?? '#',
+      source: 'task' as const,
+      label: (r.course_tasks as unknown as { title: string } | null)?.title ?? null,
+      created_at: r.created_at,
+    })),
+    ...(receiptRows ?? []).map((r) => {
+      const item = r.expense_items as unknown as {
+        category: string
+        expense_reports: { profiles: { first_name: string | null; last_name: string | null } | null } | null
+      } | null
+      const who = [item?.expense_reports?.profiles?.first_name, item?.expense_reports?.profiles?.last_name]
+        .filter(Boolean)
+        .join(' ')
+      return {
+        id: r.id,
+        filename: r.filename ?? 'receipt',
+        url: fileUrl.get(r.path) ?? '#',
+        source: 'expense' as const,
+        label: [who, item?.category?.replace(/_/g, ' ')].filter(Boolean).join(' · ') || null,
+        created_at: r.created_at,
+      }
+    }),
+  ].sort((a, b) => b.created_at.localeCompare(a.created_at))
+
   const enrollments = enrollmentRows ?? []
+  const staffedProfileIds = new Set(
+    (assigned ?? [])
+      .map((a) => (a.instructors as unknown as { profile_id: string | null } | null)?.profile_id)
+      .filter(Boolean)
+  )
   const taskPeople: TaskPerson[] = (peopleRows ?? [])
-    .map((p) => ({ id: p.id, name: [p.first_name, p.last_name].filter(Boolean).join(' ') }))
+    .map((p) => ({
+      id: p.id,
+      name: [p.first_name, p.last_name].filter(Boolean).join(' '),
+      onCourse: p.role === 'admin' || staffedProfileIds.has(p.id),
+    }))
     .filter((p) => p.name)
   // Quotes are only ever issued by admins.
   const quotePeople = (adminRows ?? [])
@@ -266,6 +333,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
               <textarea name="notes" rows={2} defaultValue={inst.notes ?? ''} className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500 resize-none" />
             </div>
           </AutoSaveForm>
+          <CourseFilesSection instanceId={id} files={courseFiles} />
         </details>
 
         {/* ── Schedule ─────────────────────────────────────────────── */}
@@ -381,6 +449,11 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
             instanceId={id}
             qualified={qualified}
             unassigned={unassigned}
+            hasLead={(assigned ?? []).some(a => a.role === 'lead')}
+          />
+
+          <GuestInstructorButton
+            instanceId={id}
             hasLead={(assigned ?? []).some(a => a.role === 'lead')}
           />
 
