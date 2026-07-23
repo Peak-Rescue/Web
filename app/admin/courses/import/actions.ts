@@ -85,6 +85,12 @@ export async function importCourseFromEvent(formData: FormData) {
       await deleteImportedEvent(sourceCalendarId, sourceEventId)
     }
     await syncCourseCalendar(admin, data.id)
+    // No "you're assigned" emails here, but a medical-cert gap is still worth
+    // an alert — expired certs matter regardless of how the crew was staffed.
+    const { sendAssignmentCertAlert } = await import('@/lib/notifications')
+    for (const member of crew) {
+      await sendAssignmentCertAlert(admin, data.id, member.instructor_id)
+    }
   })
 
   revalidatePath('/admin/courses')

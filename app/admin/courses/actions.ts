@@ -361,6 +361,15 @@ export async function assignInstructor(instanceId: string, formData: FormData) {
     })
   }
 
+  // New assignments also check medical certs: if theirs will be expired by the
+  // course's last day, they get told to update it in the portal.
+  if (!existing) {
+    after(async () => {
+      const { sendAssignmentCertAlert } = await import('@/lib/notifications')
+      await sendAssignmentCertAlert(admin, instanceId, instructor_id)
+    })
+  }
+
   // The crew is part of the Google event title, so assignments re-sync it.
   after(() => syncCourseCalendar(admin, instanceId))
 

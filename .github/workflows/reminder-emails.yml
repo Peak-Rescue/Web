@@ -1,0 +1,22 @@
+name: Portal Reminder Emails
+
+# Triggers the portal's daily reminder sweep: medical-cert expiry alerts for
+# staffed instructors and ADP hours-due reminders. The route dedupes every
+# send, so a manual re-run never double-emails anyone.
+
+on:
+  schedule:
+    - cron: '0 15 * * *'  # daily at 15:00 UTC (~9am Mountain)
+  workflow_dispatch:       # allow manual trigger
+
+jobs:
+  sweep:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger reminder sweep
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          curl -fsS -X POST \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "https://peak-rescue.com/api/cron/notifications"
