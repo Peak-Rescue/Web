@@ -252,15 +252,14 @@ export async function syncCourseCalendar(admin: Admin, instanceId: string): Prom
       : null
     const eventBody = attendees ? { ...event, attendees } : event
 
-    // Email attendees only for changes worth their attention: a new event,
-    // moved dates, or a crew change. Cosmetic edits apply silently.
-    const prevEmails = (existing?.attendees ?? []).map((a) => (a.email ?? '').toLowerCase()).sort().join(',')
-    const nextEmails = (attendees ?? []).map((a) => a.email.toLowerCase()).sort().join(',')
+    // Email attendees only for changes worth their attention: a new event or
+    // moved dates. Everything else — including crew changes, which rewrite the
+    // title — applies silently; Google can't email just the affected person,
+    // so a crew-change notification would blast the whole existing crew too.
     const datesChanged =
       existing !== null &&
       (existing.start?.date !== event.start.date || existing.end?.date !== event.end.date)
-    const sendUpdates =
-      existing === null || datesChanged || (canInvite && prevEmails !== nextEmails) ? 'all' : 'none'
+    const sendUpdates = existing === null || datesChanged ? 'all' : 'none'
 
     // Existing event on the wrong calendar → move it silently (the follow-up
     // patch sends the notification if the change is meaningful).
