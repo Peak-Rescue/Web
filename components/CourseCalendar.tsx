@@ -7,12 +7,22 @@ export type CalendarCourse = {
   starts_at: string // yyyy-mm-dd
   ends_at: string
   href?: string // absent → rendered as a non-clickable chip
+  category?: string | null // course_category; 'tactical' → military, anything else → civilian
 }
 
+// Military vs civilian accent — same designation rule as the Google Calendar
+// sync (course_category 'tactical' → military, everything else → civilian).
+const CATEGORY_DOT = {
+  military: 'bg-orange-400',
+  civilian: 'bg-cyan-400',
+}
+
+// Solidity mirrors certainty: confirmed/completed chips are filled, quoted is
+// outline-only, tentative is a dashed outline.
 const STATUS_CHIP: Record<string, string> = {
-  tentative: 'bg-yellow-900/60 text-yellow-200 border-yellow-800',
-  quoted: 'bg-blue-900/60 text-blue-200 border-blue-800',
-  confirmed: 'bg-teal-900/60 text-teal-200 border-teal-800',
+  tentative: 'border-dashed border-yellow-700 text-yellow-300',
+  quoted: 'border-blue-700 text-blue-300',
+  confirmed: 'bg-teal-800/80 text-teal-100 border-teal-700',
   completed: 'bg-zinc-800 text-zinc-400 border-zinc-700',
   cancelled: 'bg-red-900/50 text-red-300 border-red-900 line-through',
 }
@@ -28,17 +38,36 @@ export default function CourseCalendar({
   courses,
   basePath,
   params,
+  category,
 }: {
   month: string
   courses: CalendarCourse[]
   basePath: string
   params?: Record<string, string> // extra query params to preserve in month-nav links
+  category?: string | null // active military/civilian filter (?cat=), toggled via the legend
 }) {
+  const catFilter = category === 'military' || category === 'civilian' ? category : null
+  const isMilitary = (c: CalendarCourse) => c.category === 'tactical'
+  const visible = catFilter
+    ? courses.filter((c) => (catFilter === 'military') === isMilitary(c))
+    : courses
+
   const navHref = (m?: string) => {
     const q = new URLSearchParams(params)
+    if (catFilter) q.set('cat', catFilter)
     if (m) q.set('cal', m)
     const s = q.toString()
     return s ? `${basePath}?${s}` : basePath
+  }
+
+  // Legend-pill links: set the filter, or clear it when already active.
+  // Always carry the shown month so pages whose calendar panel opens off the
+  // ?cal param keep it expanded.
+  const catHref = (next: 'military' | 'civilian') => {
+    const q = new URLSearchParams(params)
+    q.set('cal', month)
+    if (catFilter !== next) q.set('cat', next)
+    return `${basePath}?${q.toString()}`
   }
   const [y, m] = month.split('-').map(Number)
   const first = new Date(Date.UTC(y, m - 1, 1))
@@ -57,6 +86,21 @@ export default function CourseCalendar({
   while (cells.length % 7 !== 0) cells.push(null)
 
   const todayStr = ymd(new Date())
+
+  // Google-style multi-day bars: every course keeps one lane for its whole
+  // span, so its per-day segments sit at the same height in adjacent cells
+  // and read as a single connected bar. Greedy assignment, earliest start
+  // first; a lane is reusable once its previous occupant has ended.
+  const lanes = new Map<string, number>()
+  const laneEnds: string[] = []
+  for (const c of [...visible].sort(
+    (a, b) => a.starts_at.localeCompare(b.starts_at) || a.ends_at.localeCompare(b.ends_at)
+  )) {
+    let lane = laneEnds.findIndex((end) => end < c.starts_at)
+    if (lane === -1) lane = laneEnds.length
+    laneEnds[lane] = c.ends_at
+    lanes.set(c.id, lane)
+  }
 
   return (
     <div>
@@ -77,7 +121,11 @@ export default function CourseCalendar({
 
       <div className="grid grid-cols-7 gap-px bg-zinc-800 border border-zinc-800 rounded-lg overflow-hidden">
         {cells.map((day, i) => {
-          const active = day ? courses.filter((c) => c.starts_at <= day && day <= c.ends_at) : []
+          const active = day ? visible.filter((c) => c.starts_at <= day && day <= c.ends_at) : []
+          // Slot each active course into its lane; gaps stay as invisible
+          // spacers so higher lanes keep their vertical position.
+          const bySlot: (CalendarCourse | undefined)[] = []
+          for (const c of active) bySlot[lanes.get(c.id)!] = c
           return (
             <div key={i} className={`min-h-20 bg-zinc-950 p-1 ${day === todayStr ? 'bg-zinc-900' : ''}`}>
               {day && (
@@ -86,15 +134,42 @@ export default function CourseCalendar({
                 </p>
               )}
               <div className="space-y-0.5">
-                {active.map((c) => {
-                  const chipClass = `block px-1 py-0.5 rounded border text-[10px] leading-tight truncate ${STATUS_CHIP[c.status] ?? STATUS_CHIP.completed}`
-                  const text = day === c.starts_at || i % 7 === 0 ? c.label : '·'
+                {Array.from(bySlot, (c, lane) => {
+                  if (!c) {
+                    return (
+                      <span key={lane} className="block px-1 py-0.5 border border-transparent text-[10px] leading-tight">
+                        {' '}
+                      </span>
+                    )
+                  }
+                  // Segments continuing from/to a neighboring cell in the same
+                  // row square off that edge and bleed across the cell padding
+                  // and grid gap, joining into one bar. Labels render on the
+                  // first segment and again at each week start.
+                  const contLeft = day! > c.starts_at && i % 7 !== 0
+                  const contRight = day! < c.ends_at && i % 7 !== 6
+                  const chipClass = [
+                    'block px-1 py-0.5 border text-[10px] leading-tight truncate',
+                    STATUS_CHIP[c.status] ?? STATUS_CHIP.completed,
+                    contLeft ? 'rounded-l-none border-l-0 -ml-[5px]' : 'rounded-l',
+                    contRight ? 'rounded-r-none border-r-0 -mr-1' : 'rounded-r',
+                  ].join(' ')
+                  const text = contLeft ? ' ' : c.label
+                  const dot = !contLeft && c.category !== undefined && (
+                    <span
+                      className={`inline-block w-1.5 h-1.5 rounded-full mr-1 align-middle ${
+                        c.category === 'tactical' ? CATEGORY_DOT.military : CATEGORY_DOT.civilian
+                      }`}
+                    />
+                  )
                   return c.href ? (
                     <Link key={c.id} href={c.href} title={c.label} className={`${chipClass} hover:brightness-125 transition`}>
+                      {dot}
                       {text}
                     </Link>
                   ) : (
                     <span key={c.id} title={c.label} className={chipClass}>
+                      {dot}
                       {text}
                     </span>
                   )
@@ -104,6 +179,30 @@ export default function CourseCalendar({
           )
         })}
       </div>
+
+      {courses.some((c) => c.category !== undefined) && (
+        <div className="flex items-center gap-1.5 mt-2 text-[10px]">
+          {(['military', 'civilian'] as const).map((k) => (
+            <Link
+              key={k}
+              href={catHref(k)}
+              title={catFilter === k ? 'Show all courses' : `Show only ${k} courses`}
+              className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full border transition-colors ${
+                catFilter === k
+                  ? 'bg-zinc-800 border-zinc-600 text-white'
+                  : 'border-transparent text-zinc-500 hover:text-zinc-300'
+              }`}
+            >
+              <span
+                className={`w-1.5 h-1.5 rounded-full ${CATEGORY_DOT[k]} ${
+                  catFilter && catFilter !== k ? 'opacity-40' : ''
+                }`}
+              />
+              {k === 'military' ? 'Military' : 'Civilian'}
+            </Link>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

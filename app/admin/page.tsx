@@ -6,11 +6,11 @@ import MyTasksList from '@/components/MyTasksList'
 import { loadMyOpenTasks } from '@/lib/course-tasks'
 import CourseCalendar, { type CalendarCourse } from '@/components/CourseCalendar'
 import StaffingInterestList from '@/components/StaffingInterestList'
-import { courseShortName } from '@/lib/courses'
+import { courseShortName, courseEventTitle, crewFirstNames } from '@/lib/courses'
 import { courseCapabilityCategories } from '@/lib/capabilities'
 
-export default async function AdminPage({ searchParams }: { searchParams: Promise<{ cal?: string; scope?: string; as?: string }> }) {
-  const { cal, scope, as } = await searchParams
+export default async function AdminPage({ searchParams }: { searchParams: Promise<{ cal?: string; scope?: string; as?: string; cat?: string }> }) {
+  const { cal, scope, as, cat } = await searchParams
   const showAllCourses = scope === 'all'
   const supabase = await createClient()
 
@@ -24,6 +24,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     id: string
     ref_number: number
     course_type: string
+    course_category?: string | null
     custom_title: string | null
     client_name: string | null
     location: string | null
@@ -31,19 +32,20 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     ends_at: string | null
     status: string
     custom_categories?: string[] | null
+    instance_instructors?: { role: string; instructors: { name: string } | null }[] | null
   }
   // Profile gate + personalized data in one parallel round.
   const [{ data: profile }, { data: assignmentRows }, myTasks, allInstancesRes, { data: inviteRows }, { data: capRow }] = await Promise.all([
     admin.from('profiles').select('role, first_name, last_name, email').eq('id', user.id).single(),
     admin
       .from('instance_instructors')
-      .select('role, course_instances!inner(id, ref_number, course_type, custom_title, client_name, location, starts_at, ends_at, status), instructors!inner(profile_id)')
+      .select('role, course_instances!inner(id, ref_number, course_type, course_category, custom_title, client_name, location, starts_at, ends_at, status, instance_instructors(role, instructors(name))), instructors!inner(profile_id)')
       .eq('instructors.profile_id', user.id),
     loadMyOpenTasks(admin, user.id),
     showAllCourses
       ? admin
           .from('course_instances')
-          .select('id, ref_number, course_type, custom_title, custom_categories, client_name, location, starts_at, ends_at, status')
+          .select('id, ref_number, course_type, course_category, custom_title, custom_categories, client_name, location, starts_at, ends_at, status, instance_instructors(role, instructors(name))')
           .neq('status', 'cancelled')
       : Promise.resolve({ data: null }),
     admin
@@ -112,29 +114,44 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     ((capRow?.instructor_capabilities ?? []) as { category: string }[]).map((c) => c.category)
   )
   const calendarSource: InstRow[] = showAllCourses
-    ? ((allInstancesRes.data ?? []) as InstRow[]).filter(
+    ? ((allInstancesRes.data ?? []) as unknown as InstRow[]).filter(
         (i) =>
           showAsAdmin ||
           assignedIds.has(i.id) ||
           courseCapabilityCategories(i.course_type, i.custom_categories).some((c) => myCategories.has(c))
       )
     : (assignmentRows ?? []).map((a) => a.course_instances as unknown as InstRow)
+  // Chip labels mirror the Google Calendar event titles: name — client —
+  // location — crew first names (lead first).
+  const chipLabel = (i: InstRow) =>
+    courseEventTitle(
+      i,
+      crewFirstNames(
+        (i.instance_instructors ?? [])
+          .filter((r) => r.instructors)
+          .map((r) => ({ role: r.role, name: r.instructors!.name }))
+      )
+    )
   const calendarCourses: CalendarCourse[] = calendarSource
     .filter((i) => i && i.status !== 'cancelled' && i.starts_at && i.ends_at)
     .map((i) => ({
       id: i.id,
-      label: courseShortName(i.course_type, i.custom_title),
+      label: chipLabel(i),
       status: i.status,
       starts_at: i.starts_at!,
       ends_at: i.ends_at! >= i.starts_at! ? i.ends_at! : i.starts_at!,
       href: showAsAdmin || assignedIds.has(i.id) ? portalHref(i.id) : undefined,
+      category: i.course_category ?? null,
     }))
 
-  const homeHref = ({ all = showAllCourses, view = viewAs }: { all?: boolean; view?: string | null } = {}) => {
+  const calMonth = /^\d{4}-\d{2}$/.test(cal ?? '') ? cal! : today.slice(0, 7)
+
+  const homeHref = ({ all = showAllCourses, view = viewAs, month = cal }: { all?: boolean; view?: string | null; month?: string } = {}) => {
     const q = new URLSearchParams()
-    if (cal) q.set('cal', cal)
+    if (month) q.set('cal', month)
     if (all) q.set('scope', 'all')
     if (view) q.set('as', view)
+    if (cat) q.set('cat', cat)
     const s = q.toString()
     return s ? `/admin?${s}` : '/admin'
   }
@@ -267,8 +284,11 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
           </summary>
           <div className="mt-3">
             <div className="flex gap-1 mb-3 text-xs">
+              {/* Toggles carry the shown month so the destination page renders
+                  the details open — otherwise switching back to "My courses"
+                  drops every param and the panel collapses. */}
               <Link
-                href={homeHref({ all: false })}
+                href={homeHref({ all: false, month: calMonth })}
                 className={`px-2.5 py-1 rounded-full border transition-colors ${
                   !showAllCourses
                     ? 'bg-zinc-800 border-zinc-600 text-white'
@@ -278,7 +298,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
                 My courses
               </Link>
               <Link
-                href={homeHref({ all: true })}
+                href={homeHref({ all: true, month: calMonth })}
                 className={`px-2.5 py-1 rounded-full border transition-colors ${
                   showAllCourses
                     ? 'bg-zinc-800 border-zinc-600 text-white'
@@ -289,9 +309,10 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
               </Link>
             </div>
             <CourseCalendar
-              month={/^\d{4}-\d{2}$/.test(cal ?? '') ? cal! : today.slice(0, 7)}
+              month={calMonth}
               basePath="/admin"
               courses={calendarCourses}
+              category={cat}
               params={{
                 ...(showAllCourses ? { scope: 'all' } : {}),
                 ...(viewAs ? { as: viewAs } : {}),

@@ -24,6 +24,7 @@ export type Instance = {
   ref_number: number
   slug: string | null
   course_type: string
+  course_category: string | null
   custom_title: string | null
   status: string
   location: string | null
@@ -32,6 +33,7 @@ export type Instance = {
   ends_at: string | null
   max_students: number | null
   instance_instructors: { count: number }[]
+  crew?: { role: string; instructors: { name: string } | null }[] | null
   enrollments: { count: number }[]
 }
 

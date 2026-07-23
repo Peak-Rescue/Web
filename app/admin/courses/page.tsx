@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createInstance, syncAllCoursesToCalendar } from './actions'
 import { CourseTypeSelect } from './CourseTypeSelect'
-import { courseShortName } from '@/lib/courses'
+import { courseEventTitle, crewFirstNames } from '@/lib/courses'
 import CourseCalendar, { type CalendarCourse } from '@/components/CourseCalendar'
 import CourseContactsEditor from '@/components/CourseContactsEditor'
 import CourseList, { type Instance } from './CourseList'
@@ -17,8 +17,8 @@ function lastEndDate(inst: Instance): string | null {
   return inst.ends_at ?? null
 }
 
-export default async function CoursesPage({ searchParams }: { searchParams: Promise<{ cal?: string }> }) {
-  const { cal } = await searchParams
+export default async function CoursesPage({ searchParams }: { searchParams: Promise<{ cal?: string; cat?: string }> }) {
+  const { cal, cat } = await searchParams
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
@@ -30,8 +30,9 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
   const { data: raw } = await admin
     .from('course_instances')
     .select(`
-      id, ref_number, slug, course_type, custom_title, status, location, client_name, starts_at, ends_at, max_students,
+      id, ref_number, slug, course_type, course_category, custom_title, status, location, client_name, starts_at, ends_at, max_students,
       instance_instructors(count),
+      crew:instance_instructors(role, instructors(name)),
       enrollments(count),
       course_estimates(count)
     `)
@@ -164,16 +165,26 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
           <CourseCalendar
             month={/^\d{4}-\d{2}$/.test(cal ?? '') ? cal! : today.slice(0, 7)}
             basePath="/admin/courses"
+            category={cat}
             courses={
               instances
                 .filter((i) => i.starts_at && i.ends_at && i.status !== 'cancelled')
                 .map((i) => ({
                   id: i.id,
-                  label: courseShortName(i.course_type, i.custom_title),
+                  // Mirrors the Google Calendar event title convention.
+                  label: courseEventTitle(
+                    i,
+                    crewFirstNames(
+                      (i.crew ?? [])
+                        .filter((r) => r.instructors)
+                        .map((r) => ({ role: r.role, name: r.instructors!.name }))
+                    )
+                  ),
                   status: i.status,
                   starts_at: i.starts_at!,
                   ends_at: i.ends_at! >= i.starts_at! ? i.ends_at! : i.starts_at!,
                   href: `/admin/courses/${i.id}`,
+                  category: i.course_category ?? null,
                 })) as CalendarCourse[]
             }
           />

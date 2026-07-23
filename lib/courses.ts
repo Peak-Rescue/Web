@@ -61,6 +61,31 @@ export function courseShortName(course_type: string, custom_title: string | null
   return services.find(s => s.slug === course_type)?.shortTitle ?? custom_title ?? course_type
 }
 
+// Calendar-event title, shared by the Google Calendar sync and the portal
+// calendars so an event reads the same in both:
+// "Name — Client — Location — Crew first names".
+export function courseEventTitle(
+  c: { course_type: string; custom_title: string | null; client_name?: string | null; location?: string | null },
+  crewNames: string[]
+): string {
+  return [
+    courseShortName(c.course_type, c.custom_title),
+    c.client_name,
+    c.location,
+    crewNames.join(', ') || null,
+  ]
+    .filter(Boolean)
+    .join(' — ')
+}
+
+// Lead(s) first, first names only — the team's long-standing manual
+// calendar-event convention.
+export function crewFirstNames(crew: { role: string; name: string }[]): string[] {
+  return [...crew]
+    .sort((a, b) => Number(a.role !== 'lead') - Number(b.role !== 'lead'))
+    .map((m) => m.name.split(' ')[0])
+}
+
 // Compact display label for a course instance — the human parts (type,
 // client, location, date) lead; the PR ref number trails for uniqueness.
 // e.g. "Jungle Mobility · Peak Rescue · Casper · Jul 2026 (PR-0002)"

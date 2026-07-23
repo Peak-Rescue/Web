@@ -15,7 +15,7 @@
 
 import { createSign } from 'crypto'
 import { type createAdminClient } from '@/lib/supabase/admin'
-import { courseShortName } from '@/lib/courses'
+import { courseEventTitle } from '@/lib/courses'
 
 const SCOPE = 'https://www.googleapis.com/auth/calendar'
 const API = 'https://www.googleapis.com/calendar/v3'
@@ -128,12 +128,13 @@ type CourseRow = {
   starts_at: string | null
   ends_at: string | null
   status: string
+  notes: string | null
   gcal_event_id: string | null
   gcal_calendar_id: string | null
 }
 
 const COURSE_COLS =
-  'id, ref_number, course_type, course_category, custom_title, client_name, location, starts_at, ends_at, status, gcal_event_id, gcal_calendar_id'
+  'id, ref_number, course_type, course_category, custom_title, client_name, location, starts_at, ends_at, status, notes, gcal_event_id, gcal_calendar_id'
 
 function targetCalendar(c: CourseRow): string | null {
   if (c.status === 'cancelled' || !c.starts_at) return null
@@ -146,25 +147,29 @@ function targetCalendar(c: CourseRow): string | null {
 type CrewMember = { name: string; email: string | null }
 
 function buildEvent(c: CourseRow, crew: CrewMember[]) {
-  const name = courseShortName(c.course_type, c.custom_title)
   const ref = `PR-${String(c.ref_number).padStart(4, '0')}`
   // Calendar events are shared with people outside this dev environment, so the
   // portal link must always target the live site — never NEXT_PUBLIC_SITE_URL,
   // which is localhost during local development.
   const siteUrl = 'https://www.peakrescuemountainguides.com'
-  // First names match the team's long-standing manual event convention.
-  const crewNames = crew.map((m) => m.name.split(' ')[0]).join(', ')
   // All-day events; Google's end date is exclusive.
   const endExclusive = new Date(Date.parse(c.ends_at ?? c.starts_at!) + 86_400_000)
     .toISOString()
     .slice(0, 10)
   return {
-    summary: [name, c.client_name, c.location, crewNames || null]
-      .filter(Boolean)
-      .join(' — ')
+    // crew arrives lead-first; first names match the team's long-standing
+    // manual event convention.
+    summary: courseEventTitle(c, crew.map((m) => m.name.split(' ')[0]))
       + (c.status === 'tentative' || c.status === 'quoted' ? ` (${c.status})` : ''),
     location: c.location ?? undefined,
-    description: [`${ref} · managed by the Peak Rescue portal`, `${siteUrl}/portal/${c.id}`].join('\n'),
+    // Course notes lead; the footer's "managed by the Peak Rescue portal"
+    // marker must stay — the import tool uses it to recognize synced events.
+    description: [
+      c.notes?.trim() || null,
+      [`${ref} · managed by the Peak Rescue portal`, `${siteUrl}/portal/${c.id}`].join('\n'),
+    ]
+      .filter(Boolean)
+      .join('\n\n'),
     start: { date: c.starts_at },
     end: { date: endExclusive },
     guestsCanModify: false,
