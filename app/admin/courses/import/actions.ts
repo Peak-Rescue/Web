@@ -34,6 +34,10 @@ export async function importCourseFromEvent(formData: FormData) {
   const ends_at = (formData.get('ends_at') as string) || null
   const sourceCalendarId = (formData.get('source_calendar_id') as string) || null
   const sourceEventId = (formData.get('source_event_id') as string) || null
+  const leadInstructorId = (formData.get('lead_instructor_id') as string) || null
+  const assistInstructorIds = (formData.getAll('assist_instructor_ids') as string[]).filter(
+    (iid) => iid && iid !== leadInstructorId
+  )
 
   const { data, error } = await admin
     .from('course_instances')
@@ -55,6 +59,21 @@ export async function importCourseFromEvent(formData: FormData) {
     .single()
   if (error || !data) throw new Error(error?.message ?? 'Could not create the course')
 
+  // Staff the course before the deferred calendar sync so the managed event
+  // carries the crew from the start. These are existing courses being
+  // migrated, so no "you're assigned" emails — the Google invite from the
+  // sync is the only notification the crew gets.
+  const crew = [
+    ...(leadInstructorId ? [{ instance_id: data.id, instructor_id: leadInstructorId, role: 'lead' }] : []),
+    ...assistInstructorIds.map((iid) => ({ instance_id: data.id, instructor_id: iid, role: 'assist' })),
+  ]
+  if (crew.length > 0) {
+    const { error: crewError } = await admin.from('instance_instructors').insert(crew)
+    // The course exists at this point — a staffing hiccup shouldn't fail the
+    // import. Assignments can be fixed on the course page.
+    if (crewError) console.error('Import staffing failed:', crewError.message)
+  }
+
   // The general Peak Rescue calendar is read-only to the portal — imported
   // events there must be deleted by hand in Google Calendar.
   const fromGeneral = Boolean(sourceCalendarId && sourceCalendarId === process.env.GCAL_GENERAL_CALENDAR_ID)
@@ -69,6 +88,8 @@ export async function importCourseFromEvent(formData: FormData) {
 
   revalidatePath('/admin/courses')
   revalidatePath('/admin/courses/import')
+  // Assignments show up in "Your upcoming courses" on the portal home.
+  revalidatePath('/admin')
   redirect(`/admin/courses/import?imported=${data.id}${fromGeneral ? '&manual=1' : ''}`)
 }
 

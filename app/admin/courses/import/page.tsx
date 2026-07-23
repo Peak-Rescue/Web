@@ -18,6 +18,22 @@ function fmt(d: string) {
   return new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
+// Manual events carry crew first names in the title ("… — Micah, Nadav"), so
+// instructors whose first name appears there get pre-selected, in title order
+// (the team convention lists the lead first).
+function matchCrew(summary: string, instructors: { id: string; name: string }[]): string[] {
+  const s = summary.toLowerCase()
+  return instructors
+    .map((i) => {
+      const first = i.name.split(' ')[0].toLowerCase()
+      const safe = first.replace(/[.*+?^${}()|[\]\\]/g, '')
+      return { id: i.id, idx: safe.length >= 3 ? s.search(new RegExp(`\\b${safe}\\b`)) : -1 }
+    })
+    .filter((m) => m.idx >= 0)
+    .sort((a, b) => a.idx - b.idx)
+    .map((m) => m.id)
+}
+
 export default async function CalendarImportPage({
   searchParams,
 }: {
@@ -43,12 +59,14 @@ export default async function CalendarImportPage({
   ]
 
   const enabled = calendarSyncEnabled()
-  const [{ data: linked }, { data: importedRows }] = await Promise.all([
+  const [{ data: linked }, { data: importedRows }, { data: instructorRows }] = await Promise.all([
     admin.from('course_instances').select('gcal_event_id').not('gcal_event_id', 'is', null),
     // Events already imported from calendars we can't delete from (the general
     // one) are recognized by the event id recorded in the course notes.
     admin.from('course_instances').select('notes').ilike('notes', '%Imported from Google Calendar (event %'),
+    admin.from('instructors').select('id, name').order('name'),
   ])
+  const instructors = instructorRows ?? []
   const portalEventIds = new Set((linked ?? []).map((r) => r.gcal_event_id as string))
   for (const r of importedRows ?? []) {
     const m = (r.notes as string | null)?.match(/Imported from Google Calendar \(event ([^)]+)\)/)
@@ -132,7 +150,6 @@ export default async function CalendarImportPage({
                       <input type="hidden" name="summary" value={e.summary} />
                       <input type="hidden" name="starts_at" value={e.start} />
                       <input type="hidden" name="ends_at" value={e.end} />
-                      <input type="hidden" name="location" value={e.location ?? ''} />
                       <input type="hidden" name="source_calendar_id" value={l.calendarId} />
                       <input type="hidden" name="source_event_id" value={e.id} />
 
@@ -152,6 +169,49 @@ export default async function CalendarImportPage({
                         <label className={labelCls}>Client / organization</label>
                         <input name="client_name" placeholder="e.g. 24th STS" className={inputCls} />
                       </div>
+                      <div>
+                        <label className={labelCls}>Location</label>
+                        <input name="location" defaultValue={e.location ?? ''} placeholder="e.g. Saint George, UT" className={inputCls} />
+                      </div>
+                      {instructors.length > 0 && (() => {
+                        const matched = matchCrew(e.summary, instructors)
+                        const assists = new Set(matched.slice(1))
+                        return (
+                          <>
+                            <div>
+                              <label className={labelCls}>Lead instructor</label>
+                              <select name="lead_instructor_id" defaultValue={matched[0] ?? ''} className={inputCls}>
+                                <option value="">None yet</option>
+                                {instructors.map((i) => (
+                                  <option key={i.id} value={i.id}>{i.name}</option>
+                                ))}
+                              </select>
+                            </div>
+                            <div className="sm:col-span-2">
+                              <label className={labelCls}>Assisting instructors</label>
+                              <div className="flex flex-wrap gap-x-4 gap-y-2 p-3 bg-zinc-800/50 border border-zinc-700 rounded">
+                                {instructors.map((i) => (
+                                  <label key={i.id} className="flex items-center gap-1.5 text-sm text-zinc-300 cursor-pointer">
+                                    <input
+                                      type="checkbox"
+                                      name="assist_instructor_ids"
+                                      value={i.id}
+                                      defaultChecked={assists.has(i.id)}
+                                      className="accent-red-600"
+                                    />
+                                    {i.name}
+                                  </label>
+                                ))}
+                              </div>
+                              {matched.length > 0 && (
+                                <p className="text-[11px] text-zinc-500 mt-1">
+                                  Pre-selected from names in the event title (first name listed → lead) — adjust before importing.
+                                </p>
+                              )}
+                            </div>
+                          </>
+                        )
+                      })()}
                       <div className="sm:col-span-2">
                         <button className="px-4 py-2 bg-pr-red hover:bg-pr-red-dark text-white rounded text-sm font-medium transition-colors">
                           Import as course →
