@@ -34,6 +34,7 @@ export async function importCourseFromEvent(formData: FormData) {
   const ends_at = (formData.get('ends_at') as string) || null
   const sourceCalendarId = (formData.get('source_calendar_id') as string) || null
   const sourceEventId = (formData.get('source_event_id') as string) || null
+  const notesInput = ((formData.get('notes') as string) || '').trim()
   const leadInstructorId = (formData.get('lead_instructor_id') as string) || null
   const assistInstructorIds = (formData.getAll('assist_instructor_ids') as string[]).filter(
     (iid) => iid && iid !== leadInstructorId
@@ -51,9 +52,13 @@ export async function importCourseFromEvent(formData: FormData) {
       ends_at,
       location,
       client_name,
-      // The event id in the notes lets the import page recognize already-
-      // imported events on calendars we can't delete from (the general one).
-      notes: sourceEventId ? `Imported from Google Calendar (event ${sourceEventId}).` : null,
+      // The event's own notes/attachments come first; the event id line lets
+      // the import page recognize already-imported events whose manual copy
+      // somehow survives (e.g. deletion failed, or the event was moved).
+      notes:
+        [notesInput || null, sourceEventId ? `Imported from Google Calendar (event ${sourceEventId}).` : null]
+          .filter(Boolean)
+          .join('\n\n') || null,
     })
     .select('id')
     .single()
@@ -74,13 +79,9 @@ export async function importCourseFromEvent(formData: FormData) {
     if (crewError) console.error('Import staffing failed:', crewError.message)
   }
 
-  // The general Peak Rescue calendar is read-only to the portal — imported
-  // events there must be deleted by hand in Google Calendar.
-  const fromGeneral = Boolean(sourceCalendarId && sourceCalendarId === process.env.GCAL_GENERAL_CALENDAR_ID)
-
   after(async () => {
     // Retire the manual event first so the portal-managed one isn't a duplicate.
-    if (sourceCalendarId && sourceEventId && !fromGeneral) {
+    if (sourceCalendarId && sourceEventId) {
       await deleteImportedEvent(sourceCalendarId, sourceEventId)
     }
     await syncCourseCalendar(admin, data.id)
@@ -90,7 +91,7 @@ export async function importCourseFromEvent(formData: FormData) {
   revalidatePath('/admin/courses/import')
   // Assignments show up in "Your upcoming courses" on the portal home.
   revalidatePath('/admin')
-  redirect(`/admin/courses/import?imported=${data.id}${fromGeneral ? '&manual=1' : ''}`)
+  redirect(`/admin/courses/import?imported=${data.id}`)
 }
 
 // For manual events whose course already exists in the portal: just remove the

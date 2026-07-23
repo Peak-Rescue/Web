@@ -10,7 +10,8 @@
 // Status or designation changes MOVE the event between calendars. All entry
 // points are safe no-ops when the env isn't configured, and never throw —
 // they're invoked via after() from actions, and a Google hiccup must never
-// break a portal write. The general Peak Rescue calendar is not ours to touch.
+// break a portal write. The general Peak Rescue (admin) calendar is never a
+// sync target — the import tool only retires legacy course events from it.
 
 import { createSign } from 'crypto'
 import { type createAdminClient } from '@/lib/supabase/admin'
@@ -352,6 +353,7 @@ export type GcalEvent = {
   end: string // inclusive
   location: string | null
   description: string | null
+  attachments: { title: string; url: string }[]
 }
 
 // Upcoming events on a calendar, normalized to all-day date ranges. Returns
@@ -374,6 +376,7 @@ export async function listUpcomingEvents(calendarId: string): Promise<GcalEvent[
         description?: string
         start?: { date?: string; dateTime?: string }
         end?: { date?: string; dateTime?: string }
+        attachments?: { fileUrl?: string; title?: string }[]
       }[]
     }
     return (data.items ?? [])
@@ -391,6 +394,9 @@ export async function listUpcomingEvents(calendarId: string): Promise<GcalEvent[
           end: endRaw >= startDate ? endRaw : startDate,
           location: e.location ?? null,
           description: e.description ?? null,
+          attachments: (e.attachments ?? [])
+            .filter((a) => a.fileUrl)
+            .map((a) => ({ title: a.title || 'Attachment', url: a.fileUrl! })),
         }
       })
   } catch (e) {

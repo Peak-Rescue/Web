@@ -18,6 +18,34 @@ function fmt(d: string) {
   return new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
+// Google event descriptions are HTML-ish; course notes are plain text. Flatten
+// links to "label (url)" so nothing is lost.
+function htmlToText(s: string): string {
+  if (!/[<&]/.test(s)) return s
+  return s
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(p|div|li)>/gi, '\n')
+    .replace(/<a[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi, (_, href, label) => {
+      const text = label.replace(/<[^>]+>/g, '').trim()
+      return text && text !== href ? `${text} (${href})` : href
+    })
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
+// Event description + attached files, as the default course notes.
+function eventNotes(e: GcalEvent): string {
+  const files = e.attachments.map((a) => `${a.title}: ${a.url}`).join('\n')
+  return [e.description ? htmlToText(e.description) : '', files].filter(Boolean).join('\n\n')
+}
+
 // Manual events carry crew first names in the title ("… — Micah, Nadav"), so
 // instructors whose first name appears there get pre-selected, in title order
 // (the team convention lists the lead first).
@@ -37,9 +65,9 @@ function matchCrew(summary: string, instructors: { id: string; name: string }[])
 export default async function CalendarImportPage({
   searchParams,
 }: {
-  searchParams: Promise<{ imported?: string; manual?: string }>
+  searchParams: Promise<{ imported?: string }>
 }) {
-  const { imported, manual } = await searchParams
+  const { imported } = await searchParams
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
@@ -48,21 +76,25 @@ export default async function CalendarImportPage({
   const { data: profile } = await admin.from('profiles').select('role').eq('id', user.id).single()
   if (profile?.role !== 'admin') redirect('/dashboard')
 
-  // canDelete: the portal owns the three course calendars, so retiring manual
-  // events there is fine. The general calendar is read-only to us — course
-  // events imported from it must be cleaned up by hand in Google Calendar.
-  const sources: { key: string; label: string; calendarId: string | null; canDelete: boolean; defaults: { status: string; category: string } }[] = [
-    { key: 'military', label: 'Military Programs', calendarId: process.env.GCAL_MILITARY_CALENDAR_ID ?? null, canDelete: true, defaults: { status: 'confirmed', category: 'tactical' } },
-    { key: 'general', label: 'Peak Rescue (general — old civilian courses)', calendarId: process.env.GCAL_GENERAL_CALENDAR_ID ?? null, canDelete: false, defaults: { status: 'confirmed', category: 'sar' } },
-    { key: 'civilian', label: 'Civilian Courses', calendarId: process.env.GCAL_CIVILIAN_CALENDAR_ID ?? null, canDelete: true, defaults: { status: 'confirmed', category: 'sar' } },
-    { key: 'prospective', label: 'Prospective Classes', calendarId: process.env.GCAL_PROSPECTIVE_CALENDAR_ID ?? null, canDelete: true, defaults: { status: 'tentative', category: 'tactical' } },
+  // The portal has write access everywhere (service account is a writer on the
+  // general admin calendar too), so every import retires its manual original.
+  // Admin-only reminders on the general calendar ("Hours Due") are filtered
+  // from the listing and simply stay there — importing the course events out
+  // leaves it as a pure admin calendar.
+  const sources: { key: string; label: string; calendarId: string | null; defaults: { status: string; category: string } }[] = [
+    { key: 'military', label: 'Military Programs', calendarId: process.env.GCAL_MILITARY_CALENDAR_ID ?? null, defaults: { status: 'confirmed', category: 'tactical' } },
+    { key: 'civilian', label: 'Civilian Courses', calendarId: process.env.GCAL_CIVILIAN_CALENDAR_ID ?? null, defaults: { status: 'confirmed', category: 'sar' } },
+    { key: 'general', label: 'Peak Rescue (admin) — legacy course events', calendarId: process.env.GCAL_GENERAL_CALENDAR_ID ?? null, defaults: { status: 'confirmed', category: 'sar' } },
+    { key: 'prospective', label: 'Prospective Classes', calendarId: process.env.GCAL_PROSPECTIVE_CALENDAR_ID ?? null, defaults: { status: 'tentative', category: 'tactical' } },
   ]
 
   const enabled = calendarSyncEnabled()
   const [{ data: linked }, { data: importedRows }, { data: instructorRows }] = await Promise.all([
     admin.from('course_instances').select('gcal_event_id').not('gcal_event_id', 'is', null),
-    // Events already imported from calendars we can't delete from (the general
-    // one) are recognized by the event id recorded in the course notes.
+    // Already-imported events whose manual copy outlived the import (e.g.
+    // imported from the old read-only general calendar, then moved here) are
+    // recognized by the event id recorded in the course notes — Google keeps
+    // the id when an event moves between calendars.
     admin.from('course_instances').select('notes').ilike('notes', '%Imported from Google Calendar (event %'),
     admin.from('instructors').select('id, name').order('name'),
   ])
@@ -73,7 +105,7 @@ export default async function CalendarImportPage({
     if (m) portalEventIds.add(m[1])
   }
 
-  const lists: { label: string; calendarId: string; canDelete: boolean; events: GcalEvent[] | null }[] = []
+  const lists: { label: string; calendarId: string; events: GcalEvent[] | null }[] = []
   if (enabled) {
     for (const s of sources) {
       if (!s.calendarId) continue
@@ -81,11 +113,12 @@ export default async function CalendarImportPage({
       lists.push({
         label: s.label,
         calendarId: s.calendarId,
-        canDelete: s.canDelete,
         events:
           events
             ?.filter((e) => !portalEventIds.has(e.id))
-            .filter((e) => !(e.description ?? '').includes('managed by the Peak Rescue portal')) ?? null,
+            .filter((e) => !(e.description ?? '').includes('managed by the Peak Rescue portal'))
+            // Payroll reminders on the admin calendar — never courses.
+            .filter((e) => !/^hours due$/i.test(e.summary.trim())) ?? null,
       })
     }
   }
@@ -106,9 +139,7 @@ export default async function CalendarImportPage({
 
         {imported && (
           <p className="mb-8 p-4 bg-green-900/30 border border-green-800 rounded-lg text-green-200 text-sm">
-            {manual
-              ? 'Course created. The original event is on the general Peak Rescue calendar, which the portal can’t edit — delete it there by hand.'
-              : 'Course created and the manual event retired.'}{' '}
+            Course created and the manual event retired.{' '}
             <Link href={`/admin/courses/${imported}`} className="underline hover:text-white">
               Open the course →
             </Link>
@@ -173,6 +204,21 @@ export default async function CalendarImportPage({
                         <label className={labelCls}>Location</label>
                         <input name="location" defaultValue={e.location ?? ''} placeholder="e.g. Saint George, UT" className={inputCls} />
                       </div>
+                      <div className="sm:col-span-2">
+                        <label className={labelCls}>Notes</label>
+                        <textarea
+                          name="notes"
+                          defaultValue={eventNotes(e)}
+                          rows={eventNotes(e) ? Math.min(8, Math.max(3, eventNotes(e).split('\n').length + 1)) : 2}
+                          placeholder="Carried into the course notes (visible to admins and instructors)"
+                          className={`${inputCls} resize-y`}
+                        />
+                        {e.attachments.length > 0 && (
+                          <p className="text-[11px] text-zinc-500 mt-1">
+                            Includes {e.attachments.length} attached file{e.attachments.length > 1 ? 's' : ''} from the event — the links keep working after import.
+                          </p>
+                        )}
+                      </div>
                       {instructors.length > 0 && (() => {
                         const matched = matchCrew(e.summary, instructors)
                         const assists = new Set(matched.slice(1))
@@ -218,15 +264,13 @@ export default async function CalendarImportPage({
                         </button>
                       </div>
                     </form>
-                    {l.canDelete && (
-                      <form action={dismissImportedEvent} className="px-4 pb-3 -mt-1">
-                        <input type="hidden" name="source_calendar_id" value={l.calendarId} />
-                        <input type="hidden" name="source_event_id" value={e.id} />
-                        <button className="text-xs text-zinc-500 hover:text-zinc-300 underline transition-colors">
-                          Already in the portal — remove this event
-                        </button>
-                      </form>
-                    )}
+                    <form action={dismissImportedEvent} className="px-4 pb-3 -mt-1">
+                      <input type="hidden" name="source_calendar_id" value={l.calendarId} />
+                      <input type="hidden" name="source_event_id" value={e.id} />
+                      <button className="text-xs text-zinc-500 hover:text-zinc-300 underline transition-colors">
+                        Already in the portal — remove this event
+                      </button>
+                    </form>
                   </details>
                 ))}
               </div>
