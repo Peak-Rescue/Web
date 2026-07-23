@@ -175,15 +175,16 @@ export default function CourseList({ upcoming, past }: { upcoming: Instance[]; p
           <div key={group.category} className="flex flex-wrap items-center gap-3">
             <button
               onClick={() => toggleCategory(group.category)}
-              title={`All ${CATEGORY_SHORT[group.category] ?? group.category} courses`}
-              className={`w-24 shrink-0 px-2.5 py-1 rounded text-xs font-semibold text-left transition-colors ${
+              title={`Select all ${CATEGORY_SHORT[group.category] ?? group.category} courses`}
+              className={`w-24 shrink-0 px-2.5 py-1 rounded text-[11px] font-bold uppercase tracking-wider text-left transition-colors ${
                 categories.has(group.category)
                   ? 'bg-pr-red-light text-white'
-                  : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-white'
+                  : 'bg-zinc-800 text-zinc-300 ring-1 ring-inset ring-zinc-600 hover:bg-zinc-700 hover:text-white'
               }`}
             >
               {CATEGORY_SHORT[group.category] ?? group.category}
             </button>
+            <span className="self-stretch w-px bg-zinc-700 shrink-0" aria-hidden="true" />
             <div className="flex flex-wrap gap-2">
               {group.types.map(([value, label]) => (
                 <button
@@ -224,7 +225,8 @@ export default function CourseList({ upcoming, past }: { upcoming: Instance[]; p
 
         {/* Status */}
         <div className="flex flex-wrap items-center gap-3">
-          <span className="text-xs font-medium text-zinc-400 uppercase tracking-wider w-24 shrink-0">Status</span>
+          <span className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider w-24 shrink-0">Status</span>
+          <span className="self-stretch w-px bg-zinc-700 shrink-0" aria-hidden="true" />
           <div className="flex flex-wrap gap-2">
             {STATUS_OPTIONS.map(s => (
               <button
