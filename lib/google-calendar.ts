@@ -45,12 +45,21 @@ export function calendarSyncEnabled(): boolean {
   return Boolean(serviceKey() && ids.military && ids.civilian && ids.prospective)
 }
 
-// ─── Auth (JWT → access token, cached until near expiry) ────────────────────
+// ─── Auth (JWT → access token, cached per identity until near expiry) ───────
+//
+// With GCAL_INVITE_AS set (a Workspace user, via domain-wide delegation) the
+// portal acts as that user, which is what lets events carry attendees — plain
+// service accounts can't send invites. If impersonation fails (delegation
+// revoked/misconfigured), we fall back to the service identity and simply
+// write events without attendees rather than breaking sync.
 
-let cached: { token: string; exp: number } | null = null
+const cached = new Map<string, { token: string; exp: number }>()
+let impersonationBroken = false
 
-async function getToken(): Promise<string> {
-  if (cached && cached.exp > Date.now() + 60_000) return cached.token
+async function getToken(sub: string | null): Promise<string> {
+  const cacheKey = sub ?? ''
+  const hit = cached.get(cacheKey)
+  if (hit && hit.exp > Date.now() + 60_000) return hit.token
   const key = serviceKey()
   if (!key) throw new Error('Calendar sync not configured')
 
@@ -62,6 +71,7 @@ async function getToken(): Promise<string> {
     aud: 'https://oauth2.googleapis.com/token',
     iat: now,
     exp: now + 3600,
+    ...(sub ? { sub } : {}),
   })}`
   const signature = createSign('RSA-SHA256').update(unsigned).sign(key.private_key, 'base64url')
 
@@ -75,12 +85,25 @@ async function getToken(): Promise<string> {
   })
   if (!res.ok) throw new Error(`Google auth failed: ${await res.text()}`)
   const data = (await res.json()) as { access_token: string; expires_in: number }
-  cached = { token: data.access_token, exp: Date.now() + data.expires_in * 1000 }
+  cached.set(cacheKey, { token: data.access_token, exp: Date.now() + data.expires_in * 1000 })
   return data.access_token
 }
 
+async function activeAuth(): Promise<{ token: string; canInvite: boolean }> {
+  const sub = process.env.GCAL_INVITE_AS || null
+  if (sub && !impersonationBroken) {
+    try {
+      return { token: await getToken(sub), canInvite: true }
+    } catch (e) {
+      impersonationBroken = true
+      console.error('gcal impersonation failed — falling back to service identity (no invites):', e)
+    }
+  }
+  return { token: await getToken(null), canInvite: false }
+}
+
 async function gcal(method: string, path: string, body?: unknown): Promise<Response> {
-  const token = await getToken()
+  const { token } = await activeAuth()
   return fetch(`${API}${path}`, {
     method,
     headers: {
@@ -119,18 +142,23 @@ function targetCalendar(c: CourseRow): string | null {
   return c.course_category === 'tactical' ? ids.military : ids.civilian
 }
 
-function buildEvent(c: CourseRow, instructorNames: string[]) {
+type CrewMember = { name: string; email: string | null }
+
+function buildEvent(c: CourseRow, crew: CrewMember[]) {
   const name = courseShortName(c.course_type, c.custom_title)
   const ref = `PR-${String(c.ref_number).padStart(4, '0')}`
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.peakrescuemountainguides.com'
+  // Calendar events are shared with people outside this dev environment, so the
+  // portal link must always target the live site — never NEXT_PUBLIC_SITE_URL,
+  // which is localhost during local development.
+  const siteUrl = 'https://www.peakrescuemountainguides.com'
   // First names match the team's long-standing manual event convention.
-  const crew = instructorNames.map((n) => n.split(' ')[0]).join(', ')
+  const crewNames = crew.map((m) => m.name.split(' ')[0]).join(', ')
   // All-day events; Google's end date is exclusive.
   const endExclusive = new Date(Date.parse(c.ends_at ?? c.starts_at!) + 86_400_000)
     .toISOString()
     .slice(0, 10)
   return {
-    summary: [name, c.client_name, c.location, crew || null]
+    summary: [name, c.client_name, c.location, crewNames || null]
       .filter(Boolean)
       .join(' — ')
       + (c.status === 'tentative' || c.status === 'quoted' ? ` (${c.status})` : ''),
@@ -138,8 +166,8 @@ function buildEvent(c: CourseRow, instructorNames: string[]) {
     description: [`${ref} · managed by the Peak Rescue portal`, `${siteUrl}/portal/${c.id}`].join('\n'),
     start: { date: c.starts_at },
     end: { date: endExclusive },
-    // Note: no attendees — service accounts can't send invites without
-    // domain-wide delegation. Assignment invites are a follow-up phase.
+    guestsCanModify: false,
+    guestsCanInviteOthers: false,
   }
 }
 
@@ -150,25 +178,28 @@ type Admin = ReturnType<typeof createAdminClient>
 export async function syncCourseCalendar(admin: Admin, instanceId: string): Promise<void> {
   if (!calendarSyncEnabled()) return
   try {
-    const [{ data: c }, { data: crew }] = await Promise.all([
+    const [{ data: c }, { data: crewRows }] = await Promise.all([
       admin.from('course_instances').select(COURSE_COLS).eq('id', instanceId).maybeSingle(),
       admin
         .from('instance_instructors')
-        .select('role, instructors(name)')
+        .select('role, instructors(name, email)')
         .eq('instance_id', instanceId),
     ])
     if (!c) return
     const course = c as CourseRow
     const target = targetCalendar(course)
-    const instructorNames = ((crew ?? []) as unknown as { role: string; instructors: { name: string } | null }[])
+    const crew: CrewMember[] = (
+      (crewRows ?? []) as unknown as { role: string; instructors: { name: string; email: string | null } | null }[]
+    )
       .filter((a) => a.instructors)
       .sort((a, b) => (a.role === 'lead' ? 0 : 1) - (b.role === 'lead' ? 0 : 1))
-      .map((a) => a.instructors!.name)
+      .map((a) => ({ name: a.instructors!.name, email: a.instructors!.email }))
 
-    // No event should exist (cancelled / dateless): remove if present.
+    // No event should exist (cancelled / dateless): remove if present, telling
+    // any invited instructors the event is off.
     if (!target) {
       if (course.gcal_event_id && course.gcal_calendar_id) {
-        await deleteEvent(course.gcal_calendar_id, course.gcal_event_id)
+        await deleteEvent(course.gcal_calendar_id, course.gcal_event_id, true)
         await admin
           .from('course_instances')
           .update({ gcal_event_id: null, gcal_calendar_id: null })
@@ -177,13 +208,65 @@ export async function syncCourseCalendar(admin: Admin, instanceId: string): Prom
       return
     }
 
-    const event = buildEvent(course, instructorNames)
+    const { canInvite } = await activeAuth()
+    const event = buildEvent(course, crew)
 
-    // Existing event on the wrong calendar → move it, then patch content.
+    // Current Google copy, fetched before any move: RSVPs must be carried
+    // through our patches (sending attendees without responseStatus resets
+    // them), and comparing it tells us whether this change warrants emailing
+    // attendees or can be applied silently.
+    type ExistingEvent = {
+      attendees?: { email?: string; responseStatus?: string }[]
+      start?: { date?: string }
+      end?: { date?: string }
+    }
+    let existing: ExistingEvent | null = null
+    if (course.gcal_event_id && course.gcal_calendar_id) {
+      const res = await gcal(
+        'GET',
+        `/calendars/${encodeURIComponent(course.gcal_calendar_id)}/events/${course.gcal_event_id}`
+      )
+      if (res.ok) {
+        existing = (await res.json()) as ExistingEvent
+      } else if (res.status === 404 || res.status === 410) {
+        course.gcal_event_id = null // deleted out from under us — recreate below
+      }
+    }
+
+    // Attendees only while impersonating (GCAL_INVITE_AS) — the plain service
+    // identity is rejected outright for events that carry them.
+    const attendees = canInvite
+      ? crew
+          .filter((m) => m.email)
+          .map((m) => {
+            const prev = existing?.attendees?.find(
+              (a) => a.email?.toLowerCase() === m.email!.toLowerCase()
+            )
+            return {
+              email: m.email!,
+              displayName: m.name,
+              ...(prev?.responseStatus ? { responseStatus: prev.responseStatus } : {}),
+            }
+          })
+      : null
+    const eventBody = attendees ? { ...event, attendees } : event
+
+    // Email attendees only for changes worth their attention: a new event,
+    // moved dates, or a crew change. Cosmetic edits apply silently.
+    const prevEmails = (existing?.attendees ?? []).map((a) => (a.email ?? '').toLowerCase()).sort().join(',')
+    const nextEmails = (attendees ?? []).map((a) => a.email.toLowerCase()).sort().join(',')
+    const datesChanged =
+      existing !== null &&
+      (existing.start?.date !== event.start.date || existing.end?.date !== event.end.date)
+    const sendUpdates =
+      existing === null || datesChanged || (canInvite && prevEmails !== nextEmails) ? 'all' : 'none'
+
+    // Existing event on the wrong calendar → move it silently (the follow-up
+    // patch sends the notification if the change is meaningful).
     if (course.gcal_event_id && course.gcal_calendar_id && course.gcal_calendar_id !== target) {
       const moved = await gcal(
         'POST',
-        `/calendars/${encodeURIComponent(course.gcal_calendar_id)}/events/${course.gcal_event_id}/move?destination=${encodeURIComponent(target)}`
+        `/calendars/${encodeURIComponent(course.gcal_calendar_id)}/events/${course.gcal_event_id}/move?destination=${encodeURIComponent(target)}&sendUpdates=none`
       )
       if (!moved.ok) {
         // Move can fail across sharing edge cases — fall back to delete + recreate.
@@ -197,8 +280,8 @@ export async function syncCourseCalendar(admin: Admin, instanceId: string): Prom
     if (course.gcal_event_id) {
       const res = await gcal(
         'PATCH',
-        `/calendars/${encodeURIComponent(target)}/events/${course.gcal_event_id}`,
-        event
+        `/calendars/${encodeURIComponent(target)}/events/${course.gcal_event_id}?sendUpdates=${sendUpdates}`,
+        eventBody
       )
       if (res.status === 404 || res.status === 410) {
         course.gcal_event_id = null // event was deleted out from under us — recreate
@@ -209,7 +292,11 @@ export async function syncCourseCalendar(admin: Admin, instanceId: string): Prom
     }
 
     if (!course.gcal_event_id) {
-      const res = await gcal('POST', `/calendars/${encodeURIComponent(target)}/events`, event)
+      const res = await gcal(
+        'POST',
+        `/calendars/${encodeURIComponent(target)}/events?sendUpdates=all`,
+        eventBody
+      )
       if (!res.ok) {
         console.error(`gcal insert failed (${res.status}): ${await res.text()}`)
         return
@@ -237,17 +324,19 @@ export async function removeCourseEvent(admin: Admin, instanceId: string): Promi
       .eq('id', instanceId)
       .maybeSingle()
     if (c?.gcal_event_id && c.gcal_calendar_id) {
-      await deleteEvent(c.gcal_calendar_id, c.gcal_event_id)
+      await deleteEvent(c.gcal_calendar_id, c.gcal_event_id, true)
     }
   } catch (e) {
     console.error('Calendar event removal failed:', e)
   }
 }
 
-async function deleteEvent(calendarId: string, eventId: string): Promise<void> {
+// notify=true emails any invited attendees a cancellation; imports and
+// internal cleanup stay silent.
+async function deleteEvent(calendarId: string, eventId: string, notify = false): Promise<void> {
   const res = await gcal(
     'DELETE',
-    `/calendars/${encodeURIComponent(calendarId)}/events/${eventId}`
+    `/calendars/${encodeURIComponent(calendarId)}/events/${eventId}?sendUpdates=${notify ? 'all' : 'none'}`
   )
   if (!res.ok && res.status !== 404 && res.status !== 410) {
     console.error(`gcal delete failed (${res.status}): ${await res.text()}`)
