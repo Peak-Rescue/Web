@@ -99,14 +99,20 @@ export default function CourseList({ upcoming, past }: { upcoming: Instance[]; p
   // same way.
   const instCategory = (i: Instance) => i.course_category ?? 'tactical'
 
+  // Every custom course shares course_type === 'custom', so key custom courses
+  // by category (custom:tactical, custom:industrial, …) — otherwise the
+  // "Custom" chip in one category row would select custom courses in every row.
+  const typeKey = (i: Instance) => i.course_type === 'custom' ? `custom:${instCategory(i)}` : i.course_type
+
   // Course types present in the data, grouped by category — the same
   // category → type structure used when a course is created.
   const typeGroups = useMemo(() => {
     const byCat = new Map<string, Map<string, string>>()
     for (const i of [...upcoming, ...past]) {
       const m = byCat.get(instCategory(i)) ?? new Map<string, string>()
-      if (!m.has(i.course_type)) {
-        m.set(i.course_type, i.course_type === 'custom' ? 'Custom' : courseShortName(i.course_type, null))
+      const key = typeKey(i)
+      if (!m.has(key)) {
+        m.set(key, i.course_type === 'custom' ? 'Custom' : courseShortName(i.course_type, null))
       }
       byCat.set(instCategory(i), m)
     }
@@ -125,7 +131,7 @@ export default function CourseList({ upcoming, past }: { upcoming: Instance[]; p
     if (
       (categories.size > 0 || types.size > 0) &&
       !categories.has(instCategory(inst)) &&
-      !types.has(inst.course_type)
+      !types.has(typeKey(inst))
     ) return false
     if (statuses.size > 0 && !statuses.has(inst.status)) return false
     const q = query.trim().toLowerCase()
