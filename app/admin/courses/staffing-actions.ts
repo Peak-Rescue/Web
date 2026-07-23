@@ -1,9 +1,11 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { after } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { courseShortName } from '@/lib/courses'
+import { syncCourseCalendar } from '@/lib/google-calendar'
 
 async function requireAdmin() {
   const supabase = await createClient()
@@ -152,6 +154,9 @@ export async function addGuestInstructor(
 
   // Portal invite (or a sign-in link if they already have an account).
   await adminSendInvite(instructorId)
+
+  // The crew is part of the Google event title, so assignments re-sync it.
+  after(() => syncCourseCalendar(admin, instanceId))
 
   revalidatePath(`/admin/courses/${instanceId}`)
   return { name: existing?.name ?? `${firstName} ${lastName}`, existed: Boolean(existing) }

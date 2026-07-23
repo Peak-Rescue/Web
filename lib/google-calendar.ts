@@ -119,16 +119,21 @@ function targetCalendar(c: CourseRow): string | null {
   return c.course_category === 'tactical' ? ids.military : ids.civilian
 }
 
-function buildEvent(c: CourseRow) {
+function buildEvent(c: CourseRow, instructorNames: string[]) {
   const name = courseShortName(c.course_type, c.custom_title)
   const ref = `PR-${String(c.ref_number).padStart(4, '0')}`
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.peakrescuemountainguides.com'
+  // First names match the team's long-standing manual event convention.
+  const crew = instructorNames.map((n) => n.split(' ')[0]).join(', ')
   // All-day events; Google's end date is exclusive.
   const endExclusive = new Date(Date.parse(c.ends_at ?? c.starts_at!) + 86_400_000)
     .toISOString()
     .slice(0, 10)
   return {
-    summary: `${name}${c.client_name ? ` — ${c.client_name}` : ''}${c.status === 'tentative' || c.status === 'quoted' ? ` (${c.status})` : ''}`,
+    summary: [name, c.client_name, c.location, crew || null]
+      .filter(Boolean)
+      .join(' — ')
+      + (c.status === 'tentative' || c.status === 'quoted' ? ` (${c.status})` : ''),
     location: c.location ?? undefined,
     description: [`${ref} · managed by the Peak Rescue portal`, `${siteUrl}/portal/${c.id}`].join('\n'),
     start: { date: c.starts_at },
@@ -145,14 +150,20 @@ type Admin = ReturnType<typeof createAdminClient>
 export async function syncCourseCalendar(admin: Admin, instanceId: string): Promise<void> {
   if (!calendarSyncEnabled()) return
   try {
-    const { data: c } = await admin
-      .from('course_instances')
-      .select(COURSE_COLS)
-      .eq('id', instanceId)
-      .maybeSingle()
+    const [{ data: c }, { data: crew }] = await Promise.all([
+      admin.from('course_instances').select(COURSE_COLS).eq('id', instanceId).maybeSingle(),
+      admin
+        .from('instance_instructors')
+        .select('role, instructors(name)')
+        .eq('instance_id', instanceId),
+    ])
     if (!c) return
     const course = c as CourseRow
     const target = targetCalendar(course)
+    const instructorNames = ((crew ?? []) as unknown as { role: string; instructors: { name: string } | null }[])
+      .filter((a) => a.instructors)
+      .sort((a, b) => (a.role === 'lead' ? 0 : 1) - (b.role === 'lead' ? 0 : 1))
+      .map((a) => a.instructors!.name)
 
     // No event should exist (cancelled / dateless): remove if present.
     if (!target) {
@@ -166,7 +177,7 @@ export async function syncCourseCalendar(admin: Admin, instanceId: string): Prom
       return
     }
 
-    const event = buildEvent(course)
+    const event = buildEvent(course, instructorNames)
 
     // Existing event on the wrong calendar → move it, then patch content.
     if (course.gcal_event_id && course.gcal_calendar_id && course.gcal_calendar_id !== target) {

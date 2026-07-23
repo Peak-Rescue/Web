@@ -361,6 +361,9 @@ export async function assignInstructor(instanceId: string, formData: FormData) {
     })
   }
 
+  // The crew is part of the Google event title, so assignments re-sync it.
+  after(() => syncCourseCalendar(admin, instanceId))
+
   revalidatePath(`/admin/courses/${instanceId}`)
   revalidatePath(`/portal/${instanceId}`)
   revalidatePath('/admin')
@@ -368,14 +371,18 @@ export async function assignInstructor(instanceId: string, formData: FormData) {
 
 export async function removeInstructor(instanceId: string, instructorId: string) {
   await requireAdmin()
+  const admin = createAdminClient()
 
-  const { error } = await createAdminClient()
+  const { error } = await admin
     .from('instance_instructors')
     .delete()
     .eq('instance_id', instanceId)
     .eq('instructor_id', instructorId)
 
   if (error) throw new Error(error.message)
+
+  after(() => syncCourseCalendar(admin, instanceId))
+
   revalidatePath(`/admin/courses/${instanceId}`)
 }
 
