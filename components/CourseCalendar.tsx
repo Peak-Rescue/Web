@@ -104,8 +104,8 @@ export default function CourseCalendar({
   const todayStr = ymd(new Date())
 
   // Google-style multi-day bars: every course keeps one lane for its whole
-  // span, so its per-day segments sit at the same height in adjacent cells
-  // and read as a single connected bar. Greedy assignment, earliest start
+  // span, so its bar sits at the same height in every week row and other
+  // courses stack around it consistently. Greedy assignment, earliest start
   // first; a lane is reusable once its previous occupant has ended.
   const lanes = new Map<string, number>()
   const laneEnds: string[] = []
@@ -151,33 +151,37 @@ export default function CourseCalendar({
               )}
               <div className="space-y-0.5">
                 {Array.from(bySlot, (c, lane) => {
-                  if (!c) {
+                  // Spacer when the lane is empty here, and on the days a bar
+                  // continues across — the stretched chip below covers them
+                  // visually; the spacer just keeps the lane's vertical slot.
+                  if (!c || (day !== c.starts_at && i % 7 !== 0)) {
                     return (
                       <span key={lane} className="block px-1 py-0.5 border border-transparent text-[10px] leading-tight">
                         {' '}
                       </span>
                     )
                   }
-                  // Segments continuing from/to a neighboring cell in the same
-                  // row square off that edge and bleed across the cell padding
-                  // and grid gap, joining into one bar. Labels render on the
-                  // first segment and again at each week start.
-                  const contLeft = day! > c.starts_at && i % 7 !== 0
-                  const contRight = day! < c.ends_at && i % 7 !== 6
+                  // One chip per row per course, rendered on its first day in
+                  // the row (true start or week start) and stretched across
+                  // every cell it spans — so the label has the full bar's
+                  // width and the whole bar is a single hover/click target.
+                  const daysToEnd = Math.round((Date.parse(c.ends_at) - Date.parse(day!)) / 86_400_000)
+                  const span = Math.min(daysToEnd, 6 - (i % 7), daysInMonth - Number(day!.slice(8))) + 1
+                  // Every extra spanned cell adds its own width (100% = one
+                  // cell's content box) plus the 8px of cell padding and 1px
+                  // grid gap crossed at the boundary.
+                  const style = span > 1 ? { width: `calc(${span * 100}% + ${(span - 1) * 9}px)` } : undefined
                   const chipClass = [
-                    'block px-1 py-0.5 border text-[10px] leading-tight truncate',
+                    'relative z-10 block px-1 py-0.5 border rounded text-[10px] leading-tight truncate',
                     chipStyle(c),
-                    contLeft ? 'rounded-l-none border-l-0 -ml-[5px]' : 'rounded-l',
-                    contRight ? 'rounded-r-none border-r-0 -mr-1' : 'rounded-r',
                   ].join(' ')
-                  const text = contLeft ? ' ' : c.label
                   return c.href ? (
-                    <Link key={c.id} href={c.href} title={c.label} className={`${chipClass} hover:brightness-125 transition`}>
-                      {text}
+                    <Link key={c.id} href={c.href} title={c.label} style={style} className={`${chipClass} hover:brightness-125 transition`}>
+                      {c.label}
                     </Link>
                   ) : (
-                    <span key={c.id} title={c.label} className={chipClass}>
-                      {text}
+                    <span key={c.id} title={c.label} style={style} className={chipClass}>
+                      {c.label}
                     </span>
                   )
                 })}
