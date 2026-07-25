@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import QuoteHeroPicker from '@/app/admin/courses/QuoteHeroPicker'
-import { HERO_CHOICES } from '@/lib/quote-heroes'
+import { HERO_CHOICES, clientSafeHero } from '@/lib/quote-heroes'
 import { courseDisplayName, courseShortName } from '@/lib/courses'
 import { services, categoryMeta, type ServiceCategory } from '@/lib/data/services'
 import { QUOTE_MISSION, QUOTE_COMMITMENT, QUOTE_CONTACT, quoteNumber } from '@/lib/quotes'
@@ -66,11 +66,12 @@ export default async function QuotePage({
 
   const service = services.find((s) => s.slug === inst.course_type)
   // Admin-pinned photo wins (with its framing); otherwise course type photo →
-  // category banner → site default.
+  // category banner → site default. Every automatic candidate passes the
+  // client-safe guard so a redacted internal photo can never front a quote.
   const heroImage =
     inst.hero_image ??
-    (service as { heroImage?: string } | undefined)?.heroImage ??
-    categoryMeta[inst.course_category as ServiceCategory]?.image ??
+    clientSafeHero((service as { heroImage?: string } | undefined)?.heroImage) ??
+    clientSafeHero(categoryMeta[inst.course_category as ServiceCategory]?.image) ??
     '/images/pr_hero.jpeg'
   const heroStyle: React.CSSProperties | undefined = inst.hero_image
     ? {

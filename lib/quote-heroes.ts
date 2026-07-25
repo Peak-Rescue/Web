@@ -16,6 +16,12 @@ const NOT_CLIENT_FACING = new Set([
   '/images/categories/category-tactical.jpg',
 ])
 
+// Guard for the quote page's automatic fallback chain: a candidate that's
+// not client-safe falls through to the site default instead.
+export function clientSafeHero(path: string | null | undefined): string | null {
+  return path && !NOT_CLIENT_FACING.has(path) ? path : null
+}
+
 // The photo pool an admin can pin as a course's quote-page hero: standalone
 // topic shots first, then every service hero, then the category banners.
 // Gallery uploads join this pool at render time (see the course admin page).
