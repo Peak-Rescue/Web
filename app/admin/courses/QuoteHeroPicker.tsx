@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from 'react'
 import Image from 'next/image'
+import { useRouter } from 'next/navigation'
 import { categoryMeta, type ServiceCategory } from '@/lib/data/services'
 import type { HeroChoice } from '@/lib/quote-heroes'
 import { updateQuoteHero } from './actions'
@@ -45,6 +46,7 @@ export default function QuoteHeroPicker({ instanceId, choices, currentImage, cur
   const [scale, setScale] = useState(() => parseScale(currentScale))
   const [pending, startTransition] = useTransition()
   const posStart = useRef({ x: 50, y: 50, px: 0, py: 0, w: 1, h: 1 })
+  const router = useRouter()
 
   const currentLabel = currentImage
     ? choices.find((c) => c.value === currentImage)?.label ?? 'Custom photo'
@@ -105,6 +107,9 @@ export default function QuoteHeroPicker({ instanceId, choices, currentImage, cur
     fd.set('hero_scale', src ? scaleValue : '')
     startTransition(async () => {
       await updateQuoteHero(instanceId, fd)
+      // The quote page renders outside the revalidated admin path — refresh
+      // whatever page the picker is mounted on so the new framing shows.
+      router.refresh()
       setOpen(false)
     })
   }

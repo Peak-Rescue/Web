@@ -1,6 +1,9 @@
 import Image from 'next/image'
 import { notFound } from 'next/navigation'
+import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import QuoteHeroPicker from '@/app/admin/courses/QuoteHeroPicker'
+import { HERO_CHOICES } from '@/lib/quote-heroes'
 import { courseDisplayName, courseShortName } from '@/lib/courses'
 import { services, categoryMeta, type ServiceCategory } from '@/lib/data/services'
 import { QUOTE_MISSION, QUOTE_COMMITMENT, QUOTE_CONTACT, quoteNumber } from '@/lib/quotes'
@@ -38,6 +41,27 @@ export default async function QuotePage({
   // First open of a sent quote → record viewed.
   if (quote.status === 'sent' && !quote.viewed_at) {
     await admin.from('course_quotes').update({ viewed_at: new Date().toISOString() }).eq('id', quote.id)
+  }
+
+  // Admin viewing the client's page: offer the hero-photo picker in place —
+  // this is where a wrong photo gets noticed. Clients see nothing extra.
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  let heroChoices: { value: string; label: string; categories: string[] }[] | null = null
+  if (user) {
+    const { data: profile } = await admin.from('profiles').select('role').eq('id', user.id).single()
+    if (profile?.role === 'admin') {
+      const { data: galleryImages } = await admin
+        .from('gallery_images')
+        .select('url, caption, categories')
+        .order('created_at', { ascending: false })
+      heroChoices = [
+        ...HERO_CHOICES,
+        ...(galleryImages ?? [])
+          .filter((g) => !HERO_CHOICES.some((c) => c.value === g.url))
+          .map((g) => ({ value: g.url, label: g.caption || 'Gallery photo', categories: g.categories ?? [] })),
+      ]
+    }
   }
 
   const service = services.find((s) => s.slug === inst.course_type)
@@ -79,6 +103,17 @@ export default async function QuotePage({
       <div className="relative overflow-hidden border-b border-white/[0.06]">
         <div className="absolute top-0 left-0 w-16 h-[3px] bg-pr-red z-10" />
         <div className="absolute top-0 left-0 w-[3px] h-16 bg-pr-red z-10" />
+        {heroChoices && (
+          <div className="absolute top-4 left-4 z-20">
+            <QuoteHeroPicker
+              instanceId={quote.instance_id}
+              choices={heroChoices}
+              currentImage={inst.hero_image ?? null}
+              currentPosition={inst.hero_position ?? null}
+              currentScale={inst.hero_scale ?? null}
+            />
+          </div>
+        )}
         <div className="relative w-full h-72 md:h-[420px]">
           <Image src={heroImage} alt={courseName} fill priority className="object-cover object-center" style={heroStyle} />
           <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/60 to-zinc-950/20" />
