@@ -164,7 +164,7 @@ export default function QuotesSection({
                         <div key={i} className="flex items-center gap-2">
                           <input name={`opt_title_${i}`} defaultValue={o.title} className={`${inputCls} flex-1`} />
                           <span className="text-zinc-600 text-xs">$</span>
-                          <input name={`opt_total_${i}`} type="number" step="0.01" min="0" defaultValue={o.total} className={`${inputCls} w-32 text-right`} />
+                          <input name={`opt_total_${i}`} type="number" step="0.01" min="0" defaultValue={o.total} className={`${inputCls} basis-32 shrink-0 text-right`} />
                         </div>
                       ))}
                     </div>
