@@ -30,7 +30,7 @@ export default async function QuotePage({
 
   const { data: inst } = await admin
     .from('course_instances')
-    .select('ref_number, course_type, course_category, custom_title, client_name, location, starts_at, ends_at')
+    .select('ref_number, course_type, course_category, custom_title, client_name, location, starts_at, ends_at, hero_image, hero_position, hero_scale')
     .eq('id', quote.instance_id)
     .single()
   if (!inst) notFound()
@@ -41,10 +41,20 @@ export default async function QuotePage({
   }
 
   const service = services.find((s) => s.slug === inst.course_type)
+  // Admin-pinned photo wins (with its framing); otherwise course type photo →
+  // category banner → site default.
   const heroImage =
+    inst.hero_image ??
     (service as { heroImage?: string } | undefined)?.heroImage ??
     categoryMeta[inst.course_category as ServiceCategory]?.image ??
     '/images/pr_hero.jpeg'
+  const heroStyle: React.CSSProperties | undefined = inst.hero_image
+    ? {
+        objectPosition: inst.hero_position ?? undefined,
+        transform: inst.hero_scale ? `scale(${inst.hero_scale})` : undefined,
+        transformOrigin: inst.hero_position ?? undefined,
+      }
+    : undefined
 
   const qNum = quoteNumber(inst.ref_number, quote.quote_seq)
   const courseName = courseDisplayName(inst.course_type, inst.custom_title)
@@ -70,7 +80,7 @@ export default async function QuotePage({
         <div className="absolute top-0 left-0 w-16 h-[3px] bg-pr-red z-10" />
         <div className="absolute top-0 left-0 w-[3px] h-16 bg-pr-red z-10" />
         <div className="relative w-full h-72 md:h-[420px]">
-          <Image src={heroImage} alt={courseName} fill priority className="object-cover object-center" />
+          <Image src={heroImage} alt={courseName} fill priority className="object-cover object-center" style={heroStyle} />
           <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/60 to-zinc-950/20" />
         </div>
         <div className="absolute inset-x-0 bottom-0">

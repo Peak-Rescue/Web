@@ -98,9 +98,19 @@ export async function updateInstanceDetails(id: string, formData: FormData) {
   const max_students     = formData.get('max_students') ? Number(formData.get('max_students')) : null
   const instructor_slots = formData.get('instructor_slots') ? Number(formData.get('instructor_slots')) : null
 
+  // Quote-page hero override: only photos from the curated pool; framing
+  // (position/scale) only alongside a photo, in the avatar-editor format.
+  const { HERO_CHOICES } = await import('@/lib/quote-heroes')
+  const heroRaw = (formData.get('hero_image') as string) || null
+  const hero_image = heroRaw && HERO_CHOICES.some((c) => c.value === heroRaw) ? heroRaw : null
+  const posRaw = (formData.get('hero_position') as string) || null
+  const hero_position = hero_image && posRaw && /^\d{1,3}% \d{1,3}%$/.test(posRaw) ? posRaw : null
+  const scaleRaw = Number(formData.get('hero_scale'))
+  const hero_scale = hero_image && Number.isFinite(scaleRaw) && scaleRaw > 1 && scaleRaw <= 3 ? String(scaleRaw) : null
+
   const { error } = await admin
     .from('course_instances')
-    .update({ course_category, course_type, custom_title, custom_categories, status, location, client_name, notes, max_students, instructor_slots, ...(contactsRaw !== null ? { contacts: contactsFromForm(contactsRaw) } : {}) })
+    .update({ course_category, course_type, custom_title, custom_categories, status, location, client_name, notes, max_students, instructor_slots, hero_image, hero_position, hero_scale, ...(contactsRaw !== null ? { contacts: contactsFromForm(contactsRaw) } : {}) })
     .eq('id', id)
 
   if (error) throw new Error(error.message)

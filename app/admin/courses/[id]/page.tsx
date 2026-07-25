@@ -14,6 +14,8 @@ import DeleteInstanceButton from '../DeleteInstanceButton'
 import CourseTasksPanel, { type TaskPerson } from '@/components/CourseTasksPanel'
 import EstimatePanel, { type PricingRate } from '@/components/EstimatePanel'
 import CoaComparison from '../CoaComparison'
+import HeroImagePicker from '@/components/HeroImagePicker'
+import { HERO_CHOICES } from '@/lib/quote-heroes'
 import { createEstimateCoa, copyEstimatesFrom } from '../finance-actions'
 import QuotesSection, { type QuoteRow } from '../QuotesSection'
 import CourseContactsEditor from '@/components/CourseContactsEditor'
@@ -333,6 +335,14 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
             <div className="sm:col-span-2">
               <label className="block text-xs text-zinc-400 mb-1">Notes</label>
               <textarea name="notes" rows={2} defaultValue={inst.notes ?? ''} className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500 resize-none" />
+            </div>
+            <div className="sm:col-span-2">
+              <HeroImagePicker
+                choices={HERO_CHOICES}
+                currentImage={inst.hero_image ?? null}
+                currentPosition={inst.hero_position ?? null}
+                currentScale={inst.hero_scale ?? null}
+              />
             </div>
           </AutoSaveForm>
           <CourseFilesSection instanceId={id} files={courseFiles} />
