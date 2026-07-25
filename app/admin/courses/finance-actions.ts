@@ -98,11 +98,10 @@ export async function saveEstimate(
   return { id: id! }
 }
 
-// Adds another COA, seeded with the default-line rates (quantities guessed
-// from the course, same as a fresh estimate).
-export async function createEstimateCoa(instanceId: string) {
-  const admin = await requireAdmin()
-
+// Persists a new COA seeded with the default-line rates (quantities guessed
+// from the course, same as the virtual estimate the course page shows before
+// anything is saved). Returns it shaped like createQuote's estimate query.
+async function seedDefaultCoa(admin: Awaited<ReturnType<typeof requireAdmin>>, instanceId: string) {
   const [{ data: inst }, { count }, { data: defaults }, { count: assignedCount }] = await Promise.all([
     admin.from('course_instances').select('starts_at, ends_at, max_students').eq('id', instanceId).single(),
     admin.from('course_estimates').select('id', { count: 'exact', head: true }).eq('instance_id', instanceId),
@@ -128,7 +127,7 @@ export async function createEstimateCoa(instanceId: string) {
   const { data: estimate, error } = await admin
     .from('course_estimates')
     .insert({ instance_id: instanceId, title: `COA ${(count ?? 0) + 1}` })
-    .select('id')
+    .select('id, title, margin')
     .single()
   if (error || !estimate) throw new Error(error?.message ?? 'Could not create estimate')
 
@@ -145,6 +144,14 @@ export async function createEstimateCoa(instanceId: string) {
   })
   if (rows.length > 0) await admin.from('estimate_items').insert(rows)
 
+  return { title: estimate.title as string, margin: estimate.margin as number | null, estimate_items: rows }
+}
+
+// Adds another COA, seeded with the default-line rates (quantities guessed
+// from the course, same as a fresh estimate).
+export async function createEstimateCoa(instanceId: string) {
+  const admin = await requireAdmin()
+  await seedDefaultCoa(admin, instanceId)
   revalidatePath(`/admin/courses/${instanceId}`)
 }
 
@@ -269,7 +276,15 @@ export async function createQuote(instanceId: string, formData: FormData) {
     user ? admin.from('profiles').select('first_name, last_name, email').eq('id', user.id).single() : { data: null },
   ])
   if (!inst) throw new Error('Course not found')
-  const estimate = (estimates ?? [])[0] ?? null
+  let estimate = (estimates ?? [])[0] ?? null
+
+  // No persisted estimate: the course page shows a virtual default COA that
+  // only saves once touched. Persist those same defaults so the quote prices
+  // from real lines instead of silently coming out $0.
+  if (!allCoas && !estimate) {
+    if (estimateId) throw new Error('That estimate no longer exists — reload the page and try again')
+    estimate = await seedDefaultCoa(admin, instanceId)
+  }
 
   const quotePrice = (e: { margin: number | null; estimate_items: unknown } | null) => {
     const items = (e?.estimate_items ?? []) as { qty: number; rate: number }[]
