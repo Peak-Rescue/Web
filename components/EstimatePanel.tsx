@@ -326,7 +326,7 @@ export default function EstimatePanel({
           value={solo && title === 'COA 1' ? '' : title}
           onChange={(e) => schedule(rows, margin, e.target.value)}
           placeholder={solo ? 'Estimate name (optional)' : ''}
-          className="bg-transparent border-b border-transparent hover:border-zinc-700 focus:border-zinc-500 focus:outline-none text-sm font-semibold w-52 placeholder:text-zinc-600 placeholder:font-normal"
+          className="bg-transparent border-b border-transparent hover:border-zinc-700 focus:border-zinc-500 focus:outline-none text-sm font-semibold flex-1 min-w-0 max-w-md placeholder:text-zinc-600 placeholder:font-normal"
           title="Name this COA (e.g. 'Drive team', 'Fly-in option')"
         />
         <div className="flex items-center gap-3">
