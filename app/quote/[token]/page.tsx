@@ -105,7 +105,9 @@ export default async function QuotePage({
         <div className="absolute top-0 left-0 w-16 h-[3px] bg-pr-red z-10" />
         <div className="absolute top-0 left-0 w-[3px] h-16 bg-pr-red z-10" />
         {heroChoices && (
-          <div className="absolute top-4 left-4 z-20">
+          /* Below the fixed site header (h-16 + breathing room) — anything
+             higher renders invisibly behind it. */
+          <div className="absolute top-24 left-4 z-20">
             <QuoteHeroPicker
               instanceId={quote.instance_id}
               choices={heroChoices}
