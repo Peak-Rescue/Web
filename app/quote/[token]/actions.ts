@@ -9,9 +9,12 @@ import { quoteNumber } from '@/lib/quotes'
 import { courseShortName } from '@/lib/courses'
 
 // Public action — authorization is the unguessable token itself.
+// For multi-option quotes, `selected` holds the indexes of the option or
+// options the client is accepting; every option stays on record with the
+// chosen ones flagged, and the quote total becomes their sum.
 export async function acceptQuote(
   token: string,
-  input: { name: string; title: string }
+  input: { name: string; title: string; selected?: number[] }
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const name = input.name.trim()
   const title = input.title.trim()
@@ -20,7 +23,7 @@ export async function acceptQuote(
   const admin = createAdminClient()
   const { data: quote } = await admin
     .from('course_quotes')
-    .select('id, instance_id, status, valid_until, quote_seq')
+    .select('id, instance_id, status, valid_until, quote_seq, options')
     .eq('accept_token', token)
     .maybeSingle()
   if (!quote) return { ok: false, error: 'This quote link is no longer valid' }
@@ -32,12 +35,27 @@ export async function acceptQuote(
     return { ok: false, error: 'This quote has expired — please contact us for an updated quote' }
   }
 
+  const options = (quote.options ?? null) as { title: string; total: number; chosen?: boolean }[] | null
+  let optionsPatch: Record<string, unknown> = {}
+  let chosenTitles: string[] = []
+  if (options) {
+    const selected = [...new Set((input.selected ?? []).filter((i) => Number.isInteger(i) && i >= 0 && i < options.length))]
+    if (selected.length === 0) return { ok: false, error: 'Please select at least one option' }
+    const flagged = options.map((o, i) => ({ ...o, chosen: selected.includes(i) }))
+    chosenTitles = flagged.filter((o) => o.chosen).map((o) => o.title)
+    optionsPatch = {
+      options: flagged,
+      total: Math.round(flagged.filter((o) => o.chosen).reduce((s, o) => s + Number(o.total), 0) * 100) / 100,
+    }
+  }
+
   const hdrs = await headers()
   const ip = (hdrs.get('x-forwarded-for') ?? '').split(',')[0].trim() || null
 
   const { error } = await admin
     .from('course_quotes')
     .update({
+      ...optionsPatch,
       status: 'accepted',
       accepted_at: new Date().toISOString(),
       accepted_name: name.slice(0, 120),
@@ -76,6 +94,7 @@ export async function acceptQuote(
           subject: `✅ Quote ${qNum} accepted — ${courseName}`,
           text: [
             `${name}${title ? ` (${title})` : ''} accepted quote ${qNum}.`,
+            ...(chosenTitles.length > 0 ? ['', `Chosen option${chosenTitles.length > 1 ? 's' : ''}: ${chosenTitles.join(' + ')}`] : []),
             '',
             `Course: ${courseName}${inst.client_name ? ` · ${inst.client_name}` : ''}`,
             `The course status has been moved to Confirmed.`,

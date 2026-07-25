@@ -58,6 +58,11 @@ export default async function QuotePage({
   const expired = quote.status === 'sent' && quote.valid_until && quote.valid_until < today
   const accepted = quote.status === 'accepted'
 
+  // Multi-option quote: every COA priced side by side; chosen ones are
+  // flagged at accept time and the total becomes their sum.
+  const options = (quote.options ?? null) as { title: string; total: number; chosen?: boolean }[] | null
+  const chosen = options?.filter((o) => o.chosen) ?? []
+
   return (
     <main className="min-h-screen bg-zinc-950 text-white">
       {/* ── Hero ── */}
@@ -118,8 +123,49 @@ export default async function QuotePage({
 
         {/* ── The quote ── */}
         <section className="mt-12 p-8 bg-zinc-900 border border-zinc-800 rounded-xl">
-          <p className="text-pr-red font-semibold tracking-[0.2em] text-xs uppercase mb-3">Total Price</p>
-          <p className="text-5xl font-bold tracking-tight mb-2">{fmtMoney(Number(quote.total))}</p>
+          {options ? (
+            <>
+              <p className="text-pr-red font-semibold tracking-[0.2em] text-xs uppercase mb-3">
+                {accepted ? 'Accepted Option' + (chosen.length > 1 ? 's' : '') : 'Pricing Options'}
+              </p>
+              {accepted && (
+                <p className="text-5xl font-bold tracking-tight mb-5">{fmtMoney(Number(quote.total))}</p>
+              )}
+              <div className="space-y-2.5">
+                {options.map((o, i) => {
+                  const dimmed = accepted && !o.chosen
+                  return (
+                    <div
+                      key={i}
+                      className={`flex items-center justify-between gap-3 px-4 py-3.5 rounded-lg border ${
+                        o.chosen
+                          ? 'border-teal-700 bg-teal-900/20'
+                          : dimmed
+                            ? 'border-zinc-800 opacity-50'
+                            : 'border-zinc-700 bg-zinc-800/40'
+                      }`}
+                    >
+                      <span className="text-base font-medium">
+                        {o.chosen && <span className="text-teal-400 mr-2">✓</span>}
+                        {o.title}
+                      </span>
+                      <span className="text-xl font-bold whitespace-nowrap">{fmtMoney(Number(o.total))}</span>
+                    </div>
+                  )
+                })}
+              </div>
+              {!accepted && (
+                <p className="mt-4 text-sm text-zinc-400">
+                  Options can be combined — select the one or several that fit when accepting below.
+                </p>
+              )}
+            </>
+          ) : (
+            <>
+              <p className="text-pr-red font-semibold tracking-[0.2em] text-xs uppercase mb-3">Total Price</p>
+              <p className="text-5xl font-bold tracking-tight mb-2">{fmtMoney(Number(quote.total))}</p>
+            </>
+          )}
           {quote.unit_rate_note && <p className="text-zinc-400 mb-4">{quote.unit_rate_note}</p>}
           {(quote.scope_bullets ?? []).length > 0 && (
             <ul className="mt-6 space-y-2.5">
@@ -143,7 +189,11 @@ export default async function QuotePage({
             <p className="text-sm text-zinc-400 mb-6">
               Accepting reserves your training dates. Contracting paperwork can follow through your normal channels.
             </p>
-            <AcceptForm token={token} clientName={inst.client_name} />
+            <AcceptForm
+              token={token}
+              clientName={inst.client_name}
+              options={options ? options.map((o) => ({ title: o.title, total: Number(o.total) })) : null}
+            />
           </section>
         )}
 

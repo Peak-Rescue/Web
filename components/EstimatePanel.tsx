@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react'
 import { fmtMoney, round2 } from '@/lib/expenses'
-import { saveEstimate, deleteEstimateCoa, type EstimateItemInput } from '@/app/admin/courses/finance-actions'
+import { saveEstimate, deleteEstimateCoa, duplicateEstimateCoa, type EstimateItemInput } from '@/app/admin/courses/finance-actions'
 import { useRouter } from 'next/navigation'
 import { CalculatorIcon, NotesIcon } from '@/components/TaskIcons'
 import { useUnsavedGuard, withSaveTimeout } from '@/components/useUnsavedGuard'
@@ -66,6 +66,7 @@ export default function EstimatePanel({
   const [persistedId, setPersistedId] = useState<string | null>(estimateId)
   const [title, setTitle] = useState(initialTitle)
   const [deleting, setDeleting] = useState(false)
+  const [duplicating, setDuplicating] = useState(false)
   const nextKey = useRef(initialItems.length)
   const [rows, setRows] = useState<Row[]>(
     initialItems.map((i, idx) => ({
@@ -336,6 +337,27 @@ export default function EstimatePanel({
           {status === 'error' && (
             <button onClick={() => void flush()} className="text-xs text-zinc-300 underline hover:text-white">
               Retry
+            </button>
+          )}
+          {persistedId && (
+            <button
+              onClick={async () => {
+                if (duplicating) return
+                setDuplicating(true)
+                try {
+                  // Save in-flight edits first so the copy matches what's on screen.
+                  if (dirty) await flush()
+                  await duplicateEstimateCoa(instanceId, estimateIdRef.current!)
+                  router.refresh()
+                } finally {
+                  setDuplicating(false)
+                }
+              }}
+              disabled={duplicating}
+              title="Copy this COA into a new one to tweak"
+              className="text-xs text-zinc-600 hover:text-zinc-300 transition-colors disabled:opacity-50"
+            >
+              {duplicating ? 'Duplicating…' : 'Duplicate COA'}
             </button>
           )}
           {canDelete && persistedId && (

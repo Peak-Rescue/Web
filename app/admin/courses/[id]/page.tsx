@@ -13,6 +13,7 @@ import AutoSaveForm from '@/components/AutoSaveForm'
 import DeleteInstanceButton from '../DeleteInstanceButton'
 import CourseTasksPanel, { type TaskPerson } from '@/components/CourseTasksPanel'
 import EstimatePanel, { type PricingRate } from '@/components/EstimatePanel'
+import CoaComparison from '../CoaComparison'
 import { createEstimateCoa, copyEstimatesFrom } from '../finance-actions'
 import QuotesSection, { type QuoteRow } from '../QuotesSection'
 import CourseContactsEditor from '@/components/CourseContactsEditor'
@@ -92,7 +93,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
     admin.from('profiles').select('id, first_name, last_name, email').eq('role', 'admin').order('first_name'),
     admin.from('course_estimates').select('id, title, margin, created_at, estimate_items(label, qty, rate, notes, qty_factors, sort_order)').eq('instance_id', id).order('created_at'),
     admin.from('pricing_rates').select('id, label, unit, rate, default_line').eq('active', true).order('sort_order'),
-    admin.from('course_quotes').select('id, accept_token, prepared_by, prepared_by_name, quote_seq, status, issue_date, valid_until, total, unit_rate_note, scope_bullets, course_blurb, sent_at, accepted_at, accepted_name').eq('instance_id', id).order('quote_seq', { ascending: false }),
+    admin.from('course_quotes').select('id, accept_token, prepared_by, prepared_by_name, quote_seq, status, issue_date, valid_until, total, options, unit_rate_note, scope_bullets, course_blurb, sent_at, accepted_at, accepted_name').eq('instance_id', id).order('quote_seq', { ascending: false }),
     admin.from('course_instances').select('id, ref_number, course_type, custom_title, client_name, starts_at, course_estimates(count)').neq('id', id).order('starts_at', { ascending: false, nullsFirst: false }).limit(60),
     admin.from('course_task_templates').select('id, title, default_line, sort_order').eq('active', true).order('sort_order'),
     admin.from('course_interest_invites').select('id, instructor_id, sent_at, responded_at, interested, note').eq('instance_id', id).order('created_at'),
@@ -608,6 +609,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
               />
             ))}
           </div>
+          {estimatePanels.length > 1 && <CoaComparison coas={estimatePanels} />}
           <div className="mt-4 flex items-center gap-3 flex-wrap">
             <form action={createEstimateCoa.bind(null, id)}>
               <button className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded text-sm font-medium transition-colors">

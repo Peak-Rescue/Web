@@ -148,6 +148,39 @@ export async function createEstimateCoa(instanceId: string) {
   revalidatePath(`/admin/courses/${instanceId}`)
 }
 
+// Copies one COA (items, notes, breakdowns) into a new COA on the same
+// course — the "similar option, tweak from here" workflow.
+export async function duplicateEstimateCoa(instanceId: string, estimateId: string) {
+  const admin = await requireAdmin()
+  const { data: src } = await admin
+    .from('course_estimates')
+    .select('title, margin, estimate_items(label, qty, rate, notes, qty_factors, sort_order)')
+    .eq('id', estimateId)
+    .eq('instance_id', instanceId)
+    .single()
+  if (!src) throw new Error('Estimate not found')
+
+  const { data: created, error } = await admin
+    .from('course_estimates')
+    .insert({
+      instance_id: instanceId,
+      title: `${src.title} (copy)`.slice(0, 80),
+      margin: src.margin,
+    })
+    .select('id')
+    .single()
+  if (error || !created) throw new Error(error?.message ?? 'Could not duplicate estimate')
+
+  const items = ((src.estimate_items ?? []) as { label: string; qty: number; rate: number; notes: string | null; qty_factors: unknown; sort_order: number }[])
+    .map((i) => ({ estimate_id: created.id, label: i.label, qty: i.qty, rate: i.rate, notes: i.notes, qty_factors: i.qty_factors, sort_order: i.sort_order }))
+  if (items.length > 0) {
+    const { error: itemsError } = await admin.from('estimate_items').insert(items)
+    if (itemsError) throw new Error(itemsError.message)
+  }
+
+  revalidatePath(`/admin/courses/${instanceId}`)
+}
+
 export async function deleteEstimateCoa(instanceId: string, estimateId: string) {
   const admin = await requireAdmin()
   const { error } = await admin
@@ -210,12 +243,16 @@ export async function createQuote(instanceId: string, formData: FormData) {
   const { data: { user } } = await supabase.auth.getUser()
 
   // Which COA prices this quote: explicit choice, else the newest estimate.
+  // "__all__" presents every COA as a priced option the client picks from.
   const estimateId = String(formData.get('estimate_id') ?? '')
+  const allCoas = estimateId === '__all__'
   let estimateQuery = admin
     .from('course_estimates')
-    .select('margin, estimate_items(qty, rate)')
+    .select('title, margin, estimate_items(qty, rate)')
     .eq('instance_id', instanceId)
-  if (estimateId) {
+  if (allCoas) {
+    estimateQuery = estimateQuery.order('created_at')
+  } else if (estimateId) {
     estimateQuery = estimateQuery.eq('id', estimateId)
   } else {
     estimateQuery = estimateQuery.order('created_at', { ascending: false }).limit(1)
@@ -234,9 +271,19 @@ export async function createQuote(instanceId: string, formData: FormData) {
   if (!inst) throw new Error('Course not found')
   const estimate = (estimates ?? [])[0] ?? null
 
-  const items = (estimate?.estimate_items ?? []) as { qty: number; rate: number }[]
-  const subtotal = items.reduce((s, i) => s + Number(i.qty) * Number(i.rate), 0)
-  const total = Math.round(subtotal * (1 + Number(estimate?.margin ?? 0.25)) * 100) / 100
+  const quotePrice = (e: { margin: number | null; estimate_items: unknown } | null) => {
+    const items = (e?.estimate_items ?? []) as { qty: number; rate: number }[]
+    const subtotal = items.reduce((s, i) => s + Number(i.qty) * Number(i.rate), 0)
+    return Math.round(subtotal * (1 + Number(e?.margin ?? 0.25)) * 100) / 100
+  }
+
+  // Multi-option: snapshot every COA as { title, total }; the quote's own
+  // total stays 0 until the client picks (it becomes the sum of the chosen).
+  const options = allCoas
+    ? (estimates ?? []).map((e) => ({ title: e.title, total: quotePrice(e) }))
+    : null
+  if (allCoas && (options?.length ?? 0) < 2) throw new Error('Need at least two COAs for an options quote')
+  const total = allCoas ? 0 : quotePrice(estimate)
 
   const days =
     inst.starts_at && inst.ends_at
@@ -259,6 +306,7 @@ export async function createQuote(instanceId: string, formData: FormData) {
     instance_id: instanceId,
     quote_seq: (lastQuote?.quote_seq ?? 0) + 1,
     total,
+    options,
     valid_until: validUntil.toISOString().slice(0, 10),
     scope_bullets: bullets,
     course_blurb: blurb,
@@ -272,8 +320,30 @@ export async function createQuote(instanceId: string, formData: FormData) {
 
 export async function updateQuote(instanceId: string, quoteId: string, formData: FormData) {
   const admin = await requireAdmin()
-  const total = Number(formData.get('total'))
-  if (!Number.isFinite(total) || total < 0) throw new Error('Total must be a non-negative number')
+
+  // Options quotes edit per-option titles/prices; classic quotes edit the
+  // single total. The stored options array is authoritative for count.
+  const { data: existing } = await admin
+    .from('course_quotes')
+    .select('options')
+    .eq('id', quoteId)
+    .eq('instance_id', instanceId)
+    .single()
+  const existingOptions = (existing?.options ?? null) as { title: string; total: number; chosen?: boolean }[] | null
+
+  let total = 0
+  let optionsPatch: Record<string, unknown> = {}
+  if (existingOptions) {
+    const options = existingOptions.map((o, i) => {
+      const title = String(formData.get(`opt_title_${i}`) ?? o.title).trim().slice(0, 80) || o.title
+      const t = Number(formData.get(`opt_total_${i}`))
+      return { ...o, title, total: Number.isFinite(t) && t >= 0 ? Math.round(t * 100) / 100 : o.total }
+    })
+    optionsPatch = { options }
+  } else {
+    total = Number(formData.get('total'))
+    if (!Number.isFinite(total) || total < 0) throw new Error('Total must be a non-negative number')
+  }
 
   const bullets = String(formData.get('scope_bullets') ?? '')
     .split('\n')
@@ -298,7 +368,7 @@ export async function updateQuote(instanceId: string, quoteId: string, formData:
     .from('course_quotes')
     .update({
       ...preparerPatch,
-      total,
+      ...(existingOptions ? optionsPatch : { total }),
       valid_until: String(formData.get('valid_until') ?? '') || null,
       unit_rate_note: String(formData.get('unit_rate_note') ?? '').trim() || null,
       scope_bullets: bullets,
@@ -313,13 +383,37 @@ export async function updateQuote(instanceId: string, quoteId: string, formData:
 
 // Manual transitions for now (the send/accept flow automates these later).
 // Sent syncs the course to 'quoted'; accepted syncs it to 'confirmed'.
-export async function setQuoteStatus(instanceId: string, quoteId: string, status: 'sent' | 'accepted' | 'declined') {
+// Accepting a multi-option quote manually (client committed by phone/email)
+// records which options they chose via the form's checkboxes, same shape as
+// the client-side accept.
+export async function setQuoteStatus(instanceId: string, quoteId: string, status: 'sent' | 'accepted' | 'declined', formData?: FormData) {
   const admin = await requireAdmin()
 
   const patch: Record<string, unknown> = { status }
   if (status === 'sent') patch.sent_at = new Date().toISOString()
   if (status === 'accepted') patch.accepted_at = new Date().toISOString()
   if (status === 'declined') patch.declined_at = new Date().toISOString()
+
+  if (status === 'accepted') {
+    const { data: quote } = await admin
+      .from('course_quotes')
+      .select('options')
+      .eq('id', quoteId)
+      .eq('instance_id', instanceId)
+      .single()
+    const options = (quote?.options ?? null) as { title: string; total: number; chosen?: boolean }[] | null
+    if (options) {
+      const selected = new Set(
+        (formData?.getAll('chosen_opt') ?? [])
+          .map(Number)
+          .filter((i) => Number.isInteger(i) && i >= 0 && i < options.length)
+      )
+      if (selected.size === 0) throw new Error('Check which option(s) the client accepted first')
+      const flagged = options.map((o, i) => ({ ...o, chosen: selected.has(i) }))
+      patch.options = flagged
+      patch.total = Math.round(flagged.filter((o) => o.chosen).reduce((s, o) => s + Number(o.total), 0) * 100) / 100
+    }
+  }
 
   const { error } = await admin.from('course_quotes').update(patch).eq('id', quoteId).eq('instance_id', instanceId)
   if (error) throw new Error(error.message)

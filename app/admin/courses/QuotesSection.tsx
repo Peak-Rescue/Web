@@ -5,6 +5,8 @@ import { fmtMoney } from '@/lib/expenses'
 
 export type QuotePerson = { id: string; name: string; email: string | null }
 
+export type QuoteOption = { title: string; total: number; chosen?: boolean }
+
 export type QuoteRow = {
   id: string
   accept_token: string
@@ -15,6 +17,7 @@ export type QuoteRow = {
   issue_date: string
   valid_until: string | null
   total: number
+  options: QuoteOption[] | null
   unit_rate_note: string | null
   scope_bullets: string[] | null
   course_blurb: string | null
@@ -69,7 +72,22 @@ export default function QuotesSection({
                 <span className={`px-1.5 py-0.5 text-[10px] font-medium rounded ${STATUS_BADGE[q.status] ?? STATUS_BADGE.draft}`}>
                   {q.status}
                 </span>
-                <span className="text-sm font-medium">{fmtMoney(q.total)}</span>
+                {q.options ? (
+                  q.options.some((o) => o.chosen) ? (
+                    <span className="text-sm font-medium">
+                      {fmtMoney(q.options.filter((o) => o.chosen).reduce((s, o) => s + Number(o.total), 0))}
+                      <span className="ml-1.5 text-xs font-normal text-teal-300">
+                        ✓ {q.options.filter((o) => o.chosen).map((o) => o.title).join(' + ')}
+                      </span>
+                    </span>
+                  ) : (
+                    <span className="text-sm font-medium" title={q.options.map((o) => `${o.title} — ${fmtMoney(o.total)}`).join(' · ')}>
+                      {q.options.length} options
+                    </span>
+                  )
+                ) : (
+                  <span className="text-sm font-medium">{fmtMoney(q.total)}</span>
+                )}
                 <span className="text-xs text-zinc-500">
                   issued {fmtDate(q.issue_date)}
                   {q.valid_until ? ` · valid through ${fmtDate(q.valid_until)}` : ''}
@@ -115,7 +133,15 @@ export default function QuotesSection({
                 )}
                 {q.status === 'sent' && (
                   <>
-                    <form action={setQuoteStatus.bind(null, instanceId, q.id, 'accepted')}>
+                    <form action={setQuoteStatus.bind(null, instanceId, q.id, 'accepted')} className="flex items-center gap-2.5 flex-wrap">
+                      {/* Options quote accepted off-page (phone/email): record which
+                          option(s) the client committed to. */}
+                      {(q.options ?? []).map((o, i) => (
+                        <label key={i} className="flex items-center gap-1.5 text-xs text-zinc-400 cursor-pointer" title={fmtMoney(Number(o.total))}>
+                          <input type="checkbox" name="chosen_opt" value={i} className="accent-pr-red size-3.5" />
+                          {o.title}
+                        </label>
+                      ))}
                       <button className="text-xs px-2.5 py-1 bg-teal-800 hover:bg-teal-700 text-white rounded transition-colors">
                         Mark accepted
                       </button>
@@ -130,10 +156,25 @@ export default function QuotesSection({
 
             {q.status === 'draft' && (
               <form action={updateQuote.bind(null, instanceId, q.id)} className="px-4 pb-4 grid sm:grid-cols-3 gap-3 border-t border-zinc-800 pt-3">
-                <div>
-                  <label className={labelCls}>Total price (USD)</label>
-                  <input name="total" type="number" step="0.01" min="0" defaultValue={q.total} className={inputCls} />
-                </div>
+                {q.options ? (
+                  <div className="sm:col-span-3">
+                    <label className={labelCls}>Options (client picks one or more when accepting)</label>
+                    <div className="space-y-2">
+                      {q.options.map((o, i) => (
+                        <div key={i} className="flex items-center gap-2">
+                          <input name={`opt_title_${i}`} defaultValue={o.title} className={`${inputCls} flex-1`} />
+                          <span className="text-zinc-600 text-xs">$</span>
+                          <input name={`opt_total_${i}`} type="number" step="0.01" min="0" defaultValue={o.total} className={`${inputCls} w-32 text-right`} />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <label className={labelCls}>Total price (USD)</label>
+                    <input name="total" type="number" step="0.01" min="0" defaultValue={q.total} className={inputCls} />
+                  </div>
+                )}
                 <div>
                   <label className={labelCls}>Valid through</label>
                   <input name="valid_until" type="date" defaultValue={q.valid_until ?? ''} className={inputCls} />
@@ -181,12 +222,13 @@ export default function QuotesSection({
             {estimates.map((e) => (
               <option key={e.id} value={e.id}>{e.title}</option>
             ))}
+            <option value="__all__">All COAs as options — client picks</option>
           </select>
         ) : (
           estimates[0] && <input type="hidden" name="estimate_id" value={estimates[0].id} />
         )}
         <button className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded text-sm font-medium transition-colors">
-          New quote from {estimates.length > 1 ? 'selected COA' : 'estimate'}
+          New quote from {estimates.length > 1 ? 'selection' : 'estimate'}
         </button>
       </form>
     </div>
