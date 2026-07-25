@@ -14,7 +14,7 @@ import DeleteInstanceButton from '../DeleteInstanceButton'
 import CourseTasksPanel, { type TaskPerson } from '@/components/CourseTasksPanel'
 import EstimatePanel, { type PricingRate } from '@/components/EstimatePanel'
 import CoaComparison from '../CoaComparison'
-import HeroImagePicker from '@/components/HeroImagePicker'
+import QuoteHeroPicker from '../QuoteHeroPicker'
 import { HERO_CHOICES } from '@/lib/quote-heroes'
 import { createEstimateCoa, copyEstimatesFrom } from '../finance-actions'
 import QuotesSection, { type QuoteRow } from '../QuotesSection'
@@ -87,6 +87,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
     { data: courseDocRows },
     { data: taskDocRows },
     { data: receiptRows },
+    { data: galleryImageRows },
   ] = await Promise.all([
     admin.from('enrollments').select('id, enrolled_at, profiles(first_name, last_name, email)').eq('instance_id', id).order('enrolled_at'),
     admin.from('expense_items').select('id', { count: 'exact', head: true }).eq('instance_id', id),
@@ -102,7 +103,17 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
     admin.from('course_documents').select('id, path, filename, created_at').eq('instance_id', id),
     admin.from('course_task_documents').select('id, path, filename, created_at, course_tasks!inner(title, instance_id)').eq('course_tasks.instance_id', id),
     admin.from('expense_receipts').select('id, path, filename, created_at, expense_items!inner(category, instance_id, expense_reports(profiles(first_name, last_name)))').eq('expense_items.instance_id', id),
+    admin.from('gallery_images').select('url, caption, categories').order('created_at', { ascending: false }),
   ])
+
+  // Quote-hero photo pool: the curated static shots plus every gallery upload,
+  // each carrying the category tags the picker filters by.
+  const heroChoices = [
+    ...HERO_CHOICES,
+    ...(galleryImageRows ?? [])
+      .filter((g) => !HERO_CHOICES.some((c) => c.value === g.url))
+      .map((g) => ({ value: g.url, label: g.caption || 'Gallery photo', categories: g.categories ?? [] })),
+  ]
 
   // One "Files" view across every attachment on the course: general uploads,
   // task documents, and expense receipts — signed per-bucket in two calls.
@@ -335,14 +346,6 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
             <div className="sm:col-span-2">
               <label className="block text-xs text-zinc-400 mb-1">Notes</label>
               <textarea name="notes" rows={2} defaultValue={inst.notes ?? ''} className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500 resize-none" />
-            </div>
-            <div className="sm:col-span-2">
-              <HeroImagePicker
-                choices={HERO_CHOICES}
-                currentImage={inst.hero_image ?? null}
-                currentPosition={inst.hero_position ?? null}
-                currentScale={inst.hero_scale ?? null}
-              />
             </div>
           </AutoSaveForm>
           <CourseFilesSection instanceId={id} files={courseFiles} />
@@ -647,10 +650,19 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
 
         <details open className="mb-8 group">
           <summary className="cursor-pointer list-none text-lg font-semibold select-none mb-3"><span className="text-zinc-600 text-sm mr-2 inline-block transition-transform group-open:rotate-90">▶</span>Financials — Quotes</summary>
-          <p className="text-xs text-zinc-500 mb-4">
-            Client-facing lump sum generated from the estimate. Marking sent/accepted moves the course to
-            Quoted/Confirmed automatically.
-          </p>
+          <div className="flex items-start justify-between gap-3 flex-wrap mb-4">
+            <p className="text-xs text-zinc-500">
+              Client-facing lump sum generated from the estimate. Marking sent/accepted moves the course to
+              Quoted/Confirmed automatically.
+            </p>
+            <QuoteHeroPicker
+              instanceId={id}
+              choices={heroChoices}
+              currentImage={inst.hero_image ?? null}
+              currentPosition={inst.hero_position ?? null}
+              currentScale={inst.hero_scale ?? null}
+            />
+          </div>
           <QuotesSection
             instanceId={id}
             refNumber={inst.ref_number}
