@@ -94,7 +94,24 @@ function colX(key: string): number {
 
 const GRID_W = COLS.reduce((s, c) => s + c.w, 0)
 
+// The standard fonts use WinAnsi encoding, which rejects control characters
+// and anything beyond Latin-1-ish text — one stray newline or emoji in a
+// description would otherwise fail the whole PDF. Drop what can't render.
+function winAnsiSafe(font: PDFFont, text: string): string {
+  return Array.from(text.replace(/\s+/g, ' '))
+    .filter((ch) => {
+      try {
+        font.widthOfTextAtSize(ch, 8)
+        return true
+      } catch {
+        return false
+      }
+    })
+    .join('')
+}
+
 function truncate(font: PDFFont, text: string, size: number, maxW: number): string {
+  text = winAnsiSafe(font, text)
   if (font.widthOfTextAtSize(text, size) <= maxW) return text
   let t = text
   while (t.length > 1 && font.widthOfTextAtSize(t + '…', size) > maxW) t = t.slice(0, -1)
@@ -106,6 +123,8 @@ export async function generateExpensePdf(report: PdfReport): Promise<Uint8Array>
   const font = await doc.embedFont(StandardFonts.Helvetica)
   const bold = await doc.embedFont(StandardFonts.HelveticaBold)
 
+  const employeeName = winAnsiSafe(font, report.employeeName)
+  const reason = winAnsiSafe(font, report.reason ?? '')
   const totals = computeTotals(report.items)
   const cardItems = report.items.filter((i) => i.paid_by === 'company_card')
   const columnSum = (items: PdfItem[], colKey: string) =>
@@ -130,14 +149,14 @@ export async function generateExpensePdf(report: PdfReport): Promise<Uint8Array>
 
     // Header
     page.drawText('Name:', { x: MARGIN, y: PAGE_H - 42, size: 9, font: bold })
-    page.drawText(report.employeeName, { x: MARGIN + 38, y: PAGE_H - 42, size: 9, font })
+    page.drawText(employeeName, { x: MARGIN + 38, y: PAGE_H - 42, size: 9, font })
     page.drawText('Currency used: USD', { x: PAGE_W / 2 - 50, y: PAGE_H - 42, size: 9, font })
     page.drawText('HARKEN EXPENSE REPORT', {
       x: PAGE_W - MARGIN - bold.widthOfTextAtSize('HARKEN EXPENSE REPORT', 15),
       y: PAGE_H - 46, size: 15, font: bold,
     })
     page.drawText('Reason for travel:', { x: MARGIN, y: PAGE_H - 58, size: 9, font: bold })
-    page.drawText(report.reason ?? '', { x: MARGIN + 92, y: PAGE_H - 58, size: 9, font })
+    page.drawText(reason, { x: MARGIN + 92, y: PAGE_H - 58, size: 9, font })
     if (!first) {
       page.drawText('(continued)', { x: PAGE_W - MARGIN - 60, y: PAGE_H - 62, size: 8, font, color: GRAY })
     }
@@ -252,7 +271,7 @@ export async function generateExpensePdf(report: PdfReport): Promise<Uint8Array>
   if (detailItems.length > 0) {
     const p2 = doc.addPage([PAGE_W, PAGE_H])
     p2.drawText('Name:', { x: MARGIN, y: PAGE_H - 42, size: 9, font: bold })
-    p2.drawText(report.employeeName, { x: MARGIN + 38, y: PAGE_H - 42, size: 9, font })
+    p2.drawText(employeeName, { x: MARGIN + 38, y: PAGE_H - 42, size: 9, font })
     p2.drawText('Page 2 — Other / Entertainment Expense Details', {
       x: PAGE_W - MARGIN - bold.widthOfTextAtSize('Page 2 — Other / Entertainment Expense Details', 12),
       y: PAGE_H - 44, size: 12, font: bold,
@@ -269,10 +288,10 @@ export async function generateExpensePdf(report: PdfReport): Promise<Uint8Array>
     for (const item of detailItems) {
       const lines = [
         item.description ?? '',
-        item.details ?? '',
+        ...(item.details ?? '').split('\n'),
         item.paid_for_others ? '(paid for others)' : '',
         item.courseTitle ? `Course: ${item.courseTitle}` : '',
-      ].filter(Boolean)
+      ].map((l) => l.trim()).filter(Boolean)
       p2.drawText(fmtDateRange(item.start_date, item.end_date), { x: MARGIN, y: dy, size: 8, font })
       const amt = money(item.amount)
       p2.drawText(amt, { x: PAGE_W - MARGIN - font.widthOfTextAtSize(amt, 8), y: dy, size: 8, font })

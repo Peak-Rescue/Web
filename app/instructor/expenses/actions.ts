@@ -279,7 +279,13 @@ export async function submitReport(reportId: string): Promise<{ ok: true } | { o
   const submittedAt = new Date()
   loaded.pdfReport.submittedAt = submittedAt
 
-  const pdfBytes = await generateExpensePdf(loaded.pdfReport)
+  let pdfBytes: Uint8Array
+  try {
+    pdfBytes = await generateExpensePdf(loaded.pdfReport)
+  } catch (e) {
+    console.error('Expense report PDF generation failed:', e)
+    return { ok: false, error: 'Could not generate the report PDF — nothing was submitted. Try again, and let admin know if it keeps failing.' }
+  }
   const totals = computeTotals(loaded.pdfReport.items)
   const employeeName = loaded.pdfReport.employeeName
   const monthTag = submittedAt.toISOString().slice(0, 10)
