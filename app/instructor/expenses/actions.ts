@@ -3,6 +3,7 @@
 import { randomUUID } from 'crypto'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
+import { after } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import {
@@ -256,7 +257,70 @@ export async function saveSignature(dataUrl: string) {
 
 // ─── Submit: generate PDF, email to accounting, lock the report ──────────────
 
+// Deliberate guard errors pass through to the instructor as-is; anything
+// unexpected gets a reference code they can relay, a server log, and an
+// email to admin so failures surface without a bug report.
+const KNOWN_SUBMIT_ERRORS: Record<string, string> = {
+  'Not authenticated': 'Your session has expired — refresh the page, sign in again, and resubmit.',
+  'Report not found': 'Report not found — refresh the page and try again.',
+  'Report has already been submitted': 'This report was already submitted — refresh the page to see its status.',
+}
+
 export async function submitReport(reportId: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    return await doSubmitReport(reportId)
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e)
+    const known = KNOWN_SUBMIT_ERRORS[message]
+    if (known) return { ok: false, error: known }
+
+    const ref = randomUUID().slice(0, 8)
+    console.error(`Expense report submit failed [${ref}]:`, e)
+    after(notifySubmitFailure(reportId, ref, message))
+    return {
+      ok: false,
+      error: `Something unexpected went wrong and nothing was submitted. Try again in a minute — if it keeps failing, let admin know and mention error code ${ref}.`,
+    }
+  }
+}
+
+// Best-effort heads-up to admin with the details the instructor can't see.
+async function notifySubmitFailure(reportId: string, ref: string, message: string) {
+  if (!process.env.RESEND_API_KEY) return
+  try {
+    const admin = createAdminClient()
+    const { data: report } = await admin
+      .from('expense_reports')
+      .select('reason, profile_id')
+      .eq('id', reportId)
+      .maybeSingle()
+    const { data: profile } = report
+      ? await admin.from('profiles').select('first_name, last_name, email').eq('id', report.profile_id).single()
+      : { data: null }
+    const name = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ') || 'Unknown instructor'
+
+    const { Resend } = await import('resend')
+    const resend = new Resend(process.env.RESEND_API_KEY)
+    await resend.emails.send({
+      from: 'Peak Rescue Portal <noreply@peak-rescue.com>',
+      to: [process.env.EXPENSE_REPORT_TO || 'info@peak-rescue.com'],
+      subject: `Expense report submit FAILED — ${name} (code ${ref})`,
+      text: [
+        `${name}${profile?.email ? ` (${profile.email})` : ''} hit an unexpected error submitting an expense report. The report is still in draft.`,
+        '',
+        report?.reason ? `Reason for travel: ${report.reason}` : null,
+        `Report ID: ${reportId}`,
+        `Error code shown to them: ${ref}`,
+        '',
+        `Error: ${message}`,
+      ].filter((l): l is string => l !== null).join('\n'),
+    })
+  } catch (e) {
+    console.error('Expense submit failure notification failed:', e)
+  }
+}
+
+async function doSubmitReport(reportId: string): Promise<{ ok: true } | { ok: false; error: string }> {
   const { user, admin } = await requireOwnedReport(reportId, { draftOnly: true })
 
   const { data: profile } = await admin
@@ -279,13 +343,7 @@ export async function submitReport(reportId: string): Promise<{ ok: true } | { o
   const submittedAt = new Date()
   loaded.pdfReport.submittedAt = submittedAt
 
-  let pdfBytes: Uint8Array
-  try {
-    pdfBytes = await generateExpensePdf(loaded.pdfReport)
-  } catch (e) {
-    console.error('Expense report PDF generation failed:', e)
-    return { ok: false, error: 'Could not generate the report PDF — nothing was submitted. Try again, and let admin know if it keeps failing.' }
-  }
+  const pdfBytes = await generateExpensePdf(loaded.pdfReport)
   const totals = computeTotals(loaded.pdfReport.items)
   const employeeName = loaded.pdfReport.employeeName
   const monthTag = submittedAt.toISOString().slice(0, 10)

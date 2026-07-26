@@ -560,6 +560,13 @@ export default function ExpenseReportEditor({
       } else {
         setSubmitError(result.error)
       }
+    } catch (e) {
+      // The action returns known failures; reaching here means the call itself
+      // died (connection dropped, deploy in progress) — never fail silently.
+      const digest = (e as { digest?: string } | null)?.digest
+      setSubmitError(
+        `Submit failed before it reached the server — check your internet connection and try again. If it keeps failing, let admin know${digest ? ` and mention error code ${digest}` : ''}.`
+      )
     } finally {
       setSubmitting(false)
     }
