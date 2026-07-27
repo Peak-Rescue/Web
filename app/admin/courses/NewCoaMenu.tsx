@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState, useTransition } from 'react'
-import { createEstimateCoa, duplicateEstimateCoa, copyEstimatesFrom, copyEstimateCoaFrom } from './finance-actions'
+import { createEstimateCoa, duplicateEstimateCoa, duplicateCurrentEstimate, copyEstimatesFrom, copyEstimateCoaFrom } from './finance-actions'
 
 // The one entry point for adding a COA, with its three starting points:
 // seeded default lines, a copy of an existing COA on this course, or a COA
@@ -122,10 +122,15 @@ export default function NewCoaMenu({
             </button>
           ))}
           {coas.length === 0 && (
-            <p className="px-3 py-2 text-xs text-zinc-600">
-              The estimate above is still the untouched defaults — once it saves (edit any field), it&rsquo;ll show
-              here as a copy source too.
-            </p>
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => run(() => duplicateCurrentEstimate(instanceId))}
+              className={rowCls}
+            >
+              <span className="block">Copy of current estimate</span>
+              <span className="block text-xs text-zinc-500">Saves the estimate above, then copies it</span>
+            </button>
           )}
           {sources.length > 0 && (
             <button type="button" disabled={pending} onClick={() => setView('sources')} className={rowCls}>

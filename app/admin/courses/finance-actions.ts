@@ -166,6 +166,27 @@ export async function createEstimateCoa(instanceId: string) {
   revalidatePath(`/admin/courses/${instanceId}`)
 }
 
+// "Copy of current estimate" on a course whose panel is still the virtual
+// default COA: persist those defaults and replicate them. If an autosave
+// landed since the page rendered, copy that saved estimate instead.
+export async function duplicateCurrentEstimate(instanceId: string) {
+  const admin = await requireAdmin()
+  const { data: existing } = await admin
+    .from('course_estimates')
+    .select('id')
+    .eq('instance_id', instanceId)
+    .order('created_at')
+    .limit(1)
+    .maybeSingle()
+  if (existing) {
+    await duplicateEstimateCoa(instanceId, existing.id)
+    return
+  }
+  await seedDefaultCoa(admin, instanceId)
+  await seedDefaultCoa(admin, instanceId)
+  revalidatePath(`/admin/courses/${instanceId}`)
+}
+
 // Copies one COA (items, notes, breakdowns) into a new COA on the same
 // course — the "similar option, tweak from here" workflow.
 export async function duplicateEstimateCoa(instanceId: string, estimateId: string) {
