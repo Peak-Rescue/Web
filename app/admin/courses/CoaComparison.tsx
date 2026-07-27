@@ -36,7 +36,7 @@ export default function CoaComparison({
             <td className="px-4 py-2 text-xs text-zinc-400">Margin</td>
             {cols.map((c, i) => (
               <td key={i} className="px-4 py-2 text-right text-zinc-300">
-                {fmtMoney(c.marginAmount)} <span className="text-zinc-600 text-xs">({Math.round(c.margin * 100)}%)</span>
+                <span className="text-zinc-600 text-xs mr-2">{Math.round(c.margin * 100)}%</span>{fmtMoney(c.marginAmount)}
               </td>
             ))}
           </tr>
