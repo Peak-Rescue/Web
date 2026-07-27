@@ -121,6 +121,12 @@ export default function NewCoaMenu({
               <span className="block text-xs text-zinc-500">Same lines and margin, tweak from there</span>
             </button>
           ))}
+          {coas.length === 0 && (
+            <p className="px-3 py-2 text-xs text-zinc-600">
+              The estimate above is still the untouched defaults — once it saves (edit any field), it&rsquo;ll show
+              here as a copy source too.
+            </p>
+          )}
           {sources.length > 0 && (
             <button type="button" disabled={pending} onClick={() => setView('sources')} className={rowCls}>
               <span className="block">From another course…</span>
