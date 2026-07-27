@@ -16,8 +16,7 @@ import EstimatePanel, { type PricingRate } from '@/components/EstimatePanel'
 import CoaComparison from '../CoaComparison'
 import QuoteHeroPicker from '../QuoteHeroPicker'
 import { HERO_CHOICES } from '@/lib/quote-heroes'
-import { createEstimateCoa, duplicateEstimateCoa, duplicateEstimateCoaForm } from '../finance-actions'
-import CopyEstimatePicker, { type CopySource } from '../CopyEstimatePicker'
+import NewCoaMenu, { type CopySource } from '../NewCoaMenu'
 import { guessSeedQty } from '@/lib/estimates'
 import { EstimateReviewBanner, EstimateReviewRequest, type EstimateReviewRow } from '../EstimateReviewBar'
 import QuotesSection, { type QuoteRow } from '../QuotesSection'
@@ -683,38 +682,12 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
             ))}
           </div>
           {estimatePanels.length > 1 && <CoaComparison coas={estimatePanels} />}
-          <div className="mt-4 flex items-center gap-3 flex-wrap">
-            <form action={createEstimateCoa.bind(null, id)}>
-              <button className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded text-sm font-medium transition-colors">
-                + Add another COA
-              </button>
-            </form>
-            {persistedCoas.length === 1 && (
-              <form action={duplicateEstimateCoa.bind(null, id, persistedCoas[0].id!)}>
-                <button
-                  title="Copy this COA into a new one to tweak"
-                  className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded text-sm font-medium transition-colors"
-                >
-                  Duplicate COA
-                </button>
-              </form>
-            )}
-            {persistedCoas.length > 1 && (
-              <form action={duplicateEstimateCoaForm.bind(null, id)} className="flex items-center gap-2">
-                <select name="estimate_id" className="bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm text-zinc-300">
-                  {persistedCoas.map((e) => (
-                    <option key={e.id} value={e.id!}>{e.title}</option>
-                  ))}
-                </select>
-                <button
-                  title="Copy the selected COA into a new one to tweak"
-                  className="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded text-sm transition-colors"
-                >
-                  Duplicate COA
-                </button>
-              </form>
-            )}
-            {copySources.length > 0 && <CopyEstimatePicker instanceId={id} sources={copySources} />}
+          <div className="mt-4">
+            <NewCoaMenu
+              instanceId={id}
+              coas={persistedCoas.map((e) => ({ id: e.id!, title: e.title }))}
+              sources={copySources}
+            />
           </div>
           <EstimateReviewRequest instanceId={id} reviews={estimateReviews} admins={reviewAdmins} currentUserId={user.id} />
         </details>

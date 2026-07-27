@@ -152,7 +152,17 @@ async function seedDefaultCoa(admin: Awaited<ReturnType<typeof requireAdmin>>, i
 // from the course, same as a fresh estimate).
 export async function createEstimateCoa(instanceId: string) {
   const admin = await requireAdmin()
+
+  // A course with no saved estimate shows a virtual default COA. Adding "another"
+  // COA there must persist that one too, or the page re-renders with a single
+  // panel and the click looks like it did nothing.
+  const { count } = await admin
+    .from('course_estimates')
+    .select('id', { count: 'exact', head: true })
+    .eq('instance_id', instanceId)
   await seedDefaultCoa(admin, instanceId)
+  if ((count ?? 0) === 0) await seedDefaultCoa(admin, instanceId)
+
   revalidatePath(`/admin/courses/${instanceId}`)
 }
 
@@ -187,14 +197,6 @@ export async function duplicateEstimateCoa(instanceId: string, estimateId: strin
   }
 
   revalidatePath(`/admin/courses/${instanceId}`)
-}
-
-// Form wrapper for the estimates-footer "Duplicate COA" control, where the
-// source COA comes from a <select>.
-export async function duplicateEstimateCoaForm(instanceId: string, formData: FormData) {
-  const estimateId = String(formData.get('estimate_id') ?? '')
-  if (!estimateId) return
-  await duplicateEstimateCoa(instanceId, estimateId)
 }
 
 export async function deleteEstimateCoa(instanceId: string, estimateId: string) {
