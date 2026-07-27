@@ -27,7 +27,7 @@ export default async function AdminExpenseRatesPage() {
     <main className="min-h-screen bg-zinc-950 text-white pt-16 md:pt-20">
       <div className="max-w-4xl mx-auto px-4 py-10">
         <Link href="/admin/expenses" className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors mb-6 inline-block">
-          ← Expense Reports
+          ← Expense Admin
         </Link>
         <h1 className="text-2xl font-bold mb-2">Rates Library</h1>
         <p className="text-zinc-400 mb-10">

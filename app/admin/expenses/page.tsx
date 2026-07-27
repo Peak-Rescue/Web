@@ -77,7 +77,7 @@ export default async function AdminExpensesPage() {
           ← Portal
         </Link>
         <div className="flex items-center justify-between mb-2">
-          <h1 className="text-2xl font-bold">Expenses</h1>
+          <h1 className="text-2xl font-bold">Expense Admin</h1>
           <Link
             href="/admin/expenses/rates"
             className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded text-sm font-medium transition-colors"
@@ -85,7 +85,7 @@ export default async function AdminExpensesPage() {
             Manage rates
           </Link>
         </div>
-        <p className="text-zinc-400 mb-10">All expense reports and per-course spending</p>
+        <p className="text-zinc-400 mb-10">Everyone's expense reports, rates, and per-course spending</p>
 
         {/* ── Submitted reports ── */}
         <section className="mb-12">

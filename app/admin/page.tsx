@@ -157,12 +157,119 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   }
 
 
-  // Marks cards instructors don't see, so admins know what's admin-only.
-  const adminBadge = (
-    <span className="absolute top-3 right-3 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider bg-pr-red/15 border border-pr-red/40 text-pr-red">
-      Admin
-    </span>
-  )
+  // Portal destinations, grouped: personal tools render as cards, admin
+  // consoles as dense rows under one Administration header.
+  type PortalLink = {
+    title: string
+    desc: string
+    href: string
+    icon: React.ReactNode
+    section: 'personal' | 'admin'
+    preserveView?: boolean // append ?as=… so the instructor preview carries through
+  }
+  const svgProps = {
+    xmlns: 'http://www.w3.org/2000/svg',
+    viewBox: '0 0 24 24',
+    fill: 'none',
+    stroke: 'currentColor',
+    strokeWidth: 1.5,
+    strokeLinecap: 'round',
+    strokeLinejoin: 'round',
+  } as const
+  const portalLinks: PortalLink[] = [
+    {
+      title: 'My Profile',
+      desc: 'Manage your bio, photo, and certifications',
+      href: '/instructor',
+      section: 'personal',
+      icon: (
+        <svg {...svgProps}>
+          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+        </svg>
+      ),
+    },
+    {
+      title: 'My Expense Reports',
+      desc: 'File and track your reimbursement requests',
+      href: '/instructor/expenses',
+      section: 'personal',
+      icon: (
+        <svg {...svgProps}>
+          <rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/><line x1="6" y1="15" x2="10" y2="15"/>
+        </svg>
+      ),
+    },
+    {
+      title: 'Instructor Profiles',
+      desc: 'Certifications, expertise, and portal access',
+      href: '/admin/instructors',
+      section: 'personal',
+      icon: (
+        <svg {...svgProps} viewBox="0 0 72 24">
+          <circle cx="12" cy="7" r="4"/><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+          <circle cx="36" cy="7" r="4"/><path d="M44 21v-2a4 4 0 0 0-4-4H32a4 4 0 0 0-4 4v2"/>
+          <circle cx="60" cy="7" r="4"/><path d="M68 21v-2a4 4 0 0 0-4-4H56a4 4 0 0 0-4 4v2"/>
+        </svg>
+      ),
+    },
+    {
+      title: 'Employee Information',
+      desc: 'Handbook, policies, and employment documents',
+      href: '/admin/employee-info',
+      section: 'personal',
+      preserveView: true,
+      icon: (
+        <svg {...svgProps}>
+          <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+        </svg>
+      ),
+    },
+    {
+      title: 'Courses',
+      desc: 'Schedule and manage course instances',
+      href: '/admin/courses',
+      section: 'admin',
+      icon: (
+        <svg {...svgProps}>
+          <rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/>
+        </svg>
+      ),
+    },
+    {
+      title: 'Expense Admin',
+      desc: "Everyone's reports, rates, and per-course spending",
+      href: '/admin/expenses',
+      section: 'admin',
+      icon: (
+        <svg {...svgProps}>
+          <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+        </svg>
+      ),
+    },
+    {
+      title: 'Contact Submissions',
+      desc: 'Messages from the public contact form',
+      href: '/admin/contact',
+      section: 'admin',
+      icon: (
+        <svg {...svgProps}>
+          <rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
+        </svg>
+      ),
+    },
+    {
+      title: 'Gallery',
+      desc: 'Upload and manage public gallery photos',
+      href: '/admin/gallery',
+      section: 'admin',
+      icon: (
+        <svg {...svgProps}>
+          <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/>
+        </svg>
+      ),
+    },
+  ]
+  const linkHref = (l: PortalLink) => (l.preserveView && viewAs ? `${l.href}?as=${viewAs}` : l.href)
 
   const fmtRange = (c: InstRow) => {
     const f = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
@@ -322,102 +429,48 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         </details>
 
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Link
-            href="/admin/instructors"
-            className="p-6 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-pr-red transition-colors"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="84" height="28" viewBox="0 0 72 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="mb-3 text-pr-red">
-              <circle cx="12" cy="7" r="4"/><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-              <circle cx="36" cy="7" r="4"/><path d="M44 21v-2a4 4 0 0 0-4-4H32a4 4 0 0 0-4 4v2"/>
-              <circle cx="60" cy="7" r="4"/><path d="M68 21v-2a4 4 0 0 0-4-4H56a4 4 0 0 0-4 4v2"/>
-            </svg>
-            <h2 className="font-semibold text-lg mb-1">Instructor Profiles</h2>
-            <p className="text-zinc-400 text-sm">Certifications, expertise, and portal access</p>
-          </Link>
-          {showAsAdmin && (
-            <Link
-              href="/admin/courses"
-              className="relative p-6 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-pr-red transition-colors"
-            >
-              {adminBadge}
-              <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="mb-3 text-pr-red">
-                <rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/>
-              </svg>
-              <h2 className="font-semibold text-lg mb-1">Courses</h2>
-              <p className="text-zinc-400 text-sm">Schedule and manage course instances</p>
-            </Link>
-          )}
-          <Link
-            href="/instructor"
-            className="p-6 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-pr-red transition-colors"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="mb-3 text-pr-red">
-              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
-            </svg>
-            <h2 className="font-semibold text-lg mb-1">My Profile</h2>
-            <p className="text-zinc-400 text-sm">Manage your bio, photo, and certifications</p>
-          </Link>
-          <Link
-            href="/instructor/expenses"
-            className="p-6 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-pr-red transition-colors"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="mb-3 text-pr-red">
-              <rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/><line x1="6" y1="15" x2="10" y2="15"/>
-            </svg>
-            <h2 className="font-semibold text-lg mb-1">Expense Reports</h2>
-            <p className="text-zinc-400 text-sm">File reimbursement requests with receipts</p>
-          </Link>
-          {showAsAdmin && (
-            <Link
-              href="/admin/expenses"
-              className="relative p-6 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-pr-red transition-colors"
-            >
-              {adminBadge}
-              <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="mb-3 text-pr-red">
-                <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
-              </svg>
-              <h2 className="font-semibold text-lg mb-1">Expenses Admin</h2>
-              <p className="text-zinc-400 text-sm">All reports, rates, and per-course spending</p>
-            </Link>
-          )}
-          <Link
-            href={viewAs ? `/admin/employee-info?as=${viewAs}` : '/admin/employee-info'}
-            className="p-6 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-pr-red transition-colors"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="mb-3 text-pr-red">
-              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
-            </svg>
-            <h2 className="font-semibold text-lg mb-1">Employee Information</h2>
-            <p className="text-zinc-400 text-sm">Handbook, policies, and employment documents</p>
-          </Link>
-          {showAsAdmin && (
-            <Link
-              href="/admin/contact"
-              className="relative p-6 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-pr-red transition-colors"
-            >
-              {adminBadge}
-              <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="mb-3 text-pr-red">
-                <rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
-              </svg>
-              <h2 className="font-semibold text-lg mb-1">Contact Submissions</h2>
-              <p className="text-zinc-400 text-sm">Messages from the public contact form</p>
-            </Link>
-          )}
-          {showAsAdmin && (
-            <Link
-              href="/admin/gallery"
-              className="relative p-6 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-pr-red transition-colors"
-            >
-              {adminBadge}
-              <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="mb-3 text-pr-red">
-                <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/>
-              </svg>
-              <h2 className="font-semibold text-lg mb-1">Gallery</h2>
-              <p className="text-zinc-400 text-sm">Upload and manage public gallery photos</p>
-            </Link>
-          )}
-        </div>
+        <section className="mb-10">
+          <h2 className="text-sm font-medium text-zinc-500 uppercase tracking-wide mb-3">Your tools</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {portalLinks.filter((l) => l.section === 'personal').map((l) => (
+              <Link
+                key={l.href}
+                href={linkHref(l)}
+                className="p-6 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-pr-red transition-colors"
+              >
+                <div className="mb-3 text-pr-red [&>svg]:h-7 [&>svg]:w-auto">{l.icon}</div>
+                <h3 className="font-semibold text-lg mb-1">{l.title}</h3>
+                <p className="text-zinc-400 text-sm">{l.desc}</p>
+              </Link>
+            ))}
+          </div>
+        </section>
+
+        {showAsAdmin && (
+          <section>
+            <h2 className="text-sm font-medium text-zinc-500 uppercase tracking-wide mb-3 flex items-center gap-2">
+              Administration
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider bg-pr-red/15 border border-pr-red/40 text-pr-red">
+                Admin
+              </span>
+            </h2>
+            <div className="space-y-2">
+              {portalLinks.filter((l) => l.section === 'admin').map((l) => (
+                <Link
+                  key={l.href}
+                  href={linkHref(l)}
+                  className="flex items-center gap-4 px-4 py-3 bg-zinc-900 border border-zinc-800 rounded-lg hover:border-pr-red transition-colors"
+                >
+                  <div className="shrink-0 text-pr-red [&>svg]:h-[22px] [&>svg]:w-auto">{l.icon}</div>
+                  <div className="min-w-0">
+                    <h3 className="font-medium text-sm">{l.title}</h3>
+                    <p className="text-xs text-zinc-500 truncate">{l.desc}</p>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </section>
+        )}
       </div>
     </main>
   )

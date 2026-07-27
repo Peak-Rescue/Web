@@ -32,7 +32,7 @@ export default async function AdminGalleryPage() {
   return (
     <main className="min-h-screen bg-zinc-950 text-white pt-16 md:pt-20">
       <div className="max-w-4xl mx-auto px-4 py-10">
-        <Link href="/admin" className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors mb-6 inline-block">← Admin</Link>
+        <Link href="/admin" className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors mb-6 inline-block">← Portal</Link>
         <h1 className="text-2xl font-bold mb-1">Gallery</h1>
         <p className="text-zinc-400 mb-8">Photos shown on the public gallery page.</p>
 

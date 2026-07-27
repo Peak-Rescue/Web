@@ -40,7 +40,7 @@ export default async function ExpenseReportsPage() {
           ← Portal
         </Link>
         <div className="flex items-center justify-between mb-2">
-          <h1 className="text-2xl font-bold">Expense Reports</h1>
+          <h1 className="text-2xl font-bold">My Expense Reports</h1>
           <form action={createReport}>
             <button
               type="submit"

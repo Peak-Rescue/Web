@@ -591,7 +591,7 @@ export default function ExpenseReportEditor({
     <main className="min-h-screen bg-zinc-950 text-white pt-16 md:pt-20">
       <div className="max-w-4xl mx-auto px-4 py-10">
         <Link href="/instructor/expenses" className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors mb-6 inline-block">
-          ← Expense Reports
+          ← My Expense Reports
         </Link>
         <div className="flex items-center gap-3 mb-8">
           <h1 className="text-2xl font-bold">Expense report</h1>
