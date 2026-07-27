@@ -119,15 +119,16 @@ export function EstimateReviewRequest({
         </div>
       )}
       {others.length > 0 && (
-        <form action={requestEstimateReview.bind(null, instanceId)} className="flex items-center gap-2 flex-wrap">
-          <select name="reviewer_id" className={`${inputCls} text-zinc-300`}>
+        <form action={requestEstimateReview.bind(null, instanceId)} className="group flex items-center gap-2 flex-wrap">
+          <select name="reviewer_id" required defaultValue="" className={`${inputCls} text-zinc-300`}>
+            <option value="" disabled>Select admin</option>
             {others.map((a) => (
               <option key={a.id} value={a.id}>{a.name}</option>
             ))}
           </select>
           <input name="note" placeholder="Note for them (optional)" className={`${inputCls} flex-1 min-w-48`} />
           <button
-            className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded text-sm font-medium transition-colors"
+            className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded text-sm font-medium transition-colors group-has-[select:invalid]:opacity-40 group-has-[select:invalid]:pointer-events-none"
             title="Emails them a link straight to this section"
           >
             Request estimate review
