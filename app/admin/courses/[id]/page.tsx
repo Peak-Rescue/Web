@@ -359,7 +359,8 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
         {/* ── Details ─────────────────────────────────────────────── */}
         <details open className="mb-8 group">
           <summary className="cursor-pointer list-none text-lg font-semibold select-none mb-3"><span className="text-zinc-600 text-sm mr-2 inline-block transition-transform group-open:rotate-90">▶</span>Details</summary>
-          <AutoSaveForm action={updateDetailsWithId} className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-6 bg-zinc-900 rounded-lg border border-zinc-800">
+          <div className="bg-zinc-900 rounded-lg border border-zinc-800">
+          <AutoSaveForm action={updateDetailsWithId} className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-6">
             <CourseTypeSelect
               defaultCategory={inst.course_category}
               defaultType={inst.course_type}
@@ -406,6 +407,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
             </div>
           </AutoSaveForm>
           <CourseFilesSection instanceId={id} files={courseFiles} />
+          </div>
         </details>
 
         {/* ── Schedule ─────────────────────────────────────────────── */}

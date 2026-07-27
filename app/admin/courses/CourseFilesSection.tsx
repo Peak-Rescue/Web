@@ -111,7 +111,7 @@ export default function CourseFilesSection({
   }
 
   return (
-    <div className="mt-4 p-6 bg-zinc-900 rounded-lg border border-zinc-800">
+    <div className="p-6 pt-5 border-t border-zinc-800">
       <input
         ref={fileRef}
         type="file"
