@@ -39,7 +39,7 @@ export async function cloneEstimates(
 ): Promise<number> {
   const { data: sources } = await admin
     .from('course_estimates')
-    .select('title, margin, estimate_items(label, qty, rate, notes, qty_factors, sort_order)')
+    .select('title, margin, estimate_items(label, qty, rate, notes, qty_factors, rate_id, sort_order)')
     .eq('instance_id', sourceInstanceId)
     .order('created_at')
 
@@ -56,8 +56,8 @@ export async function cloneEstimates(
       .single()
     if (error || !created) throw new Error(error?.message ?? 'Could not copy estimate')
 
-    const items = ((src.estimate_items ?? []) as { label: string; qty: number; rate: number; notes: string | null; qty_factors: unknown; sort_order: number }[])
-      .map((i) => ({ estimate_id: created.id, label: i.label, qty: i.qty, rate: i.rate, notes: i.notes, qty_factors: i.qty_factors, sort_order: i.sort_order }))
+    const items = ((src.estimate_items ?? []) as { label: string; qty: number; rate: number; notes: string | null; qty_factors: unknown; rate_id: string | null; sort_order: number }[])
+      .map((i) => ({ estimate_id: created.id, label: i.label, qty: i.qty, rate: i.rate, notes: i.notes, qty_factors: i.qty_factors, rate_id: i.rate_id, sort_order: i.sort_order }))
     if (items.length > 0) {
       const { error: itemsError } = await admin.from('estimate_items').insert(items)
       if (itemsError) throw new Error(itemsError.message)

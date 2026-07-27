@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react'
 import { fmtMoney, round2 } from '@/lib/expenses'
-import { saveEstimate, deleteEstimateCoa, duplicateEstimateCoa, type EstimateItemInput } from '@/app/admin/courses/finance-actions'
+import { saveEstimate, deleteEstimateCoa, type EstimateItemInput } from '@/app/admin/courses/finance-actions'
 import { useRouter } from 'next/navigation'
 import { CalculatorIcon, NotesIcon } from '@/components/TaskIcons'
 import { useUnsavedGuard, withSaveTimeout } from '@/components/useUnsavedGuard'
@@ -19,6 +19,7 @@ type Row = {
   notes: string
   factors: Factors | null
   flabels: (string | null)[]
+  rateId: string | null // library rate the line came from — survives renames
 }
 // Variable-length: as many boxes as the rate's unit has dimensions, plus any
 // explicitly added multipliers (max 4).
@@ -55,7 +56,7 @@ export default function EstimatePanel({
   estimateId: string | null // null = not yet persisted (first COA, untouched)
   initialTitle: string
   initialMargin: number
-  initialItems: { label: string; qty: number; rate: number; notes: string | null; factors: number[] | null; factor_labels: (string | null)[] | null }[]
+  initialItems: { label: string; qty: number; rate: number; notes: string | null; factors: number[] | null; factor_labels: (string | null)[] | null; rate_id: string | null }[]
   rates: PricingRate[]
   canDelete: boolean
   solo: boolean // only COA on the course — the default "COA n" title stays hidden until a second exists
@@ -66,7 +67,6 @@ export default function EstimatePanel({
   const [persistedId, setPersistedId] = useState<string | null>(estimateId)
   const [title, setTitle] = useState(initialTitle)
   const [deleting, setDeleting] = useState(false)
-  const [duplicating, setDuplicating] = useState(false)
   const nextKey = useRef(initialItems.length)
   const [rows, setRows] = useState<Row[]>(
     initialItems.map((i, idx) => ({
@@ -77,6 +77,7 @@ export default function EstimatePanel({
       notes: i.notes ?? '',
       factors: i.factors && i.factors.length >= 2 ? i.factors.map(String) : null,
       flabels: i.factor_labels ?? [],
+      rateId: i.rate_id,
     }))
   )
   const [notesOpen, setNotesOpen] = useState<Set<number>>(
@@ -144,6 +145,7 @@ export default function EstimatePanel({
             notes: row.notes || null,
             factors: trimmed.length >= 2 ? trimmed : null,
             factor_labels: trimmed.length >= 2 ? trimmedLabels : null,
+            rate_id: row.rateId,
           }
         })
       const saved = await withSaveTimeout(saveEstimate(instanceId, estimateIdRef.current, { title: t, margin: m, items }))
@@ -188,7 +190,7 @@ export default function EstimatePanel({
   function addFromLibrary(rateId: string) {
     const lib = rates.find((r) => r.id === rateId)
     if (!lib) return
-    const labels = factorLabels(lib.label)
+    const labels = unitFactorNames(lib.unit)
     const values = labels.map((l) => prefillForFactor(l, lib.label))
     const qty = values.reduce((p, v) => p * v, 1)
     schedule(
@@ -200,13 +202,14 @@ export default function EstimatePanel({
         notes: '',
         factors: labels.length >= 2 ? values.map(String) : null,
         flabels: [],
+        rateId: lib.id,
       }],
       margin
     )
   }
 
   function addCustom() {
-    schedule([...rows, { key: nextKey.current++, label: '', qty: '1', rate: '', notes: '', factors: null, flabels: [] }], margin)
+    schedule([...rows, { key: nextKey.current++, label: '', qty: '1', rate: '', notes: '', factors: null, flabels: [], rateId: null }], margin)
   }
 
   function toggleNotes(key: number) {
@@ -223,7 +226,7 @@ export default function EstimatePanel({
   // typing a qty directly clears it.
   function rowFactors(r: Row): Factors {
     if (r.factors) return r.factors
-    const n = Math.max(factorLabels(r.label).length, 1)
+    const n = Math.max(factorLabels(r).length, 1)
     return [r.qty.trim() || '1', ...Array.from({ length: n - 1 }, () => '1')]
   }
 
@@ -281,20 +284,24 @@ export default function EstimatePanel({
     schedule(rows.filter((r) => r.key !== key), margin)
   }
 
+  // The library rate behind a line: by stored id first (survives library
+  // renames), else by exact label (older lines and hand-typed matches).
+  function rateFor(r: { rateId: string | null; label: string }): PricingRate | undefined {
+    return (r.rateId ? rates.find((x) => x.id === r.rateId) : undefined) ?? rates.find((x) => x.label === r.label)
+  }
+
   // What the quantity means for library items: "per mile" → "miles",
   // "per student per day" → "student × day". Null for custom lines.
-  function qtyFactors(label: string): string | null {
-    const unit = rates.find((r) => r.label === label)?.unit
+  function qtyFactors(r: Row): string | null {
+    const unit = rateFor(r)?.unit
     if (!unit) return null
     const factors = unit.replace(/^per\s+/, '').split(/\s+per\s+/)
     return factors.length > 1 ? factors.join(' × ') : `${factors[0]}s`
   }
 
-  // The rate's unit text, e.g. "per mile", "per person per night".
-  // Labels for the factor boxes, from the rate's unit: "per instructor per
+  // Labels for the factor boxes, from a rate's unit: "per instructor per
   // day" → ['instructors', 'days']. Extra boxes beyond the unit are spares.
-  function factorLabels(label: string): string[] {
-    const unit = rates.find((r) => r.label === label)?.unit
+  function unitFactorNames(unit: string | null): string[] {
     if (!unit) return []
     return unit
       .replace(/^per\s+/, '')
@@ -302,8 +309,13 @@ export default function EstimatePanel({
       .map((f) => (f.endsWith('s') ? f : `${f}s`))
   }
 
-  function rateUnit(label: string): string | null {
-    return rates.find((r) => r.label === label)?.unit ?? null
+  function factorLabels(r: Row): string[] {
+    return unitFactorNames(rateFor(r)?.unit ?? null)
+  }
+
+  // The rate's unit text, e.g. "per mile", "per person per night".
+  function rateUnit(r: Row): string | null {
+    return rateFor(r)?.unit ?? null
   }
 
   // Hint under the qty box: the saved breakdown ("= 3 × 5") when there is
@@ -311,7 +323,7 @@ export default function EstimatePanel({
   function qtyHint(r: Row): string | null {
     const breakdown = r.factors ? trimFactors(r.factors) : []
     if (breakdown.length >= 2) return `= ${breakdown.join(' × ')}`
-    return qtyFactors(r.label)
+    return qtyFactors(r)
   }
 
   const subtotal = round2(rows.reduce((s, r) => s + (Number(r.qty) || 0) * (Number(r.rate) || 0), 0))
@@ -337,27 +349,6 @@ export default function EstimatePanel({
           {status === 'error' && (
             <button onClick={() => void flush()} className="text-xs text-zinc-300 underline hover:text-white">
               Retry
-            </button>
-          )}
-          {persistedId && (
-            <button
-              onClick={async () => {
-                if (duplicating) return
-                setDuplicating(true)
-                try {
-                  // Save in-flight edits first so the copy matches what's on screen.
-                  if (dirty) await flush()
-                  await duplicateEstimateCoa(instanceId, estimateIdRef.current!)
-                  router.refresh()
-                } finally {
-                  setDuplicating(false)
-                }
-              }}
-              disabled={duplicating}
-              title="Copy this COA into a new one to tweak"
-              className="text-xs text-zinc-600 hover:text-zinc-300 transition-colors disabled:opacity-50"
-            >
-              {duplicating ? 'Duplicating…' : 'Duplicate COA'}
             </button>
           )}
           {canDelete && persistedId && (
@@ -417,7 +408,7 @@ export default function EstimatePanel({
                     step="0.5"
                     onChange={(e) => updateRow(r.key, { qty: e.target.value, factors: null })}
                     className={`${inputCls} w-20 text-right`}
-                    title={qtyFactors(r.label) ? `Quantity = ${qtyFactors(r.label)}` : 'Quantity'}
+                    title={qtyFactors(r) ? `Quantity = ${qtyFactors(r)}` : 'Quantity'}
                   />
                   {qtyHint(r) && (
                     <span className="mt-0.5 text-[10px] text-zinc-600 whitespace-nowrap">{qtyHint(r)}</span>
@@ -432,10 +423,10 @@ export default function EstimatePanel({
                     step="0.01"
                     onChange={(e) => updateRow(r.key, { rate: e.target.value })}
                     className={`${inputCls} w-24 text-right`}
-                    title={rateUnit(r.label) ? `Dollars ${rateUnit(r.label)}` : 'Dollar rate'}
+                    title={rateUnit(r) ? `Dollars ${rateUnit(r)}` : 'Dollar rate'}
                   />
                   <span className="mt-0.5 text-[10px] text-zinc-600 whitespace-nowrap">
-                    {rateUnit(r.label) ?? 'dollars'}
+                    {rateUnit(r) ?? 'dollars'}
                   </span>
                 </div>
                 <span className="text-sm w-24 text-right shrink-0 mt-2">
@@ -461,8 +452,8 @@ export default function EstimatePanel({
                         onChange={(e) => setFactor(r.key, i, e.target.value)}
                         className={`${inputCls} w-16 text-right`}
                       />
-                      {factorLabels(r.label)[i] ? (
-                        <span className="mt-0.5 text-[10px] text-zinc-600">{factorLabels(r.label)[i]}</span>
+                      {factorLabels(r)[i] ? (
+                        <span className="mt-0.5 text-[10px] text-zinc-600">{factorLabels(r)[i]}</span>
                       ) : (
                         <span className="mt-0.5 flex items-center gap-1">
                           <input
@@ -471,7 +462,7 @@ export default function EstimatePanel({
                             placeholder="name"
                             className="w-14 bg-transparent border-b border-zinc-800 focus:border-zinc-500 focus:outline-none text-[10px] text-zinc-400 text-center"
                           />
-                          {i >= factorLabels(r.label).length && rowFactors(r).length > 1 && (
+                          {i >= factorLabels(r).length && rowFactors(r).length > 1 && (
                             <button
                               onClick={() => removeFactor(r.key, i)}
                               title="Remove this multiplier"

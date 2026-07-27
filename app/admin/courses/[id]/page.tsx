@@ -16,7 +16,8 @@ import EstimatePanel, { type PricingRate } from '@/components/EstimatePanel'
 import CoaComparison from '../CoaComparison'
 import QuoteHeroPicker from '../QuoteHeroPicker'
 import { HERO_CHOICES } from '@/lib/quote-heroes'
-import { createEstimateCoa, copyEstimatesFrom } from '../finance-actions'
+import { createEstimateCoa, duplicateEstimateCoa, duplicateEstimateCoaForm } from '../finance-actions'
+import CopyEstimatePicker from '../CopyEstimatePicker'
 import { guessSeedQty } from '@/lib/estimates'
 import { EstimateReviewBanner, EstimateReviewRequest, type EstimateReviewRow } from '../EstimateReviewBar'
 import QuotesSection, { type QuoteRow } from '../QuotesSection'
@@ -97,7 +98,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
     loadTasksWithDocs(admin, id),
     admin.from('profiles').select('id, first_name, last_name, email, role').in('role', ['admin', 'instructor']).order('first_name'),
     admin.from('profiles').select('id, first_name, last_name, email').eq('role', 'admin').order('first_name'),
-    admin.from('course_estimates').select('id, title, margin, created_at, estimate_items(label, qty, rate, notes, qty_factors, sort_order)').eq('instance_id', id).order('created_at'),
+    admin.from('course_estimates').select('id, title, margin, created_at, estimate_items(label, qty, rate, notes, qty_factors, rate_id, sort_order)').eq('instance_id', id).order('created_at'),
     admin.from('pricing_rates').select('id, label, unit, rate, default_line').eq('active', true).order('sort_order'),
     admin.from('course_quotes').select('id, accept_token, prepared_by, prepared_by_name, quote_seq, status, issue_date, valid_until, total, options, unit_rate_note, scope_bullets, course_blurb, sent_at, accepted_at, accepted_name').eq('instance_id', id).order('quote_seq', { ascending: false }),
     admin.from('course_instances').select('id, ref_number, course_type, custom_title, client_name, starts_at, course_estimates(count)').neq('id', id).order('starts_at', { ascending: false, nullsFirst: false }).limit(60),
@@ -192,7 +193,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
     (s) => ((s.course_estimates as unknown as { count: number }[])?.[0]?.count ?? 0) > 0
   )
 
-  type EstimateItemRow = { label: string; qty: number; rate: number; notes: string | null; qty_factors: unknown; sort_order: number }
+  type EstimateItemRow = { label: string; qty: number; rate: number; notes: string | null; qty_factors: unknown; rate_id: string | null; sort_order: number }
   const normalizeFactors = (qf: unknown): { f: number[]; l: (string | null)[] } | null => {
     if (Array.isArray(qf)) return { f: qf.map(Number), l: [] }
     if (qf && typeof qf === 'object' && Array.isArray((qf as { f?: unknown }).f)) {
@@ -214,6 +215,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
         notes: i.notes,
         factors: normalizeFactors(i.qty_factors)?.f ?? null,
         factor_labels: normalizeFactors(i.qty_factors)?.l ?? null,
+        rate_id: i.rate_id,
       })),
   }))
 
@@ -243,10 +245,14 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
         .filter((r) => r.default_line)
         .map((r) => {
           const guess = guessSeedQty(r, seedCounts)
-          return { label: r.label, qty: guess.qty, rate: Number(r.rate), notes: null, factors: guess.factors, factor_labels: null }
+          return { label: r.label, qty: guess.qty, rate: Number(r.rate), notes: null, factors: guess.factors, factor_labels: null, rate_id: r.id as string }
         }),
     }]
   }
+
+  // COAs that exist in the DB — the virtual first COA (id null) can't be
+  // duplicated until it's been touched and saved.
+  const persistedCoas = estimatePanels.filter((e) => e.id !== null)
 
   const courseType = inst.course_type
 
@@ -639,21 +645,45 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
                 + Add another COA
               </button>
             </form>
-            {copySources.length > 0 && (
-              <form action={copyEstimatesFrom.bind(null, id)} className="flex items-center gap-2">
-                <select name="source_instance_id" className="bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm text-zinc-300">
-                  {copySources.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {courseShortName(s.course_type, s.custom_title)}
-                      {s.client_name ? ` · ${s.client_name}` : ''}
-                      {s.starts_at ? ` · ${s.starts_at.slice(0, 7)}` : ''}
-                    </option>
-                  ))}
-                </select>
-                <button className="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded text-sm transition-colors">
-                  Copy estimate from course
+            {persistedCoas.length === 1 && (
+              <form action={duplicateEstimateCoa.bind(null, id, persistedCoas[0].id!)}>
+                <button
+                  title="Copy this COA into a new one to tweak"
+                  className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded text-sm font-medium transition-colors"
+                >
+                  Duplicate COA
                 </button>
               </form>
+            )}
+            {persistedCoas.length > 1 && (
+              <form action={duplicateEstimateCoaForm.bind(null, id)} className="flex items-center gap-2">
+                <select name="estimate_id" className="bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm text-zinc-300">
+                  {persistedCoas.map((e) => (
+                    <option key={e.id} value={e.id!}>{e.title}</option>
+                  ))}
+                </select>
+                <button
+                  title="Copy the selected COA into a new one to tweak"
+                  className="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded text-sm transition-colors"
+                >
+                  Duplicate COA
+                </button>
+              </form>
+            )}
+            {copySources.length > 0 && (
+              <CopyEstimatePicker
+                instanceId={id}
+                sources={copySources.map((s) => ({
+                  id: s.id,
+                  label: [
+                    courseShortName(s.course_type, s.custom_title),
+                    s.client_name || null,
+                    s.starts_at ? s.starts_at.slice(0, 7) : null,
+                  ]
+                    .filter(Boolean)
+                    .join(' · '),
+                }))}
+              />
             )}
           </div>
           <EstimateReviewRequest instanceId={id} reviews={estimateReviews} admins={reviewAdmins} currentUserId={user.id} />

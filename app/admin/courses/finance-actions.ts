@@ -25,7 +25,10 @@ export type EstimateItemInput = {
   notes: string | null
   factors: number[] | null
   factor_labels: (string | null)[] | null
+  rate_id: string | null // library rate the line came from — survives renames
 }
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 // A breakdown is only meaningful with ≥2 factors; anything else stores null.
 // Stored as { f: numbers, l: labels } — labels name explicitly added
@@ -88,6 +91,7 @@ export async function saveEstimate(
       rate: Number.isFinite(i.rate) ? i.rate : 0,
       notes: i.notes?.trim().slice(0, 500) || null,
       qty_factors: cleanFactors(i.factors, i.factor_labels),
+      rate_id: i.rate_id && UUID_RE.test(i.rate_id) ? i.rate_id : null,
       sort_order: idx,
     }))
   if (rows.length > 0) {
@@ -106,7 +110,7 @@ async function seedDefaultCoa(admin: Awaited<ReturnType<typeof requireAdmin>>, i
   const [{ data: inst }, { count }, { data: defaults }, { count: assignedCount }] = await Promise.all([
     admin.from('course_instances').select('starts_at, ends_at, max_students').eq('id', instanceId).single(),
     admin.from('course_estimates').select('id', { count: 'exact', head: true }).eq('instance_id', instanceId),
-    admin.from('pricing_rates').select('label, unit, rate').eq('active', true).eq('default_line', true).order('sort_order'),
+    admin.from('pricing_rates').select('id, label, unit, rate').eq('active', true).eq('default_line', true).order('sort_order'),
     admin.from('instance_instructors').select('id', { count: 'exact', head: true }).eq('instance_id', instanceId),
   ])
   if (!inst) throw new Error('Course not found')
@@ -135,6 +139,7 @@ async function seedDefaultCoa(admin: Awaited<ReturnType<typeof requireAdmin>>, i
       qty: guess.qty,
       qty_factors: guess.factors,
       rate: Number(r.rate),
+      rate_id: r.id,
       sort_order: idx,
     }
   })
@@ -157,7 +162,7 @@ export async function duplicateEstimateCoa(instanceId: string, estimateId: strin
   const admin = await requireAdmin()
   const { data: src } = await admin
     .from('course_estimates')
-    .select('title, margin, estimate_items(label, qty, rate, notes, qty_factors, sort_order)')
+    .select('title, margin, estimate_items(label, qty, rate, notes, qty_factors, rate_id, sort_order)')
     .eq('id', estimateId)
     .eq('instance_id', instanceId)
     .single()
@@ -174,14 +179,22 @@ export async function duplicateEstimateCoa(instanceId: string, estimateId: strin
     .single()
   if (error || !created) throw new Error(error?.message ?? 'Could not duplicate estimate')
 
-  const items = ((src.estimate_items ?? []) as { label: string; qty: number; rate: number; notes: string | null; qty_factors: unknown; sort_order: number }[])
-    .map((i) => ({ estimate_id: created.id, label: i.label, qty: i.qty, rate: i.rate, notes: i.notes, qty_factors: i.qty_factors, sort_order: i.sort_order }))
+  const items = ((src.estimate_items ?? []) as { label: string; qty: number; rate: number; notes: string | null; qty_factors: unknown; rate_id: string | null; sort_order: number }[])
+    .map((i) => ({ estimate_id: created.id, label: i.label, qty: i.qty, rate: i.rate, notes: i.notes, qty_factors: i.qty_factors, rate_id: i.rate_id, sort_order: i.sort_order }))
   if (items.length > 0) {
     const { error: itemsError } = await admin.from('estimate_items').insert(items)
     if (itemsError) throw new Error(itemsError.message)
   }
 
   revalidatePath(`/admin/courses/${instanceId}`)
+}
+
+// Form wrapper for the estimates-footer "Duplicate COA" control, where the
+// source COA comes from a <select>.
+export async function duplicateEstimateCoaForm(instanceId: string, formData: FormData) {
+  const estimateId = String(formData.get('estimate_id') ?? '')
+  if (!estimateId) return
+  await duplicateEstimateCoa(instanceId, estimateId)
 }
 
 export async function deleteEstimateCoa(instanceId: string, estimateId: string) {
