@@ -84,7 +84,7 @@ export default async function EmployeeInfoPage({ searchParams }: { searchParams:
             </div>
           )}
         </div>
-        <h1 className="text-2xl font-bold mb-2">Employee Information</h1>
+        <h1 className="text-2xl font-bold mb-2">Employee Documents</h1>
         <p className="text-zinc-400 text-sm mb-8">Handbook, policies, and employment documents</p>
 
         {resources.length === 0 && (

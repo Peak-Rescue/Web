@@ -74,7 +74,7 @@ export default async function AdminInstructorsPage() {
     <main className="min-h-screen bg-zinc-950 text-white pt-16 md:pt-20">
       <div className="max-w-7xl mx-auto px-4 py-10">
         <Link href="/admin" className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors mb-6 inline-block">← Portal</Link>
-        <h1 className="text-2xl font-bold mb-2">Instructor Profiles</h1>
+        <h1 className="text-2xl font-bold mb-2">All Instructor Profiles</h1>
         <div className="flex items-center justify-between mb-10">
           <p className="text-zinc-400">Certifications, expertise, and portal access</p>
           {isAdmin && <AddInstructorButton />}

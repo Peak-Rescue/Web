@@ -200,7 +200,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       ),
     },
     {
-      title: 'Instructor Profiles',
+      title: 'All Instructor Profiles',
       desc: 'Certifications, expertise, and portal access',
       href: '/admin/instructors',
       section: 'personal',
@@ -213,8 +213,8 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       ),
     },
     {
-      title: 'Employee Information',
-      desc: 'Handbook, policies, and employment documents',
+      title: 'Employee Documents',
+      desc: 'Handbook, policies, and employment paperwork',
       href: '/admin/employee-info',
       section: 'personal',
       preserveView: true,

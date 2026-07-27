@@ -84,7 +84,7 @@ export default async function AdminInstructorDetailPage({ params }: { params: Pr
       <div className="max-w-4xl mx-auto px-4 py-10">
         <div className="mb-8">
           <Link href="/admin/instructors" className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors">
-            ← Instructor Profiles
+            ← All Instructor Profiles
           </Link>
           <div className="flex items-center gap-3 mt-3">
             <h1 className="text-2xl font-bold">{displayName}</h1>
