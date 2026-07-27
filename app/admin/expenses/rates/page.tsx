@@ -38,36 +38,44 @@ export default async function AdminExpenseRatesPage() {
 
         <div className="bg-zinc-900 rounded-lg border border-zinc-800 divide-y divide-zinc-800">
           {pricingRates.map((r) => (
-            <div key={r.id} className="flex items-center justify-between gap-4 px-4 py-2.5">
-              <div className="min-w-0">
-                <p className="text-sm font-medium truncate">
-                  {r.label}
-                  {r.reimb_type && (
-                    <span
-                      className="ml-2 px-1.5 py-0.5 text-[10px] font-medium rounded bg-teal-900/60 text-teal-300 align-middle"
-                      title="Used to compute employee expense reports"
-                    >
-                      Reimbursement
-                    </span>
-                  )}
-                </p>
-                {r.unit && <p className="text-xs text-zinc-500">{r.unit}</p>}
-              </div>
+            <div key={r.id} className="flex items-center justify-between gap-4 px-4 py-2.5 flex-wrap">
+              <form action={updatePricingRate.bind(null, r.id)} className="flex items-center gap-2 flex-1 min-w-0 flex-wrap">
+                <input
+                  name="label"
+                  required
+                  defaultValue={r.label}
+                  title="Shown on estimate lines when added from the library"
+                  className="flex-1 min-w-36 bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm font-medium focus:outline-none focus:border-zinc-500"
+                />
+                {r.reimb_type && (
+                  <span
+                    className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-teal-900/60 text-teal-300"
+                    title="Used to compute employee expense reports"
+                  >
+                    Reimbursement
+                  </span>
+                )}
+                <input
+                  name="unit"
+                  defaultValue={r.unit ?? ''}
+                  placeholder="per day"
+                  title='Drives the quantity calculator, e.g. "per instructor per day"'
+                  className="w-40 bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-xs text-zinc-400 focus:outline-none focus:border-zinc-500"
+                />
+                <input
+                  type="number"
+                  name="rate"
+                  step="0.01"
+                  min="0"
+                  defaultValue={r.rate}
+                  className="w-24 bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-right focus:outline-none focus:border-zinc-500"
+                />
+                <SaveButton className="px-2.5 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-white rounded text-xs font-medium transition-colors">
+                  Save
+                </SaveButton>
+              </form>
               <div className="flex items-center gap-3 shrink-0">
                 <DefaultLineToggle rateId={r.id} initialValue={r.default_line} />
-                <form action={updatePricingRate.bind(null, r.id)} className="flex items-center gap-2">
-                  <input
-                    type="number"
-                    name="rate"
-                    step="0.01"
-                    min="0"
-                    defaultValue={r.rate}
-                    className="w-24 bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-right focus:outline-none focus:border-zinc-500"
-                  />
-                  <SaveButton className="px-2.5 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-white rounded text-xs font-medium transition-colors">
-                    Save
-                  </SaveButton>
-                </form>
                 {!r.reimb_type && <DeletePricingRateButton rateId={r.id} label={r.label} />}
               </div>
             </div>

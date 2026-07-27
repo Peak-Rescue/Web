@@ -213,8 +213,11 @@ export async function updatePricingRate(rateId: string, formData: FormData) {
   const admin = await requireAdmin()
   const rate = Number(formData.get('rate'))
   if (!Number.isFinite(rate) || rate < 0) throw new Error('Rate must be a non-negative number')
+  const label = String(formData.get('label') ?? '').trim().slice(0, 80)
+  if (!label) throw new Error('Label is required')
+  const unit = String(formData.get('unit') ?? '').trim().slice(0, 60) || null
 
-  const { error } = await admin.from('pricing_rates').update({ rate }).eq('id', rateId)
+  const { error } = await admin.from('pricing_rates').update({ rate, label, unit }).eq('id', rateId)
   if (error) throw new Error(error.message)
   revalidatePath('/admin/expenses/rates')
 }
