@@ -11,6 +11,8 @@ import { copyEstimatesFrom, copyEstimateCoaFrom } from './finance-actions'
 export type CopySource = {
   id: string
   name: string
+  typeKey: string
+  typeLabel: string
   client: string | null
   month: string | null
   sameType: boolean
@@ -25,6 +27,7 @@ function fmtPrice(p: number) {
 export default function CopyEstimatePicker({ instanceId, sources }: { instanceId: string; sources: CopySource[] }) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
+  const [typeFilter, setTypeFilter] = useState<string | null>(null)
   const [expanded, setExpanded] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
   const rootRef = useRef<HTMLDivElement>(null)
@@ -45,8 +48,16 @@ export default function CopyEstimatePicker({ instanceId, sources }: { instanceId
     }
   }, [open])
 
+  // Category chips: one per course type present, busiest first.
+  const typeChips = [...sources.reduce((m, s) => {
+    const c = m.get(s.typeKey)
+    m.set(s.typeKey, { label: s.typeLabel, count: (c?.count ?? 0) + 1 })
+    return m
+  }, new Map<string, { label: string; count: number }>()).entries()].sort((a, b) => b[1].count - a[1].count)
+
   const q = query.trim().toLowerCase()
-  const matches = (s: CopySource) => !q || `${s.name} ${s.client ?? ''}`.toLowerCase().includes(q)
+  const matches = (s: CopySource) =>
+    (!typeFilter || s.typeKey === typeFilter) && (!q || `${s.name} ${s.client ?? ''}`.toLowerCase().includes(q))
   const filtered = sources.filter(matches)
   const groups = [
     { title: 'Same course type', items: filtered.filter((s) => s.sameType) },
@@ -58,6 +69,7 @@ export default function CopyEstimatePicker({ instanceId, sources }: { instanceId
   const done = () => {
     setOpen(false)
     setQuery('')
+    setTypeFilter(null)
     setExpanded(null)
   }
 
@@ -96,6 +108,27 @@ export default function CopyEstimatePicker({ instanceId, sources }: { instanceId
             placeholder="Search course or client…"
             className="w-full mb-1 bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-zinc-500"
           />
+          {typeChips.length > 1 && (
+            <div className="flex flex-wrap gap-1 px-1 py-1.5">
+              <button
+                type="button"
+                onClick={() => setTypeFilter(null)}
+                className={`px-2 py-0.5 rounded-full text-[11px] transition-colors ${typeFilter === null ? 'bg-zinc-200 text-zinc-900' : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200'}`}
+              >
+                All
+              </button>
+              {typeChips.map(([key, t]) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setTypeFilter(typeFilter === key ? null : key)}
+                  className={`px-2 py-0.5 rounded-full text-[11px] transition-colors ${typeFilter === key ? 'bg-zinc-200 text-zinc-900' : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200'}`}
+                >
+                  {t.label} <span className="text-zinc-600">{t.count}</span>
+                </button>
+              ))}
+            </div>
+          )}
           <div className="max-h-80 overflow-y-auto">
             {groups.map((g) => (
               <div key={g.title}>

@@ -101,7 +101,25 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
     admin.from('course_estimates').select('id, title, margin, created_at, estimate_items(label, qty, rate, notes, qty_factors, rate_id, sort_order)').eq('instance_id', id).order('created_at'),
     admin.from('pricing_rates').select('id, label, unit, rate, default_line').eq('active', true).order('sort_order'),
     admin.from('course_quotes').select('id, accept_token, prepared_by, prepared_by_name, quote_seq, status, issue_date, valid_until, total, options, unit_rate_note, scope_bullets, course_blurb, sent_at, accepted_at, accepted_name').eq('instance_id', id).order('quote_seq', { ascending: false }),
-    admin.from('course_instances').select('id, ref_number, course_type, custom_title, client_name, starts_at, course_estimates(id, title, margin, created_at, estimate_items(qty, rate))').neq('id', id).order('starts_at', { ascending: false, nullsFirst: false }).limit(60),
+    // Copy-picker sources: the recent pool for browsing, plus same-type and
+    // same-client courses from any age — relevance shouldn't fall off the
+    // recency cap as the course list grows.
+    (async () => {
+      const sel = 'id, ref_number, course_type, custom_title, client_name, starts_at, course_estimates(id, title, margin, created_at, estimate_items(qty, rate))'
+      const sourceQuery = () =>
+        admin.from('course_instances').select(sel).neq('id', id).order('starts_at', { ascending: false, nullsFirst: false })
+      const client = ((inst.client_name as string | null) ?? '').trim()
+      const [recent, sameType, sameClient] = await Promise.all([
+        sourceQuery().limit(60),
+        inst.course_type !== 'custom' ? sourceQuery().eq('course_type', inst.course_type).limit(40) : { data: [] },
+        client ? sourceQuery().ilike('client_name', `%${client}%`).limit(40) : { data: [] },
+      ])
+      const seen = new Set<string>()
+      const rows = [...(recent.data ?? []), ...(sameType.data ?? []), ...(sameClient.data ?? [])]
+        .filter((r) => !seen.has(r.id) && Boolean(seen.add(r.id)))
+        .sort((a, b) => ((b.starts_at as string | null) ?? '').localeCompare((a.starts_at as string | null) ?? ''))
+      return { data: rows }
+    })(),
     admin.from('course_task_templates').select('id, title, default_line, sort_order').eq('active', true).order('sort_order'),
     admin.from('course_interest_invites').select('id, instructor_id, sent_at, responded_at, interested, note').eq('instance_id', id).order('created_at'),
     admin.from('course_documents').select('id, path, filename, created_at').eq('instance_id', id),
@@ -197,6 +215,8 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
     .map((s) => ({
       id: s.id,
       name: courseShortName(s.course_type, s.custom_title),
+      typeKey: s.course_type,
+      typeLabel: s.course_type === 'custom' ? 'Custom' : courseShortName(s.course_type, null),
       client: s.client_name?.trim() || null,
       month: s.starts_at
         ? new Date(s.starts_at + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
