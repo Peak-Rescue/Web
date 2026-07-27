@@ -345,7 +345,14 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
             </div>
             <div className="sm:col-span-2">
               <label className="block text-xs text-zinc-400 mb-1">Notes</label>
-              <textarea name="notes" rows={2} defaultValue={inst.notes ?? ''} className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500 resize-none" />
+              {/* field-sizing auto-grows with content; rows is the fallback for
+                  browsers without it (sized to the saved note), drag always works. */}
+              <textarea
+                name="notes"
+                rows={Math.min(Math.max((inst.notes ?? '').split('\n').length, 2), 12)}
+                defaultValue={inst.notes ?? ''}
+                className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500 resize-y [field-sizing:content] min-h-14 max-h-80"
+              />
             </div>
           </AutoSaveForm>
           <CourseFilesSection instanceId={id} files={courseFiles} />
