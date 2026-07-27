@@ -241,6 +241,123 @@ export async function setPricingRateDefault(rateId: string, defaultLine: boolean
   revalidatePath('/admin/expenses/rates')
 }
 
+// ─── Estimate reviews ────────────────────────────────────────────────────────
+
+// Pings another admin by email with a link to this course's estimate; the
+// review row drives the "please take a look" banner they see on the page.
+export async function requestEstimateReview(instanceId: string, formData: FormData) {
+  const admin = await requireAdmin()
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Not authenticated')
+
+  const reviewerId = String(formData.get('reviewer_id') ?? '')
+  const note = String(formData.get('note') ?? '').trim().slice(0, 1000) || null
+  if (!reviewerId) throw new Error('Pick who should review')
+  if (reviewerId === user.id) throw new Error('Pick someone other than yourself')
+  if (!process.env.RESEND_API_KEY) throw new Error('Email is not configured in this environment')
+
+  const [{ data: reviewer }, { data: requester }, { data: inst }] = await Promise.all([
+    admin.from('profiles').select('first_name, last_name, email, role').eq('id', reviewerId).single(),
+    admin.from('profiles').select('first_name, last_name, email').eq('id', user.id).single(),
+    admin.from('course_instances').select('ref_number, course_type, custom_title, client_name, starts_at').eq('id', instanceId).single(),
+  ])
+  if (!inst) throw new Error('Course not found')
+  if (reviewer?.role !== 'admin' || !reviewer.email) throw new Error('Reviewer must be an admin with an email')
+
+  const { error } = await admin.from('estimate_reviews').insert({
+    instance_id: instanceId,
+    requested_by: user.id,
+    reviewer_id: reviewerId,
+    note,
+  })
+  if (error) throw new Error(error.message)
+
+  const { courseShortName } = await import('@/lib/courses')
+  const courseName = courseShortName(inst.course_type, inst.custom_title)
+  const requesterName = [requester?.first_name, requester?.last_name].filter(Boolean).join(' ') || 'An admin'
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.peakrescuemountainguides.com'
+  const link = `${siteUrl}/admin/courses/${instanceId}#estimates`
+
+  const { Resend } = await import('resend')
+  const resend = new Resend(process.env.RESEND_API_KEY)
+  const { error: sendError } = await resend.emails.send({
+    from: 'Peak Rescue Portal <noreply@peak-rescue.com>',
+    to: [reviewer.email],
+    replyTo: requester?.email ?? undefined,
+    subject: `Estimate review — ${courseName}${inst.client_name ? ` (${inst.client_name})` : ''}`,
+    text: [
+      `${requesterName} asked you to look over the price estimate for ${courseName}${inst.client_name ? ` (${inst.client_name})` : ''}${inst.starts_at ? `, starting ${inst.starts_at}` : ''}.`,
+      '',
+      note ? `"${note}"` : null,
+      note ? '' : null,
+      link,
+      '',
+      'The Estimates section has a banner where you can approve it or send notes back — or just edit the numbers directly.',
+    ].filter((l): l is string => l !== null).join('\n'),
+  })
+  if (sendError) throw new Error(`Email failed: ${sendError.message}`)
+
+  revalidatePath(`/admin/courses/${instanceId}`)
+}
+
+// Reviewer approves or sends notes back; the requester gets an email either way.
+export async function respondEstimateReview(reviewId: string, formData: FormData) {
+  const admin = await requireAdmin()
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Not authenticated')
+
+  const { data: review } = await admin
+    .from('estimate_reviews')
+    .select('id, instance_id, requested_by, reviewer_id, responded_at')
+    .eq('id', reviewId)
+    .single()
+  if (!review || review.reviewer_id !== user.id) throw new Error('Review not found')
+  if (review.responded_at) throw new Error('This review was already answered')
+
+  const approved = formData.get('approved') === 'true'
+  const responseNote = String(formData.get('response_note') ?? '').trim().slice(0, 2000) || null
+  if (!approved && !responseNote) throw new Error('Approve it or write a note first')
+
+  const { error } = await admin
+    .from('estimate_reviews')
+    .update({ approved, response_note: responseNote, responded_at: new Date().toISOString() })
+    .eq('id', reviewId)
+  if (error) throw new Error(error.message)
+
+  if (process.env.RESEND_API_KEY) {
+    const [{ data: requester }, { data: reviewer }, { data: inst }] = await Promise.all([
+      admin.from('profiles').select('email').eq('id', review.requested_by).single(),
+      admin.from('profiles').select('first_name, last_name, email').eq('id', user.id).single(),
+      admin.from('course_instances').select('course_type, custom_title, client_name').eq('id', review.instance_id).single(),
+    ])
+    if (requester?.email && inst) {
+      const { courseShortName } = await import('@/lib/courses')
+      const courseName = courseShortName(inst.course_type, inst.custom_title)
+      const reviewerName = [reviewer?.first_name, reviewer?.last_name].filter(Boolean).join(' ') || 'The reviewer'
+      const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.peakrescuemountainguides.com'
+      const { Resend } = await import('resend')
+      const resend = new Resend(process.env.RESEND_API_KEY)
+      await resend.emails.send({
+        from: 'Peak Rescue Portal <noreply@peak-rescue.com>',
+        to: [requester.email],
+        replyTo: reviewer?.email ?? undefined,
+        subject: `${reviewerName} ${approved ? 'approved' : 'left notes on'} the estimate — ${courseName}${inst.client_name ? ` (${inst.client_name})` : ''}`,
+        text: [
+          approved ? `${reviewerName} looked over the estimate and it's good to go.` : `${reviewerName} looked over the estimate and left notes:`,
+          '',
+          responseNote ? `"${responseNote}"` : null,
+          responseNote ? '' : null,
+          `${siteUrl}/admin/courses/${review.instance_id}#estimates`,
+        ].filter((l): l is string => l !== null).join('\n'),
+      })
+    }
+  }
+
+  revalidatePath(`/admin/courses/${review.instance_id}`)
+}
+
 // ─── Quotes ──────────────────────────────────────────────────────────────────
 
 export async function createQuote(instanceId: string, formData: FormData) {

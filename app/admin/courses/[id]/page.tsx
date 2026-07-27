@@ -18,6 +18,7 @@ import QuoteHeroPicker from '../QuoteHeroPicker'
 import { HERO_CHOICES } from '@/lib/quote-heroes'
 import { createEstimateCoa, copyEstimatesFrom } from '../finance-actions'
 import { guessSeedQty } from '@/lib/estimates'
+import { EstimateReviewBanner, EstimateReviewRequest, type EstimateReviewRow } from '../EstimateReviewBar'
 import QuotesSection, { type QuoteRow } from '../QuotesSection'
 import CourseContactsEditor from '@/components/CourseContactsEditor'
 import { parseContacts, primaryContactEmail, ccEmailOptions } from '@/lib/contacts'
@@ -89,6 +90,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
     { data: taskDocRows },
     { data: receiptRows },
     { data: galleryImageRows },
+    { data: estimateReviewRows },
   ] = await Promise.all([
     admin.from('enrollments').select('id, enrolled_at, profiles(first_name, last_name, email)').eq('instance_id', id).order('enrolled_at'),
     admin.from('expense_items').select('id', { count: 'exact', head: true }).eq('instance_id', id),
@@ -105,6 +107,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
     admin.from('course_task_documents').select('id, path, filename, created_at, course_tasks!inner(title, instance_id)').eq('course_tasks.instance_id', id),
     admin.from('expense_receipts').select('id, path, filename, created_at, expense_items!inner(category, instance_id, expense_reports(profiles(first_name, last_name)))').eq('expense_items.instance_id', id),
     admin.from('gallery_images').select('url, caption, categories').order('created_at', { ascending: false }),
+    admin.from('estimate_reviews').select('id, created_at, requested_by, reviewer_id, note, responded_at, approved, response_note').eq('instance_id', id).order('created_at', { ascending: false }).limit(8),
   ])
 
   // Quote-hero photo pool: the curated static shots plus every gallery upload,
@@ -212,6 +215,12 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
         factors: normalizeFactors(i.qty_factors)?.f ?? null,
         factor_labels: normalizeFactors(i.qty_factors)?.l ?? null,
       })),
+  }))
+
+  const estimateReviews = (estimateReviewRows ?? []) as EstimateReviewRow[]
+  const reviewAdmins = (adminRows ?? []).map((a) => ({
+    id: a.id,
+    name: [a.first_name, a.last_name].filter(Boolean).join(' ') || a.email || 'Admin',
   }))
 
   const instructorCount = Math.max((assigned ?? []).length, 1)
@@ -600,12 +609,13 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
           </form>
         </details>
 
-        <details open className="mb-8 group">
+        <details open id="estimates" className="mb-8 group">
           <summary className="cursor-pointer list-none text-lg font-semibold select-none mb-3"><span className="text-zinc-600 text-sm mr-2 inline-block transition-transform group-open:rotate-90">▶</span>Financials — Estimates</summary>
           <p className="text-xs text-zinc-500 mb-4">
             Internal cost build-up — never shown to instructors or clients. Add alternate COAs to price different
             ways of running the course; quotes are generated from the COA you pick.
           </p>
+          <EstimateReviewBanner reviews={estimateReviews} admins={reviewAdmins} currentUserId={user.id} />
           <div className="space-y-8">
             {estimatePanels.map((e) => (
               <EstimatePanel
@@ -646,6 +656,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
               </form>
             )}
           </div>
+          <EstimateReviewRequest instanceId={id} reviews={estimateReviews} admins={reviewAdmins} currentUserId={user.id} />
         </details>
 
         <details open className="mb-8 group">
