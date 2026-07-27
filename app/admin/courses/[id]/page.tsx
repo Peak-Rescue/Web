@@ -17,6 +17,7 @@ import CoaComparison from '../CoaComparison'
 import QuoteHeroPicker from '../QuoteHeroPicker'
 import { HERO_CHOICES } from '@/lib/quote-heroes'
 import { createEstimateCoa, copyEstimatesFrom } from '../finance-actions'
+import { guessSeedQty } from '@/lib/estimates'
 import QuotesSection, { type QuoteRow } from '../QuotesSection'
 import CourseContactsEditor from '@/components/CourseContactsEditor'
 import { parseContacts, primaryContactEmail, ccEmailOptions } from '@/lib/contacts'
@@ -224,15 +225,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
   // always-recurring lines, quantities guessed from the course (nothing
   // saves until touched).
   if (estimatePanels.length === 0) {
-    const guessQty = (label: string): { qty: number; factors: number[] | null } => {
-      const days = courseDays ?? 1
-      if (label === 'Instructor field day') return { qty: instructorCount * days, factors: [instructorCount, days] }
-      if (label === 'Instructor travel day') return { qty: instructorCount * 2, factors: [instructorCount, 2] }
-      // Lodging nights: course days plus a travel night on each end
-      if (label === 'Lodging') return { qty: instructorCount * (days + 2), factors: [instructorCount, days + 2] }
-      if (label === 'Permits' && inst.max_students) return { qty: inst.max_students * days, factors: [inst.max_students, days] }
-      return { qty: 1, factors: null }
-    }
+    const seedCounts = { instructors: instructorCount, days: courseDays ?? 1, students: (inst.max_students as number | null) ?? null }
     estimatePanels = [{
       id: null,
       title: 'COA 1',
@@ -240,7 +233,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
       items: (pricingRateRows ?? [])
         .filter((r) => r.default_line)
         .map((r) => {
-          const guess = guessQty(r.label)
+          const guess = guessSeedQty(r, seedCounts)
           return { label: r.label, qty: guess.qty, rate: Number(r.rate), notes: null, factors: guess.factors, factor_labels: null }
         }),
     }]

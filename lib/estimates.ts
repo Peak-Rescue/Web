@@ -4,6 +4,33 @@
 
 import { type createAdminClient } from '@/lib/supabase/admin'
 
+// Quantity guess for a seeded default estimate line. Label rules cover lines
+// whose math isn't literal (travel days are out + back, lodging adds a travel
+// night on each end); everything else derives factors from the rate's unit
+// ("per person", "per student per day") the same way the panel's library
+// picker does, multiplying only when the course can supply every factor.
+export type SeedCounts = { instructors: number; days: number; students: number | null }
+
+export function guessSeedQty(
+  rate: { label: string; unit: string | null },
+  counts: SeedCounts
+): { qty: number; factors: number[] | null } {
+  const { instructors, days, students } = counts
+  if (rate.label === 'Instructor travel day') return { qty: instructors * 2, factors: [instructors, 2] }
+  if (rate.label === 'Lodging') return { qty: instructors * (days + 2), factors: [instructors, days + 2] }
+
+  const parts = (rate.unit ?? '').toLowerCase().replace(/^per\s+/, '').split(/\s+per\s+/).filter(Boolean)
+  const factors = parts.map((name): number | null => {
+    if (name.startsWith('instructor') || name.startsWith('person')) return instructors
+    if (name.startsWith('day') || name.startsWith('night')) return /travel/i.test(rate.label) ? 2 : days
+    if (name.startsWith('student')) return students
+    return null
+  })
+  if (factors.length === 0 || factors.some((f) => f === null || f <= 0)) return { qty: 1, factors: null }
+  const known = factors as number[]
+  return { qty: known.reduce((p, f) => p * f, 1), factors: known.length >= 2 ? known : null }
+}
+
 export async function cloneEstimates(
   admin: ReturnType<typeof createAdminClient>,
   sourceInstanceId: string,

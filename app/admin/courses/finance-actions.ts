@@ -6,6 +6,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { after } from 'next/server'
 import { syncCourseCalendar } from '@/lib/google-calendar'
 import { parseContacts, primaryContactEmail, ccEmailOptions } from '@/lib/contacts'
+import { guessSeedQty, type SeedCounts } from '@/lib/estimates'
 
 async function requireAdmin() {
   const supabase = await createClient()
@@ -105,23 +106,18 @@ async function seedDefaultCoa(admin: Awaited<ReturnType<typeof requireAdmin>>, i
   const [{ data: inst }, { count }, { data: defaults }, { count: assignedCount }] = await Promise.all([
     admin.from('course_instances').select('starts_at, ends_at, max_students').eq('id', instanceId).single(),
     admin.from('course_estimates').select('id', { count: 'exact', head: true }).eq('instance_id', instanceId),
-    admin.from('pricing_rates').select('label, rate').eq('active', true).eq('default_line', true).order('sort_order'),
+    admin.from('pricing_rates').select('label, unit, rate').eq('active', true).eq('default_line', true).order('sort_order'),
     admin.from('instance_instructors').select('id', { count: 'exact', head: true }).eq('instance_id', instanceId),
   ])
   if (!inst) throw new Error('Course not found')
 
-  const instructorCount = Math.max(assignedCount ?? 0, 1)
-  const courseDays =
-    inst.starts_at && inst.ends_at
-      ? Math.max(Math.round((Date.parse(inst.ends_at) - Date.parse(inst.starts_at)) / 86_400_000) + 1, 1)
-      : 1
-  const guessQty = (label: string): { qty: number; factors: number[] | null } => {
-    if (label === 'Instructor field day') return { qty: instructorCount * courseDays, factors: [instructorCount, courseDays] }
-    if (label === 'Instructor travel day') return { qty: instructorCount * 2, factors: [instructorCount, 2] }
-    // Lodging nights: course days plus a travel night on each end
-    if (label === 'Lodging') return { qty: instructorCount * (courseDays + 2), factors: [instructorCount, courseDays + 2] }
-    if (label === 'Permits' && inst.max_students) return { qty: inst.max_students * courseDays, factors: [inst.max_students, courseDays] }
-    return { qty: 1, factors: null }
+  const counts: SeedCounts = {
+    instructors: Math.max(assignedCount ?? 0, 1),
+    days:
+      inst.starts_at && inst.ends_at
+        ? Math.max(Math.round((Date.parse(inst.ends_at) - Date.parse(inst.starts_at)) / 86_400_000) + 1, 1)
+        : 1,
+    students: inst.max_students,
   }
 
   const { data: estimate, error } = await admin
@@ -132,7 +128,7 @@ async function seedDefaultCoa(admin: Awaited<ReturnType<typeof requireAdmin>>, i
   if (error || !estimate) throw new Error(error?.message ?? 'Could not create estimate')
 
   const rows = (defaults ?? []).map((r, idx) => {
-    const guess = guessQty(r.label)
+    const guess = guessSeedQty(r, counts)
     return {
       estimate_id: estimate.id,
       label: r.label,
