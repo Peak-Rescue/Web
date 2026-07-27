@@ -658,6 +658,36 @@ export async function sendQuote(instanceId: string, quoteId: string, formData?: 
 
 // Copies all COAs from another course into this one (for pricing a course
 // similar to one already run).
+// Copies one COA from another course into this one (the picker's per-COA copy).
+export async function copyEstimateCoaFrom(instanceId: string, estimateId: string) {
+  const admin = await requireAdmin()
+  const { data: src } = await admin
+    .from('course_estimates')
+    .select('title, margin, instance_id, estimate_items(label, qty, rate, notes, qty_factors, rate_id, sort_order)')
+    .eq('id', estimateId)
+    .single()
+  if (!src || src.instance_id === instanceId) throw new Error('Estimate not found')
+
+  const { data: source } = await admin.from('course_instances').select('ref_number').eq('id', src.instance_id).single()
+  const suffix = source ? ` (from PR-${String(source.ref_number).padStart(4, '0')})` : ' (copy)'
+
+  const { data: created, error } = await admin
+    .from('course_estimates')
+    .insert({ instance_id: instanceId, title: `${src.title}${suffix}`.slice(0, 80), margin: src.margin })
+    .select('id')
+    .single()
+  if (error || !created) throw new Error(error?.message ?? 'Could not copy estimate')
+
+  const items = ((src.estimate_items ?? []) as { label: string; qty: number; rate: number; notes: string | null; qty_factors: unknown; rate_id: string | null; sort_order: number }[])
+    .map((i) => ({ estimate_id: created.id, label: i.label, qty: i.qty, rate: i.rate, notes: i.notes, qty_factors: i.qty_factors, rate_id: i.rate_id, sort_order: i.sort_order }))
+  if (items.length > 0) {
+    const { error: itemsError } = await admin.from('estimate_items').insert(items)
+    if (itemsError) throw new Error(itemsError.message)
+  }
+
+  revalidatePath(`/admin/courses/${instanceId}`)
+}
+
 export async function copyEstimatesFrom(instanceId: string, formData: FormData) {
   const admin = await requireAdmin()
   const sourceId = String(formData.get('source_instance_id') ?? '')

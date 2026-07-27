@@ -17,7 +17,7 @@ import CoaComparison from '../CoaComparison'
 import QuoteHeroPicker from '../QuoteHeroPicker'
 import { HERO_CHOICES } from '@/lib/quote-heroes'
 import { createEstimateCoa, duplicateEstimateCoa, duplicateEstimateCoaForm } from '../finance-actions'
-import CopyEstimatePicker from '../CopyEstimatePicker'
+import CopyEstimatePicker, { type CopySource } from '../CopyEstimatePicker'
 import { guessSeedQty } from '@/lib/estimates'
 import { EstimateReviewBanner, EstimateReviewRequest, type EstimateReviewRow } from '../EstimateReviewBar'
 import QuotesSection, { type QuoteRow } from '../QuotesSection'
@@ -101,7 +101,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
     admin.from('course_estimates').select('id, title, margin, created_at, estimate_items(label, qty, rate, notes, qty_factors, rate_id, sort_order)').eq('instance_id', id).order('created_at'),
     admin.from('pricing_rates').select('id, label, unit, rate, default_line').eq('active', true).order('sort_order'),
     admin.from('course_quotes').select('id, accept_token, prepared_by, prepared_by_name, quote_seq, status, issue_date, valid_until, total, options, unit_rate_note, scope_bullets, course_blurb, sent_at, accepted_at, accepted_name').eq('instance_id', id).order('quote_seq', { ascending: false }),
-    admin.from('course_instances').select('id, ref_number, course_type, custom_title, client_name, starts_at, course_estimates(count)').neq('id', id).order('starts_at', { ascending: false, nullsFirst: false }).limit(60),
+    admin.from('course_instances').select('id, ref_number, course_type, custom_title, client_name, starts_at, course_estimates(id, title, margin, created_at, estimate_items(qty, rate))').neq('id', id).order('starts_at', { ascending: false, nullsFirst: false }).limit(60),
     admin.from('course_task_templates').select('id, title, default_line, sort_order').eq('active', true).order('sort_order'),
     admin.from('course_interest_invites').select('id, instructor_id, sent_at, responded_at, interested, note').eq('instance_id', id).order('created_at'),
     admin.from('course_documents').select('id, path, filename, created_at').eq('instance_id', id),
@@ -189,9 +189,31 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
     .filter((p) => p.name)
   const pricingRates: PricingRate[] = (pricingRateRows ?? []).map((r) => ({ ...r, rate: Number(r.rate) }))
   const quotes: QuoteRow[] = (quoteRows ?? []).map((q) => ({ ...q, total: Number(q.total) }))
-  const copySources = (estimateSourceRows ?? []).filter(
-    (s) => ((s.course_estimates as unknown as { count: number }[])?.[0]?.count ?? 0) > 0
-  )
+  // Copy-picker sources: each course's COAs with their quote prices, plus the
+  // relevance flags the picker groups by (same type first, then same client).
+  type SourceEstimate = { id: string; title: string; margin: number; created_at: string; estimate_items: { qty: number; rate: number }[] }
+  const currentClient = ((inst.client_name as string | null) ?? '').trim().toLowerCase()
+  const copySources: CopySource[] = (estimateSourceRows ?? [])
+    .map((s) => ({
+      id: s.id,
+      name: courseShortName(s.course_type, s.custom_title),
+      client: s.client_name?.trim() || null,
+      month: s.starts_at
+        ? new Date(s.starts_at + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+        : null,
+      sameType: s.course_type === inst.course_type && s.course_type !== 'custom',
+      sameClient: Boolean(currentClient) && (s.client_name ?? '').trim().toLowerCase() === currentClient,
+      coas: ((s.course_estimates ?? []) as SourceEstimate[])
+        .sort((a, b) => a.created_at.localeCompare(b.created_at))
+        .map((e) => ({
+          id: e.id,
+          title: e.title,
+          price: Math.round(
+            (e.estimate_items ?? []).reduce((t, i) => t + Number(i.qty) * Number(i.rate), 0) * (1 + Number(e.margin))
+          ),
+        })),
+    }))
+    .filter((s) => s.coas.length > 0)
 
   type EstimateItemRow = { label: string; qty: number; rate: number; notes: string | null; qty_factors: unknown; rate_id: string | null; sort_order: number }
   const normalizeFactors = (qf: unknown): { f: number[]; l: (string | null)[] } | null => {
@@ -670,21 +692,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
                 </button>
               </form>
             )}
-            {copySources.length > 0 && (
-              <CopyEstimatePicker
-                instanceId={id}
-                sources={copySources.map((s) => ({
-                  id: s.id,
-                  label: [
-                    courseShortName(s.course_type, s.custom_title),
-                    s.client_name || null,
-                    s.starts_at ? s.starts_at.slice(0, 7) : null,
-                  ]
-                    .filter(Boolean)
-                    .join(' · '),
-                }))}
-              />
-            )}
+            {copySources.length > 0 && <CopyEstimatePicker instanceId={id} sources={copySources} />}
           </div>
           <EstimateReviewRequest instanceId={id} reviews={estimateReviews} admins={reviewAdmins} currentUserId={user.id} />
         </details>
