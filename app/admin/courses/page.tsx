@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { createInstance, syncAllCoursesToCalendar } from './actions'
+import { createInstance } from './actions'
 import { CourseTypeSelect } from './CourseTypeSelect'
 import { courseShortName, courseEventTitle, crewFirstNames } from '@/lib/courses'
 import CourseCalendar, { type CalendarCourse } from '@/components/CourseCalendar'
@@ -70,28 +70,9 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
       <div className="max-w-5xl mx-auto px-4 py-10">
         <Link href="/admin" className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors mb-6 inline-block">← Portal</Link>
 
-        <div className="mb-8 flex items-end justify-between gap-4 flex-wrap">
-          <div>
-            <h1 className="text-2xl font-bold">Courses</h1>
-            <p className="text-zinc-400 mt-1">Schedule and manage course instances</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Link
-              href="/admin/courses/import"
-              className="text-xs px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded transition-colors"
-              title="Bring existing Google Calendar events in as portal courses"
-            >
-              Calendar Import
-            </Link>
-            <form action={syncAllCoursesToCalendar}>
-              <button
-                className="text-xs px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded transition-colors"
-                title="Push every course to its Google calendar (military / civilian / prospective)"
-              >
-                Sync Google Calendars
-              </button>
-            </form>
-          </div>
+        <div className="mb-8">
+          <h1 className="text-2xl font-bold">Courses</h1>
+          <p className="text-zinc-400 mt-1">Schedule and manage course instances</p>
         </div>
 
         {/* Minimal-intent create: pick the course type, everything else on the
