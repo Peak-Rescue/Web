@@ -55,13 +55,13 @@ export default function GuestInstructorButton({
 
   if (!open) {
     return (
-      <div className="mt-2">
+      <div className="mt-3">
         <button
           onClick={() => {
             setDone(null)
             setOpen(true)
           }}
-          className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+          className="inline-flex items-center text-xs px-2.5 py-1.5 rounded border border-zinc-700 text-zinc-300 hover:text-white hover:border-zinc-500 transition-colors"
         >
           + Guest instructor (not in the roster yet)
         </button>

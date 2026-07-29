@@ -118,82 +118,20 @@ export default function StaffingInterest({
   )
 
   return (
-    <div className="mt-6 pt-5 border-t border-zinc-800/70">
-      <div className="flex items-center gap-3 flex-wrap mb-3">
-        <h3 className="text-sm font-medium text-zinc-400">Interest check</h3>
-        {invites.length > 0 && (
-          <span className="text-xs text-zinc-500">
-            {interested.length} interested · {declined.length} can&apos;t · {awaiting.length} awaiting reply
-          </span>
-        )}
-        <button
-          onClick={() => { setShowPicker((v) => !v); setMessage(null) }}
-          className="ml-auto text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
-        >
-          {showPicker ? 'Close' : invites.length > 0 ? '+ Invite more' : '+ Email instructors about this course'}
-        </button>
-      </div>
+    <div className="mt-2">
+      {/* Styled identically to the guest-instructor button just above — the
+          two are peer actions and should read that way. */}
+      <button
+        onClick={() => { setShowPicker((v) => !v); setMessage(null) }}
+        className="inline-flex items-center text-xs px-2.5 py-1.5 rounded border border-zinc-700 text-zinc-300 hover:text-white hover:border-zinc-500 transition-colors"
+      >
+        {showPicker ? 'Close' : '+ Email instructors about this course'}
+      </button>
 
-      {message && <p className="mb-3 text-xs text-teal-300">{message}</p>}
-
-      {invites.length > 0 && (
-        <div className="space-y-2 mb-4">
-          {[...interested, ...awaiting, ...declined].map((inv) => (
-            <div key={inv.id} className="px-4 py-2.5 bg-zinc-900 border border-zinc-800 rounded-lg">
-              <div className="flex items-center gap-3 flex-wrap">
-                <span className="font-medium text-sm">{inv.name}</span>
-                <span
-                  className={`text-[10px] font-medium px-2 py-0.5 rounded-full border ${
-                    inv.interested === true
-                      ? 'border-teal-700 bg-teal-900/30 text-teal-300'
-                      : inv.interested === false
-                        ? 'border-zinc-600 bg-zinc-800 text-zinc-400'
-                        : 'border-yellow-800 bg-yellow-900/20 text-yellow-300/90'
-                  }`}
-                >
-                  {inv.interested === true ? 'Interested' : inv.interested === false ? "Can't make it" : 'Awaiting reply'}
-                </span>
-                {inv.interested === null && inv.sentAt && (
-                  <span className="text-xs text-zinc-600">sent {fmtDay(inv.sentAt)}</span>
-                )}
-                <div className="ml-auto flex items-center gap-2">
-                  {inv.assigned ? (
-                    <span className="text-xs text-teal-400">Assigned ✓</span>
-                  ) : inv.interested === true ? (
-                    <>
-                      <button
-                        onClick={() => assign(inv.instructorId, hasLead ? 'assist' : 'lead')}
-                        disabled={assigningId !== null}
-                        className="text-xs px-2.5 py-1 rounded bg-pr-red hover:bg-pr-red-dark text-white font-medium transition-colors disabled:opacity-40"
-                      >
-                        {assigningId === inv.instructorId ? 'Assigning…' : `Assign ${hasLead ? 'assist' : 'lead'}`}
-                      </button>
-                      <button
-                        onClick={() => assign(inv.instructorId, hasLead ? 'lead' : 'assist')}
-                        disabled={assigningId !== null}
-                        className="text-xs px-2.5 py-1 rounded border border-zinc-700 hover:border-zinc-500 text-zinc-300 transition-colors disabled:opacity-40"
-                      >
-                        as {hasLead ? 'lead' : 'assist'}
-                      </button>
-                    </>
-                  ) : null}
-                  <button
-                    onClick={() => removeInvite(inv.id)}
-                    aria-label={`Remove invite for ${inv.name}`}
-                    className="text-zinc-700 hover:text-red-400 transition-colors text-sm leading-none"
-                  >
-                    ×
-                  </button>
-                </div>
-              </div>
-              {inv.note && <p className="mt-1.5 text-xs text-zinc-400 italic">&ldquo;{inv.note}&rdquo;</p>}
-            </div>
-          ))}
-        </div>
-      )}
+      {message && <p className="mt-2 text-xs text-teal-300">{message}</p>}
 
       {showPicker && (
-        <div className="p-4 bg-zinc-900 border border-zinc-800 rounded-lg">
+        <div className="mt-3 p-4 bg-zinc-900 border border-zinc-800 rounded-lg">
           <div className="flex items-center gap-2 mb-3 text-xs">
             <span className="text-zinc-500">Preselect:</span>
             <button onClick={selectQualified} className="px-2 py-0.5 rounded border border-zinc-700 text-zinc-400 hover:text-zinc-200 transition-colors">
@@ -246,6 +184,71 @@ export default function StaffingInterest({
           </button>
         </div>
       )}
+
+      {invites.length > 0 && (
+        <div className="mt-6 pt-5 border-t border-zinc-800/70">
+          <div className="flex items-center gap-3 flex-wrap mb-3">
+            <h3 className="text-sm font-medium text-zinc-400">Interest check</h3>
+            <span className="text-xs text-zinc-500">
+              {interested.length} interested · {declined.length} can&apos;t · {awaiting.length} awaiting reply
+            </span>
+          </div>
+          <div className="space-y-2">
+          {[...interested, ...awaiting, ...declined].map((inv) => (
+            <div key={inv.id} className="px-4 py-2.5 bg-zinc-900 border border-zinc-800 rounded-lg">
+              <div className="flex items-center gap-3 flex-wrap">
+                <span className="font-medium text-sm">{inv.name}</span>
+                <span
+                  className={`text-[10px] font-medium px-2 py-0.5 rounded-full border ${
+                    inv.interested === true
+                      ? 'border-teal-700 bg-teal-900/30 text-teal-300'
+                      : inv.interested === false
+                        ? 'border-zinc-600 bg-zinc-800 text-zinc-400'
+                        : 'border-yellow-800 bg-yellow-900/20 text-yellow-300/90'
+                  }`}
+                >
+                  {inv.interested === true ? 'Interested' : inv.interested === false ? "Can't make it" : 'Awaiting reply'}
+                </span>
+                {inv.interested === null && inv.sentAt && (
+                  <span className="text-xs text-zinc-600">sent {fmtDay(inv.sentAt)}</span>
+                )}
+                <div className="ml-auto flex items-center gap-2">
+                  {inv.assigned ? (
+                    <span className="text-xs text-teal-400">Assigned ✓</span>
+                  ) : inv.interested === true ? (
+                    <>
+                      <button
+                        onClick={() => assign(inv.instructorId, hasLead ? 'assist' : 'lead')}
+                        disabled={assigningId !== null}
+                        className="text-xs px-2.5 py-1 rounded bg-pr-red hover:bg-pr-red-dark text-white font-medium transition-colors disabled:opacity-40"
+                      >
+                        {assigningId === inv.instructorId ? 'Assigning…' : `Assign ${hasLead ? 'assist' : 'lead'}`}
+                      </button>
+                      <button
+                        onClick={() => assign(inv.instructorId, hasLead ? 'lead' : 'assist')}
+                        disabled={assigningId !== null}
+                        className="text-xs px-2.5 py-1 rounded border border-zinc-700 hover:border-zinc-500 text-zinc-300 transition-colors disabled:opacity-40"
+                      >
+                        as {hasLead ? 'lead' : 'assist'}
+                      </button>
+                    </>
+                  ) : null}
+                  <button
+                    onClick={() => removeInvite(inv.id)}
+                    aria-label={`Remove invite for ${inv.name}`}
+                    className="text-zinc-700 hover:text-red-400 transition-colors text-sm leading-none"
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
+              {inv.note && <p className="mt-1.5 text-xs text-zinc-400 italic">&ldquo;{inv.note}&rdquo;</p>}
+            </div>
+          ))}
+          </div>
+        </div>
+      )}
+
     </div>
   )
 }
