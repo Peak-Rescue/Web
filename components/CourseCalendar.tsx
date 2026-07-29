@@ -94,18 +94,19 @@ export default function CourseCalendar({
   const [y, m] = month.split('-').map(Number)
   const first = new Date(Date.UTC(y, m - 1, 1))
   const daysInMonth = new Date(Date.UTC(y, m, 0)).getUTCDate()
-  const leadBlanks = first.getUTCDay() // Sunday-start grid
+  const leadDays = first.getUTCDay() // Sunday-start grid
 
   const prev = new Date(Date.UTC(y, m - 2, 1))
   const next = new Date(Date.UTC(y, m, 1))
   const fmtMonth = (d: Date) =>
     d.toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' })
 
-  const cells: (string | null)[] = [
-    ...Array.from({ length: leadBlanks }, () => null),
-    ...Array.from({ length: daysInMonth }, (_, i) => ymd(new Date(Date.UTC(y, m - 1, i + 1)))),
-  ]
-  while (cells.length % 7 !== 0) cells.push(null)
+  // Google-style grid: lead/trail cells carry the adjacent months' real dates
+  // (and show their courses) instead of sitting blank.
+  const totalCells = Math.ceil((leadDays + daysInMonth) / 7) * 7
+  const cells: string[] = Array.from({ length: totalCells }, (_, i) =>
+    ymd(new Date(Date.UTC(y, m - 1, i + 1 - leadDays)))
+  )
 
   const todayStr = ymd(new Date())
 
@@ -143,26 +144,31 @@ export default function CourseCalendar({
 
       <div className="grid grid-cols-7 gap-px bg-zinc-800 border border-zinc-800 rounded-lg overflow-hidden">
         {cells.map((day, i) => {
-          const active = day ? visible.filter((c) => c.starts_at <= day && day <= c.ends_at) : []
+          const inMonth = day.slice(0, 7) === month
+          const active = visible.filter((c) => c.starts_at <= day && day <= c.ends_at)
           // Slot each active course into its lane; gaps stay as invisible
           // spacers so higher lanes keep their vertical position.
           const bySlot: (CalendarCourse | undefined)[] = []
           for (const c of active) bySlot[lanes.get(c.id)!] = c
           return (
-            <div key={i} className={`min-h-20 bg-zinc-950 p-1 ${day === todayStr ? 'bg-zinc-900' : ''}`}>
-              {day && (
-                <p className={`text-[10px] mb-1 ${day === todayStr ? 'text-pr-red-light font-bold' : 'text-zinc-600'}`}>
-                  {Number(day.slice(8))}
-                </p>
-              )}
+            <div key={day} className={`min-h-20 bg-zinc-950 p-1 ${day === todayStr ? 'bg-zinc-900' : ''}`}>
+              <p
+                className={`text-[10px] mb-1 ${
+                  day === todayStr ? 'text-pr-red-light font-bold' : inMonth ? 'text-zinc-600' : 'text-zinc-700'
+                }`}
+              >
+                {/* Adjacent-month 1sts get a month label so the grid's second
+                    "1" is unambiguous, like Google Calendar. */}
+                {!inMonth && day.slice(8) === '01'
+                  ? new Date(day).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
+                  : Number(day.slice(8))}
+              </p>
               <div className="space-y-0.5">
                 {Array.from(bySlot, (c, lane) => {
-                  // A bar (re)starts on the course's first day, at each week
-                  // start, and on the 1st of the month — the last case covers
-                  // courses that began in the previous month, whose bar must
-                  // still appear from day one of this month.
-                  const barStartsHere =
-                    day === c?.starts_at || i % 7 === 0 || Number(day!.slice(8)) === 1
+                  // A bar (re)starts on the course's first day and at each
+                  // week start; with adjacent-month cells filled in, bars run
+                  // continuously across month boundaries within a row.
+                  const barStartsHere = day === c?.starts_at || i % 7 === 0
                   // Spacer when the lane is empty here, and on the days a bar
                   // continues across — the stretched chip below covers them
                   // visually; the spacer just keeps the lane's vertical slot.
@@ -177,8 +183,8 @@ export default function CourseCalendar({
                   // the row (true start or week start) and stretched across
                   // every cell it spans — so the label has the full bar's
                   // width and the whole bar is a single hover/click target.
-                  const daysToEnd = Math.round((Date.parse(c.ends_at) - Date.parse(day!)) / 86_400_000)
-                  const span = Math.min(daysToEnd, 6 - (i % 7), daysInMonth - Number(day!.slice(8))) + 1
+                  const daysToEnd = Math.round((Date.parse(c.ends_at) - Date.parse(day)) / 86_400_000)
+                  const span = Math.min(daysToEnd, 6 - (i % 7)) + 1
                   // Every extra spanned cell adds its own width (100% = one
                   // cell's content box) plus the 8px of cell padding and 1px
                   // grid gap crossed at the boundary.
