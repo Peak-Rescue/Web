@@ -137,7 +137,11 @@ export function InstructorTable({ instructors, isAdmin = false }: { instructors:
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [levelFilters, setLevelFilters] = useState<Map<CertType, number>>(new Map())
   const [expertiseFilter, setExpertiseFilter] = useState<Map<CapabilityCategory, CapabilityRole | 'any'>>(new Map())
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
+  // Cert groups start collapsed to their summary dots; only Expertise
+  // ('capabilities', not a cert group) opens expanded.
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(
+    () => new Set(CERT_GROUPS.map(g => g.id))
+  )
   const [previewDoc, setPreviewDoc] = useState<{ url: string; name: string } | null>(null)
   const [emailsCopied, setEmailsCopied] = useState(false)
 
