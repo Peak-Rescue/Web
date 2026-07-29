@@ -16,12 +16,12 @@ export type CalendarCourse = {
 // filled, quoted outlined, tentative dashed, completed dimmed.
 const CATEGORY_STYLE = {
   military: {
-    swatch: 'bg-orange-400',
+    swatch: 'bg-orange-900 border-orange-700 text-orange-100',
     solid: 'bg-orange-900/80 text-orange-100 border-orange-700',
     outline: 'border-orange-700 text-orange-300',
   },
   civilian: {
-    swatch: 'bg-cyan-400',
+    swatch: 'bg-cyan-900 border-cyan-700 text-cyan-100',
     solid: 'bg-cyan-900/80 text-cyan-100 border-cyan-700',
     outline: 'border-cyan-700 text-cyan-300',
   },
@@ -123,9 +123,9 @@ export default function CourseCalendar({
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-sm font-semibold">{fmtMonth(first)}</h3>
         <div className="flex gap-2 text-sm">
-          <Link href={navHref(ymd(prev).slice(0, 7))} className="px-2 py-1 bg-zinc-800 hover:bg-zinc-700 rounded text-zinc-300 transition-colors">←</Link>
-          <Link href={navHref()} className="px-2 py-1 bg-zinc-800 hover:bg-zinc-700 rounded text-zinc-300 transition-colors text-xs leading-5">Today</Link>
-          <Link href={navHref(ymd(next).slice(0, 7))} className="px-2 py-1 bg-zinc-800 hover:bg-zinc-700 rounded text-zinc-300 transition-colors">→</Link>
+          <Link href={navHref(ymd(prev).slice(0, 7))} scroll={false} className="px-2 py-1 bg-zinc-800 hover:bg-zinc-700 rounded text-zinc-300 transition-colors">←</Link>
+          <Link href={navHref()} scroll={false} className="px-2 py-1 bg-zinc-800 hover:bg-zinc-700 rounded text-zinc-300 transition-colors text-xs leading-5">Today</Link>
+          <Link href={navHref(ymd(next).slice(0, 7))} scroll={false} className="px-2 py-1 bg-zinc-800 hover:bg-zinc-700 rounded text-zinc-300 transition-colors">→</Link>
         </div>
       </div>
 
@@ -151,10 +151,16 @@ export default function CourseCalendar({
               )}
               <div className="space-y-0.5">
                 {Array.from(bySlot, (c, lane) => {
+                  // A bar (re)starts on the course's first day, at each week
+                  // start, and on the 1st of the month — the last case covers
+                  // courses that began in the previous month, whose bar must
+                  // still appear from day one of this month.
+                  const barStartsHere =
+                    day === c?.starts_at || i % 7 === 0 || Number(day!.slice(8)) === 1
                   // Spacer when the lane is empty here, and on the days a bar
                   // continues across — the stretched chip below covers them
                   // visually; the spacer just keeps the lane's vertical slot.
-                  if (!c || (day !== c.starts_at && i % 7 !== 0)) {
+                  if (!c || !barStartsHere) {
                     return (
                       <span key={lane} className="block px-1 py-0.5 border border-transparent text-[10px] leading-tight">
                         {' '}
@@ -203,6 +209,7 @@ export default function CourseCalendar({
               <Link
                 key={k}
                 href={catHref(checked ? other : null)}
+                scroll={false}
                 title={checked ? `Hide ${k} courses` : `Show ${k} courses`}
                 className={`flex items-center gap-1.5 transition-colors ${
                   checked ? 'text-zinc-300 hover:text-white' : 'text-zinc-600 hover:text-zinc-400'
@@ -210,7 +217,7 @@ export default function CourseCalendar({
               >
                 <span
                   className={`flex items-center justify-center w-3 h-3 rounded-sm border ${
-                    checked ? `${CATEGORY_STYLE[k].swatch} border-transparent text-zinc-950` : 'border-zinc-600'
+                    checked ? CATEGORY_STYLE[k].swatch : 'border-zinc-600'
                   }`}
                 >
                   {checked && (
