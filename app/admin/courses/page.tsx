@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createInstance, syncAllCoursesToCalendar } from './actions'
 import { CourseTypeSelect } from './CourseTypeSelect'
-import { courseEventTitle, crewFirstNames } from '@/lib/courses'
+import { courseShortName, courseEventTitle, crewFirstNames } from '@/lib/courses'
 import CourseCalendar, { type CalendarCourse } from '@/components/CourseCalendar'
 import CourseContactsEditor from '@/components/CourseContactsEditor'
 import CourseList, { type Instance } from './CourseList'
@@ -169,23 +169,27 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
             courses={
               instances
                 .filter((i) => i.starts_at && i.ends_at && i.status !== 'cancelled')
-                .map((i) => ({
-                  id: i.id,
-                  // Mirrors the Google Calendar event title convention.
-                  label: courseEventTitle(
-                    i,
-                    crewFirstNames(
-                      (i.crew ?? [])
-                        .filter((r) => r.instructors)
-                        .map((r) => ({ role: r.role, name: r.instructors!.name }))
-                    )
-                  ),
-                  status: i.status,
-                  starts_at: i.starts_at!,
-                  ends_at: i.ends_at! >= i.starts_at! ? i.ends_at! : i.starts_at!,
-                  href: `/admin/courses/${i.id}`,
-                  category: i.course_category ?? null,
-                })) as CalendarCourse[]
+                .map((i) => {
+                  const crew = crewFirstNames(
+                    (i.crew ?? [])
+                      .filter((r) => r.instructors)
+                      .map((r) => ({ role: r.role, name: r.instructors!.name }))
+                  )
+                  return {
+                    id: i.id,
+                    // Mirrors the Google Calendar event title convention.
+                    label: courseEventTitle(i, crew),
+                    status: i.status,
+                    starts_at: i.starts_at!,
+                    ends_at: i.ends_at! >= i.starts_at! ? i.ends_at! : i.starts_at!,
+                    href: `/admin/courses/${i.id}`,
+                    category: i.course_category ?? null,
+                    name: courseShortName(i.course_type, i.custom_title),
+                    client: i.client_name,
+                    location: i.location,
+                    crew,
+                  }
+                }) as CalendarCourse[]
             }
           />
           </div>

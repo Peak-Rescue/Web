@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import CalendarChip from './CalendarChip'
 
 export type CalendarCourse = {
   id: string
@@ -8,6 +9,11 @@ export type CalendarCourse = {
   ends_at: string
   href?: string // absent → rendered as a non-clickable chip
   category?: string | null // course_category; 'tactical' → military, anything else → civilian
+  // Optional structured fields for the hover tooltip (falls back to label).
+  name?: string
+  client?: string | null
+  location?: string | null
+  crew?: string[]
 }
 
 // Chips are colored by designation like the Google calendars — military vs
@@ -180,16 +186,9 @@ export default function CourseCalendar({
                   const chipClass = [
                     'relative z-10 block px-1 py-0.5 border rounded text-[10px] leading-tight truncate',
                     chipStyle(c),
+                    c.href ? 'hover:brightness-125 transition' : '',
                   ].join(' ')
-                  return c.href ? (
-                    <Link key={c.id} href={c.href} title={c.label} style={style} className={`${chipClass} hover:brightness-125 transition`}>
-                      {c.label}
-                    </Link>
-                  ) : (
-                    <span key={c.id} title={c.label} style={style} className={chipClass}>
-                      {c.label}
-                    </span>
-                  )
+                  return <CalendarChip key={c.id} course={c} style={style} className={chipClass} />
                 })}
               </div>
             </div>

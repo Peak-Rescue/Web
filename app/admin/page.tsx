@@ -123,25 +123,26 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     : (assignmentRows ?? []).map((a) => a.course_instances as unknown as InstRow)
   // Chip labels mirror the Google Calendar event titles: name — client —
   // location — crew first names (lead first).
-  const chipLabel = (i: InstRow) =>
-    courseEventTitle(
-      i,
-      crewFirstNames(
-        (i.instance_instructors ?? [])
-          .filter((r) => r.instructors)
-          .map((r) => ({ role: r.role, name: r.instructors!.name }))
-      )
+  const chipCrew = (i: InstRow) =>
+    crewFirstNames(
+      (i.instance_instructors ?? [])
+        .filter((r) => r.instructors)
+        .map((r) => ({ role: r.role, name: r.instructors!.name }))
     )
   const calendarCourses: CalendarCourse[] = calendarSource
     .filter((i) => i && i.status !== 'cancelled' && i.starts_at && i.ends_at)
     .map((i) => ({
       id: i.id,
-      label: chipLabel(i),
+      label: courseEventTitle(i, chipCrew(i)),
       status: i.status,
       starts_at: i.starts_at!,
       ends_at: i.ends_at! >= i.starts_at! ? i.ends_at! : i.starts_at!,
       href: showAsAdmin || assignedIds.has(i.id) ? portalHref(i.id) : undefined,
       category: i.course_category ?? null,
+      name: courseShortName(i.course_type, i.custom_title),
+      client: i.client_name,
+      location: i.location,
+      crew: chipCrew(i),
     }))
 
   const calMonth = /^\d{4}-\d{2}$/.test(cal ?? '') ? cal! : today.slice(0, 7)
