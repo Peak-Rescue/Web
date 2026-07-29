@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { adminSetCapability, adminRemoveCapability } from './[id]/actions'
 import { CAPABILITY_META, CAPABILITY_ORDER, type CapabilityCategory, type CapabilityRole } from '@/lib/capabilities'
 
 type Capability = { category: CapabilityCategory; role: CapabilityRole }
@@ -18,30 +18,23 @@ export default function CapabilityPanel({
 
   const capMap = Object.fromEntries(capabilities.map(c => [c.category, c.role])) as Partial<Record<CapabilityCategory, CapabilityRole>>
 
+  // Server actions (not direct browser writes) so the save also revalidates
+  // the instructors list — otherwise back-navigation restores a cached table
+  // that doesn't show the edit.
   async function handleSet(category: CapabilityCategory, role: CapabilityRole) {
     if (saving) return
     setSaving(category)
 
-    const supabase = createClient()
-
     try {
       if (capMap[category] === role) {
-        const { error } = await supabase
-          .from('instructor_capabilities')
-          .delete()
-          .eq('instructor_id', instructorId)
-          .eq('category', category)
-        if (error) throw error
+        await adminRemoveCapability(instructorId, category)
         setCapabilities(prev => prev.filter(c => c.category !== category))
       } else {
-        const { error } = await supabase
-          .from('instructor_capabilities')
-          .upsert({ instructor_id: instructorId, category, role }, { onConflict: 'instructor_id,category' })
-        if (error) throw error
+        await adminSetCapability(instructorId, category, role)
         setCapabilities(prev => [...prev.filter(c => c.category !== category), { category, role }])
       }
     } catch (err) {
-      console.error('Failed to update capability:', JSON.stringify(err))
+      console.error('Failed to update capability:', err)
     } finally {
       setSaving(null)
     }

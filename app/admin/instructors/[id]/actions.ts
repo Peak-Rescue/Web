@@ -355,6 +355,7 @@ export async function adminSetCapability(instructorId: string, category: Capabil
 
   if (error) throw new Error(error.message)
   revalidatePath('/admin/instructors')
+  revalidatePath(`/admin/instructors/${instructorId}`)
 }
 
 export async function adminRemoveCapability(instructorId: string, category: CapabilityCategory) {
@@ -368,6 +369,7 @@ export async function adminRemoveCapability(instructorId: string, category: Capa
 
   if (error) throw new Error(error.message)
   revalidatePath('/admin/instructors')
+  revalidatePath(`/admin/instructors/${instructorId}`)
 }
 
 export async function adminCreateInstructor(firstName: string, lastName: string, email: string): Promise<{ id: string }> {
