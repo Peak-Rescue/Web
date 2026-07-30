@@ -74,8 +74,12 @@ export async function joinCourse(
   }
 
   try {
+    // Must land on /auth/confirm (browser-side): invite links carry the
+    // session in the URL hash, which the /auth/callback server route can't
+    // see — it would bounce the new student to the login page. Names travel
+    // via user metadata (the signup trigger writes them to the profile).
     const { data, error } = await admin.auth.admin.inviteUserByEmail(normalizedEmail, {
-      redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback?next=/dashboard`,
+      redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/confirm`,
       data: { first_name: first, last_name: last },
     })
 

@@ -289,8 +289,14 @@ export async function adminSendInvite(instructorId: string) {
     return
   }
 
+  // Invite links come back from Supabase with the session in the URL hash
+  // (implicit flow — admin-generated links have no browser to hold a PKCE
+  // verifier), so they must land on /auth/confirm, the browser-side handler
+  // magic links use. A server route (/auth/callback) never sees the hash and
+  // would bounce the new instructor to the login page. Names travel via user
+  // metadata (the signup trigger writes them to the profile).
   const { error } = await admin.auth.admin.inviteUserByEmail(instructor.email, {
-    redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback?next=/instructor`,
+    redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/confirm`,
     data: { first_name: firstName, last_name: lastName },
   })
 
