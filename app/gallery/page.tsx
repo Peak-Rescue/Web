@@ -26,6 +26,7 @@ export default async function GalleryPage({
   const { data } = await createAdminClient()
     .from('gallery_images')
     .select('id, url, caption, categories')
+    .order('sort_order', { ascending: true })
     .order('created_at', { ascending: false })
 
   const all = (data ?? []) as GalleryImage[]

@@ -94,6 +94,21 @@ export async function updateGalleryImages(
   revalidate()
 }
 
+// Persist a full ordering: ids in display order become sort_order 1..N.
+// (New uploads default to sort_order 0, so they surface at the top until
+// deliberately placed.)
+export async function reorderGalleryImages(orderedIds: string[]) {
+  const admin = await requireAdmin()
+  for (let i = 0; i < orderedIds.length; i++) {
+    const { error } = await admin
+      .from('gallery_images')
+      .update({ sort_order: i + 1 })
+      .eq('id', orderedIds[i])
+    if (error) throw new Error(error.message)
+  }
+  revalidate()
+}
+
 export async function deleteGalleryImage(id: string) {
   const admin = await requireAdmin()
 

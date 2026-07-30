@@ -4,7 +4,7 @@ import { useState } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { categoryMeta, type ServiceCategory } from '@/lib/data/services'
-import { updateGalleryImages, deleteGalleryImage } from './actions'
+import { updateGalleryImages, deleteGalleryImage, reorderGalleryImages } from './actions'
 
 const CATEGORY_KEYS = Object.keys(categoryMeta) as ServiceCategory[]
 
@@ -33,6 +33,51 @@ export function GalleryEditor({ images }: { images: GalleryImage[] }) {
   const [edits, setEdits] = useState<Record<string, Edit>>({})
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+
+  // Local display order (optimistic while a reorder saves), re-synced from
+  // the server prop whenever it changes (render-time compare — no effects).
+  const [orderIds, setOrderIds] = useState<string[]>(() => images.map(i => i.id))
+  const propKey = images.map(i => i.id).join('|')
+  const [syncedKey, setSyncedKey] = useState(propKey)
+  if (syncedKey !== propKey) {
+    setSyncedKey(propKey)
+    setOrderIds(images.map(i => i.id))
+  }
+  const [dragId, setDragId] = useState<string | null>(null)
+
+  const byId = new Map(images.map(i => [i.id, i]))
+  const ordered = orderIds.map(id => byId.get(id)).filter((i): i is GalleryImage => Boolean(i))
+
+  async function applyOrder(next: string[]) {
+    setOrderIds(next)
+    setBusy(true)
+    setError('')
+    try {
+      await reorderGalleryImages(next)
+      router.refresh()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Reorder failed.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  function moveBy(id: string, delta: number) {
+    const from = orderIds.indexOf(id)
+    const to = from + delta
+    if (from < 0 || to < 0 || to >= orderIds.length) return
+    const next = [...orderIds]
+    ;[next[from], next[to]] = [next[to], next[from]]
+    void applyOrder(next)
+  }
+
+  function dropOn(targetId: string) {
+    if (!dragId || dragId === targetId) return
+    const next = orderIds.filter(x => x !== dragId)
+    next.splice(next.indexOf(targetId), 0, dragId)
+    setDragId(null)
+    void applyOrder(next)
+  }
 
   const current = (img: GalleryImage): Edit => edits[img.id] ?? baseline(img)
 
@@ -94,17 +139,53 @@ export function GalleryEditor({ images }: { images: GalleryImage[] }) {
     <div className="space-y-4">
       {error && <p className="text-sm text-pr-red" role="alert">{error}</p>}
 
+      <p className="text-xs text-zinc-500">
+        Drag a photo (or use its ‹ › arrows) to change the order — this is the order the public gallery shows.
+      </p>
+
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {images.map(img => {
+        {ordered.map((img, idx) => {
           const e = current(img)
           const changed = isDirty(img)
           return (
             <div
               key={img.id}
-              className={`rounded-lg overflow-hidden bg-zinc-900 border ${changed ? 'border-pr-red' : 'border-zinc-800'}`}
+              onDragOver={ev => { if (dragId && dragId !== img.id) ev.preventDefault() }}
+              onDrop={ev => { ev.preventDefault(); dropOn(img.id) }}
+              className={`rounded-lg overflow-hidden bg-zinc-900 border ${
+                changed ? 'border-pr-red' : dragId && dragId !== img.id ? 'border-zinc-600 border-dashed' : 'border-zinc-800'
+              } ${dragId === img.id ? 'opacity-40' : ''}`}
             >
-              <div className="relative aspect-[4/3] bg-zinc-800">
+              <div
+                className="relative aspect-[4/3] bg-zinc-800 cursor-grab active:cursor-grabbing"
+                draggable={!busy}
+                onDragStart={() => setDragId(img.id)}
+                onDragEnd={() => setDragId(null)}
+              >
                 <Image src={img.url} alt={e.caption} fill className="object-cover" sizes="(max-width: 640px) 100vw, 50vw" />
+                <span className="absolute top-2 left-2 px-1.5 py-0.5 rounded bg-black/60 text-[10px] text-zinc-300">
+                  #{idx + 1}
+                </span>
+                <div className="absolute top-2 right-2 flex gap-1">
+                  <button
+                    type="button"
+                    onClick={() => moveBy(img.id, -1)}
+                    disabled={busy || idx === 0}
+                    aria-label="Move earlier"
+                    className="w-6 h-6 rounded bg-black/60 text-zinc-300 hover:text-white text-sm leading-none disabled:opacity-30 transition-colors"
+                  >
+                    ‹
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => moveBy(img.id, 1)}
+                    disabled={busy || idx === ordered.length - 1}
+                    aria-label="Move later"
+                    className="w-6 h-6 rounded bg-black/60 text-zinc-300 hover:text-white text-sm leading-none disabled:opacity-30 transition-colors"
+                  >
+                    ›
+                  </button>
+                </div>
               </div>
               <div className="p-3 space-y-3">
                 <input
