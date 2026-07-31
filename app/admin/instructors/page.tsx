@@ -36,7 +36,7 @@ export default async function AdminInstructorsPage() {
   const { data: profileRows } = profileIds.length > 0
     ? await admin
         .from('profiles')
-        .select('id, first_name, last_name, email, phone, is_exempt, instructor_certs(id, cert_type, level, notes, expires_at, instructor_cert_documents(id, url, file_name))')
+        .select('id, first_name, last_name, email, phone, instructor_certs(id, cert_type, level, notes, expires_at, instructor_cert_documents(id, url, file_name))')
         .in('id', profileIds)
     : { data: [] }
 
@@ -60,7 +60,6 @@ export default async function AdminInstructorsPage() {
       last_name: profile?.last_name ?? null,
       phone: profile?.phone ?? null,
       invite_status: inviteStatus,
-      is_exempt: profile?.is_exempt ?? false,
       instructor_certs: (profile?.instructor_certs ?? []) as Parameters<typeof InstructorTable>[0]['instructors'][number]['instructor_certs'],
       instructor_capabilities: (instr.instructor_capabilities ?? []) as Parameters<typeof InstructorTable>[0]['instructors'][number]['instructor_capabilities'],
     }

@@ -28,7 +28,6 @@ type Instructor = {
   email: string | null
   phone: string | null
   invite_status: 'active' | 'invited' | 'not_invited'
-  is_exempt?: boolean
   instructor_certs: RawCert[]
   instructor_capabilities: RawCapability[]
 }
@@ -532,11 +531,6 @@ export function InstructorTable({ instructors, isAdmin = false }: { instructors:
                     ) : (
                       <span className="font-medium">
                         {instructor.first_name ? `${instructor.first_name} ${instructor.last_name ?? ''}`.trim() : instructor.name}
-                      </span>
-                    )}
-                    {isAdmin && instructor.is_exempt && (
-                      <span className="ml-2 inline-block px-1.5 py-0.5 text-[9px] font-medium rounded bg-indigo-900/60 text-indigo-300 align-middle">
-                        Exempt
                       </span>
                     )}
                     {isAdmin && instructor.invite_status !== 'active' && (
