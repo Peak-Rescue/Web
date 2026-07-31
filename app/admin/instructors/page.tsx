@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { signCertDocs } from '@/lib/cert-docs'
 import { InstructorTable } from './InstructorTable'
 import { adminSendInvite } from './[id]/actions'
 import AddInstructorButton from './AddInstructorButton'
@@ -39,6 +40,18 @@ export default async function AdminInstructorsPage() {
         .select('id, first_name, last_name, email, phone, instructor_certs(id, cert_type, level, notes, expires_at, instructor_cert_documents(id, url, file_name))')
         .in('id', profileIds)
     : { data: [] }
+
+  // cert-documents is private — swap stored paths for short-lived signed URLs
+  // in one batched call across every instructor's documents.
+  const allDocs = (profileRows ?? []).flatMap(p =>
+    (p.instructor_certs ?? []).flatMap(c => c.instructor_cert_documents ?? [])
+  )
+  const signedById = new Map((await signCertDocs(admin, allDocs)).map(d => [d.id, d.url]))
+  for (const p of profileRows ?? []) {
+    for (const c of p.instructor_certs ?? []) {
+      for (const d of c.instructor_cert_documents ?? []) d.url = signedById.get(d.id) ?? ''
+    }
+  }
 
   const profileMap = new Map((profileRows ?? []).map(p => [p.id, p]))
 

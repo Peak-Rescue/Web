@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { signCertDocs } from '@/lib/cert-docs'
 import CertGrid from './CertGrid'
 import ProfileForm from './ProfileForm'
 import AvatarEditor from '@/components/AvatarEditor'
@@ -29,6 +30,14 @@ export default async function InstructorPage() {
     .select('id, cert_type, level, expires_at, notes, instructor_cert_documents(id, url, file_name, created_at)')
     .eq('instructor_id', user.id)
     .order('cert_type')
+
+  // cert-documents is a private bucket — hand the UI short-lived signed URLs.
+  const certsWithDocs = await Promise.all(
+    (certs ?? []).map(async (c) => ({
+      ...c,
+      instructor_cert_documents: await signCertDocs(admin, c.instructor_cert_documents ?? []),
+    }))
+  )
 
   const capabilities = (instructor.instructor_capabilities ?? []) as { category: string; role: string }[]
 
@@ -86,7 +95,7 @@ export default async function InstructorPage() {
         {/* Certifications */}
         <section className="mb-10">
           <h2 className="text-lg font-semibold mb-4">Certifications</h2>
-          <CertGrid initialCerts={certs ?? []} actions={{ upsertCert, deleteCert, addCertDocument, deleteCertDocument }} />
+          <CertGrid initialCerts={certsWithDocs} actions={{ upsertCert, deleteCert, addCertDocument, deleteCertDocument }} />
         </section>
 
         {/* Teaching expertise (read-only — set by admin) */}

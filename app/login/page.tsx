@@ -31,12 +31,12 @@ export default function LoginPage() {
       },
     })
 
-    if (error) {
-      setError(
-        error.message.toLowerCase().includes('signup')
-          ? 'No account found for that email. Portal access is by invite — contact your course organizer.'
-          : error.message
-      )
+    // Deliberately identical outcome whether or not the address has an
+    // account: a distinct "no account found" reply would let anyone test which
+    // emails belong to Peak Rescue staff and students. Rate-limit errors still
+    // surface, since those are actionable for a real user.
+    if (error && !error.message.toLowerCase().includes('signup')) {
+      setError(error.message)
       setLoading(false)
       return
     }
@@ -51,8 +51,11 @@ export default function LoginPage() {
         <div className="max-w-md w-full mx-4 text-center">
           <h1 className="text-2xl font-bold text-white mb-4">Check your email</h1>
           <p className="text-zinc-400">
-            We sent a sign-in link to <span className="text-white">{email}</span>.
-            Click it to access your portal.
+            If an account exists for <span className="text-white">{email}</span>, a sign-in
+            link is on its way. Click it to access your portal.
+          </p>
+          <p className="text-zinc-500 text-sm mt-4">
+            Nothing arrives? Portal access is by invite — contact your course organizer.
           </p>
         </div>
       </main>

@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { certDocPath, CERT_BUCKET } from '@/lib/cert-docs'
 import { type CertType } from '@/lib/certs'
 import { normalizePhone } from '@/lib/phone'
 
@@ -60,9 +61,14 @@ export async function addCertDocument(certId: string, url: string, fileName: str
 
   if (!cert) throw new Error('Cert not found or not yours')
 
+  // Only accept values that resolve inside our own bucket — the caller could
+  // otherwise store any URL, which later renders as a link for an admin.
+  const storedPath = certDocPath(url)
+  if (!storedPath) throw new Error('Invalid document reference')
+
   const { data, error } = await admin
     .from('instructor_cert_documents')
-    .insert({ cert_id: certId, url, file_name: fileName })
+    .insert({ cert_id: certId, url: storedPath, file_name: fileName })
     .select('id, url, file_name, created_at')
     .single()
 
@@ -103,17 +109,10 @@ export async function deleteCertDocument(docId: string) {
 
   if (error) throw new Error(error.message)
 
-  // Delete from storage — path follows publicUrl: /storage/v1/object/public/cert-documents/<path>
-  try {
-    const url = new URL(doc.url)
-    const marker = '/object/public/cert-documents/'
-    const idx = url.pathname.indexOf(marker)
-    if (idx !== -1) {
-      const storagePath = url.pathname.slice(idx + marker.length)
-      await admin.storage.from('cert-documents').remove([storagePath])
-    }
-  } catch {
-    // non-fatal: DB row is already gone
+  // Delete from storage (handles both bare paths and legacy public URLs).
+  const storagePath = certDocPath(doc.url)
+  if (storagePath) {
+    await admin.storage.from(CERT_BUCKET).remove([storagePath])
   }
 
   revalidatePath('/instructor')

@@ -2,6 +2,7 @@ import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { signCertDocs } from '@/lib/cert-docs'
 import CertGrid from '@/app/instructor/CertGrid'
 import ProfileForm from '@/app/instructor/ProfileForm'
 import AvatarEditor from '@/components/AvatarEditor'
@@ -67,6 +68,14 @@ export default async function AdminInstructorDetailPage({ params }: { params: Pr
         .eq('instructor_id', profile.id)
         .order('cert_type')
     : { data: [] }
+
+  // cert-documents is private — hand the UI short-lived signed URLs.
+  const certsWithDocs = await Promise.all(
+    (certs ?? []).map(async (c) => ({
+      ...c,
+      instructor_cert_documents: await signCertDocs(admin, c.instructor_cert_documents ?? []),
+    }))
+  )
 
   const inviteStatus: InviteStatus = instructor.profile_id
     ? 'active'
@@ -209,7 +218,7 @@ export default async function AdminInstructorDetailPage({ params }: { params: Pr
             <section className="mb-10">
               <h2 className="text-lg font-semibold mb-4">Certifications</h2>
               <CertGrid
-                initialCerts={certs ?? []}
+                initialCerts={certsWithDocs}
                 actions={{
                   upsertCert: adminUpsertCert.bind(null, profile.id),
                   deleteCert: adminDeleteCert.bind(null, profile.id),

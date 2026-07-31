@@ -1,6 +1,7 @@
 'use server'
 
 import { createAdminClient } from '@/lib/supabase/admin'
+import { checkRateLimit, clientIp } from '@/lib/rate-limit'
 import { createClient as createAnonClient } from '@supabase/supabase-js'
 
 export type JoinResult = { ok: true } | { ok: false; error: string }
@@ -18,6 +19,9 @@ export async function joinCourse(
   const normalizedEmail = email.trim().toLowerCase()
 
   if (!first || !last) return { ok: false, error: 'Please enter your first and last name.' }
+  if (first.length > 80 || last.length > 80) {
+    return { ok: false, error: 'Please shorten your name.' }
+  }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
     return { ok: false, error: 'Please enter a valid email address.' }
   }
@@ -26,6 +30,18 @@ export async function joinCourse(
   }
 
   const admin = createAdminClient()
+
+  // This action creates auth users and sends mail from our domain, so a
+  // leaked invite token must not become an open relay: cap per token, per
+  // target address, and per IP.
+  const ip = await clientIp()
+  const withinLimits =
+    (await checkRateLimit(admin, 'join_token', token, { limit: 20, windowMinutes: 60 })) &&
+    (await checkRateLimit(admin, 'join_email', normalizedEmail, { limit: 3, windowMinutes: 60 })) &&
+    (await checkRateLimit(admin, 'join_ip', ip, { limit: 10, windowMinutes: 60 }))
+  if (!withinLimits) {
+    return { ok: false, error: 'Too many sign-up attempts just now. Please try again shortly.' }
+  }
 
   const { data: inst } = await admin
     .from('course_instances')

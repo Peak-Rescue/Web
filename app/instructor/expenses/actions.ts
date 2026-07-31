@@ -21,11 +21,22 @@ const BUCKET = 'expense-receipts'
 const MAX_RECEIPT_BYTES = 15 * 1024 * 1024
 const MAX_EMAIL_ATTACHMENT_BYTES = 20 * 1024 * 1024
 
+// Expense reports are a staff feature. Server actions are callable directly,
+// so the role gate has to live here and not only on the page — otherwise any
+// signed-in account (including a student who self-registered through a course
+// invite link) could file a reimbursement claim.
 async function requireUser() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('Not authenticated')
-  return { user, admin: createAdminClient() }
+  const admin = createAdminClient()
+  const { data: profile } = await admin
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single()
+  if (!['admin', 'instructor'].includes(profile?.role ?? '')) throw new Error('Not authorized')
+  return { user, admin }
 }
 
 // Report must belong to the caller; mutations additionally require draft status.
@@ -163,6 +174,17 @@ export async function saveItem(reportId: string, itemId: string | null, payload:
 
 export async function deleteItem(reportId: string, itemId: string) {
   const { admin } = await requireOwnedReport(reportId, { draftOnly: true })
+
+  // Confirm the item belongs to this (already ownership-checked) report before
+  // touching its receipts — keying the receipt lookup on itemId alone would let
+  // a caller delete another user's receipt files.
+  const { data: item } = await admin
+    .from('expense_items')
+    .select('id')
+    .eq('id', itemId)
+    .eq('report_id', reportId)
+    .maybeSingle()
+  if (!item) throw new Error('Expense not found')
 
   const { data: receipts } = await admin
     .from('expense_receipts')

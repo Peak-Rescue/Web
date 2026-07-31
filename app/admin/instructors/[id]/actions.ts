@@ -6,6 +6,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient as createAnonClient } from '@supabase/supabase-js'
 import { type CertType } from '@/lib/certs'
 import { type CapabilityCategory, type CapabilityRole } from '@/lib/capabilities'
+import { certDocPath, CERT_BUCKET } from '@/lib/cert-docs'
 import { normalizePhone } from '@/lib/phone'
 import { normalizeEmail } from '@/lib/email'
 
@@ -113,9 +114,12 @@ export async function adminAddCertDocument(profileId: string, certId: string, ur
 
   if (!cert) throw new Error('Cert not found')
 
+  const storedPath = certDocPath(url)
+  if (!storedPath) throw new Error('Invalid document reference')
+
   const { data, error } = await admin
     .from('instructor_cert_documents')
-    .insert({ cert_id: certId, url, file_name: fileName })
+    .insert({ cert_id: certId, url: storedPath, file_name: fileName })
     .select('id, url, file_name, created_at')
     .single()
 
@@ -153,16 +157,9 @@ export async function adminDeleteCertDocument(profileId: string, docId: string) 
 
   if (error) throw new Error(error.message)
 
-  try {
-    const url = new URL(doc.url)
-    const marker = '/object/public/cert-documents/'
-    const idx = url.pathname.indexOf(marker)
-    if (idx !== -1) {
-      const storagePath = url.pathname.slice(idx + marker.length)
-      await admin.storage.from('cert-documents').remove([storagePath])
-    }
-  } catch {
-    // non-fatal
+  const storagePath = certDocPath(doc.url)
+  if (storagePath) {
+    await admin.storage.from(CERT_BUCKET).remove([storagePath])
   }
 
   await revalidateByProfileId(profileId)

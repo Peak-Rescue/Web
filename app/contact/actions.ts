@@ -1,6 +1,7 @@
 'use server'
 
 import { createAdminClient } from '@/lib/supabase/admin'
+import { checkRateLimit, clientIp } from '@/lib/rate-limit'
 import { isLikelyContactSpam } from '@/lib/contact-spam'
 
 export type ContactInput = {
@@ -38,11 +39,25 @@ export async function submitContactForm(input: ContactInput): Promise<ContactRes
   if (message.length > 5000) {
     return { ok: false, error: 'That message is a bit too long — please shorten it.' }
   }
+  if (firstName.length > 120 || lastName.length > 120 || (organization?.length ?? 0) > 200) {
+    return { ok: false, error: 'Please shorten your name or organization.' }
+  }
+
+  const admin = createAdminClient()
+
+  // This action emails info@ and is reachable by anyone, so cap it per sender
+  // and per IP. The reply is deliberately the success message — telling a bot
+  // it hit a limit just teaches it the threshold.
+  const ip = await clientIp()
+  const withinLimits =
+    (await checkRateLimit(admin, 'contact', email.toLowerCase(), { limit: 3, windowMinutes: 60 })) &&
+    (await checkRateLimit(admin, 'contact_ip', ip, { limit: 10, windowMinutes: 60 }))
+  if (!withinLimits) return { ok: true }
 
   const spam = isLikelyContactSpam({ firstName, lastName, organization, message })
 
   // Durable capture first — this must succeed for the form to "work".
-  const { error } = await createAdminClient().from('contact_submissions').insert({
+  const { error } = await admin.from('contact_submissions').insert({
     first_name: firstName,
     last_name: lastName,
     email,
