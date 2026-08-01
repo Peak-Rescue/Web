@@ -7,7 +7,7 @@ type State = { status: 'idle' | 'success' | 'error'; message?: string }
 const initial: State = { status: 'idle' }
 
 type Props = {
-  action: () => Promise<void>
+  action: () => Promise<void | { ok: boolean; error?: string }>
   label: string
   className?: string
 }
@@ -16,7 +16,10 @@ export function InviteButton({ action, label, className }: Props) {
   const [state, formAction, pending] = useActionState(
     async (_prev: State): Promise<State> => {
       try {
-        await action()
+        const result = await action()
+        if (result && !result.ok) {
+          return { status: 'error', message: result.error ?? 'Failed to send' }
+        }
         return { status: 'success' }
       } catch (e) {
         return { status: 'error', message: e instanceof Error ? e.message : 'Failed to send' }

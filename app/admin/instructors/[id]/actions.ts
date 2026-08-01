@@ -263,27 +263,31 @@ export async function adminSendInvite(instructorId: string) {
   const firstName = nameParts[0] ?? ''
   const lastName = nameParts.slice(1).join(' ')
 
-  const sendOtp = async () => {
+  // A failed send must reach the button: SMTP outages otherwise die silently
+  // here and the UI shows "Sent" for an email that never left the building.
+  const sendOtp = async (): Promise<string | null> => {
     const anon = createAnonClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
       { auth: { flowType: 'implicit' } }
     )
-    await anon.auth.signInWithOtp({
+    const { error: otpError } = await anon.auth.signInWithOtp({
       email: instructor.email!,
       options: {
         emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/confirm`,
         shouldCreateUser: false,
       },
     })
+    return otpError ? otpError.message : null
   }
 
   // Active instructor (already has a portal account) — send sign-in link directly
   if (instructor.profile_id) {
-    await sendOtp()
+    const sendError = await sendOtp()
     revalidatePath(`/admin/instructors/${instructorId}`)
     revalidatePath('/admin/instructors')
-    return
+    if (sendError) return { ok: false as const, error: `Email failed to send: ${sendError}` }
+    return { ok: true as const }
   }
 
   // Invite links come back from Supabase with the session in the URL hash
@@ -298,7 +302,9 @@ export async function adminSendInvite(instructorId: string) {
   })
 
   if (error) {
-    if (!error.message.includes('already been registered')) throw new Error(error.message)
+    if (!error.message.includes('already been registered')) {
+      return { ok: false as const, error: `Invite failed to send: ${error.message}` }
+    }
 
     // User exists in auth but profile not linked yet — resolve their ID and link
     const { data: linkData, error: linkError } = await admin.auth.admin.generateLink({
@@ -314,11 +320,12 @@ export async function adminSendInvite(instructorId: string) {
       admin.from('profiles').update({ role: 'instructor' }).eq('id', linkData.user.id).neq('role', 'admin'),
     ])
 
-    await sendOtp()
+    const sendError = await sendOtp()
 
     revalidatePath(`/admin/instructors/${instructorId}`)
     revalidatePath('/admin/instructors')
-    return
+    if (sendError) return { ok: false as const, error: `Email failed to send: ${sendError}` }
+    return { ok: true as const }
   }
 
   await admin
@@ -328,6 +335,7 @@ export async function adminSendInvite(instructorId: string) {
 
   revalidatePath(`/admin/instructors/${instructorId}`)
   revalidatePath('/admin/instructors')
+  return { ok: true as const }
 }
 
 export async function adminSetShowOnTeamPage(instructorId: string, show: boolean) {

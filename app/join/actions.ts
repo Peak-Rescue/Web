@@ -74,19 +74,20 @@ export async function joinCourse(
     if (error) throw new Error(error.message)
   }
 
-  const sendSignInLink = async () => {
+  const sendSignInLink = async (): Promise<string | null> => {
     const anon = createAnonClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
       { auth: { flowType: 'implicit' } }
     )
-    await anon.auth.signInWithOtp({
+    const { error } = await anon.auth.signInWithOtp({
       email: normalizedEmail,
       options: {
         emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/confirm`,
         shouldCreateUser: false,
       },
     })
+    return error ? error.message : null
   }
 
   try {
@@ -123,7 +124,15 @@ export async function joinCourse(
     }
 
     await enroll(linkData.user.id)
-    await sendSignInLink()
+    const sendError = await sendSignInLink()
+    if (sendError) {
+      // They ARE enrolled at this point — only the email failed.
+      console.error('joinCourse sign-in email failed:', sendError)
+      return {
+        ok: false,
+        error: "You're enrolled, but we couldn't send your sign-in email. Request a link from the login page, or contact your course organizer.",
+      }
+    }
     return { ok: true }
   } catch (err) {
     console.error('joinCourse failed:', err instanceof Error ? err.message : err)
