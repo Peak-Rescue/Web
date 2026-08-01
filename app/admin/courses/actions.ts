@@ -366,7 +366,7 @@ export async function assignInstructor(instanceId: string, formData: FormData) {
       if (instructor?.email && inst) {
         const { courseShortName } = await import('@/lib/courses')
         const courseName = courseShortName(inst.course_type, inst.custom_title)
-        const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.peakrescuemountainguides.com'
+        const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://peak-rescue.com'
         const dates = inst.starts_at
           ? `${inst.starts_at}${inst.ends_at && inst.ends_at !== inst.starts_at ? ` – ${inst.ends_at}` : ''}`
           : 'dates TBD'

@@ -312,7 +312,7 @@ export async function requestEstimateReview(instanceId: string, formData: FormDa
   const { courseShortName } = await import('@/lib/courses')
   const courseName = courseShortName(inst.course_type, inst.custom_title)
   const requesterName = [requester?.first_name, requester?.last_name].filter(Boolean).join(' ') || 'An admin'
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.peakrescuemountainguides.com'
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://peak-rescue.com'
   const link = `${siteUrl}/admin/courses/${instanceId}#estimates`
 
   const { Resend } = await import('resend')
@@ -372,7 +372,7 @@ export async function respondEstimateReview(reviewId: string, formData: FormData
       const { courseShortName } = await import('@/lib/courses')
       const courseName = courseShortName(inst.course_type, inst.custom_title)
       const reviewerName = [reviewer?.first_name, reviewer?.last_name].filter(Boolean).join(' ') || 'The reviewer'
-      const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.peakrescuemountainguides.com'
+      const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://peak-rescue.com'
       const { Resend } = await import('resend')
       const resend = new Resend(process.env.RESEND_API_KEY)
       await resend.emails.send({
@@ -632,7 +632,7 @@ export async function sendQuote(instanceId: string, quoteId: string, formData?: 
   const { courseShortName } = await import('@/lib/courses')
   const qNum = quoteNumber(inst.ref_number, quote.quote_seq)
   const courseName = courseShortName(inst.course_type, inst.custom_title)
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.peakrescuemountainguides.com'
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://peak-rescue.com'
   const link = `${siteUrl}/quote/${quote.accept_token}`
   const dates = inst.starts_at
     ? `${inst.starts_at}${inst.ends_at && inst.ends_at !== inst.starts_at ? ` – ${inst.ends_at}` : ''}`

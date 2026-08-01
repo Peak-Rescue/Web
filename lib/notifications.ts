@@ -27,7 +27,7 @@ const MEDICAL_CERTS = CERT_GROUPS.find((g) => g.id === 'medical')!.certs
 const FROM = 'Peak Rescue Portal <noreply@peak-rescue.com>'
 
 function siteUrl(): string {
-  return process.env.NEXT_PUBLIC_SITE_URL || 'https://www.peakrescuemountainguides.com'
+  return process.env.NEXT_PUBLIC_SITE_URL || 'https://peak-rescue.com'
 }
 
 function todayISO(): string {

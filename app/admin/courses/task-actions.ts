@@ -58,7 +58,7 @@ async function notifyAssignee(
     ])
     if (!assignee?.email || !inst) return
     const courseName = courseShortName(inst.course_type, inst.custom_title)
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.peakrescuemountainguides.com'
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://peak-rescue.com'
     const { Resend } = await import('resend')
     const resend = new Resend(process.env.RESEND_API_KEY)
     await resend.emails.send({

@@ -151,7 +151,7 @@ function buildEvent(c: CourseRow, crew: CrewMember[]) {
   // Calendar events are shared with people outside this dev environment, so the
   // portal link must always target the live site — never NEXT_PUBLIC_SITE_URL,
   // which is localhost during local development.
-  const siteUrl = 'https://www.peakrescuemountainguides.com'
+  const siteUrl = 'https://peak-rescue.com'
   // All-day events; Google's end date is exclusive.
   const endExclusive = new Date(Date.parse(c.ends_at ?? c.starts_at!) + 86_400_000)
     .toISOString()

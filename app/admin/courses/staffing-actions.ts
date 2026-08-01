@@ -69,7 +69,7 @@ export async function sendInterestInvites(
   const inviteByInstructor = new Map(inviteRows.map((r) => [r.instructor_id, r]))
 
   const courseName = courseShortName(inst.course_type, inst.custom_title)
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.peakrescuemountainguides.com'
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://peak-rescue.com'
   const dates = inst.starts_at
     ? `${fmtLong(inst.starts_at)}${inst.ends_at && inst.ends_at !== inst.starts_at ? ` – ${fmtLong(inst.ends_at)}` : ''}`
     : 'Dates TBD'

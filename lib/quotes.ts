@@ -14,7 +14,7 @@ export const QUOTE_COMMITMENT =
 
 export const QUOTE_CONTACT = {
   phone: '(833) 737-2834',
-  website: 'www.peakrescuemountainguides.com',
+  website: 'www.peak-rescue.com',
 }
 
 export function quoteNumber(refNumber: number, seq: number): string {
