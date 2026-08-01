@@ -13,10 +13,11 @@ jobs:
         env:
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: |
-          # Query a real table via PostgREST so the request actually hits
-          # Postgres. The auth /health endpoint does not touch the database,
-          # so it does not count as activity for Supabase's auto-pause check.
+          # Call a dedicated no-data RPC so the request actually hits
+          # Postgres (the auth /health endpoint does not, so it would not
+          # count as activity for Supabase's auto-pause check). Real tables
+          # are no longer anon-readable since the RLS hardening.
           curl -fsS -o /dev/null \
             -H "apikey: $SUPABASE_ANON_KEY" \
             -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
-            "https://qejyeetwurhszyirhpxd.supabase.co/rest/v1/instructors?select=id&limit=1"
+            "https://qejyeetwurhszyirhpxd.supabase.co/rest/v1/rpc/keep_alive"

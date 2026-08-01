@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { sendLoginLink } from './actions'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -13,30 +14,17 @@ export default function LoginPage() {
     setLoading(true)
     setError('')
 
-    // Use implicit flow so the magic link works regardless of which browser
-    // the user opens it in (avoids PKCE cookie cross-context failure on mobile)
-    const { createClient: createImplicitClient } = await import('@supabase/supabase-js')
-    const supabase = createImplicitClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      { auth: { flowType: 'implicit' } }
-    )
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        emailRedirectTo: `${window.location.origin}/auth/confirm`,
-        // Accounts are created by invite only — an unknown email here must
-        // not create an auth user (and a profile row via trigger).
-        shouldCreateUser: false,
-      },
-    })
+    // The OTP request runs in a server action: some corporate networks block
+    // *.supabase.co in the browser, which hung this form on "Sending…".
+    let result
+    try {
+      result = await sendLoginLink(email)
+    } catch {
+      result = { ok: false as const, error: 'Something went wrong. Please try again.' }
+    }
 
-    // Deliberately identical outcome whether or not the address has an
-    // account: a distinct "no account found" reply would let anyone test which
-    // emails belong to Peak Rescue staff and students. Rate-limit errors still
-    // surface, since those are actionable for a real user.
-    if (error && !error.message.toLowerCase().includes('signup')) {
-      setError(error.message)
+    if (!result.ok) {
+      setError(result.error)
       setLoading(false)
       return
     }
