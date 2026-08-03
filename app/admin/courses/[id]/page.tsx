@@ -319,7 +319,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
   // the two things that make assembling a course mostly clicking, not typing.
   const { data: libRows } = await createAdminClient()
     .from('library_items')
-    .select('id, title, kind, audience, disciplines, topics, venue_id, venues(name)')
+    .select('id, title, url, kind, audience, disciplines, topics, venue_id, venues(name)')
     .eq('status', 'published')
     .order('title')
     .limit(1000)
@@ -331,6 +331,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
     return {
       id: l.id,
       title: l.title,
+      url: l.url,
       kind: l.kind,
       audience: l.audience,
       disciplines: l.disciplines,
@@ -693,6 +694,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
                       instanceId={id}
                       moduleId={mod.id}
                       moduleAudience={moduleAudience(mod.audience)}
+                      courseDisciplines={matchingCategories}
                       items={pickerItems}
                     />
                   </div>
