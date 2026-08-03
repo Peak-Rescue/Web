@@ -6,6 +6,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { courseDisplayName, computeBlocks } from '@/lib/courses'
 import CourseTasksPanel, { type CourseTask, type TaskPerson } from '@/components/CourseTasksPanel'
 import { loadTasksWithDocs } from '@/lib/course-tasks'
+import { LinkIcon, PaperclipIcon } from '@/components/TaskIcons'
 
 const STATUS_LABEL: Record<string, string> = {
   tentative: 'Tentative',
@@ -90,7 +91,7 @@ export default async function PortalPage({
     modulesQuery = modulesQuery.in('audience', audienceFilter)
   }
 
-  const [{ data: inst }, { data: offDays }, { data: modules }, { data: instructors }, taskRows, { data: peopleRows }, { data: templateRows }] =
+  const [{ data: inst }, { data: offDays }, { data: modules }, { data: instructors }, taskRows, { data: peopleRows }, { data: templateRows }, { data: courseDocRows }, { data: taskDocRows }] =
     await Promise.all([
       admin.from('course_instances')
         .select('course_type, custom_title, status, location, client_name, notes, ref_number, starts_at, ends_at')
@@ -109,9 +110,37 @@ export default async function PortalPage({
       showTasks
         ? admin.from('course_task_templates').select('id, title, default_line, sort_order').eq('active', true).order('sort_order')
         : Promise.resolve({ data: [] }),
+      showTasks
+        ? admin.from('course_documents').select('id, path, filename, url, created_at').eq('instance_id', id)
+        : Promise.resolve({ data: [] }),
+      showTasks
+        ? admin.from('course_task_documents').select('id, path, filename, url, created_at, course_tasks!inner(title, instance_id)').eq('course_tasks.instance_id', id)
+        : Promise.resolve({ data: [] }),
     ])
 
   if (!inst) notFound()
+
+  // Every attachment on the course — task documents (even from completed
+  // tasks, where they'd otherwise be folded away) plus general course files —
+  // gathered into one glanceable rail for the team. Uploads live in the
+  // private task-documents bucket and need signing; links carry their URL.
+  type PortalDocRow = { id: string; path: string | null; filename: string | null; url: string | null; created_at: string }
+  const docRows: (PortalDocRow & { course_tasks?: unknown })[] = [...(courseDocRows ?? []), ...(taskDocRows ?? [])]
+  const docPaths = docRows.map((r) => r.path).filter((p): p is string => Boolean(p))
+  const { data: signedDocs } = docPaths.length
+    ? await admin.storage.from('task-documents').createSignedUrls(docPaths, 3600)
+    : { data: [] }
+  const docUrl = new Map((signedDocs ?? []).map((s) => [s.path, s.signedUrl]))
+  const courseDocs = docRows
+    .map((r) => ({
+      id: r.id,
+      filename: r.filename ?? 'document',
+      url: r.url ?? (r.path ? docUrl.get(r.path) : undefined) ?? '#',
+      external: Boolean(r.url),
+      taskTitle: (r.course_tasks as { title: string } | null | undefined)?.title ?? null,
+      created_at: r.created_at,
+    }))
+    .sort((a, b) => b.created_at.localeCompare(a.created_at))
 
   const blocks = inst.starts_at && inst.ends_at
     ? computeBlocks(inst.starts_at, inst.ends_at, offDays ?? [])
@@ -214,6 +243,35 @@ export default async function PortalPage({
           <div className="mb-8 p-4 bg-zinc-900 border border-zinc-700 rounded-lg text-sm text-zinc-300 whitespace-pre-wrap">
             {inst.notes}
           </div>
+        )}
+
+        {/* Course documents (team only) — every attachment in one place, as
+            the same pills the course editor uses, so a schedule attached to a
+            (possibly completed) task is one click away from the overview */}
+        {showTasks && courseDocs.length > 0 && (
+          <section className="mb-10">
+            <h2 className="font-semibold text-lg mb-3">Documents</h2>
+            <div className="flex flex-wrap gap-2">
+              {courseDocs.map((d) => (
+                <a
+                  key={d.id}
+                  href={d.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  title={d.taskTitle ? `From task: ${d.taskTitle}` : d.external ? 'Opens external link' : 'Course file'}
+                  className={`inline-flex items-center gap-1.5 max-w-full px-3 py-1.5 rounded-full border text-sm transition-colors ${
+                    d.external
+                      ? 'bg-teal-500/10 border-teal-500/30 hover:border-teal-400 text-teal-300 hover:text-teal-100'
+                      : 'bg-zinc-800 border-zinc-700 hover:border-zinc-500 text-zinc-300 hover:text-white'
+                  }`}
+                >
+                  {d.external ? <LinkIcon /> : <span className="shrink-0"><PaperclipIcon /></span>}
+                  <span className="truncate">{d.filename}</span>
+                  {d.external && <span className="text-teal-400/70 shrink-0">↗</span>}
+                </a>
+              ))}
+            </div>
+          </section>
         )}
 
         {/* Course tasks (team only) */}

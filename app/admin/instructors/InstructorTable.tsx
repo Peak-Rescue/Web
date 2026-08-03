@@ -113,7 +113,7 @@ const DOT_COLORS = {
 
 function GroupSummaryCell({ group, certMap }: { group: CertGroup; certMap: Record<string, RawCert> }) {
   return (
-    <td className="py-3 px-3 text-center align-middle">
+    <td className="py-3 px-3 text-center align-middle border-b border-zinc-900">
       <div className="flex flex-wrap justify-center gap-1">
         {group.certs.map(type => {
           const cert = certMap[type]
@@ -409,13 +409,15 @@ export function InstructorTable({ instructors, isAdmin = false }: { instructors:
           : `${filtered.length} of ${instructors.length} instructors`}
       </div>
 
-      {/* Table */}
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
+      {/* Table — its own scroll box so the header rows and the instructor
+          column stay frozen while the matrix scrolls under them. Borders live
+          on cells (border-separate) so they travel with the sticky header. */}
+      <div className="overflow-auto max-h-[80vh]">
+        <table className="w-full text-sm border-separate border-spacing-0">
+          <thead className="sticky top-0 z-20 bg-pr-bg">
             {/* Group header row */}
-            <tr className="border-b border-zinc-700">
-              <th rowSpan={2} className="text-left py-3 pr-6 text-zinc-400 font-medium whitespace-nowrap align-bottom">
+            <tr>
+              <th rowSpan={2} className="sticky left-0 z-10 bg-pr-bg text-left py-3 pr-6 text-zinc-400 font-medium whitespace-nowrap align-bottom border-b border-zinc-800">
                 Instructor
               </th>
               {CERT_GROUPS.map(group => {
@@ -427,8 +429,8 @@ export function InstructorTable({ instructors, isAdmin = false }: { instructors:
                     colSpan={collapsed ? 1 : group.certs.length}
                     rowSpan={collapsed ? 2 : 1}
                     className={`text-center py-2 px-2 font-medium whitespace-nowrap border-l border-zinc-800 ${
-                      activeCerts.length > 0 ? 'text-pr-red-light' : 'text-zinc-300'
-                    }`}
+                      collapsed ? 'border-b border-zinc-800' : 'border-b border-zinc-700'
+                    } ${activeCerts.length > 0 ? 'text-pr-red-light' : 'text-zinc-300'}`}
                   >
                     <button
                       onClick={() => toggleGroup(group.id)}
@@ -462,7 +464,9 @@ export function InstructorTable({ instructors, isAdmin = false }: { instructors:
                   <th
                     colSpan={collapsed ? 1 : CAPABILITY_ORDER.length}
                     rowSpan={collapsed ? 2 : 1}
-                    className="text-center py-2 px-2 font-medium whitespace-nowrap border-l border-zinc-700 text-zinc-300"
+                    className={`text-center py-2 px-2 font-medium whitespace-nowrap border-l border-zinc-700 text-zinc-300 ${
+                      collapsed ? 'border-b border-zinc-800' : 'border-b border-zinc-700'
+                    }`}
                   >
                     <button
                       onClick={() => toggleGroup('capabilities')}
@@ -486,13 +490,13 @@ export function InstructorTable({ instructors, isAdmin = false }: { instructors:
               })()}
             </tr>
             {/* Individual cert + capability header row — only for expanded groups */}
-            <tr className="border-b border-zinc-800">
+            <tr>
               {CERT_GROUPS.flatMap(group => {
                 if (collapsedGroups.has(group.id)) return []
                 return group.certs.map(type => (
                   <th
                     key={type}
-                    className={`text-center py-2 px-2 font-medium whitespace-nowrap text-xs transition-colors ${
+                    className={`text-center py-2 px-2 font-medium whitespace-nowrap text-xs transition-colors border-b border-zinc-800 ${
                       requiredCerts.has(type) || levelFilters.has(type) ? 'text-pr-red-light' : 'text-zinc-500'
                     }`}
                   >
@@ -503,7 +507,7 @@ export function InstructorTable({ instructors, isAdmin = false }: { instructors:
               {!collapsedGroups.has('capabilities') && CAPABILITY_ORDER.map(cat => (
                 <th
                   key={cat}
-                  className="text-center py-2 px-2 font-medium whitespace-nowrap text-xs text-zinc-500"
+                  className="text-center py-2 px-2 font-medium whitespace-nowrap text-xs text-zinc-500 border-b border-zinc-800"
                 >
                   {CAPABILITY_META[cat].label}
                 </th>
@@ -522,8 +526,8 @@ export function InstructorTable({ instructors, isAdmin = false }: { instructors:
               const capMap = Object.fromEntries(instructor.instructor_capabilities.map(c => [c.category, c.role])) as Partial<Record<CapabilityCategory, CapabilityRole>>
 
               return (
-                <tr key={instructor.id} className="border-b border-zinc-900 hover:bg-zinc-900/50">
-                  <td className="py-3 pr-6 whitespace-nowrap">
+                <tr key={instructor.id} className="group hover:bg-zinc-900/50">
+                  <td className="sticky left-0 z-10 bg-pr-bg group-hover:bg-zinc-900 py-3 pr-6 whitespace-nowrap border-b border-zinc-900">
                     {isAdmin ? (
                       <Link href={`/admin/instructors/${instructor.id}`} className="font-medium hover:text-pr-red-light transition-colors">
                         {instructor.first_name ? `${instructor.first_name} ${instructor.last_name ?? ''}`.trim() : instructor.name}
@@ -556,7 +560,7 @@ export function InstructorTable({ instructors, isAdmin = false }: { instructors:
                       const status = cert ? certStatus(cert.expires_at) : 'missing'
                       const docs = cert?.instructor_cert_documents ?? []
                       return (
-                        <td key={type} className="py-3 px-2 text-center">
+                        <td key={type} className="py-3 px-2 text-center border-b border-zinc-900">
                           <div className="flex flex-col items-center">
                             <div className="h-6 flex items-center justify-center">
                               <StatusDot status={status} level={cert?.level ?? null} certType={type} notes={cert?.notes ?? null} />
@@ -581,7 +585,7 @@ export function InstructorTable({ instructors, isAdmin = false }: { instructors:
                     })
                   })}
                   {collapsedGroups.has('capabilities') ? (
-                    <td className="py-3 px-3 text-center align-middle">
+                    <td className="py-3 px-3 text-center align-middle border-b border-zinc-900">
                       <div className="flex flex-wrap justify-center gap-1">
                         {CAPABILITY_ORDER.map(cat => {
                           const role = capMap[cat]
@@ -598,7 +602,7 @@ export function InstructorTable({ instructors, isAdmin = false }: { instructors:
                   ) : CAPABILITY_ORDER.map(cat => {
                     const role = capMap[cat]
                     return (
-                      <td key={cat} className="py-3 px-2 text-center">
+                      <td key={cat} className="py-3 px-2 text-center border-b border-zinc-900">
                         {role ? (
                           <span className={`inline-flex items-center justify-center rounded px-1.5 py-0.5 text-[10px] font-bold leading-none ${
                             role === 'lead' ? 'bg-teal-900/60 text-teal-300' : 'bg-blue-900/60 text-blue-300'
