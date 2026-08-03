@@ -27,6 +27,7 @@ import { courseDisplayName, courseShortName, computeBlocks } from '@/lib/courses
 import { courseCapabilityCategories, courseSector } from '@/lib/capabilities'
 import { moduleAudience, type LibraryAudience } from '@/lib/library'
 import LibraryPicker, { type PickerItem } from '../LibraryPicker'
+import SuggestedContent from '../SuggestedContent'
 
 const STATUS_STYLES: Record<string, string> = {
   tentative: 'bg-yellow-900/40 text-yellow-300 border-yellow-700',
@@ -634,6 +635,14 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
         {/* ── Content modules ──────────────────────────────────────── */}
         <details open className="mb-8 group">
           <summary className="cursor-pointer list-none text-lg font-semibold select-none mb-3"><span className="text-zinc-600 text-sm mr-2 inline-block transition-transform group-open:rotate-90">▶</span>Content</summary>
+
+          <SuggestedContent
+            instanceId={id}
+            items={pickerItems}
+            existingItemIds={(modules ?? []).flatMap(m =>
+              (m.course_items ?? []).map(ci => ci.library_item_id).filter((x): x is string => Boolean(x))
+            )}
+          />
 
           <div className="space-y-6 mb-6">
             {(modules ?? []).map(mod => {

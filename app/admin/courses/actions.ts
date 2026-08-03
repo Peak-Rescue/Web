@@ -364,6 +364,94 @@ export async function addLibraryItems(instanceId: string, moduleId: string, item
   revalidatePath(`/portal/${instanceId}`)
 }
 
+// Bulk-apply library material to a course: each group becomes a section (or
+// merges into one that already exists), holding the items ticked under it.
+// Sections carry their own audience, so a whole group can be held back to
+// instructors — venue and instructor-info groups usually are.
+export async function applyLibrarySelection(
+  instanceId: string,
+  groups: { title: string; audience: 'internal' | 'shared'; itemIds: string[] }[]
+) {
+  await requireAdmin()
+  const admin = createAdminClient()
+
+  const wanted = groups.filter((g) => g.itemIds.length > 0)
+  if (wanted.length === 0) return { sections: 0, items: 0 }
+
+  const { data: existingModules } = await admin
+    .from('course_modules')
+    .select('id, title, "order"')
+    .eq('instance_id', instanceId)
+  const byTitle = new Map((existingModules ?? []).map((m) => [m.title.toLowerCase(), m]))
+  let nextOrder = Math.max(-1, ...(existingModules ?? []).map((m) => m.order as number)) + 1
+
+  let items = 0
+  let sections = 0
+
+  for (const g of wanted) {
+    let moduleId = byTitle.get(g.title.toLowerCase())?.id
+    if (!moduleId) {
+      const { data, error } = await admin
+        .from('course_modules')
+        .insert({
+          instance_id: instanceId,
+          title: g.title.slice(0, 120),
+          audience: g.audience === 'internal' ? 'instructor' : 'both',
+          order: nextOrder++,
+        })
+        .select('id')
+        .single()
+      if (error) throw new Error(error.message)
+      moduleId = data.id
+      sections++
+    }
+
+    const { data: lib } = await admin
+      .from('library_items')
+      .select('id, title')
+      .in('id', g.itemIds)
+      .eq('status', 'published')
+
+    const { data: already } = await admin
+      .from('course_items')
+      .select('order')
+      .eq('module_id', moduleId)
+      .order('order', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    let order = already ? (already.order as number) + 1 : 0
+
+    const rows = (lib ?? []).map((l) => ({
+      module_id: moduleId!,
+      library_item_id: l.id,
+      title: l.title,
+      order: order++,
+    }))
+    if (rows.length === 0) continue
+
+    const { error } = await admin
+      .from('course_items')
+      .upsert(rows, { onConflict: 'module_id,library_item_id', ignoreDuplicates: true })
+    if (error) throw new Error(error.message)
+    items += rows.length
+  }
+
+  revalidatePath(`/admin/courses/${instanceId}`)
+  revalidatePath(`/portal/${instanceId}`)
+  return { sections, items }
+}
+
+// Bulk-remove items from a course's sections. Removes the link, never the
+// library entry.
+export async function removeCourseItems(instanceId: string, itemIds: string[]) {
+  await requireAdmin()
+  if (itemIds.length === 0) return
+  const { error } = await createAdminClient().from('course_items').delete().in('id', itemIds)
+  if (error) throw new Error(error.message)
+  revalidatePath(`/admin/courses/${instanceId}`)
+  revalidatePath(`/portal/${instanceId}`)
+}
+
 // Per-course visibility override; null restores the library item's own level.
 export async function setItemAudience(instanceId: string, itemId: string, audience: 'internal' | 'shared' | null) {
   await requireAdmin()
