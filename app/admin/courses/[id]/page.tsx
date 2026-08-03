@@ -624,12 +624,6 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
         {/* ── Content modules ──────────────────────────────────────── */}
         <details open className="mb-8 group">
           <summary className="cursor-pointer list-none text-lg font-semibold select-none mb-3"><span className="text-zinc-600 text-sm mr-2 inline-block transition-transform group-open:rotate-90">▶</span>Content</summary>
-          <p className="text-xs text-zinc-500 mb-4">
-            Add material from the <Link href="/admin/library" className="underline hover:text-zinc-300">content library</Link> so
-            it stays in sync everywhere it&rsquo;s used, or paste a one-off link. Sections are either{' '}
-            <span className="text-teal-400">instructors only</span> or <span className="text-blue-400">students &amp; instructors</span>;
-            an individual item can be held back to instructors inside a shared section.
-          </p>
 
           <div className="space-y-6 mb-6">
             {(modules ?? []).map(mod => {
@@ -714,6 +708,14 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
               )
             })}
           </div>
+
+          {(modules ?? []).length === 0 && (
+            <p className="text-sm text-zinc-500 mb-3">
+              Material lives in sections. Add one below — e.g. Pre-course, Venue information, Rappelling — then
+              pull items into it from the{' '}
+              <Link href="/admin/library" className="underline hover:text-zinc-300">content library</Link>.
+            </p>
+          )}
 
           <form action={addModuleWithId} className="flex gap-2 flex-wrap items-end p-4 bg-zinc-900 border border-dashed border-zinc-700 rounded-lg">
             <div>
