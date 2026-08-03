@@ -1,86 +1,65 @@
-// Expertise: what an instructor is signed off to run, scoped by sector.
+// Expertise: the skill an instructor is signed off in, at lead or assist.
 //
-// Military and civilian expertise are deliberately separate lists. The same
-// terrain appears on both sides — canyon, water, mountain — but the sign-off
-// isn't transferable: running Canyon Mobility for a military client is its own
-// qualification, distinct from Class C Canyon Rescue.
+// One list, not one per sector. The skills genuinely overlap — swiftwater is
+// swiftwater whether the team is civilian or military — and in practice the
+// same people work both sides. What differs is whether someone is cleared to
+// work that client type, which is a separate field on the instructor record
+// (instructors.sectors). Staffing requires both: the right skill AND clearance
+// for the sector.
 //
-// Sector (military / civilian) lives on the instructor record and says which
-// side someone can work at all; these are the skill areas within each side.
+// The hyper-specific differences between, say, a civilian and a military
+// swiftwater course are differences in delivery and material, not in who can
+// teach it — so they live on the offering and its content, not here.
+//
+// Four skills have no civilian counterpart (jungle, urban, cold weather, small
+// team) and one has no military one (maritime), but they sit in the same list;
+// the sector gate does the filtering.
 
 export type CapabilityCategory =
-  // Civilian
   | 'industry' | 'rope_access' | 'aerial_evac' | 'canyoning'
-  | 'swift_water' | 'backcountry'
-  // Military
-  | 'mil_jungle' | 'mil_urban' | 'mil_mountain' | 'mil_canyon'
-  | 'mil_water' | 'mil_maritime' | 'mil_cold_weather' | 'mil_small_team' | 'mil_aerial'
+  | 'swift_water' | 'backcountry' | 'maritime'
+  | 'jungle_mobility' | 'urban_mobility' | 'cold_weather' | 'small_team'
 
 export type CapabilityRole = 'lead' | 'assist'
-export type CapabilitySector = 'civilian' | 'military'
 
-export const CAPABILITY_META: Record<CapabilityCategory, { label: string; sector: CapabilitySector }> = {
-  // ─── Civilian ─────────────────────────────────────────────────────────────
+export const CAPABILITY_META: Record<CapabilityCategory, { label: string }> = {
   // Confined space folded into industry (Aug 2026): every instructor holding
   // it also held industry, so it was a redundant second sign-off.
-  industry:         { label: 'Industry',          sector: 'civilian' },
-  rope_access:      { label: 'Rope Access',       sector: 'civilian' },
-  aerial_evac:      { label: 'Aerial Evac',       sector: 'civilian' },
-  canyoning:        { label: 'Canyon',            sector: 'civilian' },
-  swift_water:      { label: 'Swift Water',       sector: 'civilian' },
-  backcountry:      { label: 'Backcountry',       sector: 'civilian' },
-  // ─── Military ─────────────────────────────────────────────────────────────
-  // Parachute rescue & recovery sits inside Jungle Mobility.
-  mil_jungle:       { label: 'Jungle Mobility',   sector: 'military' },
-  mil_urban:        { label: 'Urban Mobility',    sector: 'military' },
-  mil_mountain:     { label: 'Mountain Mobility', sector: 'military' },
-  mil_canyon:       { label: 'Canyon Mobility',   sector: 'military' },
-  mil_water:        { label: 'Water Mobility',    sector: 'military' },
-  mil_maritime:     { label: 'Maritime Mobility', sector: 'military' },
-  mil_cold_weather: { label: 'Cold Weather',      sector: 'military' },
-  mil_small_team:   { label: 'Small Team Rescue', sector: 'military' },
-  mil_aerial:       { label: 'Aerial Assets',     sector: 'military' },
+  industry:        { label: 'Industry' },
+  rope_access:     { label: 'Rope Access' },
+  aerial_evac:     { label: 'Aerial Evac' },
+  canyoning:       { label: 'Canyon' },
+  swift_water:     { label: 'Swift Water' },
+  backcountry:     { label: 'Backcountry' },
+  maritime:        { label: 'Maritime' },
+  // Parachute rescue & recovery sits inside jungle mobility.
+  jungle_mobility: { label: 'Jungle Mobility' },
+  urban_mobility:  { label: 'Urban Mobility' },
+  cold_weather:    { label: 'Cold Weather / Arctic' },
+  small_team:      { label: 'Small Team Rescue' },
 }
-
-export const CIVILIAN_CAPABILITIES: CapabilityCategory[] = [
-  'industry', 'rope_access', 'aerial_evac', 'canyoning', 'swift_water', 'backcountry',
-]
-
-export const MILITARY_CAPABILITIES: CapabilityCategory[] = [
-  'mil_jungle', 'mil_urban', 'mil_mountain', 'mil_canyon',
-  'mil_water', 'mil_maritime', 'mil_cold_weather', 'mil_small_team', 'mil_aerial',
-]
 
 export const CAPABILITY_ORDER: CapabilityCategory[] = [
-  ...CIVILIAN_CAPABILITIES,
-  ...MILITARY_CAPABILITIES,
+  'industry', 'rope_access', 'aerial_evac', 'canyoning',
+  'swift_water', 'backcountry', 'maritime',
+  'jungle_mobility', 'urban_mobility', 'cold_weather', 'small_team',
 ]
 
-export function capabilitiesForSector(sector: CapabilitySector): CapabilityCategory[] {
-  return sector === 'military' ? MILITARY_CAPABILITIES : CIVILIAN_CAPABILITIES
-}
-
-// Which expertise covers each offering. Military offerings map only to
-// military expertise and civilian only to civilian — that separation is the
-// point: the tactical version of a discipline is its own sign-off.
+// Which expertise covers each offering. Civilian and military versions of the
+// same terrain map to the same skill — Canyon Mobility and Class C Canyon
+// Rescue both need Canyon — because the sector gate handles the rest.
 export const CATEGORY_COURSE_TYPES: Record<CapabilityCategory, string[]> = {
-  // Civilian
-  industry:         ['emergency-response-team', 'firefighter-survival', 'fall-protection-rope-access', 'rope-rescue', 'standby-rescue', 'tv-rigging-safety', 'confined-space-rescue'],
-  rope_access:      ['rope-rescue', 'fall-protection-rope-access'],
-  aerial_evac:      ['aerial-tramway-rescue', 'zipline-adventure-park-rescue', 'stableflight'],
-  canyoning:        ['class-c-canyon-rescue'],
-  swift_water:      ['swiftwater-rescue'],
-  backcountry:      ['mountain-rescue'],
-  // Military
-  mil_jungle:       ['jungle-mobility'],
-  mil_urban:        ['urban-mobility'],
-  mil_mountain:     ['mountain-mobility-training'],
-  mil_canyon:       ['canyoneering'],
-  mil_water:        ['water-mobility'],
-  mil_maritime:     ['maritime-mobility'],
-  mil_cold_weather: ['cold-weather-arctic-operations'],
-  mil_small_team:   ['small-team-rescue'],
-  mil_aerial:       ['aerial-assets'],
+  industry:        ['emergency-response-team', 'firefighter-survival', 'fall-protection-rope-access', 'rope-rescue', 'standby-rescue', 'tv-rigging-safety', 'confined-space-rescue'],
+  rope_access:     ['rope-rescue', 'fall-protection-rope-access'],
+  aerial_evac:     ['aerial-tramway-rescue', 'zipline-adventure-park-rescue', 'stableflight', 'aerial-assets'],
+  canyoning:       ['class-c-canyon-rescue', 'canyoneering'],
+  swift_water:     ['swiftwater-rescue', 'water-mobility'],
+  backcountry:     ['mountain-rescue', 'mountain-mobility-training'],
+  maritime:        ['maritime-mobility'],
+  jungle_mobility: ['jungle-mobility'],
+  urban_mobility:  ['urban-mobility'],
+  cold_weather:    ['cold-weather-arctic-operations'],
+  small_team:      ['small-team-rescue'],
 }
 
 // Expertise that covers a course instance — the reverse of the map above.
@@ -94,4 +73,10 @@ export function courseCapabilityCategories(
     return (custom_categories ?? []).filter((c): c is CapabilityCategory => c in CATEGORY_COURSE_TYPES)
   }
   return CAPABILITY_ORDER.filter((cat) => CATEGORY_COURSE_TYPES[cat].includes(course_type))
+}
+
+// A course's sector, for the staffing gate. course_category 'tactical' is the
+// military sector; everything else is civilian.
+export function courseSector(course_category: string | null): 'military' | 'civilian' {
+  return course_category === 'tactical' ? 'military' : 'civilian'
 }

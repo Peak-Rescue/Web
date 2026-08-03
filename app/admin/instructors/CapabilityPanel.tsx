@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { adminSetCapability, adminRemoveCapability } from './[id]/actions'
-import { CAPABILITY_META, capabilitiesForSector, type CapabilityCategory, type CapabilityRole } from '@/lib/capabilities'
+import { CAPABILITY_META, CAPABILITY_ORDER, type CapabilityCategory, type CapabilityRole } from '@/lib/capabilities'
 
 type Capability = { category: CapabilityCategory; role: CapabilityRole }
 
@@ -41,14 +41,8 @@ export default function CapabilityPanel({
   }
 
   return (
-    <div className="space-y-5">
-      {(['civilian', 'military'] as const).map(sector => (
-        <div key={sector}>
-          <h3 className="text-xs font-medium text-zinc-500 uppercase tracking-wide mb-2">
-            {sector === 'military' ? 'Military / tactical' : 'Civilian'}
-          </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-      {capabilitiesForSector(sector).map(category => {
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+      {CAPABILITY_ORDER.map(category => {
         const current = capMap[category]
         const isSaving = saving === category
         return (
@@ -75,9 +69,6 @@ export default function CapabilityPanel({
           </div>
         )
       })}
-          </div>
-        </div>
-      ))}
     </div>
   )
 }

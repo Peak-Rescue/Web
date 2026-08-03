@@ -24,7 +24,7 @@ import CourseContactsEditor from '@/components/CourseContactsEditor'
 import { parseContacts, primaryContactEmail, ccEmailOptions } from '@/lib/contacts'
 import { loadTasksWithDocs } from '@/lib/course-tasks'
 import { courseDisplayName, courseShortName, computeBlocks } from '@/lib/courses'
-import { courseCapabilityCategories } from '@/lib/capabilities'
+import { courseCapabilityCategories, courseSector } from '@/lib/capabilities'
 import { moduleAudience, type LibraryAudience } from '@/lib/library'
 import LibraryPicker, { type PickerItem } from '../LibraryPicker'
 
@@ -79,7 +79,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
     admin.from('instance_off_days').select('id, off_date, end_date').eq('instance_id', id).order('off_date'),
     admin.from('course_modules').select('id, title, audience, order, course_items(id, title, type, url, description, order, audience, library_item_id, library_items(id, title, url, kind, audience, disciplines, topics, venue_id))').eq('instance_id', id).order('order'),
     admin.from('instance_instructors').select('instructor_id, role, instructors(name, profile_id)').eq('instance_id', id),
-    admin.from('instructors').select('id, name, email, instructor_role, instructor_capabilities(category, role)').eq('active', true).order('name'),
+    admin.from('instructors').select('id, name, email, instructor_role, sectors, instructor_capabilities(category, role)').eq('active', true).order('name'),
   ])
 
   if (!inst) notFound()
@@ -348,9 +348,15 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
 
   const assignedIds = new Set((assigned ?? []).map(a => a.instructor_id))
   const unassigned = (allInstructors ?? []).filter(i => !assignedIds.has(i.id))
-  const qualified = unassigned.filter(i =>
+  // Staffing needs both: the skill, and clearance to work this client type.
+  // Someone signed off in Swift Water can run a military water course only if
+  // they're cleared for military work.
+  const sector = courseSector(inst.course_category)
+  const clearedForSector = (i: { sectors?: string[] | null }) =>
+    (i.sectors ?? []).length === 0 || (i.sectors ?? []).includes(sector)
+  const hasSkill = (i: { instructor_capabilities: unknown }) =>
     (i.instructor_capabilities as { category: string; role: string }[]).some(c => matchingCategories.includes(c.category))
-  )
+  const qualified = unassigned.filter(i => hasSkill(i) && clearedForSector(i))
 
   const instructorById = new Map((allInstructors ?? []).map(i => [i.id, i]))
   const interestCandidates = unassigned.map(i => {
@@ -359,8 +365,8 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
       id: i.id,
       name: i.name,
       hasEmail: Boolean(i.email),
-      qualified: caps.some(c => matchingCategories.includes(c.category)),
-      leadQualified: caps.some(c => matchingCategories.includes(c.category) && c.role === 'lead'),
+      qualified: caps.some(c => matchingCategories.includes(c.category)) && clearedForSector(i),
+      leadQualified: caps.some(c => matchingCategories.includes(c.category) && c.role === 'lead') && clearedForSector(i),
     }
   })
   const interestInvites = (interestInviteRows ?? []).map(r => ({
