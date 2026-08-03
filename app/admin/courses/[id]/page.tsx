@@ -25,6 +25,8 @@ import { parseContacts, primaryContactEmail, ccEmailOptions } from '@/lib/contac
 import { loadTasksWithDocs } from '@/lib/course-tasks'
 import { courseDisplayName, courseShortName, computeBlocks } from '@/lib/courses'
 import { courseCapabilityCategories } from '@/lib/capabilities'
+import { moduleAudience, type LibraryAudience } from '@/lib/library'
+import LibraryPicker, { type PickerItem } from '../LibraryPicker'
 
 const STATUS_STYLES: Record<string, string> = {
   tentative: 'bg-yellow-900/40 text-yellow-300 border-yellow-700',
@@ -50,6 +52,17 @@ function fmt(d: string) {
   return new Date(d + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
 }
 
+type LibItem = {
+  id: string
+  title: string
+  url: string | null
+  kind: string
+  audience: LibraryAudience
+  disciplines: string[]
+  topics: string[]
+  venue_id: string | null
+}
+
 export default async function CourseInstancePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
 
@@ -64,7 +77,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
   const [{ data: inst }, { data: offDays }, { data: modules }, { data: assigned }, { data: allInstructors }] = await Promise.all([
     admin.from('course_instances').select('*, ref_number, slug').eq('id', id).single(),
     admin.from('instance_off_days').select('id, off_date, end_date').eq('instance_id', id).order('off_date'),
-    admin.from('course_modules').select('id, title, audience, order, course_items(id, title, type, url, description, order)').eq('instance_id', id).order('order'),
+    admin.from('course_modules').select('id, title, audience, order, course_items(id, title, type, url, description, order, audience, library_item_id, library_items(id, title, url, kind, audience, disciplines, topics, venue_id))').eq('instance_id', id).order('order'),
     admin.from('instance_instructors').select('instructor_id, role, instructors(name, profile_id)').eq('instance_id', id),
     admin.from('instructors').select('id, name, email, instructor_role, instructor_capabilities(category, role)').eq('active', true).order('name'),
   ])
@@ -300,6 +313,33 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
   // Find which capability categories cover this course type (custom courses
   // use their admin-tagged categories)
   const matchingCategories: string[] = courseCapabilityCategories(courseType, inst.custom_categories)
+
+  // Library material offered on this course's sections. "Suggested" = same
+  // discipline as the course, or attached to a venue matching its location —
+  // the two things that make assembling a course mostly clicking, not typing.
+  const { data: libRows } = await createAdminClient()
+    .from('library_items')
+    .select('id, title, kind, audience, disciplines, topics, venue_id, venues(name)')
+    .eq('status', 'published')
+    .order('title')
+    .limit(1000)
+
+  const loc = (inst.location ?? '').toLowerCase()
+  const pickerItems: PickerItem[] = ((libRows ?? []) as unknown as (LibItem & { venues: { name: string } | null })[]).map((l) => {
+    const venueName = l.venues?.name ?? null
+    const venueMatches = Boolean(venueName && loc && (loc.includes(venueName.toLowerCase()) || venueName.toLowerCase().includes(loc)))
+    return {
+      id: l.id,
+      title: l.title,
+      kind: l.kind,
+      audience: l.audience,
+      disciplines: l.disciplines,
+      topics: l.topics,
+      venue_id: l.venue_id,
+      venueName,
+      suggested: venueMatches || l.disciplines.some((d) => matchingCategories.includes(d)),
+    }
+  })
 
   const assignedIds = new Set((assigned ?? []).map(a => a.instructor_id))
   const unassigned = (allInstructors ?? []).filter(i => !assignedIds.has(i.id))
@@ -583,7 +623,12 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
         {/* ── Content modules ──────────────────────────────────────── */}
         <details open className="mb-8 group">
           <summary className="cursor-pointer list-none text-lg font-semibold select-none mb-3"><span className="text-zinc-600 text-sm mr-2 inline-block transition-transform group-open:rotate-90">▶</span>Content</summary>
-          <p className="text-xs text-zinc-500 mb-4">Sections visible to <span className="text-blue-400">students</span>, <span className="text-teal-400">instructors</span>, or <span className="text-zinc-400">both</span>.</p>
+          <p className="text-xs text-zinc-500 mb-4">
+            Add material from the <Link href="/admin/library" className="underline hover:text-zinc-300">content library</Link> so
+            it stays in sync everywhere it&rsquo;s used, or paste a one-off link. Sections are either{' '}
+            <span className="text-teal-400">instructors only</span> or <span className="text-blue-400">students &amp; instructors</span>;
+            an individual item can be held back to instructors inside a shared section.
+          </p>
 
           <div className="space-y-6 mb-6">
             {(modules ?? []).map(mod => {
@@ -597,7 +642,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
                     <div className="flex items-center gap-2">
                       <span className="font-medium">{mod.title}</span>
                       <span className={`text-xs ${AUDIENCE_STYLES[mod.audience]}`}>
-                        {mod.audience === 'both' ? 'everyone' : mod.audience + 's only'}
+                        {moduleAudience(mod.audience) === 'internal' ? 'instructors only' : 'students & instructors'}
                       </span>
                     </div>
                     <form action={deleteModWithArgs}>
@@ -607,14 +652,32 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
 
                   {items.map(item => {
                     const deleteItemWithArgs = deleteItem.bind(null, id, item.id)
+                    // Library-backed rows take their title/link from the library
+                    // entry, so an edit there reaches every course at once.
+                    // Supabase types the embedded row as an array; it's a
+                    // single FK join, so take the first (or null).
+                    const libRaw = item.library_items as unknown
+                    const lib: LibItem | null = Array.isArray(libRaw) ? (libRaw[0] ?? null) : (libRaw as LibItem | null)
+                    const title = lib?.title ?? item.title
+                    const url = lib?.url ?? item.url
+                    const effective = item.audience ?? lib?.audience ?? 'shared'
+                    const heldBack = moduleAudience(mod.audience) === 'shared' && effective === 'internal'
                     return (
                       <div key={item.id} className="flex items-start justify-between px-4 py-3 border-b border-zinc-800/60 last:border-0">
                         <div className="flex items-start gap-3 min-w-0">
                           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="mt-0.5 shrink-0 text-zinc-500">
-                            <path d={ITEM_ICON[item.type]} />
+                            <path d={ITEM_ICON[(item.type ?? 'link') as keyof typeof ITEM_ICON]} />
                           </svg>
                           <div className="min-w-0">
-                            <a href={item.url} target="_blank" rel="noreferrer" className="text-sm font-medium hover:text-pr-red-light transition-colors">{item.title}</a>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              {url
+                                ? <a href={url} target="_blank" rel="noreferrer" className="text-sm font-medium hover:text-pr-red-light transition-colors">{title}</a>
+                                : <span className="text-sm font-medium">{title}</span>}
+                              {lib && <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-500">library</span>}
+                              {heldBack && (
+                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400">instructors only</span>
+                              )}
+                            </div>
                             {item.description && <p className="text-xs text-zinc-500 mt-0.5">{item.description}</p>}
                           </div>
                         </div>
@@ -624,6 +687,15 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
                       </div>
                     )
                   })}
+
+                  <div className="px-4 py-3 bg-zinc-950/50 border-t border-zinc-800/60">
+                    <LibraryPicker
+                      instanceId={id}
+                      moduleId={mod.id}
+                      moduleAudience={moduleAudience(mod.audience)}
+                      items={pickerItems}
+                    />
+                  </div>
 
                   <form action={addItemWithArgs} className="flex flex-col sm:flex-row gap-2 px-4 py-3 bg-zinc-950/50">
                     <input name="title" required placeholder="Item title" className="flex-1 bg-zinc-800 border border-zinc-700 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-zinc-500" />
@@ -649,8 +721,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
             <div>
               <label className="block text-xs text-zinc-500 mb-1">Visible to</label>
               <select name="audience" className="bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500">
-                <option value="both">Everyone</option>
-                <option value="student">Students only</option>
+                <option value="both">Students &amp; instructors</option>
                 <option value="instructor">Instructors only</option>
               </select>
             </div>

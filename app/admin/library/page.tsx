@@ -164,8 +164,8 @@ export default async function LibraryPage({
             <div>
               <label className={label}>Who can see it</label>
               <select name="audience" className={input} defaultValue="internal">
-                <option value="internal">Internal — instructors and admins</option>
-                <option value="shared">Shared — everyone on the course</option>
+                <option value="internal">Instructors only</option>
+                <option value="shared">Students &amp; instructors</option>
               </select>
             </div>
             <div>

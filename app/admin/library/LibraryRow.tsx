@@ -57,7 +57,7 @@ export default function LibraryRow({ item, venues }: { item: LibraryItem; venues
             <span className={`text-[10px] px-1.5 py-0.5 rounded ${
               item.audience === 'shared' ? 'bg-teal-900/50 text-teal-300' : 'bg-zinc-800 text-zinc-500'
             }`}>
-              {AUDIENCE_META[item.audience].label}
+              {AUDIENCE_META[item.audience].badge}
             </span>
             {venue && <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-900/40 text-blue-300">{venue.name}</span>}
             {item.topics.includes('needs-link-check') && (
@@ -111,8 +111,8 @@ export default function LibraryRow({ item, venues }: { item: LibraryItem; venues
           <div>
             <label className={label}>Who can see it</label>
             <select className={input} value={form.audience} onChange={(e) => setForm({ ...form, audience: e.target.value as 'internal' | 'shared' })}>
-              <option value="internal">{AUDIENCE_META.internal.label} — {AUDIENCE_META.internal.hint}</option>
-              <option value="shared">{AUDIENCE_META.shared.label} — {AUDIENCE_META.shared.hint}</option>
+              <option value="internal">{AUDIENCE_META.internal.choice}</option>
+              <option value="shared">{AUDIENCE_META.shared.choice}</option>
             </select>
           </div>
           <div>

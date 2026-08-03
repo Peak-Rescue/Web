@@ -9,9 +9,17 @@ export type LibraryAudience = 'internal' | 'shared'
 export type LibrarySourceType = 'drive' | 'link' | 'youtube' | 'file'
 export type LibraryStatus = 'pending' | 'published' | 'archived'
 
-export const AUDIENCE_META: Record<LibraryAudience, { label: string; hint: string }> = {
-  internal: { label: 'Internal', hint: 'Instructors and admins only' },
-  shared: { label: 'Shared', hint: 'Visible to everyone on the course' },
+// Two labels per level: `choice` where you pick it (be explicit — admins
+// shouldn't have to guess who "shared" means), `badge` where space is tight.
+export const AUDIENCE_META: Record<LibraryAudience, { badge: string; choice: string }> = {
+  internal: { badge: 'Internal', choice: 'Instructors only' },
+  shared: { badge: 'Students', choice: 'Students & instructors' },
+}
+
+// course_modules.audience is the older three-value enum; 'student' was never
+// used and never actually hid anything from staff, so it folds into 'shared'.
+export function moduleAudience(v: string): LibraryAudience {
+  return v === 'instructor' ? 'internal' : 'shared'
 }
 
 export const LIBRARY_KINDS = [

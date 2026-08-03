@@ -83,7 +83,7 @@ export default async function PortalPage({
 
   let modulesQuery = admin
     .from('course_modules')
-    .select('id, title, audience, order, course_items(id, title, type, url, description, order)')
+    .select('id, title, audience, order, course_items(id, title, type, url, description, order, audience, library_items(id, title, url, kind, audience))')
     .eq('instance_id', id)
     .order('order')
   if (audienceFilter) {
@@ -254,24 +254,36 @@ export default async function PortalPage({
                   </div>
 
                   <div className="space-y-1">
-                    {items.map(item => (
+                    {items.map(item => {
+                      // Library rows carry their own title/link, and an item can
+                      // be held back to instructors inside a shared section.
+                      const libRaw = item.library_items as unknown
+                      const lib = (Array.isArray(libRaw) ? libRaw[0] : libRaw) as
+                        { title: string; url: string | null; audience: string } | null
+                      const effective = item.audience ?? lib?.audience ?? 'shared'
+                      if (!showTasks && effective === 'internal') return null
+                      const title = lib?.title ?? item.title
+                      const url = lib?.url ?? item.url
+                      if (!url) return null
+                      return (
                       <a
                         key={item.id}
-                        href={item.url}
+                        href={url}
                         target="_blank"
                         rel="noreferrer"
                         className="flex items-start gap-3 px-4 py-3 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded-lg transition-colors group"
                       >
-                        {ITEM_ICON[item.type]}
+                        {ITEM_ICON[(item.type ?? 'link') as keyof typeof ITEM_ICON]}
                         <div className="min-w-0">
-                          <div className="text-sm font-medium group-hover:text-pr-red-light transition-colors">{item.title}</div>
+                          <div className="text-sm font-medium group-hover:text-pr-red-light transition-colors">{title}</div>
                           {item.description && <div className="text-xs text-zinc-500 mt-0.5">{item.description}</div>}
                         </div>
                         <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="ml-auto shrink-0 text-zinc-600 group-hover:text-zinc-400 mt-0.5 transition-colors">
                           <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14 21 3"/>
                         </svg>
                       </a>
-                    ))}
+                      )
+                    })}
                   </div>
                 </section>
               )

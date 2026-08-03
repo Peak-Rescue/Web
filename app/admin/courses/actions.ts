@@ -319,6 +319,63 @@ export async function addItem(instanceId: string, moduleId: string, formData: Fo
   revalidatePath(`/admin/courses/${instanceId}`)
 }
 
+// Attach published library items to a section. Stores references, not
+// copies — editing the library entry updates every course pointing at it.
+export async function addLibraryItems(instanceId: string, moduleId: string, itemIds: string[]) {
+  await requireAdmin()
+  const admin = createAdminClient()
+  if (itemIds.length === 0) return
+
+  const { data: existing } = await admin
+    .from('course_items')
+    .select('order')
+    .eq('module_id', moduleId)
+    .order('order', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  let order = existing ? (existing.order as number) + 1 : 0
+
+  // Title is denormalised only so legacy free-typed rows and references can
+  // share a NOT NULL column; the reference's real title comes from the library.
+  const { data: lib } = await admin
+    .from('library_items')
+    .select('id, title')
+    .in('id', itemIds)
+    .eq('status', 'published')
+
+  const rows = (lib ?? []).map((l) => ({
+    module_id: moduleId,
+    library_item_id: l.id,
+    title: l.title,
+    order: order++,
+  }))
+  if (rows.length === 0) return
+
+  // Ignore anything already in this section rather than erroring on the
+  // (module_id, library_item_id) unique index.
+  const { error } = await admin.from('course_items').upsert(rows, {
+    onConflict: 'module_id,library_item_id',
+    ignoreDuplicates: true,
+  })
+  if (error) throw new Error(error.message)
+
+  revalidatePath(`/admin/courses/${instanceId}`)
+  revalidatePath(`/portal/${instanceId}`)
+}
+
+// Per-course visibility override; null restores the library item's own level.
+export async function setItemAudience(instanceId: string, itemId: string, audience: 'internal' | 'shared' | null) {
+  await requireAdmin()
+  const { error } = await createAdminClient()
+    .from('course_items')
+    .update({ audience })
+    .eq('id', itemId)
+  if (error) throw new Error(error.message)
+  revalidatePath(`/admin/courses/${instanceId}`)
+  revalidatePath(`/portal/${instanceId}`)
+}
+
 export async function deleteItem(instanceId: string, itemId: string) {
   await requireAdmin()
 
