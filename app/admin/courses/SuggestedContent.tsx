@@ -31,6 +31,7 @@ export default function SuggestedContent({
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [done, setDone] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
   const [scope, setScope] = useState<string>('suggested')
   const [q, setQ] = useState('')
 
@@ -91,6 +92,7 @@ export default function SuggestedContent({
 
   async function apply() {
     setBusy(true)
+    setError(null)
     try {
       const payload = groups
         .map((g) => ({
@@ -106,6 +108,8 @@ export default function SuggestedContent({
       setOpen(false)
       setChecked(new Set())
       router.refresh()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not add the content — please try again.')
     } finally {
       setBusy(false)
     }
@@ -255,6 +259,8 @@ export default function SuggestedContent({
           </p>
         )}
       </div>
+
+      {error && <p className="text-sm text-pr-red mt-3">{error}</p>}
 
       <div className="flex items-center gap-3 mt-3">
         <button

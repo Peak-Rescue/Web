@@ -43,6 +43,7 @@ export default function LibraryPicker({
   const [scope, setScope] = useState<string>('suggested') // 'suggested' | 'all' | a discipline
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const visible = useMemo(() => {
     const needle = q.trim().toLowerCase()
@@ -79,12 +80,15 @@ export default function LibraryPicker({
   async function add() {
     if (selected.size === 0) return
     setBusy(true)
+    setError(null)
     try {
       await addLibraryItems(instanceId, moduleId, [...selected])
       setSelected(new Set())
       setOpen(false)
       setQ('')
       router.refresh()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not add — please try again.')
     } finally {
       setBusy(false)
     }
@@ -200,6 +204,8 @@ export default function LibraryPicker({
           )}
         </div>
       )}
+
+      {error && <p className="text-xs text-pr-red mt-2">{error}</p>}
 
       <div className="flex items-center gap-3 mt-3">
         <button

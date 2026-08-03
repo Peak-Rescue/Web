@@ -328,13 +328,10 @@ export async function addLibraryItems(instanceId: string, moduleId: string, item
 
   const { data: existing } = await admin
     .from('course_items')
-    .select('order')
+    .select('order, library_item_id')
     .eq('module_id', moduleId)
-    .order('order', { ascending: false })
-    .limit(1)
-    .maybeSingle()
-
-  let order = existing ? (existing.order as number) + 1 : 0
+  const have = new Set((existing ?? []).map((c) => c.library_item_id).filter(Boolean))
+  let order = Math.max(-1, ...(existing ?? []).map((c) => c.order as number)) + 1
 
   // Title is denormalised only so legacy free-typed rows and references can
   // share a NOT NULL column; the reference's real title comes from the library.
@@ -344,7 +341,7 @@ export async function addLibraryItems(instanceId: string, moduleId: string, item
     .in('id', itemIds)
     .eq('status', 'published')
 
-  const rows = (lib ?? []).map((l) => ({
+  const rows = (lib ?? []).filter((l) => !have.has(l.id)).map((l) => ({
     module_id: moduleId,
     library_item_id: l.id,
     title: l.title,
@@ -352,12 +349,7 @@ export async function addLibraryItems(instanceId: string, moduleId: string, item
   }))
   if (rows.length === 0) return
 
-  // Ignore anything already in this section rather than erroring on the
-  // (module_id, library_item_id) unique index.
-  const { error } = await admin.from('course_items').upsert(rows, {
-    onConflict: 'module_id,library_item_id',
-    ignoreDuplicates: true,
-  })
+  const { error } = await admin.from('course_items').insert(rows)
   if (error) throw new Error(error.message)
 
   revalidatePath(`/admin/courses/${instanceId}`)
@@ -419,16 +411,16 @@ export async function applyLibrarySelection(
       .eq('status', 'published')
     const overrideById = new Map(g.items.map((i) => [i.id, i.audience]))
 
-    const { data: already } = await admin
+    // The duplicate guard is a partial unique index, which PostgREST can't use
+    // for ON CONFLICT inference — so skip existing rows explicitly.
+    const { data: current } = await admin
       .from('course_items')
-      .select('order')
+      .select('order, library_item_id')
       .eq('module_id', moduleId)
-      .order('order', { ascending: false })
-      .limit(1)
-      .maybeSingle()
-    let order = already ? (already.order as number) + 1 : 0
+    const have = new Set((current ?? []).map((c) => c.library_item_id).filter(Boolean))
+    let order = Math.max(-1, ...(current ?? []).map((c) => c.order as number)) + 1
 
-    const rows = (lib ?? []).map((l) => {
+    const rows = (lib ?? []).filter((l) => !have.has(l.id)).map((l) => {
       const own = overrideById.get(l.id)
       return {
         module_id: moduleId!,
@@ -441,9 +433,7 @@ export async function applyLibrarySelection(
     })
     if (rows.length === 0) continue
 
-    const { error } = await admin
-      .from('course_items')
-      .upsert(rows, { onConflict: 'module_id,library_item_id', ignoreDuplicates: true })
+    const { error } = await admin.from('course_items').insert(rows)
     if (error) throw new Error(error.message)
     items += rows.length
   }

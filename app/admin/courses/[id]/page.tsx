@@ -347,6 +347,14 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
     }
   })
 
+  // Known section names — from library topics and sections already in use on
+  // other courses. Free-typing section titles guarantees near-duplicates
+  // ("Venue Info" vs "Venue Information"), so the field offers these first.
+  const knownSectionNames = [...new Set([
+    ...pickerItems.flatMap((p) => p.topics).filter((t) => t && t !== 'needs-link-check'),
+    ...((await createAdminClient().from('course_modules').select('title')).data ?? []).map((m) => m.title as string),
+  ])].sort((a, b) => a.localeCompare(b))
+
   const assignedIds = new Set((assigned ?? []).map(a => a.instructor_id))
   const unassigned = (allInstructors ?? []).filter(i => !assignedIds.has(i.id))
   // Staffing needs both: the skill, and clearance to work this client type.
@@ -740,7 +748,17 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
           <form action={addModuleWithId} className="flex gap-2 flex-wrap items-end p-4 bg-zinc-900 border border-dashed border-zinc-700 rounded-lg">
             <div>
               <label className="block text-xs text-zinc-500 mb-1">New section title</label>
-              <input name="title" required placeholder="e.g. Anchor Station Rigging" className="bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500 w-64" />
+              <input
+                name="title"
+                required
+                list="section-name-suggestions"
+                autoComplete="off"
+                placeholder="Start typing — e.g. Anchor Station Rigging"
+                className="bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500 w-64"
+              />
+              <datalist id="section-name-suggestions">
+                {knownSectionNames.map((n) => <option key={n} value={n} />)}
+              </datalist>
             </div>
             <div>
               <label className="block text-xs text-zinc-500 mb-1">Visible to</label>
