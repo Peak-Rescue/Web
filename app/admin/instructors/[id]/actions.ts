@@ -365,6 +365,35 @@ export async function adminSetInstructorSectors(instructorId: string, sectors: s
   await revalidateInstructor(instructorId)
 }
 
+// Single entry point for the bulk expertise grid: role null clears the
+// sign-off, otherwise it's set. Saves one cell at a time so a mis-click is
+// one click to undo.
+export async function adminSetExpertise(
+  instructorId: string,
+  category: CapabilityCategory,
+  role: CapabilityRole | null
+) {
+  await requireAdmin()
+  const admin = createAdminClient()
+
+  if (role === null) {
+    const { error } = await admin
+      .from('instructor_capabilities')
+      .delete()
+      .eq('instructor_id', instructorId)
+      .eq('category', category)
+    if (error) throw new Error(error.message)
+  } else {
+    const { error } = await admin
+      .from('instructor_capabilities')
+      .upsert({ instructor_id: instructorId, category, role }, { onConflict: 'instructor_id,category' })
+    if (error) throw new Error(error.message)
+  }
+  revalidatePath('/admin/instructors')
+  revalidatePath('/admin/instructors/expertise')
+  revalidatePath(`/admin/instructors/${instructorId}`)
+}
+
 export async function adminSetCapability(instructorId: string, category: CapabilityCategory, role: CapabilityRole) {
   await requireAdmin()
   const admin = createAdminClient()
