@@ -412,7 +412,7 @@ export function InstructorTable({ instructors, isAdmin = false }: { instructors:
       {/* Table — its own scroll box so the header rows and the instructor
           column stay frozen while the matrix scrolls under them. Borders live
           on cells (border-separate) so they travel with the sticky header. */}
-      <div className="overflow-auto overscroll-contain max-h-[80vh]">
+      <div className="overflow-auto max-h-[80vh]">
         <table className="w-full text-sm border-separate border-spacing-0">
           <thead className="sticky top-0 z-20 bg-pr-bg">
             {/* Group header row */}
