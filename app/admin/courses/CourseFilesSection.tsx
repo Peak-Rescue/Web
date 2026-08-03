@@ -10,7 +10,7 @@ import {
   renameCourseDoc,
   deleteCourseDoc,
 } from './document-actions'
-import { PencilIcon } from '@/components/TaskIcons'
+import { LinkIcon, PencilIcon } from '@/components/TaskIcons'
 import UploadNameDialog from '@/components/UploadNameDialog'
 import AddLinkDialog from '@/components/AddLinkDialog'
 
@@ -184,6 +184,18 @@ export default function CourseFilesSection({
                   onBlur={() => rename(f)}
                   className="max-w-64 flex-1 bg-zinc-800 border border-zinc-600 rounded px-2 py-1 text-sm text-zinc-200 focus:outline-none focus:border-zinc-400"
                 />
+              ) : f.isLink ? (
+                <a
+                  href={f.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  title="Opens external link"
+                  className="inline-flex items-center gap-1.5 max-w-64 px-2.5 py-1 bg-teal-500/10 border border-teal-500/30 hover:border-teal-400 rounded-full text-sm text-teal-300 hover:text-teal-100 transition-colors"
+                >
+                  <LinkIcon />
+                  <span className="truncate">{f.filename}</span>
+                  <span className="text-teal-400/70 shrink-0">↗</span>
+                </a>
               ) : (
                 <a
                   href={f.url}
@@ -193,9 +205,6 @@ export default function CourseFilesSection({
                 >
                   {f.filename}
                 </a>
-              )}
-              {f.isLink && renamingId !== f.id && (
-                <span className="text-xs text-zinc-500 shrink-0" title="External link">↗</span>
               )}
               <span className="text-xs text-zinc-500 truncate flex-1">
                 {f.source === 'course' ? (f.isLink ? 'Link' : 'Course file') : f.source === 'task' ? `Task: ${f.label ?? '—'}` : `Expense receipt${f.label ? ` · ${f.label}` : ''}`}

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { PencilIcon } from '@/components/TaskIcons'
+import { LinkIcon, PencilIcon } from '@/components/TaskIcons'
 
 // Attachment chip with inline rename — shared by CourseTasksPanel and
 // MyTasksList. Rename/delete fire the parent's action runner, which owns
@@ -54,11 +54,21 @@ export default function TaskDocChip({
   }
 
   return (
-    <span className="inline-flex items-center gap-1.5 px-2 py-1 bg-zinc-800 rounded text-xs">
-      <a href={doc.url} target="_blank" rel="noreferrer" className="text-zinc-300 hover:text-white max-w-44 truncate">
+    <span
+      className={`inline-flex items-center gap-1.5 px-2 py-1 rounded text-xs ${
+        doc.external ? 'bg-teal-500/10 border border-teal-500/30' : 'bg-zinc-800'
+      }`}
+    >
+      {doc.external && <span className="text-teal-300"><LinkIcon /></span>}
+      <a
+        href={doc.url}
+        target="_blank"
+        rel="noreferrer"
+        className={`max-w-44 truncate ${doc.external ? 'text-teal-300 hover:text-teal-100' : 'text-zinc-300 hover:text-white'}`}
+      >
         {doc.filename}
       </a>
-      {doc.external && <span className="text-zinc-500" title="External link">↗</span>}
+      {doc.external && <span className="text-teal-400/70" title="External link">↗</span>}
       {canEdit && (
         <>
           <button
