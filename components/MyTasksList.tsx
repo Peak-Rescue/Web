@@ -9,6 +9,7 @@ import {
   updateTaskNotes,
   createTaskDocUploadTargets,
   finalizeTaskDocs,
+  addTaskDocLink,
   renameTaskDoc,
   deleteTaskDoc,
 } from '@/app/admin/courses/task-actions'
@@ -16,6 +17,7 @@ import { type MyOpenTask } from '@/lib/course-tasks'
 import { NotesIcon, PaperclipIcon, taskIconClass } from '@/components/TaskIcons'
 import TaskDocChip from '@/components/TaskDocChip'
 import UploadNameDialog from '@/components/UploadNameDialog'
+import AddLinkDialog from '@/components/AddLinkDialog'
 
 // "Your open tasks" on the portal home — same task rows as the course pages,
 // with the same notes and attachments (shared data, so edits show both places).
@@ -47,6 +49,8 @@ export default function MyTasksList({ tasks }: { tasks: MyOpenTask[] }) {
   }
   const [uploadingFor, setUploadingFor] = useState<string | null>(null)
   const [pending, setPending] = useState<{ task: MyOpenTask; files: File[] } | null>(null)
+  const [linkTask, setLinkTask] = useState<MyOpenTask | null>(null)
+  const [linkBusy, setLinkBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const uploadTaskRef = useRef<MyOpenTask | null>(null)
@@ -135,6 +139,22 @@ export default function MyTasksList({ tasks }: { tasks: MyOpenTask[] }) {
     }
   }
 
+  async function addLink(name: string, url: string) {
+    const task = linkTask
+    if (!task) return
+    setLinkBusy(true)
+    setError(null)
+    try {
+      await addTaskDocLink(task.instance_id, task.id, url, name)
+      setLinkTask(null)
+      router.refresh()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not add link')
+    } finally {
+      setLinkBusy(false)
+    }
+  }
+
   // Tasks arrive sorted by course start date, so consecutive rows for the
   // same course collapse into one header group.
   const groups: { instanceId: string; first: MyOpenTask; items: MyOpenTask[] }[] = []
@@ -204,6 +224,13 @@ export default function MyTasksList({ tasks }: { tasks: MyOpenTask[] }) {
                 >
                   {uploadingFor === t.id ? 'Uploading…' : '+ Attach document'}
                 </button>
+                <button
+                  onClick={() => setLinkTask(t)}
+                  disabled={linkBusy}
+                  className="inline-flex items-center gap-1 px-2 py-1 border border-dashed border-zinc-700 hover:border-zinc-500 text-zinc-400 hover:text-zinc-200 rounded text-xs transition-colors disabled:opacity-50"
+                >
+                  + Add link
+                </button>
                 <Link href={`/portal/${t.instance_id}`} className="ml-auto text-xs text-zinc-500 underline hover:text-zinc-300">
                   Open course →
                 </Link>
@@ -237,6 +264,12 @@ export default function MyTasksList({ tasks }: { tasks: MyOpenTask[] }) {
         uploading={uploadingFor !== null}
         onSubmit={uploadNamed}
         onCancel={() => uploadingFor === null && setPending(null)}
+      />
+      <AddLinkDialog
+        open={linkTask !== null}
+        busy={linkBusy}
+        onSubmit={addLink}
+        onCancel={() => !linkBusy && setLinkTask(null)}
       />
       {groups.map((g) => (
         <div key={g.instanceId} className="divide-y divide-zinc-800">

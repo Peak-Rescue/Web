@@ -7,25 +7,28 @@ export type LoadedTask = {
   assigned_to: string | null
   assigned_by: string | null
   status: 'open' | 'done'
-  documents: { id: string; filename: string; url: string }[]
+  documents: { id: string; filename: string; url: string; external: boolean }[]
 }
 
 // Tasks for one instance with their attached documents resolved to signed
 // URLs (private bucket) — one batched signing call for the whole list.
+// External-link attachments carry their own URL and skip signing.
 export async function loadTasksWithDocs(
   admin: ReturnType<typeof createAdminClient>,
   instanceId: string
 ): Promise<LoadedTask[]> {
   const { data } = await admin
     .from('course_tasks')
-    .select('id, title, notes, assigned_to, assigned_by, status, course_task_documents(id, path, filename)')
+    .select('id, title, notes, assigned_to, assigned_by, status, course_task_documents(id, path, filename, url)')
     .eq('instance_id', instanceId)
     .order('sort_order')
     .order('created_at')
 
-  type DocRow = { id: string; path: string; filename: string | null }
+  type DocRow = { id: string; path: string | null; filename: string | null; url: string | null }
   const rows = data ?? []
-  const allPaths = rows.flatMap((r) => ((r.course_task_documents ?? []) as DocRow[]).map((d) => d.path))
+  const allPaths = rows.flatMap((r) =>
+    ((r.course_task_documents ?? []) as DocRow[]).map((d) => d.path).filter((p): p is string => Boolean(p))
+  )
   const { data: signed } = allPaths.length
     ? await admin.storage.from('task-documents').createSignedUrls(allPaths, 3600)
     : { data: [] }
@@ -41,7 +44,8 @@ export async function loadTasksWithDocs(
     documents: ((r.course_task_documents ?? []) as DocRow[]).map((d) => ({
       id: d.id,
       filename: d.filename ?? 'document',
-      url: urlByPath.get(d.path) ?? '#',
+      url: d.url ?? (d.path ? urlByPath.get(d.path) : undefined) ?? '#',
+      external: Boolean(d.url),
     })),
   }))
 }
@@ -57,7 +61,7 @@ export type MyOpenTask = {
   location: string | null
   startsAt: string | null
   endsAt: string | null
-  documents: { id: string; filename: string; url: string }[]
+  documents: { id: string; filename: string; url: string; external: boolean }[]
 }
 
 // A user's open tasks across courses, with notes and signed document URLs —
@@ -69,7 +73,7 @@ export async function loadMyOpenTasks(
 ): Promise<MyOpenTask[]> {
   const { data } = await admin
     .from('course_tasks')
-    .select('id, instance_id, title, notes, created_at, course_instances(course_type, custom_title, status, client_name, location, starts_at, ends_at), course_task_documents(id, path, filename)')
+    .select('id, instance_id, title, notes, created_at, course_instances(course_type, custom_title, status, client_name, location, starts_at, ends_at), course_task_documents(id, path, filename, url)')
     .eq('assigned_to', userId)
     .eq('status', 'open')
     .order('created_at', { ascending: true })
@@ -84,7 +88,7 @@ export async function loadMyOpenTasks(
     starts_at: string | null
     ends_at: string | null
   }
-  type DocRow = { id: string; path: string; filename: string | null }
+  type DocRow = { id: string; path: string | null; filename: string | null; url: string | null }
   const rows = (data ?? [])
     .filter((r) => (r.course_instances as unknown as InstRow | null)?.status !== 'cancelled')
     .sort((a, b) => {
@@ -96,7 +100,9 @@ export async function loadMyOpenTasks(
         (a.created_at as string).localeCompare(b.created_at as string)
       )
     })
-  const allPaths = rows.flatMap((r) => ((r.course_task_documents ?? []) as DocRow[]).map((d) => d.path))
+  const allPaths = rows.flatMap((r) =>
+    ((r.course_task_documents ?? []) as DocRow[]).map((d) => d.path).filter((p): p is string => Boolean(p))
+  )
   const { data: signed } = allPaths.length
     ? await admin.storage.from('task-documents').createSignedUrls(allPaths, 3600)
     : { data: [] }
@@ -119,7 +125,8 @@ export async function loadMyOpenTasks(
       documents: ((r.course_task_documents ?? []) as DocRow[]).map((d) => ({
         id: d.id,
         filename: d.filename ?? 'document',
-        url: urlByPath.get(d.path) ?? '#',
+        url: d.url ?? (d.path ? urlByPath.get(d.path) : undefined) ?? '#',
+        external: Boolean(d.url),
       })),
     }
   })

@@ -134,8 +134,8 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
     })(),
     admin.from('course_task_templates').select('id, title, default_line, sort_order').eq('active', true).order('sort_order'),
     admin.from('course_interest_invites').select('id, instructor_id, sent_at, responded_at, interested, note').eq('instance_id', id).order('created_at'),
-    admin.from('course_documents').select('id, path, filename, created_at').eq('instance_id', id),
-    admin.from('course_task_documents').select('id, path, filename, created_at, course_tasks!inner(title, instance_id)').eq('course_tasks.instance_id', id),
+    admin.from('course_documents').select('id, path, filename, url, created_at').eq('instance_id', id),
+    admin.from('course_task_documents').select('id, path, filename, url, created_at, course_tasks!inner(title, instance_id)').eq('course_tasks.instance_id', id),
     admin.from('expense_receipts').select('id, path, filename, created_at, expense_items!inner(category, instance_id, expense_reports(profiles(first_name, last_name)))').eq('expense_items.instance_id', id),
     admin.from('gallery_images').select('url, caption, categories').order('created_at', { ascending: false }),
     admin.from('estimate_reviews').select('id, created_at, requested_by, reviewer_id, note, responded_at, approved, response_note').eq('instance_id', id).order('created_at', { ascending: false }).limit(8),
@@ -151,11 +151,13 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
   ]
 
   // One "Files" view across every attachment on the course: general uploads,
-  // task documents, and expense receipts — signed per-bucket in two calls.
+  // external links, task documents, and expense receipts — uploads signed
+  // per-bucket in two calls, links used as-is.
   const docRows = [...(courseDocRows ?? []), ...(taskDocRows ?? [])]
+  const docPaths = docRows.map((r) => r.path).filter((p): p is string => Boolean(p))
   const [{ data: signedDocs }, { data: signedReceipts }] = await Promise.all([
-    docRows.length
-      ? admin.storage.from('task-documents').createSignedUrls(docRows.map((r) => r.path), 3600)
+    docPaths.length
+      ? admin.storage.from('task-documents').createSignedUrls(docPaths, 3600)
       : Promise.resolve({ data: [] }),
     (receiptRows ?? []).length
       ? admin.storage.from('expense-receipts').createSignedUrls((receiptRows ?? []).map((r) => r.path), 3600)
@@ -168,17 +170,19 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
     ...(courseDocRows ?? []).map((r) => ({
       id: r.id,
       filename: r.filename ?? 'document',
-      url: fileUrl.get(r.path) ?? '#',
+      url: r.url ?? (r.path ? fileUrl.get(r.path) : undefined) ?? '#',
       source: 'course' as const,
       label: null,
+      isLink: Boolean(r.url),
       created_at: r.created_at,
     })),
     ...(taskDocRows ?? []).map((r) => ({
       id: r.id,
       filename: r.filename ?? 'document',
-      url: fileUrl.get(r.path) ?? '#',
+      url: r.url ?? (r.path ? fileUrl.get(r.path) : undefined) ?? '#',
       source: 'task' as const,
       label: (r.course_tasks as unknown as { title: string } | null)?.title ?? null,
+      isLink: Boolean(r.url),
       created_at: r.created_at,
     })),
     ...(receiptRows ?? []).map((r) => {

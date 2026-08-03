@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { normalizeDocLink } from '@/lib/doc-links'
 
 // General course documents (contracts, site maps, client paperwork) — files
 // attached to the course itself rather than a task. Same private bucket and
@@ -58,6 +59,21 @@ export async function finalizeCourseDocs(
   revalidatePath(`/admin/courses/${instanceId}`)
 }
 
+// A course "document" can also be an external link (Google Drive, Dropbox…)
+// — same table and list, url instead of a storage path.
+export async function addCourseDocLink(instanceId: string, url: string, title: string) {
+  const { user, admin } = await requireAdmin()
+  const link = normalizeDocLink(url, title)
+  const { error } = await admin.from('course_documents').insert({
+    instance_id: instanceId,
+    url: link.url,
+    filename: link.filename,
+    uploaded_by: user.id,
+  })
+  if (error) throw new Error(error.message)
+  revalidatePath(`/admin/courses/${instanceId}`)
+}
+
 export async function renameCourseDoc(instanceId: string, docId: string, filename: string) {
   const { admin } = await requireAdmin()
   const name = filename.trim().slice(0, 200)
@@ -80,7 +96,7 @@ export async function deleteCourseDoc(instanceId: string, docId: string) {
     .eq('instance_id', instanceId)
     .single()
   if (!doc) throw new Error('Document not found')
-  await admin.storage.from(DOC_BUCKET).remove([doc.path])
+  if (doc.path) await admin.storage.from(DOC_BUCKET).remove([doc.path])
   const { error } = await admin.from('course_documents').delete().eq('id', docId)
   if (error) throw new Error(error.message)
   revalidatePath(`/admin/courses/${instanceId}`)

@@ -12,6 +12,7 @@ import {
   updateTaskNotes,
   createTaskDocUploadTargets,
   finalizeTaskDocs,
+  addTaskDocLink,
   renameTaskDoc,
   deleteTaskDoc,
 } from '@/app/admin/courses/task-actions'
@@ -19,6 +20,7 @@ import {
 import { NotesIcon, PaperclipIcon, taskIconClass } from '@/components/TaskIcons'
 import TaskDocChip from '@/components/TaskDocChip'
 import UploadNameDialog from '@/components/UploadNameDialog'
+import AddLinkDialog from '@/components/AddLinkDialog'
 import { useUnsavedGuard, withSaveTimeout } from '@/components/useUnsavedGuard'
 
 export type CourseTask = {
@@ -28,7 +30,7 @@ export type CourseTask = {
   assigned_to: string | null
   assigned_by: string | null
   status: 'open' | 'done'
-  documents: { id: string; filename: string; url: string }[]
+  documents: { id: string; filename: string; url: string; external?: boolean }[]
 }
 
 // onCourse: admins and instructors staffed on this course — the default
@@ -138,6 +140,8 @@ export default function CourseTasksPanel({
   })
   const [uploadingDocsFor, setUploadingDocsFor] = useState<string | null>(null)
   const [pendingDocs, setPendingDocs] = useState<{ taskId: string; files: File[] } | null>(null)
+  const [linkTaskId, setLinkTaskId] = useState<string | null>(null)
+  const [linkBusy, setLinkBusy] = useState(false)
   const docInputRef = useRef<HTMLInputElement>(null)
   const docTaskRef = useRef<string | null>(null)
   const notesFieldRef = useRef<HTMLTextAreaElement>(null)
@@ -215,6 +219,22 @@ export default function CourseTasksPanel({
       setError(err instanceof Error ? err.message : 'Document upload failed')
     } finally {
       setUploadingDocsFor(null)
+    }
+  }
+
+  async function addLink(name: string, url: string) {
+    const taskId = linkTaskId
+    if (!taskId) return
+    setLinkBusy(true)
+    setError(null)
+    try {
+      await addTaskDocLink(instanceId, taskId, url, name)
+      setLinkTaskId(null)
+      router.refresh()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not add link')
+    } finally {
+      setLinkBusy(false)
     }
   }
 
@@ -335,16 +355,25 @@ export default function CourseTasksPanel({
               />
             ))}
             {canEditNotes && (
-              <button
-                onClick={() => {
-                  docTaskRef.current = t.id
-                  docInputRef.current?.click()
-                }}
-                disabled={uploadingDocsFor === t.id}
-                className="inline-flex items-center gap-1 px-2 py-1 border border-dashed border-zinc-700 hover:border-zinc-500 text-zinc-400 hover:text-zinc-200 rounded text-xs transition-colors disabled:opacity-50"
-              >
-                {uploadingDocsFor === t.id ? 'Uploading…' : '+ Attach document'}
-              </button>
+              <>
+                <button
+                  onClick={() => {
+                    docTaskRef.current = t.id
+                    docInputRef.current?.click()
+                  }}
+                  disabled={uploadingDocsFor === t.id}
+                  className="inline-flex items-center gap-1 px-2 py-1 border border-dashed border-zinc-700 hover:border-zinc-500 text-zinc-400 hover:text-zinc-200 rounded text-xs transition-colors disabled:opacity-50"
+                >
+                  {uploadingDocsFor === t.id ? 'Uploading…' : '+ Attach document'}
+                </button>
+                <button
+                  onClick={() => setLinkTaskId(t.id)}
+                  disabled={linkBusy}
+                  className="inline-flex items-center gap-1 px-2 py-1 border border-dashed border-zinc-700 hover:border-zinc-500 text-zinc-400 hover:text-zinc-200 rounded text-xs transition-colors disabled:opacity-50"
+                >
+                  + Add link
+                </button>
+              </>
             )}
           </div>
           {canEditNotes ? (
@@ -390,6 +419,12 @@ export default function CourseTasksPanel({
         uploading={uploadingDocsFor !== null}
         onSubmit={uploadNamedDocs}
         onCancel={() => uploadingDocsFor === null && setPendingDocs(null)}
+      />
+      <AddLinkDialog
+        open={linkTaskId !== null}
+        busy={linkBusy}
+        onSubmit={addLink}
+        onCancel={() => !linkBusy && setLinkTaskId(null)}
       />
       <div className="bg-zinc-900 rounded-lg border border-zinc-800 divide-y divide-zinc-800">
         {open.map((t) => renderTaskRow(t))}

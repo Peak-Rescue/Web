@@ -5,6 +5,7 @@ import { after } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { courseShortName } from '@/lib/courses'
+import { normalizeDocLink } from '@/lib/doc-links'
 
 // Admins manage tasks everywhere; a lead instructor manages tasks on their
 // own course. Assignees may toggle their own task's status.
@@ -273,6 +274,21 @@ export async function finalizeTaskDocs(
   revalidateTaskViews(instanceId)
 }
 
+// A task attachment can also be an external link (Google Drive, Dropbox…) —
+// same table and chips, url instead of a storage path.
+export async function addTaskDocLink(instanceId: string, taskId: string, url: string, title: string) {
+  const { user, admin } = await requireTaskParticipant(instanceId, taskId)
+  const link = normalizeDocLink(url, title)
+  const { error } = await admin.from('course_task_documents').insert({
+    task_id: taskId,
+    url: link.url,
+    filename: link.filename,
+    uploaded_by: user.id,
+  })
+  if (error) throw new Error(error.message)
+  revalidateTaskViews(instanceId)
+}
+
 export async function renameTaskDoc(instanceId: string, taskId: string, docId: string, filename: string) {
   const { admin } = await requireTaskParticipant(instanceId, taskId)
   const name = filename.trim().slice(0, 200)
@@ -295,7 +311,7 @@ export async function deleteTaskDoc(instanceId: string, taskId: string, docId: s
     .eq('task_id', taskId)
     .single()
   if (!doc) return
-  await admin.storage.from(DOC_BUCKET).remove([doc.path])
+  if (doc.path) await admin.storage.from(DOC_BUCKET).remove([doc.path])
   const { error } = await admin.from('course_task_documents').delete().eq('id', docId)
   if (error) throw new Error(error.message)
   revalidateTaskViews(instanceId)

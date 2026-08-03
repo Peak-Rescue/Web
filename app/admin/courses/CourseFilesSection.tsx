@@ -6,11 +6,13 @@ import { createClient } from '@/lib/supabase/client'
 import {
   createCourseDocUploadTargets,
   finalizeCourseDocs,
+  addCourseDocLink,
   renameCourseDoc,
   deleteCourseDoc,
 } from './document-actions'
 import { PencilIcon } from '@/components/TaskIcons'
 import UploadNameDialog from '@/components/UploadNameDialog'
+import AddLinkDialog from '@/components/AddLinkDialog'
 
 export type CourseFile = {
   id: string
@@ -19,6 +21,8 @@ export type CourseFile = {
   // Where the file came from: general course upload, a task, an expense report.
   source: 'course' | 'task' | 'expense'
   label: string | null
+  // External link (Google Drive, Dropbox…) rather than an uploaded file.
+  isLink?: boolean
 }
 
 // Every file attached anywhere in the course, in one place — general uploads
@@ -38,6 +42,8 @@ export default function CourseFilesSection({
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [renameDraft, setRenameDraft] = useState('')
   const [pending, setPending] = useState<File[]>([])
+  const [linkOpen, setLinkOpen] = useState(false)
+  const [linkBusy, setLinkBusy] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
   const renameCancelled = useRef(false)
 
@@ -75,6 +81,20 @@ export default function CourseFilesSection({
       setError(err instanceof Error ? err.message : 'Upload failed')
     } finally {
       setUploading(false)
+    }
+  }
+
+  async function addLink(name: string, url: string) {
+    setLinkBusy(true)
+    setError(null)
+    try {
+      await addCourseDocLink(instanceId, url, name)
+      setLinkOpen(false)
+      router.refresh()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not add link')
+    } finally {
+      setLinkBusy(false)
     }
   }
 
@@ -124,13 +144,22 @@ export default function CourseFilesSection({
         <p className="text-xs text-zinc-400">
           Files — everything attached to this course, including task attachments and expense receipts.
         </p>
-        <button
-          onClick={() => fileRef.current?.click()}
-          disabled={uploading}
-          className="shrink-0 inline-flex items-center gap-1 px-3 py-1.5 border border-dashed border-zinc-700 hover:border-zinc-500 text-zinc-400 hover:text-zinc-200 rounded text-xs transition-colors disabled:opacity-50"
-        >
-          {uploading ? 'Uploading…' : '+ Upload files'}
-        </button>
+        <div className="shrink-0 flex items-center gap-2">
+          <button
+            onClick={() => setLinkOpen(true)}
+            disabled={linkBusy}
+            className="inline-flex items-center gap-1 px-3 py-1.5 border border-dashed border-zinc-700 hover:border-zinc-500 text-zinc-400 hover:text-zinc-200 rounded text-xs transition-colors disabled:opacity-50"
+          >
+            + Add link
+          </button>
+          <button
+            onClick={() => fileRef.current?.click()}
+            disabled={uploading}
+            className="inline-flex items-center gap-1 px-3 py-1.5 border border-dashed border-zinc-700 hover:border-zinc-500 text-zinc-400 hover:text-zinc-200 rounded text-xs transition-colors disabled:opacity-50"
+          >
+            {uploading ? 'Uploading…' : '+ Upload files'}
+          </button>
+        </div>
       </div>
 
       {files.length === 0 ? (
@@ -165,8 +194,11 @@ export default function CourseFilesSection({
                   {f.filename}
                 </a>
               )}
+              {f.isLink && renamingId !== f.id && (
+                <span className="text-xs text-zinc-500 shrink-0" title="External link">↗</span>
+              )}
               <span className="text-xs text-zinc-500 truncate flex-1">
-                {f.source === 'course' ? 'Course file' : f.source === 'task' ? `Task: ${f.label ?? '—'}` : `Expense receipt${f.label ? ` · ${f.label}` : ''}`}
+                {f.source === 'course' ? (f.isLink ? 'Link' : 'Course file') : f.source === 'task' ? `Task: ${f.label ?? '—'}` : `Expense receipt${f.label ? ` · ${f.label}` : ''}`}
               </span>
               {f.source === 'course' && (
                 <>
@@ -202,6 +234,12 @@ export default function CourseFilesSection({
         uploading={uploading}
         onSubmit={uploadNamed}
         onCancel={() => !uploading && setPending([])}
+      />
+      <AddLinkDialog
+        open={linkOpen}
+        busy={linkBusy}
+        onSubmit={addLink}
+        onCancel={() => !linkBusy && setLinkOpen(false)}
       />
     </div>
   )

@@ -12,7 +12,7 @@ export default function TaskDocChip({
   onRename,
   onDelete,
 }: {
-  doc: { id: string; filename: string; url: string }
+  doc: { id: string; filename: string; url: string; external?: boolean }
   canEdit: boolean
   onRename: (filename: string) => void
   onDelete: () => void
@@ -58,6 +58,7 @@ export default function TaskDocChip({
       <a href={doc.url} target="_blank" rel="noreferrer" className="text-zinc-300 hover:text-white max-w-44 truncate">
         {doc.filename}
       </a>
+      {doc.external && <span className="text-zinc-500" title="External link">↗</span>}
       {canEdit && (
         <>
           <button
