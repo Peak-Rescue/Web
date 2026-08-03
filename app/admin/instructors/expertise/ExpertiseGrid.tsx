@@ -76,8 +76,8 @@ export default function ExpertiseGrid({ rows }: { rows: GridRow[] }) {
     }`
 
   return (
-    <div>
-      <div className="flex items-center gap-3 mb-4 flex-wrap">
+    <div className="flex-1 min-h-0 flex flex-col px-4 pb-4">
+      <div className="flex items-center gap-3 mb-3 flex-wrap shrink-0">
         <div className="flex items-center gap-1">
           {(['all', 'military', 'civilian'] as const).map((f) => (
             <button
@@ -97,10 +97,11 @@ export default function ExpertiseGrid({ rows }: { rows: GridRow[] }) {
         </span>
       </div>
 
-      {error && <p className="text-sm text-pr-red mb-3">{error}</p>}
+      {error && <p className="text-sm text-pr-red mb-2 shrink-0">{error}</p>}
 
-      {/* Bounded scroll box so the header and name column can stay put. */}
-      <div className="overflow-auto max-h-[70vh] border border-zinc-800 rounded-lg">
+      {/* The only scrolling element on the page, so the pinned header and name
+          column stay put and never travel under the site nav. */}
+      <div className="flex-1 min-h-0 overflow-auto border border-zinc-800 rounded-lg">
         <table className="w-full text-sm border-separate border-spacing-0">
           <thead>
             <tr>
@@ -171,7 +172,7 @@ export default function ExpertiseGrid({ rows }: { rows: GridRow[] }) {
         </table>
       </div>
 
-      <p className="text-xs text-zinc-600 mt-3">
+      <p className="text-xs text-zinc-600 mt-2 shrink-0">
         {visible.length} instructor{visible.length === 1 ? '' : 's'} shown.
       </p>
     </div>

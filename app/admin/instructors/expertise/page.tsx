@@ -31,21 +31,20 @@ export default async function ExpertiseGridPage() {
   }))
 
   return (
-    <main className="min-h-screen bg-zinc-950 text-white pt-16 md:pt-20">
-      <div className="max-w-full mx-auto px-4 py-10">
-        <Link href="/admin/instructors" className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors mb-6 inline-block">
+    // Fixed-height page: only the grid scrolls, so its pinned header can never
+    // slide up under the site nav.
+    <main className="h-screen flex flex-col bg-zinc-950 text-white pt-16 md:pt-20">
+      <div className="px-4 pt-6 pb-4 shrink-0">
+        <Link href="/admin/instructors" className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors mb-3 inline-block">
           ← All instructors
         </Link>
-
         <h1 className="text-2xl font-bold">Expertise &amp; Sector</h1>
-        <p className="text-zinc-400 mt-1 mb-6 max-w-3xl text-sm">
-          The whole roster in one grid. Staffing needs both: the right skill, and clearance for the client type —
-          so someone signed off in Swift Water can run a military water course only if they&rsquo;re also cleared
-          for military work.
+        <p className="text-zinc-400 mt-1 max-w-3xl text-sm">
+          Staffing needs both: the right skill, and clearance for the client type.
         </p>
-
-        <ExpertiseGrid rows={rows} />
       </div>
+
+      <ExpertiseGrid rows={rows} />
     </main>
   )
 }
