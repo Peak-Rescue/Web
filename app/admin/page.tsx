@@ -269,6 +269,17 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         </svg>
       ),
     },
+    {
+      title: 'Content Library',
+      desc: 'Course material, references, maps and venue packs',
+      href: '/admin/library',
+      section: 'admin',
+      icon: (
+        <svg {...svgProps}>
+          <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+        </svg>
+      ),
+    },
   ]
   const linkHref = (l: PortalLink) => (l.preserveView && viewAs ? `${l.href}?as=${viewAs}` : l.href)
 

@@ -1,0 +1,159 @@
+'use server'
+
+import { revalidatePath } from 'next/cache'
+import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { LIBRARY_KINDS } from '@/lib/library'
+import { CAPABILITY_ORDER } from '@/lib/capabilities'
+
+async function requireAdmin() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Not authenticated')
+  const admin = createAdminClient()
+  const { data: profile } = await admin.from('profiles').select('role').eq('id', user.id).single()
+  if (profile?.role !== 'admin') throw new Error('Not authorized')
+  return admin
+}
+
+function revalidate() {
+  revalidatePath('/admin/library')
+  revalidatePath('/admin/venues')
+}
+
+const VALID_KINDS = new Set<string>(LIBRARY_KINDS)
+const VALID_DISCIPLINES = new Set<string>(CAPABILITY_ORDER)
+
+// Free-form tags are the one open field; keep them tidy so the autocomplete
+// stays useful (deduped, trimmed, capped).
+function cleanTags(raw: string): string[] {
+  return [...new Set(
+    raw.split(',').map((t) => t.trim()).filter(Boolean).map((t) => t.slice(0, 60))
+  )].slice(0, 12)
+}
+
+export type LibraryPatch = {
+  title?: string
+  description?: string | null
+  url?: string | null
+  edit_url?: string | null
+  kind?: string
+  audience?: 'internal' | 'shared'
+  disciplines?: string[]
+  topicsRaw?: string
+  venue_id?: string | null
+  expires_at?: string | null
+  status?: 'pending' | 'published' | 'archived'
+}
+
+export async function updateLibraryItem(id: string, patch: LibraryPatch) {
+  const admin = await requireAdmin()
+
+  const update: Record<string, unknown> = {}
+  if (patch.title !== undefined) update.title = patch.title.trim().slice(0, 200) || 'Untitled'
+  if (patch.description !== undefined) update.description = patch.description?.trim() || null
+  if (patch.url !== undefined) update.url = patch.url?.trim() || null
+  if (patch.edit_url !== undefined) update.edit_url = patch.edit_url?.trim() || null
+  if (patch.kind !== undefined && VALID_KINDS.has(patch.kind)) update.kind = patch.kind
+  if (patch.audience !== undefined) update.audience = patch.audience
+  if (patch.disciplines !== undefined) {
+    update.disciplines = patch.disciplines.filter((d) => VALID_DISCIPLINES.has(d))
+  }
+  if (patch.topicsRaw !== undefined) update.topics = cleanTags(patch.topicsRaw)
+  if (patch.venue_id !== undefined) update.venue_id = patch.venue_id || null
+  if (patch.expires_at !== undefined) update.expires_at = patch.expires_at || null
+  if (patch.status !== undefined) {
+    update.status = patch.status
+    if (patch.status === 'published') update.reviewed_at = new Date().toISOString()
+  }
+  update.updated_at = new Date().toISOString()
+
+  const { error } = await admin.from('library_items').update(update).eq('id', id)
+  if (error) throw new Error(error.message)
+  revalidate()
+}
+
+export async function createLibraryItem(formData: FormData) {
+  const admin = await requireAdmin()
+
+  const url = ((formData.get('url') as string) || '').trim()
+  const kind = (formData.get('kind') as string) || 'reference'
+  const driveMatch = url.match(/drive\.google\.com\/file\/d\/([^/]+)/)
+  const youtube = /youtube\.com|youtu\.be/.test(url)
+
+  const { error } = await admin.from('library_items').insert({
+    title: ((formData.get('title') as string) || '').trim().slice(0, 200) || 'Untitled',
+    description: ((formData.get('description') as string) || '').trim() || null,
+    url: url || null,
+    edit_url: ((formData.get('edit_url') as string) || '').trim() || null,
+    drive_file_id: driveMatch?.[1] ?? null,
+    source_type: driveMatch ? 'drive' : youtube ? 'youtube' : 'link',
+    kind: VALID_KINDS.has(kind) ? kind : 'reference',
+    audience: (formData.get('audience') as string) === 'shared' ? 'shared' : 'internal',
+    disciplines: (formData.getAll('disciplines') as string[]).filter((d) => VALID_DISCIPLINES.has(d)),
+    topics: cleanTags((formData.get('topics') as string) || ''),
+    venue_id: ((formData.get('venue_id') as string) || '') || null,
+    expires_at: ((formData.get('expires_at') as string) || '') || null,
+    status: 'published',
+  })
+  if (error) throw new Error(error.message)
+  revalidate()
+}
+
+export async function deleteLibraryItem(id: string) {
+  const admin = await requireAdmin()
+  const { error } = await admin.from('library_items').delete().eq('id', id)
+  if (error) throw new Error(error.message)
+  revalidate()
+}
+
+// Review queue: publish everything still pending from one Classroom class,
+// so a batch that's already correct clears in one click.
+export async function publishPendingFromClass(sourceClass: string) {
+  const admin = await requireAdmin()
+  const { error, count } = await admin
+    .from('library_items')
+    .update({ status: 'published', reviewed_at: new Date().toISOString() }, { count: 'exact' })
+    .eq('status', 'pending')
+    .eq('source_class', sourceClass)
+  if (error) throw new Error(error.message)
+  revalidate()
+  return { published: count ?? 0 }
+}
+
+// ─── Venues ─────────────────────────────────────────────────────────────────
+
+export async function createVenue(formData: FormData) {
+  const admin = await requireAdmin()
+  const name = ((formData.get('name') as string) || '').trim()
+  if (!name) throw new Error('Name is required')
+  const { error } = await admin.from('venues').insert({
+    name: name.slice(0, 120),
+    region: ((formData.get('region') as string) || '').trim() || null,
+    client_name: ((formData.get('client_name') as string) || '').trim() || null,
+    notes: ((formData.get('notes') as string) || '').trim() || null,
+  })
+  if (error) throw new Error(error.message)
+  revalidate()
+}
+
+export async function updateVenue(id: string, patch: { name?: string; region?: string | null; client_name?: string | null; notes?: string | null; active?: boolean }) {
+  const admin = await requireAdmin()
+  const update: Record<string, unknown> = {}
+  if (patch.name !== undefined) update.name = patch.name.trim().slice(0, 120)
+  if (patch.region !== undefined) update.region = patch.region?.trim() || null
+  if (patch.client_name !== undefined) update.client_name = patch.client_name?.trim() || null
+  if (patch.notes !== undefined) update.notes = patch.notes?.trim() || null
+  if (patch.active !== undefined) update.active = patch.active
+  const { error } = await admin.from('venues').update(update).eq('id', id)
+  if (error) throw new Error(error.message)
+  revalidate()
+}
+
+export async function deleteVenue(id: string) {
+  const admin = await requireAdmin()
+  // Items keep existing; their venue link is cleared by the FK's ON DELETE SET NULL.
+  const { error } = await admin.from('venues').delete().eq('id', id)
+  if (error) throw new Error(error.message)
+  revalidate()
+}
