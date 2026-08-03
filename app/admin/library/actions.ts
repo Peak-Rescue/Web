@@ -107,6 +107,35 @@ export async function deleteLibraryItem(id: string) {
   revalidate()
 }
 
+// Bulk operations for the review queue — approve or re-audience a whole
+// section at once, since that's the unit people actually judge.
+export async function approveLibraryItems(ids: string[]) {
+  const admin = await requireAdmin()
+  if (ids.length === 0) return
+  const { error } = await admin
+    .from('library_items')
+    .update({ status: 'published', reviewed_at: new Date().toISOString() })
+    .in('id', ids)
+  if (error) throw new Error(error.message)
+  revalidate()
+}
+
+export async function setLibraryAudience(ids: string[], audience: 'internal' | 'shared') {
+  const admin = await requireAdmin()
+  if (ids.length === 0) return
+  const { error } = await admin.from('library_items').update({ audience }).in('id', ids)
+  if (error) throw new Error(error.message)
+  revalidate()
+}
+
+export async function rejectLibraryItems(ids: string[]) {
+  const admin = await requireAdmin()
+  if (ids.length === 0) return
+  const { error } = await admin.from('library_items').update({ status: 'archived' }).in('id', ids)
+  if (error) throw new Error(error.message)
+  revalidate()
+}
+
 // Review queue: publish everything still pending from one Classroom class,
 // so a batch that's already correct clears in one click.
 export async function publishPendingFromClass(sourceClass: string) {

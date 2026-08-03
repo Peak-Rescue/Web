@@ -5,7 +5,8 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { KIND_META, LIBRARY_KINDS, type LibraryItem, type Venue } from '@/lib/library'
 import { CAPABILITY_META, CAPABILITY_ORDER } from '@/lib/capabilities'
 import LibraryRow from './LibraryRow'
-import { createLibraryItem, publishPendingFromClass } from './actions'
+import ReviewQueue from './ReviewQueue'
+import { createLibraryItem } from './actions'
 
 const input = 'w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500'
 const label = 'block text-xs text-zinc-400 mb-1'
@@ -88,25 +89,17 @@ export default async function LibraryPage({
         </div>
 
         {/* ── Review queue ─────────────────────────────────────────────── */}
-        {pendingByClass.size > 0 && (
-          <section className="mb-8 p-4 bg-yellow-950/20 border border-yellow-900/60 rounded-lg">
-            <h2 className="text-sm font-semibold text-yellow-200 mb-1">Imported — waiting for review</h2>
-            <p className="text-xs text-zinc-400 mb-3">
-              Nothing here is visible to instructors or participants until you approve it. Check the type, who can see it,
-              and the tags; fix anything wrong, then approve individually or clear a whole class at once.
-            </p>
-            <div className="space-y-1.5">
-              {[...pendingByClass.entries()].sort((a, b) => b[1] - a[1]).map(([cls, count]) => (
-                <div key={cls} className="flex items-center justify-between gap-3 text-sm">
-                  <span className="text-zinc-300 truncate">{cls} <span className="text-zinc-600">· {count} item{count === 1 ? '' : 's'}</span></span>
-                  <form action={async () => { 'use server'; await publishPendingFromClass(cls) }}>
-                    <button className="text-xs px-2.5 py-1 rounded border border-zinc-700 text-zinc-300 hover:text-white hover:border-zinc-500 transition-colors">
-                      Approve all
-                    </button>
-                  </form>
-                </div>
-              ))}
-            </div>
+        {pendingByClass.size > 0 && status === 'pending' && (
+          <section className="mb-6 p-4 bg-zinc-900 border border-zinc-800 rounded-lg">
+            <h2 className="text-sm font-semibold mb-1">What approving does</h2>
+            <ul className="text-xs text-zinc-400 space-y-1 list-disc pl-4">
+              <li>Approved material becomes available to add to courses. It is <em>not</em> published to anyone by
+                approving it — nothing reaches students until you add it to a course.</li>
+              <li>Each group below was a topic in Google Classroom, and becomes a <strong>section</strong> on a course.</li>
+              <li>&ldquo;Who sees this section&rdquo; carries over to the course, where it can still be changed per course.
+                Instructor-only was taken from Classroom: drafts were hidden from students.</li>
+              <li>Skip archives material you don&rsquo;t want — it stays searchable but is never suggested.</li>
+            </ul>
           </section>
         )}
 
@@ -204,10 +197,14 @@ export default async function LibraryPage({
 
         {/* ── Items ────────────────────────────────────────────────────── */}
         <p className="text-xs text-zinc-600 mb-3">{items.length} item{items.length === 1 ? '' : 's'}</p>
-        <div className="space-y-2">
-          {items.map((it) => <LibraryRow key={it.id} item={it} venues={venues} />)}
-          {items.length === 0 && <p className="text-sm text-zinc-500">Nothing here yet.</p>}
-        </div>
+        {status === 'pending' && items.length > 0 ? (
+          <ReviewQueue items={items} venues={venues} />
+        ) : (
+          <div className="space-y-2">
+            {items.map((it) => <LibraryRow key={it.id} item={it} venues={venues} />)}
+            {items.length === 0 && <p className="text-sm text-zinc-500">Nothing here yet.</p>}
+          </div>
+        )}
       </div>
     </main>
   )

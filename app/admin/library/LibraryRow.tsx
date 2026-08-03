@@ -10,7 +10,7 @@ const input =
   'w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-zinc-500'
 const label = 'block text-[11px] text-zinc-500 mb-1'
 
-export default function LibraryRow({ item, venues }: { item: LibraryItem; venues: Venue[] }) {
+export default function LibraryRow({ item, venues, hideProvenance = false }: { item: LibraryItem; venues: Venue[]; hideProvenance?: boolean }) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -65,10 +65,12 @@ export default function LibraryRow({ item, venues }: { item: LibraryItem; venues
             )}
           </div>
           <p className="text-[11px] text-zinc-600 mt-1 truncate">
-            {item.disciplines.map((d) => CAPABILITY_META[d as keyof typeof CAPABILITY_META]?.label ?? d).join(' · ') || 'no discipline'}
-            {item.topics.filter((t) => t !== 'needs-link-check').length > 0 &&
-              ` — ${item.topics.filter((t) => t !== 'needs-link-check').join(', ')}`}
-            {item.source_class && <span className="text-zinc-700"> · from {item.source_class}{item.source_topic ? ` / ${item.source_topic}` : ''}</span>}
+            {item.url ? new URL(item.url, 'https://x').hostname.replace('www.', '') || 'link' : 'no link'}
+            {' · '}
+            {item.disciplines.map((d) => CAPABILITY_META[d as keyof typeof CAPABILITY_META]?.label ?? d).join(', ') || 'no expertise tag'}
+            {!hideProvenance && item.source_class && (
+              <span className="text-zinc-700"> · from {item.source_class}</span>
+            )}
           </p>
         </div>
 
