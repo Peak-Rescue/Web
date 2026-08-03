@@ -14,7 +14,7 @@ export type CapabilityCategory =
   | 'swift_water' | 'backcountry'
   // Military
   | 'mil_jungle' | 'mil_urban' | 'mil_mountain' | 'mil_canyon'
-  | 'mil_water' | 'mil_cold_weather' | 'mil_small_team' | 'mil_aerial'
+  | 'mil_water' | 'mil_maritime' | 'mil_cold_weather' | 'mil_small_team' | 'mil_aerial'
 
 export type CapabilityRole = 'lead' | 'assist'
 export type CapabilitySector = 'civilian' | 'military'
@@ -35,7 +35,8 @@ export const CAPABILITY_META: Record<CapabilityCategory, { label: string; sector
   mil_urban:        { label: 'Urban Mobility',    sector: 'military' },
   mil_mountain:     { label: 'Mountain Mobility', sector: 'military' },
   mil_canyon:       { label: 'Canyon Mobility',   sector: 'military' },
-  mil_water:        { label: 'Water & Maritime',  sector: 'military' },
+  mil_water:        { label: 'Water Mobility',    sector: 'military' },
+  mil_maritime:     { label: 'Maritime Mobility', sector: 'military' },
   mil_cold_weather: { label: 'Cold Weather',      sector: 'military' },
   mil_small_team:   { label: 'Small Team Rescue', sector: 'military' },
   mil_aerial:       { label: 'Aerial Assets',     sector: 'military' },
@@ -47,7 +48,7 @@ export const CIVILIAN_CAPABILITIES: CapabilityCategory[] = [
 
 export const MILITARY_CAPABILITIES: CapabilityCategory[] = [
   'mil_jungle', 'mil_urban', 'mil_mountain', 'mil_canyon',
-  'mil_water', 'mil_cold_weather', 'mil_small_team', 'mil_aerial',
+  'mil_water', 'mil_maritime', 'mil_cold_weather', 'mil_small_team', 'mil_aerial',
 ]
 
 export const CAPABILITY_ORDER: CapabilityCategory[] = [
@@ -75,7 +76,8 @@ export const CATEGORY_COURSE_TYPES: Record<CapabilityCategory, string[]> = {
   mil_urban:        ['urban-mobility'],
   mil_mountain:     ['mountain-mobility-training'],
   mil_canyon:       ['canyoneering'],
-  mil_water:        ['water-mobility', 'maritime-mobility'],
+  mil_water:        ['water-mobility'],
+  mil_maritime:     ['maritime-mobility'],
   mil_cold_weather: ['cold-weather-arctic-operations'],
   mil_small_team:   ['small-team-rescue'],
   mil_aerial:       ['aerial-assets'],
