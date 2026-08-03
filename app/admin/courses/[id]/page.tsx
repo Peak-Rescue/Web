@@ -638,6 +638,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
 
           <SuggestedContent
             instanceId={id}
+            courseDisciplines={matchingCategories}
             items={pickerItems}
             existingItemIds={(modules ?? []).flatMap(m =>
               (m.course_items ?? []).map(ci => ci.library_item_id).filter((x): x is string => Boolean(x))

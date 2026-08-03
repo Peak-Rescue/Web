@@ -370,12 +370,18 @@ export async function addLibraryItems(instanceId: string, moduleId: string, item
 // instructors — venue and instructor-info groups usually are.
 export async function applyLibrarySelection(
   instanceId: string,
-  groups: { title: string; audience: 'internal' | 'shared'; itemIds: string[] }[]
+  groups: {
+    title: string
+    audience: 'internal' | 'shared'
+    // Per-item audience: set only where it differs from the section, which is
+    // how a single item stays instructor-only inside a shared section.
+    items: { id: string; audience?: 'internal' | 'shared' }[]
+  }[]
 ) {
   await requireAdmin()
   const admin = createAdminClient()
 
-  const wanted = groups.filter((g) => g.itemIds.length > 0)
+  const wanted = groups.filter((g) => g.items.length > 0)
   if (wanted.length === 0) return { sections: 0, items: 0 }
 
   const { data: existingModules } = await admin
@@ -409,8 +415,9 @@ export async function applyLibrarySelection(
     const { data: lib } = await admin
       .from('library_items')
       .select('id, title')
-      .in('id', g.itemIds)
+      .in('id', g.items.map((i) => i.id))
       .eq('status', 'published')
+    const overrideById = new Map(g.items.map((i) => [i.id, i.audience]))
 
     const { data: already } = await admin
       .from('course_items')
@@ -421,12 +428,17 @@ export async function applyLibrarySelection(
       .maybeSingle()
     let order = already ? (already.order as number) + 1 : 0
 
-    const rows = (lib ?? []).map((l) => ({
-      module_id: moduleId!,
-      library_item_id: l.id,
-      title: l.title,
-      order: order++,
-    }))
+    const rows = (lib ?? []).map((l) => {
+      const own = overrideById.get(l.id)
+      return {
+        module_id: moduleId!,
+        library_item_id: l.id,
+        title: l.title,
+        // Only store an override when it differs from the section's level.
+        audience: own && own !== g.audience ? own : null,
+        order: order++,
+      }
+    })
     if (rows.length === 0) continue
 
     const { error } = await admin
