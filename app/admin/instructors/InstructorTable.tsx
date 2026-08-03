@@ -409,12 +409,14 @@ export function InstructorTable({ instructors, isAdmin = false }: { instructors:
           : `${filtered.length} of ${instructors.length} instructors`}
       </div>
 
-      {/* Table — its own scroll box so the header rows and the instructor
-          column stay frozen while the matrix scrolls under them. Borders live
-          on cells (border-separate) so they travel with the sticky header. */}
-      <div className="overflow-auto max-h-[80vh]">
+      {/* Table scrolls with the page — no inner scroll box, so there is a
+          single scroll context. The header rows stick to the viewport just
+          below the fixed site nav (h-16 md:h-20), and the instructor column
+          sticks left if the page ever scrolls horizontally. Borders live on
+          cells (border-separate) so they travel with the sticky header. */}
+      <div>
         <table className="w-full text-sm border-separate border-spacing-0">
-          <thead className="sticky top-0 z-20 bg-pr-bg">
+          <thead className="sticky top-16 md:top-20 z-20 bg-pr-bg">
             {/* Group header row */}
             <tr>
               <th rowSpan={2} className="sticky left-0 z-10 bg-pr-bg text-left py-3 pr-6 text-zinc-400 font-medium whitespace-nowrap align-bottom border-b border-zinc-800">
