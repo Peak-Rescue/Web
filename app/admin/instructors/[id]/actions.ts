@@ -350,6 +350,21 @@ export async function adminSetShowOnTeamPage(instructorId: string, show: boolean
   await revalidateInstructor(instructorId)
 }
 
+const VALID_SECTORS = new Set(['military', 'civilian'])
+
+// Which client sectors this instructor can work. Separate from expertise:
+// sector is eligibility for the job, expertise is what they can run on it.
+export async function adminSetInstructorSectors(instructorId: string, sectors: string[]) {
+  await requireAdmin()
+  const clean = [...new Set(sectors.filter((s) => VALID_SECTORS.has(s)))]
+  const { error } = await createAdminClient()
+    .from('instructors')
+    .update({ sectors: clean })
+    .eq('id', instructorId)
+  if (error) throw new Error(error.message)
+  await revalidateInstructor(instructorId)
+}
+
 export async function adminSetCapability(instructorId: string, category: CapabilityCategory, role: CapabilityRole) {
   await requireAdmin()
   const admin = createAdminClient()

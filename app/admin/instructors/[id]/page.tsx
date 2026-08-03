@@ -8,6 +8,7 @@ import ProfileForm from '@/app/instructor/ProfileForm'
 import AvatarEditor from '@/components/AvatarEditor'
 import SaveButton from '@/components/SaveButton'
 import CapabilityPanel from '@/app/admin/instructors/CapabilityPanel'
+import SectorPanel from '@/app/admin/instructors/SectorPanel'
 import TeamPageToggle from '@/app/admin/instructors/TeamPageToggle'
 import ExemptToggle from '@/app/admin/instructors/ExemptToggle'
 import DeleteInstructorButton from '@/app/admin/instructors/DeleteInstructorButton'
@@ -45,7 +46,7 @@ export default async function AdminInstructorDetailPage({ params }: { params: Pr
   // Look up by instructors.id (the URL param)
   const { data: instructor } = await admin
     .from('instructors')
-    .select('id, name, email, slug, profile_id, invite_sent_at, show_on_team_page, bio, avatar, avatar_position, avatar_scale, instructor_capabilities(category, role)')
+    .select('id, name, email, slug, profile_id, invite_sent_at, show_on_team_page, bio, avatar, avatar_position, avatar_scale, sectors, instructor_capabilities(category, role)')
     .eq('id', id)
     .single()
 
@@ -247,7 +248,14 @@ export default async function AdminInstructorDetailPage({ params }: { params: Pr
         )}
 
         <section className="mb-10">
-          <h2 className="text-lg font-semibold mb-4">Expertise</h2>
+          <h2 className="text-lg font-semibold mb-1">Sector</h2>
+          <p className="text-xs text-zinc-500 mb-3">Which client types this instructor can work.</p>
+          <SectorPanel instructorId={instructor.id} initialSectors={instructor.sectors ?? []} />
+        </section>
+
+        <section className="mb-10">
+          <h2 className="text-lg font-semibold mb-1">Expertise</h2>
+          <p className="text-xs text-zinc-500 mb-3">What they&rsquo;re signed off to run, and at what level.</p>
           <CapabilityPanel
             instructorId={instructor.id}
             initialCapabilities={capabilities as Parameters<typeof CapabilityPanel>[0]['initialCapabilities']}
