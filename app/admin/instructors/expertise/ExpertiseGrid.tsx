@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { adminSetExpertise, adminSetInstructorSectors } from '../[id]/actions'
 import { CAPABILITY_META, CAPABILITY_ORDER, type CapabilityCategory, type CapabilityRole } from '@/lib/capabilities'
@@ -25,6 +25,12 @@ export default function ExpertiseGrid({ rows }: { rows: GridRow[] }) {
   const [focused, setFocused] = useState<string | null>(null)
 
   const visible = state.filter((r) => (filter === 'all' ? true : r.sectors.includes(filter)))
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setFocused(null) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
 
   async function set(row: GridRow, cat: CapabilityCategory, role: CapabilityRole) {
     const key = `${row.id}:${cat}`
@@ -96,9 +102,17 @@ export default function ExpertiseGrid({ rows }: { rows: GridRow[] }) {
         </div>
         <span className="text-xs text-zinc-600">
           <span className="text-teal-400 font-bold">L</span>ead ·{' '}
-          <span className="text-blue-400 font-bold">A</span>ssist — click the active one to clear. Click a name to
-          focus that row. Saves as you go.
+          <span className="text-blue-400 font-bold">A</span>ssist — click the active one to clear. Click anywhere in a
+          row to focus it. Saves as you go.
         </span>
+        {focused && (
+          <button
+            onClick={() => setFocused(null)}
+            className="ml-auto text-xs text-zinc-400 hover:text-white transition-colors"
+          >
+            Clear focus (esc)
+          </button>
+        )}
       </div>
 
       {error && <p className="text-sm text-pr-red mb-2 shrink-0">{error}</p>}
@@ -132,29 +146,19 @@ export default function ExpertiseGrid({ rows }: { rows: GridRow[] }) {
               return (
               <tr
                 key={r.id}
-                className={`group transition-opacity ${dim ? 'opacity-30' : ''} ${on ? 'bg-zinc-900' : ''}`}
+                onClick={() => setFocused(r.id)}
+                className={`group transition-opacity cursor-default ${dim ? 'opacity-30' : ''} ${on ? 'bg-zinc-900' : ''}`}
               >
                 <td className={`sticky left-0 z-10 px-3 py-2 whitespace-nowrap border-b border-zinc-900 ${
                   on ? 'bg-zinc-900' : 'bg-zinc-950 group-hover:bg-zinc-900'
                 }`}>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => setFocused(on ? null : r.id)}
-                      title={on ? 'Unfocus' : 'Focus this row'}
-                      className={`text-left transition-colors ${on ? 'text-white font-medium' : 'hover:text-zinc-300'}`}
-                    >
-                      {r.name}
-                    </button>
-                    <Link
-                      href={`/admin/instructors/${r.id}`}
-                      title="Open profile"
-                      className="shrink-0 text-zinc-700 hover:text-zinc-400 transition-colors"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14 21 3" />
-                      </svg>
-                    </Link>
-                  </div>
+                  <Link
+                    href={`/admin/instructors/${r.id}`}
+                    title={`Open ${r.name}'s profile`}
+                    className={`transition-colors ${on ? 'text-white font-medium' : 'hover:text-pr-red-light'}`}
+                  >
+                    {r.name}
+                  </Link>
                 </td>
                 <td className="px-2 py-2 whitespace-nowrap border-b border-zinc-900 group-hover:bg-zinc-900/40">
                   <div className="flex gap-1">
