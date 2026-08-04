@@ -31,9 +31,11 @@ export async function upsertGearItem(input: {
   recommended?: string | null
   url?: string | null
   category?: string | null
+  parentId?: string | null
+  aliases?: string[]
 }) {
   const admin = await requireAdmin()
-  const row = {
+  const row: Record<string, unknown> = {
     name: input.name.trim().slice(0, 120),
     info: input.info?.trim() || null,
     recommended: input.recommended?.trim() || null,
@@ -41,6 +43,35 @@ export async function upsertGearItem(input: {
     category: input.category?.trim() || null,
   }
   if (!row.name) throw new Error('Name is required')
+  if (input.aliases !== undefined) {
+    row.aliases = [...new Set(input.aliases.map((a) => a.trim().toLowerCase()).filter(Boolean))]
+  }
+
+  if (input.parentId !== undefined) {
+    // Two levels, not a tree: a model hangs off a type, and a type has no
+    // parent. Anything deeper and "what satisfies this line" stops having one
+    // obvious answer.
+    if (input.parentId) {
+      const { data: parent } = await admin
+        .from('gear_items').select('id, parent_id').eq('id', input.parentId).single()
+      if (!parent) throw new Error('That type no longer exists')
+      if (parent.parent_id) throw new Error('A model can’t sit under another model — pick the type instead')
+      if (input.id === input.parentId) throw new Error('An item can’t be its own type')
+    }
+    row.parent_id = input.parentId
+  }
+
+  // A name that already exists, as a name or as a synonym, is the duplicate we
+  // are trying to prevent — say which row it collided with rather than a bare
+  // constraint error.
+  const typed = (row.name as string).toLowerCase()
+  const { data: clash } = await admin
+    .from('gear_items')
+    .select('id, name')
+    .or(`name.ilike.${typed},aliases.cs.{"${typed.replace(/"/g, '')}"}`)
+    .limit(2)
+  const other = (clash ?? []).find((c) => c.id !== input.id)
+  if (other) throw new Error(`"${other.name}" is already in the catalog — use it, or add this as a model under it`)
 
   if (input.id) {
     const { error } = await admin.from('gear_items').update(row).eq('id', input.id)
@@ -60,6 +91,43 @@ export async function retireGearItem(id: string) {
   const { error } = await admin.from('gear_items').update({ active: false }).eq('id', id)
   if (error) throw new Error(error.message)
   touch()
+}
+
+// Fold one catalog row into another: every list that used it now points at the
+// keeper, and the loser's name survives as a synonym so searching for it still
+// lands somewhere. Models under the loser move across too.
+export async function mergeGearItems(keepId: string, dropId: string) {
+  const admin = await requireAdmin()
+  if (keepId === dropId) throw new Error('Pick two different items')
+
+  const { data: rows } = await admin
+    .from('gear_items').select('id, name, aliases, parent_id').in('id', [keepId, dropId])
+  const keep = rows?.find((r) => r.id === keepId)
+  const drop = rows?.find((r) => r.id === dropId)
+  if (!keep || !drop) throw new Error('Item not found')
+
+  await admin.from('gear_list_entries').update({ gear_item_id: keepId }).eq('gear_item_id', dropId)
+  await admin.from('gear_items').update({ parent_id: keep.parent_id ? null : keepId }).eq('parent_id', dropId)
+
+  // An entry could end up naming the keeper twice if it already listed both as
+  // options; the unique constraint would reject the update, so clear first.
+  const { data: dupes } = await admin.from('gear_entry_options').select('entry_id').eq('gear_item_id', keepId)
+  const alreadyHas = new Set((dupes ?? []).map((d) => d.entry_id))
+  const { data: moving } = await admin.from('gear_entry_options').select('id, entry_id').eq('gear_item_id', dropId)
+  for (const m of moving ?? []) {
+    if (alreadyHas.has(m.entry_id)) await admin.from('gear_entry_options').delete().eq('id', m.id)
+    else await admin.from('gear_entry_options').update({ gear_item_id: keepId }).eq('id', m.id)
+  }
+
+  const aliases = [...new Set([
+    ...(keep.aliases ?? []), ...(drop.aliases ?? []), drop.name.toLowerCase(),
+  ])]
+  await admin.from('gear_items').update({ aliases }).eq('id', keepId)
+
+  const { error } = await admin.from('gear_items').delete().eq('id', dropId)
+  if (error) throw new Error(error.message)
+  touch()
+  return { keptName: keep.name, droppedName: drop.name }
 }
 
 // ─── Lists ──────────────────────────────────────────────────────────────────
@@ -180,6 +248,24 @@ export async function updateGearEntry(
   touch((data?.gear_lists as unknown as { instance_id: string | null } | null)?.instance_id)
 }
 
+// Which models satisfy this line. None means the entry stands as written; one
+// pins it; several read as "A or B" — the swiftwater list's "an ATC or Reverso
+// works great but the Camp OVO or Kong GiGi is more compact".
+export async function setGearEntryOptions(entryId: string, gearItemIds: string[]) {
+  const admin = await requireAdmin()
+  await admin.from('gear_entry_options').delete().eq('entry_id', entryId)
+  const ids = [...new Set(gearItemIds)]
+  if (ids.length) {
+    const { error } = await admin.from('gear_entry_options').insert(
+      ids.map((gear_item_id, i) => ({ entry_id: entryId, gear_item_id, sort_order: i }))
+    )
+    if (error) throw new Error(error.message)
+  }
+  const { data } = await admin
+    .from('gear_list_entries').select('gear_lists(instance_id)').eq('id', entryId).single()
+  touch((data?.gear_lists as unknown as { instance_id: string | null } | null)?.instance_id)
+}
+
 export async function removeGearEntry(id: string) {
   const admin = await requireAdmin()
   const { data } = await admin.from('gear_list_entries').select('gear_lists(instance_id)').eq('id', id).single()
@@ -201,7 +287,7 @@ export async function copyGearList(
 
   const { data: src } = await admin
     .from('gear_lists')
-    .select('name, audience, intro, gear_list_entries(gear_item_id, name, info, recommended, url, category, group_type, quantity, sort_order)')
+    .select('name, audience, intro, gear_list_entries(gear_item_id, name, info, recommended, url, category, group_type, quantity, sort_order, gear_entry_options(gear_item_id, sort_order))')
     .eq('id', sourceId)
     .single()
   if (!src) throw new Error('List not found')
@@ -220,12 +306,28 @@ export async function copyGearList(
     .single()
   if (error) throw new Error(error.message)
 
-  const entries = (src.gear_list_entries ?? []) as Record<string, unknown>[]
+  type OptionRow = { gear_item_id: string; sort_order: number }
+  const entries = (src.gear_list_entries ?? []) as unknown as (Record<string, unknown> & {
+    gear_entry_options: OptionRow[]
+  })[]
   if (entries.length) {
-    const { error: e2 } = await admin.from('gear_list_entries').insert(
-      entries.map((e) => ({ ...e, list_id: created.id }))
-    )
+    const { data: madeEntries, error: e2 } = await admin
+      .from('gear_list_entries')
+      .insert(entries.map(({ gear_entry_options: _options, ...e }) => ({ ...e, list_id: created.id })))
+      .select('id')
     if (e2) throw new Error(e2.message)
+
+    // Insert order matches the array we sent, so an entry's either/or set
+    // follows it onto the copy.
+    const options = (madeEntries ?? []).flatMap((made, i) =>
+      (entries[i].gear_entry_options ?? []).map((o) => ({
+        entry_id: made.id, gear_item_id: o.gear_item_id, sort_order: o.sort_order,
+      }))
+    )
+    if (options.length) {
+      const { error: e3 } = await admin.from('gear_entry_options').insert(options)
+      if (e3) throw new Error(e3.message)
+    }
   }
 
   touch(target.instanceId)

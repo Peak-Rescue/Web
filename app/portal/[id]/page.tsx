@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { moduleAudience } from '@/lib/library'
+import { gearLabel } from '@/lib/gear'
 import { courseDisplayName, computeBlocks } from '@/lib/courses'
 import CourseTasksPanel, { type CourseTask, type TaskPerson } from '@/components/CourseTasksPanel'
 import { loadTasksWithDocs } from '@/lib/course-tasks'
@@ -168,7 +169,7 @@ export default async function PortalPage({
   // ever see the student one.
   const { data: gearRows } = await admin
     .from('gear_lists')
-    .select('id, name, audience, intro, gear_list_entries(id, name, info, recommended, url, category, group_type, quantity, sort_order, gear_items(name, info, recommended, url, category))')
+    .select('id, name, audience, intro, gear_list_entries(id, name, info, recommended, url, category, group_type, quantity, sort_order, gear_items(name, info, recommended, url, category), gear_entry_options(sort_order, gear_items(name)))')
     .eq('instance_id', id)
   type GearRow = {
     id: string; name: string; audience: string; intro: string | null
@@ -176,6 +177,7 @@ export default async function PortalPage({
       id: string; name: string | null; info: string | null; recommended: string | null; url: string | null
       category: string | null; group_type: 'personal' | 'group'; quantity: string | null; sort_order: number
       gear_items: { name: string; info: string | null; recommended: string | null; url: string | null; category: string | null } | null
+      gear_entry_options: { sort_order: number; gear_items: { name: string } | null }[]
     }[]
   }
   const gearAll = (gearRows ?? []) as unknown as GearRow[]
@@ -409,12 +411,22 @@ export default async function PortalPage({
                           const info = e.info ?? e.gear_items?.info
                           const rec = e.recommended ?? e.gear_items?.recommended
                           const url = e.url ?? e.gear_items?.url
+                          // "Descent device — Petzl Rig or Grigri" when the
+                          // line accepts more than one model.
+                          const { detail } = gearLabel(
+                            name,
+                            [...(e.gear_entry_options ?? [])]
+                              .sort((a, b) => a.sort_order - b.sort_order)
+                              .map((o) => o.gear_items)
+                              .filter(Boolean) as { name: string }[]
+                          )
                           return (
                             <li key={e.id} className="px-3 py-2 text-sm">
                               <div className="flex items-center gap-2 flex-wrap">
                                 {url ? (
                                   <a href={url} target="_blank" rel="noreferrer" className="hover:text-pr-red-light transition-colors">{name}</a>
                                 ) : name}
+                                {detail && <span className="text-xs text-zinc-400">{detail}</span>}
                                 {e.quantity && <span className="text-[11px] text-zinc-500">× {e.quantity}</span>}
                               </div>
                               {(info || rec) && (

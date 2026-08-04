@@ -281,6 +281,17 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       ),
     },
     {
+      title: 'Gear Catalog',
+      desc: 'The kit our lists are built from, and the models that satisfy each type',
+      href: '/admin/gear',
+      section: 'admin',
+      icon: (
+        <svg {...svgProps}>
+          <path d="M20.5 7.3l-8-4.6a1 1 0 0 0-1 0l-8 4.6a1 1 0 0 0-.5.87v9.26a1 1 0 0 0 .5.87l8 4.6a1 1 0 0 0 1 0l8-4.6a1 1 0 0 0 .5-.87V8.17a1 1 0 0 0-.5-.87z"/><path d="M3.3 7.7L12 12.8l8.7-5.1M12 22V12.8"/>
+        </svg>
+      ),
+    },
+    {
       title: 'Content Library',
       desc: 'Course material, references, maps and venue packs',
       href: '/admin/library',
