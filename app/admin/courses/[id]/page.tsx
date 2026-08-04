@@ -424,7 +424,6 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
         <CourseNav
           sections={[
             { id: 'details', label: 'Details' },
-            { id: 'schedule', label: 'Schedule' },
             { id: 'participants', label: 'Participant info' },
             { id: 'content', label: 'Content' },
             { id: 'instructors', label: 'Instructors' },
@@ -484,13 +483,8 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
               />
             </div>
           </AutoSaveForm>
-          <CourseFilesSection instanceId={id} files={courseFiles} />
-          </div>
-        </StickySection>
 
-        {/* ── Schedule ─────────────────────────────────────────────── */}
-        <StickySection id="schedule">
-          <summary className="cursor-pointer list-none text-lg font-semibold select-none mb-3"><span className="text-zinc-600 text-sm mr-2 inline-block transition-transform group-open:rotate-90">▶</span>Schedule</summary>
+          <h3 className="text-sm font-semibold text-zinc-400 mt-6 mb-2">Dates</h3>
 
           {/* Overall window — auto-saved */}
           <AutoSaveForm action={updateDatesWithId} className="grid grid-cols-2 gap-4 p-4 bg-zinc-900 border border-zinc-800 rounded-lg mb-4">
@@ -570,7 +564,11 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
               </div>
             </div>
           )}
+
+          <CourseFilesSection instanceId={id} files={courseFiles} />
+          </div>
         </StickySection>
+
 
         {/* ── Instructors ──────────────────────────────────────────── */}
         <StickySection id="instructors">

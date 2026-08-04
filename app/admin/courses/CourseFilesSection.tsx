@@ -148,16 +148,28 @@ export default function CourseFilesSection({
           <button
             onClick={() => setLinkOpen(true)}
             disabled={linkBusy}
-            className="inline-flex items-center gap-1 px-3 py-1.5 border border-dashed border-zinc-700 hover:border-zinc-500 text-zinc-400 hover:text-zinc-200 rounded text-xs transition-colors disabled:opacity-50"
+            title="Add a link"
+            aria-label="Add a link"
+            className="inline-flex items-center justify-center w-8 h-8 border border-dashed border-zinc-700 hover:border-zinc-500 text-zinc-400 hover:text-zinc-200 rounded transition-colors disabled:opacity-50"
           >
-            + Add link
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+            </svg>
           </button>
           <button
             onClick={() => fileRef.current?.click()}
             disabled={uploading}
-            className="inline-flex items-center gap-1 px-3 py-1.5 border border-dashed border-zinc-700 hover:border-zinc-500 text-zinc-400 hover:text-zinc-200 rounded text-xs transition-colors disabled:opacity-50"
+            title={uploading ? 'Uploading…' : 'Upload files'}
+            aria-label="Upload files"
+            className="inline-flex items-center justify-center w-8 h-8 border border-dashed border-zinc-700 hover:border-zinc-500 text-zinc-400 hover:text-zinc-200 rounded transition-colors disabled:opacity-50"
           >
-            {uploading ? 'Uploading…' : '+ Upload files'}
+            {uploading ? (
+              <span className="text-[10px]">…</span>
+            ) : (
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/>
+              </svg>
+            )}
           </button>
         </div>
       </div>
