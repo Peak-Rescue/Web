@@ -375,6 +375,46 @@ export async function updateCourseLogistics(id: string, formData: FormData) {
   revalidatePath(`/portal/${id}`)
 }
 
+// Library material for a course's pickers, fetched on demand. Loading ~700
+// items on every course-page render cost about half a second whether or not
+// anyone opened a picker — and every delete revalidates the page.
+export async function loadPickerItems(instanceId: string) {
+  await requireAdmin()
+  const admin = createAdminClient()
+
+  const [{ data: inst }, { data: rows }] = await Promise.all([
+    admin.from('course_instances').select('course_type, custom_categories, location').eq('id', instanceId).single(),
+    admin
+      .from('library_items')
+      .select('id, title, url, kind, audience, disciplines, topics, venue_id, source_class, venues(name)')
+      .eq('status', 'published')
+      .order('title')
+      .limit(1000),
+  ])
+  if (!inst) return []
+
+  const { courseCapabilityCategories } = await import('@/lib/capabilities')
+  const matching = courseCapabilityCategories(inst.course_type, inst.custom_categories)
+  const loc = (inst.location ?? '').toLowerCase()
+
+  return ((rows ?? []) as unknown as {
+    id: string; title: string; url: string | null; kind: string; audience: 'internal' | 'shared'
+    disciplines: string[]; topics: string[]; venue_id: string | null; source_class: string | null
+    venues: { name: string } | null
+  }[]).map((l) => {
+    const venueName = l.venues?.name ?? null
+    const venueMatches = Boolean(
+      venueName && loc && (loc.includes(venueName.toLowerCase()) || venueName.toLowerCase().includes(loc))
+    )
+    return {
+      id: l.id, title: l.title, url: l.url, kind: l.kind, audience: l.audience,
+      disciplines: l.disciplines, topics: l.topics, venue_id: l.venue_id,
+      venueName, sourceClass: l.source_class,
+      suggested: venueMatches || l.disciplines.some((d) => matching.includes(d as never)),
+    }
+  })
+}
+
 // Applying a template rebuilds a known course shape: its sections in order,
 // each holding references to the same library items. Idempotent — sections
 // that already exist are reused and items already present are skipped, so it

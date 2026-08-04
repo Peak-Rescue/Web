@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { addLibraryItems } from './actions'
+import { addLibraryItems, loadPickerItems } from './actions'
 import { KIND_META, AUDIENCE_META, type LibraryAudience } from '@/lib/library'
 import { CAPABILITY_META, CAPABILITY_ORDER, type CapabilityCategory } from '@/lib/capabilities'
 
@@ -30,14 +30,14 @@ export default function LibraryPicker({
   moduleId,
   moduleAudience,
   courseDisciplines,
-  items,
 }: {
   instanceId: string
   moduleId: string
   moduleAudience: LibraryAudience
   courseDisciplines: string[]
-  items: PickerItem[]
 }) {
+  const [items, setItems] = useState<PickerItem[]>([])
+  const [loading, setLoading] = useState(false)
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [q, setQ] = useState('')
@@ -95,10 +95,18 @@ export default function LibraryPicker({
     }
   }
 
+  async function openPicker() {
+    setOpen(true)
+    if (items.length === 0) {
+      setLoading(true)
+      try { setItems(await loadPickerItems(instanceId)) } finally { setLoading(false) }
+    }
+  }
+
   if (!open) {
     return (
       <button
-        onClick={() => setOpen(true)}
+        onClick={openPicker}
         className="text-xs px-2.5 py-1.5 rounded border border-zinc-700 text-zinc-300 hover:text-white hover:border-zinc-500 transition-colors"
       >
         + Add from library
@@ -181,7 +189,8 @@ export default function LibraryPicker({
             </label>
           )
         })}
-        {visible.length === 0 && (
+        {loading && <p className="text-xs text-zinc-500 px-2.5 py-4">Loading the library…</p>}
+        {!loading && visible.length === 0 && (
           <p className="text-xs text-zinc-500 px-2.5 py-4">
             {q ? 'Nothing matches — try Everything in the filter.' : 'Nothing suggested for this course yet.'}
           </p>

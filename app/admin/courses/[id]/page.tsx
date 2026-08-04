@@ -29,6 +29,7 @@ import { moduleAudience, type LibraryAudience } from '@/lib/library'
 import LibraryPicker, { type PickerItem } from '../LibraryPicker'
 import SuggestedContent from '../SuggestedContent'
 import TemplatePicker, { type TemplateOption } from '../TemplatePicker'
+import RemovableRow from '../RemovableRow'
 
 const STATUS_STYLES: Record<string, string> = {
   tentative: 'bg-yellow-900/40 text-yellow-300 border-yellow-700',
@@ -320,46 +321,6 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
   // use their admin-tagged categories)
   const matchingCategories: string[] = courseCapabilityCategories(courseType, inst.custom_categories)
 
-  // Library material offered on this course's sections. "Suggested" = same
-  // discipline as the course, or attached to a venue matching its location —
-  // the two things that make assembling a course mostly clicking, not typing.
-  const { data: libRows } = await createAdminClient()
-    .from('library_items')
-    .select('id, title, url, kind, audience, disciplines, topics, venue_id, source_class, venues(name)')
-    .eq('status', 'published')
-    .order('title')
-    .limit(1000)
-
-  const loc = (inst.location ?? '').toLowerCase()
-  const pickerItems: PickerItem[] = ((libRows ?? []) as unknown as (LibItem & { venues: { name: string } | null })[]).map((l) => {
-    const venueName = l.venues?.name ?? null
-    const venueMatches = Boolean(venueName && loc && (loc.includes(venueName.toLowerCase()) || venueName.toLowerCase().includes(loc)))
-    return {
-      id: l.id,
-      title: l.title,
-      url: l.url,
-      kind: l.kind,
-      audience: l.audience,
-      disciplines: l.disciplines,
-      topics: l.topics,
-      venue_id: l.venue_id,
-      venueName,
-      sourceClass: (l as unknown as { source_class: string | null }).source_class,
-      suggested: venueMatches || l.disciplines.some((d) => matchingCategories.includes(d)),
-    }
-  })
-
-  // Known section names — from library topics and sections already in use on
-  // other courses. Free-typing section titles guarantees near-duplicates
-  // ("Venue Info" vs "Venue Information"), so the field offers these first.
-  const knownSectionNames = [...new Set([
-    ...pickerItems.flatMap((p) => p.topics).filter((t) => t && t !== 'needs-link-check'),
-    ...((await createAdminClient().from('course_modules').select('title')).data ?? []).map((m) => m.title as string),
-  ])].sort((a, b) => a.localeCompare(b))
-
-  // Instructor-only sections sit at the top for staff — that's where they were
-  // in Classroom, and it's what you want to see first when you open a course
-  // you're running. Students never see them, so their view is unaffected.
   // Course shapes available here: this offering's first, then the rest.
   const { data: tplRows } = await createAdminClient()
     .from('course_templates')
@@ -380,8 +341,17 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
     }))
     .sort((a, b) => Number(b.isDefault) - Number(a.isDefault) || a.name.localeCompare(b.name))
 
+  // Section names already in use, so the same section isn't retyped three
+  // slightly different ways across courses.
+  const knownSectionNames = [...new Set(
+    ((await createAdminClient().from('course_modules').select('title')).data ?? []).map((m) => m.title as string)
+  )].sort((a, b) => a.localeCompare(b))
+
   const updateLogisticsWithId = updateCourseLogistics.bind(null, id)
 
+  // Instructor-only sections sit at the top for staff — that's where they were
+  // in Classroom, and it's what you want to see first when you open a course
+  // you're running. Students never see them, so their view is unaffected.
   const orderedModules = [...(modules ?? [])].sort((a, b) => {
     const ai = moduleAudience(a.audience) === 'internal' ? 0 : 1
     const bi = moduleAudience(b.audience) === 'internal' ? 0 : 1
@@ -738,7 +708,6 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
           <SuggestedContent
             instanceId={id}
             courseDisciplines={matchingCategories}
-            items={pickerItems}
             existingItemIds={(modules ?? []).flatMap(m =>
               (m.course_items ?? []).map(ci => ci.library_item_id).filter((x): x is string => Boolean(x))
             )}
@@ -795,9 +764,11 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
                             {item.description && <p className="text-xs text-zinc-500 mt-0.5">{item.description}</p>}
                           </div>
                         </div>
-                        <form action={deleteItemWithArgs} className="ml-4 shrink-0">
-                          <button type="submit" className="text-xs text-zinc-600 hover:text-red-400 transition-colors">×</button>
-                        </form>
+                        <RemovableRow
+                          onRemove={async () => { 'use server'; await deleteItem(id, item.id) }}
+                          label="×"
+                          className="ml-4 shrink-0"
+                        />
                       </div>
                     )
                   })}
@@ -808,7 +779,6 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
                       moduleId={mod.id}
                       moduleAudience={moduleAudience(mod.audience)}
                       courseDisciplines={matchingCategories}
-                      items={pickerItems}
                     />
                   </div>
 

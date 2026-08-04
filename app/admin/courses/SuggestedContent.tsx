@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { applyLibrarySelection } from './actions'
+import { applyLibrarySelection, loadPickerItems } from './actions'
 import { KIND_META, AUDIENCE_META, type LibraryAudience } from '@/lib/library'
 import { CAPABILITY_META, CAPABILITY_ORDER, type CapabilityCategory } from '@/lib/capabilities'
 import { type PickerItem } from './LibraryPicker'
@@ -18,15 +18,16 @@ type Group = { title: string; items: PickerItem[] }
 
 export default function SuggestedContent({
   instanceId,
-  items,
   existingItemIds,
   courseDisciplines,
 }: {
   instanceId: string
-  items: PickerItem[]
   existingItemIds: string[]
   courseDisciplines: string[]
 }) {
+  // Loaded when the panel opens, not on every course-page render.
+  const [items, setItems] = useState<PickerItem[]>([])
+  const [loading, setLoading] = useState(false)
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -117,20 +118,27 @@ export default function SuggestedContent({
     }
   }
 
-  const totalSuggested = items.filter((i) => i.suggested && !existingItemIds.includes(i.id)).length
-
   // Whole-class pull: the provenance we kept on import makes "give me all of
   // Parachute Rescue" a single selection, sections and all.
   const sourceClasses = [...new Set(items.map((i) => i.sourceClass).filter((c): c is string => Boolean(c)))].sort()
+
+  async function openPanel() {
+    setOpen(true)
+    setChecked(new Set())
+    if (items.length === 0) {
+      setLoading(true)
+      try { setItems(await loadPickerItems(instanceId)) } finally { setLoading(false) }
+    }
+  }
 
   if (!open) {
     return (
       <div className="mb-4">
         <button
-          onClick={() => { setOpen(true); setChecked(new Set()) }}
+          onClick={openPanel}
           className="text-xs px-3 py-1.5 rounded bg-pr-red hover:bg-pr-red-dark text-white font-medium transition-colors"
         >
-          Add content from library{totalSuggested > 0 ? ` (${totalSuggested} suggested)` : ''}
+          Add content from library
         </button>
         {done && <p className="text-xs text-teal-400 mt-2">{done}</p>}
       </div>
@@ -266,7 +274,8 @@ export default function SuggestedContent({
             </div>
           )
         })}
-        {groups.length === 0 && (
+        {loading && <p className="text-xs text-zinc-500 py-4">Loading the library…</p>}
+        {!loading && groups.length === 0 && (
           <p className="text-xs text-zinc-500 py-4">
             {scope === 'suggested'
               ? 'Nothing suggested for this course — try “Everything in the library”.'
