@@ -83,9 +83,14 @@ export default async function LibraryPage({
             <h1 className="text-2xl font-bold">Content Library</h1>
             <p className="text-zinc-400 mt-1">Course material, references, maps and permits — tagged once, reused everywhere</p>
           </div>
-          <Link href="/admin/venues" className="text-xs px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded transition-colors">
-            Venues
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link href="/admin/library/overview" className="text-xs px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded transition-colors">
+              Coverage
+            </Link>
+            <Link href="/admin/venues" className="text-xs px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded transition-colors">
+              Venues
+            </Link>
+          </div>
         </div>
 
         {/* ── Review queue ─────────────────────────────────────────────── */}
