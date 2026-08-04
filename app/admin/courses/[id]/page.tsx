@@ -482,8 +482,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
             </summary>
             <div className="mt-3">
             <p className="text-xs text-zinc-500 mb-3">
-              Off-days are dates <span className="text-zinc-300">excluded from within the course window</span> (a rest
-              day, a mid-course pause) — not the course dates themselves, which go in Course start/end above.
+              Rest days or pauses inside the course window — not the course start/end.
             </p>
             {(offDays ?? []).length > 0 && (
               <div className="space-y-2 mb-3">
@@ -598,8 +597,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
             </span>
           </summary>
           <p className="text-xs text-zinc-500 mb-4">
-            Portal accounts are invite-only — share this course&rsquo;s link with the client contact
-            and students enroll themselves.
+            Share the invite link below — students enroll themselves.
           </p>
 
           {enrollments.length > 0 && (
@@ -634,7 +632,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
         {/* ── Participant logistics ─────────────────────────────────── */}
         <StickySection id="participants">
           <summary className="cursor-pointer list-none text-lg font-semibold select-none mb-3"><span className="text-zinc-600 text-sm mr-2 inline-block transition-transform group-open:rotate-90">▶</span>
-            Course info for participants
+            Participant info
             {!inst.meeting_point && !inst.meeting_time && (
               <span className="ml-3 text-[11px] font-normal px-2 py-0.5 rounded bg-yellow-900/40 text-yellow-300 align-middle">
                 not set yet
@@ -787,8 +785,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
 
           {(modules ?? []).length === 0 && (
             <p className="text-sm text-zinc-500 mb-3">
-              Material lives in sections. Add one below — e.g. Pre-course, Venue information, Rappelling — then
-              pull items into it from the{' '}
+              Add a section below, then pull items into it from the{' '}
               <Link href="/admin/library" className="underline hover:text-zinc-300">content library</Link>.
             </p>
           )}
@@ -801,7 +798,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
                 required
                 list="section-name-suggestions"
                 autoComplete="off"
-                placeholder="Start typing — e.g. Anchor Station Rigging"
+                placeholder="e.g. Anchor Station Rigging"
                 className="bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500 w-64"
               />
               <datalist id="section-name-suggestions">
@@ -820,7 +817,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
         </StickySection>
 
         <StickySection id="estimates" defaultOpen={false}>
-          <summary className="cursor-pointer list-none text-lg font-semibold select-none mb-3"><span className="text-zinc-600 text-sm mr-2 inline-block transition-transform group-open:rotate-90">▶</span>Financials — Estimates</summary>
+          <summary className="cursor-pointer list-none text-lg font-semibold select-none mb-3"><span className="text-zinc-600 text-sm mr-2 inline-block transition-transform group-open:rotate-90">▶</span>Estimates</summary>
           <p className="text-xs text-zinc-500 mb-4">
             Internal — never shown to instructors or clients.
           </p>
@@ -853,7 +850,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
         </StickySection>
 
         <StickySection id="quotes" defaultOpen={false}>
-          <summary className="cursor-pointer list-none text-lg font-semibold select-none mb-3"><span className="text-zinc-600 text-sm mr-2 inline-block transition-transform group-open:rotate-90">▶</span>Financials — Quotes</summary>
+          <summary className="cursor-pointer list-none text-lg font-semibold select-none mb-3"><span className="text-zinc-600 text-sm mr-2 inline-block transition-transform group-open:rotate-90">▶</span>Quotes</summary>
           <div className="flex items-start justify-between gap-3 flex-wrap mb-4">
             <p className="text-xs text-zinc-500">
               Marking a quote sent or accepted moves the course to Quoted or Confirmed.
