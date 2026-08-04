@@ -106,7 +106,10 @@ export async function fetchDriveFile(fileId: string, readAs?: string): Promise<D
 
   return {
     body: fileRes.body,
-    contentType: exportAs?.mime ?? fileRes.headers.get('content-type') ?? 'application/octet-stream',
+    // Drive's own mimeType beats the download response header, which is
+    // sometimes octet-stream — and octet-stream always downloads, even for a
+    // PDF the browser could have rendered.
+    contentType: exportAs?.mime ?? meta.mimeType ?? fileRes.headers.get('content-type') ?? 'application/octet-stream',
     filename: exportAs ? `${meta.name}.${exportAs.ext}` : meta.name,
     status: 200,
   }

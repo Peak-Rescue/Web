@@ -77,8 +77,7 @@ export default async function ReferencePage({
 
         <h1 className="text-2xl font-bold">Reference</h1>
         <p className="text-zinc-400 mt-1 mb-6 text-sm max-w-2xl">
-          Manuals, tech notes, standards and venue beta — everything in the library, whether or not it&rsquo;s on a
-          course you&rsquo;re running. For company policies and employment paperwork, see{' '}
+          The full library — manuals, tech notes, standards, venue beta. Policies and paperwork live in{' '}
           <Link href="/admin/employee-info" className="underline hover:text-zinc-200">Employee Documents</Link>.
         </p>
 
