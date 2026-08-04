@@ -419,11 +419,11 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
           storageKey={`course-tab:${id}`}
           tabs={[
             { id: 'details', label: 'Details' },
-            { id: 'participants', label: 'Participants' },
-            { id: 'content', label: 'Content' },
+            { id: 'instructors', label: 'Staffing' },
             { id: 'gear', label: 'Gear' },
-            { id: 'instructors', label: 'Instructors & tasks' },
-            { id: 'estimates', label: 'Estimates & quotes' },
+            { id: 'estimates', label: 'Pricing' },
+            { id: 'content', label: 'Curriculum' },
+            { id: 'participants', label: 'Students' },
           ]}
         >
 
@@ -732,7 +732,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
         </TabPanel>
 
         <TabPanel id="content">
-          <h2 className="text-lg font-semibold mb-4">Content</h2>
+          <h2 className="text-lg font-semibold mb-4">Curriculum</h2>
 
           <TemplatePicker instanceId={id} templates={templates} />
 
