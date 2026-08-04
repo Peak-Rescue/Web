@@ -183,6 +183,19 @@ export default async function PortalPage({
     ? gearAll.find((g) => g.audience === 'instructor') ?? gearAll[0]
     : gearAll.find((g) => g.audience === 'student')
 
+  // The running order, same for everyone on the course.
+  const { data: schedRows } = await admin
+    .from('course_schedules')
+    .select('id, name, overview, objectives, schedule_days(id, title, location, notes, sort_order, schedule_blocks(id, parent_id, title, time_label, location, sort_order))')
+    .eq('instance_id', id)
+    .limit(1)
+  type SchedBlock = { id: string; parent_id: string | null; title: string; time_label: string | null; location: string | null; sort_order: number }
+  type SchedDay = { id: string; title: string; location: string | null; notes: string | null; sort_order: number; schedule_blocks: SchedBlock[] }
+  const sched = ((schedRows ?? []) as unknown as {
+    id: string; name: string; overview: string | null; objectives: string[]; schedule_days: SchedDay[]
+  }[])[0]
+  const schedDays = [...(sched?.schedule_days ?? [])].sort((a, b) => a.sort_order - b.sort_order)
+
   // Staff see instructor-only sections first — the same order they had in
   // Classroom. Students never receive those sections at all.
   const orderedModules = [...(modules ?? [])].sort((a, b) => {
@@ -314,6 +327,56 @@ export default async function PortalPage({
               canManage={canManageTasks}
               currentUserId={user.id}
             />
+          </section>
+        )}
+
+        {/* Running order */}
+        {sched && schedDays.length > 0 && (
+          <section className="mb-8">
+            <h2 className="text-lg font-semibold mb-3">Schedule</h2>
+            {sched.overview && <p className="text-sm text-zinc-400 mb-3 whitespace-pre-line">{sched.overview}</p>}
+            {sched.objectives.length > 0 && (
+              <ol className="mb-4 space-y-1 text-sm text-zinc-300 list-decimal pl-5">
+                {sched.objectives.map((o, i) => <li key={i}>{o}</li>)}
+              </ol>
+            )}
+            <div className="space-y-3">
+              {schedDays.map((d) => {
+                const blocks = [...(d.schedule_blocks ?? [])].sort((a, b) => a.sort_order - b.sort_order)
+                const topics = blocks.filter((b) => !b.parent_id)
+                return (
+                  <div key={d.id} className="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
+                    <h3 className="font-medium text-sm">{d.title}</h3>
+                    {(d.location || d.notes) && (
+                      <p className="text-xs text-zinc-500 mt-0.5">
+                        {[d.location, d.notes].filter(Boolean).join(' · ')}
+                      </p>
+                    )}
+                    {topics.length > 0 && (
+                      <ul className="mt-2 space-y-1.5">
+                        {topics.map((t) => {
+                          const kids = blocks.filter((b) => b.parent_id === t.id)
+                          return (
+                            <li key={t.id} className="text-sm text-zinc-300">
+                              {t.time_label && <span className="text-zinc-500 mr-2">{t.time_label}</span>}
+                              {t.title}
+                              {t.location && <span className="text-xs text-zinc-500 ml-2">{t.location}</span>}
+                              {kids.length > 0 && (
+                                <ul className="mt-1 ml-4 space-y-0.5">
+                                  {kids.map((k) => (
+                                    <li key={k.id} className="text-[13px] text-zinc-400">{k.title}</li>
+                                  ))}
+                                </ul>
+                              )}
+                            </li>
+                          )
+                        })}
+                      </ul>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
           </section>
         )}
 

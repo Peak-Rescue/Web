@@ -33,6 +33,8 @@ import RemovableRow from '../RemovableRow'
 import { CourseTabs, TabPanel } from '../CourseTabs'
 import CourseGear from '../CourseGear'
 import { type GearItem, type GearList } from '@/app/admin/gear/GearListEditor'
+import { type Schedule } from '@/app/admin/schedules/ScheduleEditor'
+import CourseSchedule from '@/app/admin/courses/CourseSchedule'
 
 const STATUS_STYLES: Record<string, string> = {
   tentative: 'bg-yellow-900/40 text-yellow-300 border-yellow-700',
@@ -343,6 +345,23 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
     .sort((a, b) => Number(b.course_type === courseType) - Number(a.course_type === courseType))
     .map((t) => ({ id: t.id, name: t.name, audience: t.audience, entries: t.gear_list_entries.length }))
 
+  // Schedule: this course's running order and any templates for this offering.
+  const [{ data: scheduleRows }, { data: scheduleTemplateRows }] = await Promise.all([
+    gearAdmin.from('course_schedules')
+      .select('id, name, overview, objectives, instance_id, is_template, schedule_days(id, title, location, notes, sort_order, schedule_blocks(id, parent_id, title, time_label, location, sort_order))')
+      .eq('instance_id', id)
+      .limit(1),
+    gearAdmin.from('course_schedules')
+      .select('id, name, course_type, schedule_days(id)')
+      .eq('is_template', true),
+  ])
+  const schedule = ((scheduleRows ?? []) as unknown as Schedule[])[0] ?? null
+  const scheduleTemplates = ((scheduleTemplateRows ?? []) as unknown as {
+    id: string; name: string; course_type: string | null; schedule_days: unknown[]
+  }[])
+    .sort((a, b) => Number(b.course_type === courseType) - Number(a.course_type === courseType))
+    .map((t) => ({ id: t.id, name: t.name, days: t.schedule_days.length }))
+
   const updateLogisticsWithId = updateCourseLogistics.bind(null, id)
 
   // Instructor-only sections sit at the top for staff — that's where they were
@@ -423,6 +442,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
             { id: 'gear', label: 'Gear' },
             { id: 'estimates', label: 'Pricing' },
             { id: 'content', label: 'Curriculum' },
+            { id: 'schedule', label: 'Schedule' },
             { id: 'participants', label: 'Students' },
           ]}
         >
@@ -714,6 +734,21 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
               expired={!!inst.invite_expires_at && new Date(inst.invite_expires_at) < new Date()}
             />
           </div>
+        </TabPanel>
+
+        <TabPanel id="schedule">
+          <h2 className="text-lg font-semibold mb-1">Schedule</h2>
+          <p className="text-xs text-zinc-500 mb-4">
+            The running order participants see. Days carry their own location and notes; topics can hold sub-topics, and
+            times are optional.
+          </p>
+          <CourseSchedule
+            instanceId={id}
+            courseType={courseType}
+            courseDays={Math.min(courseDays ?? 0, 30)}
+            schedule={schedule}
+            templates={scheduleTemplates}
+          />
         </TabPanel>
 
         {/* ── Content modules ──────────────────────────────────────── */}
