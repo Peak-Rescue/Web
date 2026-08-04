@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { applyLibrarySelection, loadPickerItems } from './actions'
-import { KIND_META, AUDIENCE_META, type LibraryAudience } from '@/lib/library'
+import { KIND_META, AUDIENCE_META, BUCKET_META, BUCKET_ORDER, type LibraryAudience, type LibraryBucket } from '@/lib/library'
 import { CAPABILITY_META, CAPABILITY_ORDER, type CapabilityCategory } from '@/lib/capabilities'
 import { type PickerItem } from './LibraryPicker'
 
@@ -34,6 +34,7 @@ export default function SuggestedContent({
   const [done, setDone] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [scope, setScope] = useState<string>('suggested')
+  const [bucket, setBucket] = useState<string>('all')
   const [q, setQ] = useState('')
 
   const [checked, setChecked] = useState<Set<string>>(new Set())
@@ -46,6 +47,7 @@ export default function SuggestedContent({
     const map = new Map<string, PickerItem[]>()
     for (const i of items) {
       if (have.has(i.id)) continue
+      if (bucket !== 'all' && i.bucket !== bucket) continue
       if (scope === 'suggested' && !i.suggested && !needle) continue
       if (scope.startsWith('class:')) {
         if (i.sourceClass !== scope.slice(6)) continue
@@ -57,7 +59,7 @@ export default function SuggestedContent({
     return [...map.entries()]
       .map(([title, its]) => ({ title, items: its.sort((a, b) => a.title.localeCompare(b.title)) }))
       .sort((a, b) => a.title.localeCompare(b.title))
-  }, [items, existingItemIds, scope, q])
+  }, [items, existingItemIds, scope, q, bucket])
 
   // A section defaults to what its items already say, not to a guess from the
   // section's name. Mixed groups default to the stricter level.
@@ -164,6 +166,12 @@ export default function SuggestedContent({
             placeholder="Search…"
             className={`w-36 ${select}`}
           />
+          <select value={bucket} onChange={(e) => setBucket(e.target.value)} className={select}>
+            <option value="all">All libraries</option>
+            {BUCKET_ORDER.map((b) => (
+              <option key={b} value={b}>{BUCKET_META[b as LibraryBucket].label}</option>
+            ))}
+          </select>
           <select value={scope} onChange={(e) => setScope(e.target.value)} className={select}>
             <option value="suggested">
               Suggested for this course{courseDisciplines.length ? ` (${courseDisciplines.map((d) => CAPABILITY_META[d as CapabilityCategory]?.label ?? d).join(', ')})` : ''}
@@ -235,7 +243,7 @@ export default function SuggestedContent({
                       />
                       <span className="truncate">{i.title}</span>
                       <span className="text-[10px] text-zinc-600 shrink-0">
-                        {KIND_META[i.kind as keyof typeof KIND_META] ?? i.kind}
+                        {BUCKET_META[i.bucket as LibraryBucket]?.label ?? KIND_META[i.kind as keyof typeof KIND_META] ?? i.kind}
                       </span>
                       {i.venueName && <span className="text-[10px] text-blue-400/70 shrink-0">{i.venueName}</span>}
                       {off && (

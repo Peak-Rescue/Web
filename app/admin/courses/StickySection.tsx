@@ -31,7 +31,14 @@ export default function StickySection({
   }, [key])
 
   return (
-    <details ref={ref} id={id} open={defaultOpen} className="mb-8 group scroll-mt-32">
+    // A visible break between sections: it's a long page, and without one it's
+    // easy to scroll past the section you were working in without noticing.
+    <details
+      ref={ref}
+      id={id}
+      open={defaultOpen}
+      className="mb-10 pt-6 border-t border-zinc-800/80 group scroll-mt-32 first-of-type:border-t-0 first-of-type:pt-0"
+    >
       {children}
     </details>
   )

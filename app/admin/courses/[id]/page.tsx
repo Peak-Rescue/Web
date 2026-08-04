@@ -398,7 +398,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
         <CourseNav
           sections={[
             { id: 'details', label: 'Details' },
-            { id: 'participants', label: 'Participant info' },
+            { id: 'participants', label: 'Info for participants' },
             { id: 'content', label: 'Content' },
             { id: 'instructors', label: 'Instructors' },
             { id: 'students', label: 'Students' },

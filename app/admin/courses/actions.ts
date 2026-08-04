@@ -386,7 +386,7 @@ export async function loadPickerItems(instanceId: string) {
     admin.from('course_instances').select('course_type, custom_categories, location').eq('id', instanceId).single(),
     admin
       .from('library_items')
-      .select('id, title, url, kind, audience, disciplines, topics, venue_id, source_class, venues(name)')
+      .select('id, title, url, kind, audience, disciplines, topics, venue_id, bucket, source_class, venues(name)')
       .eq('status', 'published')
       .order('title')
       .limit(1000),
@@ -399,8 +399,8 @@ export async function loadPickerItems(instanceId: string) {
 
   return ((rows ?? []) as unknown as {
     id: string; title: string; url: string | null; kind: string; audience: 'internal' | 'shared'
-    disciplines: string[]; topics: string[]; venue_id: string | null; source_class: string | null
-    venues: { name: string } | null
+    disciplines: string[]; topics: string[]; venue_id: string | null; bucket: string
+    source_class: string | null; venues: { name: string } | null
   }[]).map((l) => {
     const venueName = l.venues?.name ?? null
     const venueMatches = Boolean(
@@ -408,7 +408,7 @@ export async function loadPickerItems(instanceId: string) {
     )
     return {
       id: l.id, title: l.title, url: l.url, kind: l.kind, audience: l.audience,
-      disciplines: l.disciplines, topics: l.topics, venue_id: l.venue_id,
+      disciplines: l.disciplines, topics: l.topics, venue_id: l.venue_id, bucket: l.bucket,
       venueName, sourceClass: l.source_class,
       suggested: venueMatches || l.disciplines.some((d) => matching.includes(d as never)),
     }

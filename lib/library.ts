@@ -8,6 +8,19 @@ import { type CapabilityCategory } from '@/lib/capabilities'
 export type LibraryAudience = 'internal' | 'shared'
 export type LibrarySourceType = 'drive' | 'link' | 'youtube' | 'file'
 export type LibraryStatus = 'pending' | 'published' | 'archived'
+export type LibraryBucket = 'teaching' | 'resource' | 'map' | 'instructor'
+
+// Four libraries rather than one pile. Only teaching material is carried by a
+// course template — maps come from the venue, resources and instructor
+// material are pulled in deliberately, and per-delivery logistics live on the
+// course itself. Mixing them is how one course's travel plans reached another.
+export const BUCKET_META: Record<LibraryBucket, { label: string; hint: string }> = {
+  teaching:   { label: 'Teaching material', hint: 'How-tos: technique videos, walkthroughs, skill sheets' },
+  resource:   { label: 'Resources',         hint: 'External reference: manuals, tech notes, standards' },
+  map:        { label: 'Maps',              hint: 'CalTopo, SARTopo and other maps' },
+  instructor: { label: 'Instructor material', hint: 'Guides, outlines and teaching notes — never shown to students' },
+}
+export const BUCKET_ORDER: LibraryBucket[] = ['teaching', 'resource', 'map', 'instructor']
 
 // Two labels per level: `choice` where you pick it (be explicit — admins
 // shouldn't have to guess who "shared" means), `badge` where space is tight.
@@ -70,6 +83,7 @@ export type LibraryItem = {
   venue_id: string | null
   expires_at: string | null
   status: LibraryStatus
+  bucket: LibraryBucket
   source_class: string | null
   source_topic: string | null
   source_item: string | null
