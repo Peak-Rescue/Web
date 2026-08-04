@@ -38,19 +38,20 @@ export default async function LibraryPage({
   if (venue) query = query.eq('venue_id', venue)
   if (q) query = query.ilike('title', `%${q}%`)
 
-  const [{ data: itemRows }, { data: venueRows }, { data: pendingRows }] = await Promise.all([
+  const [{ data: itemRows }, { data: venueRows }] = await Promise.all([
     query,
     admin.from('venues').select('id, name, region, client_name, notes, active').order('name'),
-    admin.from('library_items').select('source_class').eq('status', 'pending'),
   ])
 
   const items = (itemRows ?? []) as LibraryItem[]
   const venues = (venueRows ?? []) as Venue[]
 
-  // Pending grouped by the Classroom class it came from, for batch approval.
+  // Pending grouped by source class, derived from what we already fetched
+  // rather than a second scan of the table.
   const pendingByClass = new Map<string, number>()
-  for (const r of pendingRows ?? []) {
-    const k = (r.source_class as string) ?? 'Added in portal'
+  for (const r of items) {
+    if (r.status !== 'pending') continue
+    const k = r.source_class ?? 'Added in portal'
     pendingByClass.set(k, (pendingByClass.get(k) ?? 0) + 1)
   }
 

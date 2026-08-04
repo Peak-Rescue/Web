@@ -16,9 +16,9 @@ const input = 'w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-
 export default async function ReferencePage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; discipline?: string; kind?: string; venue?: string }>
+  searchParams: Promise<{ q?: string; discipline?: string; kind?: string; venue?: string; page?: string }>
 }) {
-  const { q, discipline, kind, venue } = await searchParams
+  const { q, discipline, kind, venue, page } = await searchParams
 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -28,12 +28,19 @@ export default async function ReferencePage({
   const { data: profile } = await admin.from('profiles').select('role').eq('id', user.id).single()
   if (!['admin', 'instructor'].includes(profile?.role ?? '')) redirect('/dashboard')
 
+  // A page of results, not the whole shelf: 800+ rows on every visit cost
+  // about half a second to render a list nobody reads end to end.
+  const PAGE = 60
+  const offset = Math.max(0, Number(page ?? '0')) * PAGE
+
   let query = admin
     .from('library_items')
     .select('id, title, description, source_type, url, edit_url, drive_file_id, kind, audience, disciplines, topics, venue_id, expires_at, status, source_class, source_topic, source_item')
     .eq('status', 'published')
     .order('title')
-    .limit(500)
+    // One extra row tells us whether there's a next page — an exact count
+    // costs a full table scan and we only need "is there more".
+    .range(offset, offset + PAGE)
 
   if (discipline) query = query.contains('disciplines', [discipline])
   if (kind) query = query.eq('kind', kind)
@@ -44,7 +51,9 @@ export default async function ReferencePage({
     query,
     admin.from('venues').select('id, name, region, client_name, notes, active').order('name'),
   ])
-  const items = (itemRows ?? []) as LibraryItem[]
+  const fetched = (itemRows ?? []) as LibraryItem[]
+  const hasMore = fetched.length > PAGE
+  const items = hasMore ? fetched.slice(0, PAGE) : fetched
   const venues = (venueRows ?? []) as Venue[]
   const venueName = new Map(venues.map((v) => [v.id, v.name]))
 
@@ -98,6 +107,12 @@ export default async function ReferencePage({
           </p>
         )}
 
+        {items.length > 0 && (
+          <p className="text-xs text-zinc-600 mb-3">
+            Showing {offset + 1}–{offset + items.length}
+          </p>
+        )}
+
         <div className="space-y-8">
           {ordered.map(([cat, rows]) => (
             <section key={cat}>
@@ -112,7 +127,11 @@ export default async function ReferencePage({
                       <div className="flex items-center gap-2 flex-wrap">
                         {i.url ? (
                           <a
-                            href={i.url}
+                            href={
+                              i.drive_file_id || /drive\.google\.com|docs\.google\.com/.test(i.url)
+                                ? `/api/library/${i.id}`
+                                : i.url
+                            }
                             target="_blank"
                             rel="noreferrer"
                             className="text-sm font-medium hover:text-pr-red-light transition-colors truncate"
@@ -159,6 +178,27 @@ export default async function ReferencePage({
             </section>
           ))}
         </div>
+
+        {(hasMore || offset > 0) && (
+          <div className="flex items-center gap-3 mt-8">
+            {offset > 0 && (
+              <Link
+                href={`/instructor/reference?${new URLSearchParams({ ...(q ? { q } : {}), ...(discipline ? { discipline } : {}), ...(kind ? { kind } : {}), ...(venue ? { venue } : {}), page: String(Number(page ?? '0') - 1) })}`}
+                className="text-xs px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded transition-colors"
+              >
+                ← Previous
+              </Link>
+            )}
+            {hasMore && (
+              <Link
+                href={`/instructor/reference?${new URLSearchParams({ ...(q ? { q } : {}), ...(discipline ? { discipline } : {}), ...(kind ? { kind } : {}), ...(venue ? { venue } : {}), page: String(Number(page ?? '0') + 1) })}`}
+                className="text-xs px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded transition-colors"
+              >
+                Next →
+              </Link>
+            )}
+          </div>
+        )}
       </div>
     </main>
   )
