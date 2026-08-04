@@ -30,6 +30,8 @@ import LibraryPicker, { type PickerItem } from '../LibraryPicker'
 import SuggestedContent from '../SuggestedContent'
 import TemplatePicker, { type TemplateOption } from '../TemplatePicker'
 import RemovableRow from '../RemovableRow'
+import StickySection from '../StickySection'
+import CourseNav, { type NavSection } from '../CourseNav'
 
 const STATUS_STYLES: Record<string, string> = {
   tentative: 'bg-yellow-900/40 text-yellow-300 border-yellow-700',
@@ -419,7 +421,21 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
         </div>
 
         {/* ── Details ─────────────────────────────────────────────── */}
-        <details open className="mb-8 group">
+        <CourseNav
+          sections={[
+            { id: 'details', label: 'Details' },
+            { id: 'schedule', label: 'Schedule' },
+            { id: 'participants', label: 'Participant info' },
+            { id: 'content', label: 'Content' },
+            { id: 'instructors', label: 'Instructors' },
+            { id: 'students', label: 'Students' },
+            { id: 'tasks', label: 'Tasks' },
+            { id: 'estimates', label: 'Estimates' },
+            { id: 'quotes', label: 'Quotes' },
+          ] satisfies NavSection[]}
+        />
+
+        <StickySection id="details">
           <summary className="cursor-pointer list-none text-lg font-semibold select-none mb-3"><span className="text-zinc-600 text-sm mr-2 inline-block transition-transform group-open:rotate-90">▶</span>Details</summary>
           <div className="bg-zinc-900 rounded-lg border border-zinc-800">
           <AutoSaveForm action={updateDetailsWithId} className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-6">
@@ -470,10 +486,10 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
           </AutoSaveForm>
           <CourseFilesSection instanceId={id} files={courseFiles} />
           </div>
-        </details>
+        </StickySection>
 
         {/* ── Schedule ─────────────────────────────────────────────── */}
-        <details open className="mb-8 group">
+        <StickySection id="schedule">
           <summary className="cursor-pointer list-none text-lg font-semibold select-none mb-3"><span className="text-zinc-600 text-sm mr-2 inline-block transition-transform group-open:rotate-90">▶</span>Schedule</summary>
 
           {/* Overall window — auto-saved */}
@@ -554,10 +570,10 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
               </div>
             </div>
           )}
-        </details>
+        </StickySection>
 
         {/* ── Instructors ──────────────────────────────────────────── */}
-        <details open className="mb-8 group">
+        <StickySection id="instructors">
           <summary className="cursor-pointer list-none text-lg font-semibold select-none mb-3"><span className="text-zinc-600 text-sm mr-2 inline-block transition-transform group-open:rotate-90">▶</span>Instructors</summary>
 
           {(assigned ?? []).length > 0 && (
@@ -599,10 +615,10 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
             invites={interestInvites}
             hasLead={(assigned ?? []).some(a => a.role === 'lead')}
           />
-        </details>
+        </StickySection>
 
         {/* ── Students ─────────────────────────────────────────────── */}
-        <details open className="mb-8 group">
+        <StickySection id="students">
           <summary className="cursor-pointer list-none text-lg font-semibold select-none mb-3"><span className="text-zinc-600 text-sm mr-2 inline-block transition-transform group-open:rotate-90">▶</span>
             Students
             <span className="ml-2 text-sm font-normal text-zinc-500">
@@ -641,10 +657,10 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
             expiresAt={inst.invite_expires_at ?? null}
             expired={!!inst.invite_expires_at && new Date(inst.invite_expires_at) < new Date()}
           />
-        </details>
+        </StickySection>
 
         {/* ── Participant logistics ─────────────────────────────────── */}
-        <details open className="mb-8 group">
+        <StickySection id="participants">
           <summary className="cursor-pointer list-none text-lg font-semibold select-none mb-3"><span className="text-zinc-600 text-sm mr-2 inline-block transition-transform group-open:rotate-90">▶</span>
             Course info for participants
             {!inst.meeting_point && !inst.meeting_time && (
@@ -654,8 +670,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
             )}
           </summary>
           <p className="text-xs text-zinc-500 mb-3">
-            Written fresh for this delivery and shown to everyone on the course — not pulled from the library, because
-            it changes every time.
+            Shown to everyone on the course.
           </p>
           <AutoSaveForm action={updateLogisticsWithId} className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-6 bg-zinc-900 border border-zinc-800 rounded-lg">
             <div className="sm:col-span-2">
@@ -697,10 +712,10 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
               />
             </div>
           </AutoSaveForm>
-        </details>
+        </StickySection>
 
         {/* ── Content modules ──────────────────────────────────────── */}
-        <details open className="mb-8 group">
+        <StickySection id="content">
           <summary className="cursor-pointer list-none text-lg font-semibold select-none mb-3"><span className="text-zinc-600 text-sm mr-2 inline-block transition-transform group-open:rotate-90">▶</span>Content</summary>
 
           <TemplatePicker instanceId={id} templates={templates} />
@@ -830,13 +845,12 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
             </div>
             <button type="submit" className="px-4 py-2 bg-pr-red hover:bg-pr-red-dark text-white rounded text-sm font-medium transition-colors">Add section</button>
           </form>
-        </details>
+        </StickySection>
 
-        <details open id="estimates" className="mb-8 group">
+        <StickySection id="estimates" defaultOpen={false}>
           <summary className="cursor-pointer list-none text-lg font-semibold select-none mb-3"><span className="text-zinc-600 text-sm mr-2 inline-block transition-transform group-open:rotate-90">▶</span>Financials — Estimates</summary>
           <p className="text-xs text-zinc-500 mb-4">
-            Internal cost build-up — never shown to instructors or clients. Add alternate COAs to price different
-            ways of running the course; quotes are generated from the COA you pick.
+            Internal — never shown to instructors or clients.
           </p>
           <EstimateReviewBanner reviews={estimateReviews} admins={reviewAdmins} currentUserId={user.id} />
           <div className="space-y-8">
@@ -864,14 +878,13 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
             />
           </div>
           <EstimateReviewRequest instanceId={id} reviews={estimateReviews} admins={reviewAdmins} currentUserId={user.id} />
-        </details>
+        </StickySection>
 
-        <details open className="mb-8 group">
+        <StickySection id="quotes" defaultOpen={false}>
           <summary className="cursor-pointer list-none text-lg font-semibold select-none mb-3"><span className="text-zinc-600 text-sm mr-2 inline-block transition-transform group-open:rotate-90">▶</span>Financials — Quotes</summary>
           <div className="flex items-start justify-between gap-3 flex-wrap mb-4">
             <p className="text-xs text-zinc-500">
-              Client-facing lump sum generated from the estimate. Marking sent/accepted moves the course to
-              Quoted/Confirmed automatically.
+              Marking a quote sent or accepted moves the course to Quoted or Confirmed.
             </p>
             <QuoteHeroPicker
               instanceId={id}
@@ -890,12 +903,12 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
             people={quotePeople}
             estimates={estimatePanels.filter((e) => e.id).map((e) => ({ id: e.id!, title: e.title }))}
           />
-        </details>
+        </StickySection>
 
-        <details open className="mb-8 group">
+        <StickySection id="tasks">
           <summary className="cursor-pointer list-none text-lg font-semibold select-none mb-3"><span className="text-zinc-600 text-sm mr-2 inline-block transition-transform group-open:rotate-90">▶</span>Tasks</summary>
           <p className="text-xs text-zinc-500 mb-4">
-            Course prep checklist — assignees are notified by email and see their tasks on the portal home page.
+            Assignees are emailed and see these on their portal home.
           </p>
           <CourseTasksPanel
             instanceId={id}
@@ -906,7 +919,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
             suggestions={templateRows ?? []}
             completedOpen
           />
-        </details>
+        </StickySection>
 
         <div className="pt-4 border-t border-zinc-800">
           <Link href={`/portal/${id}`} className="text-sm text-zinc-400 hover:text-white transition-colors">
