@@ -3,6 +3,7 @@ import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { moduleAudience } from '@/lib/library'
 import { courseDisplayName, computeBlocks } from '@/lib/courses'
 import CourseTasksPanel, { type CourseTask, type TaskPerson } from '@/components/CourseTasksPanel'
 import { loadTasksWithDocs } from '@/lib/course-tasks'
@@ -163,6 +164,14 @@ export default async function PortalPage({
 
   const fmtLong = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'long', day: 'numeric', year: 'numeric' })
 
+  // Staff see instructor-only sections first — the same order they had in
+  // Classroom. Students never receive those sections at all.
+  const orderedModules = [...(modules ?? [])].sort((a, b) => {
+    const ai = moduleAudience(a.audience) === 'internal' ? 0 : 1
+    const bi = moduleAudience(b.audience) === 'internal' ? 0 : 1
+    return ai - bi || (a.order as number) - (b.order as number)
+  })
+
   return (
     <main className="min-h-screen bg-zinc-950 text-white pt-16 md:pt-20">
       <div className="max-w-3xl mx-auto px-4 py-10">
@@ -294,7 +303,7 @@ export default async function PortalPage({
           <p className="text-zinc-500 text-sm">No content has been added yet.</p>
         ) : (
           <div className="space-y-8">
-            {(modules ?? []).map(mod => {
+            {orderedModules.map(mod => {
               const items = (mod.course_items ?? []).slice().sort((a, b) => a.order - b.order)
               return (
                 <section key={mod.id}>

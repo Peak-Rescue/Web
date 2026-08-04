@@ -355,6 +355,15 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
     ...((await createAdminClient().from('course_modules').select('title')).data ?? []).map((m) => m.title as string),
   ])].sort((a, b) => a.localeCompare(b))
 
+  // Instructor-only sections sit at the top for staff — that's where they were
+  // in Classroom, and it's what you want to see first when you open a course
+  // you're running. Students never see them, so their view is unaffected.
+  const orderedModules = [...(modules ?? [])].sort((a, b) => {
+    const ai = moduleAudience(a.audience) === 'internal' ? 0 : 1
+    const bi = moduleAudience(b.audience) === 'internal' ? 0 : 1
+    return ai - bi || (a.order as number) - (b.order as number)
+  })
+
   const assignedIds = new Set((assigned ?? []).map(a => a.instructor_id))
   const unassigned = (allInstructors ?? []).filter(i => !assignedIds.has(i.id))
   // Staffing needs both: the skill, and clearance to work this client type.
@@ -654,7 +663,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
           />
 
           <div className="space-y-6 mb-6">
-            {(modules ?? []).map(mod => {
+            {orderedModules.map(mod => {
               const items = (mod.course_items ?? []).slice().sort((a, b) => a.order - b.order)
               const deleteModWithArgs = deleteModule.bind(null, id, mod.id)
               const addItemWithArgs = addItem.bind(null, id, mod.id)
