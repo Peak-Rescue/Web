@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { applyCourseTemplate } from './actions'
+import { applyCourseTemplate, previewCourseTemplate } from './actions'
 
 export type TemplateOption = {
   id: string
@@ -25,10 +25,30 @@ export default function TemplatePicker({
 }) {
   const router = useRouter()
   const [busy, setBusy] = useState<string | null>(null)
+  // Preview before applying — adding 70-odd items sight unseen is a leap.
+  const [preview, setPreview] = useState<{
+    tpl: TemplateOption
+    sections: {
+      title: string; audience: 'internal' | 'shared'; sectionExists: boolean
+      items: { id: string; title: string; kind: string; audience: string; alreadyOnCourse: boolean }[]
+    }[]
+  } | null>(null)
   const [msg, setMsg] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   if (templates.length === 0) return null
+
+  async function open(t: TemplateOption) {
+    setBusy(t.id)
+    setError(null)
+    try {
+      setPreview({ tpl: t, sections: await previewCourseTemplate(instanceId, t.id) })
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not read that setup.')
+    } finally {
+      setBusy(null)
+    }
+  }
 
   async function apply(t: TemplateOption) {
     setBusy(t.id)
@@ -40,6 +60,7 @@ export default function TemplatePicker({
           ? `“${t.name}” is already applied.`
           : `Added ${res.items} item${res.items === 1 ? '' : 's'} across ${res.sections} new section${res.sections === 1 ? '' : 's'}.`
       )
+      setPreview(null)
       router.refresh()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not apply the template.')
@@ -58,12 +79,12 @@ export default function TemplatePicker({
         {templates.map((t) => (
           <button
             key={t.id}
-            onClick={() => apply(t)}
+            onClick={() => open(t)}
             disabled={busy !== null}
-            title={`Add ${t.sections} section${t.sections === 1 ? '' : 's'} and ${t.items} item${t.items === 1 ? '' : 's'} from ${t.name}`}
+            title={`See what ${t.name} would add`}
             className="text-xs px-3 py-1.5 rounded border border-zinc-700 text-zinc-300 hover:text-white hover:border-zinc-500 transition-colors disabled:opacity-40"
           >
-            {busy === t.id ? 'Applying…' : t.name}
+            {busy === t.id ? 'Loading…' : t.name}
             <span className="text-zinc-600 ml-1.5">
               {t.sections} section{t.sections === 1 ? '' : 's'} · {t.items}
             </span>
@@ -71,6 +92,53 @@ export default function TemplatePicker({
           </button>
         ))}
       </div>
+      {preview && (
+        <div className="mt-3 border border-zinc-700 rounded-lg overflow-hidden">
+          <div className="px-3 py-2 bg-zinc-950/60 flex items-center gap-2 flex-wrap">
+            <span className="text-sm font-medium">{preview.tpl.name}</span>
+            <span className="text-[11px] text-zinc-500">
+              {preview.sections.reduce((n, s) => n + s.items.filter((i) => !i.alreadyOnCourse).length, 0)} item(s) will be added
+            </span>
+          </div>
+          <div className="max-h-72 overflow-y-auto divide-y divide-zinc-800/60">
+            {preview.sections.map((sec) => (
+              <details key={sec.title} className="px-3 py-2">
+                <summary className="cursor-pointer list-none flex items-center gap-2 text-sm">
+                  <span className="text-zinc-600 text-[10px]">▶</span>
+                  {sec.title}
+                  <span className="text-[10px] text-zinc-600">{sec.items.length}</span>
+                  {sec.audience === 'internal' && (
+                    <span className="text-[10px] px-1 rounded bg-zinc-800 text-zinc-400">Internal</span>
+                  )}
+                  {sec.sectionExists && <span className="text-[10px] text-zinc-600">section already here</span>}
+                </summary>
+                <ul className="mt-1 pl-4 space-y-0.5">
+                  {sec.items.map((i) => (
+                    <li key={i.id} className={`text-[11px] ${i.alreadyOnCourse ? 'text-zinc-700 line-through' : 'text-zinc-500'}`}>
+                      {i.title}
+                      {i.audience === 'internal' && <span className="text-zinc-700"> · internal</span>}
+                    </li>
+                  ))}
+                  {sec.items.length === 0 && <li className="text-[11px] text-zinc-700">nothing in this section yet</li>}
+                </ul>
+              </details>
+            ))}
+          </div>
+          <div className="px-3 py-2 bg-zinc-950/60 flex items-center gap-3">
+            <button
+              onClick={() => apply(preview.tpl)}
+              disabled={busy !== null}
+              className="text-xs px-3 py-1.5 rounded bg-pr-red hover:bg-pr-red-dark text-white font-medium transition-colors disabled:opacity-40"
+            >
+              {busy ? 'Adding…' : 'Add these'}
+            </button>
+            <button onClick={() => setPreview(null)} className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
       {msg && <p className="text-xs text-teal-400 mt-2">{msg}</p>}
       {error && <p className="text-xs text-pr-red mt-2">{error}</p>}
     </div>

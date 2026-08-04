@@ -415,6 +415,41 @@ export async function loadPickerItems(instanceId: string) {
   })
 }
 
+// What a template would add to this course — for the preview, so applying
+// isn't a leap of faith. Sections already present are marked, and items
+// already on the course are excluded from the counts.
+export async function previewCourseTemplate(instanceId: string, templateId: string) {
+  await requireAdmin()
+  const admin = createAdminClient()
+
+  const [{ data: sections }, { data: existingModules }, { data: onCourse }] = await Promise.all([
+    admin
+      .from('course_template_sections')
+      .select('id, title, audience, sort_order, course_template_items(item_id, sort_order, library_items(id, title, kind, audience))')
+      .eq('template_id', templateId)
+      .order('sort_order'),
+    admin.from('course_modules').select('title').eq('instance_id', instanceId),
+    admin.from('course_items').select('library_item_id, course_modules!inner(instance_id)').eq('course_modules.instance_id', instanceId),
+  ])
+
+  const haveSections = new Set((existingModules ?? []).map((m) => (m.title as string).toLowerCase()))
+  const haveItems = new Set((onCourse ?? []).map((c) => c.library_item_id).filter(Boolean))
+
+  return ((sections ?? []) as unknown as {
+    title: string
+    audience: 'internal' | 'shared'
+    course_template_items: { library_items: { id: string; title: string; kind: string; audience: string } | null }[]
+  }[]).map((s) => ({
+    title: s.title,
+    audience: s.audience,
+    sectionExists: haveSections.has(s.title.toLowerCase()),
+    items: s.course_template_items
+      .map((i) => i.library_items)
+      .filter((i): i is { id: string; title: string; kind: string; audience: string } => Boolean(i))
+      .map((i) => ({ ...i, alreadyOnCourse: haveItems.has(i.id) })),
+  }))
+}
+
 // Applying a template rebuilds a known course shape: its sections in order,
 // each holding references to the same library items. Idempotent — sections
 // that already exist are reused and items already present are skipped, so it
