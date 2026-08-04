@@ -46,7 +46,9 @@ export default function SuggestedContent({
     for (const i of items) {
       if (have.has(i.id)) continue
       if (scope === 'suggested' && !i.suggested && !needle) continue
-      if (scope !== 'suggested' && scope !== 'all' && !i.disciplines.includes(scope)) continue
+      if (scope.startsWith('class:')) {
+        if (i.sourceClass !== scope.slice(6)) continue
+      } else if (scope !== 'suggested' && scope !== 'all' && !i.disciplines.includes(scope)) continue
       if (needle && !i.title.toLowerCase().includes(needle) && !i.topics.some((t) => t.toLowerCase().includes(needle))) continue
       const key = i.topics.find((t) => t !== 'needs-link-check') ?? 'Other material'
       map.set(key, [...(map.get(key) ?? []), i])
@@ -117,6 +119,10 @@ export default function SuggestedContent({
 
   const totalSuggested = items.filter((i) => i.suggested && !existingItemIds.includes(i.id)).length
 
+  // Whole-class pull: the provenance we kept on import makes "give me all of
+  // Parachute Rescue" a single selection, sections and all.
+  const sourceClasses = [...new Set(items.map((i) => i.sourceClass).filter((c): c is string => Boolean(c)))].sort()
+
   if (!open) {
     return (
       <div className="mb-4">
@@ -155,9 +161,18 @@ export default function SuggestedContent({
               Suggested for this course{courseDisciplines.length ? ` (${courseDisciplines.map((d) => CAPABILITY_META[d as CapabilityCategory]?.label ?? d).join(', ')})` : ''}
             </option>
             <option value="all">Everything in the library</option>
-            {CAPABILITY_ORDER.map((c) => (
-              <option key={c} value={c}>{CAPABILITY_META[c].label}</option>
-            ))}
+            <optgroup label="By expertise">
+              {CAPABILITY_ORDER.map((c) => (
+                <option key={c} value={c}>{CAPABILITY_META[c].label}</option>
+              ))}
+            </optgroup>
+            {sourceClasses.length > 0 && (
+              <optgroup label="Everything from one Classroom class">
+                {sourceClasses.map((c) => (
+                  <option key={c} value={`class:${c}`}>{c}</option>
+                ))}
+              </optgroup>
+            )}
           </select>
         </div>
       </div>

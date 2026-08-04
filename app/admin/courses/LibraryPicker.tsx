@@ -16,6 +16,7 @@ export type PickerItem = {
   topics: string[]
   venue_id: string | null
   venueName: string | null
+  sourceClass: string | null // the Classroom class it came from
   suggested: boolean // this course's discipline, or its venue
 }
 
