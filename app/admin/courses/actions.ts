@@ -356,6 +356,24 @@ export async function addLibraryItems(instanceId: string, moduleId: string, item
   revalidatePath(`/portal/${instanceId}`)
 }
 
+// Per-delivery logistics — meeting point, time, running order. Participant
+// facing by definition, and the one part of course content that must be
+// rewritten every delivery rather than pulled from the library.
+export async function updateCourseLogistics(id: string, formData: FormData) {
+  await requireAdmin()
+  const { error } = await createAdminClient()
+    .from('course_instances')
+    .update({
+      meeting_point: ((formData.get('meeting_point') as string) || '').trim() || null,
+      meeting_time: ((formData.get('meeting_time') as string) || '').trim() || null,
+      schedule: ((formData.get('schedule') as string) || '').trim() || null,
+    })
+    .eq('id', id)
+  if (error) throw new Error(error.message)
+  revalidatePath(`/admin/courses/${id}`)
+  revalidatePath(`/portal/${id}`)
+}
+
 // Bulk-apply library material to a course: each group becomes a section (or
 // merges into one that already exists), holding the items ticked under it.
 // Sections carry their own audience, so a whole group can be held back to

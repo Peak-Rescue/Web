@@ -95,7 +95,7 @@ export default async function PortalPage({
   const [{ data: inst }, { data: offDays }, { data: modules }, { data: instructors }, taskRows, { data: peopleRows }, { data: templateRows }, { data: courseDocRows }, { data: taskDocRows }] =
     await Promise.all([
       admin.from('course_instances')
-        .select('course_type, custom_title, status, location, client_name, notes, ref_number, starts_at, ends_at')
+        .select('course_type, custom_title, status, location, client_name, notes, ref_number, starts_at, ends_at, meeting_point, meeting_time, schedule')
         .eq('id', id)
         .single(),
       admin.from('instance_off_days')
@@ -299,6 +299,24 @@ export default async function PortalPage({
         )}
 
         {/* Content modules */}
+        {(inst.meeting_point || inst.meeting_time || inst.schedule) && (
+          <section className="mb-8">
+            <h2 className="text-lg font-semibold mb-3">Meeting &amp; schedule</h2>
+            <div className="px-4 py-3 bg-zinc-900 border border-zinc-800 rounded-lg space-y-2 text-sm">
+              {(inst.meeting_point || inst.meeting_time) && (
+                <p>
+                  {inst.meeting_point && <span className="text-white">{inst.meeting_point}</span>}
+                  {inst.meeting_point && inst.meeting_time && <span className="text-zinc-600"> · </span>}
+                  {inst.meeting_time && <span className="text-white">{inst.meeting_time}</span>}
+                </p>
+              )}
+              {inst.schedule && (
+                <p className="text-zinc-300 whitespace-pre-line">{inst.schedule}</p>
+              )}
+            </div>
+          </section>
+        )}
+
         {(modules ?? []).length === 0 ? (
           <p className="text-zinc-500 text-sm">No content has been added yet.</p>
         ) : (

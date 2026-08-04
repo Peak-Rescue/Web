@@ -2,7 +2,7 @@ import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { updateInstanceDetails, updateInstanceDates, addOffDay, removeOffDay, addModule, deleteModule, addItem, deleteItem, removeInstructor, removeEnrollment } from '../actions'
+import { updateInstanceDetails, updateInstanceDates, addOffDay, removeOffDay, addModule, deleteModule, addItem, deleteItem, removeInstructor, removeEnrollment, updateCourseLogistics } from '../actions'
 import { CourseTypeSelect } from '../CourseTypeSelect'
 import InstructorAssign from '../InstructorAssign'
 import StaffingInterest from '../StaffingInterest'
@@ -358,6 +358,8 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
   // Instructor-only sections sit at the top for staff — that's where they were
   // in Classroom, and it's what you want to see first when you open a course
   // you're running. Students never see them, so their view is unaffected.
+  const updateLogisticsWithId = updateCourseLogistics.bind(null, id)
+
   const orderedModules = [...(modules ?? [])].sort((a, b) => {
     const ai = moduleAudience(a.audience) === 'internal' ? 0 : 1
     const bi = moduleAudience(b.audience) === 'internal' ? 0 : 1
@@ -647,6 +649,52 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
             expiresAt={inst.invite_expires_at ?? null}
             expired={!!inst.invite_expires_at && new Date(inst.invite_expires_at) < new Date()}
           />
+        </details>
+
+        {/* ── Participant logistics ─────────────────────────────────── */}
+        <details open className="mb-8 group">
+          <summary className="cursor-pointer list-none text-lg font-semibold select-none mb-3"><span className="text-zinc-600 text-sm mr-2 inline-block transition-transform group-open:rotate-90">▶</span>
+            Meeting &amp; schedule
+            {!inst.meeting_point && !inst.meeting_time && (
+              <span className="ml-3 text-[11px] font-normal px-2 py-0.5 rounded bg-yellow-900/40 text-yellow-300 align-middle">
+                not set yet
+              </span>
+            )}
+          </summary>
+          <p className="text-xs text-zinc-500 mb-3">
+            Written fresh for this delivery and shown to everyone on the course — not pulled from the library, because
+            it changes every time.
+          </p>
+          <AutoSaveForm action={updateLogisticsWithId} className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-6 bg-zinc-900 border border-zinc-800 rounded-lg">
+            <div>
+              <label className="block text-xs text-zinc-400 mb-1">Meeting point</label>
+              <input
+                name="meeting_point"
+                defaultValue={inst.meeting_point ?? ''}
+                placeholder="e.g. Garfield Ledges trailhead, lower lot"
+                className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-zinc-400 mb-1">Day one meeting time</label>
+              <input
+                name="meeting_time"
+                defaultValue={inst.meeting_time ?? ''}
+                placeholder="e.g. 0700, ready to walk"
+                className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500"
+              />
+            </div>
+            <div className="sm:col-span-2">
+              <label className="block text-xs text-zinc-400 mb-1">Schedule / running order</label>
+              <textarea
+                name="schedule"
+                rows={4}
+                defaultValue={inst.schedule ?? ''}
+                placeholder={'Day 1 — travel, gear check\nDay 2 — anchors and rappels\n…'}
+                className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm resize-y focus:outline-none focus:border-zinc-500"
+              />
+            </div>
+          </AutoSaveForm>
         </details>
 
         {/* ── Content modules ──────────────────────────────────────── */}
