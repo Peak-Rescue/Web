@@ -13,9 +13,9 @@ export type TemplateOption = {
   isDefault: boolean
 }
 
-// Start a course from a known shape — the Classroom class, rebuilt with live
-// library references. Applying is idempotent, so it's also how you pick up
-// material added to the template since.
+// Sets a course up the way that kind of course is normally run: its usual
+// sections, filled with references to the same library material. Re-running it
+// is safe and is how a course picks up anything added since.
 export default function TemplatePicker({
   instanceId,
   templates,
@@ -51,7 +51,8 @@ export default function TemplatePicker({
   return (
     <div className="mb-4 p-3 bg-zinc-900 border border-zinc-800 rounded-lg">
       <p className="text-xs text-zinc-500 mb-2">
-        Start from a course shape — sections and material as they run today, then adjust for this delivery.
+        <span className="text-zinc-300 font-medium">Start with a standard setup.</span> Adds the sections and
+        material this kind of course normally uses — change anything afterwards.
       </p>
       <div className="flex flex-wrap gap-2">
         {templates.map((t) => (
@@ -59,7 +60,7 @@ export default function TemplatePicker({
             key={t.id}
             onClick={() => apply(t)}
             disabled={busy !== null}
-            title={t.description ?? undefined}
+            title={`Add ${t.sections} section${t.sections === 1 ? '' : 's'} and ${t.items} item${t.items === 1 ? '' : 's'} from ${t.name}`}
             className="text-xs px-3 py-1.5 rounded border border-zinc-700 text-zinc-300 hover:text-white hover:border-zinc-500 transition-colors disabled:opacity-40"
           >
             {busy === t.id ? 'Applying…' : t.name}
