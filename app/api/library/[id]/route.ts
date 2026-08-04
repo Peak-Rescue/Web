@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { fetchDriveFile, driveIdFromUrl, driveProxyEnabled } from '@/lib/drive'
+import { fetchDriveFile, findDriveReader, driveIdFromUrl, driveProxyEnabled } from '@/lib/drive'
 
 // Streams a library item's Drive file to someone the portal has decided may
 // see it. Staff get anything published; a student gets an item only if it's
@@ -69,7 +69,32 @@ export async function GET(
     return NextResponse.json({ error: 'No file' }, { status: 404 })
   }
 
-  const file = await fetchDriveFile(fileId, item.drive_reader ?? undefined)
+  let file = await fetchDriveFile(fileId, item.drive_reader ?? undefined)
+
+  // No reader recorded yet, or the recorded one lost access: find a staff
+  // account that can see it and remember the answer. Classroom attachments
+  // live in the uploader's Drive, so which account works varies per file —
+  // resolving on first open beats a migration nobody has to run.
+  if (!file.body) {
+    const { data: staff } = await admin
+      .from('instructors')
+      .select('email')
+      .eq('active', true)
+      .not('email', 'is', null)
+    const candidates = [
+      ...new Set(
+        (staff ?? [])
+          .map((s) => s.email as string)
+          .filter((e) => e.endsWith('@peak-rescue.com') && e !== item.drive_reader)
+      ),
+    ]
+    const reader = await findDriveReader(fileId, candidates)
+    if (reader) {
+      await admin.from('library_items').update({ drive_reader: reader }).eq('id', id)
+      file = await fetchDriveFile(fileId, reader)
+    }
+  }
+
   if (!file.body) {
     return NextResponse.json(
       { error: 'Could not read that file from Drive' },

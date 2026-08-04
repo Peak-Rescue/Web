@@ -43,7 +43,10 @@ export default function TemplatePicker({
   function toggle(ids: string[], on: boolean) {
     setExcluded((prev) => {
       const next = new Set(prev)
-      for (const id of ids) on ? next.delete(id) : next.add(id)
+      for (const id of ids) {
+        if (on) next.delete(id)
+        else next.add(id)
+      }
       return next
     })
   }
@@ -108,32 +111,72 @@ export default function TemplatePicker({
           <div className="px-3 py-2 bg-zinc-950/60 flex items-center gap-2 flex-wrap">
             <span className="text-sm font-medium">{preview.tpl.name}</span>
             <span className="text-[11px] text-zinc-500">
-              {preview.sections.reduce((n, s) => n + s.items.filter((i) => !i.alreadyOnCourse).length, 0)} item(s) will be added
+              {preview.sections.reduce((n, s) => n + s.items.filter((i) => !i.alreadyOnCourse && !excluded.has(i.id)).length, 0)} item(s)
+              will be added — untick anything you don&apos;t want
             </span>
           </div>
           <div className="max-h-72 overflow-y-auto divide-y divide-zinc-800/60">
-            {preview.sections.map((sec) => (
-              <details key={sec.title} className="px-3 py-2">
-                <summary className="cursor-pointer list-none flex items-center gap-2 text-sm">
-                  <span className="text-zinc-600 text-[10px]">▶</span>
-                  {sec.title}
-                  <span className="text-[10px] text-zinc-600">{sec.items.length}</span>
-                  {sec.audience === 'internal' && (
-                    <span className="text-[10px] px-1 rounded bg-zinc-800 text-zinc-400">Internal</span>
-                  )}
-                  {sec.sectionExists && <span className="text-[10px] text-zinc-600">section already here</span>}
-                </summary>
-                <ul className="mt-1 pl-4 space-y-0.5">
-                  {sec.items.map((i) => (
-                    <li key={i.id} className={`text-[11px] ${i.alreadyOnCourse ? 'text-zinc-700 line-through' : 'text-zinc-500'}`}>
-                      {i.title}
-                      {i.audience === 'internal' && <span className="text-zinc-700"> · internal</span>}
-                    </li>
-                  ))}
-                  {sec.items.length === 0 && <li className="text-[11px] text-zinc-700">nothing in this section yet</li>}
-                </ul>
-              </details>
-            ))}
+            {preview.sections.map((sec) => {
+              const addable = sec.items.filter((i) => !i.alreadyOnCourse)
+              const picked = addable.filter((i) => !excluded.has(i.id))
+              return (
+                <details key={sec.title} className="px-3 py-2">
+                  <summary className="cursor-pointer list-none flex items-center gap-2 text-sm">
+                    <span className="text-zinc-600 text-[10px]">▶</span>
+                    {addable.length > 0 && (
+                      <input
+                        type="checkbox"
+                        checked={picked.length === addable.length}
+                        ref={(el) => {
+                          if (el) el.indeterminate = picked.length > 0 && picked.length < addable.length
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={(e) => toggle(addable.map((i) => i.id), e.target.checked)}
+                        title="Include this whole section"
+                        className="accent-teal-600"
+                      />
+                    )}
+                    {sec.title}
+                    <span className="text-[10px] text-zinc-600">{sec.items.length}</span>
+                    {sec.audience === 'internal' && (
+                      <span className="text-[10px] px-1 rounded bg-zinc-800 text-zinc-400">Internal</span>
+                    )}
+                    {sec.sectionExists && <span className="text-[10px] text-zinc-600">section already here</span>}
+                  </summary>
+                  <ul className="mt-1 pl-4 space-y-0.5">
+                    {sec.items.map((i) => (
+                      <li
+                        key={i.id}
+                        className={`text-[11px] ${
+                          i.alreadyOnCourse ? 'text-zinc-700 line-through' : excluded.has(i.id) ? 'text-zinc-700' : 'text-zinc-500'
+                        }`}
+                      >
+                        {i.alreadyOnCourse ? (
+                          <>
+                            {i.title}
+                            {i.audience === 'internal' && <span className="text-zinc-700"> · internal</span>}
+                          </>
+                        ) : (
+                          <label className="flex items-center gap-1.5 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={!excluded.has(i.id)}
+                              onChange={(e) => toggle([i.id], e.target.checked)}
+                              className="accent-teal-600"
+                            />
+                            <span>
+                              {i.title}
+                              {i.audience === 'internal' && <span className="text-zinc-700"> · internal</span>}
+                            </span>
+                          </label>
+                        )}
+                      </li>
+                    ))}
+                    {sec.items.length === 0 && <li className="text-[11px] text-zinc-700">nothing in this section yet</li>}
+                  </ul>
+                </details>
+              )
+            })}
           </div>
           <div className="px-3 py-2 bg-zinc-950/60 flex items-center gap-3">
             <button
