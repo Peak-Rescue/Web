@@ -18,15 +18,18 @@ export type CourseFile = {
   id: string
   filename: string
   url: string
-  // Where the file came from: general course upload, a task, an expense report.
-  source: 'course' | 'task' | 'expense'
+  // Where the file came from: a general course upload or a task attachment.
+  source: 'course' | 'task'
   label: string | null
   // External link (Google Drive, Dropbox…) rather than an uploaded file.
   isLink?: boolean
 }
 
 // Every file attached anywhere in the course, in one place — general uploads
-// (added here), task attachments, and expense receipts. Only general uploads
+// (added here) and task attachments. Expense receipts deliberately aren't
+// gathered here — they're financial records about a named person, and the
+// expenses console already lists them with a per-course rollup. Only general
+// uploads
 // can be deleted here; the others belong to their task/report.
 export default function CourseFilesSection({
   instanceId,
@@ -142,7 +145,7 @@ export default function CourseFilesSection({
       />
       <div className="flex items-center justify-between gap-3 mb-3">
         <p className="text-xs text-zinc-400">
-          Files — everything attached to this course, including task attachments and expense receipts.
+          Files — course documents and task attachments.
         </p>
         <div className="shrink-0 flex items-center gap-2">
           <button

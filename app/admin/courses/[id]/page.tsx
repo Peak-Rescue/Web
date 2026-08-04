@@ -106,7 +106,6 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
     { data: interestInviteRows },
     { data: courseDocRows },
     { data: taskDocRows },
-    { data: receiptRows },
     { data: galleryImageRows },
     { data: estimateReviewRows },
   ] = await Promise.all([
@@ -141,7 +140,6 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
     admin.from('course_interest_invites').select('id, instructor_id, sent_at, responded_at, interested, note').eq('instance_id', id).order('created_at'),
     admin.from('course_documents').select('id, path, filename, url, created_at').eq('instance_id', id),
     admin.from('course_task_documents').select('id, path, filename, url, created_at, course_tasks!inner(title, instance_id)').eq('course_tasks.instance_id', id),
-    admin.from('expense_receipts').select('id, path, filename, created_at, expense_items!inner(category, instance_id, expense_reports(profiles(first_name, last_name)))').eq('expense_items.instance_id', id),
     admin.from('gallery_images').select('url, caption, categories').order('created_at', { ascending: false }),
     admin.from('estimate_reviews').select('id, created_at, requested_by, reviewer_id, note, responded_at, approved, response_note').eq('instance_id', id).order('created_at', { ascending: false }).limit(8),
   ])
@@ -160,17 +158,10 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
   // per-bucket in two calls, links used as-is.
   const docRows = [...(courseDocRows ?? []), ...(taskDocRows ?? [])]
   const docPaths = docRows.map((r) => r.path).filter((p): p is string => Boolean(p))
-  const [{ data: signedDocs }, { data: signedReceipts }] = await Promise.all([
-    docPaths.length
-      ? admin.storage.from('task-documents').createSignedUrls(docPaths, 3600)
-      : Promise.resolve({ data: [] }),
-    (receiptRows ?? []).length
-      ? admin.storage.from('expense-receipts').createSignedUrls((receiptRows ?? []).map((r) => r.path), 3600)
-      : Promise.resolve({ data: [] }),
-  ])
-  const fileUrl = new Map(
-    [...(signedDocs ?? []), ...(signedReceipts ?? [])].map((s) => [s.path, s.signedUrl])
-  )
+  const { data: signedDocs } = docPaths.length
+    ? await admin.storage.from('task-documents').createSignedUrls(docPaths, 3600)
+    : { data: [] }
+  const fileUrl = new Map((signedDocs ?? []).map((s) => [s.path, s.signedUrl]))
   const courseFiles: (CourseFile & { created_at: string })[] = [
     ...(courseDocRows ?? []).map((r) => ({
       id: r.id,
@@ -190,23 +181,6 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
       isLink: Boolean(r.url),
       created_at: r.created_at,
     })),
-    ...(receiptRows ?? []).map((r) => {
-      const item = r.expense_items as unknown as {
-        category: string
-        expense_reports: { profiles: { first_name: string | null; last_name: string | null } | null } | null
-      } | null
-      const who = [item?.expense_reports?.profiles?.first_name, item?.expense_reports?.profiles?.last_name]
-        .filter(Boolean)
-        .join(' ')
-      return {
-        id: r.id,
-        filename: r.filename ?? 'receipt',
-        url: fileUrl.get(r.path) ?? '#',
-        source: 'expense' as const,
-        label: [who, item?.category?.replace(/_/g, ' ')].filter(Boolean).join(' · ') || null,
-        created_at: r.created_at,
-      }
-    }),
   ].sort((a, b) => b.created_at.localeCompare(a.created_at))
 
   const enrollments = enrollmentRows ?? []
@@ -504,7 +478,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
           <details open={(offDays ?? []).length > 0} className="mb-4 group/off">
             <summary className="cursor-pointer list-none text-sm text-zinc-400 hover:text-zinc-200 transition-colors select-none">
               <span className="text-zinc-600 text-xs mr-1.5 inline-block transition-transform group-open/off:rotate-90">▶</span>
-              This course has a break in the middle (off-days)…
+              Dates to exclude
             </summary>
             <div className="mt-3">
             <p className="text-xs text-zinc-500 mb-3">
