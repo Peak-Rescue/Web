@@ -28,7 +28,7 @@ export async function GET(
   const admin = createAdminClient()
   const [{ data: profile }, { data: item }] = await Promise.all([
     admin.from('profiles').select('role').eq('id', user.id).single(),
-    admin.from('library_items').select('id, url, drive_file_id, status, audience').eq('id', id).maybeSingle(),
+    admin.from('library_items').select('id, url, drive_file_id, status, audience, drive_reader').eq('id', id).maybeSingle(),
   ])
 
   if (!item || item.status !== 'published') {
@@ -69,7 +69,7 @@ export async function GET(
     return NextResponse.json({ error: 'No file' }, { status: 404 })
   }
 
-  const file = await fetchDriveFile(fileId)
+  const file = await fetchDriveFile(fileId, item.drive_reader ?? undefined)
   if (!file.body) {
     return NextResponse.json(
       { error: 'Could not read that file from Drive' },

@@ -33,15 +33,26 @@ export default function TemplatePicker({
       items: { id: string; title: string; kind: string; audience: string; alreadyOnCourse: boolean }[]
     }[]
   } | null>(null)
+  // Items unticked in the preview — they stay out when the setup is applied.
+  const [excluded, setExcluded] = useState<Set<string>>(new Set())
   const [msg, setMsg] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   if (templates.length === 0) return null
 
+  function toggle(ids: string[], on: boolean) {
+    setExcluded((prev) => {
+      const next = new Set(prev)
+      for (const id of ids) on ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
   async function open(t: TemplateOption) {
     setBusy(t.id)
     setError(null)
     try {
+      setExcluded(new Set())
       setPreview({ tpl: t, sections: await previewCourseTemplate(instanceId, t.id) })
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not read that setup.')
@@ -54,7 +65,7 @@ export default function TemplatePicker({
     setBusy(t.id)
     setError(null)
     try {
-      const res = await applyCourseTemplate(instanceId, t.id)
+      const res = await applyCourseTemplate(instanceId, t.id, Array.from(excluded))
       setMsg(
         res.items === 0 && res.sections === 0
           ? `“${t.name}” is already applied.`

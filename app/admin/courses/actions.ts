@@ -453,10 +453,13 @@ export async function previewCourseTemplate(instanceId: string, templateId: stri
 // Applying a template rebuilds a known course shape: its sections in order,
 // each holding references to the same library items. Idempotent — sections
 // that already exist are reused and items already present are skipped, so it
-// can be re-run after the template gains material.
-export async function applyCourseTemplate(instanceId: string, templateId: string) {
+// can be re-run after the template gains material. Items deselected in the
+// preview arrive as excludeItemIds; a new section whose every item was
+// deselected is not created at all.
+export async function applyCourseTemplate(instanceId: string, templateId: string, excludeItemIds: string[] = []) {
   await requireAdmin()
   const admin = createAdminClient()
+  const excluded = new Set(excludeItemIds)
 
   const { data: sections } = await admin
     .from('course_template_sections')
@@ -476,7 +479,12 @@ export async function applyCourseTemplate(instanceId: string, templateId: string
   let addedItems = 0
 
   for (const sec of sections) {
+    const allWanted = ((sec.course_template_items ?? []) as { item_id: string; sort_order: number }[])
+      .sort((a, b) => a.sort_order - b.sort_order)
+    const wanted = allWanted.filter((w) => !excluded.has(w.item_id))
+
     let moduleId = byTitle.get(sec.title.toLowerCase())
+    if (!moduleId && allWanted.length > 0 && wanted.length === 0) continue
     if (!moduleId) {
       const { data, error } = await admin
         .from('course_modules')
@@ -493,8 +501,6 @@ export async function applyCourseTemplate(instanceId: string, templateId: string
       madeSections++
     }
 
-    const wanted = ((sec.course_template_items ?? []) as { item_id: string; sort_order: number }[])
-      .sort((a, b) => a.sort_order - b.sort_order)
     if (wanted.length === 0) continue
 
     // Only published items, and only ones not already in this section.

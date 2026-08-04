@@ -31,12 +31,13 @@ export function driveProxyEnabled(): boolean {
   return Boolean(serviceKey() && process.env.GCAL_INVITE_AS)
 }
 
-let cached: { token: string; exp: number } | null = null
+const cached = new Map<string, { token: string; exp: number }>()
 
-async function getToken(): Promise<string> {
-  if (cached && cached.exp > Date.now() + 60_000) return cached.token
+async function getToken(subject?: string): Promise<string> {
+  const sub = subject ?? process.env.GCAL_INVITE_AS
+  const hit = cached.get(sub ?? '')
+  if (hit && hit.exp > Date.now() + 60_000) return hit.token
   const key = serviceKey()
-  const sub = process.env.GCAL_INVITE_AS
   if (!key || !sub) throw new Error('Drive access not configured')
 
   const b64 = (o: object) => Buffer.from(JSON.stringify(o)).toString('base64url')
@@ -61,7 +62,7 @@ async function getToken(): Promise<string> {
   })
   if (!res.ok) throw new Error(`Drive auth failed: ${await res.text()}`)
   const data = (await res.json()) as { access_token: string; expires_in: number }
-  cached = { token: data.access_token, exp: Date.now() + data.expires_in * 1000 }
+  cached.set(sub, { token: data.access_token, exp: Date.now() + data.expires_in * 1000 })
   return data.access_token
 }
 
@@ -80,8 +81,8 @@ export type DriveFile = {
   status: number
 }
 
-export async function fetchDriveFile(fileId: string): Promise<DriveFile> {
-  const token = await getToken()
+export async function fetchDriveFile(fileId: string, readAs?: string): Promise<DriveFile> {
+  const token = await getToken(readAs)
   const auth = { Authorization: `Bearer ${token}` }
 
   const metaRes = await fetch(
@@ -119,4 +120,27 @@ export function driveIdFromUrl(url: string | null): string | null {
     url.match(/[?&]id=([^&#]+)/) ??
     url.match(/docs\.google\.com\/\w+\/d\/([^/?#]+)/)
   return m?.[1] ?? null
+}
+
+// Finds a staff account that can read a file. Classroom attachments sit in the
+// uploader's Drive shared with their class, so the portal's default identity
+// often can't see them — but someone in the domain always can, and delegation
+// lets us be them. Cheaper to remember the answer than to re-discover it.
+export async function findDriveReader(
+  fileId: string,
+  candidates: string[]
+): Promise<string | null> {
+  for (const who of candidates) {
+    try {
+      const token = await getToken(who)
+      const res = await fetch(
+        `https://www.googleapis.com/drive/v3/files/${fileId}?fields=id&supportsAllDrives=true`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      )
+      if (res.ok) return who
+    } catch {
+      // try the next account
+    }
+  }
+  return null
 }
