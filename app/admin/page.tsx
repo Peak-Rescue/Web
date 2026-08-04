@@ -270,6 +270,17 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       ),
     },
     {
+      title: 'Reference',
+      desc: 'Manuals, tech notes, standards and venue beta',
+      href: '/instructor/reference',
+      section: 'personal',
+      icon: (
+        <svg {...svgProps}>
+          <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+        </svg>
+      ),
+    },
+    {
       title: 'Content Library',
       desc: 'Course material, references, maps and venue packs',
       href: '/admin/library',
