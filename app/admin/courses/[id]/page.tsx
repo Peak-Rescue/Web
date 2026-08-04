@@ -30,8 +30,7 @@ import LibraryPicker, { type PickerItem } from '../LibraryPicker'
 import SuggestedContent from '../SuggestedContent'
 import TemplatePicker, { type TemplateOption } from '../TemplatePicker'
 import RemovableRow from '../RemovableRow'
-import StickySection from '../StickySection'
-import CourseNav, { type NavSection } from '../CourseNav'
+import { CourseTabs, TabPanel } from '../CourseTabs'
 
 const STATUS_STYLES: Record<string, string> = {
   tentative: 'bg-yellow-900/40 text-yellow-300 border-yellow-700',
@@ -395,8 +394,9 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
         </div>
 
         {/* ── Details ─────────────────────────────────────────────── */}
-        <CourseNav
-          sections={[
+        <CourseTabs
+          storageKey={`course-tab:${id}`}
+          tabs={[
             { id: 'details', label: 'Details' },
             { id: 'participants', label: 'Info for participants' },
             { id: 'content', label: 'Content' },
@@ -405,11 +405,11 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
             { id: 'tasks', label: 'Tasks' },
             { id: 'estimates', label: 'Estimates' },
             { id: 'quotes', label: 'Quotes' },
-          ] satisfies NavSection[]}
-        />
+          ]}
+        >
 
-        <StickySection id="details">
-          <summary className="cursor-pointer list-none text-lg font-semibold select-none mb-3"><span className="text-zinc-600 text-sm mr-2 inline-block transition-transform group-open:rotate-90">▶</span>Details</summary>
+        <TabPanel id="details">
+          <h2 className="text-lg font-semibold mb-4">Details</h2>
           <div className="bg-zinc-900 rounded-lg border border-zinc-800">
           <AutoSaveForm action={updateDetailsWithId} className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-6">
             <CourseTypeSelect
@@ -540,12 +540,12 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
 
           <CourseFilesSection instanceId={id} files={courseFiles} />
           </div>
-        </StickySection>
+        </TabPanel>
 
 
         {/* ── Instructors ──────────────────────────────────────────── */}
-        <StickySection id="instructors">
-          <summary className="cursor-pointer list-none text-lg font-semibold select-none mb-3"><span className="text-zinc-600 text-sm mr-2 inline-block transition-transform group-open:rotate-90">▶</span>Instructors</summary>
+        <TabPanel id="instructors">
+          <h2 className="text-lg font-semibold mb-4">Instructors</h2>
 
           {(assigned ?? []).length > 0 && (
             <div className="mb-4 space-y-2">
@@ -586,16 +586,15 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
             invites={interestInvites}
             hasLead={(assigned ?? []).some(a => a.role === 'lead')}
           />
-        </StickySection>
+        </TabPanel>
 
         {/* ── Students ─────────────────────────────────────────────── */}
-        <StickySection id="students">
-          <summary className="cursor-pointer list-none text-lg font-semibold select-none mb-3"><span className="text-zinc-600 text-sm mr-2 inline-block transition-transform group-open:rotate-90">▶</span>
-            Students
+        <TabPanel id="students">
+          <h2 className="text-lg font-semibold mb-4">Students
             <span className="ml-2 text-sm font-normal text-zinc-500">
               {enrollments.length}{inst.max_students ? ` / ${inst.max_students}` : ''} enrolled
             </span>
-          </summary>
+          </h2>
           <p className="text-xs text-zinc-500 mb-4">
             Share the invite link below — students enroll themselves.
           </p>
@@ -627,18 +626,17 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
             expiresAt={inst.invite_expires_at ?? null}
             expired={!!inst.invite_expires_at && new Date(inst.invite_expires_at) < new Date()}
           />
-        </StickySection>
+        </TabPanel>
 
         {/* ── Participant logistics ─────────────────────────────────── */}
-        <StickySection id="participants">
-          <summary className="cursor-pointer list-none text-lg font-semibold select-none mb-3"><span className="text-zinc-600 text-sm mr-2 inline-block transition-transform group-open:rotate-90">▶</span>
-            Participant info
+        <TabPanel id="participants">
+          <h2 className="text-lg font-semibold mb-4">Participant info
             {!inst.meeting_point && !inst.meeting_time && (
               <span className="ml-3 text-[11px] font-normal px-2 py-0.5 rounded bg-yellow-900/40 text-yellow-300 align-middle">
                 not set yet
               </span>
             )}
-          </summary>
+          </h2>
           <p className="text-xs text-zinc-500 mb-3">
             Shown to everyone on the course.
           </p>
@@ -682,11 +680,11 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
               />
             </div>
           </AutoSaveForm>
-        </StickySection>
+        </TabPanel>
 
         {/* ── Content modules ──────────────────────────────────────── */}
-        <StickySection id="content">
-          <summary className="cursor-pointer list-none text-lg font-semibold select-none mb-3"><span className="text-zinc-600 text-sm mr-2 inline-block transition-transform group-open:rotate-90">▶</span>Content</summary>
+        <TabPanel id="content">
+          <h2 className="text-lg font-semibold mb-4">Content</h2>
 
           <TemplatePicker instanceId={id} templates={templates} />
 
@@ -719,7 +717,6 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
                   </div>
 
                   {items.map(item => {
-                    const deleteItemWithArgs = deleteItem.bind(null, id, item.id)
                     // Library-backed rows take their title/link from the library
                     // entry, so an edit there reaches every course at once.
                     // Supabase types the embedded row as an array; it's a
@@ -814,10 +811,10 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
             </div>
             <button type="submit" className="px-4 py-2 bg-pr-red hover:bg-pr-red-dark text-white rounded text-sm font-medium transition-colors">Add section</button>
           </form>
-        </StickySection>
+        </TabPanel>
 
-        <StickySection id="estimates" defaultOpen={false}>
-          <summary className="cursor-pointer list-none text-lg font-semibold select-none mb-3"><span className="text-zinc-600 text-sm mr-2 inline-block transition-transform group-open:rotate-90">▶</span>Estimates</summary>
+        <TabPanel id="estimates">
+          <h2 className="text-lg font-semibold mb-4">Estimates</h2>
           <p className="text-xs text-zinc-500 mb-4">
             Internal — never shown to instructors or clients.
           </p>
@@ -847,10 +844,10 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
             />
           </div>
           <EstimateReviewRequest instanceId={id} reviews={estimateReviews} admins={reviewAdmins} currentUserId={user.id} />
-        </StickySection>
+        </TabPanel>
 
-        <StickySection id="quotes" defaultOpen={false}>
-          <summary className="cursor-pointer list-none text-lg font-semibold select-none mb-3"><span className="text-zinc-600 text-sm mr-2 inline-block transition-transform group-open:rotate-90">▶</span>Quotes</summary>
+        <TabPanel id="quotes">
+          <h2 className="text-lg font-semibold mb-4">Quotes</h2>
           <div className="flex items-start justify-between gap-3 flex-wrap mb-4">
             <p className="text-xs text-zinc-500">
               Marking a quote sent or accepted moves the course to Quoted or Confirmed.
@@ -872,10 +869,10 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
             people={quotePeople}
             estimates={estimatePanels.filter((e) => e.id).map((e) => ({ id: e.id!, title: e.title }))}
           />
-        </StickySection>
+        </TabPanel>
 
-        <StickySection id="tasks">
-          <summary className="cursor-pointer list-none text-lg font-semibold select-none mb-3"><span className="text-zinc-600 text-sm mr-2 inline-block transition-transform group-open:rotate-90">▶</span>Tasks</summary>
+        <TabPanel id="tasks">
+          <h2 className="text-lg font-semibold mb-4">Tasks</h2>
           <p className="text-xs text-zinc-500 mb-4">
             Assignees are emailed and see these on their portal home.
           </p>
@@ -888,7 +885,8 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
             suggestions={templateRows ?? []}
             completedOpen
           />
-        </StickySection>
+        </TabPanel>
+        </CourseTabs>
 
         <div className="pt-4 border-t border-zinc-800">
           <Link href={`/portal/${id}`} className="text-sm text-zinc-400 hover:text-white transition-colors">
