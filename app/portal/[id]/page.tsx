@@ -85,7 +85,7 @@ export default async function PortalPage({
 
   let modulesQuery = admin
     .from('course_modules')
-    .select('id, title, audience, order, course_items(id, title, type, url, description, order, audience, library_items(id, title, url, kind, audience))')
+    .select('id, title, audience, order, course_items(id, title, type, url, description, order, audience, library_items(id, title, url, kind, audience, drive_file_id))')
     .eq('instance_id', id)
     .order('order')
   if (audienceFilter) {
@@ -345,11 +345,15 @@ export default async function PortalPage({
                       // be held back to instructors inside a shared section.
                       const libRaw = item.library_items as unknown
                       const lib = (Array.isArray(libRaw) ? libRaw[0] : libRaw) as
-                        { title: string; url: string | null; audience: string } | null
+                        { id: string; title: string; url: string | null; audience: string; drive_file_id?: string | null } | null
                       const effective = item.audience ?? lib?.audience ?? 'shared'
                       if (!showTasks && effective === 'internal') return null
                       const title = lib?.title ?? item.title
-                      const url = lib?.url ?? item.url
+                      // Drive files go through the portal, which streams them
+                      // with the service account — a direct Drive link would
+                      // show participants Google's request-access page.
+                      const isDrive = Boolean(lib?.drive_file_id) || /drive\.google\.com|docs\.google\.com/.test(lib?.url ?? '')
+                      const url = lib && isDrive ? `/api/library/${lib.id}` : (lib?.url ?? item.url)
                       if (!url) return null
                       return (
                       <a
