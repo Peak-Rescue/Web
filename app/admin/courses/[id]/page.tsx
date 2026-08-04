@@ -31,6 +31,8 @@ import SuggestedContent from '../SuggestedContent'
 import TemplatePicker, { type TemplateOption } from '../TemplatePicker'
 import RemovableRow from '../RemovableRow'
 import { CourseTabs, TabPanel } from '../CourseTabs'
+import CourseGear from '../CourseGear'
+import { type GearItem, type GearList } from '@/app/admin/gear/GearListEditor'
 
 const STATUS_STYLES: Record<string, string> = {
   tentative: 'bg-yellow-900/40 text-yellow-300 border-yellow-700',
@@ -322,6 +324,25 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
     ((await createAdminClient().from('course_modules').select('title')).data ?? []).map((m) => m.title as string)
   )].sort((a, b) => a.localeCompare(b))
 
+  // Gear: this course's lists, the catalog they draw on, and any saved
+  // templates for this offering.
+  const gearAdmin = createAdminClient()
+  const [{ data: gearListRows }, { data: gearCatalog }, { data: gearTemplateRows }] = await Promise.all([
+    gearAdmin.from('gear_lists')
+      .select('id, name, audience, intro, instance_id, is_template, gear_list_entries(id, gear_item_id, name, info, recommended, url, category, group_type, quantity, sort_order)')
+      .eq('instance_id', id),
+    gearAdmin.from('gear_items').select('id, name, info, recommended, url, category').eq('active', true).order('name'),
+    gearAdmin.from('gear_lists')
+      .select('id, name, audience, course_type, gear_list_entries(id)')
+      .eq('is_template', true),
+  ])
+  const gearLists = (gearListRows ?? []) as unknown as GearList[]
+  const gearTemplates = ((gearTemplateRows ?? []) as unknown as {
+    id: string; name: string; audience: string; course_type: string | null; gear_list_entries: unknown[]
+  }[])
+    .sort((a, b) => Number(b.course_type === courseType) - Number(a.course_type === courseType))
+    .map((t) => ({ id: t.id, name: t.name, audience: t.audience, entries: t.gear_list_entries.length }))
+
   const updateLogisticsWithId = updateCourseLogistics.bind(null, id)
 
   // Instructor-only sections sit at the top for staff — that's where they were
@@ -398,13 +419,11 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
           storageKey={`course-tab:${id}`}
           tabs={[
             { id: 'details', label: 'Details' },
-            { id: 'participants', label: 'Info for participants' },
+            { id: 'participants', label: 'Participants' },
             { id: 'content', label: 'Content' },
-            { id: 'instructors', label: 'Instructors' },
-            { id: 'students', label: 'Students' },
-            { id: 'tasks', label: 'Tasks' },
-            { id: 'estimates', label: 'Estimates' },
-            { id: 'quotes', label: 'Quotes' },
+            { id: 'gear', label: 'Gear' },
+            { id: 'instructors', label: 'Instructors & tasks' },
+            { id: 'estimates', label: 'Estimates & quotes' },
           ]}
         >
 
@@ -586,49 +605,25 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
             invites={interestInvites}
             hasLead={(assigned ?? []).some(a => a.role === 'lead')}
           />
+
+          <div className="mt-10 pt-8 border-t border-zinc-800">
+            <h2 className="text-lg font-semibold mb-4">Tasks</h2>
+            <p className="text-xs text-zinc-500 mb-4">
+              Assignees are emailed and see these on their portal home.
+            </p>
+            <CourseTasksPanel
+              instanceId={id}
+              tasks={tasks}
+              people={taskPeople}
+              canManage
+              currentUserId={user.id}
+              suggestions={templateRows ?? []}
+              completedOpen
+            />
+          </div>
         </TabPanel>
 
-        {/* ── Students ─────────────────────────────────────────────── */}
-        <TabPanel id="students">
-          <h2 className="text-lg font-semibold mb-4">Students
-            <span className="ml-2 text-sm font-normal text-zinc-500">
-              {enrollments.length}{inst.max_students ? ` / ${inst.max_students}` : ''} enrolled
-            </span>
-          </h2>
-          <p className="text-xs text-zinc-500 mb-4">
-            Share the invite link below — students enroll themselves.
-          </p>
-
-          {enrollments.length > 0 && (
-            <div className="mb-4 space-y-2">
-              {enrollments.map(e => {
-                const p = e.profiles as unknown as { first_name: string | null; last_name: string | null; email: string | null } | null
-                const name = [p?.first_name, p?.last_name].filter(Boolean).join(' ') || 'Unnamed'
-                const removeWithArgs = removeEnrollment.bind(null, id, e.id)
-                return (
-                  <div key={e.id} className="flex items-center justify-between px-4 py-2 bg-zinc-900 border border-zinc-800 rounded-lg">
-                    <div>
-                      <span className="font-medium text-sm">{name}</span>
-                      {p?.email && <span className="ml-3 text-xs text-zinc-500">{p.email}</span>}
-                    </div>
-                    <form action={removeWithArgs}>
-                      <button type="submit" className="text-xs text-zinc-500 hover:text-red-400 transition-colors">Remove</button>
-                    </form>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-
-          <StudentInvitePanel
-            instanceId={id}
-            inviteUrl={inst.invite_token ? `${process.env.NEXT_PUBLIC_SITE_URL}/join/${inst.invite_token}` : null}
-            expiresAt={inst.invite_expires_at ?? null}
-            expired={!!inst.invite_expires_at && new Date(inst.invite_expires_at) < new Date()}
-          />
-        </TabPanel>
-
-        {/* ── Participant logistics ─────────────────────────────────── */}
+        {/* ── Participants: shared logistics + the student roster ───── */}
         <TabPanel id="participants">
           <h2 className="text-lg font-semibold mb-4">Participant info
             {!inst.meeting_point && !inst.meeting_time && (
@@ -680,9 +675,62 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
               />
             </div>
           </AutoSaveForm>
+
+          <div className="mt-10 pt-8 border-t border-zinc-800">
+            <h2 className="text-lg font-semibold mb-4">Students
+              <span className="ml-2 text-sm font-normal text-zinc-500">
+                {enrollments.length}{inst.max_students ? ` / ${inst.max_students}` : ''} enrolled
+              </span>
+            </h2>
+            <p className="text-xs text-zinc-500 mb-4">
+              Share the invite link below — students enroll themselves.
+            </p>
+
+            {enrollments.length > 0 && (
+              <div className="mb-4 space-y-2">
+                {enrollments.map(e => {
+                  const p = e.profiles as unknown as { first_name: string | null; last_name: string | null; email: string | null } | null
+                  const name = [p?.first_name, p?.last_name].filter(Boolean).join(' ') || 'Unnamed'
+                  const removeWithArgs = removeEnrollment.bind(null, id, e.id)
+                  return (
+                    <div key={e.id} className="flex items-center justify-between px-4 py-2 bg-zinc-900 border border-zinc-800 rounded-lg">
+                      <div>
+                        <span className="font-medium text-sm">{name}</span>
+                        {p?.email && <span className="ml-3 text-xs text-zinc-500">{p.email}</span>}
+                      </div>
+                      <form action={removeWithArgs}>
+                        <button type="submit" className="text-xs text-zinc-500 hover:text-red-400 transition-colors">Remove</button>
+                      </form>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+
+            <StudentInvitePanel
+              instanceId={id}
+              inviteUrl={inst.invite_token ? `${process.env.NEXT_PUBLIC_SITE_URL}/join/${inst.invite_token}` : null}
+              expiresAt={inst.invite_expires_at ?? null}
+              expired={!!inst.invite_expires_at && new Date(inst.invite_expires_at) < new Date()}
+            />
+          </div>
         </TabPanel>
 
         {/* ── Content modules ──────────────────────────────────────── */}
+        <TabPanel id="gear">
+          <h2 className="text-lg font-semibold mb-1">Gear</h2>
+          <p className="text-xs text-zinc-500 mb-4">
+            Built from the gear catalog and shown on the course — no separate document to write and link.
+          </p>
+          <CourseGear
+            instanceId={id}
+            courseType={courseType}
+            lists={gearLists}
+            templates={gearTemplates}
+            catalog={(gearCatalog ?? []) as GearItem[]}
+          />
+        </TabPanel>
+
         <TabPanel id="content">
           <h2 className="text-lg font-semibold mb-4">Content</h2>
 
@@ -844,9 +892,8 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
             />
           </div>
           <EstimateReviewRequest instanceId={id} reviews={estimateReviews} admins={reviewAdmins} currentUserId={user.id} />
-        </TabPanel>
 
-        <TabPanel id="quotes">
+          <div className="mt-10 pt-8 border-t border-zinc-800">
           <h2 className="text-lg font-semibold mb-4">Quotes</h2>
           <div className="flex items-start justify-between gap-3 flex-wrap mb-4">
             <p className="text-xs text-zinc-500">
@@ -869,22 +916,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
             people={quotePeople}
             estimates={estimatePanels.filter((e) => e.id).map((e) => ({ id: e.id!, title: e.title }))}
           />
-        </TabPanel>
-
-        <TabPanel id="tasks">
-          <h2 className="text-lg font-semibold mb-4">Tasks</h2>
-          <p className="text-xs text-zinc-500 mb-4">
-            Assignees are emailed and see these on their portal home.
-          </p>
-          <CourseTasksPanel
-            instanceId={id}
-            tasks={tasks}
-            people={taskPeople}
-            canManage
-            currentUserId={user.id}
-            suggestions={templateRows ?? []}
-            completedOpen
-          />
+          </div>
         </TabPanel>
         </CourseTabs>
 

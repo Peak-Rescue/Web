@@ -40,7 +40,7 @@ export function CourseTabs({
   return (
     <TabContext.Provider value={active}>
       <div className="sticky top-16 md:top-20 z-30 -mx-4 px-4 py-2 sm:py-0 bg-zinc-950/95 backdrop-blur border-b border-zinc-800 mb-8">
-        {/* On a phone a row of eight tabs means horizontal scrolling to find
+        {/* On a phone a row of tabs means horizontal scrolling to find
             one you can't see. The native picker shows them all in a tap. */}
         <label className="sm:hidden block relative">
           <span className="sr-only">Section</span>

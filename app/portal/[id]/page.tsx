@@ -164,6 +164,25 @@ export default async function PortalPage({
 
   const fmtLong = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'long', day: 'numeric', year: 'numeric' })
 
+  // The gear list participants get. Instructors see theirs too; students only
+  // ever see the student one.
+  const { data: gearRows } = await admin
+    .from('gear_lists')
+    .select('id, name, audience, intro, gear_list_entries(id, name, info, recommended, url, category, group_type, quantity, sort_order, gear_items(name, info, recommended, url, category))')
+    .eq('instance_id', id)
+  type GearRow = {
+    id: string; name: string; audience: string; intro: string | null
+    gear_list_entries: {
+      id: string; name: string | null; info: string | null; recommended: string | null; url: string | null
+      category: string | null; group_type: 'personal' | 'group'; quantity: string | null; sort_order: number
+      gear_items: { name: string; info: string | null; recommended: string | null; url: string | null; category: string | null } | null
+    }[]
+  }
+  const gearAll = (gearRows ?? []) as unknown as GearRow[]
+  const gearList = showTasks
+    ? gearAll.find((g) => g.audience === 'instructor') ?? gearAll[0]
+    : gearAll.find((g) => g.audience === 'student')
+
   // Staff see instructor-only sections first — the same order they had in
   // Classroom. Students never receive those sections at all.
   const orderedModules = [...(modules ?? [])].sort((a, b) => {
@@ -299,6 +318,59 @@ export default async function PortalPage({
         )}
 
         {/* Content modules */}
+        {gearList && gearList.gear_list_entries.length > 0 && (
+          <section className="mb-8">
+            <h2 className="text-lg font-semibold mb-3">{gearList.name}</h2>
+            {gearList.intro && <p className="text-sm text-zinc-400 mb-3 whitespace-pre-line">{gearList.intro}</p>}
+            {(['personal', 'group'] as const).map((gt) => {
+              const rows = gearList.gear_list_entries
+                .filter((e) => e.group_type === gt)
+                .sort((a, b) => a.sort_order - b.sort_order)
+              if (rows.length === 0) return null
+              const byCat = new Map<string, typeof rows>()
+              for (const r of rows) {
+                const c = r.category ?? r.gear_items?.category ?? 'Other'
+                byCat.set(c, [...(byCat.get(c) ?? []), r])
+              }
+              return (
+                <div key={gt} className="mb-4">
+                  <h3 className="text-xs font-semibold text-zinc-500 uppercase tracking-wide mb-1.5">
+                    {gt === 'personal' ? 'Each person brings' : 'Group kit'}
+                  </h3>
+                  {[...byCat.entries()].map(([cat, items]) => (
+                    <div key={cat} className="mb-2">
+                      <p className="text-[11px] text-zinc-600 mb-1">{cat}</p>
+                      <ul className="border border-zinc-800 rounded divide-y divide-zinc-800/70">
+                        {items.map((e) => {
+                          const name = e.name ?? e.gear_items?.name ?? 'Item'
+                          const info = e.info ?? e.gear_items?.info
+                          const rec = e.recommended ?? e.gear_items?.recommended
+                          const url = e.url ?? e.gear_items?.url
+                          return (
+                            <li key={e.id} className="px-3 py-2 text-sm">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                {url ? (
+                                  <a href={url} target="_blank" rel="noreferrer" className="hover:text-pr-red-light transition-colors">{name}</a>
+                                ) : name}
+                                {e.quantity && <span className="text-[11px] text-zinc-500">× {e.quantity}</span>}
+                              </div>
+                              {(info || rec) && (
+                                <p className="text-[11px] text-zinc-600 mt-0.5">
+                                  {info}{info && rec && ' — '}{rec && <span className="text-zinc-500">{rec}</span>}
+                                </p>
+                              )}
+                            </li>
+                          )
+                        })}
+                      </ul>
+                    </div>
+                  ))}
+                </div>
+              )
+            })}
+          </section>
+        )}
+
         {(inst.intro || inst.meeting_point || inst.meeting_time || inst.schedule) && (
           <section className="mb-8">
             <h2 className="text-lg font-semibold mb-3">About this course</h2>
