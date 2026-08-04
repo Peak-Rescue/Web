@@ -364,6 +364,7 @@ export async function updateCourseLogistics(id: string, formData: FormData) {
   const { error } = await createAdminClient()
     .from('course_instances')
     .update({
+      intro: ((formData.get('intro') as string) || '').trim() || null,
       meeting_point: ((formData.get('meeting_point') as string) || '').trim() || null,
       meeting_time: ((formData.get('meeting_time') as string) || '').trim() || null,
       schedule: ((formData.get('schedule') as string) || '').trim() || null,

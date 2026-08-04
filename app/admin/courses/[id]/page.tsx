@@ -655,7 +655,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
         {/* ── Participant logistics ─────────────────────────────────── */}
         <details open className="mb-8 group">
           <summary className="cursor-pointer list-none text-lg font-semibold select-none mb-3"><span className="text-zinc-600 text-sm mr-2 inline-block transition-transform group-open:rotate-90">▶</span>
-            Meeting &amp; schedule
+            Course info for participants
             {!inst.meeting_point && !inst.meeting_time && (
               <span className="ml-3 text-[11px] font-normal px-2 py-0.5 rounded bg-yellow-900/40 text-yellow-300 align-middle">
                 not set yet
@@ -667,6 +667,16 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
             it changes every time.
           </p>
           <AutoSaveForm action={updateLogisticsWithId} className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-6 bg-zinc-900 border border-zinc-800 rounded-lg">
+            <div className="sm:col-span-2">
+              <label className="block text-xs text-zinc-400 mb-1">Welcome / what to expect</label>
+              <textarea
+                name="intro"
+                rows={3}
+                defaultValue={inst.intro ?? ''}
+                placeholder="Short intro to the course — what they'll cover, how it runs, anything to know before arriving."
+                className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm resize-y focus:outline-none focus:border-zinc-500"
+              />
+            </div>
             <div>
               <label className="block text-xs text-zinc-400 mb-1">Meeting point</label>
               <input
