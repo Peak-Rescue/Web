@@ -28,6 +28,7 @@ import { courseCapabilityCategories, courseSector } from '@/lib/capabilities'
 import { moduleAudience, type LibraryAudience } from '@/lib/library'
 import LibraryPicker, { type PickerItem } from '../LibraryPicker'
 import SuggestedContent from '../SuggestedContent'
+import TemplatePicker, { type TemplateOption } from '../TemplatePicker'
 
 const STATUS_STYLES: Record<string, string> = {
   tentative: 'bg-yellow-900/40 text-yellow-300 border-yellow-700',
@@ -359,6 +360,26 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
   // Instructor-only sections sit at the top for staff — that's where they were
   // in Classroom, and it's what you want to see first when you open a course
   // you're running. Students never see them, so their view is unaffected.
+  // Course shapes available here: this offering's first, then the rest.
+  const { data: tplRows } = await createAdminClient()
+    .from('course_templates')
+    .select('id, name, description, course_type, is_default, course_template_sections(id, course_template_items(id))')
+    .eq('active', true)
+    .order('name')
+  const templates: TemplateOption[] = ((tplRows ?? []) as unknown as {
+    id: string; name: string; description: string | null; course_type: string | null; is_default: boolean
+    course_template_sections: { id: string; course_template_items: { id: string }[] }[]
+  }[])
+    .map((t) => ({
+      id: t.id,
+      name: t.name,
+      description: t.description,
+      sections: t.course_template_sections.length,
+      items: t.course_template_sections.reduce((n, s) => n + s.course_template_items.length, 0),
+      isDefault: t.course_type === courseType,
+    }))
+    .sort((a, b) => Number(b.isDefault) - Number(a.isDefault) || a.name.localeCompare(b.name))
+
   const updateLogisticsWithId = updateCourseLogistics.bind(null, id)
 
   const orderedModules = [...(modules ?? [])].sort((a, b) => {
@@ -711,6 +732,8 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
         {/* ── Content modules ──────────────────────────────────────── */}
         <details open className="mb-8 group">
           <summary className="cursor-pointer list-none text-lg font-semibold select-none mb-3"><span className="text-zinc-600 text-sm mr-2 inline-block transition-transform group-open:rotate-90">▶</span>Content</summary>
+
+          <TemplatePicker instanceId={id} templates={templates} />
 
           <SuggestedContent
             instanceId={id}

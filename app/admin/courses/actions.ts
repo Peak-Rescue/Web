@@ -375,6 +375,82 @@ export async function updateCourseLogistics(id: string, formData: FormData) {
   revalidatePath(`/portal/${id}`)
 }
 
+// Applying a template rebuilds a known course shape: its sections in order,
+// each holding references to the same library items. Idempotent — sections
+// that already exist are reused and items already present are skipped, so it
+// can be re-run after the template gains material.
+export async function applyCourseTemplate(instanceId: string, templateId: string) {
+  await requireAdmin()
+  const admin = createAdminClient()
+
+  const { data: sections } = await admin
+    .from('course_template_sections')
+    .select('id, title, audience, sort_order, course_template_items(item_id, sort_order)')
+    .eq('template_id', templateId)
+    .order('sort_order')
+  if (!sections?.length) return { sections: 0, items: 0 }
+
+  const { data: existingModules } = await admin
+    .from('course_modules')
+    .select('id, title, "order"')
+    .eq('instance_id', instanceId)
+  const byTitle = new Map((existingModules ?? []).map((m) => [m.title.toLowerCase(), m.id]))
+  let nextOrder = Math.max(-1, ...(existingModules ?? []).map((m) => m.order as number)) + 1
+
+  let madeSections = 0
+  let addedItems = 0
+
+  for (const sec of sections) {
+    let moduleId = byTitle.get(sec.title.toLowerCase())
+    if (!moduleId) {
+      const { data, error } = await admin
+        .from('course_modules')
+        .insert({
+          instance_id: instanceId,
+          title: sec.title,
+          audience: sec.audience === 'internal' ? 'instructor' : 'both',
+          order: nextOrder++,
+        })
+        .select('id')
+        .single()
+      if (error) throw new Error(error.message)
+      moduleId = data.id
+      madeSections++
+    }
+
+    const wanted = ((sec.course_template_items ?? []) as { item_id: string; sort_order: number }[])
+      .sort((a, b) => a.sort_order - b.sort_order)
+    if (wanted.length === 0) continue
+
+    // Only published items, and only ones not already in this section.
+    const [{ data: live }, { data: current }] = await Promise.all([
+      admin.from('library_items').select('id, title').in('id', wanted.map((w) => w.item_id)).eq('status', 'published'),
+      admin.from('course_items').select('order, library_item_id').eq('module_id', moduleId),
+    ])
+    const have = new Set((current ?? []).map((c) => c.library_item_id).filter(Boolean))
+    let order = Math.max(-1, ...(current ?? []).map((c) => c.order as number)) + 1
+    const titleById = new Map((live ?? []).map((l) => [l.id, l.title]))
+
+    const rows = wanted
+      .filter((w) => titleById.has(w.item_id) && !have.has(w.item_id))
+      .map((w) => ({
+        module_id: moduleId!,
+        library_item_id: w.item_id,
+        title: titleById.get(w.item_id)!,
+        order: order++,
+      }))
+    if (rows.length === 0) continue
+
+    const { error } = await admin.from('course_items').insert(rows)
+    if (error) throw new Error(error.message)
+    addedItems += rows.length
+  }
+
+  revalidatePath(`/admin/courses/${instanceId}`)
+  revalidatePath(`/portal/${instanceId}`)
+  return { sections: madeSections, items: addedItems }
+}
+
 // Bulk-apply library material to a course: each group becomes a section (or
 // merges into one that already exists), holding the items ticked under it.
 // Sections carry their own audience, so a whole group can be held back to
