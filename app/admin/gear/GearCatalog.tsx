@@ -278,6 +278,15 @@ export default function GearCatalog({ items }: { items: Row[] }) {
         </button>
       </div>
 
+      {/* Only while searching: the rest of the catalog is hidden then, and how
+          much of it is hidden is the one thing looking at the page can't tell
+          you. Unfiltered, everything is on screen and a total says nothing. */}
+      {query.trim() && shown.length > 0 && (
+        <p className="text-[11px] text-zinc-600">
+          Showing {shown.length} of {types.length} types
+        </p>
+      )}
+
       {mergeFrom && (
         <p className="text-xs text-pr-red-light">
           Merging <strong>{mergeFrom.name}</strong> — pick the row to keep.{' '}
@@ -292,9 +301,6 @@ export default function GearCatalog({ items }: { items: Row[] }) {
           <section key={g.name || '__none__'}>
             <h2 className={`text-xs font-semibold uppercase tracking-wide mb-2 ${g.name ? 'text-zinc-400' : 'text-yellow-500/80'}`}>
               {g.name || 'No category'}
-              <span className="ml-2 font-normal normal-case tracking-normal text-zinc-600">
-                {g.rows.length} {g.rows.length === 1 ? 'type' : 'types'}
-              </span>
             </h2>
             <div className="space-y-3">
               {g.rows.map((t) => {
