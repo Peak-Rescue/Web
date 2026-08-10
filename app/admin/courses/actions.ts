@@ -13,7 +13,12 @@ function toSlugPart(s: string) {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
 }
 
-async function generateSlug(parts: (string | null | undefined)[]): Promise<string> {
+async function generateSlug(
+  parts: (string | null | undefined)[],
+  // The course being renamed holds the slug it is trying to keep, so without
+  // this it collides with itself and every save appends another -1.
+  excludeId?: string,
+): Promise<string> {
   const admin = createAdminClient()
   const base = parts.filter(Boolean).map(p => toSlugPart(p!)).filter(Boolean).join('-')
 
@@ -22,9 +27,33 @@ async function generateSlug(parts: (string | null | undefined)[]): Promise<strin
   let attempt = 0
   while (true) {
     const { data } = await admin.from('course_instances').select('id').eq('slug', candidate).maybeSingle()
-    if (!data) return candidate
+    if (!data || data.id === excludeId) return candidate
     attempt++
     candidate = `${base}-${attempt}`
+  }
+}
+
+// The slug was written once at creation and never again, so changing the course
+// type, client, location or dates afterwards left it describing a course that
+// no longer exists — a canyoneering course in Maui still reading
+// "jungle-mobility-131-rqs-maui". Nothing resolves by slug (every route uses
+// the id, and the only lookup is the collision check above), so it is a label,
+// and a label that can lie is worse than no label.
+//
+// If it ever becomes a URL this has to stop: then a stable slug beats an
+// accurate one, and renames need redirects.
+async function resyncSlug(admin: ReturnType<typeof createAdminClient>, id: string) {
+  const { data: inst } = await admin
+    .from('course_instances')
+    .select('slug, course_type, custom_title, client_name, location, starts_at')
+    .eq('id', id)
+    .single()
+  if (!inst) return
+
+  const displayName = inst.course_type === 'custom' ? (inst.custom_title ?? 'custom') : inst.course_type
+  const next = await generateSlug([displayName, inst.client_name, inst.location, inst.starts_at], id)
+  if (next !== inst.slug) {
+    await admin.from('course_instances').update({ slug: next }).eq('id', id)
   }
 }
 
@@ -108,6 +137,8 @@ export async function updateInstanceDetails(id: string, formData: FormData) {
     .eq('id', id)
 
   if (error) throw new Error(error.message)
+
+  await resyncSlug(admin, id)
 
   // Course cancelled → tell every assigned instructor (best-effort). It
   // disappears from their portal home, so silence would leave them planning
@@ -203,12 +234,17 @@ export async function updateInstanceDates(id: string, formData: FormData) {
   const starts_at = (formData.get('starts_at') as string) || null
   const ends_at   = (formData.get('ends_at') as string) || null
 
-  const { error } = await createAdminClient()
+  const admin = createAdminClient()
+  const { error } = await admin
     .from('course_instances')
     .update({ starts_at, ends_at })
     .eq('id', id)
 
   if (error) throw new Error(error.message)
+
+  // The start date is part of the slug, so moving a course has to rewrite it.
+  await resyncSlug(admin, id)
+
   after(() => syncCourseCalendar(createAdminClient(), id))
   revalidatePath(`/admin/courses/${id}`)
 }
