@@ -199,9 +199,18 @@ export async function deleteGearList(id: string) {
 
 // ─── Entries ────────────────────────────────────────────────────────────────
 
+// instanceId and sortOrder are passed in by the editor, which already knows
+// both, purely to save a round trip each. Neither decides anything the caller
+// isn't allowed to decide — the first only picks which pages to revalidate,
+// the second is the row's position on a list they are already editing — so
+// taking them on trust costs nothing.
 export async function addGearEntry(
   listId: string,
-  input: { gearItemId?: string | null; name?: string; section?: string | null; groupType?: 'personal' | 'group'; quantity?: string | null }
+  input: {
+    gearItemId?: string | null; name?: string; section?: string | null
+    groupType?: 'personal' | 'group'; quantity?: string | null
+    sortOrder?: number; instanceId?: string | null
+  }
 ) {
   const admin = await requireAdmin()
 
@@ -209,49 +218,56 @@ export async function addGearEntry(
   // was typed. Either way the entry can be edited afterwards without touching
   // the catalog.
   //
-  // The section is the caller's to choose — it is the heading on this list,
-  // not the catalog's taxonomy. The catalog category is only a starting point
-  // for the first rows on an empty list, so a list built without a thought
-  // about headings still comes out grouped sensibly.
+  // The section is the caller's to choose, and no section is a real answer —
+  // the row then sits directly under Personal or Group, which is where most
+  // gear belongs. The catalog's category is how an instructor finds an item,
+  // not a heading to file it under, so it is never borrowed as one; doing that
+  // is what filled these lists with headings nobody had chosen.
   const section = input.section?.trim() || null
-  let seed: { name: string | null; info: string | null; recommended: string | null; url: string | null; section: string | null } = {
-    name: input.name?.trim() || null, info: null, recommended: null, url: null, section,
-  }
-  if (input.gearItemId) {
-    const { data: g } = await admin
-      .from('gear_items')
-      .select('name, info, recommended, url, category')
-      .eq('id', input.gearItemId)
-      .single()
-    if (g) seed = { name: null, info: null, recommended: null, url: null, section: section ?? g.category }
+  const seed = {
+    name: input.gearItemId ? null : input.name?.trim() || null,
+    info: null, recommended: null, url: null, section,
   }
   if (!input.gearItemId && !seed.name) throw new Error('Pick an item or give it a name')
 
-  const { data: last } = await admin
-    .from('gear_list_entries')
-    .select('sort_order')
-    .eq('list_id', listId)
-    .order('sort_order', { ascending: false })
-    .limit(1)
-    .maybeSingle()
+  let sortOrder = input.sortOrder
+  if (sortOrder === undefined) {
+    const { data: last } = await admin
+      .from('gear_list_entries')
+      .select('sort_order')
+      .eq('list_id', listId)
+      .order('sort_order', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    sortOrder = last ? (last.sort_order as number) + 1 : 0
+  }
 
-  const { error } = await admin.from('gear_list_entries').insert({
+  const { data: added, error } = await admin.from('gear_list_entries').insert({
     list_id: listId,
     gear_item_id: input.gearItemId ?? null,
     ...seed,
     group_type: input.groupType ?? 'personal',
     quantity: input.quantity?.trim() || null,
-    sort_order: last ? (last.sort_order as number) + 1 : 0,
-  })
+    sort_order: sortOrder,
+  }).select('id').single()
   if (error) throw new Error(error.message)
 
-  const { data: l } = await admin.from('gear_lists').select('instance_id').eq('id', listId).single()
-  touch(l?.instance_id)
+  await touchList(admin, listId, input.instanceId)
+  return { id: added.id as string }
+}
+
+// The course whose pages need rebuilding. The caller usually knows it, and a
+// query to re-learn it costs as much as the write it follows.
+async function touchList(admin: Admin, listId: string, known?: string | null) {
+  if (known !== undefined) return touch(known)
+  const { data } = await admin.from('gear_lists').select('instance_id').eq('id', listId).single()
+  touch(data?.instance_id)
 }
 
 export async function updateGearEntry(
   id: string,
-  patch: { name?: string | null; info?: string | null; recommended?: string | null; url?: string | null; section?: string | null; groupType?: 'personal' | 'group'; quantity?: string | null }
+  patch: { name?: string | null; info?: string | null; recommended?: string | null; url?: string | null; section?: string | null; groupType?: 'personal' | 'group'; quantity?: string | null },
+  instanceId?: string | null
 ) {
   const admin = await requireAdmin()
   const update: Record<string, unknown> = {}
@@ -262,6 +278,12 @@ export async function updateGearEntry(
     if (v !== undefined) update[k] = (v as string)?.trim() || null
   }
   if (patch.groupType !== undefined) update.group_type = patch.groupType
+
+  if (instanceId !== undefined) {
+    const { error } = await admin.from('gear_list_entries').update(update).eq('id', id)
+    if (error) throw new Error(error.message)
+    return touch(instanceId)
+  }
 
   const { data, error } = await admin
     .from('gear_list_entries')
@@ -276,7 +298,11 @@ export async function updateGearEntry(
 // Which models satisfy this line. None means the entry stands as written; one
 // pins it; several read as "A or B" — the swiftwater list's "an ATC or Reverso
 // works great but the Camp OVO or Kong GiGi is more compact".
-export async function setGearEntryOptions(entryId: string, gearItemIds: string[]) {
+export async function setGearEntryOptions(
+  entryId: string,
+  gearItemIds: string[],
+  instanceId?: string | null
+) {
   const admin = await requireAdmin()
   await admin.from('gear_entry_options').delete().eq('entry_id', entryId)
   const ids = [...new Set(gearItemIds)]
@@ -286,6 +312,8 @@ export async function setGearEntryOptions(entryId: string, gearItemIds: string[]
     )
     if (error) throw new Error(error.message)
   }
+  if (instanceId !== undefined) return touch(instanceId)
+
   const { data } = await admin
     .from('gear_list_entries').select('gear_lists(instance_id)').eq('id', entryId).single()
   touch((data?.gear_lists as unknown as { instance_id: string | null } | null)?.instance_id)
@@ -313,6 +341,27 @@ export async function renameGearSection(
     .eq('list_id', listId)
     .eq('group_type', groupType)
     .eq('section', from)
+  if (error) throw new Error(error.message)
+
+  const { data: l } = await admin.from('gear_lists').select('instance_id').eq('id', listId).single()
+  touch(l?.instance_id)
+}
+
+// Dropping the heading and keeping the gear, which is what you want for a
+// section that was never chosen — every list built before headings were
+// deliberate has a few, filled in from whatever the catalog called the item.
+export async function ungroupGearSection(
+  listId: string,
+  groupType: 'personal' | 'group',
+  section: string
+) {
+  const admin = await requireAdmin()
+  const { error } = await admin
+    .from('gear_list_entries')
+    .update({ section: null })
+    .eq('list_id', listId)
+    .eq('group_type', groupType)
+    .eq('section', section)
   if (error) throw new Error(error.message)
 
   const { data: l } = await admin.from('gear_lists').select('instance_id').eq('id', listId).single()
@@ -347,34 +396,43 @@ export async function removeGearSection(
 export async function moveGearEntry(
   listId: string,
   entryId: string,
-  target: { section: string | null; groupType: 'personal' | 'group'; orderedIds: string[] }
+  target: {
+    section: string | null; groupType: 'personal' | 'group'; orderedIds: string[]
+    instanceId?: string | null
+  }
 ) {
   const admin = await requireAdmin()
 
-  const { error } = await admin
-    .from('gear_list_entries')
-    .update({ section: target.section?.trim() || null, group_type: target.groupType })
-    .eq('id', entryId)
-    .eq('list_id', listId)
-  if (error) throw new Error(error.message)
-
   // Renumbering from zero every time keeps the orders dense, so a list can't
   // drift into the state where two rows share a sort_order and the arrangement
-  // depends on what the database felt like returning.
+  // depends on what the database felt like returning. The dragged row's new
+  // heading rides along in its own update rather than going first, so the whole
+  // move is one round trip's worth of waiting instead of two.
   const results = await Promise.all(
     target.orderedIds.map((id, i) =>
-      admin.from('gear_list_entries').update({ sort_order: i }).eq('id', id).eq('list_id', listId)
+      admin
+        .from('gear_list_entries')
+        .update(id === entryId
+          ? { sort_order: i, section: target.section?.trim() || null, group_type: target.groupType }
+          : { sort_order: i })
+        .eq('id', id)
+        .eq('list_id', listId)
     )
   )
   const failed = results.find((r) => r.error)
   if (failed?.error) throw new Error(failed.error.message)
 
-  const { data: l } = await admin.from('gear_lists').select('instance_id').eq('id', listId).single()
-  touch(l?.instance_id)
+  await touchList(admin, listId, target.instanceId)
 }
 
-export async function removeGearEntry(id: string) {
+export async function removeGearEntry(id: string, instanceId?: string | null) {
   const admin = await requireAdmin()
+  if (instanceId !== undefined) {
+    const { error } = await admin.from('gear_list_entries').delete().eq('id', id)
+    if (error) throw new Error(error.message)
+    return touch(instanceId)
+  }
+
   const { data } = await admin.from('gear_list_entries').select('gear_lists(instance_id)').eq('id', id).single()
   const { error } = await admin.from('gear_list_entries').delete().eq('id', id)
   if (error) throw new Error(error.message)

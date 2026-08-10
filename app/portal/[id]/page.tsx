@@ -613,20 +613,21 @@ export default async function PortalPage({
                 .filter((e) => e.group_type === gt)
                 .sort((a, b) => a.sort_order - b.sort_order)
               if (rows.length === 0) return null
-              const byCat = new Map<string, typeof rows>()
+              // The list's own headings, which are editorial and say what this
+              // course wants ("Bring this as well"). Most gear sits under none
+              // of them and prints as a plain list — the catalog's taxonomy is
+              // how staff find an item, and was never a heading for students.
+              const byCat = new Map<string | null, typeof rows>()
               for (const r of rows) {
-                // The list's own heading, which is editorial and says what this
-                // course wants ("Bring this as well"). The catalog's taxonomy
-                // is only the fallback for a row nobody has filed.
-                const c = r.section ?? r.gear_items?.category ?? 'Other'
+                const c = r.section ?? null
                 byCat.set(c, [...(byCat.get(c) ?? []), r])
               }
               return (
                 <div key={gt} className="mb-5">
                   <SubHead title={gt === 'personal' ? 'Each person brings' : 'Group kit'} />
                   {[...byCat.entries()].map(([cat, items]) => (
-                    <div key={cat} className="mb-2">
-                      <p className="text-[11px] text-zinc-600 mb-1">{cat}</p>
+                    <div key={cat ?? '—'} className="mb-2">
+                      {cat && <p className="text-[11px] text-zinc-600 mb-1">{cat}</p>}
                       <ul className="border border-zinc-800 rounded divide-y divide-zinc-800/70">
                         {items.map((e) => {
                           const name = e.name ?? e.gear_items?.name ?? 'Item'
