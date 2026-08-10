@@ -133,10 +133,18 @@ export default function GearCatalog({ items }: { items: Row[] }) {
 
   const input = 'bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-zinc-500'
 
+  // Merging and retiring are things you do to the catalog perhaps once a month;
+  // reading it is what happens the rest of the time. So they stay out of the
+  // way until the pointer is on the row — except mid-merge, when every row is a
+  // candidate keeper and hiding the target would be absurd.
   function Actions({ row }: { row: Row }) {
     const merging = mergeFrom?.id === row.id
     return (
-      <div className="flex items-center justify-end gap-2 whitespace-nowrap">
+      <div
+        className={`flex items-center justify-end gap-2 whitespace-nowrap transition-opacity ${
+          mergeFrom ? 'opacity-100' : 'opacity-0 group-hover/row:opacity-100 focus-within:opacity-100'
+        }`}
+      >
         {mergeFrom && !merging ? (
           <button
             onClick={() => {
@@ -157,7 +165,10 @@ export default function GearCatalog({ items }: { items: Row[] }) {
             {merging ? 'pick keeper…' : 'merge'}
           </button>
         )}
-        {row.uses === 0 && (
+        {/* Gear on a list can't be retired, and the count is the reason — so it
+            takes retire's place rather than a column of its own. Nobody scans
+            the catalog for it; you want it at the moment retire isn't there. */}
+        {row.uses === 0 ? (
           <button
             onClick={() => run(() => retireGearItem(row.id))}
             disabled={busy}
@@ -165,6 +176,13 @@ export default function GearCatalog({ items }: { items: Row[] }) {
           >
             retire
           </button>
+        ) : (
+          <span
+            title={`On ${row.uses} gear list${row.uses === 1 ? '' : 's'} — it can be retired once nothing uses it`}
+            className="text-[11px] text-zinc-700"
+          >
+            on {row.uses}
+          </span>
         )}
       </div>
     )
@@ -196,9 +214,6 @@ export default function GearCatalog({ items }: { items: Row[] }) {
             placeholder="—"
             className={`${CELL} text-[11px] text-zinc-400`}
           />
-        </td>
-        <td className="px-2 py-0.5 text-[11px] text-zinc-600 whitespace-nowrap">
-          {row.uses > 0 ? `${row.uses} list${row.uses === 1 ? '' : 's'}` : '—'}
         </td>
         <td className="px-2 py-0.5"><Actions row={row} /></td>
       </>
@@ -257,13 +272,17 @@ export default function GearCatalog({ items }: { items: Row[] }) {
             <table className="w-full text-sm min-w-3xl">
               <thead>
                 <tr className="text-[10px] uppercase tracking-wide text-zinc-600 border-b border-zinc-800">
-                  <th className="text-left font-medium px-2 py-1.5 w-64">Type / product</th>
-                  <th className="text-left font-medium px-2 py-1.5 w-36">Brand</th>
-                  <th className="text-left font-medium px-2 py-1.5 w-44">Category</th>
+                  {/* Only the columns that identify a row are pinned to a
+                      width. Everything someone actually types — the synonyms
+                      gear gets found by, the spec that decides whether a
+                      student's kit passes — takes what's left, because those
+                      were the two columns squeezed to six characters. */}
+                  <th className="text-left font-medium px-2 py-1.5 w-56">Type / product</th>
+                  <th className="text-left font-medium px-2 py-1.5 w-32">Brand</th>
+                  <th className="text-left font-medium px-2 py-1.5 w-36">Category</th>
                   <th className="text-left font-medium px-2 py-1.5">Also called</th>
                   <th className="text-left font-medium px-2 py-1.5">Spec / note</th>
-                  <th className="text-left font-medium px-2 py-1.5 w-16">Used on</th>
-                  <th className="px-2 py-1.5 w-28"></th>
+                  <th className="px-2 py-1.5 w-20"></th>
                 </tr>
               </thead>
 
@@ -271,7 +290,7 @@ export default function GearCatalog({ items }: { items: Row[] }) {
                 const products = childrenOf.get(t.id) ?? []
                 return (
                   <tbody key={t.id} className="border-b border-zinc-800 last:border-0">
-                    <tr className="bg-zinc-800/30">
+                    <tr className="group/row bg-zinc-800/30">
                       <td className="px-1 py-1">
                         <input
                           defaultValue={t.name}
@@ -295,7 +314,7 @@ export default function GearCatalog({ items }: { items: Row[] }) {
                     </tr>
 
                     {products.map((p) => (
-                      <tr key={p.id} className="hover:bg-zinc-800/20">
+                      <tr key={p.id} className="group/row hover:bg-zinc-800/20">
                         <td className="px-1 py-0.5 pl-6">
                           <input
                             defaultValue={p.name}
@@ -322,7 +341,7 @@ export default function GearCatalog({ items }: { items: Row[] }) {
                     ))}
 
                     <tr>
-                      <td colSpan={7} className="px-1 py-0.5">
+                      <td colSpan={6} className="px-1 py-0.5">
                         {addingTo === t.id ? (
                           <AddProduct type={t} busy={busy} run={run} input={input} onDone={() => setAddingTo(null)} />
                         ) : (
@@ -378,22 +397,30 @@ function AddProduct({
     if (e.key === 'Escape') onDone()
   }
 
+  // Product first, brand second — the same order as the columns this row is
+  // adding to. Reversed, the fields didn't line up with the rows above them and
+  // the row read as a different kind of thing.
+  //
+  // Brand is a suggestion list, not a menu: the makers already in the catalog
+  // are one keystroke away, and a maker that isn't there yet is typed. The
+  // browser draws the datalist arrow either way, which makes it look closed —
+  // so the placeholder says out loud that a new one is welcome.
   return (
     <div className="flex flex-wrap items-center gap-2 pl-6 py-1.5">
       <input
         autoFocus
-        list="gear-brands"
-        value={brand}
-        onChange={(e) => setBrand(e.target.value)}
-        onKeyDown={key}
-        placeholder="Brand"
-        className={`${input} w-36 text-[13px]`}
-      />
-      <input
         value={name}
         onChange={(e) => setName(e.target.value)}
         onKeyDown={key}
         placeholder="Product — e.g. Grigri"
+        className={`${input} w-52 text-[13px]`}
+      />
+      <input
+        list="gear-brands"
+        value={brand}
+        onChange={(e) => setBrand(e.target.value)}
+        onKeyDown={key}
+        placeholder="Brand — or type a new one"
         className={`${input} w-52 text-[13px]`}
       />
       <button
@@ -432,18 +459,19 @@ function AddItem({
           {types.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
         </select>
       </div>
-      {/* Only a product has a maker, so the field appears only once one is
-          being made — a brand on a type is a question with no answer. */}
-      {parentId && (
-        <div>
-          <label className="block text-[11px] text-zinc-500 mb-1">Brand</label>
-          <input list="gear-brands" value={brand} onChange={(e) => setBrand(e.target.value)} className={`${input} w-36`} />
-        </div>
-      )}
       <div>
         <label className="block text-[11px] text-zinc-500 mb-1">Name</label>
         <input value={name} onChange={(e) => setName(e.target.value)} className={`${input} w-48`} />
       </div>
+      {/* Only a product has a maker, so the field appears only once one is
+          being made — a brand on a type is a question with no answer. It sits
+          after the name, the way the catalog's columns read. */}
+      {parentId && (
+        <div>
+          <label className="block text-[11px] text-zinc-500 mb-1">Brand — or type a new one</label>
+          <input list="gear-brands" value={brand} onChange={(e) => setBrand(e.target.value)} className={`${input} w-48`} />
+        </div>
+      )}
       {!parentId && (
         <div>
           <label className="block text-[11px] text-zinc-500 mb-1">Category</label>
