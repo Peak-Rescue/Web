@@ -838,6 +838,22 @@ function AddGear({
             : `Search the catalog — adding to ${groupType === 'personal' ? 'personal' : 'group'} kit`}
           className={`flex-1 min-w-0 ${input}`}
         />
+        {/* Searching the catalog is where you find out it's wrong — a type
+            named badly, a model filed under nothing, two rows for one thing.
+            Fixing that is a different page, so it opens in its own tab: the
+            half-built list here survives the trip. */}
+        <a
+          href="/admin/gear"
+          target="_blank"
+          rel="noreferrer"
+          title="Rename, merge or retire items — opens in a new tab"
+          className="shrink-0 flex items-center gap-1.5 px-2.5 py-2 rounded border border-zinc-700 text-xs text-zinc-400 hover:text-white hover:border-zinc-500 hover:bg-zinc-800/60 transition-colors"
+        >
+          Catalog
+          <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M15 3h6v6M10 14 21 3M21 14v7H3V3h7" />
+          </svg>
+        </a>
         {/* The panel stays open across adds, so closing it is a deliberate act
             and needs to look like one — a bare word beside a full-width search
             box read as a label, not a control. Escape closes it too. */}
