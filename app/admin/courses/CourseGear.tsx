@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useSteadyRefresh } from '@/components/useSteadyRefresh'
 import GearListEditor, { type GearItem, type GearList } from '@/app/admin/gear/GearListEditor'
 import { createGearList, copyGearList, deleteGearList } from '@/app/admin/gear/actions'
 
@@ -21,13 +21,13 @@ export default function CourseGear({
   templates: { id: string; name: string; description?: string | null; audience: string; entries: number }[]
   catalog: GearItem[]
 }) {
-  const router = useRouter()
+  const refresh = useSteadyRefresh()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   async function run(fn: () => Promise<unknown>) {
     setBusy(true); setError(null)
-    try { await fn(); router.refresh() }
+    try { await fn(); refresh() }
     catch (e) { setError(e instanceof Error ? e.message : 'That didn’t work') }
     finally { setBusy(false) }
   }

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useSteadyRefresh } from '@/components/useSteadyRefresh'
 import { GEAR_CATEGORIES, matchesGear, productName, type CatalogItem } from '@/lib/gear'
 import {
   addGearEntry, updateGearEntry, removeGearEntry, updateGearList, copyGearList,
@@ -72,7 +72,10 @@ export default function GearListEditor({
   // back over the one it started from instead of only spawning another.
   templates?: GearTemplateOption[]
 }) {
-  const router = useRouter()
+  // Rows are drawn here first and the server is caught up afterwards, so the
+  // catching up waits until the clicking stops and holds the page still while
+  // it lands. Refreshing on every click walked the page away mid-edit.
+  const refresh = useSteadyRefresh()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [editingOptions, setEditingOptions] = useState<string | null>(null)
@@ -107,7 +110,7 @@ export default function GearListEditor({
     patch(optimistic)
     inflight.current += 1
     fn()
-      .then(() => router.refresh())
+      .then(() => refresh())
       .catch((e) => { setError(e instanceof Error ? e.message : 'That didn’t save'); setPending(null) })
       .finally(() => { inflight.current -= 1 })
   }
@@ -169,7 +172,7 @@ export default function GearListEditor({
 
   async function run(fn: () => Promise<unknown>) {
     setBusy(true); setError(null)
-    try { await fn(); router.refresh() }
+    try { await fn(); refresh() }
     catch (e) { setError(e instanceof Error ? e.message : 'That didn’t save'); setPending(null) }
     finally { setBusy(false) }
   }
