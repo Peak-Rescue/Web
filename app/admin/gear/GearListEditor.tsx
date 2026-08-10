@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { GEAR_CATEGORIES, matchesGear, gearLabel, type CatalogItem } from '@/lib/gear'
+import { GEAR_CATEGORIES, matchesGear, type CatalogItem } from '@/lib/gear'
 import {
   addGearEntry, updateGearEntry, removeGearEntry, updateGearList, copyGearList,
   setGearEntryOptions, upsertGearItem,
@@ -127,7 +127,6 @@ export default function GearListEditor({
                 <p className="text-[11px] text-zinc-500 mb-1">{cat}</p>
                 <div className="border border-zinc-800 rounded divide-y divide-zinc-800/70">
                   {entries.map((e) => {
-                    const label = gearLabel(e.r.name, e.r.options)
                     return (
                       <div key={e.id} className="px-3 py-2">
                         <div className="flex items-start gap-2">
@@ -135,12 +134,11 @@ export default function GearListEditor({
                             <div className="flex items-center gap-2 flex-wrap">
                               {e.r.url ? (
                                 <a href={e.r.url} target="_blank" rel="noreferrer" className="text-sm hover:text-pr-red-light transition-colors">
-                                  {label.title}
+                                  {e.r.name}
                                 </a>
                               ) : (
-                                <span className="text-sm">{label.title}</span>
+                                <span className="text-sm">{e.r.name}</span>
                               )}
-                              {label.detail && <span className="text-xs text-zinc-400">{label.detail}</span>}
                               {e.quantity && <span className="text-[11px] text-zinc-500">× {e.quantity}</span>}
                               {!e.r.catalogItem && <span className="text-[10px] text-zinc-700">one-off</span>}
                             </div>
@@ -151,13 +149,30 @@ export default function GearListEditor({
                                 {e.r.recommended && <span className="text-zinc-500">{e.r.recommended}</span>}
                               </p>
                             )}
+                            {/* The chosen models belong on the row, not tucked
+                                behind the toggle — ticking one has to look
+                                like it did something, and the row is the only
+                                place that shows what the student will read. */}
+                            {e.r.options.length > 0 && (
+                              <div className="flex flex-wrap items-center gap-1 mt-1">
+                                <span className="text-[11px] text-zinc-600">these will do:</span>
+                                {e.r.options.map((o) => (
+                                  <span
+                                    key={o.id}
+                                    className="text-[11px] px-1.5 py-0.5 rounded border border-pr-red/60 bg-pr-red/10 text-zinc-200"
+                                  >
+                                    {o.name}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
                             {e.r.models.length > 0 && (
                               <button
                                 onClick={() => setEditingOptions(editingOptions === e.id ? null : e.id)}
                                 className="mt-1 text-[11px] text-zinc-500 hover:text-zinc-300 transition-colors"
                               >
                                 {e.r.options.length === 0
-                                  ? `Any model works — narrow it (${e.r.models.length})`
+                                  ? 'Any model works — narrow it'
                                   : 'Change which models work'}
                               </button>
                             )}
@@ -240,6 +255,11 @@ export default function GearListEditor({
 // how the catalog acquired three rows for a belay device. Here you search
 // first, across names, synonyms and the models under each type, and "add as
 // new" only appears once the search has come back empty.
+//
+// Nothing is listed until you search or open a category. An idle list of the
+// first dozen items alphabetically reads as a suggestion for this course, and
+// isn't one — a canyon list was offering tactical rope and weapon retention
+// purely because they sort early.
 function AddGearRow({
   list, catalog, childrenOf, busy, run, input,
 }: {
@@ -251,15 +271,31 @@ function AddGearRow({
   input: string
 }) {
   const [query, setQuery] = useState('')
+  const [browsing, setBrowsing] = useState<string | null>(null)
   const [groupType, setGroupType] = useState<'personal' | 'group'>('personal')
   const [newCategory, setNewCategory] = useState<string>(GEAR_CATEGORIES[0])
   const [newParent, setNewParent] = useState('')
 
   const types = useMemo(() => catalog.filter((c) => !c.parent_id), [catalog])
-  const matches = useMemo(
-    () => types.filter((t) => matchesGear(t, query, childrenOf.get(t.id) ?? [])).slice(0, 12),
-    [types, query, childrenOf]
+
+  // Only categories the catalog actually has something in — an empty one is a
+  // dead click.
+  const categories = useMemo(
+    () => GEAR_CATEGORIES.filter((c) => types.some((t) => t.category === c)),
+    [types]
   )
+
+  // Searching wins over browsing: typing anything means you've stopped
+  // clicking. Search caps at 12 to keep the panel short; a category shows all
+  // of itself, because half a category is worse than none.
+  const searching = query.trim().length > 0
+  const matches = useMemo(() => {
+    if (searching) {
+      return types.filter((t) => matchesGear(t, query, childrenOf.get(t.id) ?? [])).slice(0, 12)
+    }
+    if (browsing) return types.filter((t) => t.category === browsing)
+    return []
+  }, [types, query, searching, browsing, childrenOf])
 
   const exact = catalog.some((c) =>
     c.name.toLowerCase() === query.trim().toLowerCase() ||
@@ -294,7 +330,32 @@ function AddGearRow({
         </div>
       </div>
 
+      <div className="flex flex-wrap gap-1.5">
+        {categories.map((c) => {
+          const on = !searching && browsing === c
+          return (
+            <button
+              key={c}
+              onClick={() => setBrowsing(browsing === c ? null : c)}
+              className={`text-[11px] px-2 py-0.5 rounded border transition-colors ${
+                on
+                  ? 'border-pr-red bg-pr-red/10 text-white'
+                  : 'border-zinc-700 text-zinc-500 hover:text-white hover:border-zinc-500'
+              } ${searching ? 'opacity-40' : ''}`}
+            >
+              {c}
+            </button>
+          )
+        })}
+      </div>
+
       <div className="space-y-1">
+        {!searching && !browsing && (
+          <p className="px-2 py-1 text-[11px] text-zinc-600">
+            Search above, or open a category, to see what the catalog has.
+          </p>
+        )}
+
         {matches.map((t) => {
           const models = childrenOf.get(t.id) ?? []
           return (
