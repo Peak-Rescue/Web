@@ -251,19 +251,32 @@ export default function GearListEditor({
             </h4>
 
             <div className="space-y-3">
-              {/* Always here, headed by nothing. Gear that needs no heading is
-                  the common case, so it can't be behind naming one first. */}
-              <SectionCard
-                key={`${gt}:loose`}
-                listId={list.id} groupType={gt} name={null} rows={loose}
-                catalog={catalog} childrenOf={childrenOf}
-                adding={adding === `${gt}:loose`}
-                setAdding={(on) => setAdding(on ? `${gt}:loose` : null)}
-                editingOptions={editingOptions} setEditingOptions={setEditingOptions}
-                drag={drag} setDrag={setDrag} onDrop={drop}
-                apply={apply} addEntry={addEntry} instanceId={list.instance_id}
-                busy={busy} run={run} input={input}
-              />
+              {/* Gear that needs no heading is still the common case, so adding
+                  it can't be behind naming a section first. But an empty card
+                  is a container for nothing — once a list has real sections it
+                  reads as a section someone forgot to name. So the card appears
+                  when it holds something, or while something is being put in
+                  it, and is a plain line the rest of the time. */}
+              {loose.length > 0 || adding === `${gt}:loose` ? (
+                <SectionCard
+                  key={`${gt}:loose`}
+                  listId={list.id} groupType={gt} name={null} rows={loose}
+                  catalog={catalog} childrenOf={childrenOf}
+                  adding={adding === `${gt}:loose`}
+                  setAdding={(on) => setAdding(on ? `${gt}:loose` : null)}
+                  editingOptions={editingOptions} setEditingOptions={setEditingOptions}
+                  drag={drag} setDrag={setDrag} onDrop={drop}
+                  apply={apply} addEntry={addEntry} instanceId={list.instance_id}
+                  busy={busy} run={run} input={input}
+                />
+              ) : (
+                <button
+                  onClick={() => setAdding(`${gt}:loose`)}
+                  className="text-xs text-zinc-600 hover:text-white transition-colors py-1"
+                >
+                  + Add gear
+                </button>
+              )}
 
               {real.map((s) => (
                 <SectionCard
