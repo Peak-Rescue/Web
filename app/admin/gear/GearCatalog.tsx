@@ -175,7 +175,8 @@ export default function GearCatalog({ items }: { items: Row[] }) {
         {!row.parent_id && (
           <button
             onClick={() => setMoving(moving === row.id ? null : row.id)}
-            className={`text-[11px] transition-colors ${moving === row.id ? 'text-white' : 'text-zinc-700 hover:text-zinc-300'}`}
+            title="File this type under a different category"
+            className={`text-[11px] transition-colors ${moving === row.id ? 'text-white' : 'text-zinc-500 hover:text-white'}`}
           >
             move
           </button>
@@ -281,7 +282,7 @@ export default function GearCatalog({ items }: { items: Row[] }) {
                   <th className="text-left font-medium px-2 py-1.5 w-56">Type / product</th>
                   <th className="text-left font-medium px-2 py-1.5 w-32">Brand</th>
                   <th className="text-left font-medium px-2 py-1.5">Also called</th>
-                  <th className="px-2 py-1.5 w-20"></th>
+                  <th className="text-left font-medium px-2 py-1.5 w-40">Actions</th>
                 </tr>
               </thead>
 
