@@ -430,6 +430,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
                   drops every param and the panel collapses. */}
               <Link
                 href={homeHref({ all: false, month: calMonth })}
+                scroll={false}
                 className={`px-2.5 py-1 rounded-full border transition-colors ${
                   !showAllCourses
                     ? 'bg-zinc-800 border-zinc-600 text-white'
@@ -440,6 +441,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
               </Link>
               <Link
                 href={homeHref({ all: true, month: calMonth })}
+                scroll={false}
                 className={`px-2.5 py-1 rounded-full border transition-colors ${
                   showAllCourses
                     ? 'bg-zinc-800 border-zinc-600 text-white'
