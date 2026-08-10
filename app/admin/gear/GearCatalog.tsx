@@ -83,6 +83,11 @@ export default function GearCatalog({ items }: { items: Row[] }) {
   // so a category column could only ever repeat the heading above it — the
   // value was never the display, only the ability to change it.
   const [moving, setMoving] = useState<string | null>(null)
+  // Types ticked for a bulk refile. Categories get sorted out in sweeps —
+  // you read a whole category, decide two of its five don't belong, and
+  // want both somewhere else — so refiling one row at a time is the wrong
+  // unit of work for the only job this page really has right now.
+  const [picked, setPicked] = useState<Set<string>>(new Set())
 
   const types = useMemo(() => items.filter((i) => !i.parent_id), [items])
   const childrenOf = useMemo(() => {
@@ -255,6 +260,39 @@ export default function GearCatalog({ items }: { items: Row[] }) {
         <p className="text-[11px] text-zinc-600">Showing {shown.length} of {types.length} types</p>
       )}
 
+      {/* Sticky, because a sweep means ticking rows in one category and
+          landing them in another that is several screens away — a bar that
+          scrolls off is a bar you have to scroll back to. */}
+      {picked.size > 0 && (
+        <div className="sticky top-16 z-20 flex flex-wrap items-center gap-3 p-2.5 rounded-lg border border-pr-red/50 bg-zinc-900 shadow-lg">
+          <span className="text-xs text-zinc-300">
+            {picked.size} type{picked.size === 1 ? '' : 's'} selected
+          </span>
+          <CategorySelect
+            value={null}
+            options={categories}
+            disabled={busy}
+            onChange={(next) => next && run(async () => {
+              // Each row is written on its own: upsert takes one item, and a
+              // partial failure part-way through is still a real move for the
+              // rows that landed, not a silent all-or-nothing rollback.
+              for (const id of picked) {
+                const row = types.find((t) => t.id === id)
+                if (row) await upsertGearItem({ id, name: row.name, category: next })
+              }
+              setPicked(new Set())
+            })}
+            className={`${input} text-xs`}
+          />
+          <button
+            onClick={() => setPicked(new Set())}
+            className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+          >
+            Clear selection
+          </button>
+        </div>
+      )}
+
       {mergeFrom && (
         <p className="text-xs text-pr-red-light">
           Merging <strong>{mergeFrom.name}</strong> — pick the row to keep.{' '}
@@ -279,6 +317,7 @@ export default function GearCatalog({ items }: { items: Row[] }) {
                   {/* Only the columns that identify a row are pinned to a
                       width. The synonyms someone types, which are what gear
                       gets found by, take what's left. */}
+                  <th className="px-2 py-1.5 w-7"></th>
                   <th className="text-left font-medium px-2 py-1.5 w-56">Type / product</th>
                   <th className="text-left font-medium px-2 py-1.5 w-32">Brand</th>
                   <th className="text-left font-medium px-2 py-1.5">Also called</th>
@@ -291,6 +330,20 @@ export default function GearCatalog({ items }: { items: Row[] }) {
                 return (
                   <tbody key={t.id} className="border-b border-zinc-800 last:border-0">
                     <tr className="group/row bg-zinc-800/30">
+                      <td className="px-2 py-1 align-top">
+                        <input
+                          type="checkbox"
+                          checked={picked.has(t.id)}
+                          onChange={() => setPicked((prev) => {
+                            const next = new Set(prev)
+                            if (next.has(t.id)) next.delete(t.id)
+                            else next.add(t.id)
+                            return next
+                          })}
+                          aria-label={`Select ${t.name}`}
+                          className="accent-red-600 mt-1.5"
+                        />
+                      </td>
                       <td className="px-1 py-1">
                         <input
                           defaultValue={t.name}
@@ -318,6 +371,7 @@ export default function GearCatalog({ items }: { items: Row[] }) {
 
                     {products.map((p) => (
                       <tr key={p.id} className="group/row hover:bg-zinc-800/20">
+                        <td></td>
                         <td className="px-1 py-0.5 pl-6">
                           <input
                             defaultValue={p.name}
@@ -341,7 +395,7 @@ export default function GearCatalog({ items }: { items: Row[] }) {
                     ))}
 
                     <tr>
-                      <td colSpan={4} className="px-1 py-0.5">
+                      <td colSpan={5} className="px-1 py-0.5">
                         {addingTo === t.id ? (
                           <AddProduct type={t} busy={busy} run={run} input={input} onDone={() => setAddingTo(null)} />
                         ) : (
