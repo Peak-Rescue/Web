@@ -3,7 +3,6 @@
 import { Fragment, useMemo, useState } from 'react'
 import { useSteadyRefresh } from '@/components/useSteadyRefresh'
 import { GEAR_CATEGORIES, matchesGear, type CatalogItem } from '@/lib/gear'
-import { CAPABILITY_META, CAPABILITY_ORDER, type CapabilityCategory } from '@/lib/capabilities'
 import { upsertGearItem, mergeGearItems, retireGearItem } from './actions'
 
 type Row = CatalogItem & { active: boolean; uses: number }
@@ -68,55 +67,6 @@ function CategorySelect({
   )
 }
 
-// What a piece of gear is FOR, as opposed to what it is. Kept off the type's
-// name and out of its category, so a tactical helmet can be head protection
-// and tactical at once rather than having to choose.
-function PurposeCell({
-  row, disabled, onChange,
-}: {
-  row: Row
-  disabled?: boolean
-  onChange: (next: string[]) => void
-}) {
-  const [open, setOpen] = useState(false)
-  const chosen = row.disciplines ?? []
-
-  if (!open) {
-    return (
-      <button
-        onClick={() => setOpen(true)}
-        disabled={disabled}
-        className="w-full text-left px-1.5 py-1 text-[11px] text-zinc-400 rounded border border-transparent hover:border-zinc-700 transition-colors"
-      >
-        {chosen.length
-          ? chosen.map((d) => CAPABILITY_META[d as CapabilityCategory]?.label ?? d).join(', ')
-          : <span className="text-zinc-700">—</span>}
-      </button>
-    )
-  }
-
-  return (
-    <div className="p-1.5 rounded border border-zinc-700 bg-zinc-900">
-      <div className="flex flex-wrap gap-x-3 gap-y-1">
-        {CAPABILITY_ORDER.map((c) => (
-          <label key={c} className="flex items-center gap-1 text-[10px] text-zinc-300 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={chosen.includes(c)}
-              onChange={() => onChange(chosen.includes(c) ? chosen.filter((x) => x !== c) : [...chosen, c])}
-              className="accent-red-600"
-            />
-            {CAPABILITY_META[c].label}
-          </label>
-        ))}
-      </div>
-      <button onClick={() => setOpen(false)} className="mt-1 text-[10px] text-zinc-500 hover:text-white transition-colors">
-        done
-      </button>
-    </div>
-  )
-}
-
 // The catalog itself: types with the products that satisfy them, as a table,
 // because the question it has to answer is "what have we got, and what is
 // missing" — and a blank cell answers that at a glance where a stack of cards
@@ -129,6 +79,10 @@ export default function GearCatalog({ items }: { items: Row[] }) {
   const [mergeFrom, setMergeFrom] = useState<Row | null>(null)
   const [adding, setAdding] = useState(false)
   const [addingTo, setAddingTo] = useState<string | null>(null)
+  // Which type is being refiled. The table is always grouped by category,
+  // so a category column could only ever repeat the heading above it — the
+  // value was never the display, only the ability to change it.
+  const [moving, setMoving] = useState<string | null>(null)
 
   const types = useMemo(() => items.filter((i) => !i.parent_id), [items])
   const childrenOf = useMemo(() => {
@@ -218,6 +172,14 @@ export default function GearCatalog({ items }: { items: Row[] }) {
         {/* Gear on a list can't be retired, and the count is the reason — so it
             takes retire's place rather than a column of its own. Nobody scans
             the catalog for it; you want it at the moment retire isn't there. */}
+        {!row.parent_id && (
+          <button
+            onClick={() => setMoving(moving === row.id ? null : row.id)}
+            className={`text-[11px] transition-colors ${moving === row.id ? 'text-white' : 'text-zinc-700 hover:text-zinc-300'}`}
+          >
+            move
+          </button>
+        )}
         {row.uses === 0 ? (
           <button
             onClick={() => run(() => retireGearItem(row.id))}
@@ -238,18 +200,11 @@ export default function GearCatalog({ items }: { items: Row[] }) {
     )
   }
 
-  // Aliases and the spec note behave the same on both levels, so they share
-  // their cells; only what identifies a row differs between them.
+  // Purpose and synonyms behave the same on both levels, so they share their
+  // cells; only what identifies a row differs between them.
   function SharedCells({ row }: { row: Row }) {
     return (
       <>
-        <td className="px-1 py-0.5">
-          <PurposeCell
-            row={row}
-            disabled={busy}
-            onChange={(next) => run(() => upsertGearItem({ id: row.id, name: row.name, disciplines: next }))}
-          />
-        </td>
         <td className="px-1 py-0.5">
           <input
             defaultValue={(row.aliases ?? []).join(', ')}
@@ -259,15 +214,6 @@ export default function GearCatalog({ items }: { items: Row[] }) {
                 run(() => upsertGearItem({ id: row.id, name: row.name, aliases: next }))
               }
             }}
-            placeholder="—"
-            className={`${CELL} text-[11px] text-zinc-400`}
-          />
-        </td>
-        <td className="px-1 py-0.5">
-          <input
-            defaultValue={row.recommended ?? ''}
-            onBlur={(e) => e.target.value !== (row.recommended ?? '') &&
-              run(() => upsertGearItem({ id: row.id, name: row.name, recommended: e.target.value }))}
             placeholder="—"
             className={`${CELL} text-[11px] text-zinc-400`}
           />
@@ -330,16 +276,11 @@ export default function GearCatalog({ items }: { items: Row[] }) {
               <thead>
                 <tr className="text-[10px] uppercase tracking-wide text-zinc-600 border-b border-zinc-800">
                   {/* Only the columns that identify a row are pinned to a
-                      width. Everything someone actually types — the synonyms
-                      gear gets found by, the spec that decides whether a
-                      student's kit passes — takes what's left, because those
-                      were the two columns squeezed to six characters. */}
+                      width. The synonyms someone types, which are what gear
+                      gets found by, take what's left. */}
                   <th className="text-left font-medium px-2 py-1.5 w-56">Type / product</th>
                   <th className="text-left font-medium px-2 py-1.5 w-32">Brand</th>
-                  <th className="text-left font-medium px-2 py-1.5 w-36">Category</th>
-                  <th className="text-left font-medium px-2 py-1.5 w-44">Purpose</th>
                   <th className="text-left font-medium px-2 py-1.5">Also called</th>
-                  <th className="text-left font-medium px-2 py-1.5">Spec / note</th>
                   <th className="px-2 py-1.5 w-20"></th>
                 </tr>
               </thead>
@@ -356,18 +297,21 @@ export default function GearCatalog({ items }: { items: Row[] }) {
                             run(() => upsertGearItem({ id: t.id, name: e.target.value }))}
                           className={`${CELL} text-sm font-medium`}
                         />
+                        {moving === t.id && (
+                          <CategorySelect
+                            value={t.category}
+                            options={categories}
+                            disabled={busy}
+                            onChange={(next) => {
+                              setMoving(null)
+                              run(() => upsertGearItem({ id: t.id, name: t.name, category: next }))
+                            }}
+                            className={`${CELL} mt-1 text-[11px] text-zinc-400 border-zinc-700`}
+                          />
+                        )}
                       </td>
                       {/* A type has no brand — the blank says so. */}
                       <td className="px-2 py-1 text-[11px] text-zinc-700">—</td>
-                      <td className="px-1 py-1">
-                        <CategorySelect
-                          value={t.category}
-                          options={categories}
-                          disabled={busy}
-                          onChange={(next) => run(() => upsertGearItem({ id: t.id, name: t.name, category: next }))}
-                          className={`${CELL} text-[11px] text-zinc-400`}
-                        />
-                      </td>
                       <SharedCells row={t} />
                     </tr>
 
@@ -391,15 +335,12 @@ export default function GearCatalog({ items }: { items: Row[] }) {
                             className={`${CELL} text-[13px] text-zinc-300`}
                           />
                         </td>
-                        {/* Products inherit the type's category; showing it
-                            again would invite editing one copy of it. */}
-                        <td className="px-2 py-0.5"></td>
                         <SharedCells row={p} />
                       </tr>
                     ))}
 
                     <tr>
-                      <td colSpan={7} className="px-1 py-0.5">
+                      <td colSpan={4} className="px-1 py-0.5">
                         {addingTo === t.id ? (
                           <AddProduct type={t} busy={busy} run={run} input={input} onDone={() => setAddingTo(null)} />
                         ) : (
