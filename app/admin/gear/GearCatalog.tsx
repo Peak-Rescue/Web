@@ -1,7 +1,7 @@
 'use client'
 
 import { Fragment, useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useSteadyRefresh } from '@/components/useSteadyRefresh'
 import { GEAR_CATEGORIES, matchesGear, type CatalogItem } from '@/lib/gear'
 import { upsertGearItem, mergeGearItems, retireGearItem } from './actions'
 
@@ -72,7 +72,7 @@ function CategorySelect({
 // missing" — and a blank cell answers that at a glance where a stack of cards
 // never could.
 export default function GearCatalog({ items }: { items: Row[] }) {
-  const router = useRouter()
+  const refresh = useSteadyRefresh()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [query, setQuery] = useState('')
@@ -126,7 +126,7 @@ export default function GearCatalog({ items }: { items: Row[] }) {
 
   async function run(fn: () => Promise<unknown>) {
     setBusy(true); setError(null)
-    try { await fn(); router.refresh() }
+    try { await fn(); refresh() }
     catch (e) { setError(e instanceof Error ? e.message : 'That didn’t save') }
     finally { setBusy(false) }
   }
@@ -452,6 +452,17 @@ function AddItem({
 
   return (
     <div className="p-3 bg-zinc-900 border border-dashed border-zinc-700 rounded-lg flex flex-wrap items-end gap-2">
+      {/* Widest decision first and narrowing from there: where it files, what
+          it satisfies, who makes it, what it's called. The two conditional
+          fields are the two halves of that question — a type is filed under a
+          category and has no maker; a product inherits its type's category and
+          has one. */}
+      {!parentId && (
+        <div>
+          <label className="block text-[11px] text-zinc-500 mb-1">Category</label>
+          <CategorySelect value={category} options={categories} onChange={setCategory} className={`${input} w-44`} />
+        </div>
+      )}
       <div>
         <label className="block text-[11px] text-zinc-500 mb-1">A product of</label>
         <select value={parentId} onChange={(e) => setParentId(e.target.value)} className={`${input} w-44`}>
@@ -459,25 +470,16 @@ function AddItem({
           {types.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
         </select>
       </div>
-      <div>
-        <label className="block text-[11px] text-zinc-500 mb-1">Name</label>
-        <input value={name} onChange={(e) => setName(e.target.value)} className={`${input} w-48`} />
-      </div>
-      {/* Only a product has a maker, so the field appears only once one is
-          being made — a brand on a type is a question with no answer. It sits
-          after the name, the way the catalog's columns read. */}
       {parentId && (
         <div>
           <label className="block text-[11px] text-zinc-500 mb-1">Brand — or type a new one</label>
           <input list="gear-brands" value={brand} onChange={(e) => setBrand(e.target.value)} className={`${input} w-48`} />
         </div>
       )}
-      {!parentId && (
-        <div>
-          <label className="block text-[11px] text-zinc-500 mb-1">Category</label>
-          <CategorySelect value={category} options={categories} onChange={setCategory} className={`${input} w-44`} />
-        </div>
-      )}
+      <div>
+        <label className="block text-[11px] text-zinc-500 mb-1">Name</label>
+        <input value={name} onChange={(e) => setName(e.target.value)} className={`${input} w-48`} />
+      </div>
       <button
         onClick={() => name.trim() && run(async () => {
           await upsertGearItem({
