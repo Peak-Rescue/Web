@@ -562,7 +562,9 @@ function Row({
             ) : (
               <span className="text-sm">{e.r.name}</span>
             )}
-            {e.quantity && <span className="text-[11px] text-zinc-500">× {e.quantity}</span>}
+            {/* No "× 1" beside the name: the quantity field on the right of
+                this row already holds it, and the same number in two places is
+                two things to keep in step for no gain. */}
             {!e.r.catalogItem && <span className="text-[10px] text-zinc-700">one-off</span>}
           </div>
           {/* The products we point people at sit directly under the name,
