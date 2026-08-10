@@ -10,60 +10,18 @@
 // Files stay in Drive and stay the source of truth; access is decided by the
 // portal's own permissions.
 
-import { createSign } from 'crypto'
+import { googleToken, serviceKey } from '@/lib/google-auth'
 
 const SCOPE = 'https://www.googleapis.com/auth/drive.readonly'
-
-type ServiceKey = { client_email: string; private_key: string }
-
-function serviceKey(): ServiceKey | null {
-  const raw = process.env.GOOGLE_SERVICE_ACCOUNT_KEY
-  if (!raw) return null
-  try {
-    const k = JSON.parse(raw)
-    return k.client_email && k.private_key ? k : null
-  } catch {
-    return null
-  }
-}
 
 export function driveProxyEnabled(): boolean {
   return Boolean(serviceKey() && process.env.GCAL_INVITE_AS)
 }
 
-const cached = new Map<string, { token: string; exp: number }>()
-
 async function getToken(subject?: string): Promise<string> {
   const sub = subject ?? process.env.GCAL_INVITE_AS
-  const hit = cached.get(sub ?? '')
-  if (hit && hit.exp > Date.now() + 60_000) return hit.token
-  const key = serviceKey()
-  if (!key || !sub) throw new Error('Drive access not configured')
-
-  const b64 = (o: object) => Buffer.from(JSON.stringify(o)).toString('base64url')
-  const now = Math.floor(Date.now() / 1000)
-  const unsigned = `${b64({ alg: 'RS256', typ: 'JWT' })}.${b64({
-    iss: key.client_email,
-    scope: SCOPE,
-    aud: 'https://oauth2.googleapis.com/token',
-    iat: now,
-    exp: now + 3600,
-    sub,
-  })}`
-  const signature = createSign('RSA-SHA256').update(unsigned).sign(key.private_key, 'base64url')
-
-  const res = await fetch('https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
-      assertion: `${unsigned}.${signature}`,
-    }),
-  })
-  if (!res.ok) throw new Error(`Drive auth failed: ${await res.text()}`)
-  const data = (await res.json()) as { access_token: string; expires_in: number }
-  cached.set(sub, { token: data.access_token, exp: Date.now() + data.expires_in * 1000 })
-  return data.access_token
+  if (!sub) throw new Error('Drive access not configured')
+  return googleToken(SCOPE, sub)
 }
 
 // Google-native formats have no bytes to download; they're exported instead.
