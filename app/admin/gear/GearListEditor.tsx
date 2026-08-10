@@ -83,15 +83,34 @@ export default function GearListEditor({
   // Sections named but not yet filled. A heading with no rows has nowhere to
   // live in the database, so it lives here until the first item lands in it.
   const [drafts, setDrafts] = useState<{ key: GroupType; name: string }[]>([])
-  // The arrangement a drag just produced, held until the server's version of
-  // it comes back. Without this a dropped row springs back to where it was and
-  // then jumps, which reads as a failed drop.
+  // The list as the editor has it, ahead of the server. Every write to a row
+  // is drawn here first: a click has to land instantly, and the server can't
+  // oblige — an add is three round trips to Supabase and then a rebuild of the
+  // whole course page, which is most of a second even when nothing is wrong.
   const [pending, setPending] = useState<GearEntry[] | null>(null)
+  const inflight = useRef(0)
 
   const entries = pending ?? list.gear_list_entries
-  // Fresh props mean the server has caught up, so the local arrangement has
-  // done its job.
-  useEffect(() => { setPending(null) }, [list.gear_list_entries])
+  // Fresh props mean the server has caught up — unless writes are still in the
+  // air, in which case the props are behind what's on screen and dropping the
+  // local copy would flash rows out of existence and back.
+  useEffect(() => { if (inflight.current === 0) setPending(null) }, [list.gear_list_entries])
+
+  const patch = (fn: (es: GearEntry[]) => GearEntry[]) =>
+    setPending((p) => fn(p ?? list.gear_list_entries))
+
+  // Row-level edits: draw the result, then send it. Nothing is disabled while
+  // it flies, so six items go onto a list as fast as they can be clicked
+  // instead of one per round trip.
+  function apply(optimistic: (es: GearEntry[]) => GearEntry[], fn: () => Promise<unknown>) {
+    setError(null)
+    patch(optimistic)
+    inflight.current += 1
+    fn()
+      .then(() => router.refresh())
+      .catch((e) => { setError(e instanceof Error ? e.message : 'That didn’t save'); setPending(null) })
+      .finally(() => { inflight.current -= 1 })
+  }
 
   const byId = useMemo(() => new Map(catalog.map((c) => [c.id, c])), [catalog])
   const childrenOf = useMemo(() => {
@@ -181,9 +200,29 @@ export default function GearListEditor({
     const moved = { ...dragged, group_type: gt, section }
     const next = [...rest.slice(0, at), moved, ...rest.slice(at)]
       .map(({ r: _r, ...e }, i) => ({ ...e, sort_order: i })) // eslint-disable-line @typescript-eslint/no-unused-vars
-    setPending(next)
-    run(() => moveGearEntry(list.id, drag.id, {
+    apply(() => next, () => moveGearEntry(list.id, drag.id, {
       section, groupType: gt, orderedIds: next.map((e) => e.id),
+      instanceId: list.instance_id,
+    }))
+  }
+
+  // The added row is drawn from what the catalog already says about the item,
+  // under an id the server hasn't issued yet. It is replaced wholesale by the
+  // real one when the page catches up.
+  function addEntry(input: { gearItemId?: string | null; name?: string; section: string | null; groupType: GroupType }) {
+    const sortOrder = entries.reduce((m, e) => Math.max(m, e.sort_order), -1) + 1
+    const temp: GearEntry = {
+      id: `pending-${sortOrder}-${input.gearItemId ?? input.name ?? ''}`,
+      gear_item_id: input.gearItemId ?? null,
+      name: input.gearItemId ? null : input.name?.trim() || null,
+      info: null, recommended: null, url: null,
+      section: input.section, group_type: input.groupType, quantity: null,
+      sort_order: sortOrder, gear_entry_options: [],
+    }
+    apply((es) => [...es, temp], () => addGearEntry(list.id, {
+      gearItemId: input.gearItemId, name: input.name,
+      section: input.section, groupType: input.groupType,
+      sortOrder, instanceId: list.instance_id,
     }))
   }
 
@@ -222,6 +261,7 @@ export default function GearListEditor({
                 setAdding={(on) => setAdding(on ? `${gt}:loose` : null)}
                 editingOptions={editingOptions} setEditingOptions={setEditingOptions}
                 drag={drag} setDrag={setDrag} onDrop={drop}
+                apply={apply} addEntry={addEntry} instanceId={list.instance_id}
                 busy={busy} run={run} input={input}
               />
 
@@ -234,6 +274,7 @@ export default function GearListEditor({
                   setAdding={(on) => setAdding(on ? `${gt}:${s.name}` : null)}
                   editingOptions={editingOptions} setEditingOptions={setEditingOptions}
                   drag={drag} setDrag={setDrag} onDrop={drop}
+                  apply={apply} addEntry={addEntry} instanceId={list.instance_id}
                   busy={busy} run={run} input={input}
                 />
               ))}
@@ -247,6 +288,7 @@ export default function GearListEditor({
                   setAdding={(on) => setAdding(on ? `${gt}:${d.name}` : null)}
                   editingOptions={editingOptions} setEditingOptions={setEditingOptions}
                   drag={drag} setDrag={setDrag} onDrop={drop}
+                  apply={apply} addEntry={addEntry} instanceId={list.instance_id}
                   onDiscard={() => setDrafts((xs) => xs.filter((x) => !(x.key === gt && x.name === d.name)))}
                   onRename={(next) => setDrafts((xs) => xs.map((x) =>
                     x.key === gt && x.name === d.name ? { ...x, name: next } : x
@@ -294,7 +336,8 @@ export default function GearListEditor({
 function SectionCard({
   listId, groupType, name, rows, isDraft, catalog, childrenOf,
   adding, setAdding, editingOptions, setEditingOptions,
-  drag, setDrag, onDrop, onDiscard, onRename, busy, run, input,
+  drag, setDrag, onDrop, apply, addEntry, instanceId,
+  onDiscard, onRename, busy, run, input,
 }: {
   listId: string
   groupType: GroupType
@@ -310,6 +353,9 @@ function SectionCard({
   drag: Drag | null
   setDrag: (d: Drag | null) => void
   onDrop: (gt: GroupType, section: string | null, beforeId: string | null) => void
+  apply: (optimistic: (es: GearEntry[]) => GearEntry[], fn: () => Promise<unknown>) => void
+  addEntry: (input: { gearItemId?: string | null; name?: string; section: string | null; groupType: GroupType }) => void
+  instanceId: string | null
   onDiscard?: () => void
   onRename?: (next: string) => void
   busy: boolean
@@ -405,6 +451,7 @@ function SectionCard({
             onDragStart={() => setDrag({ id: e.id })}
             onDragEnd={() => { setDrag(null); setOver(null) }}
             gap={gap(e.id)}
+            apply={apply} instanceId={instanceId}
             busy={busy} run={run} input={input}
           />
         ))}
@@ -414,7 +461,7 @@ function SectionCard({
         {adding ? (
           <AddGear
             listId={listId} section={name} groupType={groupType}
-            catalog={catalog} childrenOf={childrenOf}
+            catalog={catalog} childrenOf={childrenOf} addEntry={addEntry}
             onClose={() => setAdding(false)}
             busy={busy} run={run} input={input}
           />
@@ -433,7 +480,7 @@ function SectionCard({
 
 function Row({
   e, editingOptions, setEditingOptions, dragging, isOver,
-  onDragStart, onDragEnd, gap, busy, run, input,
+  onDragStart, onDragEnd, gap, apply, instanceId, busy, run, input,
 }: {
   e: GearEntry & { r: { name: string; info: string | null; recommended: string | null; url: string | null; section: string | null; catalogItem?: GearItem; options: GearItem[]; models: GearItem[] } }
   editingOptions: string | null
@@ -443,6 +490,8 @@ function Row({
   onDragStart: () => void
   onDragEnd: () => void
   gap: { onDragOver: (e: React.DragEvent) => void; onDragLeave: () => void; onDrop: (e: React.DragEvent) => void }
+  apply: (optimistic: (es: GearEntry[]) => GearEntry[], fn: () => Promise<unknown>) => void
+  instanceId: string | null
   busy: boolean
   run: (fn: () => Promise<unknown>) => void
   input: string
@@ -454,6 +503,15 @@ function Row({
   // can carry recommendations. A row that already names one specific model, or
   // that was typed in as a one-off, has nothing to recommend under it.
   const type = e.r.catalogItem && !e.r.catalogItem.parent_id ? e.r.catalogItem : null
+
+  // Recommendations are stored as the whole set, so every change to them is
+  // "here is the new list of models" — drawn on the row before it is sent.
+  const setOptions = (ids: string[]) => apply(
+    (es) => es.map((x) => x.id === e.id
+      ? { ...x, gear_entry_options: ids.map((gear_item_id, i) => ({ gear_item_id, sort_order: i })) }
+      : x),
+    () => setGearEntryOptions(e.id, ids, instanceId)
+  )
 
   return (
     <div
@@ -508,10 +566,7 @@ function Row({
                 >
                   {o.name}
                   <button
-                    onClick={() => run(() => setGearEntryOptions(
-                      e.id, e.r.options.filter((x) => x.id !== o.id).map((x) => x.id)
-                    ))}
-                    disabled={busy}
+                    onClick={() => setOptions(e.r.options.filter((x) => x.id !== o.id).map((x) => x.id))}
                     title={`Stop recommending the ${o.name}`}
                     className="text-zinc-500 hover:text-red-400 transition-colors disabled:opacity-40"
                   >
@@ -547,13 +602,22 @@ function Row({
         </div>
         <input
           defaultValue={e.quantity ?? ''}
-          onBlur={(ev) => ev.target.value !== (e.quantity ?? '') && run(() => updateGearEntry(e.id, { quantity: ev.target.value }))}
+          onBlur={(ev) => {
+            const v = ev.target.value
+            if (v === (e.quantity ?? '')) return
+            apply(
+              (es) => es.map((x) => (x.id === e.id ? { ...x, quantity: v.trim() || null } : x)),
+              () => updateGearEntry(e.id, { quantity: v }, instanceId)
+            )
+          }}
           placeholder="qty"
           className={`w-16 shrink-0 ${input}`}
         />
         <button
-          onClick={() => run(() => removeGearEntry(e.id))}
-          disabled={busy}
+          onClick={() => apply(
+            (es) => es.filter((x) => x.id !== e.id),
+            () => removeGearEntry(e.id, instanceId)
+          )}
           className="shrink-0 text-xs text-zinc-600 hover:text-red-400 transition-colors"
         >
           ×
@@ -569,11 +633,13 @@ function Row({
           on exactly the row where you had a product in mind. */}
       {editingOptions === e.id && type && (() => {
         const rest = e.r.models.filter((m) => !e.r.options.some((o) => o.id === m.id))
+        // This one waits: the chip can't be drawn from a catalog that doesn't
+        // have the product in it yet.
         const addNew = () => run(async () => {
           const { id } = await upsertGearItem({
             name: newModel, category: type.category, parentId: type.id,
           })
-          await setGearEntryOptions(e.id, [...e.r.options.map((o) => o.id), id])
+          await setGearEntryOptions(e.id, [...e.r.options.map((o) => o.id), id], instanceId)
           setNewModel('')
         })
         return (
@@ -590,10 +656,7 @@ function Row({
                 {rest.map((m) => (
                   <button
                     key={m.id}
-                    onClick={() => run(() => setGearEntryOptions(
-                      e.id, [...e.r.options.map((o) => o.id), m.id]
-                    ))}
-                    disabled={busy}
+                    onClick={() => setOptions([...e.r.options.map((o) => o.id), m.id])}
                     className="text-xs px-2 py-1 rounded border border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500 transition-colors disabled:opacity-40"
                   >
                     + {m.name}
@@ -704,13 +767,14 @@ function SaveToShelf({
 // where an item lands and the panel stays open across adds — filling a section
 // means adding six things to it, not confirming the destination six times.
 function AddGear({
-  listId, section, groupType, catalog, childrenOf, onClose, busy, run, input,
+  listId, section, groupType, catalog, childrenOf, addEntry, onClose, busy, run, input,
 }: {
   listId: string
   section: string | null
   groupType: GroupType
   catalog: GearItem[]
   childrenOf: Map<string, GearItem[]>
+  addEntry: (input: { gearItemId?: string | null; name?: string; section: string | null; groupType: GroupType }) => void
   onClose: () => void
   busy: boolean
   run: (fn: () => Promise<unknown>) => void
@@ -720,6 +784,16 @@ function AddGear({
   const [browsing, setBrowsing] = useState<string | null>(null)
   const [newCategory, setNewCategory] = useState<string>(GEAR_CATEGORIES[0])
   const [newParent, setNewParent] = useState('')
+
+  // Escape closes the panel — the search box has focus the moment it opens, so
+  // that is where the hand already is.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
 
   const types = useMemo(() => catalog.filter((c) => !c.parent_id), [catalog])
 
@@ -748,10 +822,8 @@ function AddGear({
   )
 
   function add(itemId: string | null, name?: string) {
-    run(async () => {
-      await addGearEntry(listId, { gearItemId: itemId, name, groupType, section })
-      setQuery('')
-    })
+    addEntry({ gearItemId: itemId, name, groupType, section })
+    setQuery('')
   }
 
   return (
@@ -766,7 +838,17 @@ function AddGear({
             : `Search the catalog — adding to ${groupType === 'personal' ? 'personal' : 'group'} kit`}
           className={`flex-1 min-w-0 ${input}`}
         />
-        <button onClick={onClose} className="shrink-0 text-xs text-zinc-500 hover:text-white transition-colors">
+        {/* The panel stays open across adds, so closing it is a deliberate act
+            and needs to look like one — a bare word beside a full-width search
+            box read as a label, not a control. Escape closes it too. */}
+        <button
+          onClick={onClose}
+          title="Close (Esc)"
+          className="shrink-0 flex items-center gap-1.5 px-2.5 py-2 rounded border border-zinc-700 text-xs text-zinc-300 hover:text-white hover:border-zinc-500 hover:bg-zinc-800/60 transition-colors"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M18 6 6 18M6 6l12 12" />
+          </svg>
           Done
         </button>
       </div>
