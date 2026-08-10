@@ -1,4 +1,6 @@
 import React from 'react'
+import Link from 'next/link'
+import Image from 'next/image'
 
 // Presentational shell for the portal page. Every top-level block on a course
 // is a Section: same icon-and-rule header, same spacing, its own anchor. The
@@ -112,8 +114,26 @@ export function SubHead({ title, note, badge }: { title: string; note?: string; 
   )
 }
 
-/** Roster row — names with the role spelled out, not left to a colour. */
-export function InstructorCard({ name, role }: { name: string; role: string }) {
+/**
+ * Roster row — names with the role spelled out, not left to a colour. An
+ * instructor with a public bio page links to it, so a student can find out
+ * who they're spending the week with.
+ */
+export function InstructorCard({
+  name,
+  role,
+  slug,
+  avatar,
+  avatarPosition,
+  avatarScale,
+}: {
+  name: string
+  role: string
+  slug?: string | null
+  avatar?: string | null
+  avatarPosition?: string | null
+  avatarScale?: number | null
+}) {
   const lead = role === 'lead'
   const initials = name
     .split(/\s+/)
@@ -121,14 +141,30 @@ export function InstructorCard({ name, role }: { name: string; role: string }) {
     .map((p) => p[0])
     .join('')
     .toUpperCase()
-  return (
-    <div className="flex items-center gap-2.5 px-3 py-2 rounded-lg border border-zinc-800 bg-zinc-900">
+
+  const inner = (
+    <>
       <span
-        className={`grid place-items-center w-8 h-8 rounded-full text-xs font-semibold shrink-0 ${
+        className={`grid place-items-center w-9 h-9 rounded-full overflow-hidden text-xs font-semibold shrink-0 ${
           lead ? 'bg-teal-900/50 text-teal-300' : 'bg-zinc-800 text-zinc-400'
         }`}
       >
-        {initials}
+        {avatar ? (
+          <Image
+            src={avatar}
+            alt=""
+            width={36}
+            height={36}
+            className="w-full h-full object-cover"
+            style={{
+              objectPosition: avatarPosition ?? 'center',
+              transform: avatarScale ? `scale(${avatarScale})` : undefined,
+              transformOrigin: avatarPosition ?? 'center',
+            }}
+          />
+        ) : (
+          initials
+        )}
       </span>
       <div className="min-w-0">
         <div className="text-sm font-medium leading-tight truncate">{name}</div>
@@ -136,6 +172,30 @@ export function InstructorCard({ name, role }: { name: string; role: string }) {
           {lead ? 'Lead instructor' : 'Assistant instructor'}
         </div>
       </div>
-    </div>
+      {slug && (
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="13"
+          height="13"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="ml-auto shrink-0 text-zinc-600 group-hover:text-zinc-400 transition-colors"
+        >
+          <path d="M9 18l6-6-6-6" />
+        </svg>
+      )}
+    </>
+  )
+
+  const box = 'flex items-center gap-2.5 px-3 py-2 rounded-lg border border-zinc-800 bg-zinc-900'
+  if (!slug) return <div className={box}>{inner}</div>
+  return (
+    <Link href={`/team/${slug}`} className={`${box} group hover:border-zinc-600 transition-colors`}>
+      {inner}
+    </Link>
   )
 }

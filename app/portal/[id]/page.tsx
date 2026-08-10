@@ -106,7 +106,9 @@ export default async function PortalPage({
         .eq('instance_id', id)
         .order('off_date'),
       modulesQuery,
-      admin.from('instance_instructors').select('role, instructors(name, profile_id)').eq('instance_id', id),
+      admin.from('instance_instructors')
+        .select('role, instructors(name, profile_id, slug, active, title, avatar, avatar_position, avatar_scale)')
+        .eq('instance_id', id),
       showTasks ? loadTasksWithDocs(admin, id) : Promise.resolve([]),
       showTasks
         ? admin.from('profiles').select('id, first_name, last_name, role').in('role', ['admin', 'instructor']).order('first_name')
@@ -351,13 +353,25 @@ export default async function PortalPage({
               {(instructors ?? []).length > 1 ? 'Your instructors' : 'Your instructor'}
             </p>
             <div className="grid sm:grid-cols-2 gap-2">
-              {(instructors ?? []).map((a, i) => (
-                <InstructorCard
-                  key={i}
-                  name={(a.instructors as unknown as { name: string } | null)?.name ?? 'Instructor'}
-                  role={a.role}
-                />
-              ))}
+              {(instructors ?? []).map((a, i) => {
+                const p = a.instructors as unknown as {
+                  name: string; slug: string | null; active: boolean | null
+                  avatar: string | null; avatar_position: string | null; avatar_scale: number | null
+                } | null
+                return (
+                  <InstructorCard
+                    key={i}
+                    name={p?.name ?? 'Instructor'}
+                    role={a.role}
+                    // /team/[slug] only serves active instructors — anyone else
+                    // would land on a 404, so they stay unlinked.
+                    slug={p?.active ? p.slug : null}
+                    avatar={p?.avatar}
+                    avatarPosition={p?.avatar_position}
+                    avatarScale={p?.avatar_scale}
+                  />
+                )
+              })}
             </div>
           </div>
         )}
