@@ -1,16 +1,13 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { GEAR_CATEGORIES, matchesGear, type CatalogItem } from '@/lib/gear'
 import {
   addGearEntry, updateGearEntry, removeGearEntry, updateGearList, copyGearList,
   saveGearListIntoTemplate, setGearEntryOptions, upsertGearItem, renameGearSection,
+  removeGearSection, moveGearEntry,
 } from './actions'
-
-// Chosen in two places — the heading a row sits under, and the heading a new
-// row lands in — so the "new one" affordance lives here rather than twice.
-const NEW_SECTION = "__new_section__"
 
 export type GearTemplateOption = { id: string; name: string; audience: string; entries: number }
 
@@ -42,11 +39,26 @@ export type GearList = {
   gear_list_entries: GearEntry[]
 }
 
+type GroupType = 'personal' | 'group'
+
+const GROUP_LABEL: Record<GroupType, string> = {
+  personal: 'Personal — each person',
+  group: 'Group — shared kit',
+}
+
+// A row picked up and not yet dropped.
+type Drag = { id: string }
+
 // Builds a list from the gear catalog instead of retyping it into a document.
 //
 // The catalog is two levels: a type ("Descent device") and the models that
 // satisfy it ("Petzl Grigri"). A line names whichever level it means, and can
 // name several models when more than one works.
+//
+// The list is built section by section: name a heading, then fill it. Sections
+// are the structure here, not a property each row carries — even though the
+// database still stores them that way, because a heading is nothing more than
+// what its rows agree on.
 export default function GearListEditor({
   list,
   catalog,
@@ -64,6 +76,22 @@ export default function GearListEditor({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [editingOptions, setEditingOptions] = useState<string | null>(null)
+  // Which section's add panel is open, as "personal:Ropes". One at a time —
+  // two open panels and it stops being obvious where the next item lands.
+  const [adding, setAdding] = useState<string | null>(null)
+  const [drag, setDrag] = useState<Drag | null>(null)
+  // Sections named but not yet filled. A heading with no rows has nowhere to
+  // live in the database, so it lives here until the first item lands in it.
+  const [drafts, setDrafts] = useState<{ key: GroupType; name: string }[]>([])
+  // The arrangement a drag just produced, held until the server's version of
+  // it comes back. Without this a dropped row springs back to where it was and
+  // then jumps, which reads as a failed drop.
+  const [pending, setPending] = useState<GearEntry[] | null>(null)
+
+  const entries = pending ?? list.gear_list_entries
+  // Fresh props mean the server has caught up, so the local arrangement has
+  // done its job.
+  useEffect(() => { setPending(null) }, [list.gear_list_entries])
 
   const byId = useMemo(() => new Map(catalog.map((c) => [c.id, c])), [catalog])
   const childrenOf = useMemo(() => {
@@ -91,44 +119,70 @@ export default function GearListEditor({
     }
   }
 
+  // Every row in the order the list is stored in. Drag maths happen against
+  // this, so a row moved between sections keeps its place relative to rows it
+  // was never next to on screen.
+  const ordered = useMemo(
+    () => [...entries].sort((a, b) => a.sort_order - b.sort_order).map((e) => ({ ...e, r: resolve(e) })),
+    [entries, byId, childrenOf] // eslint-disable-line react-hooks/exhaustive-deps
+  )
+
   // Grouped the way the real lists are: personal kit first, then group kit,
-  // each split into the sections this list has named.
+  // each split into the sections this list has named, in the order they appear.
   const grouped = useMemo(() => {
-    const out: Record<'personal' | 'group', Record<string, (GearEntry & { r: ReturnType<typeof resolve> })[]>> = {
-      personal: {}, group: {},
-    }
-    for (const e of [...list.gear_list_entries].sort((a, b) => a.sort_order - b.sort_order)) {
-      const r = resolve(e)
-      const bucket = out[e.group_type]
-      bucket[r.section] = [...(bucket[r.section] ?? []), { ...e, r }]
+    const out: Record<GroupType, { name: string; rows: typeof ordered }[]> = { personal: [], group: [] }
+    for (const e of ordered) {
+      const block = out[e.group_type]
+      const found = block.find((s) => s.name === e.r.section)
+      if (found) found.rows.push(e)
+      else block.push({ name: e.r.section, rows: [e] })
     }
     return out
-  }, [list.gear_list_entries, byId, childrenOf]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Every heading this list already uses, in the order they appear. Offered
-  // wherever a section is chosen, so a heading is picked rather than retyped —
-  // free text with no picker is how "Environmental Layers" got a lowercase
-  // twin sitting under it.
-  const sections = useMemo(() => {
-    const seen: string[] = []
-    for (const e of [...list.gear_list_entries].sort((a, b) => a.sort_order - b.sort_order)) {
-      const s = resolve(e).section
-      if (!seen.includes(s)) seen.push(s)
-    }
-    return seen
-  }, [list.gear_list_entries, byId, childrenOf]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [ordered])
 
   async function run(fn: () => Promise<unknown>) {
     setBusy(true); setError(null)
     try { await fn(); router.refresh() }
-    catch (e) { setError(e instanceof Error ? e.message : 'That didn’t save') }
+    catch (e) { setError(e instanceof Error ? e.message : 'That didn’t save'); setPending(null) }
     finally { setBusy(false) }
+  }
+
+  // Dropping is always expressed as "this row goes immediately before that
+  // one", with the end of a section standing in for "after everything in it".
+  // An empty section has nothing to sit before, so the row goes to the end.
+  function drop(gt: GroupType, section: string, beforeId: string | null) {
+    if (!drag) return
+    const dragged = ordered.find((e) => e.id === drag.id)
+    setDrag(null)
+    if (!dragged) return
+    if (dragged.group_type === gt && dragged.r.section === section && beforeId === drag.id) return
+
+    const rest = ordered.filter((e) => e.id !== drag.id)
+    let at: number
+    if (beforeId) {
+      at = rest.findIndex((e) => e.id === beforeId)
+      if (at < 0) at = rest.length
+    } else {
+      // Last row of the section it was dropped into, so it lands under the
+      // gear already there rather than at the bottom of the whole list.
+      let last = -1
+      rest.forEach((e, i) => { if (e.group_type === gt && e.r.section === section) last = i })
+      at = last < 0 ? rest.length : last + 1
+    }
+
+    const moved = { ...dragged, group_type: gt, section }
+    const next = [...rest.slice(0, at), moved, ...rest.slice(at)]
+      .map(({ r: _r, ...e }, i) => ({ ...e, sort_order: i })) // eslint-disable-line @typescript-eslint/no-unused-vars
+    setPending(next)
+    run(() => moveGearEntry(list.id, drag.id, {
+      section, groupType: gt, orderedIds: next.map((e) => e.id),
+    }))
   }
 
   const input = 'bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-zinc-500'
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       {error && <p className="text-sm text-pr-red">{error}</p>}
 
       <textarea
@@ -140,164 +194,349 @@ export default function GearListEditor({
       />
 
       {(['personal', 'group'] as const).map((gt) => {
-        const cats = grouped[gt]
-        if (Object.keys(cats).length === 0) return null
+        const real = grouped[gt]
+        // A draft the first item has already landed in is a real section now.
+        const draft = drafts.filter((d) => d.key === gt && !real.some((s) => s.name === d.name))
         return (
           <div key={gt}>
-            <h4 className="text-xs font-semibold text-zinc-400 uppercase tracking-wide mb-1.5">
-              {gt === 'personal' ? 'Personal — each person' : 'Group — shared kit'}
+            <h4 className="text-[11px] font-medium text-zinc-600 uppercase tracking-widest mb-2">
+              {GROUP_LABEL[gt]}
             </h4>
-            {Object.entries(cats).map(([cat, entries]) => (
-              <div key={cat} className="mb-3">
-                {/* The heading is the student's, so it's edited where you can
-                    see what sits under it. Renaming moves every row in the
-                    section — a section is only the string its rows agree on. */}
-                <input
-                  defaultValue={cat}
-                  onBlur={(ev) => ev.target.value.trim() !== cat && run(() => renameGearSection(list.id, cat, ev.target.value))}
-                  aria-label="Section heading"
-                  className="text-[11px] text-zinc-500 mb-1 bg-transparent border border-transparent hover:border-zinc-800 focus:border-zinc-700 rounded px-1 -ml-1 focus:outline-none focus:text-zinc-300"
-                />
-                <div className="border border-zinc-800 rounded divide-y divide-zinc-800/70">
-                  {entries.map((e) => {
-                    return (
-                      <div key={e.id} className="px-3 py-2">
-                        <div className="flex items-start gap-2">
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              {e.r.url ? (
-                                <a href={e.r.url} target="_blank" rel="noreferrer" className="text-sm hover:text-pr-red-light transition-colors">
-                                  {e.r.name}
-                                </a>
-                              ) : (
-                                <span className="text-sm">{e.r.name}</span>
-                              )}
-                              {e.quantity && <span className="text-[11px] text-zinc-500">× {e.quantity}</span>}
-                              {!e.r.catalogItem && <span className="text-[10px] text-zinc-700">one-off</span>}
-                            </div>
-                            {(e.r.info || e.r.recommended) && (
-                              <p className="text-[11px] text-zinc-600 mt-0.5">
-                                {e.r.info}
-                                {e.r.info && e.r.recommended && ' — '}
-                                {e.r.recommended && <span className="text-zinc-500">{e.r.recommended}</span>}
-                              </p>
-                            )}
-                            {/* The chosen models belong on the row, not tucked
-                                behind the toggle — ticking one has to look
-                                like it did something, and the row is the only
-                                place that shows what the student will read. */}
-                            {/* Ticking nothing is a real answer — any model of
-                                the type works — so show which ones that means.
-                                The student's list says the same thing, and an
-                                editor that showed less made "any" look like a
-                                line nobody had finished. */}
-                            {e.r.options.length === 0 && e.r.models.length > 0 && (
-                              <p className="text-[11px] text-zinc-600 mt-1">
-                                {e.r.models.length === 1 ? 'such as ' : 'any of: '}
-                                <span className="text-zinc-500">{e.r.models.map((m) => m.name).join(' · ')}</span>
-                              </p>
-                            )}
-                            {e.r.options.length > 0 && (
-                              <div className="flex flex-wrap items-center gap-1 mt-1">
-                                <span className="text-[11px] text-zinc-600">these will do:</span>
-                                {e.r.options.map((o) => (
-                                  <span
-                                    key={o.id}
-                                    className="text-[11px] px-1.5 py-0.5 rounded border border-pr-red/60 bg-pr-red/10 text-zinc-200"
-                                  >
-                                    {o.name}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
-                            {e.r.models.length > 0 && (
-                              <button
-                                onClick={() => setEditingOptions(editingOptions === e.id ? null : e.id)}
-                                className="mt-1 text-[11px] text-zinc-500 hover:text-zinc-300 transition-colors"
-                              >
-                                {e.r.options.length === 0
-                                  ? 'Any model works — narrow it'
-                                  : 'Change which models work'}
-                              </button>
-                            )}
-                          </div>
-                          <select
-                            value={e.r.section}
-                            onChange={(ev) => {
-                              const v = ev.target.value
-                              const next = v === NEW_SECTION ? prompt('Name the new section:')?.trim() : v
-                              if (next && next !== e.r.section) run(() => updateGearEntry(e.id, { section: next }))
-                            }}
-                            disabled={busy}
-                            aria-label="Section"
-                            title="Which heading this sits under on the student's list"
-                            className={`w-32 shrink-0 text-[11px] ${input}`}
-                          >
-                            {sections.map((s) => <option key={s} value={s}>{s}</option>)}
-                            <option value={NEW_SECTION}>＋ New section…</option>
-                          </select>
-                          <input
-                            defaultValue={e.quantity ?? ''}
-                            onBlur={(ev) => ev.target.value !== (e.quantity ?? '') && run(() => updateGearEntry(e.id, { quantity: ev.target.value }))}
-                            placeholder="qty"
-                            className={`w-16 shrink-0 ${input}`}
-                          />
-                          <button
-                            onClick={() => run(() => removeGearEntry(e.id))}
-                            disabled={busy}
-                            className="shrink-0 text-xs text-zinc-600 hover:text-red-400 transition-colors"
-                          >
-                            ×
-                          </button>
-                        </div>
 
-                        {editingOptions === e.id && (
-                          <div className="mt-2 p-2 bg-zinc-900 rounded border border-zinc-800">
-                            <p className="text-[11px] text-zinc-500 mb-1.5">
-                              Tick the models that will do. Tick none and any model of this type is fine.
-                            </p>
-                            <div className="flex flex-wrap gap-1.5">
-                              {e.r.models.map((m) => {
-                                const on = e.r.options.some((o) => o.id === m.id)
-                                return (
-                                  <button
-                                    key={m.id}
-                                    onClick={() => run(() => setGearEntryOptions(
-                                      e.id,
-                                      on ? e.r.options.filter((o) => o.id !== m.id).map((o) => o.id)
-                                         : [...e.r.options.map((o) => o.id), m.id]
-                                    ))}
-                                    disabled={busy}
-                                    className={`text-xs px-2 py-1 rounded border transition-colors ${
-                                      on
-                                        ? 'border-pr-red bg-pr-red/10 text-white'
-                                        : 'border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500'
-                                    }`}
-                                  >
-                                    {m.name}
-                                  </button>
-                                )
-                              })}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            ))}
+            <div className="space-y-3">
+              {real.map((s) => (
+                <SectionCard
+                  key={`${gt}:${s.name}`}
+                  listId={list.id} groupType={gt} name={s.name} rows={s.rows}
+                  catalog={catalog} childrenOf={childrenOf}
+                  adding={adding === `${gt}:${s.name}`}
+                  setAdding={(on) => setAdding(on ? `${gt}:${s.name}` : null)}
+                  editingOptions={editingOptions} setEditingOptions={setEditingOptions}
+                  drag={drag} setDrag={setDrag} onDrop={drop}
+                  busy={busy} run={run} input={input}
+                />
+              ))}
+
+              {draft.map((d) => (
+                <SectionCard
+                  key={`draft:${gt}:${d.name}`}
+                  listId={list.id} groupType={gt} name={d.name} rows={[]} isDraft
+                  catalog={catalog} childrenOf={childrenOf}
+                  adding={adding === `${gt}:${d.name}`}
+                  setAdding={(on) => setAdding(on ? `${gt}:${d.name}` : null)}
+                  editingOptions={editingOptions} setEditingOptions={setEditingOptions}
+                  drag={drag} setDrag={setDrag} onDrop={drop}
+                  onDiscard={() => setDrafts((xs) => xs.filter((x) => !(x.key === gt && x.name === d.name)))}
+                  onRename={(next) => setDrafts((xs) => xs.map((x) =>
+                    x.key === gt && x.name === d.name ? { ...x, name: next } : x
+                  ))}
+                  busy={busy} run={run} input={input}
+                />
+              ))}
+
+              <button
+                onClick={() => {
+                  const named = prompt('Name the new section — this is the heading students read:')?.trim()
+                  if (!named) return
+                  if (real.some((s) => s.name === named) || draft.some((d) => d.name === named)) {
+                    return setAdding(`${gt}:${named}`)
+                  }
+                  setDrafts((xs) => [...xs, { key: gt, name: named }])
+                  setAdding(`${gt}:${named}`)
+                }}
+                className="text-xs text-zinc-500 hover:text-white border border-dashed border-zinc-800 hover:border-zinc-600 rounded-lg w-full py-2 transition-colors"
+              >
+                + New section
+              </button>
+            </div>
           </div>
         )
       })}
-
-      <AddGearRow list={list} catalog={catalog} childrenOf={childrenOf} sections={sections} busy={busy} run={run} input={input} />
 
       {!list.is_template && (
         <SaveToShelf
           list={list} templates={templates ?? []} courseType={courseType}
           busy={busy} run={run} input={input}
         />
+      )}
+    </div>
+  )
+}
+
+// One heading and what sits under it. The header bar is the point: the section
+// name is the thing you scan for and the thing you rename, so it outranks
+// everything else in the card and reads as a field rather than a caption.
+function SectionCard({
+  listId, groupType, name, rows, isDraft, catalog, childrenOf,
+  adding, setAdding, editingOptions, setEditingOptions,
+  drag, setDrag, onDrop, onDiscard, onRename, busy, run, input,
+}: {
+  listId: string
+  groupType: GroupType
+  name: string
+  rows: (GearEntry & { r: { name: string; info: string | null; recommended: string | null; url: string | null; section: string; catalogItem?: GearItem; options: GearItem[]; models: GearItem[] } })[]
+  isDraft?: boolean
+  catalog: GearItem[]
+  childrenOf: Map<string, GearItem[]>
+  adding: boolean
+  setAdding: (on: boolean) => void
+  editingOptions: string | null
+  setEditingOptions: (id: string | null) => void
+  drag: Drag | null
+  setDrag: (d: Drag | null) => void
+  onDrop: (gt: GroupType, section: string, beforeId: string | null) => void
+  onDiscard?: () => void
+  onRename?: (next: string) => void
+  busy: boolean
+  run: (fn: () => Promise<unknown>) => void
+  input: string
+}) {
+  // Which gap the row being dragged would land in. Null while nothing hovers,
+  // 'end' for the space under the last row.
+  const [over, setOver] = useState<string | 'end' | null>(null)
+  const dragging = drag !== null
+
+  // A drag abandoned outside any card would otherwise leave its landing line
+  // drawn across a section nothing is being dropped into.
+  useEffect(() => { if (!dragging) setOver(null) }, [dragging])
+
+  // A row's own gap has to win over the card's catch-all, so the line is drawn
+  // where the row would land rather than always at the end of the section.
+  const gap = (beforeId: string | 'end') => ({
+    onDragOver: (e: React.DragEvent) => {
+      if (!dragging) return
+      e.preventDefault(); e.stopPropagation()
+      setOver(beforeId)
+    },
+    onDragLeave: () => setOver((o) => (o === beforeId ? null : o)),
+    onDrop: (e: React.DragEvent) => {
+      e.preventDefault(); e.stopPropagation()
+      setOver(null)
+      onDrop(groupType, name, beforeId === 'end' ? null : beforeId)
+    },
+  })
+
+  return (
+    <div
+      className={`border rounded-lg overflow-hidden transition-colors ${
+        dragging && over ? 'border-pr-red/70' : 'border-zinc-800'
+      }`}
+      {...gap('end')}
+    >
+      <div className="flex items-center gap-2 px-3 py-2 bg-zinc-800/50 border-b border-zinc-800">
+        <input
+          defaultValue={name}
+          key={name}
+          onBlur={(ev) => {
+            const next = ev.target.value.trim()
+            if (!next || next === name) { ev.target.value = name; return }
+            if (isDraft) return onRename?.(next)
+            run(() => renameGearSection(listId, groupType, name, next))
+          }}
+          aria-label="Section heading"
+          className="min-w-0 flex-1 text-sm font-semibold text-white bg-transparent rounded px-1.5 py-0.5 -ml-1.5 border border-transparent hover:border-zinc-700 focus:border-zinc-600 focus:bg-zinc-900 focus:outline-none"
+        />
+        <span className="shrink-0 text-[11px] text-zinc-500">
+          {isDraft ? 'empty' : `${rows.length} item${rows.length === 1 ? '' : 's'}`}
+        </span>
+        <button
+          onClick={() => {
+            if (isDraft) return onDiscard?.()
+            if (!confirm(`Delete “${name}” and the ${rows.length} item${rows.length === 1 ? '' : 's'} under it?`)) return
+            run(() => removeGearSection(listId, groupType, name))
+          }}
+          disabled={busy}
+          title={isDraft ? 'Discard this section' : 'Delete this section and its gear'}
+          className="shrink-0 text-xs text-zinc-600 hover:text-red-400 transition-colors disabled:opacity-40"
+        >
+          ×
+        </button>
+      </div>
+
+      {isDraft && rows.length === 0 && (
+        <p className="px-3 py-2 text-[11px] text-zinc-600">
+          Nothing in here yet. Add the first item and the heading sticks.
+        </p>
+      )}
+
+      <div className="divide-y divide-zinc-800/70">
+        {rows.map((e) => (
+          <Row
+            key={e.id} e={e}
+            editingOptions={editingOptions} setEditingOptions={setEditingOptions}
+            dragging={dragging} isOver={over === e.id}
+            onDragStart={() => setDrag({ id: e.id })}
+            onDragEnd={() => { setDrag(null); setOver(null) }}
+            gap={gap(e.id)}
+            busy={busy} run={run} input={input}
+          />
+        ))}
+      </div>
+
+      <div className="border-t border-zinc-800/70">
+        {adding ? (
+          <AddGear
+            listId={listId} section={name} groupType={groupType}
+            catalog={catalog} childrenOf={childrenOf}
+            onClose={() => setAdding(false)}
+            busy={busy} run={run} input={input}
+          />
+        ) : (
+          <button
+            onClick={() => setAdding(true)}
+            className="w-full text-left px-3 py-2 text-xs text-zinc-500 hover:text-white hover:bg-zinc-800/40 transition-colors"
+          >
+            + Add gear to {name}
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function Row({
+  e, editingOptions, setEditingOptions, dragging, isOver,
+  onDragStart, onDragEnd, gap, busy, run, input,
+}: {
+  e: GearEntry & { r: { name: string; info: string | null; recommended: string | null; url: string | null; section: string; catalogItem?: GearItem; options: GearItem[]; models: GearItem[] } }
+  editingOptions: string | null
+  setEditingOptions: (id: string | null) => void
+  dragging: boolean
+  isOver: boolean
+  onDragStart: () => void
+  onDragEnd: () => void
+  gap: { onDragOver: (e: React.DragEvent) => void; onDragLeave: () => void; onDrop: (e: React.DragEvent) => void }
+  busy: boolean
+  run: (fn: () => Promise<unknown>) => void
+  input: string
+}) {
+  const row = useRef<HTMLDivElement>(null)
+
+  return (
+    <div
+      ref={row}
+      {...gap}
+      className={`px-3 py-2 group ${isOver ? 'border-t-2 border-pr-red' : ''}`}
+    >
+      <div className="flex items-start gap-2">
+        {/* Only the handle starts a drag, so the quantity field and the model
+            buttons still take a click. The row is the drag image, because a
+            lone handle floating across the page says nothing about what's
+            moving. */}
+        <span
+          draggable
+          onDragStart={(ev) => {
+            ev.dataTransfer.effectAllowed = 'move'
+            ev.dataTransfer.setData('text/plain', e.id)
+            if (row.current) ev.dataTransfer.setDragImage(row.current, 12, 12)
+            onDragStart()
+          }}
+          onDragEnd={onDragEnd}
+          title="Drag to reorder, or into another section"
+          className={`shrink-0 mt-0.5 cursor-grab active:cursor-grabbing select-none text-zinc-700 hover:text-zinc-400 transition-opacity ${
+            dragging ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+          }`}
+        >
+          ⠿
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            {e.r.url ? (
+              <a href={e.r.url} target="_blank" rel="noreferrer" className="text-sm hover:text-pr-red-light transition-colors">
+                {e.r.name}
+              </a>
+            ) : (
+              <span className="text-sm">{e.r.name}</span>
+            )}
+            {e.quantity && <span className="text-[11px] text-zinc-500">× {e.quantity}</span>}
+            {!e.r.catalogItem && <span className="text-[10px] text-zinc-700">one-off</span>}
+          </div>
+          {(e.r.info || e.r.recommended) && (
+            <p className="text-[11px] text-zinc-600 mt-0.5">
+              {e.r.info}
+              {e.r.info && e.r.recommended && ' — '}
+              {e.r.recommended && <span className="text-zinc-500">{e.r.recommended}</span>}
+            </p>
+          )}
+          {/* The chosen models belong on the row, not tucked behind the toggle
+              — ticking one has to look like it did something, and the row is
+              the only place that shows what the student will read. */}
+          {/* Ticking nothing is a real answer — any model of the type works —
+              so show which ones that means. The student's list says the same
+              thing, and an editor that showed less made "any" look like a line
+              nobody had finished. */}
+          {e.r.options.length === 0 && e.r.models.length > 0 && (
+            <p className="text-[11px] text-zinc-600 mt-1">
+              {e.r.models.length === 1 ? 'such as ' : 'any of: '}
+              <span className="text-zinc-500">{e.r.models.map((m) => m.name).join(' · ')}</span>
+            </p>
+          )}
+          {e.r.options.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1 mt-1">
+              <span className="text-[11px] text-zinc-600">these will do:</span>
+              {e.r.options.map((o) => (
+                <span
+                  key={o.id}
+                  className="text-[11px] px-1.5 py-0.5 rounded border border-pr-red/60 bg-pr-red/10 text-zinc-200"
+                >
+                  {o.name}
+                </span>
+              ))}
+            </div>
+          )}
+          {e.r.models.length > 0 && (
+            <button
+              onClick={() => setEditingOptions(editingOptions === e.id ? null : e.id)}
+              className="mt-1 text-[11px] text-zinc-500 hover:text-zinc-300 transition-colors"
+            >
+              {e.r.options.length === 0 ? 'Any model works — narrow it' : 'Change which models work'}
+            </button>
+          )}
+        </div>
+        <input
+          defaultValue={e.quantity ?? ''}
+          onBlur={(ev) => ev.target.value !== (e.quantity ?? '') && run(() => updateGearEntry(e.id, { quantity: ev.target.value }))}
+          placeholder="qty"
+          className={`w-16 shrink-0 ${input}`}
+        />
+        <button
+          onClick={() => run(() => removeGearEntry(e.id))}
+          disabled={busy}
+          className="shrink-0 text-xs text-zinc-600 hover:text-red-400 transition-colors"
+        >
+          ×
+        </button>
+      </div>
+
+      {editingOptions === e.id && (
+        <div className="mt-2 p-2 bg-zinc-900 rounded border border-zinc-800">
+          <p className="text-[11px] text-zinc-500 mb-1.5">
+            Tick the models that will do. Tick none and any model of this type is fine.
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {e.r.models.map((m) => {
+              const on = e.r.options.some((o) => o.id === m.id)
+              return (
+                <button
+                  key={m.id}
+                  onClick={() => run(() => setGearEntryOptions(
+                    e.id,
+                    on ? e.r.options.filter((o) => o.id !== m.id).map((o) => o.id)
+                       : [...e.r.options.map((o) => o.id), m.id]
+                  ))}
+                  disabled={busy}
+                  className={`text-xs px-2 py-1 rounded border transition-colors ${
+                    on
+                      ? 'border-pr-red bg-pr-red/10 text-white'
+                      : 'border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500'
+                  }`}
+                >
+                  {m.name}
+                </button>
+              )
+            })}
+          </div>
+        </div>
       )}
     </div>
   )
@@ -377,27 +616,27 @@ function SaveToShelf({
 // first dozen items alphabetically reads as a suggestion for this course, and
 // isn't one — a canyon list was offering tactical rope and weapon retention
 // purely because they sort early.
-function AddGearRow({
-  list, catalog, childrenOf, sections, busy, run, input,
+//
+// It opens inside the section it fills, so there is nothing to choose about
+// where an item lands and the panel stays open across adds — filling a section
+// means adding six things to it, not confirming the destination six times.
+function AddGear({
+  listId, section, groupType, catalog, childrenOf, onClose, busy, run, input,
 }: {
-  list: GearList
+  listId: string
+  section: string
+  groupType: GroupType
   catalog: GearItem[]
   childrenOf: Map<string, GearItem[]>
-  // The headings this list already has. Everything added lands in one of them.
-  sections: string[]
+  onClose: () => void
   busy: boolean
   run: (fn: () => Promise<unknown>) => void
   input: string
 }) {
   const [query, setQuery] = useState('')
   const [browsing, setBrowsing] = useState<string | null>(null)
-  const [groupType, setGroupType] = useState<'personal' | 'group'>('personal')
   const [newCategory, setNewCategory] = useState<string>(GEAR_CATEGORIES[0])
   const [newParent, setNewParent] = useState('')
-  // Where the next item lands, and it stays put between adds — filling a
-  // section means adding six things to it, not picking the heading six times.
-  // Empty means the catalog decides, which is only right for an empty list.
-  const [section, setSection] = useState('')
 
   const types = useMemo(() => catalog.filter((c) => !c.parent_id), [catalog])
 
@@ -427,52 +666,24 @@ function AddGearRow({
 
   function add(itemId: string | null, name?: string) {
     run(async () => {
-      await addGearEntry(list.id, { gearItemId: itemId, name, groupType, section: section || null })
+      await addGearEntry(listId, { gearItemId: itemId, name, groupType, section })
       setQuery('')
     })
   }
 
   return (
-    <div className="p-3 bg-zinc-900 border border-dashed border-zinc-700 rounded-lg space-y-2">
-      <div className="flex flex-wrap items-end gap-2">
-        <div className="flex-1 min-w-56">
-          <label className="block text-[11px] text-zinc-500 mb-1">Add gear — search the catalog</label>
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="e.g. grigri, prusik, wetsuit"
-            className={`w-full ${input}`}
-          />
-        </div>
-        <div>
-          <label className="block text-[11px] text-zinc-500 mb-1">Carried by</label>
-          <select value={groupType} onChange={(e) => setGroupType(e.target.value as 'personal' | 'group')} className={input}>
-            <option value="personal">Each person</option>
-            <option value="group">Group</option>
-          </select>
-        </div>
-        <div>
-          <label className="block text-[11px] text-zinc-500 mb-1">Into section</label>
-          <select
-            value={section}
-            onChange={(e) => {
-              const v = e.target.value
-              if (v !== NEW_SECTION) return setSection(v)
-              const named = prompt('Name the new section — this is the heading students read:')?.trim()
-              if (named) setSection(named)
-            }}
-            className={`${input} max-w-52`}
-          >
-            {/* A list with no sections yet has nothing to offer, so the catalog
-                seeds the first rows and you rename the headings after. */}
-            <option value="">{sections.length ? '— from the catalog —' : '— catalog decides —'}</option>
-            {sections.map((s) => <option key={s} value={s}>{s}</option>)}
-            {/* Sticks around after it's chosen, so it survives a re-render
-                before the first item lands in it. */}
-            {section && !sections.includes(section) && <option value={section}>{section}</option>}
-            <option value={NEW_SECTION}>+ New section…</option>
-          </select>
-        </div>
+    <div className="p-3 bg-zinc-900 space-y-2">
+      <div className="flex items-center gap-2">
+        <input
+          autoFocus
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder={`Search the catalog — adding to ${section}`}
+          className={`flex-1 min-w-0 ${input}`}
+        />
+        <button onClick={onClose} className="shrink-0 text-xs text-zinc-500 hover:text-white transition-colors">
+          Done
+        </button>
       </div>
 
       <div className="flex flex-wrap gap-1.5">
@@ -563,7 +774,7 @@ function AddGearRow({
                   const { id } = await upsertGearItem({
                     name: query, category: newCategory, parentId: newParent || null,
                   })
-                  await addGearEntry(list.id, { gearItemId: id, groupType })
+                  await addGearEntry(listId, { gearItemId: id, groupType, section })
                   setQuery(''); setNewParent('')
                 })}
                 disabled={busy}

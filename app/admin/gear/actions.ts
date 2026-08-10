@@ -291,10 +291,17 @@ export async function setGearEntryOptions(entryId: string, gearItemIds: string[]
   touch((data?.gear_lists as unknown as { instance_id: string | null } | null)?.instance_id)
 }
 
-// Renaming a heading is renaming it everywhere on the list — a section only
+// Renaming a heading is renaming it everywhere in that section — a section only
 // exists as the string its rows agree on, so editing one row's copy would
-// split the section in two instead.
-export async function renameGearSection(listId: string, from: string, to: string) {
+// split the section in two instead. Scoped to one side of the list, because
+// "Ropes" under personal kit and "Ropes" under group kit are two headings that
+// happen to share a word, and renaming one shouldn't touch the other.
+export async function renameGearSection(
+  listId: string,
+  groupType: 'personal' | 'group',
+  from: string,
+  to: string
+) {
   const admin = await requireAdmin()
   const next = to.trim()
   if (!next) throw new Error('Give the section a name')
@@ -304,8 +311,63 @@ export async function renameGearSection(listId: string, from: string, to: string
     .from('gear_list_entries')
     .update({ section: next })
     .eq('list_id', listId)
+    .eq('group_type', groupType)
     .eq('section', from)
   if (error) throw new Error(error.message)
+
+  const { data: l } = await admin.from('gear_lists').select('instance_id').eq('id', listId).single()
+  touch(l?.instance_id)
+}
+
+// Deleting a heading deletes what's under it. There's no such thing as an empty
+// section to leave behind — the heading is only the agreement between its rows
+// — so the alternative would be silently scattering the gear somewhere else.
+export async function removeGearSection(
+  listId: string,
+  groupType: 'personal' | 'group',
+  section: string
+) {
+  const admin = await requireAdmin()
+  const { error } = await admin
+    .from('gear_list_entries')
+    .delete()
+    .eq('list_id', listId)
+    .eq('group_type', groupType)
+    .eq('section', section)
+  if (error) throw new Error(error.message)
+
+  const { data: l } = await admin.from('gear_lists').select('instance_id').eq('id', listId).single()
+  touch(l?.instance_id)
+}
+
+// Where a dragged row landed: which heading it's under now, which side of the
+// list it's on, and the order every row on the list ended up in. Order is sent
+// whole rather than as a single row's new index, because a drop shifts the rows
+// it passed and the editor already knows the arrangement it just drew.
+export async function moveGearEntry(
+  listId: string,
+  entryId: string,
+  target: { section: string | null; groupType: 'personal' | 'group'; orderedIds: string[] }
+) {
+  const admin = await requireAdmin()
+
+  const { error } = await admin
+    .from('gear_list_entries')
+    .update({ section: target.section?.trim() || null, group_type: target.groupType })
+    .eq('id', entryId)
+    .eq('list_id', listId)
+  if (error) throw new Error(error.message)
+
+  // Renumbering from zero every time keeps the orders dense, so a list can't
+  // drift into the state where two rows share a sort_order and the arrangement
+  // depends on what the database felt like returning.
+  const results = await Promise.all(
+    target.orderedIds.map((id, i) =>
+      admin.from('gear_list_entries').update({ sort_order: i }).eq('id', id).eq('list_id', listId)
+    )
+  )
+  const failed = results.find((r) => r.error)
+  if (failed?.error) throw new Error(failed.error.message)
 
   const { data: l } = await admin.from('gear_lists').select('instance_id').eq('id', listId).single()
   touch(l?.instance_id)

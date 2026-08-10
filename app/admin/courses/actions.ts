@@ -90,6 +90,36 @@ export async function createInstance(formData: FormData) {
   const starts_at        = (formData.get('starts_at') as string) || null
   const ends_at          = (formData.get('ends_at') as string) || null
 
+  // A course identical to one made moments ago is a double submit, not a second
+  // course. Two MARSOC jungle courses in Oahu on the same dates were created
+  // three seconds apart this way, and nothing downstream noticed: the slug
+  // collision quietly became a -1 suffix, and the calendar got a second event.
+  //
+  // Bounded by time rather than rejected outright, because running the same
+  // course for the same client twice is legitimate — doing it within a minute
+  // is not.
+  let duplicate = admin
+    .from('course_instances')
+    .select('id')
+    .eq('course_type', course_type)
+    .eq('status', status)
+    .gt('created_at', new Date(Date.now() - 60_000).toISOString())
+
+  // eq() never matches a null column, and most of these are routinely null —
+  // a custom_title on a typed course, a location not yet decided — so a null
+  // has to be compared as one or the guard silently never fires.
+  for (const [column, value] of [
+    ['custom_title', custom_title],
+    ['client_name', client_name],
+    ['location', location],
+    ['starts_at', starts_at],
+  ] as const) {
+    duplicate = value === null ? duplicate.is(column, null) : duplicate.eq(column, value)
+  }
+
+  const { data: alreadyMade } = await duplicate.limit(1).maybeSingle()
+  if (alreadyMade) redirect(`/admin/courses/${alreadyMade.id}`)
+
   const displayName = course_type === 'custom' ? (custom_title ?? 'custom') : course_type
   const slug = await generateSlug([displayName, client_name, location, starts_at])
 

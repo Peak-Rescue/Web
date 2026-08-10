@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createInstance } from './actions'
+import CreateCourseButton from './CreateCourseButton'
 import { CourseTypeSelect } from './CourseTypeSelect'
 import { courseShortName, courseEventTitle, crewFirstNames } from '@/lib/courses'
 import CourseCalendar, { type CalendarCourse } from '@/components/CourseCalendar'
@@ -129,9 +130,7 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
             </div>
 
             <div className="sm:col-span-2">
-              <button type="submit" className="px-5 py-2 bg-pr-red hover:bg-pr-red-dark text-white rounded font-medium text-sm transition-colors">
-                Create course →
-              </button>
+              <CreateCourseButton />
             </div>
           </form>
         </details>
