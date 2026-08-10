@@ -153,6 +153,17 @@ export default function GearListEditor({
                                 behind the toggle — ticking one has to look
                                 like it did something, and the row is the only
                                 place that shows what the student will read. */}
+                            {/* Ticking nothing is a real answer — any model of
+                                the type works — so show which ones that means.
+                                The student's list says the same thing, and an
+                                editor that showed less made "any" look like a
+                                line nobody had finished. */}
+                            {e.r.options.length === 0 && e.r.models.length > 0 && (
+                              <p className="text-[11px] text-zinc-600 mt-1">
+                                {e.r.models.length === 1 ? 'such as ' : 'any of: '}
+                                <span className="text-zinc-500">{e.r.models.map((m) => m.name).join(' · ')}</span>
+                              </p>
+                            )}
                             {e.r.options.length > 0 && (
                               <div className="flex flex-wrap items-center gap-1 mt-1">
                                 <span className="text-[11px] text-zinc-600">these will do:</span>
