@@ -421,7 +421,10 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         <details open={Boolean(cal) || showAllCourses} className="mb-10 group">
           <summary className="cursor-pointer list-none flex items-center gap-2 text-sm font-medium text-zinc-500 uppercase tracking-wide select-none">
             <span className="text-zinc-600 text-xs transition-transform group-open:rotate-90">▶</span>
-            Your calendar
+            {/* Not "Your calendar" — the toggle underneath switches between
+                your courses and everyone's, so the heading would contradict
+                itself half the time. The toggle says whose it is. */}
+            Calendar
           </summary>
           <div className="mt-3">
             <div className="flex gap-1 mb-3 text-xs">

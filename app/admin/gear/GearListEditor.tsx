@@ -451,46 +451,55 @@ function Row({
             {e.quantity && <span className="text-[11px] text-zinc-500">× {e.quantity}</span>}
             {!e.r.catalogItem && <span className="text-[10px] text-zinc-700">one-off</span>}
           </div>
+          {/* The products we point people at sit directly under the name,
+              ahead of the description, because the model someone has to go and
+              buy is the answer to the question the row is asking. Everything
+              that used to explain them — "these will do", "change which models
+              work" — was wording stacked in front of the thing itself. */}
+          {e.r.models.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1.5 mt-1">
+              {e.r.options.map((o) => (
+                <span
+                  key={o.id}
+                  className="inline-flex items-center gap-1.5 text-xs pl-2 pr-1.5 py-1 rounded border border-pr-red/60 bg-pr-red/10 text-white"
+                >
+                  {o.name}
+                  <button
+                    onClick={() => run(() => setGearEntryOptions(
+                      e.id, e.r.options.filter((x) => x.id !== o.id).map((x) => x.id)
+                    ))}
+                    disabled={busy}
+                    title={`Stop recommending the ${o.name}`}
+                    className="text-zinc-500 hover:text-red-400 transition-colors disabled:opacity-40"
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+              {/* Recommending nothing is a real answer — any model of the type
+                  works — but it has to say so, or the line looks unfinished. */}
+              {e.r.options.length === 0 && (
+                <span className="text-[11px] text-zinc-600">Any {e.r.name.toLowerCase()} works</span>
+              )}
+              <button
+                onClick={() => setEditingOptions(editingOptions === e.id ? null : e.id)}
+                title={e.r.options.length === 0 ? 'Recommend a specific model' : 'Recommend another model'}
+                className={`inline-flex items-center justify-center w-6 h-6 rounded border text-sm leading-none transition-colors ${
+                  editingOptions === e.id
+                    ? 'border-zinc-500 text-white bg-zinc-800'
+                    : 'border-zinc-700 text-zinc-500 hover:text-white hover:border-zinc-500'
+                }`}
+              >
+                +
+              </button>
+            </div>
+          )}
           {(e.r.info || e.r.recommended) && (
-            <p className="text-[11px] text-zinc-600 mt-0.5">
+            <p className="text-[11px] text-zinc-600 mt-1">
               {e.r.info}
               {e.r.info && e.r.recommended && ' — '}
               {e.r.recommended && <span className="text-zinc-500">{e.r.recommended}</span>}
             </p>
-          )}
-          {/* The chosen models belong on the row, not tucked behind the toggle
-              — ticking one has to look like it did something, and the row is
-              the only place that shows what the student will read. */}
-          {/* Ticking nothing is a real answer — any model of the type works —
-              so show which ones that means. The student's list says the same
-              thing, and an editor that showed less made "any" look like a line
-              nobody had finished. */}
-          {e.r.options.length === 0 && e.r.models.length > 0 && (
-            <p className="text-[11px] text-zinc-600 mt-1">
-              {e.r.models.length === 1 ? 'such as ' : 'any of: '}
-              <span className="text-zinc-500">{e.r.models.map((m) => m.name).join(' · ')}</span>
-            </p>
-          )}
-          {e.r.options.length > 0 && (
-            <div className="flex flex-wrap items-center gap-1 mt-1">
-              <span className="text-[11px] text-zinc-600">these will do:</span>
-              {e.r.options.map((o) => (
-                <span
-                  key={o.id}
-                  className="text-[11px] px-1.5 py-0.5 rounded border border-pr-red/60 bg-pr-red/10 text-zinc-200"
-                >
-                  {o.name}
-                </span>
-              ))}
-            </div>
-          )}
-          {e.r.models.length > 0 && (
-            <button
-              onClick={() => setEditingOptions(editingOptions === e.id ? null : e.id)}
-              className="mt-1 text-[11px] text-zinc-500 hover:text-zinc-300 transition-colors"
-            >
-              {e.r.options.length === 0 ? 'Any model works — narrow it' : 'Change which models work'}
-            </button>
           )}
         </div>
         <input
@@ -508,36 +517,34 @@ function Row({
         </button>
       </div>
 
-      {editingOptions === e.id && (
-        <div className="mt-2 p-2 bg-zinc-900 rounded border border-zinc-800">
-          <p className="text-[11px] text-zinc-500 mb-1.5">
-            Tick the models that will do. Tick none and any model of this type is fine.
-          </p>
-          <div className="flex flex-wrap gap-1.5">
-            {e.r.models.map((m) => {
-              const on = e.r.options.some((o) => o.id === m.id)
-              return (
+      {/* The panel only ever adds. Taking a recommendation back is the × on
+          the chip itself, where the thing being removed is. */}
+      {editingOptions === e.id && (() => {
+        const rest = e.r.models.filter((m) => !e.r.options.some((o) => o.id === m.id))
+        return (
+          <div className="mt-2 p-2 bg-zinc-900 rounded border border-zinc-800">
+            <p className="text-[11px] text-zinc-500 mb-1.5">
+              {rest.length > 0
+                ? 'Recommend a model. Recommend none and any one of them is fine.'
+                : 'Every model of this type is already recommended.'}
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {rest.map((m) => (
                 <button
                   key={m.id}
                   onClick={() => run(() => setGearEntryOptions(
-                    e.id,
-                    on ? e.r.options.filter((o) => o.id !== m.id).map((o) => o.id)
-                       : [...e.r.options.map((o) => o.id), m.id]
+                    e.id, [...e.r.options.map((o) => o.id), m.id]
                   ))}
                   disabled={busy}
-                  className={`text-xs px-2 py-1 rounded border transition-colors ${
-                    on
-                      ? 'border-pr-red bg-pr-red/10 text-white'
-                      : 'border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500'
-                  }`}
+                  className="text-xs px-2 py-1 rounded border border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500 transition-colors disabled:opacity-40"
                 >
-                  {m.name}
+                  + {m.name}
                 </button>
-              )
-            })}
+              ))}
+            </div>
           </div>
-        </div>
-      )}
+        )
+      })()}
     </div>
   )
 }
