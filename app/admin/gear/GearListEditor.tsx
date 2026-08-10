@@ -836,6 +836,10 @@ function AddGear({
     [types]
   )
 
+  // The types the category being filed under actually holds — what a new model
+  // can be a model of. See the panel below.
+  const typesHere = useMemo(() => types.filter((t) => t.category === newCategory), [types, newCategory])
+
   // Searching wins over browsing: typing anything means you've stopped
   // clicking. Search caps at 12 to keep the panel short; a category shows all
   // of itself, because half a category is worse than none.
@@ -971,14 +975,32 @@ function AddGear({
                 : 'Nothing matches. Add it to the catalog:'}
             </p>
             <div className="flex flex-wrap items-end gap-2">
+              {/* Category first, because it decides which types are on offer:
+                  every type in the catalog under every category was a list
+                  that never changed and so never said which of them fitted. */}
               <div>
-                <label className="block text-[11px] text-zinc-500 mb-1">A model of</label>
-                <select value={newParent} onChange={(e) => setNewParent(e.target.value)} className={`${input} w-44`}>
-                  <option value="">— its own type —</option>
-                  {types.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                <label className="block text-[11px] text-zinc-500 mb-1">Category</label>
+                <select
+                  value={newCategory}
+                  onChange={(e) => { setNewCategory(e.target.value); setNewParent('') }}
+                  className={`${input} w-44`}
+                >
+                  {GEAR_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
-              {newParent ? (
+              <div>
+                <label className="block text-[11px] text-zinc-500 mb-1">A model of</label>
+                <select
+                  value={newParent}
+                  onChange={(e) => setNewParent(e.target.value)}
+                  disabled={typesHere.length === 0}
+                  className={`${input} w-44 disabled:opacity-40`}
+                >
+                  <option value="">{typesHere.length === 0 ? '— nothing here yet —' : '— its own type —'}</option>
+                  {typesHere.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                </select>
+              </div>
+              {newParent && (
                 <div>
                   <label className="block text-[11px] text-zinc-500 mb-1">Brand</label>
                   <input
@@ -987,13 +1009,6 @@ function AddGear({
                     placeholder="e.g. Petzl"
                     className={`${input} w-36`}
                   />
-                </div>
-              ) : (
-                <div>
-                  <label className="block text-[11px] text-zinc-500 mb-1">Category</label>
-                  <select value={newCategory} onChange={(e) => setNewCategory(e.target.value)} className={`${input} w-44`}>
-                    {GEAR_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
-                  </select>
                 </div>
               )}
               <button

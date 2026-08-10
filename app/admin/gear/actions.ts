@@ -59,10 +59,16 @@ export async function upsertGearItem(input: {
     // obvious answer.
     if (input.parentId) {
       const { data: parent } = await admin
-        .from('gear_items').select('id, parent_id').eq('id', input.parentId).single()
+        .from('gear_items').select('id, parent_id, category').eq('id', input.parentId).single()
       if (!parent) throw new Error('That type no longer exists')
       if (parent.parent_id) throw new Error('A model can’t sit under another model — pick the type instead')
       if (input.id === input.parentId) throw new Error('An item can’t be its own type')
+      // A product is the same kind of kit as the type it satisfies, so its
+      // category is the type's and not a second answer that can disagree. The
+      // catalog nests products under their type, which hid the disagreement:
+      // a product could sit in one category's table while counting towards
+      // another's.
+      row.category = parent.category
     }
     row.parent_id = input.parentId
   }

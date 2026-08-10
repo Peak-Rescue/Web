@@ -450,26 +450,43 @@ function AddItem({
   const [parentId, setParentId] = useState('')
   const [category, setCategory] = useState<string>(GEAR_CATEGORIES[0])
 
+  // The types this category holds. Offering all forty of them under every
+  // category was how a harness ended up satisfying a rope: the list was the
+  // same list wherever you were, so nothing said which of them belonged here.
+  const inCategory = useMemo(() => types.filter((t) => t.category === category), [types, category])
+
   return (
     <div className="p-3 bg-zinc-900 border border-dashed border-zinc-700 rounded-lg flex flex-wrap items-end gap-2">
       {/* Where it goes first, widest decision down to narrowest: the category
-          it files under, then the type it satisfies. Those two are the two
-          halves of one question — a type is filed under a category and has no
-          maker; a product inherits its type's category and has one.
+          it files under, then the type within that category it satisfies.
+          Those two are the two halves of one question — a type is filed under
+          a category and has no maker; a product is filed with the type it
+          satisfies and has one.
           Then the row is named the way the table names it, product before
           brand, so this reads in the same order as everything it's being added
           to — the same order the inline "+ product" row asks in. */}
-      {!parentId && (
-        <div>
-          <label className="block text-[11px] text-zinc-500 mb-1">Category</label>
-          <CategorySelect value={category} options={categories} onChange={setCategory} className={`${input} w-44`} />
-        </div>
-      )}
+      <div>
+        <label className="block text-[11px] text-zinc-500 mb-1">Category</label>
+        <CategorySelect
+          value={category}
+          options={categories}
+          // The type picked is one of this category's, so changing category
+          // un-picks it rather than leaving a product filed against a type
+          // that is no longer on offer.
+          onChange={(next) => { setCategory(next); setParentId('') }}
+          className={`${input} w-44`}
+        />
+      </div>
       <div>
         <label className="block text-[11px] text-zinc-500 mb-1">A product of</label>
-        <select value={parentId} onChange={(e) => setParentId(e.target.value)} className={`${input} w-44`}>
-          <option value="">— its own type —</option>
-          {types.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+        <select
+          value={parentId}
+          onChange={(e) => setParentId(e.target.value)}
+          disabled={inCategory.length === 0}
+          className={`${input} w-44 disabled:opacity-40`}
+        >
+          <option value="">{inCategory.length === 0 ? '— nothing here yet —' : '— its own type —'}</option>
+          {inCategory.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
         </select>
       </div>
       <div>
