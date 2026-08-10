@@ -8,6 +8,7 @@ import Image from 'next/image'
 // at without reading the contents.
 
 export type SectionKey =
+  | 'details'
   | 'about'
   | 'schedule'
   | 'curriculum'
@@ -17,6 +18,11 @@ export type SectionKey =
   | 'notes'
 
 export const SECTION_ICON: Record<SectionKey, React.ReactElement> = {
+  // 'details' is the page header rather than a Section, so its icon is only
+  // ever used if that block later grows a header of its own.
+  details: (
+    <path d="M4 6h16M4 12h16M4 18h10" />
+  ),
   about: (
     <path d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20ZM12 16v-4M12 8h.01" />
   ),
@@ -41,6 +47,7 @@ export const SECTION_ICON: Record<SectionKey, React.ReactElement> = {
 }
 
 export const SECTION_LABEL: Record<SectionKey, string> = {
+  details: 'Details',
   about: 'Course info',
   schedule: 'Schedule',
   curriculum: 'Curriculum',

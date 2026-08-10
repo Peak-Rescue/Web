@@ -243,6 +243,9 @@ export default async function PortalPage({
   const hasTasks = showTasks && (tasks.length > 0 || canManageTasks)
 
   const navSections = ([
+    // The header block — dates, place, maps, who's teaching — is a tab like any
+    // other, so the bar can always take you back to the overview.
+    'details',
     // Team blocks lead for staff; students only ever get the four below them.
     hasNotes && 'notes',
     hasTasks && 'tasks',
@@ -290,8 +293,8 @@ export default async function PortalPage({
           </div>
         )}
 
-        {/* Header */}
-        <div className="mb-6">
+        {/* Header — the overview the "Details" tab points back to */}
+        <div id="details" className="scroll-mt-30 md:scroll-mt-36 mb-6">
           <div className="flex items-center gap-2 mb-2 text-sm text-zinc-500">
             <span className="font-mono text-xs">PR-{String(inst.ref_number).padStart(4, '0')}</span>
             {(showTasks || inst.status === 'cancelled') && (
@@ -648,7 +651,8 @@ export default async function PortalPage({
           </Section>
         )}
 
-        {navSections.length === 0 && (
+        {/* Details is always there, so emptiness is about the sections below it. */}
+        {navSections.length === 1 && (
           <p className="text-zinc-500 text-sm">Nothing has been added to this course yet — check back soon.</p>
         )}
       </div>
