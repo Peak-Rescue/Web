@@ -30,6 +30,7 @@ function touch(instanceId?: string | null) {
 export async function upsertGearItem(input: {
   id?: string
   name: string
+  brand?: string | null
   info?: string | null
   recommended?: string | null
   url?: string | null
@@ -38,13 +39,15 @@ export async function upsertGearItem(input: {
   aliases?: string[]
 }) {
   const admin = await requireAdmin()
-  const row: Record<string, unknown> = {
-    name: input.name.trim().slice(0, 120),
-    info: input.info?.trim() || null,
-    recommended: input.recommended?.trim() || null,
-    url: input.url?.trim() || null,
-    category: input.category?.trim() || null,
-  }
+  // Only what the caller actually passed. Writing every column on every call
+  // made each field's edit erase the others: renaming an item sent no
+  // recommendation, no url and no info, and so cleared all three.
+  const row: Record<string, unknown> = { name: input.name.trim().slice(0, 120) }
+  if (input.brand !== undefined) row.brand = input.brand?.trim() || null
+  if (input.info !== undefined) row.info = input.info?.trim() || null
+  if (input.recommended !== undefined) row.recommended = input.recommended?.trim() || null
+  if (input.url !== undefined) row.url = input.url?.trim() || null
+  if (input.category !== undefined) row.category = input.category?.trim() || null
   if (!row.name) throw new Error('Name is required')
   if (input.aliases !== undefined) {
     row.aliases = [...new Set(input.aliases.map((a) => a.trim().toLowerCase()).filter(Boolean))]

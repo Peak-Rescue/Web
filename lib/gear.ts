@@ -36,6 +36,17 @@ export type CatalogItem = {
   category: string | null
   parent_id: string | null
   aliases: string[]
+  // Only a product has one — a type is what a list needs, and nobody makes a
+  // "brake-assist descender". Stored apart from the name so it can be asked
+  // about; joined back together everywhere the gear is read.
+  brand?: string | null
+}
+
+// How a product is written wherever it is read as one thing: "Petzl Grigri".
+// The catalog splits the two into columns; everything else puts them back.
+export function productName(item: { brand?: string | null; name: string }): string {
+  const brand = item.brand?.trim()
+  return brand ? `${brand} ${item.name}` : item.name
 }
 
 // Matches a typed query against a name, its synonyms, and — for a type — the
@@ -46,10 +57,13 @@ export function matchesGear(item: CatalogItem, query: string, children: CatalogI
   if (!q) return true
   const haystack = [
     item.name,
+    item.brand ?? '',
     ...(item.aliases ?? []),
     item.category ?? '',
     item.recommended ?? '',
-    ...children.flatMap((c) => [c.name, ...(c.aliases ?? [])]),
+    // Brand lives in its own column now, so "Petzl" is no longer inside any
+    // name — without it here, searching a maker would find nothing.
+    ...children.flatMap((c) => [c.name, c.brand ?? '', productName(c), ...(c.aliases ?? [])]),
   ]
   return haystack.some((h) => h.toLowerCase().includes(q))
 }

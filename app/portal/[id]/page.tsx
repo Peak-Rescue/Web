@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { moduleAudience } from '@/lib/library'
-import { gearLabel } from '@/lib/gear'
+import { gearLabel, productName } from '@/lib/gear'
 import { courseDisplayName, computeBlocks } from '@/lib/courses'
 import CourseTasksPanel, { type CourseTask, type TaskPerson } from '@/components/CourseTasksPanel'
 import { loadTasksWithDocs } from '@/lib/course-tasks'
@@ -195,15 +195,15 @@ export default async function PortalPage({
   // ever see the student one.
   const { data: gearRows } = await admin
     .from('gear_lists')
-    .select('id, name, audience, intro, gear_list_entries(id, gear_item_id, name, info, recommended, url, section, group_type, quantity, sort_order, gear_items(name, info, recommended, url, category), gear_entry_options(sort_order, gear_items(name)))')
+    .select('id, name, audience, intro, gear_list_entries(id, gear_item_id, name, info, recommended, url, section, group_type, quantity, sort_order, gear_items(name, brand, info, recommended, url, category), gear_entry_options(sort_order, gear_items(name, brand)))')
     .eq('instance_id', id)
   type GearRow = {
     id: string; name: string; audience: string; intro: string | null
     gear_list_entries: {
       id: string; gear_item_id: string | null; name: string | null; info: string | null; recommended: string | null; url: string | null
       section: string | null; group_type: 'personal' | 'group'; quantity: string | null; sort_order: number
-      gear_items: { name: string; info: string | null; recommended: string | null; url: string | null; category: string | null } | null
-      gear_entry_options: { sort_order: number; gear_items: { name: string } | null }[]
+      gear_items: { name: string; brand: string | null; info: string | null; recommended: string | null; url: string | null; category: string | null } | null
+      gear_entry_options: { sort_order: number; gear_items: { name: string; brand: string | null } | null }[]
     }[]
   }
   const gearAll = (gearRows ?? []) as unknown as GearRow[]
@@ -630,7 +630,7 @@ export default async function PortalPage({
                       {cat && <p className="text-[11px] text-zinc-600 mb-1">{cat}</p>}
                       <ul className="border border-zinc-800 rounded divide-y divide-zinc-800/70">
                         {items.map((e) => {
-                          const name = e.name ?? e.gear_items?.name ?? 'Item'
+                          const name = e.name ?? (e.gear_items ? productName(e.gear_items) : null) ?? 'Item'
                           const info = e.info ?? e.gear_items?.info
                           const rec = e.recommended ?? e.gear_items?.recommended
                           const url = e.url ?? e.gear_items?.url
@@ -641,7 +641,8 @@ export default async function PortalPage({
                             [...(e.gear_entry_options ?? [])]
                               .sort((a, b) => a.sort_order - b.sort_order)
                               .map((o) => o.gear_items)
-                              .filter(Boolean) as { name: string }[]
+                              .filter(Boolean)
+                              .map((g) => ({ name: productName(g!) }))
                           )
                           // Nothing ticked means any model of the type will do
                           // — so list them rather than leave the student with a

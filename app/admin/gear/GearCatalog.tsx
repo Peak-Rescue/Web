@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { Fragment, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { GEAR_CATEGORIES, matchesGear, type CatalogItem } from '@/lib/gear'
 import { upsertGearItem, mergeGearItems, retireGearItem } from './actions'
@@ -10,6 +10,11 @@ type Row = CatalogItem & { active: boolean; uses: number }
 // Sentinel for the "make one up" option. Not a category anything can be saved
 // under — picking it swaps the select for a text field.
 const NEW_CATEGORY = '__new__'
+
+// Cells read as text until you touch them. A catalog is read far more often
+// than it is edited, and forty rows of boxed inputs is a form, not a table.
+const CELL =
+  'w-full bg-transparent border border-transparent rounded px-1.5 py-1 hover:border-zinc-700 focus:border-zinc-500 focus:bg-zinc-800 focus:outline-none'
 
 // Category picker that can also invent one. Categories are free text on the
 // item, so a new one needs nothing but typing it; the seed list in lib/gear is
@@ -62,8 +67,10 @@ function CategorySelect({
   )
 }
 
-// The catalog itself: types with the models that satisfy them, and the merge
-// tool for when two rows turn out to be the same piece of kit anyway.
+// The catalog itself: types with the products that satisfy them, as a table,
+// because the question it has to answer is "what have we got, and what is
+// missing" — and a blank cell answers that at a glance where a stack of cards
+// never could.
 export default function GearCatalog({ items }: { items: Row[] }) {
   const router = useRouter()
   const [busy, setBusy] = useState(false)
@@ -71,6 +78,7 @@ export default function GearCatalog({ items }: { items: Row[] }) {
   const [query, setQuery] = useState('')
   const [mergeFrom, setMergeFrom] = useState<Row | null>(null)
   const [adding, setAdding] = useState(false)
+  const [addingTo, setAddingTo] = useState<string | null>(null)
 
   const types = useMemo(() => items.filter((i) => !i.parent_id), [items])
   const childrenOf = useMemo(() => {
@@ -94,19 +102,24 @@ export default function GearCatalog({ items }: { items: Row[] }) {
     return [...seeded, ...extra]
   }, [types])
 
-  // The catalog reads as a shelf, not an alphabet: a category at a time, in the
-  // seed order, with anything filed under a name of your own after it.
-  // Uncategorised comes last and is always shown when it has rows — gear with
-  // no category is the thing most needing attention, so it must not hide.
+  // Brands already in use, offered as suggestions so the same maker isn't
+  // entered three ways — which is exactly how "BD" and "Black Diamond" came to
+  // be two brands before this column existed.
+  const brands = useMemo(
+    () => [...new Set(items.map((i) => i.brand?.trim()).filter(Boolean) as string[])].sort((a, b) => a.localeCompare(b)),
+    [items]
+  )
+
+  // A category at a time, in the seed order, with anything filed under a name
+  // of your own after it. Uncategorised comes last and is always shown when it
+  // has rows — gear with no category is the thing most needing attention.
   const groups = useMemo(() => {
     const byCat = new Map<string, Row[]>()
     for (const t of shown) {
       const k = t.category?.trim() || ''
       byCat.set(k, [...(byCat.get(k) ?? []), t])
     }
-    const ordered = categories
-      .filter((c) => byCat.has(c))
-      .map((c) => ({ name: c, rows: byCat.get(c)! }))
+    const ordered = categories.filter((c) => byCat.has(c)).map((c) => ({ name: c, rows: byCat.get(c)! }))
     const loose = byCat.get('')
     return loose ? [...ordered, { name: '', rows: loose }] : ordered
   }, [shown, categories])
@@ -120,154 +133,92 @@ export default function GearCatalog({ items }: { items: Row[] }) {
 
   const input = 'bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-zinc-500'
 
-  // Adding a branded product to the type it satisfies, from the type itself —
-  // the top "+ Gear" form can do it via its "a model of" dropdown, but that
-  // means naming a type you are already looking at.
-  function AddModel({ type }: { type: Row }) {
-    const [open, setOpen] = useState(false)
-    const [name, setName] = useState('')
-
-    const submit = () => {
-      const next = name.trim()
-      if (!next) return
-      // A product inherits its type's category — it is the same kind of kit,
-      // and a model filed elsewhere would group away from what it satisfies.
-      run(async () => {
-        await upsertGearItem({ name: next, category: type.category, parentId: type.id })
-        setName(''); setOpen(false)
-      })
-    }
-
-    if (!open) {
-      return (
-        <button
-          onClick={() => setOpen(true)}
-          className="w-full text-left px-3 py-2 text-[11px] text-zinc-600 hover:text-white hover:bg-zinc-800/40 transition-colors border-t border-zinc-800/70"
-        >
-          + Add a product to {type.name}
-        </button>
-      )
-    }
-
+  function Actions({ row }: { row: Row }) {
+    const merging = mergeFrom?.id === row.id
     return (
-      <div className="flex items-center gap-2 px-3 py-2 border-t border-zinc-800/70 bg-zinc-900">
-        <input
-          autoFocus
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') submit()
-            if (e.key === 'Escape') { setOpen(false); setName('') }
-          }}
-          placeholder="Brand and model — e.g. Petzl Grigri"
-          className={`flex-1 min-w-0 text-sm ${input}`}
-        />
-        <button
-          onClick={submit}
-          disabled={busy || !name.trim()}
-          className="shrink-0 px-3 py-1.5 rounded bg-pr-red hover:bg-pr-red-dark text-white text-xs font-medium transition-colors disabled:opacity-40"
-        >
-          Add
-        </button>
-        <button
-          onClick={() => { setOpen(false); setName('') }}
-          className="shrink-0 text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
-        >
-          Cancel
-        </button>
+      <div className="flex items-center justify-end gap-2 whitespace-nowrap">
+        {mergeFrom && !merging ? (
+          <button
+            onClick={() => {
+              if (confirm(`Fold "${mergeFrom.name}" into "${row.name}"? Every list using it will point here instead.`)) {
+                run(async () => { await mergeGearItems(row.id, mergeFrom.id); setMergeFrom(null) })
+              }
+            }}
+            disabled={busy}
+            className="text-[11px] px-2 py-0.5 rounded border border-pr-red text-pr-red-light hover:bg-pr-red/10 transition-colors"
+          >
+            merge into this
+          </button>
+        ) : (
+          <button
+            onClick={() => setMergeFrom(merging ? null : row)}
+            className={`text-[11px] transition-colors ${merging ? 'text-pr-red-light' : 'text-zinc-700 hover:text-zinc-300'}`}
+          >
+            {merging ? 'pick keeper…' : 'merge'}
+          </button>
+        )}
+        {row.uses === 0 && (
+          <button
+            onClick={() => run(() => retireGearItem(row.id))}
+            disabled={busy}
+            className="text-[11px] text-zinc-700 hover:text-red-400 transition-colors"
+          >
+            retire
+          </button>
+        )}
       </div>
     )
   }
 
-  function Item({ row, sub }: { row: Row; sub?: boolean }) {
-    const merging = mergeFrom?.id === row.id
+  // Aliases and the spec note behave the same on both levels, so they share
+  // their cells; only what identifies a row differs between them.
+  function SharedCells({ row }: { row: Row }) {
     return (
-      <div className={`flex items-start gap-2 px-3 py-2 ${sub ? 'pl-4' : ''}`}>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 flex-wrap">
-            {!sub && (
-              <span className="text-[10px] uppercase tracking-wide text-zinc-500 border border-zinc-700 rounded px-1.5 py-0.5 shrink-0">
-                Type
-              </span>
-            )}
-            <input
-              defaultValue={row.name}
-              onBlur={(e) => e.target.value !== row.name && run(() => upsertGearItem({ id: row.id, name: e.target.value, category: row.category }))}
-              className={`${sub ? 'text-[13px] text-zinc-300 w-52' : 'text-sm font-medium w-64'} ${input}`}
-            />
-            {!sub && (
-              <CategorySelect
-                value={row.category}
-                options={categories}
-                disabled={busy}
-                onChange={(next) => run(() => upsertGearItem({ id: row.id, name: row.name, category: next }))}
-                className={`${input} text-xs`}
-              />
-            )}
-            <span className="text-[11px] text-zinc-600">{row.uses > 0 ? `on ${row.uses} list${row.uses === 1 ? '' : 's'}` : 'unused'}</span>
-          </div>
-          <input
-            defaultValue={row.recommended ?? ''}
-            onBlur={(e) => e.target.value !== (row.recommended ?? '') && run(() => upsertGearItem({ id: row.id, name: row.name, category: row.category, recommended: e.target.value }))}
-            placeholder={sub ? 'Note on this product' : 'What we recommend for this type'}
-            className={`mt-1 w-full max-w-lg text-[11px] ${input}`}
-          />
+      <>
+        <td className="px-1 py-0.5">
           <input
             defaultValue={(row.aliases ?? []).join(', ')}
             onBlur={(e) => {
               const next = e.target.value.split(',').map((a) => a.trim()).filter(Boolean)
               if (next.join(',') !== (row.aliases ?? []).join(',')) {
-                run(() => upsertGearItem({ id: row.id, name: row.name, category: row.category, aliases: next }))
+                run(() => upsertGearItem({ id: row.id, name: row.name, aliases: next }))
               }
             }}
-            placeholder={sub ? 'Also called — so searching finds this product' : 'Also called — comma separated, so searching finds it'}
-            className={`mt-1 w-full max-w-lg text-[11px] ${input}`}
+            placeholder="—"
+            className={`${CELL} text-[11px] text-zinc-400`}
           />
-        </div>
-        <div className="shrink-0 flex flex-col items-end gap-1">
-          {mergeFrom && !merging ? (
-            <button
-              onClick={() => {
-                if (confirm(`Fold "${mergeFrom.name}" into "${row.name}"? Every list using it will point here instead.`)) {
-                  run(async () => { await mergeGearItems(row.id, mergeFrom.id); setMergeFrom(null) })
-                }
-              }}
-              disabled={busy}
-              className="text-[11px] px-2 py-0.5 rounded border border-pr-red text-pr-red-light hover:bg-pr-red/10 transition-colors"
-            >
-              merge into this
-            </button>
-          ) : (
-            <button
-              onClick={() => setMergeFrom(merging ? null : row)}
-              className={`text-[11px] transition-colors ${merging ? 'text-pr-red-light' : 'text-zinc-600 hover:text-zinc-300'}`}
-            >
-              {merging ? 'pick the keeper…' : 'merge'}
-            </button>
-          )}
-          {row.uses === 0 && (
-            <button
-              onClick={() => run(() => retireGearItem(row.id))}
-              disabled={busy}
-              className="text-[11px] text-zinc-700 hover:text-red-400 transition-colors"
-            >
-              retire
-            </button>
-          )}
-        </div>
-      </div>
+        </td>
+        <td className="px-1 py-0.5">
+          <input
+            defaultValue={row.recommended ?? ''}
+            onBlur={(e) => e.target.value !== (row.recommended ?? '') &&
+              run(() => upsertGearItem({ id: row.id, name: row.name, recommended: e.target.value }))}
+            placeholder="—"
+            className={`${CELL} text-[11px] text-zinc-400`}
+          />
+        </td>
+        <td className="px-2 py-0.5 text-[11px] text-zinc-600 whitespace-nowrap">
+          {row.uses > 0 ? `${row.uses} list${row.uses === 1 ? '' : 's'}` : '—'}
+        </td>
+        <td className="px-2 py-0.5"><Actions row={row} /></td>
+      </>
     )
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {error && <p className="text-sm text-pr-red">{error}</p>}
+
+      {/* One list of every brand in use, shared by every brand cell. */}
+      <datalist id="gear-brands">
+        {brands.map((b) => <option key={b} value={b} />)}
+      </datalist>
 
       <div className="flex flex-wrap gap-2 items-center">
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search gear, synonyms and models"
+          placeholder="Search gear, synonyms and products"
           className={`flex-1 min-w-56 ${input}`}
         />
         <button
@@ -282,9 +233,7 @@ export default function GearCatalog({ items }: { items: Row[] }) {
           much of it is hidden is the one thing looking at the page can't tell
           you. Unfiltered, everything is on screen and a total says nothing. */}
       {query.trim() && shown.length > 0 && (
-        <p className="text-[11px] text-zinc-600">
-          Showing {shown.length} of {types.length} types
-        </p>
+        <p className="text-[11px] text-zinc-600">Showing {shown.length} of {types.length} types</p>
       )}
 
       {mergeFrom && (
@@ -294,46 +243,167 @@ export default function GearCatalog({ items }: { items: Row[] }) {
         </p>
       )}
 
-      {adding && <AddItem types={types} categories={categories} busy={busy} run={run} input={input} onDone={() => setAdding(false)} />}
+      {adding && (
+        <AddItem types={types} categories={categories} busy={busy} run={run} input={input} onDone={() => setAdding(false)} />
+      )}
 
-      <div className="space-y-8">
-        {groups.map((g) => (
-          <section key={g.name || '__none__'}>
-            <h2 className={`text-xs font-semibold uppercase tracking-wide mb-2 ${g.name ? 'text-zinc-400' : 'text-yellow-500/80'}`}>
-              {g.name || 'No category'}
-            </h2>
-            <div className="space-y-3">
+      {groups.map((g) => (
+        <section key={g.name || '__none__'}>
+          <h2 className={`text-xs font-semibold uppercase tracking-wide mb-2 ${g.name ? 'text-zinc-400' : 'text-yellow-500/80'}`}>
+            {g.name || 'No category'}
+          </h2>
+
+          <div className="overflow-x-auto border border-zinc-800 rounded-lg">
+            <table className="w-full text-sm min-w-3xl">
+              <thead>
+                <tr className="text-[10px] uppercase tracking-wide text-zinc-600 border-b border-zinc-800">
+                  <th className="text-left font-medium px-2 py-1.5 w-64">Type / product</th>
+                  <th className="text-left font-medium px-2 py-1.5 w-36">Brand</th>
+                  <th className="text-left font-medium px-2 py-1.5 w-44">Category</th>
+                  <th className="text-left font-medium px-2 py-1.5">Also called</th>
+                  <th className="text-left font-medium px-2 py-1.5">Spec / note</th>
+                  <th className="text-left font-medium px-2 py-1.5 w-16">Used on</th>
+                  <th className="px-2 py-1.5 w-28"></th>
+                </tr>
+              </thead>
+
               {g.rows.map((t) => {
-                const models = childrenOf.get(t.id) ?? []
+                const products = childrenOf.get(t.id) ?? []
                 return (
-                  <div key={t.id} className="border border-zinc-800 rounded-lg overflow-hidden">
-                    {/* The type: what a list asks for. Sits on its own band so
-                        it reads as the heading of the card, not the first of a
-                        set of equals. */}
-                    <div className="bg-zinc-800/40">
-                      <Item row={t} />
-                    </div>
+                  <tbody key={t.id} className="border-b border-zinc-800 last:border-0">
+                    <tr className="bg-zinc-800/30">
+                      <td className="px-1 py-1">
+                        <input
+                          defaultValue={t.name}
+                          onBlur={(e) => e.target.value !== t.name &&
+                            run(() => upsertGearItem({ id: t.id, name: e.target.value }))}
+                          className={`${CELL} text-sm font-medium`}
+                        />
+                      </td>
+                      {/* A type has no brand — the blank says so. */}
+                      <td className="px-2 py-1 text-[11px] text-zinc-700">—</td>
+                      <td className="px-1 py-1">
+                        <CategorySelect
+                          value={t.category}
+                          options={categories}
+                          disabled={busy}
+                          onChange={(next) => run(() => upsertGearItem({ id: t.id, name: t.name, category: next }))}
+                          className={`${CELL} text-[11px] text-zinc-400`}
+                        />
+                      </td>
+                      <SharedCells row={t} />
+                    </tr>
 
-                    {models.length > 0 && (
-                      <div className="pt-2 pb-1">
-                        <p className="px-3 text-[10px] uppercase tracking-wide text-zinc-600 mb-1">
-                          Products that satisfy it
-                        </p>
-                        <div className="ml-3 border-l-2 border-zinc-800 divide-y divide-zinc-800/50">
-                          {models.map((m) => <Item key={m.id} row={m} sub />)}
-                        </div>
-                      </div>
-                    )}
+                    {products.map((p) => (
+                      <tr key={p.id} className="hover:bg-zinc-800/20">
+                        <td className="px-1 py-0.5 pl-6">
+                          <input
+                            defaultValue={p.name}
+                            onBlur={(e) => e.target.value !== p.name &&
+                              run(() => upsertGearItem({ id: p.id, name: e.target.value }))}
+                            className={`${CELL} text-[13px] text-zinc-300`}
+                          />
+                        </td>
+                        <td className="px-1 py-0.5">
+                          <input
+                            list="gear-brands"
+                            defaultValue={p.brand ?? ''}
+                            onBlur={(e) => e.target.value !== (p.brand ?? '') &&
+                              run(() => upsertGearItem({ id: p.id, name: p.name, brand: e.target.value }))}
+                            placeholder="—"
+                            className={`${CELL} text-[13px] text-zinc-300`}
+                          />
+                        </td>
+                        {/* Products inherit the type's category; showing it
+                            again would invite editing one copy of it. */}
+                        <td className="px-2 py-0.5"></td>
+                        <SharedCells row={p} />
+                      </tr>
+                    ))}
 
-                    <AddModel type={t} />
-                  </div>
+                    <tr>
+                      <td colSpan={7} className="px-1 py-0.5">
+                        {addingTo === t.id ? (
+                          <AddProduct type={t} busy={busy} run={run} input={input} onDone={() => setAddingTo(null)} />
+                        ) : (
+                          <button
+                            onClick={() => setAddingTo(t.id)}
+                            className="pl-6 py-1 text-[11px] text-zinc-700 hover:text-white transition-colors"
+                          >
+                            + product
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  </tbody>
                 )
               })}
-            </div>
-          </section>
-        ))}
-        {shown.length === 0 && <p className="text-sm text-zinc-500">Nothing matches “{query}”.</p>}
-      </div>
+            </table>
+          </div>
+        </section>
+      ))}
+
+      {shown.length === 0 && <p className="text-sm text-zinc-500">Nothing matches “{query}”.</p>}
+    </div>
+  )
+}
+
+// Adding a product to the type it satisfies, from the type itself. It inherits
+// the type's category: a product is the same kind of kit as what it satisfies,
+// and one filed elsewhere would group away from it.
+function AddProduct({
+  type, busy, run, input, onDone,
+}: {
+  type: Row
+  busy: boolean
+  run: (fn: () => Promise<unknown>) => void
+  input: string
+  onDone: () => void
+}) {
+  const [brand, setBrand] = useState('')
+  const [name, setName] = useState('')
+
+  const submit = () => {
+    if (!name.trim()) return
+    run(async () => {
+      await upsertGearItem({
+        name: name.trim(), brand: brand.trim() || null, category: type.category, parentId: type.id,
+      })
+      setBrand(''); setName(''); onDone()
+    })
+  }
+
+  const key = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') submit()
+    if (e.key === 'Escape') onDone()
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 pl-6 py-1.5">
+      <input
+        autoFocus
+        list="gear-brands"
+        value={brand}
+        onChange={(e) => setBrand(e.target.value)}
+        onKeyDown={key}
+        placeholder="Brand"
+        className={`${input} w-36 text-[13px]`}
+      />
+      <input
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        onKeyDown={key}
+        placeholder="Product — e.g. Grigri"
+        className={`${input} w-52 text-[13px]`}
+      />
+      <button
+        onClick={submit}
+        disabled={busy || !name.trim()}
+        className="px-3 py-1 rounded bg-pr-red hover:bg-pr-red-dark text-white text-xs font-medium transition-colors disabled:opacity-40"
+      >
+        Add
+      </button>
+      <button onClick={onDone} className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">Cancel</button>
     </div>
   )
 }
@@ -349,35 +419,43 @@ function AddItem({
   onDone: () => void
 }) {
   const [name, setName] = useState('')
+  const [brand, setBrand] = useState('')
   const [parentId, setParentId] = useState('')
   const [category, setCategory] = useState<string>(GEAR_CATEGORIES[0])
 
   return (
     <div className="p-3 bg-zinc-900 border border-dashed border-zinc-700 rounded-lg flex flex-wrap items-end gap-2">
       <div>
-        <label className="block text-[11px] text-zinc-500 mb-1">Name</label>
-        <input value={name} onChange={(e) => setName(e.target.value)} className={`${input} w-48`} />
-      </div>
-      <div>
-        <label className="block text-[11px] text-zinc-500 mb-1">A model of</label>
+        <label className="block text-[11px] text-zinc-500 mb-1">A product of</label>
         <select value={parentId} onChange={(e) => setParentId(e.target.value)} className={`${input} w-44`}>
           <option value="">— its own type —</option>
           {types.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
         </select>
       </div>
+      {/* Only a product has a maker, so the field appears only once one is
+          being made — a brand on a type is a question with no answer. */}
+      {parentId && (
+        <div>
+          <label className="block text-[11px] text-zinc-500 mb-1">Brand</label>
+          <input list="gear-brands" value={brand} onChange={(e) => setBrand(e.target.value)} className={`${input} w-36`} />
+        </div>
+      )}
       <div>
-        <label className="block text-[11px] text-zinc-500 mb-1">Category</label>
-        <CategorySelect
-          value={category}
-          options={categories}
-          onChange={setCategory}
-          className={`${input} w-44`}
-        />
+        <label className="block text-[11px] text-zinc-500 mb-1">Name</label>
+        <input value={name} onChange={(e) => setName(e.target.value)} className={`${input} w-48`} />
       </div>
+      {!parentId && (
+        <div>
+          <label className="block text-[11px] text-zinc-500 mb-1">Category</label>
+          <CategorySelect value={category} options={categories} onChange={setCategory} className={`${input} w-44`} />
+        </div>
+      )}
       <button
         onClick={() => name.trim() && run(async () => {
-          await upsertGearItem({ name, category, parentId: parentId || null })
-          setName(''); setParentId(''); onDone()
+          await upsertGearItem({
+            name, brand: parentId ? brand.trim() || null : null, category, parentId: parentId || null,
+          })
+          setName(''); setBrand(''); setParentId(''); onDone()
         })}
         disabled={busy || !name.trim()}
         className="px-3 py-1.5 rounded bg-pr-red hover:bg-pr-red-dark text-white text-sm font-medium transition-colors disabled:opacity-40"

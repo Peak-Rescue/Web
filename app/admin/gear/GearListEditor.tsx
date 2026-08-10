@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { GEAR_CATEGORIES, matchesGear, type CatalogItem } from '@/lib/gear'
+import { GEAR_CATEGORIES, matchesGear, productName, type CatalogItem } from '@/lib/gear'
 import {
   addGearEntry, updateGearEntry, removeGearEntry, updateGearList, copyGearList,
   saveGearListIntoTemplate, setGearEntryOptions, upsertGearItem, renameGearSection,
@@ -127,7 +127,7 @@ export default function GearListEditor({
       .map((o) => byId.get(o.gear_item_id))
       .filter(Boolean) as GearItem[]
     return {
-      name: e.name ?? c?.name ?? 'Item',
+      name: e.name ?? (c ? productName(c) : null) ?? 'Item',
       info: e.info ?? c?.info ?? null,
       recommended: e.recommended ?? c?.recommended ?? null,
       url: e.url ?? c?.url ?? null,
