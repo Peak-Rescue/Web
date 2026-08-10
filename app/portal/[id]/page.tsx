@@ -12,6 +12,9 @@ import { LinkIcon, PaperclipIcon } from '@/components/TaskIcons'
 import PortalSectionNav from './PortalSectionNav'
 import { Section, SubHead, InstructorCard, SECTION_LABEL, type SectionKey } from './sections'
 
+// Status is a sales/ops state — "quoted", "confirmed" — and means nothing to a
+// student, who by definition only sees courses they're enrolled on. The one
+// exception is cancelled, which they do need to know.
 const STATUS_LABEL: Record<string, string> = {
   tentative: 'Tentative',
   quoted:     'Quoted',
@@ -291,8 +294,14 @@ export default async function PortalPage({
         <div className="mb-6">
           <div className="flex items-center gap-2 mb-2 text-sm text-zinc-500">
             <span className="font-mono text-xs">PR-{String(inst.ref_number).padStart(4, '0')}</span>
-            <span>·</span>
-            <span>{STATUS_LABEL[inst.status] ?? inst.status}</span>
+            {(showTasks || inst.status === 'cancelled') && (
+              <>
+                <span>·</span>
+                <span className={inst.status === 'cancelled' ? 'text-red-400' : undefined}>
+                  {STATUS_LABEL[inst.status] ?? inst.status}
+                </span>
+              </>
+            )}
             {inst.client_name && <><span>·</span><span>{inst.client_name}</span></>}
           </div>
           <h1 className="text-3xl font-bold mb-4">{courseDisplayName(inst.course_type, inst.custom_title)}</h1>
