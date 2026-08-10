@@ -511,6 +511,10 @@ function Row({
 }) {
   const row = useRef<HTMLDivElement>(null)
   const [newModel, setNewModel] = useState('')
+  // Brand is its own column in the catalog now, so it has to be its own
+  // field here — typed into the name it would rebuild the very drift the
+  // split undid ("BD" and "Black Diamond" as two makers).
+  const [newBrand, setNewBrand] = useState('')
 
   // A type is a line the student has to satisfy with something they own, so it
   // can carry recommendations. A row that already names one specific model, or
@@ -579,10 +583,10 @@ function Row({
                   key={o.id}
                   className="inline-flex items-center gap-1.5 text-xs pl-2 pr-1.5 py-1 rounded border border-pr-red/60 bg-pr-red/10 text-white"
                 >
-                  {o.name}
+                  {productName(o)}
                   <button
                     onClick={() => setOptions(e.r.options.filter((x) => x.id !== o.id).map((x) => x.id))}
-                    title={`Stop recommending the ${o.name}`}
+                    title={`Stop recommending the ${productName(o)}`}
                     className="text-zinc-500 hover:text-red-400 transition-colors disabled:opacity-40"
                   >
                     ×
@@ -642,7 +646,7 @@ function Row({
       {/* The panel only ever adds. Taking a recommendation back is the × on
           the chip itself, where the thing being removed is.
 
-          The library not having the product yet is the ordinary case the first
+          The catalog not having the product yet is the ordinary case the first
           time anyone recommends something, so naming it here adds it to the
           catalog and recommends it in one go — otherwise the + is a dead end
           on exactly the row where you had a product in mind. */}
@@ -652,19 +656,19 @@ function Row({
         // have the product in it yet.
         const addNew = () => run(async () => {
           const { id } = await upsertGearItem({
-            name: newModel, category: type.category, parentId: type.id,
+            name: newModel, brand: newBrand.trim() || null, category: type.category, parentId: type.id,
           })
           await setGearEntryOptions(e.id, [...e.r.options.map((o) => o.id), id], instanceId)
-          setNewModel('')
+          setNewModel(''); setNewBrand('')
         })
         return (
           <div className="mt-2 p-2 bg-zinc-900 rounded border border-zinc-800 space-y-2">
             <p className="text-[11px] text-zinc-500">
               {e.r.models.length === 0
-                ? `The library has no models of ${type.name.toLowerCase()} yet. Name the product you recommend.`
+                ? `The catalog has no products of ${type.name.toLowerCase()} yet. Name the one you recommend.`
                 : rest.length > 0
-                  ? 'Recommend a model. Recommend none and any one of them is fine.'
-                  : 'Every model in the library is already recommended. Add another product below.'}
+                  ? 'Recommend a product. Recommend none and any one of them is fine.'
+                  : 'Every product in the catalog is already recommended. Add another below.'}
             </p>
             {rest.length > 0 && (
               <div className="flex flex-wrap gap-1.5">
@@ -674,7 +678,7 @@ function Row({
                     onClick={() => setOptions([...e.r.options.map((o) => o.id), m.id])}
                     className="text-xs px-2 py-1 rounded border border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500 transition-colors disabled:opacity-40"
                   >
-                    + {m.name}
+                    + {productName(m)}
                   </button>
                 ))}
               </div>
@@ -684,16 +688,23 @@ function Row({
                 value={newModel}
                 onChange={(ev) => setNewModel(ev.target.value)}
                 onKeyDown={(ev) => { if (ev.key === 'Enter' && newModel.trim()) addNew() }}
-                placeholder={`New ${type.name.toLowerCase()} — e.g. Petzl RollClip`}
+                placeholder={`New ${type.name.toLowerCase()} — e.g. RollClip`}
                 className={`flex-1 min-w-0 ${input}`}
+              />
+              <input
+                value={newBrand}
+                onChange={(ev) => setNewBrand(ev.target.value)}
+                onKeyDown={(ev) => { if (ev.key === 'Enter' && newModel.trim()) addNew() }}
+                placeholder="Brand — e.g. Petzl"
+                className={`w-36 shrink-0 ${input}`}
               />
               <button
                 onClick={addNew}
                 disabled={busy || !newModel.trim()}
-                title="Adds it to the gear library and recommends it here"
+                title="Adds it to the gear catalog and recommends it here"
                 className="shrink-0 text-xs px-2 py-1.5 rounded bg-pr-red hover:bg-pr-red-dark text-white transition-colors disabled:opacity-40"
               >
-                Add to library
+                Add to gear catalog
               </button>
             </div>
           </div>
@@ -799,6 +810,9 @@ function AddGear({
   const [browsing, setBrowsing] = useState<string | null>(null)
   const [newCategory, setNewCategory] = useState<string>(GEAR_CATEGORIES[0])
   const [newParent, setNewParent] = useState('')
+  // Only a product has a maker, so this is asked for only once one is
+  // being made — a brand on a type is a question with no answer.
+  const [newItemBrand, setNewItemBrand] = useState('')
 
   // Escape closes the panel — the search box has focus the moment it opens, so
   // that is where the hand already is.
@@ -923,7 +937,7 @@ function AddGear({
                 {t.recommended && <span className="text-[11px] text-zinc-500 ml-2">{t.recommended}</span>}
                 {models.length > 0 && (
                   <span className="block text-[11px] text-zinc-600 mt-0.5">
-                    any of: {models.map((m) => m.name).join(' · ')}
+                    any of: {models.map((m) => productName(m)).join(' · ')}
                   </span>
                 )}
               </button>
@@ -934,10 +948,10 @@ function AddGear({
                       key={m.id}
                       onClick={() => add(m.id)}
                       disabled={busy}
-                      title={`Add just the ${m.name}`}
+                      title={`Add just the ${productName(m)}`}
                       className="text-[11px] px-1.5 py-0.5 rounded border border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500 transition-colors disabled:opacity-40"
                     >
-                      {m.name}
+                      {productName(m)}
                     </button>
                   ))}
                 </div>
@@ -961,19 +975,34 @@ function AddGear({
                   {types.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
                 </select>
               </div>
-              <div>
-                <label className="block text-[11px] text-zinc-500 mb-1">Category</label>
-                <select value={newCategory} onChange={(e) => setNewCategory(e.target.value)} className={`${input} w-44`}>
-                  {GEAR_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
-                </select>
-              </div>
+              {newParent ? (
+                <div>
+                  <label className="block text-[11px] text-zinc-500 mb-1">Brand</label>
+                  <input
+                    value={newItemBrand}
+                    onChange={(e) => setNewItemBrand(e.target.value)}
+                    placeholder="e.g. Petzl"
+                    className={`${input} w-36`}
+                  />
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-[11px] text-zinc-500 mb-1">Category</label>
+                  <select value={newCategory} onChange={(e) => setNewCategory(e.target.value)} className={`${input} w-44`}>
+                    {GEAR_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+              )}
               <button
                 onClick={() => run(async () => {
                   const { id } = await upsertGearItem({
-                    name: query, category: newCategory, parentId: newParent || null,
+                    name: query,
+                    brand: newParent ? newItemBrand.trim() || null : null,
+                    category: newCategory,
+                    parentId: newParent || null,
                   })
                   await addGearEntry(listId, { gearItemId: id, groupType, section })
-                  setQuery(''); setNewParent('')
+                  setQuery(''); setNewParent(''); setNewItemBrand('')
                 })}
                 disabled={busy}
                 className="px-3 py-1.5 rounded bg-pr-red hover:bg-pr-red-dark text-white text-sm font-medium transition-colors disabled:opacity-40"
