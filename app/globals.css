@@ -48,6 +48,15 @@ body::-webkit-scrollbar {
   display: none;
 }
 
+/* Horizontal rails (section nav, chip rows) scroll without a visible bar. */
+.no-scrollbar {
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 /* Typography scale */
 .display-xl {
   font-family: var(--font-display);

@@ -9,6 +9,8 @@ import { courseDisplayName, computeBlocks } from '@/lib/courses'
 import CourseTasksPanel, { type CourseTask, type TaskPerson } from '@/components/CourseTasksPanel'
 import { loadTasksWithDocs } from '@/lib/course-tasks'
 import { LinkIcon, PaperclipIcon } from '@/components/TaskIcons'
+import PortalSectionNav from './PortalSectionNav'
+import { Section, SubHead, InstructorCard, SECTION_LABEL, type SectionKey } from './sections'
 
 const STATUS_LABEL: Record<string, string> = {
   tentative: 'Tentative',
@@ -93,7 +95,7 @@ export default async function PortalPage({
     modulesQuery = modulesQuery.in('audience', audienceFilter)
   }
 
-  const [{ data: inst }, { data: offDays }, { data: modules }, { data: instructors }, taskRows, { data: peopleRows }, { data: templateRows }, { data: courseDocRows }, { data: taskDocRows }] =
+  const [{ data: inst }, { data: offDays }, { data: modules }, { data: instructors }, taskRows, { data: peopleRows }, { data: templateRows }, { data: courseDocRows }, { data: taskDocRows }, { data: mapRows }] =
     await Promise.all([
       admin.from('course_instances')
         .select('course_type, custom_title, status, location, client_name, notes, ref_number, starts_at, ends_at, meeting_point, meeting_time, schedule, intro')
@@ -118,6 +120,12 @@ export default async function PortalPage({
       showTasks
         ? admin.from('course_task_documents').select('id, path, filename, url, created_at, course_tasks!inner(title, instance_id)').eq('course_tasks.instance_id', id)
         : Promise.resolve({ data: [] }),
+      // Maps: the team sees every one, students only those shared with them.
+      // This reads with the service role, so the audience filter is applied
+      // here rather than by RLS.
+      (showTasks
+        ? admin.from('course_maps').select('id, url, label, audience, library_items(title, url, edit_url)').eq('instance_id', id).order('sort_order')
+        : admin.from('course_maps').select('id, url, label, audience, library_items(title, url)').eq('instance_id', id).eq('audience', 'shared').order('sort_order')),
     ])
 
   if (!inst) notFound()
@@ -143,6 +151,19 @@ export default async function PortalPage({
       created_at: r.created_at,
     }))
     .sort((a, b) => b.created_at.localeCompare(a.created_at))
+
+  // Library maps take their title and link from the library item; the edit
+  // twin (CalTopo edit URL) is only ever handed to the team.
+  const maps = (mapRows ?? []).map((r) => {
+    const item = r.library_items as unknown as { title: string; url: string | null; edit_url?: string | null } | null
+    return {
+      id: r.id,
+      label: item?.title ?? r.label ?? 'Map',
+      url: item?.url ?? r.url,
+      editUrl: showTasks ? item?.edit_url ?? null : null,
+      internal: r.audience !== 'shared',
+    }
+  }).filter((m) => m.url || m.editUrl)
 
   const blocks = inst.starts_at && inst.ends_at
     ? computeBlocks(inst.starts_at, inst.ends_at, offDays ?? [])
@@ -206,6 +227,27 @@ export default async function PortalPage({
     return ai - bi || (a.order as number) - (b.order as number)
   })
 
+  // Which named sections this course actually has — drives both the jump bar
+  // and the order things render in, so the two can never disagree.
+  const hasAbout = Boolean(inst.intro || inst.meeting_point || inst.meeting_time || inst.schedule)
+  const hasSchedule = Boolean(sched && schedDays.length > 0)
+  const hasCurriculum = orderedModules.length > 0
+  const hasEquipment = Boolean(gearList && gearList.gear_list_entries.length > 0)
+  const hasNotes = showTasks && Boolean(inst.notes)
+  const hasDocuments = showTasks && courseDocs.length > 0
+  const hasTasks = showTasks && (tasks.length > 0 || canManageTasks)
+
+  const navSections = ([
+    // Team blocks lead for staff; students only ever get the four below them.
+    hasNotes && 'notes',
+    hasTasks && 'tasks',
+    hasDocuments && 'documents',
+    hasAbout && 'about',
+    hasSchedule && 'schedule',
+    hasCurriculum && 'curriculum',
+    hasEquipment && 'equipment',
+  ].filter(Boolean) as SectionKey[]).map((id) => ({ id, label: SECTION_LABEL[id] }))
+
   return (
     <main className="min-h-screen bg-zinc-950 text-white pt-16 md:pt-20">
       <div className="max-w-3xl mx-auto px-4 py-10">
@@ -244,56 +286,98 @@ export default async function PortalPage({
         )}
 
         {/* Header */}
-        <div className="mb-8">
+        <div className="mb-6">
           <div className="flex items-center gap-2 mb-2 text-sm text-zinc-500">
             <span className="font-mono text-xs">PR-{String(inst.ref_number).padStart(4, '0')}</span>
             <span>·</span>
             <span>{STATUS_LABEL[inst.status] ?? inst.status}</span>
             {inst.client_name && <><span>·</span><span>{inst.client_name}</span></>}
           </div>
-          <h1 className="text-3xl font-bold mb-3">{courseDisplayName(inst.course_type, inst.custom_title)}</h1>
-          <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm text-zinc-400">
-            {blocks.map((b, i) => (
-              <span key={i}>
-                {fmtLong(b.starts_at)}{b.starts_at !== b.ends_at ? ` – ${fmtLong(b.ends_at)}` : ''}
-              </span>
-            ))}
-            {inst.location && <span>{inst.location}</span>}
-          </div>
+          <h1 className="text-3xl font-bold mb-4">{courseDisplayName(inst.course_type, inst.custom_title)}</h1>
+
+          {/* The two facts every student checks first, labelled rather than
+              run together in one grey line. */}
+          <dl className="grid sm:grid-cols-2 gap-3">
+            {blocks.length > 0 && (
+              <div className="px-3 py-2 rounded-lg border border-zinc-800 bg-zinc-900">
+                <dt className="text-[11px] uppercase tracking-wide text-zinc-500">When</dt>
+                <dd className="text-sm text-zinc-200 mt-0.5 space-y-0.5">
+                  {blocks.map((b, i) => (
+                    <div key={i}>
+                      {fmtLong(b.starts_at)}{b.starts_at !== b.ends_at ? ` – ${fmtLong(b.ends_at)}` : ''}
+                    </div>
+                  ))}
+                </dd>
+              </div>
+            )}
+            {inst.location && (
+              <div className="px-3 py-2 rounded-lg border border-zinc-800 bg-zinc-900">
+                <dt className="text-[11px] uppercase tracking-wide text-zinc-500">Where</dt>
+                <dd className="text-sm text-zinc-200 mt-0.5">{inst.location}</dd>
+              </div>
+            )}
+          </dl>
+
+          {/* Maps sit with the location — the answer to "where is this?" is
+              the place name and the map together. */}
+          {maps.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2 mt-3">
+              {maps.map((m) => (
+                <span key={m.id} className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border border-teal-800 bg-teal-950/40 text-teal-300">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+                    <path d="M9 20l-5.447-2.724A1 1 0 0 1 3 16.382V5.618a1 1 0 0 1 1.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0 0 21 18.382V7.618a1 1 0 0 0-.553-.894L15 4m0 13V4m0 0L9 7" />
+                  </svg>
+                  {m.url ? (
+                    <a href={m.url} target="_blank" rel="noreferrer" className="hover:text-teal-100 transition-colors">{m.label}</a>
+                  ) : (
+                    <span>{m.label}</span>
+                  )}
+                  {m.editUrl && (
+                    <a href={m.editUrl} target="_blank" rel="noreferrer" title="Edit map — internal" className="text-teal-500/80 hover:text-teal-200 transition-colors border-l border-teal-800 pl-1.5">
+                      edit
+                    </a>
+                  )}
+                  {showTasks && m.internal && <span className="text-teal-600/80">· team</span>}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
 
-        {/* Instructor roster */}
+        {/* Instructor roster — named as such, with the role written out. */}
         {(instructors ?? []).length > 0 && (
-          <div className="mb-8 flex flex-wrap gap-2">
-            {(instructors ?? []).map((a, i) => {
-              const instr = a.instructors as unknown as { name: string } | null
-              const name = instr?.name ?? 'Instructor'
-              return (
-                <span key={i} className={`text-xs px-2.5 py-1 rounded-full border font-medium ${
-                  a.role === 'lead'
-                    ? 'border-teal-700 bg-teal-900/30 text-teal-300'
-                    : 'border-blue-800 bg-blue-900/20 text-blue-300'
-                }`}>
-                  {name} · {a.role}
-                </span>
-              )
-            })}
+          <div className="mb-8">
+            <p className="text-[11px] uppercase tracking-wide text-zinc-500 mb-2">
+              {(instructors ?? []).length > 1 ? 'Your instructors' : 'Your instructor'}
+            </p>
+            <div className="grid sm:grid-cols-2 gap-2">
+              {(instructors ?? []).map((a, i) => (
+                <InstructorCard
+                  key={i}
+                  name={(a.instructors as unknown as { name: string } | null)?.name ?? 'Instructor'}
+                  role={a.role}
+                />
+              ))}
+            </div>
           </div>
         )}
 
+        <PortalSectionNav sections={navSections} />
+
         {/* Notes (instructors + admin only) */}
-        {(showAsAdmin || showAsInstructor) && inst.notes && (
-          <div className="mb-8 p-4 bg-zinc-900 border border-zinc-700 rounded-lg text-sm text-zinc-300 whitespace-pre-wrap">
-            {inst.notes}
-          </div>
+        {hasNotes && (
+          <Section id="notes" blurb="Internal notes on this course" team>
+            <div className="p-4 bg-zinc-900 border border-zinc-800 rounded-lg text-sm text-zinc-300 whitespace-pre-wrap">
+              {inst.notes}
+            </div>
+          </Section>
         )}
 
         {/* Course documents (team only) — every attachment in one place, as
             the same pills the course editor uses, so a schedule attached to a
             (possibly completed) task is one click away from the overview */}
-        {showTasks && courseDocs.length > 0 && (
-          <section className="mb-10">
-            <h2 className="font-semibold text-lg mb-3">Documents</h2>
+        {hasDocuments && (
+          <Section id="documents" blurb="Every file and link attached to this course" team>
             <div className="flex flex-wrap gap-2">
               {courseDocs.map((d) => (
                 <a
@@ -314,13 +398,12 @@ export default async function PortalPage({
                 </a>
               ))}
             </div>
-          </section>
+          </Section>
         )}
 
         {/* Course tasks (team only) */}
-        {showTasks && (tasks.length > 0 || canManageTasks) && (
-          <section className="mb-10">
-            <h2 className="font-semibold text-lg mb-3">Course Tasks</h2>
+        {hasTasks && (
+          <Section id="tasks" title="Course tasks" blurb="What still has to happen before this course runs" team>
             <CourseTasksPanel
               instanceId={id}
               tasks={tasks}
@@ -328,27 +411,62 @@ export default async function PortalPage({
               suggestions={canManageTasks ? templateRows ?? [] : []}
               canManage={canManageTasks}
               currentUserId={user.id}
-            />
-          </section>
+            />          </Section>
+        )}
+
+        {/* What a student needs before they arrive: the practicalities, then
+            the plan, then the material, then the kit. */}
+        {hasAbout && (
+          <Section id="about" blurb="Where to meet, when to be there, and what this course covers">
+            <div className="space-y-3">
+              {inst.intro && (
+                <p className="text-sm text-zinc-300 whitespace-pre-line">{inst.intro}</p>
+              )}
+              {(inst.meeting_point || inst.meeting_time) && (
+                <dl className="grid sm:grid-cols-2 gap-3">
+                  {inst.meeting_point && (
+                    <div className="px-3 py-2 rounded-lg border border-zinc-800 bg-zinc-900">
+                      <dt className="text-[11px] uppercase tracking-wide text-zinc-500">Meeting point</dt>
+                      <dd className="text-sm text-zinc-200 mt-0.5">{inst.meeting_point}</dd>
+                    </div>
+                  )}
+                  {inst.meeting_time && (
+                    <div className="px-3 py-2 rounded-lg border border-zinc-800 bg-zinc-900">
+                      <dt className="text-[11px] uppercase tracking-wide text-zinc-500">Meeting time</dt>
+                      <dd className="text-sm text-zinc-200 mt-0.5">{inst.meeting_time}</dd>
+                    </div>
+                  )}
+                </dl>
+              )}
+              {inst.schedule && (
+                <p className="text-sm text-zinc-300 whitespace-pre-line">{inst.schedule}</p>
+              )}
+            </div>
+          </Section>
         )}
 
         {/* Running order */}
-        {sched && schedDays.length > 0 && (
-          <section className="mb-8">
-            <h2 className="text-lg font-semibold mb-3">Schedule</h2>
+        {hasSchedule && (
+          <Section id="schedule" blurb="Day by day, what we're doing and where">
             {sched.overview && <p className="text-sm text-zinc-400 mb-3 whitespace-pre-line">{sched.overview}</p>}
             {sched.objectives.length > 0 && (
-              <ol className="mb-4 space-y-1 text-sm text-zinc-300 list-decimal pl-5">
-                {sched.objectives.map((o, i) => <li key={i}>{o}</li>)}
-              </ol>
+              <div className="mb-4">
+                <SubHead title="Objectives" />
+                <ol className="space-y-1 text-sm text-zinc-300 list-decimal pl-5">
+                  {sched.objectives.map((o, i) => <li key={i}>{o}</li>)}
+                </ol>
+              </div>
             )}
             <div className="space-y-3">
-              {schedDays.map((d) => {
+              {schedDays.map((d, di) => {
                 const blocks = [...(d.schedule_blocks ?? [])].sort((a, b) => a.sort_order - b.sort_order)
                 const topics = blocks.filter((b) => !b.parent_id)
                 return (
                   <div key={d.id} className="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
-                    <h3 className="font-medium text-sm">{d.title}</h3>
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-[11px] font-mono text-zinc-600 shrink-0">Day {di + 1}</span>
+                      <h3 className="font-medium text-sm">{d.title}</h3>
+                    </div>
                     {(d.location || d.notes) && (
                       <p className="text-xs text-zinc-500 mt-0.5">
                         {[d.location, d.notes].filter(Boolean).join(' · ')}
@@ -379,13 +497,76 @@ export default async function PortalPage({
                 )
               })}
             </div>
-          </section>
+          </Section>
         )}
 
-        {/* Content modules */}
-        {gearList && gearList.gear_list_entries.length > 0 && (
-          <section className="mb-8">
-            <h2 className="text-lg font-semibold mb-3">{gearList.name}</h2>
+        {/* Curriculum — the modules, each its own named group rather than a
+            page-length run of link rows. */}
+        {hasCurriculum && (
+          <Section id="curriculum" blurb="Reading, videos and references for each topic">
+            <div className="space-y-6">
+              {orderedModules.map(mod => {
+                const items = (mod.course_items ?? []).slice().sort((a, b) => a.order - b.order)
+                return (
+                  <div key={mod.id}>
+                    <SubHead
+                      title={mod.title}
+                      badge={(showAsAdmin || showAsInstructor) && mod.audience !== 'both' ? (
+                        <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${
+                          mod.audience === 'instructor'
+                            ? 'border-teal-800 text-teal-400'
+                            : 'border-blue-800 text-blue-400'
+                        }`}>
+                          {mod.audience}s only
+                        </span>
+                      ) : undefined}
+                    />
+                    <div className="space-y-1">
+                      {items.map(item => {
+                        // Library rows carry their own title/link, and an item can
+                        // be held back to instructors inside a shared section.
+                        const libRaw = item.library_items as unknown
+                        const lib = (Array.isArray(libRaw) ? libRaw[0] : libRaw) as
+                          { id: string; title: string; url: string | null; audience: string; drive_file_id?: string | null } | null
+                        const effective = item.audience ?? lib?.audience ?? 'shared'
+                        if (!showTasks && effective === 'internal') return null
+                        const title = lib?.title ?? item.title
+                        // Drive files go through the portal, which streams them
+                        // with the service account — a direct Drive link would
+                        // show participants Google's request-access page.
+                        const isDrive = Boolean(lib?.drive_file_id) || /drive\.google\.com|docs\.google\.com/.test(lib?.url ?? '')
+                        const url = lib && isDrive ? `/api/library/${lib.id}` : (lib?.url ?? item.url)
+                        if (!url) return null
+                        return (
+                          <a
+                            key={item.id}
+                            href={url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="flex items-start gap-3 px-4 py-3 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded-lg transition-colors group"
+                          >
+                            {ITEM_ICON[(item.type ?? 'link') as keyof typeof ITEM_ICON]}
+                            <div className="min-w-0">
+                              <div className="text-sm font-medium group-hover:text-pr-red-light transition-colors">{title}</div>
+                              {item.description && <div className="text-xs text-zinc-500 mt-0.5">{item.description}</div>}
+                            </div>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="ml-auto shrink-0 text-zinc-600 group-hover:text-zinc-400 mt-0.5 transition-colors">
+                              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14 21 3"/>
+                            </svg>
+                          </a>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </Section>
+        )}
+
+        {/* Gear */}
+        {hasEquipment && gearList && (
+          <Section id="equipment" blurb={gearList.name}>
             {gearList.intro && <p className="text-sm text-zinc-400 mb-3 whitespace-pre-line">{gearList.intro}</p>}
             {(['personal', 'group'] as const).map((gt) => {
               const rows = gearList.gear_list_entries
@@ -398,10 +579,8 @@ export default async function PortalPage({
                 byCat.set(c, [...(byCat.get(c) ?? []), r])
               }
               return (
-                <div key={gt} className="mb-4">
-                  <h3 className="text-xs font-semibold text-zinc-500 uppercase tracking-wide mb-1.5">
-                    {gt === 'personal' ? 'Each person brings' : 'Group kit'}
-                  </h3>
+                <div key={gt} className="mb-5">
+                  <SubHead title={gt === 'personal' ? 'Each person brings' : 'Group kit'} />
                   {[...byCat.entries()].map(([cat, items]) => (
                     <div key={cat} className="mb-2">
                       <p className="text-[11px] text-zinc-600 mb-1">{cat}</p>
@@ -443,89 +622,11 @@ export default async function PortalPage({
                 </div>
               )
             })}
-          </section>
+          </Section>
         )}
 
-        {(inst.intro || inst.meeting_point || inst.meeting_time || inst.schedule) && (
-          <section className="mb-8">
-            <h2 className="text-lg font-semibold mb-3">About this course</h2>
-            <div className="px-4 py-3 bg-zinc-900 border border-zinc-800 rounded-lg space-y-2 text-sm">
-              {inst.intro && <p className="text-zinc-300 whitespace-pre-line">{inst.intro}</p>}
-              {(inst.meeting_point || inst.meeting_time) && (
-                <p>
-                  {inst.meeting_point && <span className="text-white">{inst.meeting_point}</span>}
-                  {inst.meeting_point && inst.meeting_time && <span className="text-zinc-600"> · </span>}
-                  {inst.meeting_time && <span className="text-white">{inst.meeting_time}</span>}
-                </p>
-              )}
-              {inst.schedule && (
-                <p className="text-zinc-300 whitespace-pre-line">{inst.schedule}</p>
-              )}
-            </div>
-          </section>
-        )}
-
-        {(modules ?? []).length === 0 ? (
-          <p className="text-zinc-500 text-sm">No content has been added yet.</p>
-        ) : (
-          <div className="space-y-8">
-            {orderedModules.map(mod => {
-              const items = (mod.course_items ?? []).slice().sort((a, b) => a.order - b.order)
-              return (
-                <section key={mod.id}>
-                  <div className="flex items-center gap-2 mb-3">
-                    <h2 className="font-semibold text-lg">{mod.title}</h2>
-                    {(showAsAdmin || showAsInstructor) && mod.audience !== 'both' && (
-                      <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${
-                        mod.audience === 'instructor'
-                          ? 'border-teal-800 text-teal-400'
-                          : 'border-blue-800 text-blue-400'
-                      }`}>
-                        {mod.audience}s only
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="space-y-1">
-                    {items.map(item => {
-                      // Library rows carry their own title/link, and an item can
-                      // be held back to instructors inside a shared section.
-                      const libRaw = item.library_items as unknown
-                      const lib = (Array.isArray(libRaw) ? libRaw[0] : libRaw) as
-                        { id: string; title: string; url: string | null; audience: string; drive_file_id?: string | null } | null
-                      const effective = item.audience ?? lib?.audience ?? 'shared'
-                      if (!showTasks && effective === 'internal') return null
-                      const title = lib?.title ?? item.title
-                      // Drive files go through the portal, which streams them
-                      // with the service account — a direct Drive link would
-                      // show participants Google's request-access page.
-                      const isDrive = Boolean(lib?.drive_file_id) || /drive\.google\.com|docs\.google\.com/.test(lib?.url ?? '')
-                      const url = lib && isDrive ? `/api/library/${lib.id}` : (lib?.url ?? item.url)
-                      if (!url) return null
-                      return (
-                      <a
-                        key={item.id}
-                        href={url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="flex items-start gap-3 px-4 py-3 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded-lg transition-colors group"
-                      >
-                        {ITEM_ICON[(item.type ?? 'link') as keyof typeof ITEM_ICON]}
-                        <div className="min-w-0">
-                          <div className="text-sm font-medium group-hover:text-pr-red-light transition-colors">{title}</div>
-                          {item.description && <div className="text-xs text-zinc-500 mt-0.5">{item.description}</div>}
-                        </div>
-                        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="ml-auto shrink-0 text-zinc-600 group-hover:text-zinc-400 mt-0.5 transition-colors">
-                          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14 21 3"/>
-                        </svg>
-                      </a>
-                      )
-                    })}
-                  </div>
-                </section>
-              )
-            })}
-          </div>
+        {navSections.length === 0 && (
+          <p className="text-zinc-500 text-sm">Nothing has been added to this course yet — check back soon.</p>
         )}
       </div>
     </main>
