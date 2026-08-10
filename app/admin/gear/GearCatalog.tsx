@@ -452,11 +452,13 @@ function AddItem({
 
   return (
     <div className="p-3 bg-zinc-900 border border-dashed border-zinc-700 rounded-lg flex flex-wrap items-end gap-2">
-      {/* Widest decision first and narrowing from there: where it files, what
-          it satisfies, who makes it, what it's called. The two conditional
-          fields are the two halves of that question — a type is filed under a
-          category and has no maker; a product inherits its type's category and
-          has one. */}
+      {/* Where it goes first, widest decision down to narrowest: the category
+          it files under, then the type it satisfies. Those two are the two
+          halves of one question — a type is filed under a category and has no
+          maker; a product inherits its type's category and has one.
+          Then the row is named the way the table names it, product before
+          brand, so this reads in the same order as everything it's being added
+          to — the same order the inline "+ product" row asks in. */}
       {!parentId && (
         <div>
           <label className="block text-[11px] text-zinc-500 mb-1">Category</label>
@@ -470,16 +472,16 @@ function AddItem({
           {types.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
         </select>
       </div>
+      <div>
+        <label className="block text-[11px] text-zinc-500 mb-1">Name</label>
+        <input value={name} onChange={(e) => setName(e.target.value)} className={`${input} w-48`} />
+      </div>
       {parentId && (
         <div>
           <label className="block text-[11px] text-zinc-500 mb-1">Brand — or type a new one</label>
           <input list="gear-brands" value={brand} onChange={(e) => setBrand(e.target.value)} className={`${input} w-48`} />
         </div>
       )}
-      <div>
-        <label className="block text-[11px] text-zinc-500 mb-1">Name</label>
-        <input value={name} onChange={(e) => setName(e.target.value)} className={`${input} w-48`} />
-      </div>
       <button
         onClick={() => name.trim() && run(async () => {
           await upsertGearItem({
