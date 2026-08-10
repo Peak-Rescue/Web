@@ -201,15 +201,21 @@ export async function deleteGearList(id: string) {
 
 export async function addGearEntry(
   listId: string,
-  input: { gearItemId?: string | null; name?: string; category?: string | null; groupType?: 'personal' | 'group'; quantity?: string | null }
+  input: { gearItemId?: string | null; name?: string; section?: string | null; groupType?: 'personal' | 'group'; quantity?: string | null }
 ) {
   const admin = await requireAdmin()
 
   // Catalog items carry their own info/recommendation; a one-off keeps what
   // was typed. Either way the entry can be edited afterwards without touching
   // the catalog.
-  let seed: { name: string | null; info: string | null; recommended: string | null; url: string | null; category: string | null } = {
-    name: input.name?.trim() || null, info: null, recommended: null, url: null, category: input.category ?? null,
+  //
+  // The section is the caller's to choose — it is the heading on this list,
+  // not the catalog's taxonomy. The catalog category is only a starting point
+  // for the first rows on an empty list, so a list built without a thought
+  // about headings still comes out grouped sensibly.
+  const section = input.section?.trim() || null
+  let seed: { name: string | null; info: string | null; recommended: string | null; url: string | null; section: string | null } = {
+    name: input.name?.trim() || null, info: null, recommended: null, url: null, section,
   }
   if (input.gearItemId) {
     const { data: g } = await admin
@@ -217,7 +223,7 @@ export async function addGearEntry(
       .select('name, info, recommended, url, category')
       .eq('id', input.gearItemId)
       .single()
-    if (g) seed = { name: null, info: null, recommended: null, url: null, category: input.category ?? g.category }
+    if (g) seed = { name: null, info: null, recommended: null, url: null, section: section ?? g.category }
   }
   if (!input.gearItemId && !seed.name) throw new Error('Pick an item or give it a name')
 
@@ -245,13 +251,13 @@ export async function addGearEntry(
 
 export async function updateGearEntry(
   id: string,
-  patch: { name?: string | null; info?: string | null; recommended?: string | null; url?: string | null; category?: string | null; groupType?: 'personal' | 'group'; quantity?: string | null }
+  patch: { name?: string | null; info?: string | null; recommended?: string | null; url?: string | null; section?: string | null; groupType?: 'personal' | 'group'; quantity?: string | null }
 ) {
   const admin = await requireAdmin()
   const update: Record<string, unknown> = {}
   for (const [k, v] of Object.entries({
     name: patch.name, info: patch.info, recommended: patch.recommended,
-    url: patch.url, category: patch.category, quantity: patch.quantity,
+    url: patch.url, section: patch.section, quantity: patch.quantity,
   })) {
     if (v !== undefined) update[k] = (v as string)?.trim() || null
   }
@@ -285,6 +291,26 @@ export async function setGearEntryOptions(entryId: string, gearItemIds: string[]
   touch((data?.gear_lists as unknown as { instance_id: string | null } | null)?.instance_id)
 }
 
+// Renaming a heading is renaming it everywhere on the list — a section only
+// exists as the string its rows agree on, so editing one row's copy would
+// split the section in two instead.
+export async function renameGearSection(listId: string, from: string, to: string) {
+  const admin = await requireAdmin()
+  const next = to.trim()
+  if (!next) throw new Error('Give the section a name')
+  if (next === from) return
+
+  const { error } = await admin
+    .from('gear_list_entries')
+    .update({ section: next })
+    .eq('list_id', listId)
+    .eq('section', from)
+  if (error) throw new Error(error.message)
+
+  const { data: l } = await admin.from('gear_lists').select('instance_id').eq('id', listId).single()
+  touch(l?.instance_id)
+}
+
 export async function removeGearEntry(id: string) {
   const admin = await requireAdmin()
   const { data } = await admin.from('gear_list_entries').select('gear_lists(instance_id)').eq('id', id).single()
@@ -298,7 +324,7 @@ export async function removeGearEntry(id: string) {
 type Admin = ReturnType<typeof createAdminClient>
 
 const SOURCE_SELECT =
-  'name, audience, intro, gear_list_entries(gear_item_id, name, info, recommended, url, category, group_type, quantity, sort_order, gear_entry_options(gear_item_id, sort_order))'
+  'name, audience, intro, gear_list_entries(gear_item_id, name, info, recommended, url, section, group_type, quantity, sort_order, gear_entry_options(gear_item_id, sort_order))'
 
 type OptionRow = { gear_item_id: string; sort_order: number }
 type EntryRow = Record<string, unknown> & { gear_entry_options: OptionRow[] }

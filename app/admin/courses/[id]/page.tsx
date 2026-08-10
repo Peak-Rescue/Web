@@ -351,7 +351,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
   const gearAdmin = createAdminClient()
   const [{ data: gearListRows }, { data: gearCatalog }, { data: gearTemplateRows }] = await Promise.all([
     gearAdmin.from('gear_lists')
-      .select('id, name, audience, intro, instance_id, is_template, gear_list_entries(id, gear_item_id, name, info, recommended, url, category, group_type, quantity, sort_order, gear_entry_options(gear_item_id, sort_order))')
+      .select('id, name, audience, intro, instance_id, is_template, gear_list_entries(id, gear_item_id, name, info, recommended, url, section, group_type, quantity, sort_order, gear_entry_options(gear_item_id, sort_order))')
       .eq('instance_id', id),
     gearAdmin.from('gear_items').select('id, name, info, recommended, url, category, parent_id, aliases').eq('active', true).order('name'),
     gearAdmin.from('gear_lists')

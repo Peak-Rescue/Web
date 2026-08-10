@@ -5,8 +5,12 @@ import { useRouter } from 'next/navigation'
 import { GEAR_CATEGORIES, matchesGear, type CatalogItem } from '@/lib/gear'
 import {
   addGearEntry, updateGearEntry, removeGearEntry, updateGearList, copyGearList,
-  saveGearListIntoTemplate, setGearEntryOptions, upsertGearItem,
+  saveGearListIntoTemplate, setGearEntryOptions, upsertGearItem, renameGearSection,
 } from './actions'
+
+// Chosen in two places — the heading a row sits under, and the heading a new
+// row lands in — so the "new one" affordance lives here rather than twice.
+const NEW_SECTION = "__new_section__"
 
 export type GearTemplateOption = { id: string; name: string; audience: string; entries: number }
 
@@ -19,7 +23,9 @@ export type GearEntry = {
   info: string | null
   recommended: string | null
   url: string | null
-  category: string | null
+  // The heading this row prints under on the student's list. Free text, named
+  // per list — not the catalog's category, which is how instructors find gear.
+  section: string | null
   group_type: 'personal' | 'group'
   quantity: string | null
   sort_order: number
@@ -78,7 +84,7 @@ export default function GearListEditor({
       info: e.info ?? c?.info ?? null,
       recommended: e.recommended ?? c?.recommended ?? null,
       url: e.url ?? c?.url ?? null,
-      category: e.category ?? c?.category ?? 'Other',
+      section: e.section ?? c?.category ?? 'Other',
       catalogItem: c,
       options,
       models: c ? childrenOf.get(c.id) ?? [] : [],
@@ -86,7 +92,7 @@ export default function GearListEditor({
   }
 
   // Grouped the way the real lists are: personal kit first, then group kit,
-  // each split into categories.
+  // each split into the sections this list has named.
   const grouped = useMemo(() => {
     const out: Record<'personal' | 'group', Record<string, (GearEntry & { r: ReturnType<typeof resolve> })[]>> = {
       personal: {}, group: {},
@@ -94,9 +100,22 @@ export default function GearListEditor({
     for (const e of [...list.gear_list_entries].sort((a, b) => a.sort_order - b.sort_order)) {
       const r = resolve(e)
       const bucket = out[e.group_type]
-      bucket[r.category] = [...(bucket[r.category] ?? []), { ...e, r }]
+      bucket[r.section] = [...(bucket[r.section] ?? []), { ...e, r }]
     }
     return out
+  }, [list.gear_list_entries, byId, childrenOf]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Every heading this list already uses, in the order they appear. Offered
+  // wherever a section is chosen, so a heading is picked rather than retyped —
+  // free text with no picker is how "Environmental Layers" got a lowercase
+  // twin sitting under it.
+  const sections = useMemo(() => {
+    const seen: string[] = []
+    for (const e of [...list.gear_list_entries].sort((a, b) => a.sort_order - b.sort_order)) {
+      const s = resolve(e).section
+      if (!seen.includes(s)) seen.push(s)
+    }
+    return seen
   }, [list.gear_list_entries, byId, childrenOf]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function run(fn: () => Promise<unknown>) {
@@ -130,7 +149,15 @@ export default function GearListEditor({
             </h4>
             {Object.entries(cats).map(([cat, entries]) => (
               <div key={cat} className="mb-3">
-                <p className="text-[11px] text-zinc-500 mb-1">{cat}</p>
+                {/* The heading is the student's, so it's edited where you can
+                    see what sits under it. Renaming moves every row in the
+                    section — a section is only the string its rows agree on. */}
+                <input
+                  defaultValue={cat}
+                  onBlur={(ev) => ev.target.value.trim() !== cat && run(() => renameGearSection(list.id, cat, ev.target.value))}
+                  aria-label="Section heading"
+                  className="text-[11px] text-zinc-500 mb-1 bg-transparent border border-transparent hover:border-zinc-800 focus:border-zinc-700 rounded px-1 -ml-1 focus:outline-none focus:text-zinc-300"
+                />
                 <div className="border border-zinc-800 rounded divide-y divide-zinc-800/70">
                   {entries.map((e) => {
                     return (
@@ -194,6 +221,21 @@ export default function GearListEditor({
                               </button>
                             )}
                           </div>
+                          <select
+                            value={e.r.section}
+                            onChange={(ev) => {
+                              const v = ev.target.value
+                              const next = v === NEW_SECTION ? prompt('Name the new section:')?.trim() : v
+                              if (next && next !== e.r.section) run(() => updateGearEntry(e.id, { section: next }))
+                            }}
+                            disabled={busy}
+                            aria-label="Section"
+                            title="Which heading this sits under on the student's list"
+                            className={`w-32 shrink-0 text-[11px] ${input}`}
+                          >
+                            {sections.map((s) => <option key={s} value={s}>{s}</option>)}
+                            <option value={NEW_SECTION}>＋ New section…</option>
+                          </select>
                           <input
                             defaultValue={e.quantity ?? ''}
                             onBlur={(ev) => ev.target.value !== (e.quantity ?? '') && run(() => updateGearEntry(e.id, { quantity: ev.target.value }))}
@@ -249,7 +291,7 @@ export default function GearListEditor({
         )
       })}
 
-      <AddGearRow list={list} catalog={catalog} childrenOf={childrenOf} busy={busy} run={run} input={input} />
+      <AddGearRow list={list} catalog={catalog} childrenOf={childrenOf} sections={sections} busy={busy} run={run} input={input} />
 
       {!list.is_template && (
         <SaveToShelf
@@ -336,11 +378,13 @@ function SaveToShelf({
 // isn't one — a canyon list was offering tactical rope and weapon retention
 // purely because they sort early.
 function AddGearRow({
-  list, catalog, childrenOf, busy, run, input,
+  list, catalog, childrenOf, sections, busy, run, input,
 }: {
   list: GearList
   catalog: GearItem[]
   childrenOf: Map<string, GearItem[]>
+  // The headings this list already has. Everything added lands in one of them.
+  sections: string[]
   busy: boolean
   run: (fn: () => Promise<unknown>) => void
   input: string
@@ -350,6 +394,10 @@ function AddGearRow({
   const [groupType, setGroupType] = useState<'personal' | 'group'>('personal')
   const [newCategory, setNewCategory] = useState<string>(GEAR_CATEGORIES[0])
   const [newParent, setNewParent] = useState('')
+  // Where the next item lands, and it stays put between adds — filling a
+  // section means adding six things to it, not picking the heading six times.
+  // Empty means the catalog decides, which is only right for an empty list.
+  const [section, setSection] = useState('')
 
   const types = useMemo(() => catalog.filter((c) => !c.parent_id), [catalog])
 
@@ -379,7 +427,7 @@ function AddGearRow({
 
   function add(itemId: string | null, name?: string) {
     run(async () => {
-      await addGearEntry(list.id, { gearItemId: itemId, name, groupType })
+      await addGearEntry(list.id, { gearItemId: itemId, name, groupType, section: section || null })
       setQuery('')
     })
   }
@@ -401,6 +449,28 @@ function AddGearRow({
           <select value={groupType} onChange={(e) => setGroupType(e.target.value as 'personal' | 'group')} className={input}>
             <option value="personal">Each person</option>
             <option value="group">Group</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-[11px] text-zinc-500 mb-1">Into section</label>
+          <select
+            value={section}
+            onChange={(e) => {
+              const v = e.target.value
+              if (v !== NEW_SECTION) return setSection(v)
+              const named = prompt('Name the new section — this is the heading students read:')?.trim()
+              if (named) setSection(named)
+            }}
+            className={`${input} max-w-52`}
+          >
+            {/* A list with no sections yet has nothing to offer, so the catalog
+                seeds the first rows and you rename the headings after. */}
+            <option value="">{sections.length ? '— from the catalog —' : '— catalog decides —'}</option>
+            {sections.map((s) => <option key={s} value={s}>{s}</option>)}
+            {/* Sticks around after it's chosen, so it survives a re-render
+                before the first item lands in it. */}
+            {section && !sections.includes(section) && <option value={section}>{section}</option>}
+            <option value={NEW_SECTION}>+ New section…</option>
           </select>
         </div>
       </div>

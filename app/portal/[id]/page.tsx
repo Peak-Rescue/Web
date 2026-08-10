@@ -195,13 +195,13 @@ export default async function PortalPage({
   // ever see the student one.
   const { data: gearRows } = await admin
     .from('gear_lists')
-    .select('id, name, audience, intro, gear_list_entries(id, gear_item_id, name, info, recommended, url, category, group_type, quantity, sort_order, gear_items(name, info, recommended, url, category), gear_entry_options(sort_order, gear_items(name)))')
+    .select('id, name, audience, intro, gear_list_entries(id, gear_item_id, name, info, recommended, url, section, group_type, quantity, sort_order, gear_items(name, info, recommended, url, category), gear_entry_options(sort_order, gear_items(name)))')
     .eq('instance_id', id)
   type GearRow = {
     id: string; name: string; audience: string; intro: string | null
     gear_list_entries: {
       id: string; gear_item_id: string | null; name: string | null; info: string | null; recommended: string | null; url: string | null
-      category: string | null; group_type: 'personal' | 'group'; quantity: string | null; sort_order: number
+      section: string | null; group_type: 'personal' | 'group'; quantity: string | null; sort_order: number
       gear_items: { name: string; info: string | null; recommended: string | null; url: string | null; category: string | null } | null
       gear_entry_options: { sort_order: number; gear_items: { name: string } | null }[]
     }[]
@@ -615,7 +615,10 @@ export default async function PortalPage({
               if (rows.length === 0) return null
               const byCat = new Map<string, typeof rows>()
               for (const r of rows) {
-                const c = r.category ?? r.gear_items?.category ?? 'Other'
+                // The list's own heading, which is editorial and says what this
+                // course wants ("Bring this as well"). The catalog's taxonomy
+                // is only the fallback for a row nobody has filed.
+                const c = r.section ?? r.gear_items?.category ?? 'Other'
                 byCat.set(c, [...(byCat.get(c) ?? []), r])
               }
               return (
