@@ -3,7 +3,8 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { LIBRARY_KINDS } from '@/lib/library'
+import { LIBRARY_KINDS, BUCKET_ORDER } from '@/lib/library'
+import { isValidRegion } from '@/lib/regions'
 import { CAPABILITY_ORDER } from '@/lib/capabilities'
 
 async function requireAdmin() {
@@ -23,6 +24,7 @@ function revalidate() {
 
 const VALID_KINDS = new Set<string>(LIBRARY_KINDS)
 const VALID_DISCIPLINES = new Set<string>(CAPABILITY_ORDER)
+const VALID_BUCKETS = new Set<string>(BUCKET_ORDER)
 
 // Free-form tags are the one open field; keep them tidy so the autocomplete
 // stays useful (deduped, trimmed, capped).
@@ -44,6 +46,8 @@ export type LibraryPatch = {
   venue_id?: string | null
   expires_at?: string | null
   status?: 'pending' | 'published' | 'archived'
+  bucket?: string
+  region?: string | null
 }
 
 export async function updateLibraryItem(id: string, patch: LibraryPatch) {
@@ -61,6 +65,8 @@ export async function updateLibraryItem(id: string, patch: LibraryPatch) {
   }
   if (patch.topicsRaw !== undefined) update.topics = cleanTags(patch.topicsRaw)
   if (patch.venue_id !== undefined) update.venue_id = patch.venue_id || null
+  if (patch.bucket !== undefined && VALID_BUCKETS.has(patch.bucket)) update.bucket = patch.bucket
+  if (patch.region !== undefined) update.region = isValidRegion(patch.region) ? patch.region : null
   if (patch.expires_at !== undefined) update.expires_at = patch.expires_at || null
   if (patch.status !== undefined) {
     update.status = patch.status
@@ -78,6 +84,7 @@ export async function createLibraryItem(formData: FormData) {
 
   const url = ((formData.get('url') as string) || '').trim()
   const kind = (formData.get('kind') as string) || 'reference'
+  const bucket = (formData.get('bucket') as string) || 'resource'
   const driveMatch = url.match(/drive\.google\.com\/file\/d\/([^/]+)/)
   const youtube = /youtube\.com|youtu\.be/.test(url)
 
@@ -89,6 +96,8 @@ export async function createLibraryItem(formData: FormData) {
     drive_file_id: driveMatch?.[1] ?? null,
     source_type: driveMatch ? 'drive' : youtube ? 'youtube' : 'link',
     kind: VALID_KINDS.has(kind) ? kind : 'reference',
+    bucket: VALID_BUCKETS.has(bucket) ? bucket : 'resource',
+    region: isValidRegion(formData.get('region') as string) ? (formData.get('region') as string) : null,
     audience: (formData.get('audience') as string) === 'shared' ? 'shared' : 'internal',
     disciplines: (formData.getAll('disciplines') as string[]).filter((d) => VALID_DISCIPLINES.has(d)),
     topics: cleanTags((formData.get('topics') as string) || ''),
@@ -159,6 +168,7 @@ export async function createVenue(formData: FormData) {
   const { error } = await admin.from('venues').insert({
     name: name.slice(0, 120),
     region: ((formData.get('region') as string) || '').trim() || null,
+    region_code: isValidRegion(formData.get('region_code') as string) ? (formData.get('region_code') as string) : null,
     client_name: ((formData.get('client_name') as string) || '').trim() || null,
     notes: ((formData.get('notes') as string) || '').trim() || null,
   })

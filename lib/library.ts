@@ -81,6 +81,7 @@ export type LibraryItem = {
   disciplines: string[]
   topics: string[]
   venue_id: string | null
+  region: string | null
   expires_at: string | null
   status: LibraryStatus
   bucket: LibraryBucket

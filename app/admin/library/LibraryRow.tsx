@@ -3,8 +3,9 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { updateLibraryItem, deleteLibraryItem } from './actions'
-import { KIND_META, LIBRARY_KINDS, AUDIENCE_META, type LibraryItem, type Venue } from '@/lib/library'
+import { KIND_META, LIBRARY_KINDS, AUDIENCE_META, BUCKET_META, BUCKET_ORDER, type LibraryBucket, type LibraryItem, type Venue } from '@/lib/library'
 import { CAPABILITY_META, CAPABILITY_ORDER } from '@/lib/capabilities'
+import { US_STATES, CA_PROVINCES, COUNTRIES } from '@/lib/regions'
 
 const input =
   'w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-zinc-500'
@@ -19,10 +20,12 @@ export default function LibraryRow({ item, venues, hideProvenance = false }: { i
     url: item.url ?? '',
     edit_url: item.edit_url ?? '',
     kind: item.kind,
+    bucket: item.bucket ?? 'resource',
     audience: item.audience,
     disciplines: item.disciplines,
     topicsRaw: item.topics.join(', '),
     venue_id: item.venue_id ?? '',
+    region: item.region ?? '',
     expires_at: item.expires_at ?? '',
   })
 
@@ -35,7 +38,7 @@ export default function LibraryRow({ item, venues, hideProvenance = false }: { i
   }
 
   const save = () => run(async () => {
-    await updateLibraryItem(item.id, { ...form, venue_id: form.venue_id || null, expires_at: form.expires_at || null })
+    await updateLibraryItem(item.id, { ...form, venue_id: form.venue_id || null, region: form.region || null, expires_at: form.expires_at || null })
     setOpen(false)
   })
 
@@ -103,6 +106,27 @@ export default function LibraryRow({ item, venues, hideProvenance = false }: { i
           <div className="sm:col-span-2">
             <label className={label}>Edit link — internal only, never shown to participants (CalTopo/SARTopo)</label>
             <input className={input} value={form.edit_url} onChange={(e) => setForm({ ...form, edit_url: e.target.value })} />
+          </div>
+          <div>
+            <label className={label}>State / country</label>
+            <select className={input} value={form.region} onChange={(e) => setForm({ ...form, region: e.target.value })}>
+              <option value="">— not set —</option>
+              <optgroup label="United States">
+                {US_STATES.map((s) => <option key={s.code} value={s.code}>{s.name}</option>)}
+              </optgroup>
+              <optgroup label="Canada">
+                {CA_PROVINCES.map((p) => <option key={p.code} value={p.code}>{p.name}</option>)}
+              </optgroup>
+              <optgroup label="Other countries">
+                {COUNTRIES.map((c) => <option key={c.code} value={c.code}>{c.name}</option>)}
+              </optgroup>
+            </select>
+          </div>
+          <div>
+            <label className={label}>Library</label>
+            <select className={input} value={form.bucket} onChange={(e) => setForm({ ...form, bucket: e.target.value as LibraryBucket })}>
+              {BUCKET_ORDER.map((b) => <option key={b} value={b}>{BUCKET_META[b].label}</option>)}
+            </select>
           </div>
           <div>
             <label className={label}>Type</label>

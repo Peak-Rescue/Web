@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createVenue } from '../library/actions'
 import VenueRow from './VenueRow'
+import RegionSelect from '@/components/RegionSelect'
 import { type Venue } from '@/lib/library'
 
 const input = 'w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500'
@@ -58,6 +59,10 @@ export default async function VenuesPage() {
             <div>
               <label className={label}>Region</label>
               <input name="region" className={input} placeholder="North Bend, WA" />
+            </div>
+            <div>
+              <label className={label}>State / country</label>
+              <RegionSelect name="region_code" className={input} />
             </div>
             <div className="sm:col-span-2">
               <label className={label}>Client (for standing client sites)</label>

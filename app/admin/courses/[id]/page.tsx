@@ -35,6 +35,8 @@ import CourseGear from '../CourseGear'
 import { type GearItem, type GearList } from '@/app/admin/gear/GearListEditor'
 import { type Schedule } from '@/app/admin/schedules/ScheduleEditor'
 import CourseSchedule from '@/app/admin/courses/CourseSchedule'
+import CourseMapsSection, { type CourseMap } from '../CourseMapsSection'
+import RegionSelect from '@/components/RegionSelect'
 
 const STATUS_STYLES: Record<string, string> = {
   tentative: 'bg-yellow-900/40 text-yellow-300 border-yellow-700',
@@ -111,6 +113,8 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
     { data: taskDocRows },
     { data: galleryImageRows },
     { data: estimateReviewRows },
+    { data: courseMapRows },
+    { data: venueRows },
   ] = await Promise.all([
     admin.from('enrollments').select('id, enrolled_at, profiles(first_name, last_name, email)').eq('instance_id', id).order('enrolled_at'),
     admin.from('expense_items').select('id', { count: 'exact', head: true }).eq('instance_id', id),
@@ -145,6 +149,8 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
     admin.from('course_task_documents').select('id, path, filename, url, created_at, course_tasks!inner(title, instance_id)').eq('course_tasks.instance_id', id),
     admin.from('gallery_images').select('url, caption, categories').order('created_at', { ascending: false }),
     admin.from('estimate_reviews').select('id, created_at, requested_by, reviewer_id, note, responded_at, approved, response_note').eq('instance_id', id).order('created_at', { ascending: false }).limit(8),
+    admin.from('course_maps').select('id, url, label, audience, library_item_id, library_items(title, url, audience)').eq('instance_id', id).order('sort_order'),
+    admin.from('venues').select('id, name').eq('active', true).order('name'),
   ])
 
   // Quote-hero photo pool: the curated static shots plus every gallery upload,
@@ -155,6 +161,20 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
       .filter((g) => !HERO_CHOICES.some((c) => c.value === g.url))
       .map((g) => ({ value: g.url, label: g.caption || 'Gallery photo', categories: g.categories ?? [] })),
   ]
+
+  // A course map is either a library item (title and link come from there, so
+  // fixing the library fixes every course using it) or a link pasted here.
+  const courseMaps: CourseMap[] = (courseMapRows ?? []).map((r) => {
+    const item = r.library_items as unknown as { title: string; url: string | null; audience: string } | null
+    return {
+      id: r.id,
+      label: item?.title ?? r.label ?? 'Map',
+      url: item?.url ?? r.url,
+      audience: r.audience as LibraryAudience,
+      fromLibrary: Boolean(r.library_item_id),
+      libraryLocked: item?.audience === 'internal',
+    }
+  })
 
   // One "Files" view across every attachment on the course: general uploads,
   // external links, task documents, and expense receipts — uploads signed
@@ -472,6 +492,19 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
               <input name="location" defaultValue={inst.location ?? ''} className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
             </div>
             <div>
+              <label className="block text-xs text-zinc-400 mb-1">Venue</label>
+              <select name="venue_id" defaultValue={inst.venue_id ?? ''} className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500">
+                <option value="">— none —</option>
+                {(venueRows ?? []).map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
+              </select>
+              <p className="text-xs text-zinc-500 mt-1">Pulls in this venue&rsquo;s maps, permits and rescue plans.</p>
+            </div>
+            <div>
+              <label className="block text-xs text-zinc-400 mb-1">State / country</label>
+              <RegionSelect name="region" defaultValue={inst.region} className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
+              <p className="text-xs text-zinc-500 mt-1">Used to suggest maps for this course.</p>
+            </div>
+            <div>
               <label className="block text-xs text-zinc-400 mb-1">Client / organization</label>
               <input name="client_name" defaultValue={inst.client_name ?? ''} className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
             </div>
@@ -496,6 +529,8 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
               />
             </div>
           </AutoSaveForm>
+
+          <CourseMapsSection instanceId={id} maps={courseMaps} />
 
           <h3 className="text-sm font-semibold text-zinc-400 mt-6 mb-2">Dates</h3>
 

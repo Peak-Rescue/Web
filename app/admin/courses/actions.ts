@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { contactsFromForm } from '@/lib/contacts'
 import { syncCourseCalendar, removeCourseEvent } from '@/lib/google-calendar'
+import { isValidRegion } from '@/lib/regions'
 
 function toSlugPart(s: string) {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
@@ -92,6 +93,9 @@ export async function updateInstanceDetails(id: string, formData: FormData) {
   const custom_categories = course_type === 'custom' ? (formData.getAll('custom_categories') as string[]) : null
   const status           = formData.get('status') as string
   const location         = (formData.get('location') as string) || null
+  const regionRaw        = (formData.get('region') as string) || ''
+  const region           = isValidRegion(regionRaw) ? regionRaw : null
+  const venue_id         = (formData.get('venue_id') as string) || null
   const client_name      = (formData.get('client_name') as string) || null
   const contactsRaw      = formData.get('contacts_json')
   const notes            = (formData.get('notes') as string) || null
@@ -100,7 +104,7 @@ export async function updateInstanceDetails(id: string, formData: FormData) {
 
   const { error } = await admin
     .from('course_instances')
-    .update({ course_category, course_type, custom_title, custom_categories, status, location, client_name, notes, max_students, instructor_slots, ...(contactsRaw !== null ? { contacts: contactsFromForm(contactsRaw) } : {}) })
+    .update({ course_category, course_type, custom_title, custom_categories, status, location, region, venue_id, client_name, notes, max_students, instructor_slots, ...(contactsRaw !== null ? { contacts: contactsFromForm(contactsRaw) } : {}) })
     .eq('id', id)
 
   if (error) throw new Error(error.message)
@@ -383,10 +387,10 @@ export async function loadPickerItems(instanceId: string) {
   const admin = createAdminClient()
 
   const [{ data: inst }, { data: rows }] = await Promise.all([
-    admin.from('course_instances').select('course_type, custom_categories, location').eq('id', instanceId).single(),
+    admin.from('course_instances').select('course_type, custom_categories, location, venue_id, region').eq('id', instanceId).single(),
     admin
       .from('library_items')
-      .select('id, title, url, kind, audience, disciplines, topics, venue_id, bucket, source_class, venues(name)')
+      .select('id, title, url, kind, audience, disciplines, topics, venue_id, region, bucket, source_class, venues(name)')
       .eq('status', 'published')
       .order('title')
       .limit(1000),
@@ -395,22 +399,27 @@ export async function loadPickerItems(instanceId: string) {
 
   const { courseCapabilityCategories } = await import('@/lib/capabilities')
   const matching = courseCapabilityCategories(inst.course_type, inst.custom_categories)
-  const loc = (inst.location ?? '').toLowerCase()
+
+  // Place match, best signal first: the venue the course is actually set to,
+  // then the region code. The old substring compare of location against venue
+  // name is the last resort, kept only for courses with no venue set yet.
+  const loc = (inst.location ?? '').toLowerCase().trim()
 
   return ((rows ?? []) as unknown as {
     id: string; title: string; url: string | null; kind: string; audience: 'internal' | 'shared'
-    disciplines: string[]; topics: string[]; venue_id: string | null; bucket: string
+    disciplines: string[]; topics: string[]; venue_id: string | null; region: string | null; bucket: string
     source_class: string | null; venues: { name: string } | null
   }[]).map((l) => {
     const venueName = l.venues?.name ?? null
-    const venueMatches = Boolean(
-      venueName && loc && (loc.includes(venueName.toLowerCase()) || venueName.toLowerCase().includes(loc))
-    )
+    const venueMatches = inst.venue_id
+      ? l.venue_id === inst.venue_id
+      : Boolean(venueName && loc && (loc.includes(venueName.toLowerCase()) || venueName.toLowerCase().includes(loc)))
+    const regionMatches = Boolean(inst.region && l.region && l.region === inst.region)
     return {
       id: l.id, title: l.title, url: l.url, kind: l.kind, audience: l.audience,
       disciplines: l.disciplines, topics: l.topics, venue_id: l.venue_id, bucket: l.bucket,
       venueName, sourceClass: l.source_class,
-      suggested: venueMatches || l.disciplines.some((d) => matching.includes(d as never)),
+      suggested: venueMatches || regionMatches || l.disciplines.some((d) => matching.includes(d as never)),
     }
   })
 }

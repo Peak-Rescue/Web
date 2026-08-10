@@ -2,8 +2,9 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { KIND_META, LIBRARY_KINDS, type LibraryItem, type Venue } from '@/lib/library'
+import { KIND_META, LIBRARY_KINDS, BUCKET_META, BUCKET_ORDER, type LibraryItem, type Venue } from '@/lib/library'
 import { CAPABILITY_META, CAPABILITY_ORDER } from '@/lib/capabilities'
+import RegionSelect from '@/components/RegionSelect'
 import LibraryRow from './LibraryRow'
 import ReviewQueue from './ReviewQueue'
 import { createLibraryItem } from './actions'
@@ -14,9 +15,9 @@ const label = 'block text-xs text-zinc-400 mb-1'
 export default async function LibraryPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; discipline?: string; kind?: string; audience?: string; venue?: string; q?: string }>
+  searchParams: Promise<{ status?: string; discipline?: string; kind?: string; audience?: string; venue?: string; bucket?: string; q?: string }>
 }) {
-  const { status = 'pending', discipline, kind, audience, venue, q } = await searchParams
+  const { status = 'pending', discipline, kind, audience, venue, bucket, q } = await searchParams
 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -27,7 +28,7 @@ export default async function LibraryPage({
 
   let query = admin
     .from('library_items')
-    .select('id, title, description, source_type, url, edit_url, drive_file_id, kind, audience, disciplines, topics, venue_id, expires_at, status, source_class, source_topic, source_item')
+    .select('id, title, description, source_type, url, edit_url, drive_file_id, kind, audience, disciplines, topics, venue_id, expires_at, status, bucket, region, source_class, source_topic, source_item')
     .order('created_at', { ascending: false })
     .limit(500)
 
@@ -36,6 +37,7 @@ export default async function LibraryPage({
   if (kind) query = query.eq('kind', kind)
   if (audience) query = query.eq('audience', audience)
   if (venue) query = query.eq('venue_id', venue)
+  if (bucket) query = query.eq('bucket', bucket)
   if (q) query = query.ilike('title', `%${q}%`)
 
   const [{ data: itemRows }, { data: venueRows }] = await Promise.all([
@@ -57,7 +59,7 @@ export default async function LibraryPage({
 
   const href = (patch: Record<string, string | undefined>) => {
     const p = new URLSearchParams()
-    const merged = { status, discipline, kind, audience, venue, q, ...patch }
+    const merged = { status, discipline, kind, audience, venue, bucket, q, ...patch }
     for (const [k, v] of Object.entries(merged)) if (v) p.set(k, v)
     return `/admin/library?${p.toString()}`
   }
@@ -117,9 +119,13 @@ export default async function LibraryPage({
           {tab('all', 'All')}
         </div>
 
-        <form className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-6" action="/admin/library">
+        <form className="grid grid-cols-2 sm:grid-cols-6 gap-2 mb-6" action="/admin/library">
           <input type="hidden" name="status" value={status} />
           <input name="q" defaultValue={q ?? ''} placeholder="Search title…" className={input} />
+          <select name="bucket" defaultValue={bucket ?? ''} className={input}>
+            <option value="">All libraries</option>
+            {BUCKET_ORDER.map((b) => <option key={b} value={b}>{BUCKET_META[b].label}</option>)}
+          </select>
           <select name="discipline" defaultValue={discipline ?? ''} className={input}>
             <option value="">All disciplines</option>
             {CAPABILITY_ORDER.map((c) => <option key={c} value={c}>{CAPABILITY_META[c].label}</option>)}
@@ -155,6 +161,13 @@ export default async function LibraryPage({
               <input name="edit_url" className={input} placeholder="https://caltopo.com/m/…" />
             </div>
             <div>
+              <label className={label}>Library</label>
+              <select name="bucket" className={input} defaultValue="resource">
+                {BUCKET_ORDER.map((b) => <option key={b} value={b}>{BUCKET_META[b].label}</option>)}
+              </select>
+              <p className="text-xs text-zinc-500 mt-1">Maps here are the ones a course can pull in beside its location.</p>
+            </div>
+            <div>
               <label className={label}>Type</label>
               <select name="kind" className={input} defaultValue="reference">
                 {LIBRARY_KINDS.map((k) => <option key={k} value={k}>{KIND_META[k]}</option>)}
@@ -166,6 +179,11 @@ export default async function LibraryPage({
                 <option value="internal">Instructors only</option>
                 <option value="shared">Students &amp; instructors</option>
               </select>
+            </div>
+            <div>
+              <label className={label}>State / country</label>
+              <RegionSelect name="region" className={input} />
+              <p className="text-xs text-zinc-500 mt-1">Maps tagged here are suggested to courses in the same place.</p>
             </div>
             <div>
               <label className={label}>Venue</label>
