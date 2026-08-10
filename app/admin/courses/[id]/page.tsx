@@ -355,15 +355,18 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
       .eq('instance_id', id),
     gearAdmin.from('gear_items').select('id, name, info, recommended, url, category, parent_id, aliases').eq('active', true).order('name'),
     gearAdmin.from('gear_lists')
-      .select('id, name, audience, course_type, gear_list_entries(id)')
+      .select('id, name, description, audience, course_type, gear_list_entries(id)')
       .eq('is_template', true),
   ])
   const gearLists = (gearListRows ?? []) as unknown as GearList[]
   const gearTemplates = ((gearTemplateRows ?? []) as unknown as {
-    id: string; name: string; audience: string; course_type: string | null; gear_list_entries: unknown[]
+    id: string; name: string; description: string | null; audience: string; course_type: string | null; gear_list_entries: unknown[]
   }[])
     .sort((a, b) => Number(b.course_type === courseType) - Number(a.course_type === courseType))
-    .map((t) => ({ id: t.id, name: t.name, audience: t.audience, entries: t.gear_list_entries.length }))
+    .map((t) => ({
+      id: t.id, name: t.name, description: t.description,
+      audience: t.audience, entries: t.gear_list_entries.length,
+    }))
 
   // Schedule: this course's running order and any templates for this offering.
   const [{ data: scheduleRows }, { data: scheduleTemplateRows }] = await Promise.all([
@@ -372,15 +375,15 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
       .eq('instance_id', id)
       .limit(1),
     gearAdmin.from('course_schedules')
-      .select('id, name, course_type, schedule_days(id)')
+      .select('id, name, description, course_type, schedule_days(id)')
       .eq('is_template', true),
   ])
   const schedule = ((scheduleRows ?? []) as unknown as Schedule[])[0] ?? null
   const scheduleTemplates = ((scheduleTemplateRows ?? []) as unknown as {
-    id: string; name: string; course_type: string | null; schedule_days: unknown[]
+    id: string; name: string; description: string | null; course_type: string | null; schedule_days: unknown[]
   }[])
     .sort((a, b) => Number(b.course_type === courseType) - Number(a.course_type === courseType))
-    .map((t) => ({ id: t.id, name: t.name, days: t.schedule_days.length }))
+    .map((t) => ({ id: t.id, name: t.name, description: t.description, days: t.schedule_days.length }))
 
   const updateLogisticsWithId = updateCourseLogistics.bind(null, id)
 

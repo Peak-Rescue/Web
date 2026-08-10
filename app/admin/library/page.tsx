@@ -2,10 +2,18 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { KIND_META, LIBRARY_KINDS, BUCKET_META, BUCKET_ORDER, type LibraryItem, type Venue } from '@/lib/library'
+import {
+  KIND_META, LIBRARY_KINDS, BUCKET_META, BUCKET_ORDER,
+  TEMPLATE_SHELF_META, TEMPLATE_SHELF_ORDER, isTemplateShelf,
+  type LibraryItem, type TemplateShelf, type TemplateSummary, type Venue,
+} from '@/lib/library'
 import { CAPABILITY_META, CAPABILITY_ORDER } from '@/lib/capabilities'
+import { type GearItem, type GearList } from '@/app/admin/gear/GearListEditor'
+import { type Schedule } from '@/app/admin/schedules/ScheduleEditor'
 import RegionSelect from '@/components/RegionSelect'
 import LibraryRow from './LibraryRow'
+import TemplateRow from './TemplateRow'
+import AddTemplate from './AddTemplate'
 import ReviewQueue from './ReviewQueue'
 import { createLibraryItem } from './actions'
 
@@ -26,6 +34,15 @@ export default async function LibraryPage({
   const { data: profile } = await admin.from('profiles').select('role').eq('id', user.id).single()
   if (profile?.role !== 'admin') redirect('/dashboard')
 
+  // Equipment lists and schedules are shelves too, but they're rows in their own
+  // tables — so which of the two lists below runs depends on the shelf picked.
+  // Filters that only a document can answer (type, venue, who-can-see, review
+  // status) rule the template shelves out rather than showing them unfiltered.
+  const docOnlyFilter = Boolean(kind || venue || audience)
+  const showDocs = !isTemplateShelf(bucket)
+  const showTemplates = (!bucket || isTemplateShelf(bucket)) && !docOnlyFilter
+  const shelves: TemplateShelf[] = isTemplateShelf(bucket) ? [bucket] : TEMPLATE_SHELF_ORDER
+
   let query = admin
     .from('library_items')
     .select('id, title, description, source_type, url, edit_url, drive_file_id, kind, audience, disciplines, topics, venue_id, expires_at, status, bucket, region, source_class, source_topic, source_item')
@@ -37,16 +54,67 @@ export default async function LibraryPage({
   if (kind) query = query.eq('kind', kind)
   if (audience) query = query.eq('audience', audience)
   if (venue) query = query.eq('venue_id', venue)
-  if (bucket) query = query.eq('bucket', bucket)
+  if (bucket && !isTemplateShelf(bucket)) query = query.eq('bucket', bucket)
   if (q) query = query.ilike('title', `%${q}%`)
 
-  const [{ data: itemRows }, { data: venueRows }] = await Promise.all([
-    query,
+  // Templates take the same search box and discipline tags the documents use.
+  // They have no review status, so the status tabs pass them by — there's
+  // nothing to approve about a kit list you wrote yourself.
+  const [{ data: itemRows }, { data: venueRows }, gearRes, scheduleRes, catalogRes] = await Promise.all([
+    showDocs ? query : Promise.resolve({ data: [] }),
     admin.from('venues').select('id, name, region, client_name, notes, active').order('name'),
+    showTemplates && shelves.includes('gear')
+      ? (() => {
+          let g = admin.from('gear_lists')
+            .select('id, name, description, audience, intro, course_type, disciplines, topics, instance_id, is_template, gear_list_entries(id, gear_item_id, name, info, recommended, url, category, group_type, quantity, sort_order, gear_entry_options(gear_item_id, sort_order))')
+            .eq('is_template', true)
+            .order('name')
+          if (q) g = g.ilike('name', `%${q}%`)
+          if (discipline) g = g.contains('disciplines', [discipline])
+          return g
+        })()
+      : Promise.resolve({ data: [] }),
+    showTemplates && shelves.includes('schedule')
+      ? (() => {
+          let s = admin.from('course_schedules')
+            .select('id, name, description, overview, objectives, course_type, disciplines, topics, instance_id, is_template, schedule_days(id, title, location, notes, sort_order, schedule_blocks(id, parent_id, title, time_label, location, sort_order))')
+            .eq('is_template', true)
+            .order('name')
+          if (q) s = s.ilike('name', `%${q}%`)
+          if (discipline) s = s.contains('disciplines', [discipline])
+          return s
+        })()
+      : Promise.resolve({ data: [] }),
+    // Editing a kit list on its shelf needs the same catalog the course page
+    // gives the editor, or every line loses the type it points at.
+    showTemplates && shelves.includes('gear')
+      ? admin.from('gear_items').select('id, name, info, recommended, url, category, parent_id, aliases').eq('active', true).order('name')
+      : Promise.resolve({ data: [] }),
   ])
 
   const items = (itemRows ?? []) as LibraryItem[]
   const venues = (venueRows ?? []) as Venue[]
+
+  type GearTemplate = GearList & {
+    description: string | null; course_type: string | null; disciplines: string[]; topics: string[]
+  }
+  type ScheduleTemplate = Schedule & {
+    description: string | null; course_type: string | null; disciplines: string[]; topics: string[]
+  }
+  const gearTemplates = (gearRes.data ?? []) as unknown as GearTemplate[]
+  const scheduleTemplates = (scheduleRes.data ?? []) as unknown as ScheduleTemplate[]
+  const catalog = (catalogRes.data ?? []) as unknown as GearItem[]
+
+  const summarize = (
+    t: { id: string; name: string; description: string | null; course_type: string | null; disciplines: string[]; topics: string[] },
+    count: number,
+    audience?: 'student' | 'instructor'
+  ): TemplateSummary => ({
+    id: t.id, name: t.name, description: t.description, course_type: t.course_type,
+    disciplines: t.disciplines ?? [], topics: t.topics ?? [], count, audience,
+  })
+
+  const shelfCount = gearTemplates.length + scheduleTemplates.length
 
   // Pending grouped by source class, derived from what we already fetched
   // rather than a second scan of the table.
@@ -84,7 +152,10 @@ export default async function LibraryPage({
         <div className="mb-8 flex items-end justify-between gap-4 flex-wrap">
           <div>
             <h1 className="text-2xl font-bold">Content Library</h1>
-            <p className="text-zinc-400 mt-1">Course material, references, maps and permits — tagged once, reused everywhere</p>
+            <p className="text-zinc-400 mt-1">
+              Course material, references, maps and permits — plus the equipment lists and schedules we build here.
+              Tagged once, reused everywhere.
+            </p>
           </div>
           <div className="flex items-center gap-2">
             <Link href="/admin/library/overview" className="text-xs px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded transition-colors">
@@ -125,6 +196,9 @@ export default async function LibraryPage({
           <select name="bucket" defaultValue={bucket ?? ''} className={input}>
             <option value="">All libraries</option>
             {BUCKET_ORDER.map((b) => <option key={b} value={b}>{BUCKET_META[b].label}</option>)}
+            <optgroup label="Reusable, built here">
+              {TEMPLATE_SHELF_ORDER.map((s) => <option key={s} value={s}>{TEMPLATE_SHELF_META[s].label}</option>)}
+            </optgroup>
           </select>
           <select name="discipline" defaultValue={discipline ?? ''} className={input}>
             <option value="">All disciplines</option>
@@ -142,7 +216,9 @@ export default async function LibraryPage({
         </form>
 
         {/* ── Add ──────────────────────────────────────────────────────── */}
-        <details className="mb-6 group">
+        {/* Documents only — an equipment list or schedule is started from its
+            own shelf below, where the editor is. */}
+        <details className={`mb-6 group ${showDocs ? '' : 'hidden'}`}>
           <summary className="cursor-pointer list-none text-sm text-zinc-400 hover:text-zinc-200 transition-colors">
             <span className="text-zinc-600 mr-2 inline-block transition-transform group-open:rotate-90">▶</span>
             Add an item
@@ -220,15 +296,70 @@ export default async function LibraryPage({
         </details>
 
         {/* ── Items ────────────────────────────────────────────────────── */}
-        <p className="text-xs text-zinc-600 mb-3">{items.length} item{items.length === 1 ? '' : 's'}</p>
-        {status === 'pending' && items.length > 0 ? (
-          <ReviewQueue items={items} venues={venues} />
-        ) : (
-          <div className="space-y-2">
-            {items.map((it) => <LibraryRow key={it.id} item={it} venues={venues} />)}
-            {items.length === 0 && <p className="text-sm text-zinc-500">Nothing here yet.</p>}
-          </div>
+        {showDocs && (
+          <>
+            <p className="text-xs text-zinc-600 mb-3">{items.length} item{items.length === 1 ? '' : 's'}</p>
+            {status === 'pending' && items.length > 0 ? (
+              <ReviewQueue items={items} venues={venues} />
+            ) : (
+              <div className="space-y-2">
+                {items.map((it) => <LibraryRow key={it.id} item={it} venues={venues} />)}
+                {items.length === 0 && (
+                  <p className="text-sm text-zinc-500">
+                    {showTemplates && shelfCount > 0 ? 'No documents match — the shelves below still do.' : 'Nothing here yet.'}
+                  </p>
+                )}
+              </div>
+            )}
+          </>
         )}
+
+        {/* ── Reusable shelves ─────────────────────────────────────────── */}
+        {/* Built in the portal rather than linked to, so these are edited in
+            place — the same editors the course page uses, on the template
+            itself. Every course keeps its own copy, so a fix here changes what
+            the *next* course starts from, never a course already running. */}
+        {showTemplates && shelves.map((shelf) => {
+          const rows = shelf === 'gear' ? gearTemplates : scheduleTemplates
+          return (
+            <section key={shelf} className={showDocs ? 'mt-10 pt-8 border-t border-zinc-800' : ''}>
+              <div className="flex items-end justify-between gap-4 flex-wrap mb-1">
+                <h2 className="text-lg font-semibold">{TEMPLATE_SHELF_META[shelf].label}</h2>
+                <AddTemplate shelf={shelf} />
+              </div>
+              <p className="text-xs text-zinc-500 mb-3">
+                {TEMPLATE_SHELF_META[shelf].hint}. Editing one here changes what the next course starts from — courses
+                already using it keep their own copy.
+              </p>
+              <div className="space-y-2">
+                {shelf === 'gear' && gearTemplates.map((t) => (
+                  <TemplateRow
+                    key={t.id}
+                    shelf="gear"
+                    list={t}
+                    catalog={catalog}
+                    summary={summarize(t, t.gear_list_entries?.length ?? 0, t.audience)}
+                  />
+                ))}
+                {shelf === 'schedule' && scheduleTemplates.map((t) => (
+                  <TemplateRow
+                    key={t.id}
+                    shelf="schedule"
+                    schedule={t}
+                    summary={summarize(t, t.schedule_days?.length ?? 0)}
+                  />
+                ))}
+                {rows.length === 0 && (
+                  <p className="text-sm text-zinc-500">
+                    {q || discipline
+                      ? 'Nothing on this shelf matches.'
+                      : `No ${TEMPLATE_SHELF_META[shelf].noun}s yet — start one blank, or save one from a course.`}
+                  </p>
+                )}
+              </div>
+            </section>
+          )
+        })}
       </div>
     </main>
   )

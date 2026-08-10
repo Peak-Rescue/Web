@@ -15,6 +15,9 @@ async function requireAdmin() {
 }
 
 function touch(instanceId?: string | null) {
+  // Templates are browsed on the library's schedule shelf, so every edit has to
+  // reach that page — a template has no course to refresh instead.
+  revalidatePath('/admin/library')
   if (instanceId) {
     revalidatePath(`/admin/courses/${instanceId}`)
     revalidatePath(`/portal/${instanceId}`)
@@ -81,7 +84,16 @@ export async function createSchedule(input: {
 
 export async function updateSchedule(
   id: string,
-  patch: { name?: string; overview?: string | null; objectives?: string[] }
+  patch: {
+    name?: string
+    overview?: string | null
+    objectives?: string[]
+    // Library metadata — how a template is found on the shelf.
+    description?: string | null
+    courseType?: string | null
+    disciplines?: string[]
+    topics?: string[]
+  }
 ) {
   const admin = await requireAdmin()
   const update: Record<string, unknown> = { updated_at: new Date().toISOString() }
@@ -89,6 +101,12 @@ export async function updateSchedule(
   if (patch.overview !== undefined) update.overview = patch.overview?.trim() || null
   if (patch.objectives !== undefined) {
     update.objectives = patch.objectives.map((o) => o.trim()).filter(Boolean)
+  }
+  if (patch.description !== undefined) update.description = patch.description?.trim() || null
+  if (patch.courseType !== undefined) update.course_type = patch.courseType || null
+  if (patch.disciplines !== undefined) update.disciplines = [...new Set(patch.disciplines)]
+  if (patch.topics !== undefined) {
+    update.topics = [...new Set(patch.topics.map((t) => t.trim()).filter(Boolean))]
   }
   const { data, error } = await admin
     .from('course_schedules').update(update).eq('id', id).select('instance_id').single()
@@ -240,9 +258,49 @@ export async function removeScheduleBlock(id: string) {
 
 // ─── Templates ──────────────────────────────────────────────────────────────
 
-// Copy a schedule — a template onto a course, or a course's schedule back into
-// a template. Days and blocks are copied, not referenced, so the two drift
-// apart from here.
+const SOURCE_SELECT =
+  'name, overview, objectives, schedule_days(id, title, location, notes, sort_order, schedule_blocks(id, parent_id, title, time_label, location, sort_order))'
+
+type BlockRow = { id: string; parent_id: string | null; title: string; time_label: string | null; location: string | null; sort_order: number }
+type DayRow = { id: string; title: string; location: string | null; notes: string | null; sort_order: number; schedule_blocks: BlockRow[] }
+
+// Lay one schedule's days onto another. Shared by "start from a template" and
+// "save back into a template" so the two carry the same thing.
+async function copyDaysInto(admin: Admin, source: { schedule_days?: unknown }, scheduleId: string) {
+  const days = ((source.schedule_days ?? []) as unknown as DayRow[]).sort((a, b) => a.sort_order - b.sort_order)
+
+  for (const d of days) {
+    const { data: newDay, error } = await admin
+      .from('schedule_days')
+      .insert({ schedule_id: scheduleId, title: d.title, location: d.location, notes: d.notes, sort_order: d.sort_order })
+      .select('id').single()
+    if (error) throw new Error(error.message)
+
+    // Parents before children, so a copied sub-topic can point at its new
+    // parent rather than the original's.
+    const blocks = (d.schedule_blocks ?? []).sort((a, b) => a.sort_order - b.sort_order)
+    const idMap = new Map<string, string>()
+    for (const pass of [blocks.filter((b) => !b.parent_id), blocks.filter((b) => b.parent_id)]) {
+      for (const b of pass) {
+        const { data: nb, error: e2 } = await admin
+          .from('schedule_blocks')
+          .insert({
+            day_id: newDay.id,
+            parent_id: b.parent_id ? idMap.get(b.parent_id) ?? null : null,
+            title: b.title, time_label: b.time_label, location: b.location, sort_order: b.sort_order,
+          })
+          .select('id').single()
+        if (e2) throw new Error(e2.message)
+        idMap.set(b.id, nb.id)
+      }
+    }
+  }
+  return days.length
+}
+
+// Copy a schedule — a template onto a course, or a course's schedule into a
+// brand new template. Days and blocks are copied, not referenced, so the two
+// drift apart from here.
 export async function copySchedule(
   sourceId: string,
   target: { instanceId?: string | null; isTemplate?: boolean; name?: string; courseType?: string | null }
@@ -250,10 +308,7 @@ export async function copySchedule(
   const admin = await requireAdmin()
 
   const { data: src } = await admin
-    .from('course_schedules')
-    .select('name, overview, objectives, schedule_days(id, title, location, notes, sort_order, schedule_blocks(id, parent_id, title, time_label, location, sort_order))')
-    .eq('id', sourceId)
-    .single()
+    .from('course_schedules').select(SOURCE_SELECT).eq('id', sourceId).single()
   if (!src) throw new Error('Schedule not found')
 
   const { data: created, error } = await admin
@@ -269,37 +324,43 @@ export async function copySchedule(
     .select('id').single()
   if (error) throw new Error(error.message)
 
-  type BlockRow = { id: string; parent_id: string | null; title: string; time_label: string | null; location: string | null; sort_order: number }
-  type DayRow = { id: string; title: string; location: string | null; notes: string | null; sort_order: number; schedule_blocks: BlockRow[] }
-  const days = ((src.schedule_days ?? []) as unknown as DayRow[]).sort((a, b) => a.sort_order - b.sort_order)
-
-  for (const d of days) {
-    const { data: newDay, error: e2 } = await admin
-      .from('schedule_days')
-      .insert({ schedule_id: created.id, title: d.title, location: d.location, notes: d.notes, sort_order: d.sort_order })
-      .select('id').single()
-    if (e2) throw new Error(e2.message)
-
-    // Parents before children, so a copied sub-topic can point at its new
-    // parent rather than the original's.
-    const blocks = (d.schedule_blocks ?? []).sort((a, b) => a.sort_order - b.sort_order)
-    const idMap = new Map<string, string>()
-    for (const pass of [blocks.filter((b) => !b.parent_id), blocks.filter((b) => b.parent_id)]) {
-      for (const b of pass) {
-        const { data: nb, error: e3 } = await admin
-          .from('schedule_blocks')
-          .insert({
-            day_id: newDay.id,
-            parent_id: b.parent_id ? idMap.get(b.parent_id) ?? null : null,
-            title: b.title, time_label: b.time_label, location: b.location, sort_order: b.sort_order,
-          })
-          .select('id').single()
-        if (e3) throw new Error(e3.message)
-        idMap.set(b.id, nb.id)
-      }
-    }
-  }
+  const days = await copyDaysInto(admin, src, created.id)
 
   touch(target.instanceId)
-  return { id: created.id, days: days.length }
+  return { id: created.id, days }
+}
+
+// Push a run's schedule back over the template it came from. Explicit click
+// only, and it replaces the days wholesale — what stays is the template's shelf
+// identity: name, description, tags. Courses already built from it keep their
+// own copy.
+export async function saveScheduleIntoTemplate(sourceId: string, templateId: string) {
+  const admin = await requireAdmin()
+  if (sourceId === templateId) throw new Error('That schedule is the template')
+
+  const { data: target } = await admin
+    .from('course_schedules').select('id, name, is_template').eq('id', templateId).single()
+  if (!target) throw new Error('That template no longer exists')
+  if (!target.is_template) throw new Error('That isn’t a template')
+
+  const { data: src } = await admin
+    .from('course_schedules').select(SOURCE_SELECT).eq('id', sourceId).single()
+  if (!src) throw new Error('Schedule not found')
+
+  // Days cascade to their blocks, so this clears the whole running order.
+  const { error: e1 } = await admin.from('schedule_days').delete().eq('schedule_id', templateId)
+  if (e1) throw new Error(e1.message)
+
+  const days = await copyDaysInto(admin, src, templateId)
+
+  // The overview and objectives describe the course, not the delivery, so they
+  // travel with the days.
+  const { error: e2 } = await admin
+    .from('course_schedules')
+    .update({ overview: src.overview, objectives: src.objectives ?? [], updated_at: new Date().toISOString() })
+    .eq('id', templateId)
+  if (e2) throw new Error(e2.message)
+
+  touch()
+  return { name: target.name as string, days }
 }

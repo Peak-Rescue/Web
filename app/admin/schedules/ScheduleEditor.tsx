@@ -5,8 +5,10 @@ import { useRouter } from 'next/navigation'
 import {
   updateSchedule, addScheduleDay, updateScheduleDay, removeScheduleDay,
   addScheduleBlock, addScheduleBlocks, updateScheduleBlock, removeScheduleBlock,
-  copySchedule,
+  copySchedule, saveScheduleIntoTemplate,
 } from './actions'
+
+export type ScheduleTemplateOption = { id: string; name: string; days: number }
 
 export type ScheduleBlock = {
   id: string
@@ -43,9 +45,13 @@ export type Schedule = {
 export default function ScheduleEditor({
   schedule,
   courseType,
+  templates,
 }: {
   schedule: Schedule
   courseType?: string | null
+  // The schedule shelf's templates, so a running order refined on a course can
+  // be saved back over the one it started from.
+  templates?: ScheduleTemplateOption[]
 }) {
   const router = useRouter()
   const [busy, setBusy] = useState(false)
@@ -246,18 +252,72 @@ export default function ScheduleEditor({
           + Day
         </button>
         {!schedule.is_template && (
-          <button
-            onClick={() => {
-              const name = prompt('Save this schedule as a reusable template. Name it:', schedule.name)
-              if (name) run(() => copySchedule(schedule.id, { isTemplate: true, name, courseType }))
-            }}
-            disabled={busy}
-            className="text-xs text-zinc-400 hover:text-white transition-colors"
-          >
-            Save as a template
-          </button>
+          <SaveToShelf
+            schedule={schedule} templates={templates ?? []} courseType={courseType}
+            busy={busy} run={run} input={input}
+          />
         )}
       </div>
+    </div>
+  )
+}
+
+// Two ways onto the schedule shelf: a new template, or over one already there.
+// Overwriting keeps the template's shelf identity — name, description, tags —
+// and replaces its days, so refining a running order on the course you're
+// actually teaching is how the reusable one improves.
+function SaveToShelf({
+  schedule, templates, courseType, busy, run, input,
+}: {
+  schedule: Schedule
+  templates: ScheduleTemplateOption[]
+  courseType?: string | null
+  busy: boolean
+  run: (fn: () => Promise<unknown>) => void
+  input: string
+}) {
+  const [target, setTarget] = useState('')
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 text-xs">
+      <button
+        onClick={() => {
+          const name = prompt('Save this schedule to the library as a new template. Name it:', schedule.name)
+          if (name) run(() => copySchedule(schedule.id, { isTemplate: true, name, courseType }))
+        }}
+        disabled={busy}
+        className="text-zinc-400 hover:text-white transition-colors disabled:opacity-40"
+      >
+        Save as a new template
+      </button>
+
+      {templates.length > 0 && (
+        <>
+          <span className="text-zinc-700">or update</span>
+          <select
+            value={target}
+            onChange={(e) => setTarget(e.target.value)}
+            className={`${input} text-xs max-w-52`}
+          >
+            <option value="">— pick a template —</option>
+            {templates.map((t) => <option key={t.id} value={t.id}>{t.name} ({t.days}d)</option>)}
+          </select>
+          <button
+            onClick={() => {
+              const t = templates.find((x) => x.id === target)
+              if (!t) return
+              if (!confirm(
+                `Replace the days on "${t.name}" with this schedule? Its name and tags stay, and courses already using it aren't touched.`
+              )) return
+              run(async () => { await saveScheduleIntoTemplate(schedule.id, t.id); setTarget('') })
+            }}
+            disabled={busy || !target}
+            className="px-2 py-1 rounded border border-zinc-700 text-zinc-300 hover:text-white hover:border-zinc-500 transition-colors disabled:opacity-40"
+          >
+            Update it
+          </button>
+        </>
+      )}
     </div>
   )
 }

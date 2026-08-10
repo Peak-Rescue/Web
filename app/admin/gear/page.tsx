@@ -15,13 +15,15 @@ export default async function GearCatalogPage() {
   const { data: profile } = await admin.from('profiles').select('role').eq('id', user.id).single()
   if (profile?.role !== 'admin') redirect('/dashboard')
 
-  const [{ data: items }, { data: entries }, { data: lists }] = await Promise.all([
+  const [{ data: items }, { data: entries }, { count: templateCount }] = await Promise.all([
     admin.from('gear_items')
       .select('id, name, info, recommended, url, category, parent_id, aliases, active')
       .eq('active', true)
       .order('name'),
     admin.from('gear_list_entries').select('gear_item_id'),
-    admin.from('gear_lists').select('id, name, audience, is_template, course_type, gear_list_entries(id)').eq('is_template', true),
+    // Saved lists are browsed and edited on the library's equipment shelf, not
+    // here — this page is the catalog the lists draw from.
+    admin.from('gear_lists').select('id', { count: 'exact', head: true }).eq('is_template', true),
   ])
 
   // "Unused" is the safe-to-retire signal, so it has to count real usage.
@@ -30,10 +32,6 @@ export default async function GearCatalogPage() {
     if (e.gear_item_id) uses.set(e.gear_item_id, (uses.get(e.gear_item_id) ?? 0) + 1)
   }
   const rows = (items ?? []).map((i) => ({ ...i, aliases: i.aliases ?? [], uses: uses.get(i.id) ?? 0 }))
-
-  const templates = (lists ?? []) as unknown as {
-    id: string; name: string; audience: string; course_type: string | null; gear_list_entries: unknown[]
-  }[]
 
   return (
     <main className="min-h-screen bg-zinc-950 text-white pt-16 md:pt-20">
@@ -49,21 +47,20 @@ export default async function GearCatalogPage() {
 
         <GearCatalog items={rows} />
 
-        {templates.length > 0 && (
-          <section className="mt-12 pt-8 border-t border-zinc-800">
-            <h2 className="text-lg font-semibold mb-3">Saved templates</h2>
-            <div className="space-y-1">
-              {templates.map((t) => (
-                <div key={t.id} className="flex items-center gap-3 px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-lg text-sm">
-                  <span>{t.name}</span>
-                  <span className="text-[11px] text-zinc-500">{t.audience}</span>
-                  {t.course_type && <span className="text-[11px] text-zinc-600">{t.course_type}</span>}
-                  <span className="ml-auto text-[11px] text-zinc-600">{t.gear_list_entries.length} items</span>
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
+        <section className="mt-12 pt-8 border-t border-zinc-800">
+          <h2 className="text-lg font-semibold mb-1">Saved equipment lists</h2>
+          <p className="text-sm text-zinc-500">
+            {templateCount
+              ? `${templateCount} reusable list${templateCount === 1 ? '' : 's'} live on the library's equipment shelf, where they can be edited, retagged and retired.`
+              : 'Reusable lists live on the library’s equipment shelf. There aren’t any yet — start one there, or save one from a course.'}
+          </p>
+          <Link
+            href="/admin/library?bucket=gear&status=all"
+            className="mt-3 inline-block text-xs px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded transition-colors"
+          >
+            Open the equipment shelf
+          </Link>
+        </section>
       </div>
     </main>
   )

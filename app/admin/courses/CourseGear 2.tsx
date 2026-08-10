@@ -18,7 +18,7 @@ export default function CourseGear({
   instanceId: string
   courseType: string | null
   lists: GearList[]
-  templates: { id: string; name: string; description?: string | null; audience: string; entries: number }[]
+  templates: { id: string; name: string; audience: string; entries: number }[]
   catalog: GearItem[]
 }) {
   const router = useRouter()
@@ -85,7 +85,7 @@ export default function CourseGear({
               key={t.id}
               onClick={() => run(() => copyGearList(t.id, { instanceId, name: t.name }))}
               disabled={busy}
-              title={[`${t.entries} item(s), ${t.audience}`, t.description].filter(Boolean).join(' — ')}
+              title={`${t.entries} item(s), ${t.audience}`}
               className="text-xs px-3 py-1.5 rounded border border-zinc-700 text-zinc-300 hover:text-white hover:border-zinc-500 transition-colors disabled:opacity-40"
             >
               {t.name}

@@ -16,6 +16,9 @@ async function requireAdmin() {
 
 function touch(instanceId?: string | null) {
   revalidatePath('/admin/gear')
+  // Templates live on the library's equipment shelf, so an edit to one has to
+  // reach that page too — it's where they're browsed and renamed.
+  revalidatePath('/admin/library')
   if (instanceId) {
     revalidatePath(`/admin/courses/${instanceId}`)
     revalidatePath(`/portal/${instanceId}`)
@@ -158,13 +161,29 @@ export async function createGearList(input: {
 
 export async function updateGearList(
   id: string,
-  patch: { name?: string; intro?: string | null; audience?: 'student' | 'instructor' }
+  patch: {
+    name?: string
+    intro?: string | null
+    audience?: 'student' | 'instructor'
+    // Library metadata — how a template is found on the shelf. A course's own
+    // list can carry them too; nothing reads them there.
+    description?: string | null
+    courseType?: string | null
+    disciplines?: string[]
+    topics?: string[]
+  }
 ) {
   const admin = await requireAdmin()
   const update: Record<string, unknown> = { updated_at: new Date().toISOString() }
   if (patch.name !== undefined) update.name = patch.name.trim().slice(0, 120) || 'Gear list'
   if (patch.intro !== undefined) update.intro = patch.intro?.trim() || null
   if (patch.audience !== undefined) update.audience = patch.audience
+  if (patch.description !== undefined) update.description = patch.description?.trim() || null
+  if (patch.courseType !== undefined) update.course_type = patch.courseType || null
+  if (patch.disciplines !== undefined) update.disciplines = [...new Set(patch.disciplines)]
+  if (patch.topics !== undefined) {
+    update.topics = [...new Set(patch.topics.map((t) => t.trim()).filter(Boolean))]
+  }
   const { data, error } = await admin.from('gear_lists').update(update).eq('id', id).select('instance_id').single()
   if (error) throw new Error(error.message)
   touch(data?.instance_id)
@@ -276,7 +295,40 @@ export async function removeGearEntry(id: string) {
 
 // ─── Templates ──────────────────────────────────────────────────────────────
 
-// Copy a list — template onto a course, or a course's list back into a
+type Admin = ReturnType<typeof createAdminClient>
+
+const SOURCE_SELECT =
+  'name, audience, intro, gear_list_entries(gear_item_id, name, info, recommended, url, category, group_type, quantity, sort_order, gear_entry_options(gear_item_id, sort_order))'
+
+type OptionRow = { gear_item_id: string; sort_order: number }
+type EntryRow = Record<string, unknown> & { gear_entry_options: OptionRow[] }
+
+// Lay one list's entries onto another list. Shared by "start from a template"
+// and "save back into a template" so the two can't drift in what they carry.
+async function copyEntriesInto(admin: Admin, entries: EntryRow[], listId: string) {
+  if (!entries.length) return 0
+
+  const { data: made, error } = await admin
+    .from('gear_list_entries')
+    .insert(entries.map(({ gear_entry_options: _options, ...e }) => ({ ...e, list_id: listId })))
+    .select('id')
+  if (error) throw new Error(error.message)
+
+  // Insert order matches the array we sent, so an entry's either/or set
+  // follows it onto the copy.
+  const options = (made ?? []).flatMap((row, i) =>
+    (entries[i].gear_entry_options ?? []).map((o) => ({
+      entry_id: row.id, gear_item_id: o.gear_item_id, sort_order: o.sort_order,
+    }))
+  )
+  if (options.length) {
+    const { error: e2 } = await admin.from('gear_entry_options').insert(options)
+    if (e2) throw new Error(e2.message)
+  }
+  return entries.length
+}
+
+// Copy a list — a template onto a course, or a course's list into a brand new
 // template. Entries are copied, not referenced: a course's list is its own
 // after that, so editing it can't rewrite the template.
 export async function copyGearList(
@@ -285,11 +337,7 @@ export async function copyGearList(
 ) {
   const admin = await requireAdmin()
 
-  const { data: src } = await admin
-    .from('gear_lists')
-    .select('name, audience, intro, gear_list_entries(gear_item_id, name, info, recommended, url, category, group_type, quantity, sort_order, gear_entry_options(gear_item_id, sort_order))')
-    .eq('id', sourceId)
-    .single()
+  const { data: src } = await admin.from('gear_lists').select(SOURCE_SELECT).eq('id', sourceId).single()
   if (!src) throw new Error('List not found')
 
   const { data: created, error } = await admin
@@ -306,30 +354,45 @@ export async function copyGearList(
     .single()
   if (error) throw new Error(error.message)
 
-  type OptionRow = { gear_item_id: string; sort_order: number }
-  const entries = (src.gear_list_entries ?? []) as unknown as (Record<string, unknown> & {
-    gear_entry_options: OptionRow[]
-  })[]
-  if (entries.length) {
-    const { data: madeEntries, error: e2 } = await admin
-      .from('gear_list_entries')
-      .insert(entries.map(({ gear_entry_options: _options, ...e }) => ({ ...e, list_id: created.id })))
-      .select('id')
-    if (e2) throw new Error(e2.message)
-
-    // Insert order matches the array we sent, so an entry's either/or set
-    // follows it onto the copy.
-    const options = (madeEntries ?? []).flatMap((made, i) =>
-      (entries[i].gear_entry_options ?? []).map((o) => ({
-        entry_id: made.id, gear_item_id: o.gear_item_id, sort_order: o.sort_order,
-      }))
-    )
-    if (options.length) {
-      const { error: e3 } = await admin.from('gear_entry_options').insert(options)
-      if (e3) throw new Error(e3.message)
-    }
-  }
+  const entries = await copyEntriesInto(
+    admin, (src.gear_list_entries ?? []) as unknown as EntryRow[], created.id
+  )
 
   touch(target.instanceId)
-  return { id: created.id, entries: entries.length }
+  return { id: created.id, entries }
+}
+
+// Push a refined course list back over the template it came from. Still not a
+// live link — this only happens on an explicit click, and it replaces the
+// template's contents wholesale. What stays is the template's shelf identity:
+// its name, what it's for, and its tags. Every course already built from it
+// keeps its own copy untouched.
+export async function saveGearListIntoTemplate(sourceId: string, templateId: string) {
+  const admin = await requireAdmin()
+  if (sourceId === templateId) throw new Error('That list is the template')
+
+  const { data: target } = await admin
+    .from('gear_lists').select('id, name, is_template').eq('id', templateId).single()
+  if (!target) throw new Error('That template no longer exists')
+  if (!target.is_template) throw new Error('That isn’t a template')
+
+  const { data: src } = await admin.from('gear_lists').select(SOURCE_SELECT).eq('id', sourceId).single()
+  if (!src) throw new Error('List not found')
+
+  const { error: e1 } = await admin.from('gear_list_entries').delete().eq('list_id', templateId)
+  if (e1) throw new Error(e1.message)
+
+  const entries = await copyEntriesInto(
+    admin, (src.gear_list_entries ?? []) as unknown as EntryRow[], templateId
+  )
+
+  // The intro and who it's for describe the kit, so they travel with it.
+  const { error: e2 } = await admin
+    .from('gear_lists')
+    .update({ intro: src.intro, audience: src.audience, updated_at: new Date().toISOString() })
+    .eq('id', templateId)
+  if (e2) throw new Error(e2.message)
+
+  touch()
+  return { name: target.name as string, entries }
 }

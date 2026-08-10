@@ -5,8 +5,10 @@ import { useRouter } from 'next/navigation'
 import { GEAR_CATEGORIES, matchesGear, type CatalogItem } from '@/lib/gear'
 import {
   addGearEntry, updateGearEntry, removeGearEntry, updateGearList, copyGearList,
-  setGearEntryOptions, upsertGearItem,
+  saveGearListIntoTemplate, setGearEntryOptions, upsertGearItem,
 } from './actions'
+
+export type GearTemplateOption = { id: string; name: string; audience: string; entries: number }
 
 export type GearItem = CatalogItem
 
@@ -43,10 +45,14 @@ export default function GearListEditor({
   list,
   catalog,
   courseType,
+  templates,
 }: {
   list: GearList
   catalog: GearItem[]
   courseType?: string | null
+  // The equipment shelf's templates, so a list refined on a course can be saved
+  // back over the one it started from instead of only spawning another.
+  templates?: GearTemplateOption[]
 }) {
   const router = useRouter()
   const [busy, setBusy] = useState(false)
@@ -246,16 +252,74 @@ export default function GearListEditor({
       <AddGearRow list={list} catalog={catalog} childrenOf={childrenOf} busy={busy} run={run} input={input} />
 
       {!list.is_template && (
-        <button
-          onClick={() => {
-            const name = prompt('Save this list as a reusable template. Name it:', list.name)
-            if (name) run(() => copyGearList(list.id, { isTemplate: true, name, courseType }))
-          }}
-          disabled={busy}
-          className="text-xs text-zinc-400 hover:text-white transition-colors"
-        >
-          Save as a template
-        </button>
+        <SaveToShelf
+          list={list} templates={templates ?? []} courseType={courseType}
+          busy={busy} run={run} input={input}
+        />
+      )}
+    </div>
+  )
+}
+
+// Two ways onto the equipment shelf: a new template, or over one that's already
+// there. Overwriting is the one that needed building — a template you'd refined
+// on a course could only be re-saved under another name, so the shelf collected
+// three near-identical lists and no way to tell which was current.
+function SaveToShelf({
+  list, templates, courseType, busy, run, input,
+}: {
+  list: GearList
+  templates: GearTemplateOption[]
+  courseType?: string | null
+  busy: boolean
+  run: (fn: () => Promise<unknown>) => void
+  input: string
+}) {
+  const [target, setTarget] = useState('')
+
+  // Overwriting a template built for the other audience is nearly always a
+  // mis-click, so those aren't offered.
+  const same = templates.filter((t) => t.audience === list.audience)
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 text-xs">
+      <button
+        onClick={() => {
+          const name = prompt('Save this list to the library as a new template. Name it:', list.name)
+          if (name) run(() => copyGearList(list.id, { isTemplate: true, name, courseType }))
+        }}
+        disabled={busy}
+        className="text-zinc-400 hover:text-white transition-colors disabled:opacity-40"
+      >
+        Save as a new template
+      </button>
+
+      {same.length > 0 && (
+        <>
+          <span className="text-zinc-700">or update</span>
+          <select
+            value={target}
+            onChange={(e) => setTarget(e.target.value)}
+            className={`${input} text-xs max-w-52`}
+          >
+            <option value="">— pick a template —</option>
+            {same.map((t) => <option key={t.id} value={t.id}>{t.name} ({t.entries})</option>)}
+          </select>
+          <button
+            onClick={() => {
+              const t = same.find((x) => x.id === target)
+              if (!t) return
+              if (!confirm(
+                `Replace what's on "${t.name}" with this list? Its name and tags stay, and courses already using it aren't touched.`
+              )) return
+              run(async () => { await saveGearListIntoTemplate(list.id, t.id); setTarget('') })
+            }}
+            disabled={busy || !target}
+            className="px-2 py-1 rounded border border-zinc-700 text-zinc-300 hover:text-white hover:border-zinc-500 transition-colors disabled:opacity-40"
+          >
+            Update it
+          </button>
+        </>
       )}
     </div>
   )

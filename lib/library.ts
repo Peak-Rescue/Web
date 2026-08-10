@@ -22,6 +22,51 @@ export const BUCKET_META: Record<LibraryBucket, { label: string; hint: string }>
 }
 export const BUCKET_ORDER: LibraryBucket[] = ['teaching', 'resource', 'map', 'instructor']
 
+// Two more shelves, browsed beside the four above but stored in their own
+// tables: an equipment list and a schedule are structured rows, not links, so
+// they can't be library_items. What they share with the rest of the library is
+// the vocabulary — a name, what it's for, disciplines, topics — and one place
+// to find them.
+export type TemplateShelf = 'gear' | 'schedule'
+export type LibraryShelf = LibraryBucket | TemplateShelf
+
+export const TEMPLATE_SHELF_META: Record<TemplateShelf, { label: string; hint: string; noun: string }> = {
+  gear: {
+    label: 'Equipment lists',
+    hint: 'Reusable kit lists — copied onto a course as its starting point',
+    noun: 'equipment list',
+  },
+  schedule: {
+    label: 'Schedules',
+    hint: 'Reusable running orders — days and topics, copied onto a course',
+    noun: 'schedule',
+  },
+}
+
+export const TEMPLATE_SHELF_ORDER: TemplateShelf[] = ['gear', 'schedule']
+export const SHELF_ORDER: LibraryShelf[] = [...BUCKET_ORDER, ...TEMPLATE_SHELF_ORDER]
+
+export function shelfLabel(v: LibraryShelf): string {
+  return isTemplateShelf(v) ? TEMPLATE_SHELF_META[v].label : BUCKET_META[v].label
+}
+
+export function isTemplateShelf(v: string | undefined): v is TemplateShelf {
+  return v === 'gear' || v === 'schedule'
+}
+
+// A template as the shelf lists it. `count` is items for a gear list, days for
+// a schedule — the one number that tells you whether it's worth opening.
+export type TemplateSummary = {
+  id: string
+  name: string
+  description: string | null
+  course_type: string | null
+  disciplines: string[]
+  topics: string[]
+  count: number
+  audience?: 'student' | 'instructor'
+}
+
 // Two labels per level: `choice` where you pick it (be explicit — admins
 // shouldn't have to guess who "shared" means), `badge` where space is tight.
 export const AUDIENCE_META: Record<LibraryAudience, { badge: string; choice: string }> = {

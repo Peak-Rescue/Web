@@ -19,7 +19,7 @@ export default function CourseSchedule({
   courseType: string | null
   courseDays: number
   schedule: Schedule | null
-  templates: { id: string; name: string; days: number }[]
+  templates: { id: string; name: string; description?: string | null; days: number }[]
 }) {
   const router = useRouter()
   const [busy, setBusy] = useState(false)
@@ -46,7 +46,7 @@ export default function CourseSchedule({
             Delete schedule
           </button>
         </div>
-        <ScheduleEditor schedule={schedule} courseType={courseType} />
+        <ScheduleEditor schedule={schedule} courseType={courseType} templates={templates} />
       </div>
     )
   }
@@ -73,7 +73,7 @@ export default function CourseSchedule({
             key={t.id}
             onClick={() => run(() => copySchedule(t.id, { instanceId, name: t.name }))}
             disabled={busy}
-            title={`${t.days} day(s)`}
+            title={[`${t.days} day(s)`, t.description].filter(Boolean).join(' — ')}
             className="text-xs px-3 py-1.5 rounded border border-zinc-700 text-zinc-300 hover:text-white hover:border-zinc-500 transition-colors disabled:opacity-40"
           >
             {t.name}

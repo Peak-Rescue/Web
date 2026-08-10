@@ -9,11 +9,16 @@
 // beside "Rope hardware" and "Personal protective", and "Team gear" smuggled
 // personal-vs-group — which is already its own axis — into the category. Fixed
 // list, chosen once.
+// The sling/rope split is by what you buy, not by what it's made of. A sewn
+// sling, a sewn cordelette and a VT prusik arrive finished and are used as
+// they come; rope, cord and tubular webbing arrive on a spool and get cut to
+// length. "Slings and webbing" cut across that — it held sewn slings next to
+// the 20 ft of tubular webbing you cut yourself.
 export const GEAR_CATEGORIES = [
   'Personal protective',
   'Rope hardware',
-  'Slings and webbing',
-  'Ropes and cord',
+  'Sewn slings and cord',
+  'Rope, cord and webbing',
   'Environmental layers',
   'Packs and carry',
   'Rescue and access',
