@@ -88,7 +88,7 @@ export default async function LibraryPage({
     // Editing a kit list on its shelf needs the same catalog the course page
     // gives the editor, or every line loses the type it points at.
     showTemplates && shelves.includes('gear')
-      ? admin.from('gear_items').select('id, name, brand, info, recommended, url, category, parent_id, aliases').eq('active', true).order('name')
+      ? admin.from('gear_items').select('id, name, brand, info, recommended, url, category, parent_id, aliases, disciplines').eq('active', true).order('name')
       : Promise.resolve({ data: [] }),
   ])
 

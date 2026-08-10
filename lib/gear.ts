@@ -14,15 +14,28 @@
 // they come; rope, cord and tubular webbing arrive on a spool and get cut to
 // length. "Slings and webbing" cut across that — it held sewn slings next to
 // the 20 ft of tubular webbing you cut yourself.
+// A category says what a thing *is*, never what it is for. "Tactical" and
+// "Rescue and access" were the second kind, and both became grab bags because
+// of it — a drone and a knife have nothing in common as objects. What gear is
+// *for* is a discipline tag now, so a tactical helmet can be head protection
+// by kind and tactical by purpose instead of having to pick one.
+//
+// Named by the job each does, because "Rope hardware" covered eleven types
+// doing five unrelated jobs and told you none of them.
 export const GEAR_CATEGORIES = [
-  'Personal protective',
-  'Rope hardware',
-  'Sewn slings and cord',
-  'Rope, cord and webbing',
-  'Environmental layers',
+  'Rope and cord',
+  'Slings and prusiks',
+  'Connectors',
+  'Descent and belay',
+  'Ascenders and rope grabs',
+  'Pulleys',
+  'Harness and personal rigging',
+  'Helmets and protection',
+  'Clothing and exposure',
   'Packs and carry',
-  'Rescue and access',
-  'Tactical',
+  'Lighting and optics',
+  'Patient handling and access',
+  'Mission kit',
 ] as const
 
 export type GearCategory = (typeof GEAR_CATEGORIES)[number]
@@ -40,6 +53,9 @@ export type CatalogItem = {
   // "brake-assist descender". Stored apart from the name so it can be asked
   // about; joined back together everywhere the gear is read.
   brand?: string | null
+  // What the gear is FOR, from the capability vocabulary. Category says what
+  // it IS — the two are different axes and were tangled together until now.
+  disciplines?: string[]
 }
 
 // How a product is written wherever it is read as one thing: "Petzl Grigri".

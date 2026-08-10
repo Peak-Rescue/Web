@@ -37,6 +37,7 @@ export async function upsertGearItem(input: {
   category?: string | null
   parentId?: string | null
   aliases?: string[]
+  disciplines?: string[]
 }) {
   const admin = await requireAdmin()
   // Only what the caller actually passed. Writing every column on every call
@@ -51,6 +52,11 @@ export async function upsertGearItem(input: {
   if (!row.name) throw new Error('Name is required')
   if (input.aliases !== undefined) {
     row.aliases = [...new Set(input.aliases.map((a) => a.trim().toLowerCase()).filter(Boolean))]
+  }
+  if (input.disciplines !== undefined) {
+    const { CAPABILITY_ORDER } = await import('@/lib/capabilities')
+    const valid = new Set<string>(CAPABILITY_ORDER)
+    row.disciplines = [...new Set(input.disciplines.filter((d) => valid.has(d)))]
   }
 
   if (input.parentId !== undefined) {

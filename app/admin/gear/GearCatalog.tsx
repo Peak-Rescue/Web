@@ -3,6 +3,7 @@
 import { Fragment, useMemo, useState } from 'react'
 import { useSteadyRefresh } from '@/components/useSteadyRefresh'
 import { GEAR_CATEGORIES, matchesGear, type CatalogItem } from '@/lib/gear'
+import { CAPABILITY_META, CAPABILITY_ORDER, type CapabilityCategory } from '@/lib/capabilities'
 import { upsertGearItem, mergeGearItems, retireGearItem } from './actions'
 
 type Row = CatalogItem & { active: boolean; uses: number }
@@ -64,6 +65,55 @@ function CategorySelect({
       {options.map((c) => <option key={c} value={c}>{c}</option>)}
       <option value={NEW_CATEGORY}>+ New category…</option>
     </select>
+  )
+}
+
+// What a piece of gear is FOR, as opposed to what it is. Kept off the type's
+// name and out of its category, so a tactical helmet can be head protection
+// and tactical at once rather than having to choose.
+function PurposeCell({
+  row, disabled, onChange,
+}: {
+  row: Row
+  disabled?: boolean
+  onChange: (next: string[]) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const chosen = row.disciplines ?? []
+
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        disabled={disabled}
+        className="w-full text-left px-1.5 py-1 text-[11px] text-zinc-400 rounded border border-transparent hover:border-zinc-700 transition-colors"
+      >
+        {chosen.length
+          ? chosen.map((d) => CAPABILITY_META[d as CapabilityCategory]?.label ?? d).join(', ')
+          : <span className="text-zinc-700">—</span>}
+      </button>
+    )
+  }
+
+  return (
+    <div className="p-1.5 rounded border border-zinc-700 bg-zinc-900">
+      <div className="flex flex-wrap gap-x-3 gap-y-1">
+        {CAPABILITY_ORDER.map((c) => (
+          <label key={c} className="flex items-center gap-1 text-[10px] text-zinc-300 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={chosen.includes(c)}
+              onChange={() => onChange(chosen.includes(c) ? chosen.filter((x) => x !== c) : [...chosen, c])}
+              className="accent-red-600"
+            />
+            {CAPABILITY_META[c].label}
+          </label>
+        ))}
+      </div>
+      <button onClick={() => setOpen(false)} className="mt-1 text-[10px] text-zinc-500 hover:text-white transition-colors">
+        done
+      </button>
+    </div>
   )
 }
 
@@ -194,6 +244,13 @@ export default function GearCatalog({ items }: { items: Row[] }) {
     return (
       <>
         <td className="px-1 py-0.5">
+          <PurposeCell
+            row={row}
+            disabled={busy}
+            onChange={(next) => run(() => upsertGearItem({ id: row.id, name: row.name, disciplines: next }))}
+          />
+        </td>
+        <td className="px-1 py-0.5">
           <input
             defaultValue={(row.aliases ?? []).join(', ')}
             onBlur={(e) => {
@@ -280,6 +337,7 @@ export default function GearCatalog({ items }: { items: Row[] }) {
                   <th className="text-left font-medium px-2 py-1.5 w-56">Type / product</th>
                   <th className="text-left font-medium px-2 py-1.5 w-32">Brand</th>
                   <th className="text-left font-medium px-2 py-1.5 w-36">Category</th>
+                  <th className="text-left font-medium px-2 py-1.5 w-44">Purpose</th>
                   <th className="text-left font-medium px-2 py-1.5">Also called</th>
                   <th className="text-left font-medium px-2 py-1.5">Spec / note</th>
                   <th className="px-2 py-1.5 w-20"></th>
@@ -341,7 +399,7 @@ export default function GearCatalog({ items }: { items: Row[] }) {
                     ))}
 
                     <tr>
-                      <td colSpan={6} className="px-1 py-0.5">
+                      <td colSpan={7} className="px-1 py-0.5">
                         {addingTo === t.id ? (
                           <AddProduct type={t} busy={busy} run={run} input={input} onDone={() => setAddingTo(null)} />
                         ) : (
