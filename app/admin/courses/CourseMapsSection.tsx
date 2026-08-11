@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import AddLinkDialog from '@/components/AddLinkDialog'
 import { AUDIENCE_META, type LibraryAudience } from '@/lib/library'
@@ -101,9 +102,18 @@ export default function CourseMapsSection({
               ) : (
                 <span className="text-sm text-zinc-200 truncate block">{m.label}</span>
               )}
-              <span className="text-[11px] text-zinc-600">
-                {m.fromLibrary ? 'From the map library' : 'Link added for this course'}
-              </span>
+              {/* Provenance that goes somewhere: "from the library" is only
+                  useful if it also gets you there. */}
+              {m.fromLibrary ? (
+                <Link
+                  href="/admin/library?status=all&bucket=map"
+                  className="text-[11px] text-zinc-600 hover:text-zinc-300 transition-colors"
+                >
+                  From the map library
+                </Link>
+              ) : (
+                <span className="text-[11px] text-zinc-600">Link added for this course</span>
+              )}
             </div>
 
             <select

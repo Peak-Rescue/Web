@@ -33,7 +33,7 @@ import RemovableRow from '../RemovableRow'
 import { CourseTabs, TabPanel } from '../CourseTabs'
 import CourseGear from '../CourseGear'
 import CourseLinksSection from '../CourseLinksSection'
-import { type CourseLink } from '@/lib/course-links'
+import { LIBRARY_HREF, type CourseLink } from '@/lib/course-links'
 import { type GearItem, type GearList } from '@/app/admin/gear/GearListEditor'
 import { type Schedule } from '@/app/admin/schedules/ScheduleEditor'
 import CourseSchedule from '@/app/admin/courses/CourseSchedule'
@@ -537,6 +537,8 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
             </div>
           </AutoSaveForm>
 
+          <CourseFilesSection instanceId={id} files={courseFiles} />
+
           <CourseMapsSection instanceId={id} maps={courseMaps} />
 
           <CourseLinksSection instanceId={id} links={(courseLinkRows ?? []) as CourseLink[]} />
@@ -621,7 +623,6 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
             </div>
           )}
 
-          <CourseFilesSection instanceId={id} files={courseFiles} />
           </div>
         </TabPanel>
 
@@ -900,7 +901,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
           {(modules ?? []).length === 0 && (
             <p className="text-sm text-zinc-500 mb-3">
               Add a section below, then pull items into it from the{' '}
-              <Link href="/admin/library" className="underline hover:text-zinc-300">content library</Link>.
+              <Link href={LIBRARY_HREF} className="underline hover:text-zinc-300">content library</Link>.
             </p>
           )}
 

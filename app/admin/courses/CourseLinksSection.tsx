@@ -1,10 +1,11 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import AddLinkDialog from '@/components/AddLinkDialog'
 import { AUDIENCE_META, type LibraryAudience } from '@/lib/library'
-import { PURPOSE_META, PURPOSE_ORDER, linkLabel, type CourseLink, type LinkPurpose } from '@/lib/course-links'
+import { PURPOSE_META, PURPOSE_ORDER, LIBRARY_HREF, linkLabel, type CourseLink, type LinkPurpose } from '@/lib/course-links'
 import { addCourseLink, removeCourseLink, setCourseLinkAudience } from './link-actions'
 
 const ICON: Record<LinkPurpose, string> = {
@@ -58,7 +59,10 @@ export default function CourseLinksSection({
       <h3 className="text-sm font-semibold text-zinc-400 mt-6 mb-1">Links</h3>
       <p className="text-xs text-zinc-500 mb-3">
         For this course only. Anything worth using again belongs in the{' '}
-        <span className="text-zinc-400">content library</span>, where it can be found by discipline and topic.
+        <Link href={LIBRARY_HREF} className="text-zinc-300 underline decoration-zinc-600 hover:text-white hover:decoration-zinc-400 transition-colors">
+          content library
+        </Link>
+        , where it can be found by discipline and topic.
       </p>
 
       {error && <p className="text-xs text-pr-red mb-2">{error}</p>}
@@ -119,9 +123,25 @@ export default function CourseLinksSection({
                 </div>
               )}
 
-              <button onClick={() => setAdding(purpose)} disabled={busy} className={btn}>
-                + {meta.verb}
-              </button>
+              <div className="flex items-center gap-3 flex-wrap">
+                <button onClick={() => setAdding(purpose)} disabled={busy} className={btn}>
+                  + {meta.verb}
+                </button>
+                {/* One click to the shelf this section keeps pointing at —
+                    being told where reusable material lives is no use if
+                    getting there means finding the library yourself. */}
+                {meta.library && (
+                  <Link
+                    href={meta.library.href}
+                    className="inline-flex items-center gap-1 text-[11px] text-zinc-500 hover:text-zinc-200 transition-colors"
+                  >
+                    {meta.library.text} in the library
+                    <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M5 12h14M13 6l6 6-6 6" />
+                    </svg>
+                  </Link>
+                )}
+              </div>
             </div>
           )
         })}
