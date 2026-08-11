@@ -1,6 +1,6 @@
 'use client'
 
-import { Fragment, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useSteadyRefresh } from '@/components/useSteadyRefresh'
 import { GEAR_CATEGORIES, matchesGear, type CatalogItem } from '@/lib/gear'
 import { upsertGearItem, mergeGearItems, retireGearItem } from './actions'
@@ -79,15 +79,14 @@ export default function GearCatalog({ items }: { items: Row[] }) {
   const [mergeFrom, setMergeFrom] = useState<Row | null>(null)
   const [adding, setAdding] = useState(false)
   const [addingTo, setAddingTo] = useState<string | null>(null)
-  // Which type is being refiled. The table is always grouped by category,
-  // so a category column could only ever repeat the heading above it — the
-  // value was never the display, only the ability to change it.
-  const [moving, setMoving] = useState<string | null>(null)
   // Types ticked for a bulk refile. Categories get sorted out in sweeps —
   // you read a whole category, decide two of its five don't belong, and
   // want both somewhere else — so refiling one row at a time is the wrong
   // unit of work for the only job this page really has right now.
   const [picked, setPicked] = useState<Set<string>>(new Set())
+  // Which row has its write-rarely fields open. One at a time: the link and
+  // the synonyms are read by search, not by people, so they stay folded.
+  const [expanded, setExpanded] = useState<string | null>(null)
 
   const types = useMemo(() => items.filter((i) => !i.parent_id), [items])
   const childrenOf = useMemo(() => {
@@ -146,18 +145,33 @@ export default function GearCatalog({ items }: { items: Row[] }) {
   // reading it is what happens the rest of the time. So they stay out of the
   // way until the pointer is on the row — except mid-merge, when every row is a
   // candidate keeper and hiding the target would be absurd.
-  function Actions({ row }: { row: Row }) {
+  function Actions({ row, showing }: { row: Row; showing: boolean }) {
     const merging = mergeFrom?.id === row.id
+    const btn = 'text-[11px] text-zinc-500 hover:text-white transition-colors'
     return (
-      <div
-        className={`flex items-center justify-end gap-2 whitespace-nowrap transition-opacity ${
-          mergeFrom ? 'opacity-100' : 'opacity-0 group-hover/row:opacity-100 focus-within:opacity-100'
-        }`}
-      >
+      <div className="flex items-center justify-end gap-3 whitespace-nowrap shrink-0">
+        {/* Why it can't be retired, where retire would otherwise be. Nobody
+            scans the catalog for a usage count; you want it at the moment the
+            option you expected isn't there. */}
+        <span
+          title={row.uses > 0 ? `On ${row.uses} gear list${row.uses === 1 ? '' : 's'}` : 'On no lists'}
+          className="text-[11px] text-zinc-700"
+        >
+          {row.uses > 0 ? `on ${row.uses}` : ''}
+        </span>
+
+        <button
+          onClick={() => setExpanded(showing ? null : row.id)}
+          title="Link and synonyms"
+          className={showing ? 'text-[11px] text-white' : btn}
+        >
+          {showing ? 'less' : 'more'}
+        </button>
+
         {mergeFrom && !merging ? (
           <button
             onClick={() => {
-              if (confirm(`Fold "${mergeFrom.name}" into "${row.name}"? Every list using it will point here instead.`)) {
+              if (confirm(`Fold "${mergeFrom.name}" into "${row.name}"? Every list using it will point here instead, and "${mergeFrom.name}" is deleted.`)) {
                 run(async () => { await mergeGearItems(row.id, mergeFrom.id); setMergeFrom(null) })
               }
             }}
@@ -169,63 +183,110 @@ export default function GearCatalog({ items }: { items: Row[] }) {
         ) : (
           <button
             onClick={() => setMergeFrom(merging ? null : row)}
-            className={`text-[11px] transition-colors ${merging ? 'text-pr-red-light' : 'text-zinc-700 hover:text-zinc-300'}`}
+            title="Mark this as a duplicate, then pick the row to keep"
+            className={merging ? 'text-[11px] text-pr-red-light' : btn}
           >
-            {merging ? 'pick keeper…' : 'merge'}
+            {merging ? 'pick keeper…' : 'duplicate'}
           </button>
         )}
-        {/* Gear on a list can't be retired, and the count is the reason — so it
-            takes retire's place rather than a column of its own. Nobody scans
-            the catalog for it; you want it at the moment retire isn't there. */}
-        {!row.parent_id && (
-          <button
-            onClick={() => setMoving(moving === row.id ? null : row.id)}
-            title="File this type under a different category"
-            className={`text-[11px] transition-colors ${moving === row.id ? 'text-white' : 'text-zinc-500 hover:text-white'}`}
-          >
-            move
-          </button>
-        )}
-        {row.uses === 0 ? (
+
+        {row.uses === 0 && (
           <button
             onClick={() => run(() => retireGearItem(row.id))}
             disabled={busy}
-            className="text-[11px] text-zinc-700 hover:text-red-400 transition-colors"
+            title="Remove from the catalog. Only offered while nothing uses it."
+            className="text-[11px] text-zinc-600 hover:text-red-400 transition-colors"
           >
             retire
           </button>
-        ) : (
-          <span
-            title={`On ${row.uses} gear list${row.uses === 1 ? '' : 's'} — it can be retired once nothing uses it`}
-            className="text-[11px] text-zinc-700"
-          >
-            on {row.uses}
-          </span>
         )}
       </div>
     )
   }
 
-  // Purpose and synonyms behave the same on both levels, so they share their
-  // cells; only what identifies a row differs between them.
-  function SharedCells({ row }: { row: Row }) {
+  // One item, two lines: what it is on the first, what we say about it on the
+  // second. The fields that get written once and read by search — the link and
+  // the synonyms — stay behind a toggle, because a row that shows every field
+  // at all times is a form, and this page is read far more than it is edited.
+  function ItemRow({ row, sub }: { row: Row; sub?: boolean }) {
+    const showing = expanded === row.id
     return (
-      <>
-        <td className="px-1 py-0.5">
+      <div className={`px-2 py-1.5 ${sub ? 'pl-9 bg-zinc-950/30' : ''}`}>
+        <div className="flex items-center gap-2">
+          {/* Types only. A product follows the type it satisfies, so refiling
+              one on its own is not a thing that can happen. */}
+          {!sub ? (
+            <input
+              type="checkbox"
+              checked={picked.has(row.id)}
+              onChange={() => setPicked((prev) => {
+                const next = new Set(prev)
+                if (next.has(row.id)) next.delete(row.id)
+                else next.add(row.id)
+                return next
+              })}
+              aria-label={`Select ${row.name}`}
+              className="accent-red-600 shrink-0"
+            />
+          ) : (
+            <span className="w-3 shrink-0" />
+          )}
+
           <input
-            defaultValue={(row.aliases ?? []).join(', ')}
-            onBlur={(e) => {
-              const next = e.target.value.split(',').map((a) => a.trim()).filter(Boolean)
-              if (next.join(',') !== (row.aliases ?? []).join(',')) {
-                run(() => upsertGearItem({ id: row.id, name: row.name, aliases: next }))
-              }
-            }}
-            placeholder="—"
-            className={`${CELL} text-[11px] text-zinc-400`}
+            defaultValue={row.name}
+            onBlur={(e) => e.target.value !== row.name &&
+              run(() => upsertGearItem({ id: row.id, name: e.target.value }))}
+            className={`${CELL} ${sub ? 'text-[13px] text-zinc-300 w-52' : 'text-sm font-medium w-64'}`}
           />
-        </td>
-        <td className="px-2 py-0.5"><Actions row={row} /></td>
-      </>
+
+          {sub && (
+            <input
+              list="gear-brands"
+              defaultValue={row.brand ?? ''}
+              onBlur={(e) => e.target.value !== (row.brand ?? '') &&
+                run(() => upsertGearItem({ id: row.id, name: row.name, brand: e.target.value }))}
+              placeholder="Brand"
+              className={`${CELL} text-[13px] text-zinc-300 w-40`}
+            />
+          )}
+
+          <span className="flex-1" />
+          <Actions row={row} showing={showing} />
+        </div>
+
+        <div className="flex items-center gap-2 mt-0.5" style={{ paddingLeft: sub ? 20 : 20 }}>
+          <input
+            defaultValue={row.info ?? ''}
+            onBlur={(e) => e.target.value !== (row.info ?? '') &&
+              run(() => upsertGearItem({ id: row.id, name: row.name, info: e.target.value }))}
+            placeholder={sub ? 'What this product is, and how we specify it' : 'What this is, and how we specify it'}
+            className={`${CELL} flex-1 min-w-0 text-[11px] text-zinc-500`}
+          />
+        </div>
+
+        {showing && (
+          <div className="flex flex-wrap items-center gap-2 mt-1 pl-5">
+            <input
+              defaultValue={row.url ?? ''}
+              onBlur={(e) => e.target.value !== (row.url ?? '') &&
+                run(() => upsertGearItem({ id: row.id, name: row.name, url: e.target.value }))}
+              placeholder="Link — manufacturer or spec page"
+              className={`${input} flex-1 min-w-56 text-[11px]`}
+            />
+            <input
+              defaultValue={(row.aliases ?? []).join(', ')}
+              onBlur={(e) => {
+                const next = e.target.value.split(',').map((a) => a.trim()).filter(Boolean)
+                if (next.join(',') !== (row.aliases ?? []).join(',')) {
+                  run(() => upsertGearItem({ id: row.id, name: row.name, aliases: next }))
+                }
+              }}
+              placeholder="Also called — what people type when searching"
+              className={`${input} flex-1 min-w-56 text-[11px]`}
+            />
+          </div>
+        )}
+      </div>
     )
   }
 
@@ -310,108 +371,28 @@ export default function GearCatalog({ items }: { items: Row[] }) {
             {g.name || 'No category'}
           </h2>
 
-          <div className="overflow-x-auto border border-zinc-800 rounded-lg">
-            <table className="w-full text-sm min-w-3xl">
-              <thead>
-                <tr className="text-[10px] uppercase tracking-wide text-zinc-600 border-b border-zinc-800">
-                  {/* Only the columns that identify a row are pinned to a
-                      width. The synonyms someone types, which are what gear
-                      gets found by, take what's left. */}
-                  <th className="px-2 py-1.5 w-7"></th>
-                  <th className="text-left font-medium px-2 py-1.5 w-56">Type / product</th>
-                  <th className="text-left font-medium px-2 py-1.5 w-32">Brand</th>
-                  <th className="text-left font-medium px-2 py-1.5">Also called</th>
-                  <th className="text-left font-medium px-2 py-1.5 w-40">Actions</th>
-                </tr>
-              </thead>
-
-              {g.rows.map((t) => {
-                const products = childrenOf.get(t.id) ?? []
-                return (
-                  <tbody key={t.id} className="border-b border-zinc-800 last:border-0">
-                    <tr className="group/row bg-zinc-800/30">
-                      <td className="px-2 py-1 align-top">
-                        <input
-                          type="checkbox"
-                          checked={picked.has(t.id)}
-                          onChange={() => setPicked((prev) => {
-                            const next = new Set(prev)
-                            if (next.has(t.id)) next.delete(t.id)
-                            else next.add(t.id)
-                            return next
-                          })}
-                          aria-label={`Select ${t.name}`}
-                          className="accent-red-600 mt-1.5"
-                        />
-                      </td>
-                      <td className="px-1 py-1">
-                        <input
-                          defaultValue={t.name}
-                          onBlur={(e) => e.target.value !== t.name &&
-                            run(() => upsertGearItem({ id: t.id, name: e.target.value }))}
-                          className={`${CELL} text-sm font-medium`}
-                        />
-                        {moving === t.id && (
-                          <CategorySelect
-                            value={t.category}
-                            options={categories}
-                            disabled={busy}
-                            onChange={(next) => {
-                              setMoving(null)
-                              run(() => upsertGearItem({ id: t.id, name: t.name, category: next }))
-                            }}
-                            className={`${CELL} mt-1 text-[11px] text-zinc-400 border-zinc-700`}
-                          />
-                        )}
-                      </td>
-                      {/* A type has no brand — the blank says so. */}
-                      <td className="px-2 py-1 text-[11px] text-zinc-700">—</td>
-                      <SharedCells row={t} />
-                    </tr>
-
-                    {products.map((p) => (
-                      <tr key={p.id} className="group/row hover:bg-zinc-800/20">
-                        <td></td>
-                        <td className="px-1 py-0.5 pl-6">
-                          <input
-                            defaultValue={p.name}
-                            onBlur={(e) => e.target.value !== p.name &&
-                              run(() => upsertGearItem({ id: p.id, name: e.target.value }))}
-                            className={`${CELL} text-[13px] text-zinc-300`}
-                          />
-                        </td>
-                        <td className="px-1 py-0.5">
-                          <input
-                            list="gear-brands"
-                            defaultValue={p.brand ?? ''}
-                            onBlur={(e) => e.target.value !== (p.brand ?? '') &&
-                              run(() => upsertGearItem({ id: p.id, name: p.name, brand: e.target.value }))}
-                            placeholder="—"
-                            className={`${CELL} text-[13px] text-zinc-300`}
-                          />
-                        </td>
-                        <SharedCells row={p} />
-                      </tr>
-                    ))}
-
-                    <tr>
-                      <td colSpan={5} className="px-1 py-0.5">
-                        {addingTo === t.id ? (
-                          <AddProduct type={t} busy={busy} run={run} input={input} onDone={() => setAddingTo(null)} />
-                        ) : (
-                          <button
-                            onClick={() => setAddingTo(t.id)}
-                            className="pl-6 py-1 text-[11px] text-zinc-700 hover:text-white transition-colors"
-                          >
-                            + product
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  </tbody>
-                )
-              })}
-            </table>
+          <div className="border border-zinc-800 rounded-lg divide-y divide-zinc-800">
+            {g.rows.map((t) => {
+              const products = childrenOf.get(t.id) ?? []
+              return (
+                <div key={t.id}>
+                  <ItemRow row={t} />
+                  {products.map((p) => <ItemRow key={p.id} row={p} sub />)}
+                  <div className="pl-9 py-0.5">
+                    {addingTo === t.id ? (
+                      <AddProduct type={t} busy={busy} run={run} input={input} onDone={() => setAddingTo(null)} />
+                    ) : (
+                      <button
+                        onClick={() => setAddingTo(t.id)}
+                        className="py-1 text-[11px] text-zinc-700 hover:text-white transition-colors"
+                      >
+                        + product
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
           </div>
         </section>
       ))}

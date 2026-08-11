@@ -31,6 +31,7 @@ export async function upsertGearItem(input: {
   id?: string
   name: string
   brand?: string | null
+  info?: string | null
   url?: string | null
   category?: string | null
   parentId?: string | null
@@ -43,6 +44,7 @@ export async function upsertGearItem(input: {
   // and no url, and so cleared both.
   const row: Record<string, unknown> = { name: input.name.trim().slice(0, 120) }
   if (input.brand !== undefined) row.brand = input.brand?.trim() || null
+  if (input.info !== undefined) row.info = input.info?.trim() || null
   if (input.url !== undefined) row.url = input.url?.trim() || null
   if (input.category !== undefined) row.category = input.category?.trim() || null
   if (!row.name) throw new Error('Name is required')

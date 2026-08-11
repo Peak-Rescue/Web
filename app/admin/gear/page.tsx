@@ -17,7 +17,7 @@ export default async function GearCatalogPage() {
 
   const [{ data: items }, { data: entries }, { count: templateCount }] = await Promise.all([
     admin.from('gear_items')
-      .select('id, name, brand, url, category, parent_id, aliases, disciplines, active')
+      .select('id, name, brand, info, url, category, parent_id, aliases, disciplines, active')
       .eq('active', true)
       .order('name'),
     admin.from('gear_list_entries').select('gear_item_id'),

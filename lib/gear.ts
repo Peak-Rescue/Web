@@ -47,6 +47,10 @@ export type GearCategory = (typeof GEAR_CATEGORIES)[number]
 export type CatalogItem = {
   id: string
   name: string
+  // The one piece of prose the catalog owns: what this gear is and how we
+  // specify it, true on every course. Per-course wording is the list entry's
+  // note, which is a different field with a different owner.
+  info?: string | null
   url: string | null
   category: string | null
   parent_id: string | null
