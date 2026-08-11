@@ -999,14 +999,14 @@ function AddGear({
                 </select>
               </div>
               <div>
-                <label className="block text-[11px] text-zinc-500 mb-1">A model of</label>
+                <label className="block text-[11px] text-zinc-500 mb-1">Generic item</label>
                 <select
                   value={newParent}
                   onChange={(e) => setNewParent(e.target.value)}
                   disabled={typesHere.length === 0}
                   className={`${input} w-44 disabled:opacity-40`}
                 >
-                  <option value="">{typesHere.length === 0 ? '— nothing here yet —' : '— its own type —'}</option>
+                  <option value="">{typesHere.length === 0 ? '— nothing here yet —' : '— none, this is a generic item —'}</option>
                   {typesHere.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
                 </select>
               </div>

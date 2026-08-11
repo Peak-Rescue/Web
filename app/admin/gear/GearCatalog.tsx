@@ -480,14 +480,14 @@ function AddItem({
         />
       </div>
       <div>
-        <label className="block text-[11px] text-zinc-500 mb-1">A product of</label>
+        <label className="block text-[11px] text-zinc-500 mb-1">Generic item</label>
         <select
           value={parentId}
           onChange={(e) => setParentId(e.target.value)}
           disabled={inCategory.length === 0}
           className={`${input} w-44 disabled:opacity-40`}
         >
-          <option value="">{inCategory.length === 0 ? '— nothing here yet —' : '— its own type —'}</option>
+          <option value="">{inCategory.length === 0 ? '— nothing here yet —' : '— none, this is a generic item —'}</option>
           {inCategory.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
         </select>
       </div>
