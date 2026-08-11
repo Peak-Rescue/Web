@@ -332,7 +332,15 @@ function BlockRow({
   sub?: boolean
 }) {
   return (
+    // The same dot and dash the course page reads with, so building a day and
+    // reading one look like the same document.
     <div className="flex items-center gap-2">
+      <span
+        aria-hidden
+        className={`shrink-0 ${
+          sub ? 'w-1.5 h-px bg-zinc-700 ml-1 mr-1' : 'w-1 h-1 rounded-full bg-zinc-600 mr-1'
+        }`}
+      />
       {!sub && (
         <input
           defaultValue={block.time_label ?? ''}

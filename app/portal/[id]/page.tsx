@@ -684,7 +684,12 @@ export default async function PortalPage({
                 return (
                   <div key={d.id} className="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
                     <div className="flex items-baseline gap-2">
-                      <span className="text-[11px] font-mono text-zinc-600 shrink-0">Day {di + 1}</span>
+                      {/* The counter only earns its place when the title says
+                          something else — most days are called "Day 1", and
+                          printing that twice is just noise. */}
+                      {!/^day\s*\d+\b/i.test(d.title.trim()) && (
+                        <span className="text-[11px] font-mono text-zinc-600 shrink-0">Day {di + 1}</span>
+                      )}
                       <h3 className="font-medium text-sm">{d.title}</h3>
                     </div>
                     {(d.location || d.notes) && (
@@ -693,22 +698,29 @@ export default async function PortalPage({
                       </p>
                     )}
                     {topics.length > 0 && (
-                      <ul className="mt-2 space-y-1.5">
+                      <ul className="mt-2.5 space-y-1.5">
                         {topics.map((t) => {
                           const kids = blocks.filter((b) => b.parent_id === t.id)
+                          // A dot for topics and a dash for what sits under
+                          // them. The previous treatment boxed the children,
+                          // which made a lone sub-topic louder than its own
+                          // parent — nesting wants children to recede.
                           return (
-                            <li key={t.id} className="text-sm text-zinc-300">
+                            <li key={t.id} className="relative pl-4 text-sm text-zinc-300">
+                              <span
+                                aria-hidden
+                                className="absolute left-0.5 top-[9px] w-1 h-1 rounded-full bg-zinc-600"
+                              />
                               {t.time_label && <span className="text-zinc-500 mr-2">{t.time_label}</span>}
                               {t.title}
                               {t.location && <span className="text-xs text-zinc-500 ml-2">{t.location}</span>}
-                              {/* Sub-topics sit behind a rule on a recessed
-                                  ground rather than one indent and a smaller
-                                  font — a fourteen-topic day is otherwise a
-                                  wall of near-identical lines. */}
                               {kids.length > 0 && (
-                                <ul className="mt-1.5 ml-1 pl-3 py-1 space-y-0.5 border-l-2 border-zinc-800 bg-black/25 rounded-r">
+                                <ul className="mt-1 ml-4 space-y-0.5">
                                   {kids.map((k) => (
-                                    <li key={k.id} className="text-[13px] text-zinc-400">{k.title}</li>
+                                    <li key={k.id} className="relative pl-3.5 text-[13px] text-zinc-400">
+                                      <span aria-hidden className="absolute left-0 top-[10px] w-1.5 h-px bg-zinc-700" />
+                                      {k.title}
+                                    </li>
                                   ))}
                                 </ul>
                               )}
