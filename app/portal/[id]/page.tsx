@@ -11,6 +11,7 @@ import { loadTasksWithDocs } from '@/lib/course-tasks'
 import { LinkIcon, PaperclipIcon } from '@/components/TaskIcons'
 import PortalSectionNav from './PortalSectionNav'
 import CourseUpdates, { type CourseUpdate } from './CourseUpdates'
+import CourseMessages, { type CourseMessage } from './CourseMessages'
 import { Section, SubHead, InstructorCard, SECTION_LABEL, type SectionKey } from './sections'
 import { PURPOSE_META, PURPOSE_ORDER, linkLabel, type CourseLink } from '@/lib/course-links'
 
@@ -100,7 +101,7 @@ export default async function PortalPage({
     modulesQuery = modulesQuery.in('audience', audienceFilter)
   }
 
-  const [{ data: inst }, { data: offDays }, { data: modules }, { data: instructors }, taskRows, { data: peopleRows }, { data: templateRows }, { data: courseDocRows }, { data: taskDocRows }, { data: mapRows }, { data: linkRows }, { data: updateRows }, { count: enrolledCount }] =
+  const [{ data: inst }, { data: offDays }, { data: modules }, { data: instructors }, taskRows, { data: peopleRows }, { data: templateRows }, { data: courseDocRows }, { data: taskDocRows }, { data: mapRows }, { data: linkRows }, { data: updateRows }, { count: enrolledCount }, { data: messageRows }] =
     await Promise.all([
       admin.from('course_instances')
         .select('course_type, custom_title, status, location, client_name, notes, ref_number, starts_at, ends_at, meeting_point, meeting_time, intro')
@@ -112,7 +113,7 @@ export default async function PortalPage({
         .order('off_date'),
       modulesQuery,
       admin.from('instance_instructors')
-        .select('role, instructors(name, profile_id, slug, active, title, avatar, avatar_position, avatar_scale)')
+        .select('role, instructors(name, email, profile_id, slug, active, title, avatar, avatar_position, avatar_scale)')
         .eq('instance_id', id),
       showTasks ? loadTasksWithDocs(admin, id) : Promise.resolve([]),
       showTasks
@@ -148,6 +149,13 @@ export default async function PortalPage({
       showTasks
         ? admin.from('enrollments').select('id', { count: 'exact', head: true }).eq('instance_id', id)
         : Promise.resolve({ count: 0 }),
+      // The outbox — staff only, and never loaded for a student.
+      showTasks
+        ? admin.from('course_messages')
+            .select('id, subject, body, audience, created_at, recipient_count, sent_count, profiles(first_name, last_name)')
+            .eq('instance_id', id)
+            .order('created_at', { ascending: false })
+        : Promise.resolve({ data: [] }),
     ])
 
   if (!inst) notFound()
@@ -305,6 +313,29 @@ export default async function PortalPage({
   // Any instructor on the course can post, not just the lead — a meeting point
   // moves and the person who needs to say so is the one standing there.
   const canPostUpdates = showTasks
+  const courseMessages: CourseMessage[] = ((messageRows ?? []) as unknown as {
+    id: string; subject: string; body: string; audience: CourseMessage['audience']; created_at: string
+    recipient_count: number; sent_count: number
+    profiles: { first_name: string | null; last_name: string | null } | null
+  }[]).map((m) => ({
+    id: m.id,
+    subject: m.subject,
+    body: m.body,
+    audience: m.audience,
+    created_at: m.created_at,
+    recipient_count: m.recipient_count,
+    sent_count: m.sent_count,
+    authorName: [m.profiles?.first_name, m.profiles?.last_name].filter(Boolean).join(' ').trim() || null,
+  }))
+  // Counted by address, not by head: the button says "Send to 5" before an
+  // irreversible action, so it has to mean five inboxes. A crew member with no
+  // email on file gets no mail and shouldn't be in the number.
+  const crewCount = new Set(
+    (instructors ?? [])
+      .map((r) => (r.instructors as unknown as { email: string | null } | null)?.email)
+      .filter(Boolean)
+      .map((e) => e!.trim().toLowerCase())
+  ).size
   const hasUpdates = canPostUpdates || courseUpdates.length > 0
   const hasDocuments = showTasks && courseDocs.length > 0
   const hasTasks = showTasks && (tasks.length > 0 || canManageTasks)
@@ -315,6 +346,7 @@ export default async function PortalPage({
     'details',
     // Team blocks lead for staff; students only ever get the four below them.
     hasUpdates && 'updates',
+    showTasks && 'message',
     hasNotes && 'notes',
     hasTasks && 'tasks',
     hasDocuments && 'documents',
@@ -502,6 +534,19 @@ export default async function PortalPage({
               updates={courseUpdates}
               canPost={canPostUpdates}
               enrolledCount={enrolledCount ?? 0}
+            />
+          </Section>
+        )}
+
+        {/* Group email — the counterpart to Updates, and staff-only both
+            ways: this is the outbox, not something recipients browse. */}
+        {showTasks && (
+          <Section id="message" blurb="Email the group directly — the words go to their inbox" team>
+            <CourseMessages
+              instanceId={id}
+              messages={courseMessages}
+              studentCount={enrolledCount ?? 0}
+              instructorCount={crewCount}
             />
           </Section>
         )}
