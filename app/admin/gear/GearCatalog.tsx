@@ -270,7 +270,7 @@ export default function GearCatalog({ items }: { items: Row[] }) {
             defaultValue={row.info ?? ''}
             onBlur={(e) => e.target.value !== (row.info ?? '') &&
               run(() => upsertGearItem({ id: row.id, name: row.name, info: e.target.value }))}
-            placeholder={sub ? 'What this product is, and how we specify it' : 'What this is, and how we specify it'}
+            placeholder="Notes / spec"
             className={`${CELL} flex-1 min-w-0 text-[11px] text-zinc-500`}
           />
         </div>
