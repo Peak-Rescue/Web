@@ -69,9 +69,13 @@ export type TemplateSummary = {
 
 // Two labels per level: `choice` where you pick it (be explicit — admins
 // shouldn't have to guess who "shared" means), `badge` where space is tight.
-export const AUDIENCE_META: Record<LibraryAudience, { badge: string; choice: string }> = {
-  internal: { badge: 'Internal', choice: 'Instructors only' },
-  shared: { badge: 'Students', choice: 'Students & instructors' },
+// Only the wording for pickers lives here now. Who-can-see-it is shown with
+// <AudiencePills>, which names the groups rather than the policy — "Internal"
+// and "Students" were two words for one axis and read as opposites when they
+// weren't.
+export const AUDIENCE_META: Record<LibraryAudience, { choice: string }> = {
+  internal: { choice: 'Instructors only' },
+  shared: { choice: 'Students & instructors' },
 }
 
 // course_modules.audience is the older three-value enum; 'student' was never

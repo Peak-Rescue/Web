@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { updateLibraryItem, deleteLibraryItem } from './actions'
 import { KIND_META, LIBRARY_KINDS, AUDIENCE_META, BUCKET_META, BUCKET_ORDER, type LibraryBucket, type LibraryItem, type Venue } from '@/lib/library'
+import { AudiencePills } from '@/components/AudiencePills'
 import { CAPABILITY_META, CAPABILITY_ORDER } from '@/lib/capabilities'
 import { US_STATES, CA_PROVINCES, COUNTRIES } from '@/lib/regions'
 
@@ -57,11 +58,7 @@ export default function LibraryRow({ item, venues, hideProvenance = false }: { i
             <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400">
               {KIND_META[item.kind as keyof typeof KIND_META] ?? item.kind}
             </span>
-            <span className={`text-[10px] px-1.5 py-0.5 rounded ${
-              item.audience === 'shared' ? 'bg-teal-900/50 text-teal-300' : 'bg-zinc-800 text-zinc-500'
-            }`}>
-              {AUDIENCE_META[item.audience].badge}
-            </span>
+            <AudiencePills audience={item.audience} />
             {venue && <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-900/40 text-blue-300">{venue.name}</span>}
             {item.topics.includes('needs-link-check') && (
               <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-900/40 text-red-300">link may be dead</span>

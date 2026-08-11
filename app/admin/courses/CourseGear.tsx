@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useSteadyRefresh } from '@/components/useSteadyRefresh'
 import GearListEditor, { type GearItem, type GearList } from '@/app/admin/gear/GearListEditor'
 import { createGearList, copyGearList, deleteGearList } from '@/app/admin/gear/actions'
+import { ForPill } from '@/components/AudiencePills'
 
 // A course's gear lists, built here rather than in a Google Doc that gets
 // linked. Student and instructor lists are separate because they differ, and
@@ -47,11 +48,7 @@ export default function CourseGear({
         <section key={l.id}>
           <div className="flex items-center gap-3 flex-wrap mb-3">
             <h3 className="text-base font-semibold">{l.name}</h3>
-            <span className={`text-[10px] px-1.5 py-0.5 rounded ${
-              l.audience === 'instructor' ? 'bg-zinc-800 text-zinc-400' : 'bg-teal-900/50 text-teal-300'
-            }`}>
-              {l.audience === 'instructor' ? 'Instructors' : 'Students'}
-            </span>
+            <ForPill audience={l.audience} />
             <button
               onClick={() => { if (confirm(`Delete "${l.name}"?`)) run(() => deleteGearList(l.id)) }}
               disabled={busy}

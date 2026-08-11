@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { addLibraryItems, loadPickerItems } from './actions'
 import { KIND_META, AUDIENCE_META, type LibraryAudience } from '@/lib/library'
+import { AudiencePills } from '@/components/AudiencePills'
 import { CAPABILITY_META, CAPABILITY_ORDER, type CapabilityCategory } from '@/lib/capabilities'
 
 export type PickerItem = {
@@ -156,11 +157,7 @@ export default function LibraryPicker({
                   <span className="text-[10px] px-1 rounded bg-zinc-800 text-zinc-500 shrink-0">
                     {KIND_META[i.kind as keyof typeof KIND_META] ?? i.kind}
                   </span>
-                  {i.audience === 'internal' && (
-                    <span className="text-[10px] px-1 rounded bg-zinc-800 text-zinc-400 shrink-0">
-                      {AUDIENCE_META.internal.badge}
-                    </span>
-                  )}
+                  {i.audience === 'internal' && <AudiencePills audience="internal" className="shrink-0" />}
                   {i.venueName && (
                     <span className="text-[10px] px-1 rounded bg-blue-900/40 text-blue-300 shrink-0">{i.venueName}</span>
                   )}

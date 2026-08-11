@@ -1,6 +1,7 @@
 import React from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
+import { AudiencePills } from '@/components/AudiencePills'
 
 // Presentational shell for the portal page. Every top-level block on a course
 // is a Section: same icon-and-rule header, same spacing, its own anchor. The
@@ -126,11 +127,9 @@ export function Section({
           <h2 className="text-lg font-semibold leading-tight">{title ?? SECTION_LABEL[id]}</h2>
           {blurb && <p className="text-xs text-zinc-500 mt-0.5">{blurb}</p>}
         </div>
-        {team && (
-          <span className="ml-auto shrink-0 text-[10px] font-medium uppercase tracking-wide px-2 py-0.5 rounded-full border border-amber-900/70 text-amber-500">
-            Instructors only
-          </span>
-        )}
+        {/* The same pills the library and the course editor use, so who can
+            see a block reads identically wherever you meet it. */}
+        {team && <AudiencePills audience="internal" className="ml-auto shrink-0" />}
       </div>
       {children}
     </section>

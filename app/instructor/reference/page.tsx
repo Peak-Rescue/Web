@@ -2,7 +2,8 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { KIND_META, LIBRARY_KINDS, AUDIENCE_META, type LibraryItem, type Venue } from '@/lib/library'
+import { KIND_META, LIBRARY_KINDS, type LibraryItem, type Venue } from '@/lib/library'
+import { AudiencePills } from '@/components/AudiencePills'
 import { CAPABILITY_META, CAPABILITY_ORDER, type CapabilityCategory } from '@/lib/capabilities'
 
 // The reference path: everything in the library, browsable by staff, with no
@@ -149,11 +150,7 @@ export default async function ReferencePage({
                             {venueName.get(i.venue_id)}
                           </span>
                         )}
-                        {i.audience === 'internal' && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-500 shrink-0">
-                            {AUDIENCE_META.internal.badge}
-                          </span>
-                        )}
+                        {i.audience === 'internal' && <AudiencePills audience="internal" className="shrink-0" />}
                       </div>
                       {(i.description || i.topics.length > 0) && (
                         <p className="text-[11px] text-zinc-600 mt-0.5 truncate">

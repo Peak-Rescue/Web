@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import AddLinkDialog from '@/components/AddLinkDialog'
 import { AUDIENCE_META, type LibraryAudience } from '@/lib/library'
+import { AudiencePills } from '@/components/AudiencePills'
 import {
   addCourseMapLink,
   addCourseMapsFromLibrary,
@@ -192,11 +193,7 @@ export default function CourseMapsSection({
                     {i.matchedOn === 'region' && i.regionLabel && (
                       <span className="text-[10px] px-1 rounded bg-zinc-800 text-zinc-400 shrink-0">{i.regionLabel}</span>
                     )}
-                    {i.audience === 'internal' && (
-                      <span className="text-[10px] px-1 rounded bg-zinc-800 text-zinc-400 shrink-0">
-                        {AUDIENCE_META.internal.badge}
-                      </span>
-                    )}
+                    {i.audience === 'internal' && <AudiencePills audience="internal" className="shrink-0" />}
                   </div>
                 </div>
                 {i.url && (

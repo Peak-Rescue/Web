@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { applyLibrarySelection, loadPickerItems } from './actions'
 import { KIND_META, AUDIENCE_META, BUCKET_META, BUCKET_ORDER, type LibraryAudience, type LibraryBucket } from '@/lib/library'
+import { AudiencePills } from '@/components/AudiencePills'
 import { CAPABILITY_META, CAPABILITY_ORDER, type CapabilityCategory } from '@/lib/capabilities'
 import { type PickerItem } from './LibraryPicker'
 
@@ -254,13 +255,9 @@ export default function SuggestedContent({
                       <button
                         onClick={() => setItemAudience({ ...itemAudience, [i.id]: iAud === 'shared' ? 'internal' : 'shared' })}
                         title="Who sees this item — click to change"
-                        className={`ml-auto shrink-0 text-[10px] px-1.5 py-0.5 rounded transition-colors ${
-                          iAud === 'shared'
-                            ? 'bg-teal-900/50 text-teal-300 hover:bg-teal-900'
-                            : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
-                        }`}
+                        className="ml-auto shrink-0 rounded transition-opacity hover:opacity-80"
                       >
-                        {AUDIENCE_META[iAud].badge}
+                        <AudiencePills audience={iAud} />
                       </button>
                       {i.url && (
                         <a

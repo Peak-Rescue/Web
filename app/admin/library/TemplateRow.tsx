@@ -8,6 +8,7 @@ import { updateGearList, deleteGearList } from '@/app/admin/gear/actions'
 import { updateSchedule, deleteSchedule } from '@/app/admin/schedules/actions'
 import { TEMPLATE_SHELF_META, type TemplateShelf, type TemplateSummary } from '@/lib/library'
 import { CAPABILITY_META, CAPABILITY_ORDER } from '@/lib/capabilities'
+import { ForPill } from '@/components/AudiencePills'
 import { COURSE_TYPE_OPTIONS, courseShortName } from '@/lib/courses'
 
 const input =
@@ -83,11 +84,7 @@ export default function TemplateRow(props: Props) {
             <span className="text-sm font-medium truncate">{summary.name}</span>
             <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400">{meta.label}</span>
             {summary.audience && (
-              <span className={`text-[10px] px-1.5 py-0.5 rounded ${
-                summary.audience === 'instructor' ? 'bg-zinc-800 text-zinc-500' : 'bg-teal-900/50 text-teal-300'
-              }`}>
-                {summary.audience === 'instructor' ? 'Instructors' : 'Students'}
-              </span>
+              <ForPill audience={summary.audience} />
             )}
             {offering && (
               <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-900/40 text-blue-300">{offering}</span>
