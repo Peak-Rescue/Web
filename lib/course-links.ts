@@ -15,7 +15,7 @@ export const LIBRARY_HREF = '/admin/library?status=all'
 
 export const PURPOSE_META: Record<
   LinkPurpose,
-  { label: string; hint: string; verb: string; library?: { href: string; text: string } }
+  { label: string; hint: string; verb: string }
 > = {
   photos: {
     label: 'Photos',
@@ -24,15 +24,13 @@ export const PURPOSE_META: Record<
   },
   resource: {
     label: 'Resources',
-    hint: 'Anything useful for this delivery only',
+    hint: '',
     verb: 'Add a resource',
-    library: { href: `${LIBRARY_HREF}&bucket=resource`, text: 'Reusable manuals and tech notes' },
   },
   form: {
     label: 'Forms and paperwork',
-    hint: 'Rosters, waivers, permits and the client’s own documents',
+    hint: '',
     verb: 'Add a form',
-    library: { href: `${LIBRARY_HREF}&kind=form`, text: 'Blank forms and templates' },
   },
   other: {
     label: 'Other links',
@@ -44,6 +42,13 @@ export const PURPOSE_META: Record<
 // Photos first: it's the one people come looking for after the course, and the
 // only one that's usually student-facing.
 export const PURPOSE_ORDER: LinkPurpose[] = ['photos', 'form', 'resource', 'other']
+
+// The only purpose we invite here. A one-off document belongs in the course
+// notes; anything we'd use twice belongs in the library, filed by discipline
+// and topic, and reaches the course through the curriculum. Forms and
+// resources still render if a course already has them — an old link shouldn't
+// vanish just because we stopped offering the button.
+export const OFFERED_PURPOSES: LinkPurpose[] = ['photos']
 
 export type CourseLink = {
   id: string

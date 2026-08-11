@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import AddLinkDialog from '@/components/AddLinkDialog'
 import { AUDIENCE_META, type LibraryAudience } from '@/lib/library'
-import { PURPOSE_META, PURPOSE_ORDER, LIBRARY_HREF, linkLabel, type CourseLink, type LinkPurpose } from '@/lib/course-links'
+import { PURPOSE_META, PURPOSE_ORDER, OFFERED_PURPOSES, LIBRARY_HREF, linkLabel, type CourseLink, type LinkPurpose } from '@/lib/course-links'
 import { addCourseLink, removeCourseLink, setCourseLinkAudience } from './link-actions'
 
 const ICON: Record<LinkPurpose, string> = {
@@ -47,11 +47,11 @@ export default function CourseLinksSection({
   const btn =
     'text-xs px-2.5 py-1.5 rounded border border-zinc-700 text-zinc-300 hover:text-white hover:border-zinc-500 transition-colors disabled:opacity-40'
 
-  // An empty purpose still shows its add button — the point is to make the
-  // place obvious before anyone has used it. "Other" is the exception: it's a
-  // fallback, not a prompt, so it only appears once something is in it.
+  // An offered purpose shows even when empty — the point is to make the place
+  // obvious before anyone has used it. The rest are history: they appear only
+  // to hold links a course already has, and don't invite more.
   const shown = PURPOSE_ORDER.filter(
-    (p) => p !== 'other' || links.some((l) => l.purpose === 'other')
+    (p) => OFFERED_PURPOSES.includes(p) || links.some((l) => l.purpose === p)
   )
 
   return (
@@ -61,8 +61,7 @@ export default function CourseLinksSection({
         For this course only. Anything worth using again belongs in the{' '}
         <Link href={LIBRARY_HREF} className="text-zinc-300 underline decoration-zinc-600 hover:text-white hover:decoration-zinc-400 transition-colors">
           content library
-        </Link>
-        , where it can be found by discipline and topic.
+        </Link>.
       </p>
 
       {error && <p className="text-xs text-pr-red mb-2">{error}</p>}
@@ -123,25 +122,11 @@ export default function CourseLinksSection({
                 </div>
               )}
 
-              <div className="flex items-center gap-3 flex-wrap">
+              {OFFERED_PURPOSES.includes(purpose) && (
                 <button onClick={() => setAdding(purpose)} disabled={busy} className={btn}>
                   + {meta.verb}
                 </button>
-                {/* One click to the shelf this section keeps pointing at —
-                    being told where reusable material lives is no use if
-                    getting there means finding the library yourself. */}
-                {meta.library && (
-                  <Link
-                    href={meta.library.href}
-                    className="inline-flex items-center gap-1 text-[11px] text-zinc-500 hover:text-zinc-200 transition-colors"
-                  >
-                    {meta.library.text} in the library
-                    <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M5 12h14M13 6l6 6-6 6" />
-                    </svg>
-                  </Link>
-                )}
-              </div>
+              )}
             </div>
           )
         })}
