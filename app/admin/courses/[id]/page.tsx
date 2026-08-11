@@ -34,6 +34,7 @@ import { CourseTabs, TabPanel } from '../CourseTabs'
 import CourseGear from '../CourseGear'
 import CoursePhotosSection from '../CoursePhotosSection'
 import { LIBRARY_HREF, type CourseLink } from '@/lib/course-links'
+import { AudiencePills } from '@/components/AudiencePills'
 import { type GearItem, type GearList } from '@/app/admin/gear/GearListEditor'
 import { type Schedule } from '@/app/admin/schedules/ScheduleEditor'
 import CourseSchedule from '@/app/admin/courses/CourseSchedule'
@@ -46,12 +47,6 @@ const STATUS_STYLES: Record<string, string> = {
   confirmed: 'bg-teal-900/40 text-teal-300 border-teal-700',
   completed: 'bg-zinc-700 text-zinc-300 border-zinc-600',
   cancelled: 'bg-red-900/40 text-red-300 border-red-700',
-}
-
-const AUDIENCE_STYLES: Record<string, string> = {
-  both:       'text-zinc-400',
-  student:    'text-blue-400',
-  instructor: 'text-teal-400',
 }
 
 const ITEM_ICON: Record<string, string> = {
@@ -837,9 +832,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
                   <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800">
                     <div className="flex items-center gap-2">
                       <span className="font-medium">{mod.title}</span>
-                      <span className={`text-xs ${AUDIENCE_STYLES[mod.audience]}`}>
-                        {moduleAudience(mod.audience) === 'internal' ? 'instructors only' : 'students & instructors'}
-                      </span>
+                      <AudiencePills audience={moduleAudience(mod.audience)} />
                     </div>
                     <form action={deleteModWithArgs}>
                       <button type="submit" className="text-xs text-zinc-600 hover:text-red-400 transition-colors">Delete section</button>
@@ -869,9 +862,10 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
                                 ? <a href={url} target="_blank" rel="noreferrer" className="text-sm font-medium hover:text-pr-red-light transition-colors">{title}</a>
                                 : <span className="text-sm font-medium">{title}</span>}
                               {lib && <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-500">library</span>}
-                              {heldBack && (
-                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400">instructors only</span>
-                              )}
+                              {/* Only worth saying where it differs from the
+                                  section: an item that matches its section is
+                                  already answered by the heading. */}
+                              {heldBack && <AudiencePills audience="internal" />}
                             </div>
                             {item.description && <p className="text-xs text-zinc-500 mt-0.5">{item.description}</p>}
                           </div>
