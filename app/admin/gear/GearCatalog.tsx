@@ -2,8 +2,8 @@
 
 import { useMemo, useState } from 'react'
 import { useSteadyRefresh } from '@/components/useSteadyRefresh'
-import { GEAR_CATEGORIES, matchesGear, type CatalogItem } from '@/lib/gear'
-import { upsertGearItem, mergeGearItems, retireGearItem } from './actions'
+import { GEAR_CATEGORIES, matchesGear, productName, type CatalogItem } from '@/lib/gear'
+import { upsertGearItem, retireGearItem } from './actions'
 
 type Row = CatalogItem & { active: boolean; uses: number }
 
@@ -76,7 +76,6 @@ export default function GearCatalog({ items }: { items: Row[] }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [query, setQuery] = useState('')
-  const [mergeFrom, setMergeFrom] = useState<Row | null>(null)
   const [adding, setAdding] = useState(false)
   const [addingTo, setAddingTo] = useState<string | null>(null)
   // Types ticked for a bulk refile. Categories get sorted out in sweeps —
@@ -147,24 +146,11 @@ export default function GearCatalog({ items }: { items: Row[] }) {
   // way until the pointer is on the row — except mid-merge, when every row is a
   // candidate keeper and hiding the target would be absurd.
   function Actions({ row, showing }: { row: Row; showing: boolean }) {
-    const merging = mergeFrom?.id === row.id
     const btn = 'text-[11px] text-zinc-500 hover:text-white transition-colors'
     return (
       <div className="flex items-center justify-end gap-3 whitespace-nowrap shrink-0">
-        {/* Why it can't be retired, where retire would otherwise be. Nobody
-            scans the catalog for a usage count; you want it at the moment the
-            option you expected isn't there. */}
-        <span
-          title={row.uses > 0 ? `On ${row.uses} gear list${row.uses === 1 ? '' : 's'}` : 'On no lists'}
-          className="text-[11px] text-zinc-700"
-        >
-          {row.uses > 0 ? `on ${row.uses}` : ''}
-        </span>
-
         {/* Types only — a product follows the type it satisfies, so refiling
-            one on its own is not a thing that can happen. Labelled with the
-            noun: a checkbox armed a hidden bar and never said what it was for,
-            and "move" didn't say move what, or where. */}
+            one on its own is not a thing that can happen. */}
         {!row.parent_id && (
           <button
             onClick={() => setMoving(moving === row.id ? null : row.id)}
@@ -175,46 +161,39 @@ export default function GearCatalog({ items }: { items: Row[] }) {
           </button>
         )}
 
+        {/* The count that used to sit here explained why delete was missing.
+            Delete is always offered now, so the explanation belongs at the
+            moment of the decision instead — in the confirm, which is the only
+            place it changes what you do. */}
         <button
-          onClick={() => setExpanded(showing ? null : row.id)}
-          title="Link and synonyms"
-          className={showing ? 'text-[11px] text-white' : btn}
+          onClick={() => {
+            if (row.uses > 0 && !confirm(
+              `"${productName(row)}" is on ${row.uses} gear list${row.uses === 1 ? '' : 's'}. ` +
+              `Delete it anyway? Those lists keep the line but lose the name it was pointing at.`
+            )) return
+            run(() => retireGearItem(row.id))
+          }}
+          disabled={busy}
+          className="text-[11px] text-zinc-500 hover:text-red-400 transition-colors"
         >
-          {showing ? 'less' : 'more'}
+          delete
         </button>
 
-        {mergeFrom && !merging ? (
-          <button
-            onClick={() => {
-              if (confirm(`Fold "${mergeFrom.name}" into "${row.name}"? Every list using it will point here instead, and "${mergeFrom.name}" is deleted.`)) {
-                run(async () => { await mergeGearItems(row.id, mergeFrom.id); setMergeFrom(null) })
-              }
-            }}
-            disabled={busy}
-            className="text-[11px] px-2 py-0.5 rounded border border-pr-red text-pr-red-light hover:bg-pr-red/10 transition-colors"
+        <button
+          onClick={() => setExpanded(showing ? null : row.id)}
+          title={showing ? 'Hide link and synonyms' : 'Link and synonyms'}
+          aria-expanded={showing}
+          aria-label={showing ? 'Hide link and synonyms' : 'Show link and synonyms'}
+          className="text-zinc-600 hover:text-white transition-colors"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24"
+            fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+            className={`transition-transform ${showing ? 'rotate-180' : ''}`}
           >
-            merge into this
-          </button>
-        ) : (
-          <button
-            onClick={() => setMergeFrom(merging ? null : row)}
-            title="Mark this as a duplicate, then pick the row to keep"
-            className={merging ? 'text-[11px] text-pr-red-light' : btn}
-          >
-            {merging ? 'pick keeper…' : 'duplicate'}
-          </button>
-        )}
-
-        {row.uses === 0 && (
-          <button
-            onClick={() => run(() => retireGearItem(row.id))}
-            disabled={busy}
-            title="Remove from the catalog. Only offered while nothing uses it."
-            className="text-[11px] text-zinc-600 hover:text-red-400 transition-colors"
-          >
-            retire
-          </button>
-        )}
+            <path d="m6 9 6 6 6-6" />
+          </svg>
+        </button>
       </div>
     )
   }
@@ -332,12 +311,6 @@ export default function GearCatalog({ items }: { items: Row[] }) {
         <p className="text-[11px] text-zinc-600">Showing {shown.length} of {types.length} types</p>
       )}
 
-      {mergeFrom && (
-        <p className="text-xs text-pr-red-light">
-          Merging <strong>{mergeFrom.name}</strong> — pick the row to keep.{' '}
-          <button onClick={() => setMergeFrom(null)} className="underline text-zinc-400">cancel</button>
-        </p>
-      )}
 
       {adding && (
         <AddItem types={types} categories={categories} busy={busy} run={run} input={input} onDone={() => setAdding(false)} />
