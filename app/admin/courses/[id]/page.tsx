@@ -35,6 +35,7 @@ import CourseGear from '../CourseGear'
 import CoursePhotosSection from '../CoursePhotosSection'
 import { LIBRARY_HREF, type CourseLink } from '@/lib/course-links'
 import { AudiencePills } from '@/components/AudiencePills'
+import ModuleAudience from '../ModuleAudience'
 import { type GearItem, type GearList } from '@/app/admin/gear/GearListEditor'
 import { type Schedule } from '@/app/admin/schedules/ScheduleEditor'
 import CourseSchedule from '@/app/admin/courses/CourseSchedule'
@@ -832,7 +833,11 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
                   <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800">
                     <div className="flex items-center gap-2">
                       <span className="font-medium">{mod.title}</span>
-                      <AudiencePills audience={moduleAudience(mod.audience)} />
+                      <ModuleAudience
+                        instanceId={id}
+                        moduleId={mod.id}
+                        audience={moduleAudience(mod.audience)}
+                      />
                     </div>
                     <form action={deleteModWithArgs}>
                       <button type="submit" className="text-xs text-zinc-600 hover:text-red-400 transition-colors">Delete section</button>

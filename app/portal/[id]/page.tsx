@@ -577,7 +577,7 @@ export default async function PortalPage({
         {/* Group email — the counterpart to Updates, and staff-only both
             ways: this is the outbox, not something recipients browse. */}
         {showTasks && (
-          <Section id="message" blurb="Email the group directly — the words go to their inbox" team>
+          <Section id="message" blurb="Email only — nothing is posted to this page" team>
             <CourseMessages
               instanceId={id}
               messages={courseMessages}

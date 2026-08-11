@@ -151,7 +151,7 @@ export default function CourseMessages({
             Write a message
           </button>
           <span className="text-xs text-zinc-500">
-            Goes straight to the inbox. For something you may need to correct later, post an update instead.
+            Can't be corrected once sent — post an update instead.
           </span>
         </div>
       )}

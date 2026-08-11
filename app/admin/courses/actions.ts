@@ -362,6 +362,29 @@ export async function deleteModule(instanceId: string, moduleId: string) {
   revalidatePath(`/admin/courses/${instanceId}`)
 }
 
+// A section's audience was fixed at creation, so a curriculum block put in as
+// instructors-only could never be opened up without deleting and rebuilding
+// it. The pill on the section header is the control now, so it needs this.
+export async function setModuleAudience(
+  instanceId: string,
+  moduleId: string,
+  audience: 'internal' | 'shared'
+) {
+  await requireAdmin()
+
+  // course_modules keeps the older three-value enum, where 'both' is the
+  // shared case and 'instructor' the internal one. moduleAudience() folds
+  // them the same way on the way out.
+  const { error } = await createAdminClient()
+    .from('course_modules')
+    .update({ audience: audience === 'internal' ? 'instructor' : 'both' })
+    .eq('id', moduleId)
+
+  if (error) throw new Error(error.message)
+  revalidatePath(`/admin/courses/${instanceId}`)
+  revalidatePath(`/portal/${instanceId}`)
+}
+
 export async function addItem(instanceId: string, moduleId: string, formData: FormData) {
   await requireAdmin()
   const admin = createAdminClient()

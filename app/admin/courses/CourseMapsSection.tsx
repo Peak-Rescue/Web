@@ -4,8 +4,9 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import AddLinkDialog from '@/components/AddLinkDialog'
-import { AUDIENCE_META, type LibraryAudience } from '@/lib/library'
+import { type LibraryAudience } from '@/lib/library'
 import { AudiencePills } from '@/components/AudiencePills'
+import AudienceToggle from '@/components/AudienceToggle'
 import {
   addCourseMapLink,
   addCourseMapsFromLibrary,
@@ -116,18 +117,14 @@ export default function CourseMapsSection({
               )}
             </div>
 
-            <select
-              value={m.audience}
-              disabled={busy || m.libraryLocked}
-              title={m.libraryLocked ? 'Marked instructors-only in the library — change it there first.' : undefined}
-              onChange={(e) =>
-                run(() => setCourseMapAudience(instanceId, m.id, e.target.value as LibraryAudience))
-              }
-              className="shrink-0 bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-xs text-zinc-300 focus:outline-none focus:border-zinc-500 disabled:opacity-50"
-            >
-              <option value="internal">{AUDIENCE_META.internal.choice}</option>
-              <option value="shared">{AUDIENCE_META.shared.choice}</option>
-            </select>
+            <span title={m.libraryLocked ? 'Marked instructors-only in the library — change it there first.' : undefined}>
+              <AudienceToggle
+                audience={m.audience}
+                disabled={busy || m.libraryLocked}
+                noun="this map"
+                onChange={(next) => run(() => setCourseMapAudience(instanceId, m.id, next))}
+              />
+            </span>
 
             {!m.fromLibrary && (
               <button

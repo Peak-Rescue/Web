@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import AddLinkDialog from '@/components/AddLinkDialog'
-import { AUDIENCE_META, type LibraryAudience } from '@/lib/library'
+import AudienceToggle from '@/components/AudienceToggle'
 import { linkLabel, type CourseLink } from '@/lib/course-links'
 import { addCourseLink, removeCourseLink, setCourseLinkAudience } from './link-actions'
 
@@ -67,17 +67,12 @@ export default function CoursePhotosSection({
                 {linkLabel(l)}
               </a>
 
-              <select
-                value={l.audience}
+              <AudienceToggle
+                audience={l.audience}
                 disabled={busy}
-                onChange={(e) =>
-                  run(() => setCourseLinkAudience(instanceId, l.id, e.target.value as LibraryAudience))
-                }
-                className="shrink-0 bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-xs text-zinc-300 focus:outline-none focus:border-zinc-500 disabled:opacity-50"
-              >
-                <option value="internal">{AUDIENCE_META.internal.choice}</option>
-                <option value="shared">{AUDIENCE_META.shared.choice}</option>
-              </select>
+                noun="this album"
+                onChange={(next) => run(() => setCourseLinkAudience(instanceId, l.id, next))}
+              />
 
               <button
                 onClick={() => run(() => removeCourseLink(instanceId, l.id))}
