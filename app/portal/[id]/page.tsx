@@ -141,7 +141,7 @@ export default async function PortalPage({
       // Updates are posted to everyone on the course, so there's no audience
       // filter — an update students can't see would defeat the point.
       admin.from('course_updates')
-        .select('id, body, created_at, sent_count, recipient_count, emailed_at, profiles(first_name, last_name)')
+        .select('id, body, created_at, updated_at, sent_count, recipient_count, notify_count, emailed_at, links, attachments, profiles(first_name, last_name)')
         .eq('instance_id', id)
         .order('created_at', { ascending: false }),
       // Only needed to say "emails 12 students" before the button is pressed.
@@ -272,16 +272,34 @@ export default async function PortalPage({
   const hasNotes = showTasks && Boolean(inst.notes)
   // Everyone on the course sees updates; staff also get the box to write one,
   // so the section shows for them even when there's nothing posted yet.
-  const courseUpdates: CourseUpdate[] = ((updateRows ?? []) as unknown as {
-    id: string; body: string; created_at: string; sent_count: number; recipient_count: number
-    emailed_at: string | null; profiles: { first_name: string | null; last_name: string | null } | null
-  }[]).map((u) => ({
+  type UpdateRow = {
+    id: string; body: string; created_at: string; updated_at: string | null
+    sent_count: number; recipient_count: number; notify_count: number; emailed_at: string | null
+    links: { label: string; url: string }[] | null
+    attachments: { path: string; filename: string }[] | null
+    profiles: { first_name: string | null; last_name: string | null } | null
+  }
+  const updateRowsTyped = (updateRows ?? []) as unknown as UpdateRow[]
+
+  // Attachments sit in the private bucket, so they're signed here — one call
+  // for every update on the page rather than one per file.
+  const updatePaths = updateRowsTyped.flatMap((u) => (u.attachments ?? []).map((a) => a.path))
+  const { data: signedUpdateDocs } = updatePaths.length
+    ? await admin.storage.from('task-documents').createSignedUrls(updatePaths, 3600)
+    : { data: [] }
+  const updateDocUrl = new Map((signedUpdateDocs ?? []).map((s) => [s.path, s.signedUrl]))
+
+  const courseUpdates: CourseUpdate[] = updateRowsTyped.map((u) => ({
     id: u.id,
     body: u.body,
     created_at: u.created_at,
+    updated_at: u.updated_at,
     sent_count: u.sent_count,
     recipient_count: u.recipient_count,
+    notify_count: u.notify_count,
     emailed_at: u.emailed_at,
+    links: u.links ?? [],
+    attachments: (u.attachments ?? []).map((a) => ({ ...a, url: updateDocUrl.get(a.path) ?? '#' })),
     authorName: [u.profiles?.first_name, u.profiles?.last_name].filter(Boolean).join(' ').trim() || null,
   }))
   // Any instructor on the course can post, not just the lead — a meeting point
