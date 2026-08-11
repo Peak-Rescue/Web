@@ -83,7 +83,8 @@ export default function GearCatalog({ items }: { items: Row[] }) {
   // you read a whole category, decide two of its five don't belong, and
   // want both somewhere else — so refiling one row at a time is the wrong
   // unit of work for the only job this page really has right now.
-  const [picked, setPicked] = useState<Set<string>>(new Set())
+  // Which type has its category picker open.
+  const [moving, setMoving] = useState<string | null>(null)
   // Which row has its write-rarely fields open. One at a time: the link and
   // the synonyms are read by search, not by people, so they stay folded.
   const [expanded, setExpanded] = useState<string | null>(null)
@@ -160,6 +161,20 @@ export default function GearCatalog({ items }: { items: Row[] }) {
           {row.uses > 0 ? `on ${row.uses}` : ''}
         </span>
 
+        {/* Types only — a product follows the type it satisfies, so refiling
+            one on its own is not a thing that can happen. Labelled with the
+            noun: a checkbox armed a hidden bar and never said what it was for,
+            and "move" didn't say move what, or where. */}
+        {!row.parent_id && (
+          <button
+            onClick={() => setMoving(moving === row.id ? null : row.id)}
+            title="File this type under a different category"
+            className={moving === row.id ? 'text-[11px] text-white' : btn}
+          >
+            category
+          </button>
+        )}
+
         <button
           onClick={() => setExpanded(showing ? null : row.id)}
           title="Link and synonyms"
@@ -213,25 +228,6 @@ export default function GearCatalog({ items }: { items: Row[] }) {
     return (
       <div className={`px-2 py-1.5 ${sub ? 'pl-9 bg-zinc-950/30' : ''}`}>
         <div className="flex items-center gap-2">
-          {/* Types only. A product follows the type it satisfies, so refiling
-              one on its own is not a thing that can happen. */}
-          {!sub ? (
-            <input
-              type="checkbox"
-              checked={picked.has(row.id)}
-              onChange={() => setPicked((prev) => {
-                const next = new Set(prev)
-                if (next.has(row.id)) next.delete(row.id)
-                else next.add(row.id)
-                return next
-              })}
-              aria-label={`Select ${row.name}`}
-              className="accent-red-600 shrink-0"
-            />
-          ) : (
-            <span className="w-3 shrink-0" />
-          )}
-
           <input
             defaultValue={row.name}
             onBlur={(e) => e.target.value !== row.name &&
@@ -254,7 +250,22 @@ export default function GearCatalog({ items }: { items: Row[] }) {
           <Actions row={row} showing={showing} />
         </div>
 
-        <div className="flex items-center gap-2 mt-0.5" style={{ paddingLeft: sub ? 20 : 20 }}>
+        {moving === row.id && (
+          <div className="mt-1">
+            <CategorySelect
+              value={row.category}
+              options={categories}
+              disabled={busy}
+              onChange={(next) => {
+                setMoving(null)
+                if (next) run(() => upsertGearItem({ id: row.id, name: row.name, category: next }))
+              }}
+              className={`${input} text-[11px] w-64`}
+            />
+          </div>
+        )}
+
+        <div className="flex items-center gap-2 mt-0.5">
           <input
             defaultValue={row.info ?? ''}
             onBlur={(e) => e.target.value !== (row.info ?? '') &&
@@ -319,39 +330,6 @@ export default function GearCatalog({ items }: { items: Row[] }) {
           you. Unfiltered, everything is on screen and a total says nothing. */}
       {query.trim() && shown.length > 0 && (
         <p className="text-[11px] text-zinc-600">Showing {shown.length} of {types.length} types</p>
-      )}
-
-      {/* Sticky, because a sweep means ticking rows in one category and
-          landing them in another that is several screens away — a bar that
-          scrolls off is a bar you have to scroll back to. */}
-      {picked.size > 0 && (
-        <div className="sticky top-16 z-20 flex flex-wrap items-center gap-3 p-2.5 rounded-lg border border-pr-red/50 bg-zinc-900 shadow-lg">
-          <span className="text-xs text-zinc-300">
-            {picked.size} type{picked.size === 1 ? '' : 's'} selected
-          </span>
-          <CategorySelect
-            value={null}
-            options={categories}
-            disabled={busy}
-            onChange={(next) => next && run(async () => {
-              // Each row is written on its own: upsert takes one item, and a
-              // partial failure part-way through is still a real move for the
-              // rows that landed, not a silent all-or-nothing rollback.
-              for (const id of picked) {
-                const row = types.find((t) => t.id === id)
-                if (row) await upsertGearItem({ id, name: row.name, category: next })
-              }
-              setPicked(new Set())
-            })}
-            className={`${input} text-xs`}
-          />
-          <button
-            onClick={() => setPicked(new Set())}
-            className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
-          >
-            Clear selection
-          </button>
-        </div>
       )}
 
       {mergeFrom && (
