@@ -25,12 +25,19 @@ export default function AudienceToggle({
   onChange,
   disabled,
   noun = 'this',
+  showInstructors = true,
 }: {
   audience: LibraryAudience
   onChange: (next: LibraryAudience) => void
   disabled?: boolean
   /** What's being shared, for the confirm step: "Show students the evac map?" */
   noun?: string
+  /**
+   * Drop the instructors pill where the answer is already on screen — a row
+   * inside a section whose header says it. Repeating it on every child is
+   * noise, and the gesture people learn is the students pill anyway.
+   */
+  showInstructors?: boolean
 }) {
   const [confirming, setConfirming] = useState(false)
   const pill = 'text-[10px] leading-none px-1.5 py-1 rounded transition-colors disabled:opacity-40'
@@ -73,9 +80,11 @@ export default function AudienceToggle({
           Students
         </button>
       )}
-      <span className={`${pill} ${INSTRUCTORS}`} title="Everyone on the course team can see this">
-        Instructors
-      </span>
+      {showInstructors && (
+        <span className={`${pill} ${INSTRUCTORS}`} title="Everyone on the course team can see this">
+          Instructors
+        </span>
+      )}
     </span>
   )
 }

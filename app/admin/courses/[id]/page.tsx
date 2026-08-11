@@ -2,7 +2,7 @@ import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { updateInstanceDetails, updateInstanceDates, addOffDay, removeOffDay, addModule, deleteModule, addItem, deleteItem, removeInstructor, removeEnrollment, updateCourseLogistics } from '../actions'
+import { updateInstanceDetails, updateInstanceDates, addOffDay, removeOffDay, addModule, deleteModule, addItem, deleteItem, removeInstructor, removeEnrollment, updateCourseLogistics, setModuleAudience, setItemAudience } from '../actions'
 import { CourseTypeSelect } from '../CourseTypeSelect'
 import InstructorAssign from '../InstructorAssign'
 import StaffingInterest from '../StaffingInterest'
@@ -34,8 +34,7 @@ import { CourseTabs, TabPanel } from '../CourseTabs'
 import CourseGear from '../CourseGear'
 import CoursePhotosSection from '../CoursePhotosSection'
 import { LIBRARY_HREF, type CourseLink } from '@/lib/course-links'
-import { AudiencePills } from '@/components/AudiencePills'
-import ModuleAudience from '../ModuleAudience'
+import AudienceSetter from '../AudienceSetter'
 import { type GearItem, type GearList } from '@/app/admin/gear/GearListEditor'
 import { type Schedule } from '@/app/admin/schedules/ScheduleEditor'
 import CourseSchedule from '@/app/admin/courses/CourseSchedule'
@@ -833,10 +832,10 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
                   <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800">
                     <div className="flex items-center gap-2">
                       <span className="font-medium">{mod.title}</span>
-                      <ModuleAudience
-                        instanceId={id}
-                        moduleId={mod.id}
+                      <AudienceSetter
                         audience={moduleAudience(mod.audience)}
+                        noun="this section"
+                        action={async (next) => { 'use server'; await setModuleAudience(id, mod.id, next) }}
                       />
                     </div>
                     <form action={deleteModWithArgs}>
@@ -854,7 +853,6 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
                     const title = lib?.title ?? item.title
                     const url = lib?.url ?? item.url
                     const effective = item.audience ?? lib?.audience ?? 'shared'
-                    const heldBack = moduleAudience(mod.audience) === 'shared' && effective === 'internal'
                     return (
                       <div key={item.id} className="flex items-start justify-between px-4 py-3 border-b border-zinc-800/60 last:border-0">
                         <div className="flex items-start gap-3 min-w-0">
@@ -867,10 +865,19 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
                                 ? <a href={url} target="_blank" rel="noreferrer" className="text-sm font-medium hover:text-pr-red-light transition-colors">{title}</a>
                                 : <span className="text-sm font-medium">{title}</span>}
                               {lib && <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-500">library</span>}
-                              {/* Only worth saying where it differs from the
-                                  section: an item that matches its section is
-                                  already answered by the heading. */}
-                              {heldBack && <AudiencePills audience="internal" />}
+                              {/* Inside an instructors-only section there is
+                                  nothing to decide — students see none of it
+                                  either way, so the control would be a lie.
+                                  The instructors pill is dropped because the
+                                  section header two lines up already says it. */}
+                              {moduleAudience(mod.audience) === 'shared' && (
+                                <AudienceSetter
+                                  audience={effective}
+                                  noun="this item"
+                                  showInstructors={false}
+                                  action={async (next) => { 'use server'; await setItemAudience(id, item.id, next) }}
+                                />
+                              )}
                             </div>
                             {item.description && <p className="text-xs text-zinc-500 mt-0.5">{item.description}</p>}
                           </div>
