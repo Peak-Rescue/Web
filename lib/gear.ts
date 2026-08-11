@@ -64,6 +64,16 @@ export type CatalogItem = {
   disciplines?: string[]
 }
 
+// Server actions hand back a message rather than throwing it, because Next
+// replaces a thrown error's text in production. Turning it back into a throw
+// here — on the client — puts it where the catch that shows it already is.
+export function unwrap<T extends object>(result: T | { error: string }): T {
+  if (result && typeof result === 'object' && 'error' in result) {
+    throw new Error((result as { error: string }).error)
+  }
+  return result as T
+}
+
 // How a product is written wherever it is read as one thing: "Petzl Grigri".
 // The catalog splits the two into columns; everything else puts them back.
 export function productName(item: { brand?: string | null; name: string }): string {

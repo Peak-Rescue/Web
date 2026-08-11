@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSteadyRefresh } from '@/components/useSteadyRefresh'
-import { GEAR_CATEGORIES, matchesGear, productName, type CatalogItem } from '@/lib/gear'
+import { GEAR_CATEGORIES, matchesGear, productName, unwrap, type CatalogItem } from '@/lib/gear'
 import {
   addGearEntry, updateGearEntry, removeGearEntry, updateGearList, copyGearList,
   saveGearListIntoTemplate, setGearEntryOptions, upsertGearItem, renameGearSection,
@@ -173,7 +173,9 @@ export default function GearListEditor({
 
   async function run(fn: () => Promise<unknown>) {
     setBusy(true); setError(null)
-    try { await fn(); refresh() }
+    // An action that hands back a message is reporting something fixable,
+    // not succeeding quietly — the catch below is where it belongs.
+    try { unwrap((await fn() ?? {}) as object); refresh() }
     catch (e) { setError(e instanceof Error ? e.message : 'That didn’t save'); setPending(null) }
     finally { setBusy(false) }
   }
@@ -669,9 +671,9 @@ function Row({
         // This one waits: the chip can't be drawn from a catalog that doesn't
         // have the product in it yet.
         const addNew = () => run(async () => {
-          const { id } = await upsertGearItem({
+          const { id } = unwrap(await upsertGearItem({
             name: newModel, brand: newBrand.trim() || null, category: type.category, parentId: type.id,
-          })
+          }))
           await setGearEntryOptions(e.id, [...e.r.options.map((o) => o.id), id], instanceId)
           setNewModel(''); setNewBrand('')
         })
@@ -1023,12 +1025,12 @@ function AddGear({
               )}
               <button
                 onClick={() => run(async () => {
-                  const { id } = await upsertGearItem({
+                  const { id } = unwrap(await upsertGearItem({
                     name: query,
                     brand: newParent ? newItemBrand.trim() || null : null,
                     category: newCategory,
                     parentId: newParent || null,
-                  })
+                  }))
                   await addGearEntry(listId, { gearItemId: id, groupType, section })
                   setQuery(''); setNewParent(''); setNewItemBrand('')
                 })}

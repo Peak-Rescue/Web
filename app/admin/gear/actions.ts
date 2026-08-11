@@ -25,6 +25,16 @@ function touch(instanceId?: string | null) {
   }
 }
 
+// Something the person can fix — a name already taken, a field left empty —
+// returned rather than thrown. Next replaces a thrown error's message with a
+// generic one in production, so every careful sentence in this file reached
+// the screen as "An error occurred in the Server Components render". The
+// client turns these back into thrown errors, where messages survive.
+//
+// Genuine faults still throw: a failed write is not advice.
+type Failed = { error: string }
+const fail = (error: string): Failed => ({ error })
+
 // ─── Catalog ────────────────────────────────────────────────────────────────
 
 export async function upsertGearItem(input: {
@@ -37,7 +47,7 @@ export async function upsertGearItem(input: {
   parentId?: string | null
   aliases?: string[]
   disciplines?: string[]
-}) {
+}): Promise<{ id: string } | Failed> {
   const admin = await requireAdmin()
   // Only what the caller actually passed. Writing every column on every call
   // made each field's edit erase the others: renaming an item sent no brand
@@ -47,7 +57,7 @@ export async function upsertGearItem(input: {
   if (input.info !== undefined) row.info = input.info?.trim() || null
   if (input.url !== undefined) row.url = input.url?.trim() || null
   if (input.category !== undefined) row.category = input.category?.trim() || null
-  if (!row.name) throw new Error('Name is required')
+  if (!row.name) return fail('Name is required')
   if (input.aliases !== undefined) {
     row.aliases = [...new Set(input.aliases.map((a) => a.trim().toLowerCase()).filter(Boolean))]
   }
@@ -64,9 +74,9 @@ export async function upsertGearItem(input: {
     if (input.parentId) {
       const { data: parent } = await admin
         .from('gear_items').select('id, parent_id, category').eq('id', input.parentId).single()
-      if (!parent) throw new Error('That type no longer exists')
-      if (parent.parent_id) throw new Error('A model can’t sit under another model — pick the type instead')
-      if (input.id === input.parentId) throw new Error('An item can’t be its own type')
+      if (!parent) return fail('That generic item no longer exists')
+      if (parent.parent_id) return fail('A product can’t sit under another product — pick the generic item instead')
+      if (input.id === input.parentId) return fail('An item can’t be its own generic item')
       // A product is the same kind of kit as the type it satisfies, so its
       // category is the type's and not a second answer that can disagree. The
       // catalog nests products under their type, which hid the disagreement:
@@ -102,7 +112,7 @@ export async function upsertGearItem(input: {
     return { id: other.id }
   }
 
-  if (other) throw new Error(`"${other.name}" is already in the catalog — use it, or add this as a product under it`)
+  if (other) return fail(`"${other.name}" is already in the catalog — use it, or add this as a product under it`)
 
   if (input.id) {
     const { error } = await admin.from('gear_items').update(row).eq('id', input.id)
@@ -119,10 +129,10 @@ export async function upsertGearItem(input: {
 // Renaming a category renames it everywhere at once. It isn't a row of its
 // own — a category exists only as the string its members carry — so the only
 // way to rename one is to write the new name onto every item holding the old.
-export async function renameGearCategory(from: string, to: string) {
+export async function renameGearCategory(from: string, to: string): Promise<Failed | void> {
   const admin = await requireAdmin()
   const next = to.trim().slice(0, 60)
-  if (!next) throw new Error('A category needs a name')
+  if (!next) return fail('A category needs a name')
   if (next === from) return
 
   const { error } = await admin

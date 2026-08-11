@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import { useSteadyRefresh } from '@/components/useSteadyRefresh'
-import { GEAR_CATEGORIES, matchesGear, type CatalogItem } from '@/lib/gear'
+import { GEAR_CATEGORIES, matchesGear, unwrap, type CatalogItem } from '@/lib/gear'
 import { upsertGearItem, retireGearItem, renameGearCategory } from './actions'
 
 type Row = CatalogItem & { active: boolean; uses: number }
@@ -145,7 +145,9 @@ export default function GearCatalog({ items }: { items: Row[] }) {
 
   async function run(fn: () => Promise<unknown>) {
     setBusy(true); setError(null)
-    try { await fn(); refresh() }
+    // An action that hands back a message is reporting something fixable,
+    // not succeeding quietly — the catch below is where it belongs.
+    try { unwrap((await fn() ?? {}) as object); refresh() }
     catch (e) { setError(e instanceof Error ? e.message : 'That didn’t save') }
     finally { setBusy(false) }
   }
@@ -580,7 +582,7 @@ function AddItem({
           // product is filed under it — two writes for what reads as one.
           let parent = parentId
           if (newType?.trim()) {
-            const { id } = await upsertGearItem({ name: newType.trim(), category })
+            const { id } = unwrap(await upsertGearItem({ name: newType.trim(), category }))
             parent = id
           }
           await upsertGearItem({
