@@ -368,8 +368,10 @@ export default function GearCatalog({ items }: { items: Row[] }) {
                 defaultValue={g.name}
                 key={g.name}
                 // Sized to its own name so the rule starts where the word ends
-                // rather than at some column the longest category set.
-                style={{ width: `calc(${g.name.length}ch + 1.75rem)` }}
+                // rather than at some column the longest category set. Uppercase
+                // and letter-spacing both run wider than a ch, so both are paid
+                // for — undercounting clips the last letter.
+                style={{ width: `calc(${g.name.length} * (1.1ch + 0.14em) + 1.75rem)` }}
                 onBlur={(e) => {
                   const next = e.target.value.trim()
                   if (!next || next === g.name) { e.target.value = g.name; return }
@@ -383,7 +385,6 @@ export default function GearCatalog({ items }: { items: Row[] }) {
                 No category
               </h2>
             )}
-            <span className="text-[11px] text-zinc-600 tabular-nums">{g.rows.length}</span>
             <span className="flex-1 h-px bg-zinc-800" />
           </div>
 
