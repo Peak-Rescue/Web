@@ -55,8 +55,8 @@ export default function CourseLinksSection({
   )
 
   return (
-    <div>
-      <h3 className="text-sm font-semibold text-zinc-400 mt-6 mb-1">Links</h3>
+    <div className="p-6 pt-5 border-t border-zinc-800">
+      <h3 className="text-sm font-semibold text-zinc-300 mb-1">Links</h3>
       <p className="text-xs text-zinc-500 mb-3">
         For this course only. Anything worth using again belongs in the{' '}
         <Link href={LIBRARY_HREF} className="text-zinc-300 underline decoration-zinc-600 hover:text-white hover:decoration-zinc-400 transition-colors">
@@ -67,7 +67,7 @@ export default function CourseLinksSection({
 
       {error && <p className="text-xs text-pr-red mb-2">{error}</p>}
 
-      <div className="space-y-4">
+      <div className="space-y-5">
         {shown.map((purpose) => {
           const meta = PURPOSE_META[purpose]
           const rows = links.filter((l) => l.purpose === purpose)
@@ -79,9 +79,9 @@ export default function CourseLinksSection({
               </div>
 
               {rows.length > 0 && (
-                <div className="bg-zinc-900 border border-zinc-800 rounded-lg divide-y divide-zinc-800 mb-2">
+                <div className="bg-zinc-950/40 border border-zinc-800 rounded-lg divide-y divide-zinc-800 mb-2">
                   {rows.map((l) => (
-                    <div key={l.id} className="flex items-center gap-3 px-3 py-2.5">
+                    <div key={l.id} className="flex items-center gap-3 px-4 py-3">
                       <svg
                         xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24"
                         fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"

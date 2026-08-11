@@ -543,10 +543,11 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
 
           <CourseLinksSection instanceId={id} links={(courseLinkRows ?? []) as CourseLink[]} />
 
-          <h3 className="text-sm font-semibold text-zinc-400 mt-6 mb-2">Dates</h3>
+          <div className="p-6 pt-5 border-t border-zinc-800">
+          <h3 className="text-sm font-semibold text-zinc-300 mb-3">Dates</h3>
 
           {/* Overall window — auto-saved */}
-          <AutoSaveForm action={updateDatesWithId} className="grid grid-cols-2 gap-4 p-4 bg-zinc-900 border border-zinc-800 rounded-lg mb-4">
+          <AutoSaveForm action={updateDatesWithId} className="grid grid-cols-2 gap-4 p-4 bg-zinc-950/40 border border-zinc-800 rounded-lg mb-4">
             <div>
               <label className="block text-xs text-zinc-400 mb-1">Course start</label>
               <input name="starts_at" type="date" defaultValue={inst.starts_at ?? ''} className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
@@ -575,7 +576,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
                   const removeOffDayWithArgs = removeOffDay.bind(null, id, o.id)
                   const isRange = o.end_date && o.end_date !== o.off_date
                   return (
-                    <div key={o.id} className="flex items-center justify-between px-4 py-2 bg-zinc-900 border border-zinc-800 rounded-lg">
+                    <div key={o.id} className="flex items-center justify-between px-4 py-2 bg-zinc-950/40 border border-zinc-800 rounded-lg">
                       <div className="flex items-center gap-2">
                         <span className="text-xs text-zinc-500 font-medium">{isRange ? 'Range' : 'Day'}</span>
                         <span className="text-sm">
@@ -590,7 +591,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
                 })}
               </div>
             )}
-            <form action={addOffDayWithId} className="flex gap-2 flex-wrap items-end p-4 bg-zinc-900 border border-dashed border-zinc-700 rounded-lg">
+            <form action={addOffDayWithId} className="flex gap-2 flex-wrap items-end p-4 bg-zinc-950/40 border border-dashed border-zinc-700 rounded-lg">
               <div>
                 <label className="block text-xs text-zinc-500 mb-1">Start date</label>
                 <input name="off_date" type="date" required className="bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
@@ -609,7 +610,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
           {/* Computed blocks preview — only when off-days split the course; a
               single block just repeats the start/end dates above */}
           {blocks.length > 1 && (
-            <div className="p-4 bg-zinc-900 border border-zinc-800 rounded-lg">
+            <div className="p-4 bg-zinc-950/40 border border-zinc-800 rounded-lg">
               <p className="text-xs text-zinc-500 mb-2">Calendar blocks ({blocks.length})</p>
               <div className="space-y-1">
                 {blocks.map((b, i) => (
@@ -622,6 +623,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
               </div>
             </div>
           )}
+          </div>
 
           </div>
         </TabPanel>

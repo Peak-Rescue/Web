@@ -76,20 +76,20 @@ export default function CourseMapsSection({
     .sort((a, b) => Number(b.suggested) - Number(a.suggested) || a.title.localeCompare(b.title))
 
   return (
-    <div>
-      <h3 className="text-sm font-semibold text-zinc-400 mt-6 mb-1">Maps</h3>
+    <div className="p-6 pt-5 border-t border-zinc-800">
+      <h3 className="text-sm font-semibold text-zinc-300 mb-1">Maps</h3>
       <p className="text-xs text-zinc-500 mb-3">
         CalTopo, SARTopo or anything else that shows where this course happens. Each map is instructors-only until
         you share it.
       </p>
 
-      <div className="bg-zinc-900 border border-zinc-800 rounded-lg divide-y divide-zinc-800">
+      <div className="bg-zinc-950/40 border border-zinc-800 rounded-lg divide-y divide-zinc-800">
         {maps.length === 0 && (
-          <p className="text-xs text-zinc-600 px-3 py-4">No maps on this course yet.</p>
+          <p className="text-xs text-zinc-600 px-4 py-4">No maps on this course yet.</p>
         )}
 
         {maps.map((m) => (
-          <div key={m.id} className="flex items-center gap-3 px-3 py-2.5">
+          <div key={m.id} className="flex items-center gap-3 px-4 py-3">
             <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-zinc-500">
               <path d="M9 20l-5.447-2.724A1 1 0 0 1 3 16.382V5.618a1 1 0 0 1 1.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0 0 21 18.382V7.618a1 1 0 0 0-.553-.894L15 4m0 13V4m0 0L9 7" />
             </svg>

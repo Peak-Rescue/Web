@@ -143,10 +143,11 @@ export default function CourseFilesSection({
         className="hidden"
         onChange={handleFiles}
       />
-      <div className="flex items-center justify-between gap-3 mb-3">
-        <p className="text-xs text-zinc-400">
-          Files — course documents and task attachments.
-        </p>
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <div>
+          <h3 className="text-sm font-semibold text-zinc-300 mb-1">Files</h3>
+          <p className="text-xs text-zinc-500">Course documents and task attachments.</p>
+        </div>
         <div className="shrink-0 flex items-center gap-2">
           <button
             onClick={() => setLinkOpen(true)}
@@ -177,12 +178,12 @@ export default function CourseFilesSection({
         </div>
       </div>
 
-      {files.length === 0 ? (
-        <p className="text-sm text-zinc-500">No files yet.</p>
-      ) : (
-        <div className="divide-y divide-zinc-800">
-          {files.map((f) => (
-            <div key={`${f.source}-${f.id}`} className="flex items-center gap-3 py-2">
+      <div className="bg-zinc-950/40 border border-zinc-800 rounded-lg divide-y divide-zinc-800">
+        {files.length === 0 ? (
+          <p className="text-xs text-zinc-600 px-4 py-4">No files on this course yet.</p>
+        ) : (
+          files.map((f) => (
+            <div key={`${f.source}-${f.id}`} className="flex items-center gap-3 px-4 py-3">
               {renamingId === f.id ? (
                 <input
                   autoFocus
@@ -247,9 +248,9 @@ export default function CourseFilesSection({
                 </>
               )}
             </div>
-          ))}
-        </div>
-      )}
+          ))
+        )}
+      </div>
 
       {error && <p className="mt-2 text-xs text-pr-red-light">{error}</p>}
 
