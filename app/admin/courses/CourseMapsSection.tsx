@@ -79,8 +79,7 @@ export default function CourseMapsSection({
     <div className="p-6 pt-5 border-t border-zinc-800">
       <h3 className="text-sm font-semibold text-zinc-300 mb-1">Maps</h3>
       <p className="text-xs text-zinc-500 mb-3">
-        CalTopo, SARTopo or anything else that shows where this course happens. Each map is instructors-only until
-        you share it.
+        CalTopo, SARTopo, anything with a link — instructors-only until you share it.
       </p>
 
       <div className="bg-zinc-950/40 border border-zinc-800 rounded-lg divide-y divide-zinc-800">
@@ -133,19 +132,24 @@ export default function CourseMapsSection({
               <button
                 onClick={() => run(() => saveCourseMapToLibrary(instanceId, m.id))}
                 disabled={busy}
-                title="Add to the map library so other courses here can use it"
-                className="shrink-0 text-zinc-500 hover:text-zinc-200 transition-colors text-xs disabled:opacity-40"
+                title="Save to the map library so other courses can use it"
+                aria-label="Save to the map library"
+                className="shrink-0 text-zinc-600 hover:text-zinc-200 transition-colors disabled:opacity-40"
               >
-                Save to library
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+                </svg>
               </button>
             )}
 
             <button
               onClick={() => run(() => removeCourseMap(instanceId, m.id))}
               disabled={busy}
-              className="shrink-0 text-zinc-600 hover:text-pr-red transition-colors text-xs disabled:opacity-40"
+              title="Remove from this course"
+              aria-label="Remove from this course"
+              className="shrink-0 text-zinc-600 hover:text-pr-red-light transition-colors text-sm leading-none disabled:opacity-40"
             >
-              Remove
+              ×
             </button>
           </div>
         ))}

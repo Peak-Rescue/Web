@@ -504,12 +504,12 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
                 <option value="">— none —</option>
                 {(venueRows ?? []).map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
               </select>
-              <p className="text-xs text-zinc-500 mt-1">Pulls in this venue&rsquo;s maps, permits and rescue plans.</p>
+              <p className="text-xs text-zinc-500 mt-1">Brings in its maps, permits and rescue plans.</p>
             </div>
             <div>
               <label className="block text-xs text-zinc-400 mb-1">State / country</label>
               <RegionSelect name="region" defaultValue={inst.region} className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
-              <p className="text-xs text-zinc-500 mt-1">Used to suggest maps for this course.</p>
+              <p className="text-xs text-zinc-500 mt-1">Suggests maps for this course.</p>
             </div>
             <div>
               <label className="block text-xs text-zinc-400 mb-1">Client / organization</label>
@@ -534,7 +534,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
                 defaultValue={inst.notes ?? ''}
                 className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500 resize-y [field-sizing:content] min-h-14 max-h-80"
               />
-              <p className="text-xs text-zinc-500 mt-1">The course team only — students never see these.</p>
+              <p className="text-xs text-zinc-500 mt-1">Team only.</p>
             </div>
           </AutoSaveForm>
 
@@ -572,7 +572,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
             </summary>
             <div className="mt-3">
             <p className="text-xs text-zinc-500 mb-3">
-              Rest days or pauses inside the course window — not the course start/end.
+              Rest days inside the course window — not the start/end.
             </p>
             {(offDays ?? []).length > 0 && (
               <div className="space-y-2 mb-3">
@@ -588,7 +588,14 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
                         </span>
                       </div>
                       <form action={removeOffDayWithArgs}>
-                        <button type="submit" className="text-xs text-zinc-600 hover:text-red-400 transition-colors">Remove</button>
+                        <button
+                          type="submit"
+                          title="Remove this date"
+                          aria-label="Remove this date"
+                          className="text-sm leading-none text-zinc-600 hover:text-pr-red-light transition-colors"
+                        >
+                          ×
+                        </button>
                       </form>
                     </div>
                   )
@@ -780,8 +787,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
         <TabPanel id="schedule">
           <h2 className="text-lg font-semibold mb-1">Schedule</h2>
           <p className="text-xs text-zinc-500 mb-4">
-            The running order participants see. Days carry their own location and notes; topics can hold sub-topics, and
-            times are optional.
+            The running order participants see.
           </p>
           <CourseSchedule
             instanceId={id}
@@ -796,7 +802,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
         <TabPanel id="gear">
           <h2 className="text-lg font-semibold mb-1">Gear</h2>
           <p className="text-xs text-zinc-500 mb-4">
-            Built from the gear catalog and shown on the course — no separate document to write and link.
+            Built from the gear catalog and shown on the course.
           </p>
           <CourseGear
             instanceId={id}

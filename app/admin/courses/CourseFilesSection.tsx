@@ -149,9 +149,7 @@ export default function CourseFilesSection({
           {/* Said out loud because the rest of this tab is audience-switched
               and these aren't: there's no Shared option here, and a file
               students need reaches them attached to a course update. */}
-          <p className="text-xs text-zinc-500">
-            Course documents and task attachments — the course team only, never students.
-          </p>
+          <p className="text-xs text-zinc-500">Documents and task attachments — team only.</p>
         </div>
         <div className="shrink-0 flex items-center gap-2">
           <button
