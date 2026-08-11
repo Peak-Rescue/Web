@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react'
 import { useSteadyRefresh } from '@/components/useSteadyRefresh'
 import { GEAR_CATEGORIES, matchesGear, productName, type CatalogItem } from '@/lib/gear'
-import { upsertGearItem, retireGearItem } from './actions'
+import { upsertGearItem, retireGearItem, renameGearCategory } from './actions'
 
 type Row = CatalogItem & { active: boolean; uses: number }
 
@@ -84,9 +84,6 @@ export default function GearCatalog({ items }: { items: Row[] }) {
   // unit of work for the only job this page really has right now.
   // Which type has its category picker open.
   const [moving, setMoving] = useState<string | null>(null)
-  // Which row has its write-rarely fields open. One at a time: the link and
-  // the synonyms are read by search, not by people, so they stay folded.
-  const [expanded, setExpanded] = useState<string | null>(null)
 
   const types = useMemo(() => items.filter((i) => !i.parent_id), [items])
   const childrenOf = useMemo(() => {
@@ -145,7 +142,7 @@ export default function GearCatalog({ items }: { items: Row[] }) {
   // reading it is what happens the rest of the time. So they stay out of the
   // way until the pointer is on the row — except mid-merge, when every row is a
   // candidate keeper and hiding the target would be absurd.
-  function Actions({ row, showing }: { row: Row; showing: boolean }) {
+  function Actions({ row }: { row: Row }) {
     const btn = 'text-[11px] text-zinc-500 hover:text-white transition-colors'
     return (
       <div className="flex items-center justify-end gap-3 whitespace-nowrap shrink-0">
@@ -179,21 +176,6 @@ export default function GearCatalog({ items }: { items: Row[] }) {
           delete
         </button>
 
-        <button
-          onClick={() => setExpanded(showing ? null : row.id)}
-          title={showing ? 'Hide link and synonyms' : 'Link and synonyms'}
-          aria-expanded={showing}
-          aria-label={showing ? 'Hide link and synonyms' : 'Show link and synonyms'}
-          className="text-zinc-600 hover:text-white transition-colors"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24"
-            fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-            className={`transition-transform ${showing ? 'rotate-180' : ''}`}
-          >
-            <path d="m6 9 6 6 6-6" />
-          </svg>
-        </button>
       </div>
     )
   }
@@ -203,7 +185,6 @@ export default function GearCatalog({ items }: { items: Row[] }) {
   // the synonyms — stay behind a toggle, because a row that shows every field
   // at all times is a form, and this page is read far more than it is edited.
   function ItemRow({ row, sub }: { row: Row; sub?: boolean }) {
-    const showing = expanded === row.id
     return (
       <div className={`px-2 py-1.5 ${sub ? 'pl-9 bg-zinc-950/30' : ''}`}>
         <div className="flex items-center gap-2">
@@ -226,7 +207,7 @@ export default function GearCatalog({ items }: { items: Row[] }) {
           )}
 
           <span className="flex-1" />
-          <Actions row={row} showing={showing} />
+          <Actions row={row} />
         </div>
 
         {moving === row.id && (
@@ -252,30 +233,31 @@ export default function GearCatalog({ items }: { items: Row[] }) {
             placeholder="Notes / spec"
             className={`${CELL} flex-1 min-w-0 text-[11px] text-zinc-500`}
           />
+          {/* Only a product has a page to link to. Nobody publishes a
+              "brake-assist descender"; Petzl publishes a Grigri. */}
+          {sub && (
+            <>
+              <input
+                defaultValue={row.url ?? ''}
+                onBlur={(e) => e.target.value !== (row.url ?? '') &&
+                  run(() => upsertGearItem({ id: row.id, name: row.name, url: e.target.value }))}
+                placeholder="Link"
+                className={`${CELL} w-64 shrink-0 text-[11px] text-zinc-500`}
+              />
+              {row.url && (
+                <a
+                  href={row.url} target="_blank" rel="noreferrer"
+                  title="Open link"
+                  className="shrink-0 text-zinc-600 hover:text-white transition-colors"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14 21 3" />
+                  </svg>
+                </a>
+              )}
+            </>
+          )}
         </div>
-
-        {showing && (
-          <div className="flex flex-wrap items-center gap-2 mt-1 pl-5">
-            <input
-              defaultValue={row.url ?? ''}
-              onBlur={(e) => e.target.value !== (row.url ?? '') &&
-                run(() => upsertGearItem({ id: row.id, name: row.name, url: e.target.value }))}
-              placeholder="Link — manufacturer or spec page"
-              className={`${input} flex-1 min-w-56 text-[11px]`}
-            />
-            <input
-              defaultValue={(row.aliases ?? []).join(', ')}
-              onBlur={(e) => {
-                const next = e.target.value.split(',').map((a) => a.trim()).filter(Boolean)
-                if (next.join(',') !== (row.aliases ?? []).join(',')) {
-                  run(() => upsertGearItem({ id: row.id, name: row.name, aliases: next }))
-                }
-              }}
-              placeholder="Also called — what people type when searching"
-              className={`${input} flex-1 min-w-56 text-[11px]`}
-            />
-          </div>
-        )}
       </div>
     )
   }
@@ -318,9 +300,26 @@ export default function GearCatalog({ items }: { items: Row[] }) {
 
       {groups.map((g) => (
         <section key={g.name || '__none__'}>
-          <h2 className={`text-xs font-semibold uppercase tracking-wide mb-2 ${g.name ? 'text-zinc-400' : 'text-yellow-500/80'}`}>
-            {g.name || 'No category'}
-          </h2>
+          {/* A category is only the string its members carry, so renaming it
+              here writes the new name onto every one of them. The heading is
+              the one place that reads as the category itself. */}
+          {g.name ? (
+            <input
+              defaultValue={g.name}
+              key={g.name}
+              onBlur={(e) => {
+                const next = e.target.value.trim()
+                if (!next || next === g.name) { e.target.value = g.name; return }
+                run(() => renameGearCategory(g.name, next))
+              }}
+              aria-label={`Rename the ${g.name} category`}
+              className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-400 bg-transparent border border-transparent rounded px-1.5 py-0.5 -ml-1.5 hover:border-zinc-700 focus:border-zinc-500 focus:bg-zinc-800 focus:outline-none"
+            />
+          ) : (
+            <h2 className="mb-2 px-1.5 py-0.5 -ml-1.5 text-xs font-semibold uppercase tracking-wide text-yellow-500/80">
+              No category
+            </h2>
+          )}
 
           <div className="border border-zinc-800 rounded-lg divide-y divide-zinc-800">
             {g.rows.map((t) => {
@@ -328,19 +327,27 @@ export default function GearCatalog({ items }: { items: Row[] }) {
               return (
                 <div key={t.id}>
                   <ItemRow row={t} />
-                  {products.map((p) => <ItemRow key={p.id} row={p} sub />)}
-                  <div className="pl-9 py-0.5">
-                    {addingTo === t.id ? (
-                      <AddProduct type={t} busy={busy} run={run} input={input} onDone={() => setAddingTo(null)} />
-                    ) : (
-                      <button
-                        onClick={() => setAddingTo(t.id)}
-                        className="py-1 text-[11px] text-zinc-700 hover:text-white transition-colors"
-                      >
-                        + product
-                      </button>
-                    )}
-                  </div>
+                  {/* The products a type is satisfied by, held inside it: one
+                      rail down the left so the nesting is a shape rather than
+                      an indent you have to measure. */}
+                  {(products.length > 0 || addingTo === t.id) && (
+                    <div className="ml-6 border-l-2 border-zinc-800 pl-1">
+                      {products.map((p) => <ItemRow key={p.id} row={p} sub />)}
+                      {addingTo === t.id && (
+                        <div className="py-0.5">
+                          <AddProduct type={t} busy={busy} run={run} input={input} onDone={() => setAddingTo(null)} />
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {addingTo !== t.id && (
+                    <button
+                      onClick={() => setAddingTo(t.id)}
+                      className="ml-6 pl-2 py-1 text-[11px] text-zinc-700 hover:text-white transition-colors"
+                    >
+                      + product
+                    </button>
+                  )}
                 </div>
               )
             })}

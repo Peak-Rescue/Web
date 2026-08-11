@@ -101,6 +101,23 @@ export async function upsertGearItem(input: {
   return { id: data.id }
 }
 
+// Renaming a category renames it everywhere at once. It isn't a row of its
+// own — a category exists only as the string its members carry — so the only
+// way to rename one is to write the new name onto every item holding the old.
+export async function renameGearCategory(from: string, to: string) {
+  const admin = await requireAdmin()
+  const next = to.trim().slice(0, 60)
+  if (!next) throw new Error('A category needs a name')
+  if (next === from) return
+
+  const { error } = await admin
+    .from('gear_items')
+    .update({ category: next })
+    .eq('category', from)
+  if (error) throw new Error(error.message)
+  touch()
+}
+
 export async function retireGearItem(id: string) {
   const admin = await requireAdmin()
   // Kept, not deleted — lists that already reference it stay intact.
