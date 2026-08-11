@@ -20,13 +20,17 @@ const CELL =
 // item, so a new one needs nothing but typing it; the seed list in lib/gear is
 // a starting vocabulary, not a closed set.
 function CategorySelect({
-  value, options, onChange, className, disabled,
+  value, options, onChange, className, disabled, autoFocus, onDismiss,
 }: {
   value: string | null
   options: readonly string[]
   onChange: (next: string) => void
   className: string
   disabled?: boolean
+  autoFocus?: boolean
+  // Opened in place of a control, it has to be able to close again without
+  // choosing — clicking away is how people back out of a menu.
+  onDismiss?: () => void
 }) {
   const [naming, setNaming] = useState(false)
   const [draft, setDraft] = useState('')
@@ -57,6 +61,9 @@ function CategorySelect({
     <select
       value={value ?? ''}
       disabled={disabled}
+      autoFocus={autoFocus}
+      onBlur={() => onDismiss?.()}
+      onKeyDown={(e) => { if (e.key === 'Escape') onDismiss?.() }}
       onChange={(e) => (e.target.value === NEW_CATEGORY ? setNaming(true) : onChange(e.target.value))}
       className={className}
     >
@@ -149,13 +156,30 @@ export default function GearCatalog({ items }: { items: Row[] }) {
         {/* Types only — a product follows the type it satisfies, so refiling
             one on its own is not a thing that can happen. */}
         {!row.parent_id && (
-          <button
-            onClick={() => setMoving(moving === row.id ? null : row.id)}
-            title="File this type under a different category"
-            className={moving === row.id ? 'text-[11px] text-white' : btn}
-          >
-            category
-          </button>
+          moving === row.id ? (
+            // Opens where it was clicked. A picker that appears at the far end
+            // of the row makes you look for what you just asked for.
+            <CategorySelect
+              value={row.category}
+              options={categories}
+              disabled={busy}
+              autoFocus
+              onDismiss={() => setMoving(null)}
+              onChange={(next) => {
+                setMoving(null)
+                if (next) run(() => upsertGearItem({ id: row.id, name: row.name, category: next }))
+              }}
+              className={`${input} text-[11px] w-56`}
+            />
+          ) : (
+            <button
+              onClick={() => setMoving(row.id)}
+              title="File this type under a different category"
+              className={btn}
+            >
+              category
+            </button>
+          )
         )}
 
         {/* The count that used to sit here explained why delete was missing.
@@ -209,21 +233,6 @@ export default function GearCatalog({ items }: { items: Row[] }) {
           <span className="flex-1" />
           <Actions row={row} />
         </div>
-
-        {moving === row.id && (
-          <div className="mt-1">
-            <CategorySelect
-              value={row.category}
-              options={categories}
-              disabled={busy}
-              onChange={(next) => {
-                setMoving(null)
-                if (next) run(() => upsertGearItem({ id: row.id, name: row.name, category: next }))
-              }}
-              className={`${input} text-[11px] w-64`}
-            />
-          </div>
-        )}
 
         <div className="flex items-center gap-2 mt-0.5">
           <input
