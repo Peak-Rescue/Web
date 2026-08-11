@@ -10,6 +10,60 @@ type Row = CatalogItem & { active: boolean; uses: number }
 // Sentinel for the "make one up" option. Not a category anything can be saved
 // under — picking it swaps the select for a text field.
 const NEW_CATEGORY = '__new__'
+
+function toggled(set: Set<string>, value: string): Set<string> {
+  const next = new Set(set)
+  if (next.has(value)) next.delete(value)
+  else next.add(value)
+  return next
+}
+
+// One row of ticks per facet. Nothing is hidden behind a dropdown: the whole
+// vocabulary is short enough to read, and seeing every category at once is
+// half of knowing what the catalog holds.
+function Chips({
+  label, options, picked, onToggle, labelFor,
+}: {
+  label: string
+  options: readonly string[]
+  picked: Set<string>
+  onToggle: (value: string) => void
+  labelFor?: (value: string) => string
+}) {
+  if (options.length === 0) return null
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      <span className="text-[10px] uppercase tracking-wide text-zinc-600 w-20 shrink-0">{label}</span>
+      {options.map((o) => {
+        const on = picked.has(o)
+        return (
+          <button
+            key={o}
+            onClick={() => onToggle(o)}
+            aria-pressed={on}
+            className={`text-[11px] px-2 py-0.5 rounded border transition-colors ${
+              on
+                ? 'border-pr-red bg-pr-red/10 text-white'
+                : 'border-zinc-800 text-zinc-500 hover:text-white hover:border-zinc-600'
+            }`}
+          >
+            {labelFor ? labelFor(o) : o}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+// The half-finished states worth hunting for while the catalog is being built
+// out. Each is a thing that is missing, not a property something has.
+type Gap = 'no-products' | 'no-notes' | 'no-link' | 'unused'
+const GAP_LABEL: Record<Gap, string> = {
+  'no-products': 'No products',
+  'no-notes': 'No notes / spec',
+  'no-link': 'A product with no link',
+  unused: 'On no lists',
+}
 // Same idea one level down: name a generic item instead of picking one.
 const NEW_TYPE = '__new_type__'
 
@@ -106,10 +160,38 @@ export default function GearCatalog({ items }: { items: Row[] }) {
     return m
   }, [items])
 
+  // Facets are combined with AND, and each is a set you tick into: the
+  // question is "rope hardware, Petzl, nothing written on it yet", not one
+  // axis at a time.
+  const [pickedCats, setPickedCats] = useState<Set<string>>(new Set())
+  const [pickedBrands, setPickedBrands] = useState<Set<string>>(new Set())
+  const [gaps, setGaps] = useState<Set<Gap>>(new Set())
+
+  // A brand belongs to a product, and the rows are generic items — so filtering
+  // by brand shows the generic items that have one, carrying only the products
+  // that matched. Showing every sibling would answer a question nobody asked.
+  const productsOf = (t: Row) => {
+    const kids = childrenOf.get(t.id) ?? []
+    if (pickedBrands.size === 0) return kids
+    return kids.filter((k) => k.brand && pickedBrands.has(k.brand.trim()))
+  }
+
   const shown = useMemo(
-    () => types.filter((t) => matchesGear(t, query, childrenOf.get(t.id) ?? [])),
-    [types, query, childrenOf]
+    () => types.filter((t) => {
+      const kids = childrenOf.get(t.id) ?? []
+      if (!matchesGear(t, query, kids)) return false
+      if (pickedCats.size > 0 && !pickedCats.has(t.category?.trim() || '')) return false
+      if (pickedBrands.size > 0 && !kids.some((k) => k.brand && pickedBrands.has(k.brand.trim()))) return false
+      if (gaps.has('no-products') && kids.length > 0) return false
+      if (gaps.has('no-notes') && (t.info ?? '').trim()) return false
+      if (gaps.has('no-link') && !kids.some((k) => !(k.url ?? '').trim())) return false
+      if (gaps.has('unused') && t.uses > 0) return false
+      return true
+    }),
+    [types, query, childrenOf, pickedCats, pickedBrands, gaps]
   )
+
+  const filtering = pickedCats.size > 0 || pickedBrands.size > 0 || gaps.size > 0 || query.trim() !== ''
 
   // Every category anything is actually filed under, plus the seed list. A
   // category invented on one row has to appear on the next row's dropdown or
@@ -341,13 +423,44 @@ export default function GearCatalog({ items }: { items: Row[] }) {
         </button>
       </div>
 
-      {/* Only while searching: the rest of the catalog is hidden then, and how
-          much of it is hidden is the one thing looking at the page can't tell
-          you. Unfiltered, everything is on screen and a total says nothing. */}
-      {query.trim() && shown.length > 0 && (
-        <p className="text-[11px] text-zinc-600">Showing {shown.length} of {types.length} types</p>
-      )}
+      {/* Check all that apply, like the course and instructor filters. Brands
+          and gaps are the two the catalog could never answer: which of these
+          are Petzl, and which are still half-written. */}
+      <div className="space-y-2">
+        <Chips
+          label="Category"
+          options={categories.filter((c) => types.some((t) => (t.category?.trim() || '') === c))}
+          picked={pickedCats}
+          onToggle={(v) => setPickedCats(toggled(pickedCats, v))}
+        />
+        {brands.length > 0 && (
+          <Chips
+            label="Brand"
+            options={brands}
+            picked={pickedBrands}
+            onToggle={(v) => setPickedBrands(toggled(pickedBrands, v))}
+          />
+        )}
+        <Chips
+          label="Still to do"
+          options={(Object.keys(GAP_LABEL) as Gap[])}
+          labelFor={(g) => GAP_LABEL[g as Gap]}
+          picked={gaps as Set<string>}
+          onToggle={(v) => setGaps(toggled(gaps as Set<string>, v) as Set<Gap>)}
+        />
+      </div>
 
+      {filtering && (
+        <p className="text-[11px] text-zinc-600">
+          Showing {shown.length} of {types.length} generic items
+          <button
+            onClick={() => { setPickedCats(new Set()); setPickedBrands(new Set()); setGaps(new Set()); setQuery('') }}
+            className="ml-3 text-zinc-500 hover:text-white underline transition-colors"
+          >
+            Clear all filters
+          </button>
+        </p>
+      )}
 
       {adding && (
         <AddItem types={types} categories={categories} busy={busy} run={run} input={input} onDone={() => setAdding(false)} />
@@ -390,7 +503,7 @@ export default function GearCatalog({ items }: { items: Row[] }) {
 
           <div className="border border-zinc-800 rounded-lg divide-y divide-zinc-800">
             {g.rows.map((t) => {
-              const products = childrenOf.get(t.id) ?? []
+              const products = productsOf(t)
               return (
                 <div key={t.id}>
                   <ItemRow row={t} />
@@ -422,7 +535,11 @@ export default function GearCatalog({ items }: { items: Row[] }) {
         </section>
       ))}
 
-      {shown.length === 0 && <p className="text-sm text-zinc-500">Nothing matches “{query}”.</p>}
+      {shown.length === 0 && (
+        <p className="text-sm text-zinc-500">
+          {query.trim() ? `Nothing matches “${query}”.` : 'Nothing matches these filters.'}
+        </p>
+      )}
     </div>
   )
 }
