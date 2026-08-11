@@ -102,7 +102,7 @@ export default async function PortalPage({
   const [{ data: inst }, { data: offDays }, { data: modules }, { data: instructors }, taskRows, { data: peopleRows }, { data: templateRows }, { data: courseDocRows }, { data: taskDocRows }, { data: mapRows }, { data: linkRows }] =
     await Promise.all([
       admin.from('course_instances')
-        .select('course_type, custom_title, status, location, client_name, notes, ref_number, starts_at, ends_at, meeting_point, meeting_time, schedule, intro')
+        .select('course_type, custom_title, status, location, client_name, notes, ref_number, starts_at, ends_at, meeting_point, meeting_time, intro')
         .eq('id', id)
         .single(),
       admin.from('instance_off_days')
@@ -254,7 +254,7 @@ export default async function PortalPage({
 
   // Which named sections this course actually has — drives both the jump bar
   // and the order things render in, so the two can never disagree.
-  const hasAbout = Boolean(inst.intro || inst.meeting_point || inst.meeting_time || inst.schedule)
+  const hasAbout = Boolean(inst.intro || inst.meeting_point || inst.meeting_time)
   const hasSchedule = Boolean(sched && schedDays.length > 0)
   const hasCurriculum = orderedModules.length > 0
   const hasEquipment = Boolean(gearList && gearList.gear_list_entries.length > 0)
@@ -518,9 +518,6 @@ export default async function PortalPage({
                     </div>
                   )}
                 </dl>
-              )}
-              {inst.schedule && (
-                <p className="text-sm text-zinc-300 whitespace-pre-line">{inst.schedule}</p>
               )}
             </div>
           </Section>

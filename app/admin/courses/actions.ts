@@ -437,7 +437,6 @@ export async function updateCourseLogistics(id: string, formData: FormData) {
       intro: ((formData.get('intro') as string) || '').trim() || null,
       meeting_point: ((formData.get('meeting_point') as string) || '').trim() || null,
       meeting_time: ((formData.get('meeting_time') as string) || '').trim() || null,
-      schedule: ((formData.get('schedule') as string) || '').trim() || null,
     })
     .eq('id', id)
   if (error) throw new Error(error.message)

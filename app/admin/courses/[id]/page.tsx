@@ -728,16 +728,6 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
                 className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500"
               />
             </div>
-            <div className="sm:col-span-2">
-              <label className="block text-xs text-zinc-400 mb-1">Schedule / running order</label>
-              <textarea
-                name="schedule"
-                rows={4}
-                defaultValue={inst.schedule ?? ''}
-                placeholder={'Day 1 — travel, gear check\nDay 2 — anchors and rappels\n…'}
-                className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm resize-y focus:outline-none focus:border-zinc-500"
-              />
-            </div>
           </AutoSaveForm>
 
           <div className="mt-10 pt-8 border-t border-zinc-800">
