@@ -534,7 +534,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
                 defaultValue={inst.notes ?? ''}
                 className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500 resize-y [field-sizing:content] min-h-14 max-h-80"
               />
-              <p className="text-xs text-zinc-500 mt-1">Team only.</p>
+              <p className="text-xs text-zinc-500 mt-1">Instructors only.</p>
             </div>
           </AutoSaveForm>
 
