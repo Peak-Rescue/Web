@@ -83,11 +83,26 @@ export async function upsertGearItem(input: {
   const typed = (row.name as string).toLowerCase()
   const { data: clash } = await admin
     .from('gear_items')
-    .select('id, name')
+    .select('id, name, active')
     .or(`name.ilike.${typed},aliases.cs.{"${typed.replace(/"/g, '')}"}`)
-    .limit(2)
+    .limit(4)
   const other = (clash ?? []).find((c) => c.id !== input.id)
-  if (other) throw new Error(`"${other.name}" is already in the catalog — use it, or add this as a model under it`)
+
+  // A deleted row keeps its name, and delete is soft so lists that used it
+  // still resolve. That made a deleted name unusable forever: gone from the
+  // page, yet refusing to be added again. Re-adding it is undeleting it —
+  // which also hands back whatever still points at it.
+  if (other && !other.active && !input.id) {
+    const { error } = await admin
+      .from('gear_items')
+      .update({ ...row, active: true })
+      .eq('id', other.id)
+    if (error) throw new Error(error.message)
+    touch()
+    return { id: other.id }
+  }
+
+  if (other) throw new Error(`"${other.name}" is already in the catalog — use it, or add this as a product under it`)
 
   if (input.id) {
     const { error } = await admin.from('gear_items').update(row).eq('id', input.id)

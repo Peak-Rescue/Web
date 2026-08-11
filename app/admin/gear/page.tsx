@@ -38,12 +38,7 @@ export default async function GearCatalogPage() {
       <div className="max-w-4xl mx-auto px-4 py-10">
         <Link href="/admin" className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors mb-6 inline-block">← Admin</Link>
 
-        <h1 className="text-2xl font-bold mb-1">Gear catalog</h1>
-        <p className="text-sm text-zinc-500 mb-8">
-          Gear is two levels: a <strong className="text-zinc-400">type</strong> is what a list needs — a descent device —
-          and a <strong className="text-zinc-400">model</strong> is a product that satisfies it. Lists name whichever level
-          they mean, so the same kit doesn’t end up in the catalog three times under three names.
-        </p>
+        <h1 className="text-2xl font-bold mb-8">Gear catalog</h1>
 
         <GearCatalog items={rows} />
 

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import { useSteadyRefresh } from '@/components/useSteadyRefresh'
-import { GEAR_CATEGORIES, matchesGear, productName, type CatalogItem } from '@/lib/gear'
+import { GEAR_CATEGORIES, matchesGear, type CatalogItem } from '@/lib/gear'
 import { upsertGearItem, retireGearItem, renameGearCategory } from './actions'
 
 type Row = CatalogItem & { active: boolean; uses: number }
@@ -96,6 +96,8 @@ export default function GearCatalog({ items }: { items: Row[] }) {
   // Which product has its link line open. A link is set once and read by
   // clicking, so it earns an icon and not a field on every row.
   const [linking, setLinking] = useState<string | null>(null)
+  // Which row has asked to be deleted and is waiting to be asked again.
+  const [confirming, setConfirming] = useState<string | null>(null)
 
   const types = useMemo(() => items.filter((i) => !i.parent_id), [items])
   const childrenOf = useMemo(() => {
@@ -219,19 +221,36 @@ export default function GearCatalog({ items }: { items: Row[] }) {
             Delete is always offered now, so the explanation belongs at the
             moment of the decision instead — in the confirm, which is the only
             place it changes what you do. */}
-        <button
-          onClick={() => {
-            if (row.uses > 0 && !confirm(
-              `"${productName(row)}" is on ${row.uses} gear list${row.uses === 1 ? '' : 's'}. ` +
-              `Delete it anyway? Those lists keep the line but lose the name it was pointing at.`
-            )) return
-            run(() => retireGearItem(row.id))
-          }}
-          disabled={busy}
-          className="text-[11px] text-zinc-500 hover:text-red-400 transition-colors"
-        >
-          delete
-        </button>
+        {confirming === row.id ? (
+          <span className="flex items-center gap-2">
+            <span className="text-[11px] text-zinc-500">
+              {row.uses > 0
+                ? `on ${row.uses} list${row.uses === 1 ? '' : 's'} — delete?`
+                : 'delete?'}
+            </span>
+            <button
+              onClick={() => { setConfirming(null); run(() => retireGearItem(row.id)) }}
+              disabled={busy}
+              className="text-[11px] px-2 py-0.5 rounded border border-pr-red text-pr-red-light hover:bg-pr-red/10 transition-colors"
+            >
+              yes, delete
+            </button>
+            <button
+              onClick={() => setConfirming(null)}
+              className="text-[11px] text-zinc-500 hover:text-white transition-colors"
+            >
+              cancel
+            </button>
+          </span>
+        ) : (
+          <button
+            onClick={() => setConfirming(row.id)}
+            disabled={busy}
+            className="text-[11px] text-zinc-500 hover:text-red-400 transition-colors"
+          >
+            delete
+          </button>
+        )}
 
       </div>
     )
@@ -337,23 +356,34 @@ export default function GearCatalog({ items }: { items: Row[] }) {
           {/* A category is only the string its members carry, so renaming it
               here writes the new name onto every one of them. The heading is
               the one place that reads as the category itself. */}
-          {g.name ? (
-            <input
-              defaultValue={g.name}
-              key={g.name}
-              onBlur={(e) => {
-                const next = e.target.value.trim()
-                if (!next || next === g.name) { e.target.value = g.name; return }
-                run(() => renameGearCategory(g.name, next))
-              }}
-              aria-label={`Rename the ${g.name} category`}
-              className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-400 bg-transparent border border-transparent rounded px-1.5 py-0.5 -ml-1.5 hover:border-zinc-700 focus:border-zinc-500 focus:bg-zinc-800 focus:outline-none"
-            />
-          ) : (
-            <h2 className="mb-2 px-1.5 py-0.5 -ml-1.5 text-xs font-semibold uppercase tracking-wide text-yellow-500/80">
-              No category
-            </h2>
-          )}
+          {/* A heading has to survive being an editable field: without weight,
+              a colour that carries and a rule running off to the edge, it read
+              as one more input in a page made of them. */}
+          <div className="flex items-center gap-2.5 mb-2">
+            <span className={`w-0.5 h-4 rounded-full ${g.name ? 'bg-pr-red' : 'bg-yellow-500'}`} />
+            {g.name ? (
+              <input
+                defaultValue={g.name}
+                key={g.name}
+                // Sized to its own name so the rule starts where the word ends
+                // rather than at some column the longest category set.
+                style={{ width: `calc(${g.name.length}ch + 1.75rem)` }}
+                onBlur={(e) => {
+                  const next = e.target.value.trim()
+                  if (!next || next === g.name) { e.target.value = g.name; return }
+                  run(() => renameGearCategory(g.name, next))
+                }}
+                aria-label={`Rename the ${g.name} category`}
+                className="min-w-0 text-sm font-bold uppercase tracking-[0.14em] text-zinc-100 bg-transparent border border-transparent rounded px-1.5 py-0.5 -ml-1.5 hover:border-zinc-700 focus:border-zinc-500 focus:bg-zinc-800 focus:outline-none"
+              />
+            ) : (
+              <h2 className="text-sm font-bold uppercase tracking-[0.14em] text-yellow-500">
+                No category
+              </h2>
+            )}
+            <span className="text-[11px] text-zinc-600 tabular-nums">{g.rows.length}</span>
+            <span className="flex-1 h-px bg-zinc-800" />
+          </div>
 
           <div className="border border-zinc-800 rounded-lg divide-y divide-zinc-800">
             {g.rows.map((t) => {
