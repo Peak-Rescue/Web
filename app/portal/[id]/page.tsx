@@ -11,6 +11,7 @@ import { loadTasksWithDocs } from '@/lib/course-tasks'
 import { LinkIcon, PaperclipIcon } from '@/components/TaskIcons'
 import PortalSectionNav from './PortalSectionNav'
 import { Section, SubHead, InstructorCard, SECTION_LABEL, type SectionKey } from './sections'
+import { PURPOSE_META, PURPOSE_ORDER, linkLabel, type CourseLink } from '@/lib/course-links'
 
 // Status is a sales/ops state — "quoted", "confirmed" — and means nothing to a
 // student, who by definition only sees courses they're enrolled on. The one
