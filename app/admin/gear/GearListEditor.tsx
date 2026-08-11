@@ -17,8 +17,10 @@ export type GearEntry = {
   id: string
   gear_item_id: string | null
   name: string | null
-  info: string | null
-  recommended: string | null
+  // What this course wants to say about the item — spec, quantity, condition.
+  // It lives here rather than in the catalog because it is an answer to "on
+  // this course", and the catalog doesn't know which course is asking.
+  note: string | null
   url: string | null
   // The heading this row prints under on the student's list. Free text, named
   // per list — not the catalog's category, which is how instructors find gear.
@@ -131,8 +133,7 @@ export default function GearListEditor({
       .filter(Boolean) as GearItem[]
     return {
       name: e.name ?? (c ? productName(c) : null) ?? 'Item',
-      info: e.info ?? c?.info ?? null,
-      recommended: e.recommended ?? c?.recommended ?? null,
+      note: e.note,
       url: e.url ?? c?.url ?? null,
       // No section is the normal case: the row sits directly under Personal or
       // Group. A heading is something you add on purpose.
@@ -218,7 +219,7 @@ export default function GearListEditor({
       id: `pending-${sortOrder}-${input.gearItemId ?? input.name ?? ''}`,
       gear_item_id: input.gearItemId ?? null,
       name: input.gearItemId ? null : input.name?.trim() || null,
-      info: null, recommended: null, url: null,
+      note: null, url: null,
       section: input.section, group_type: input.groupType, quantity: null,
       sort_order: sortOrder, gear_entry_options: [],
     }
@@ -358,7 +359,7 @@ function SectionCard({
   listId: string
   groupType: GroupType
   name: string | null
-  rows: (GearEntry & { r: { name: string; info: string | null; recommended: string | null; url: string | null; section: string | null; catalogItem?: GearItem; options: GearItem[]; models: GearItem[] } })[]
+  rows: (GearEntry & { r: { name: string; note: string | null; url: string | null; section: string | null; catalogItem?: GearItem; options: GearItem[]; models: GearItem[] } })[]
   isDraft?: boolean
   catalog: GearItem[]
   childrenOf: Map<string, GearItem[]>
@@ -498,7 +499,7 @@ function Row({
   e, editingOptions, setEditingOptions, dragging, isOver,
   onDragStart, onDragEnd, gap, apply, instanceId, busy, run, input,
 }: {
-  e: GearEntry & { r: { name: string; info: string | null; recommended: string | null; url: string | null; section: string | null; catalogItem?: GearItem; options: GearItem[]; models: GearItem[] } }
+  e: GearEntry & { r: { name: string; note: string | null; url: string | null; section: string | null; catalogItem?: GearItem; options: GearItem[]; models: GearItem[] } }
   editingOptions: string | null
   setEditingOptions: (id: string | null) => void
   dragging: boolean
@@ -614,13 +615,23 @@ function Row({
               </button>
             </div>
           )}
-          {(e.r.info || e.r.recommended) && (
-            <p className="text-[11px] text-zinc-600 mt-1">
-              {e.r.info}
-              {e.r.info && e.r.recommended && ' — '}
-              {e.r.recommended && <span className="text-zinc-500">{e.r.recommended}</span>}
-            </p>
-          )}
+          {/* The note is written here, on the course, and nowhere else. It
+              reads as the line it prints on the student's list until you put
+              the cursor in it — a box under every row would turn the list into
+              a form, and most rows need nothing said about them. */}
+          <input
+            defaultValue={e.r.note ?? ''}
+            onBlur={(ev) => {
+              const v = ev.target.value
+              if (v === (e.r.note ?? '')) return
+              apply(
+                (es) => es.map((x) => (x.id === e.id ? { ...x, note: v.trim() || null } : x)),
+                () => updateGearEntry(e.id, { note: v }, instanceId)
+              )
+            }}
+            placeholder="Add a note for this course"
+            className="mt-1 w-full bg-transparent border border-transparent rounded px-1 py-0.5 text-[11px] text-zinc-500 placeholder:text-zinc-800 hover:border-zinc-800 focus:border-zinc-600 focus:bg-zinc-900 focus:text-zinc-300 focus:outline-none transition-colors"
+          />
         </div>
         <input
           defaultValue={e.quantity ?? ''}
@@ -941,7 +952,6 @@ function AddGear({
                 className="min-w-0 flex-1 text-left disabled:opacity-40"
               >
                 <span className="text-sm">{t.name}</span>
-                {t.recommended && <span className="text-[11px] text-zinc-500 ml-2">{t.recommended}</span>}
                 {models.length > 0 && (
                   <span className="block text-[11px] text-zinc-600 mt-0.5">
                     any of: {models.map((m) => productName(m)).join(' · ')}

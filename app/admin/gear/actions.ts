@@ -31,8 +31,6 @@ export async function upsertGearItem(input: {
   id?: string
   name: string
   brand?: string | null
-  info?: string | null
-  recommended?: string | null
   url?: string | null
   category?: string | null
   parentId?: string | null
@@ -41,12 +39,10 @@ export async function upsertGearItem(input: {
 }) {
   const admin = await requireAdmin()
   // Only what the caller actually passed. Writing every column on every call
-  // made each field's edit erase the others: renaming an item sent no
-  // recommendation, no url and no info, and so cleared all three.
+  // made each field's edit erase the others: renaming an item sent no brand
+  // and no url, and so cleared both.
   const row: Record<string, unknown> = { name: input.name.trim().slice(0, 120) }
   if (input.brand !== undefined) row.brand = input.brand?.trim() || null
-  if (input.info !== undefined) row.info = input.info?.trim() || null
-  if (input.recommended !== undefined) row.recommended = input.recommended?.trim() || null
   if (input.url !== undefined) row.url = input.url?.trim() || null
   if (input.category !== undefined) row.category = input.category?.trim() || null
   if (!row.name) throw new Error('Name is required')
@@ -229,9 +225,10 @@ export async function addGearEntry(
 ) {
   const admin = await requireAdmin()
 
-  // Catalog items carry their own info/recommendation; a one-off keeps what
-  // was typed. Either way the entry can be edited afterwards without touching
-  // the catalog.
+  // A row starts with no note. Anything to say about the item on *this*
+  // course is typed onto the row afterwards — the catalog holds no notes to
+  // seed it with, which is the point: a spec written there went out on every
+  // list whether it was true of that course or not.
   //
   // The section is the caller's to choose, and no section is a real answer —
   // the row then sits directly under Personal or Group, which is where most
@@ -241,7 +238,7 @@ export async function addGearEntry(
   const section = input.section?.trim() || null
   const seed = {
     name: input.gearItemId ? null : input.name?.trim() || null,
-    info: null, recommended: null, url: null, section,
+    note: null, url: null, section,
   }
   if (!input.gearItemId && !seed.name) throw new Error('Pick an item or give it a name')
 
@@ -281,13 +278,13 @@ async function touchList(admin: Admin, listId: string, known?: string | null) {
 
 export async function updateGearEntry(
   id: string,
-  patch: { name?: string | null; info?: string | null; recommended?: string | null; url?: string | null; section?: string | null; groupType?: 'personal' | 'group'; quantity?: string | null },
+  patch: { name?: string | null; note?: string | null; url?: string | null; section?: string | null; groupType?: 'personal' | 'group'; quantity?: string | null },
   instanceId?: string | null
 ) {
   const admin = await requireAdmin()
   const update: Record<string, unknown> = {}
   for (const [k, v] of Object.entries({
-    name: patch.name, info: patch.info, recommended: patch.recommended,
+    name: patch.name, note: patch.note,
     url: patch.url, section: patch.section, quantity: patch.quantity,
   })) {
     if (v !== undefined) update[k] = (v as string)?.trim() || null
@@ -459,7 +456,7 @@ export async function removeGearEntry(id: string, instanceId?: string | null) {
 type Admin = ReturnType<typeof createAdminClient>
 
 const SOURCE_SELECT =
-  'name, audience, intro, gear_list_entries(gear_item_id, name, info, recommended, url, section, group_type, quantity, sort_order, gear_entry_options(gear_item_id, sort_order))'
+  'name, audience, intro, gear_list_entries(gear_item_id, name, note, url, section, group_type, quantity, sort_order, gear_entry_options(gear_item_id, sort_order))'
 
 type OptionRow = { gear_item_id: string; sort_order: number }
 type EntryRow = Record<string, unknown> & { gear_entry_options: OptionRow[] }

@@ -195,14 +195,14 @@ export default async function PortalPage({
   // ever see the student one.
   const { data: gearRows } = await admin
     .from('gear_lists')
-    .select('id, name, audience, intro, gear_list_entries(id, gear_item_id, name, info, recommended, url, section, group_type, quantity, sort_order, gear_items(name, brand, info, recommended, url, category), gear_entry_options(sort_order, gear_items(name, brand)))')
+    .select('id, name, audience, intro, gear_list_entries(id, gear_item_id, name, note, url, section, group_type, quantity, sort_order, gear_items(name, brand, url, category), gear_entry_options(sort_order, gear_items(name, brand)))')
     .eq('instance_id', id)
   type GearRow = {
     id: string; name: string; audience: string; intro: string | null
     gear_list_entries: {
-      id: string; gear_item_id: string | null; name: string | null; info: string | null; recommended: string | null; url: string | null
+      id: string; gear_item_id: string | null; name: string | null; note: string | null; url: string | null
       section: string | null; group_type: 'personal' | 'group'; quantity: string | null; sort_order: number
-      gear_items: { name: string; brand: string | null; info: string | null; recommended: string | null; url: string | null; category: string | null } | null
+      gear_items: { name: string; brand: string | null; url: string | null; category: string | null } | null
       gear_entry_options: { sort_order: number; gear_items: { name: string; brand: string | null } | null }[]
     }[]
   }
@@ -631,8 +631,6 @@ export default async function PortalPage({
                       <ul className="border border-zinc-800 rounded divide-y divide-zinc-800/70">
                         {items.map((e) => {
                           const name = e.name ?? (e.gear_items ? productName(e.gear_items) : null) ?? 'Item'
-                          const info = e.info ?? e.gear_items?.info
-                          const rec = e.recommended ?? e.gear_items?.recommended
                           const url = e.url ?? e.gear_items?.url
                           // "Descent device — Petzl Rig or Grigri" when the
                           // line accepts more than one model.
@@ -659,10 +657,8 @@ export default async function PortalPage({
                                 {detail && <span className="text-xs text-zinc-400">{detail}</span>}
                                 {e.quantity && <span className="text-[11px] text-zinc-500">× {e.quantity}</span>}
                               </div>
-                              {(info || rec) && (
-                                <p className="text-[11px] text-zinc-600 mt-0.5">
-                                  {info}{info && rec && ' — '}{rec && <span className="text-zinc-500">{rec}</span>}
-                                </p>
+                              {e.note && (
+                                <p className="text-[11px] text-zinc-500 mt-0.5">{e.note}</p>
                               )}
                               {anyOf && anyOf.length > 0 && (
                                 <p className="text-[11px] text-zinc-600 mt-0.5">

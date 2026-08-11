@@ -40,11 +40,13 @@ export const GEAR_CATEGORIES = [
 
 export type GearCategory = (typeof GEAR_CATEGORIES)[number]
 
+// What a piece of gear IS. Notes about it — spec, quantity, condition — are
+// not here on purpose: those are answers to "on this course", and the catalog
+// is the one place that doesn't know which course is asking. They live on the
+// list entry.
 export type CatalogItem = {
   id: string
   name: string
-  info: string | null
-  recommended: string | null
   url: string | null
   category: string | null
   parent_id: string | null
@@ -76,7 +78,6 @@ export function matchesGear(item: CatalogItem, query: string, children: CatalogI
     item.brand ?? '',
     ...(item.aliases ?? []),
     item.category ?? '',
-    item.recommended ?? '',
     // Brand lives in its own column now, so "Petzl" is no longer inside any
     // name — without it here, searching a maker would find nothing.
     ...children.flatMap((c) => [c.name, c.brand ?? '', productName(c), ...(c.aliases ?? [])]),

@@ -66,7 +66,7 @@ export default async function LibraryPage({
     showTemplates && shelves.includes('gear')
       ? (() => {
           let g = admin.from('gear_lists')
-            .select('id, name, description, audience, intro, course_type, disciplines, topics, instance_id, is_template, gear_list_entries(id, gear_item_id, name, info, recommended, url, section, group_type, quantity, sort_order, gear_entry_options(gear_item_id, sort_order))')
+            .select('id, name, description, audience, intro, course_type, disciplines, topics, instance_id, is_template, gear_list_entries(id, gear_item_id, name, note, url, section, group_type, quantity, sort_order, gear_entry_options(gear_item_id, sort_order))')
             .eq('is_template', true)
             .order('name')
           if (q) g = g.ilike('name', `%${q}%`)
@@ -88,7 +88,7 @@ export default async function LibraryPage({
     // Editing a kit list on its shelf needs the same catalog the course page
     // gives the editor, or every line loses the type it points at.
     showTemplates && shelves.includes('gear')
-      ? admin.from('gear_items').select('id, name, brand, info, recommended, url, category, parent_id, aliases, disciplines').eq('active', true).order('name')
+      ? admin.from('gear_items').select('id, name, brand, url, category, parent_id, aliases, disciplines').eq('active', true).order('name')
       : Promise.resolve({ data: [] }),
   ])
 
