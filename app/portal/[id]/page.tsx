@@ -483,7 +483,7 @@ export default async function PortalPage({
                       edit
                     </a>
                   )}
-                  {showTasks && m.internal && <span className="text-teal-600/80">· team</span>}
+                  {showTasks && m.internal && <span className="text-teal-600/80">· instructors</span>}
                 </span>
               ))}
             </div>
@@ -514,7 +514,7 @@ export default async function PortalPage({
                       >
                         {linkLabel(l)}
                         {showTasks && l.audience === 'internal' && (
-                          <span className="text-zinc-600">· team</span>
+                          <span className="text-zinc-600">· instructors</span>
                         )}
                       </a>
                     ))}

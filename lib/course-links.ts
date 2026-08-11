@@ -19,7 +19,7 @@ export const PURPOSE_META: Record<
 > = {
   photos: {
     label: 'Photos',
-    hint: 'A shared album for this course — everyone on the team can add to it',
+    hint: 'A shared album for this course',
     verb: 'Add an album',
   },
   resource: {

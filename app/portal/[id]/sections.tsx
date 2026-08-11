@@ -128,7 +128,7 @@ export function Section({
         </div>
         {team && (
           <span className="ml-auto shrink-0 text-[10px] font-medium uppercase tracking-wide px-2 py-0.5 rounded-full border border-amber-900/70 text-amber-500">
-            Team only
+            Instructors only
           </span>
         )}
       </div>
