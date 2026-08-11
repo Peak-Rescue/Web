@@ -43,12 +43,10 @@ export const PURPOSE_META: Record<
 // only one that's usually student-facing.
 export const PURPOSE_ORDER: LinkPurpose[] = ['photos', 'form', 'resource', 'other']
 
-// The only purpose we invite here. A one-off document belongs in the course
-// notes; anything we'd use twice belongs in the library, filed by discipline
-// and topic, and reaches the course through the curriculum. Forms and
-// resources still render if a course already has them — an old link shouldn't
-// vanish just because we stopped offering the button.
-export const OFFERED_PURPOSES: LinkPurpose[] = ['photos']
+// Only photo albums are offered on a course now: a one-off document belongs in
+// Files or the course notes, and anything we'd use twice belongs in the
+// library, where the curriculum can reach it. The other purposes stay in the
+// type so the portal can still render any row an older course kept.
 
 export type CourseLink = {
   id: string

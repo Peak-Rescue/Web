@@ -32,7 +32,7 @@ import TemplatePicker, { type TemplateOption } from '../TemplatePicker'
 import RemovableRow from '../RemovableRow'
 import { CourseTabs, TabPanel } from '../CourseTabs'
 import CourseGear from '../CourseGear'
-import CourseLinksSection from '../CourseLinksSection'
+import CoursePhotosSection from '../CoursePhotosSection'
 import { LIBRARY_HREF, type CourseLink } from '@/lib/course-links'
 import { type GearItem, type GearList } from '@/app/admin/gear/GearListEditor'
 import { type Schedule } from '@/app/admin/schedules/ScheduleEditor'
@@ -534,6 +534,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
                 defaultValue={inst.notes ?? ''}
                 className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500 resize-y [field-sizing:content] min-h-14 max-h-80"
               />
+              <p className="text-xs text-zinc-500 mt-1">The course team only — students never see these.</p>
             </div>
           </AutoSaveForm>
 
@@ -541,7 +542,10 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
 
           <CourseMapsSection instanceId={id} maps={courseMaps} />
 
-          <CourseLinksSection instanceId={id} links={(courseLinkRows ?? []) as CourseLink[]} />
+          <CoursePhotosSection
+            instanceId={id}
+            links={((courseLinkRows ?? []) as CourseLink[]).filter(l => l.purpose === 'photos')}
+          />
 
           <div className="p-6 pt-5 border-t border-zinc-800">
           <h3 className="text-sm font-semibold text-zinc-300 mb-3">Dates</h3>

@@ -146,7 +146,12 @@ export default function CourseFilesSection({
       <div className="flex items-start justify-between gap-3 mb-3">
         <div>
           <h3 className="text-sm font-semibold text-zinc-300 mb-1">Files</h3>
-          <p className="text-xs text-zinc-500">Course documents and task attachments.</p>
+          {/* Said out loud because the rest of this tab is audience-switched
+              and these aren't: there's no Shared option here, and a file
+              students need reaches them attached to a course update. */}
+          <p className="text-xs text-zinc-500">
+            Course documents and task attachments — the course team only, never students.
+          </p>
         </div>
         <div className="shrink-0 flex items-center gap-2">
           <button
