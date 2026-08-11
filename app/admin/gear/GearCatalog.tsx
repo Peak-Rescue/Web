@@ -18,43 +18,6 @@ function toggled(set: Set<string>, value: string): Set<string> {
   return next
 }
 
-// One row of ticks per facet. Nothing is hidden behind a dropdown: the whole
-// vocabulary is short enough to read, and seeing every category at once is
-// half of knowing what the catalog holds.
-function Chips({
-  label, options, picked, onToggle, labelFor,
-}: {
-  label: string
-  options: readonly string[]
-  picked: Set<string>
-  onToggle: (value: string) => void
-  labelFor?: (value: string) => string
-}) {
-  if (options.length === 0) return null
-  return (
-    <div className="flex flex-wrap items-center gap-1.5">
-      <span className="text-[10px] uppercase tracking-wide text-zinc-600 w-20 shrink-0">{label}</span>
-      {options.map((o) => {
-        const on = picked.has(o)
-        return (
-          <button
-            key={o}
-            onClick={() => onToggle(o)}
-            aria-pressed={on}
-            className={`text-[11px] px-2 py-0.5 rounded border transition-colors ${
-              on
-                ? 'border-pr-red bg-pr-red/10 text-white'
-                : 'border-zinc-800 text-zinc-500 hover:text-white hover:border-zinc-600'
-            }`}
-          >
-            {labelFor ? labelFor(o) : o}
-          </button>
-        )
-      })}
-    </div>
-  )
-}
-
 // The half-finished states worth hunting for while the catalog is being built
 // out. Each is a thing that is missing, not a property something has.
 type Gap = 'no-products' | 'no-notes' | 'no-link' | 'unused'
@@ -130,6 +93,70 @@ function CategorySelect({
   )
 }
 
+// A facet is a button until you need it. Twenty-eight outlined boxes across
+// five rows was most of the screen above the thing being filtered, and the
+// vocabulary is only worth reading when you are choosing from it.
+function Facet({
+  label, options, picked, onToggle, labelFor, open, onOpen,
+}: {
+  label: string
+  options: readonly string[]
+  picked: Set<string>
+  onToggle: (value: string) => void
+  labelFor?: (value: string) => string
+  open: boolean
+  onOpen: () => void
+}) {
+  if (options.length === 0) return null
+  return (
+    <div className="relative">
+      <button
+        onClick={onOpen}
+        aria-expanded={open}
+        className={`flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded border transition-colors ${
+          picked.size > 0
+            ? 'border-pr-red/60 bg-pr-red/10 text-white'
+            : 'border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-600'
+        }`}
+      >
+        {label}
+        {picked.size > 0 && <span className="text-[10px] text-pr-red-light">{picked.size}</span>}
+        <svg
+          xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24"
+          fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+          className={`transition-transform ${open ? 'rotate-180' : ''}`}
+        >
+          <path d="m6 9 6 6 6-6" />
+        </svg>
+      </button>
+
+      {open && (
+        <div className="absolute left-0 top-full mt-1 z-30 w-max max-w-2xl p-2 rounded-lg border border-zinc-700 bg-zinc-900 shadow-xl">
+          <div className="flex flex-wrap gap-1.5">
+            {options.map((o) => {
+              const on = picked.has(o)
+              return (
+                <button
+                  key={o}
+                  onClick={() => onToggle(o)}
+                  aria-pressed={on}
+                  className={`text-[11px] px-2 py-0.5 rounded border transition-colors ${
+                    on
+                      ? 'border-pr-red bg-pr-red/10 text-white'
+                      : 'border-zinc-800 text-zinc-500 hover:text-white hover:border-zinc-600'
+                  }`}
+                >
+                  {labelFor ? labelFor(o) : o}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // The catalog itself: types with the products that satisfy them, as a table,
 // because the question it has to answer is "what have we got, and what is
 // missing" — and a blank cell answers that at a glance where a stack of cards
@@ -166,6 +193,8 @@ export default function GearCatalog({ items }: { items: Row[] }) {
   const [pickedCats, setPickedCats] = useState<Set<string>>(new Set())
   const [pickedBrands, setPickedBrands] = useState<Set<string>>(new Set())
   const [gaps, setGaps] = useState<Set<Gap>>(new Set())
+  // One facet panel at a time; two open at once is the wall of chips again.
+  const [openFacet, setOpenFacet] = useState<'cat' | 'brand' | 'gap' | null>(null)
 
   // A brand belongs to a product, and the rows are generic items — so filtering
   // by brand shows the generic items that have one, carrying only the products
@@ -423,44 +452,52 @@ export default function GearCatalog({ items }: { items: Row[] }) {
         </button>
       </div>
 
-      {/* Check all that apply, like the course and instructor filters. Brands
-          and gaps are the two the catalog could never answer: which of these
-          are Petzl, and which are still half-written. */}
-      <div className="space-y-2">
-        <Chips
+      {/* One line: three buttons, each opening the only vocabulary it needs.
+          Brands and gaps are the two questions the catalog could never answer
+          — which of these are Petzl, and which are still half-written. */}
+      <div className="flex flex-wrap items-center gap-2">
+        <Facet
           label="Category"
           options={categories.filter((c) => types.some((t) => (t.category?.trim() || '') === c))}
           picked={pickedCats}
           onToggle={(v) => setPickedCats(toggled(pickedCats, v))}
+          open={openFacet === 'cat'}
+          onOpen={() => setOpenFacet(openFacet === 'cat' ? null : 'cat')}
         />
-        {brands.length > 0 && (
-          <Chips
-            label="Brand"
-            options={brands}
-            picked={pickedBrands}
-            onToggle={(v) => setPickedBrands(toggled(pickedBrands, v))}
-          />
-        )}
-        <Chips
+        <Facet
+          label="Brand"
+          options={brands}
+          picked={pickedBrands}
+          onToggle={(v) => setPickedBrands(toggled(pickedBrands, v))}
+          open={openFacet === 'brand'}
+          onOpen={() => setOpenFacet(openFacet === 'brand' ? null : 'brand')}
+        />
+        <Facet
           label="Still to do"
           options={(Object.keys(GAP_LABEL) as Gap[])}
           labelFor={(g) => GAP_LABEL[g as Gap]}
           picked={gaps as Set<string>}
           onToggle={(v) => setGaps(toggled(gaps as Set<string>, v) as Set<Gap>)}
+          open={openFacet === 'gap'}
+          onOpen={() => setOpenFacet(openFacet === 'gap' ? null : 'gap')}
         />
-      </div>
 
-      {filtering && (
-        <p className="text-[11px] text-zinc-600">
-          Showing {shown.length} of {types.length} generic items
+        {filtering && (
           <button
-            onClick={() => { setPickedCats(new Set()); setPickedBrands(new Set()); setGaps(new Set()); setQuery('') }}
-            className="ml-3 text-zinc-500 hover:text-white underline transition-colors"
+            onClick={() => {
+              setPickedCats(new Set()); setPickedBrands(new Set()); setGaps(new Set()); setQuery(''); setOpenFacet(null)
+            }}
+            className="text-[11px] text-zinc-500 hover:text-white transition-colors"
           >
-            Clear all filters
+            Clear filters
           </button>
-        </p>
-      )}
+        )}
+
+        <span className="flex-1" />
+        {filtering && (
+          <span className="text-[11px] text-zinc-600">{shown.length} of {types.length}</span>
+        )}
+      </div>
 
       {adding && (
         <AddItem types={types} categories={categories} busy={busy} run={run} input={input} onDone={() => setAdding(false)} />
