@@ -16,6 +16,7 @@ export type SectionKey =
   | 'documents'
   | 'tasks'
   | 'notes'
+  | 'updates'
 
 export const SECTION_ICON: Record<SectionKey, React.ReactElement> = {
   // 'details' is the page header rather than a Section, so its icon is only
@@ -44,6 +45,9 @@ export const SECTION_ICON: Record<SectionKey, React.ReactElement> = {
   notes: (
     <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
   ),
+  updates: (
+    <path d="M3 11l18-8-8 18-2-8-8-2Z" />
+  ),
 }
 
 export const SECTION_LABEL: Record<SectionKey, string> = {
@@ -55,6 +59,7 @@ export const SECTION_LABEL: Record<SectionKey, string> = {
   documents: 'Documents',
   tasks: 'Tasks',
   notes: 'Notes',
+  updates: 'Updates',
 }
 
 export function Section({

@@ -10,6 +10,7 @@ import CourseTasksPanel, { type CourseTask, type TaskPerson } from '@/components
 import { loadTasksWithDocs } from '@/lib/course-tasks'
 import { LinkIcon, PaperclipIcon } from '@/components/TaskIcons'
 import PortalSectionNav from './PortalSectionNav'
+import CourseUpdates, { type CourseUpdate } from './CourseUpdates'
 import { Section, SubHead, InstructorCard, SECTION_LABEL, type SectionKey } from './sections'
 import { PURPOSE_META, PURPOSE_ORDER, linkLabel, type CourseLink } from '@/lib/course-links'
 
@@ -99,7 +100,7 @@ export default async function PortalPage({
     modulesQuery = modulesQuery.in('audience', audienceFilter)
   }
 
-  const [{ data: inst }, { data: offDays }, { data: modules }, { data: instructors }, taskRows, { data: peopleRows }, { data: templateRows }, { data: courseDocRows }, { data: taskDocRows }, { data: mapRows }, { data: linkRows }] =
+  const [{ data: inst }, { data: offDays }, { data: modules }, { data: instructors }, taskRows, { data: peopleRows }, { data: templateRows }, { data: courseDocRows }, { data: taskDocRows }, { data: mapRows }, { data: linkRows }, { data: updateRows }, { count: enrolledCount }] =
     await Promise.all([
       admin.from('course_instances')
         .select('course_type, custom_title, status, location, client_name, notes, ref_number, starts_at, ends_at, meeting_point, meeting_time, intro')
@@ -137,6 +138,16 @@ export default async function PortalPage({
       (showTasks
         ? admin.from('course_links').select('id, url, label, audience, purpose').eq('instance_id', id).order('purpose').order('sort_order')
         : admin.from('course_links').select('id, url, label, audience, purpose').eq('instance_id', id).eq('audience', 'shared').order('purpose').order('sort_order')),
+      // Updates are posted to everyone on the course, so there's no audience
+      // filter — an update students can't see would defeat the point.
+      admin.from('course_updates')
+        .select('id, body, created_at, sent_count, recipient_count, emailed_at, profiles(first_name, last_name)')
+        .eq('instance_id', id)
+        .order('created_at', { ascending: false }),
+      // Only needed to say "emails 12 students" before the button is pressed.
+      showTasks
+        ? admin.from('enrollments').select('id', { count: 'exact', head: true }).eq('instance_id', id)
+        : Promise.resolve({ count: 0 }),
     ])
 
   if (!inst) notFound()
@@ -259,6 +270,24 @@ export default async function PortalPage({
   const hasCurriculum = orderedModules.length > 0
   const hasEquipment = Boolean(gearList && gearList.gear_list_entries.length > 0)
   const hasNotes = showTasks && Boolean(inst.notes)
+  // Everyone on the course sees updates; staff also get the box to write one,
+  // so the section shows for them even when there's nothing posted yet.
+  const courseUpdates: CourseUpdate[] = ((updateRows ?? []) as unknown as {
+    id: string; body: string; created_at: string; sent_count: number; recipient_count: number
+    emailed_at: string | null; profiles: { first_name: string | null; last_name: string | null } | null
+  }[]).map((u) => ({
+    id: u.id,
+    body: u.body,
+    created_at: u.created_at,
+    sent_count: u.sent_count,
+    recipient_count: u.recipient_count,
+    emailed_at: u.emailed_at,
+    authorName: [u.profiles?.first_name, u.profiles?.last_name].filter(Boolean).join(' ').trim() || null,
+  }))
+  // Any instructor on the course can post, not just the lead — a meeting point
+  // moves and the person who needs to say so is the one standing there.
+  const canPostUpdates = showTasks
+  const hasUpdates = canPostUpdates || courseUpdates.length > 0
   const hasDocuments = showTasks && courseDocs.length > 0
   const hasTasks = showTasks && (tasks.length > 0 || canManageTasks)
 
@@ -267,6 +296,7 @@ export default async function PortalPage({
     // other, so the bar can always take you back to the overview.
     'details',
     // Team blocks lead for staff; students only ever get the four below them.
+    hasUpdates && 'updates',
     hasNotes && 'notes',
     hasTasks && 'tasks',
     hasDocuments && 'documents',
@@ -444,6 +474,19 @@ export default async function PortalPage({
         )}
 
         <PortalSectionNav sections={navSections} />
+
+        {/* Updates — posted by the team, emailed to the students, and kept
+            here so the course page stays the record of what was said. */}
+        {hasUpdates && (
+          <Section id="updates" blurb="Posted to everyone on this course, and emailed to the students">
+            <CourseUpdates
+              instanceId={id}
+              updates={courseUpdates}
+              canPost={canPostUpdates}
+              enrolledCount={enrolledCount ?? 0}
+            />
+          </Section>
+        )}
 
         {/* Notes (instructors + admin only) */}
         {hasNotes && (
