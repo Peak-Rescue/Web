@@ -1,4 +1,5 @@
 import React from 'react'
+import { after } from 'next/server'
 import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
@@ -61,7 +62,7 @@ export default async function PortalPage({
   const admin = createAdminClient()
 
   // Access inputs in one parallel round.
-  const [{ data: profile }, { data: instructorAssignment }, { data: enrollment }] = await Promise.all([
+  const [{ data: profile }, { data: instructorAssignment }, { data: enrollment }, { data: lastView }] = await Promise.all([
     admin.from('profiles').select('role, first_name').eq('id', user.id).single(),
     admin
       .from('instance_instructors')
@@ -70,6 +71,9 @@ export default async function PortalPage({
       .eq('instructors.profile_id', user.id)
       .maybeSingle(),
     admin.from('enrollments').select('id').eq('instance_id', id).eq('user_id', user.id).maybeSingle(),
+    // Read before anything is marked seen — this visit is what shows the dot,
+    // and the write below is what clears it for the next one.
+    admin.from('course_views').select('last_seen_at').eq('instance_id', id).eq('user_id', user.id).maybeSingle(),
   ])
 
   const isAdmin = profile?.role === 'admin'
@@ -142,7 +146,7 @@ export default async function PortalPage({
       // Updates are posted to everyone on the course, so there's no audience
       // filter — an update students can't see would defeat the point.
       admin.from('course_updates')
-        .select('id, body, created_at, updated_at, sent_count, recipient_count, notify_count, emailed_at, links, attachments, profiles(first_name, last_name)')
+        .select('id, body, created_at, updated_at, created_by, sent_count, recipient_count, notify_count, emailed_at, links, attachments, profiles(first_name, last_name)')
         .eq('instance_id', id)
         .order('created_at', { ascending: false }),
       // Only needed to say "emails 12 students" before the button is pressed.
@@ -281,7 +285,7 @@ export default async function PortalPage({
   // Everyone on the course sees updates; staff also get the box to write one,
   // so the section shows for them even when there's nothing posted yet.
   type UpdateRow = {
-    id: string; body: string; created_at: string; updated_at: string | null
+    id: string; body: string; created_at: string; updated_at: string | null; created_by: string | null
     sent_count: number; recipient_count: number; notify_count: number; emailed_at: string | null
     links: { label: string; url: string }[] | null
     attachments: { path: string; filename: string }[] | null
@@ -302,6 +306,7 @@ export default async function PortalPage({
     body: u.body,
     created_at: u.created_at,
     updated_at: u.updated_at,
+    created_by: u.created_by,
     sent_count: u.sent_count,
     recipient_count: u.recipient_count,
     notify_count: u.notify_count,
@@ -310,6 +315,28 @@ export default async function PortalPage({
     attachments: (u.attachments ?? []).map((a) => ({ ...a, url: updateDocUrl.get(a.path) ?? '#' })),
     authorName: [u.profiles?.first_name, u.profiles?.last_name].filter(Boolean).join(' ').trim() || null,
   }))
+  // Marked seen after the response goes out, so the write never delays the
+  // page. A previewing admin is excluded: ?as=student is a look at someone
+  // else's view, not a visit, and shouldn't clear your own dot.
+  if (!viewAs) {
+    after(async () => {
+      await createAdminClient()
+        .from('course_views')
+        .upsert(
+          { user_id: user.id, instance_id: id, last_seen_at: new Date().toISOString() },
+          { onConflict: 'user_id,instance_id' }
+        )
+    })
+  }
+
+  // First visit isn't "everything is new" — that would put a dot on a page
+  // the reader has never had a chance to fall behind on.
+  const lastSeen = lastView?.last_seen_at ?? null
+  // Your own post isn't news to you — you were there when it was written.
+  const isNew = (u: { created_at: string; created_by: string | null }) =>
+    Boolean(lastSeen) && u.created_at > lastSeen! && u.created_by !== user.id
+  const unreadUpdates = courseUpdates.filter(isNew).length
+
   // Any instructor on the course can post, not just the lead — a meeting point
   // moves and the person who needs to say so is the one standing there.
   const canPostUpdates = showTasks
@@ -354,7 +381,12 @@ export default async function PortalPage({
     hasSchedule && 'schedule',
     hasCurriculum && 'curriculum',
     hasEquipment && 'equipment',
-  ].filter(Boolean) as SectionKey[]).map((id) => ({ id, label: SECTION_LABEL[id] }))
+  ].filter(Boolean) as SectionKey[]).map((id) => ({
+    id,
+    label: SECTION_LABEL[id],
+    team: id === 'notes' || id === 'tasks' || id === 'documents' || id === 'message',
+    unread: id === 'updates' && unreadUpdates > 0,
+  }))
 
   return (
     <main className="min-h-screen bg-zinc-950 text-white pt-16 md:pt-20">
@@ -528,10 +560,14 @@ export default async function PortalPage({
         {/* Updates — posted by the team, emailed to the students, and kept
             here so the course page stays the record of what was said. */}
         {hasUpdates && (
-          <Section id="updates" blurb="Posted to everyone on this course, and emailed to the students">
+          <Section
+            id="updates"
+            blurb="Posted to everyone on this course, and emailed to the students"
+            unread={unreadUpdates > 0}
+          >
             <CourseUpdates
               instanceId={id}
-              updates={courseUpdates}
+              updates={courseUpdates.map((u) => ({ ...u, isNew: isNew(u) }))}
               canPost={canPostUpdates}
               enrolledCount={enrolledCount ?? 0}
             />
@@ -665,8 +701,12 @@ export default async function PortalPage({
                               {t.time_label && <span className="text-zinc-500 mr-2">{t.time_label}</span>}
                               {t.title}
                               {t.location && <span className="text-xs text-zinc-500 ml-2">{t.location}</span>}
+                              {/* Sub-topics sit behind a rule on a recessed
+                                  ground rather than one indent and a smaller
+                                  font — a fourteen-topic day is otherwise a
+                                  wall of near-identical lines. */}
                               {kids.length > 0 && (
-                                <ul className="mt-1 ml-4 space-y-0.5">
+                                <ul className="mt-1.5 ml-1 pl-3 py-1 space-y-0.5 border-l-2 border-zinc-800 bg-black/25 rounded-r">
                                   {kids.map((k) => (
                                     <li key={k.id} className="text-[13px] text-zinc-400">{k.title}</li>
                                   ))}
@@ -769,10 +809,16 @@ export default async function PortalPage({
               return (
                 <div key={gt} className="mb-5">
                   <SubHead title={gt === 'personal' ? 'Each person brings' : 'Group kit'} />
+                  {/* Categories hang off the group behind a rule, so "each
+                      person brings" visibly owns everything under it rather
+                      than the two levels reading as one flat run of lists. */}
+                  <div className="ml-0.5 pl-3 border-l-2 border-zinc-800">
                   {[...byCat.entries()].map(([cat, items]) => (
                     <div key={cat ?? '—'} className="mb-2">
-                      {cat && <p className="text-[11px] text-zinc-600 mb-1">{cat}</p>}
-                      <ul className="border border-zinc-800 rounded divide-y divide-zinc-800/70">
+                      {cat && (
+                        <p className="text-[11px] uppercase tracking-wide text-zinc-500 mb-1">{cat}</p>
+                      )}
+                      <ul className="border border-zinc-800/70 rounded divide-y divide-zinc-800/70">
                         {items.map((e) => {
                           const name = e.name ?? (e.gear_items ? productName(e.gear_items) : null) ?? 'Item'
                           const url = e.url ?? e.gear_items?.url
@@ -816,6 +862,7 @@ export default async function PortalPage({
                       </ul>
                     </div>
                   ))}
+                  </div>
                 </div>
               )
             })}

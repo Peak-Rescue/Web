@@ -13,6 +13,7 @@ export type CourseUpdate = {
   body: string
   created_at: string
   updated_at: string | null
+  created_by: string | null
   authorName: string | null
   sent_count: number
   recipient_count: number
@@ -21,6 +22,8 @@ export type CourseUpdate = {
   links: UpdateLink[]
   // Signed on the server — attachments live in a private bucket.
   attachments: (UpdateAttachment & { url: string })[]
+  /** Posted since this reader last opened the course. */
+  isNew?: boolean
 }
 
 // Updates for the people on the course. The email only points here, so this
@@ -109,10 +112,20 @@ export default function CourseUpdates({
                   />
                 </div>
               ) : (
-                <div key={u.id} className="px-3 py-2.5 bg-zinc-900 border border-zinc-800 rounded-lg">
+                <div
+                  key={u.id}
+                  className={`px-3 py-2.5 bg-zinc-900 border rounded-lg ${
+                    u.isNew ? 'border-pr-red/45' : 'border-zinc-800'
+                  }`}
+                >
                   <div className="flex items-baseline gap-2 flex-wrap">
                     <span className="text-xs text-zinc-400">{u.authorName ?? 'Peak Rescue'}</span>
                     <span className="text-[11px] text-zinc-600">{when(u.created_at)}</span>
+                    {u.isNew && (
+                      <span className="text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-full border border-pr-red/55 bg-pr-red/15 text-pr-red-light">
+                        New
+                      </span>
+                    )}
                     {u.updated_at && (
                       <span className="text-[11px] text-zinc-600" title={`Edited ${when(u.updated_at)}`}>· edited</span>
                     )}

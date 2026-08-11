@@ -72,6 +72,7 @@ export function Section({
   title,
   blurb,
   team,
+  unread,
   children,
 }: {
   id: SectionKey
@@ -79,18 +80,34 @@ export function Section({
   blurb?: string
   /** Team-only block: tinted and badged so it reads as not-for-students. */
   team?: boolean
+  /** Something in here is newer than this reader's last visit. */
+  unread?: boolean
   children: React.ReactNode
 }) {
   return (
     <section id={id} className="scroll-mt-30 md:scroll-mt-36 mb-12">
-      <div className="flex items-center gap-3 mb-4 pb-3 border-b border-zinc-800">
+      {/* The heading carries a colour tick, the same device the gear catalog
+          uses on its category headings: it gives the eye something to land on
+          in a long scroll, and says whose block this is before the badge at
+          the far end of the row does. */}
+      <div className="relative flex items-center gap-3 mb-4 pb-3 border-b border-zinc-800">
         <span
-          className={`grid place-items-center w-8 h-8 rounded-lg border shrink-0 ${
+          aria-hidden
+          className={`absolute -left-3 top-1 w-[3px] h-5 rounded-full ${team ? 'bg-amber-500' : 'bg-pr-red'}`}
+        />
+        <span
+          className={`relative grid place-items-center w-8 h-8 rounded-lg border shrink-0 ${
             team
               ? 'border-amber-900/70 bg-amber-950/30 text-amber-400'
               : 'border-zinc-800 bg-zinc-900 text-zinc-400'
           }`}
         >
+          {unread && (
+            <span
+              aria-hidden
+              className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-pr-red-light ring-2 ring-zinc-950"
+            />
+          )}
           <svg
             xmlns="http://www.w3.org/2000/svg"
             width="16"
