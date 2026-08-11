@@ -1,23 +1,29 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { AUDIENCE_META, type LibraryAudience } from '@/lib/library'
 
 // Modal for attaching an external link (Google Drive, Dropbox, CalTopo…)
 // alongside file uploads — used by the course Files section and task
 // attachments. The parent owns the save and passes `busy` to lock controls.
+// Where the link has an audience (photo albums), `withAudience` asks for it
+// here: who it's for is part of adding it, not a setting to find afterwards.
 export default function AddLinkDialog({
   open,
   busy,
+  withAudience = false,
   onSubmit,
   onCancel,
 }: {
   open: boolean
   busy: boolean
-  onSubmit: (name: string, url: string) => void
+  withAudience?: boolean
+  onSubmit: (name: string, url: string, audience: LibraryAudience) => void
   onCancel: () => void
 }) {
   const [name, setName] = useState('')
   const [url, setUrl] = useState('')
+  const [audience, setAudience] = useState<LibraryAudience>('internal')
 
   // Reopening starts a fresh link — reset the drafts during render
   // (React's "adjust state when a prop changes" pattern, no effect needed).
@@ -26,6 +32,7 @@ export default function AddLinkDialog({
     setPrevOpen(open)
     setName('')
     setUrl('')
+    setAudience('internal')
   }
 
   useEffect(() => {
@@ -39,7 +46,7 @@ export default function AddLinkDialog({
   if (!open) return null
 
   const canSubmit = !busy && url.trim().length > 0
-  const submit = () => canSubmit && onSubmit(name, url)
+  const submit = () => canSubmit && onSubmit(name, url, audience)
 
   return (
     <div
@@ -75,6 +82,21 @@ export default function AddLinkDialog({
           placeholder="What everyone on the course sees — e.g. Packing list"
           className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:border-zinc-500 disabled:opacity-50"
         />
+
+        {withAudience && (
+          <>
+            <label className="block text-xs text-zinc-500 mt-3 mb-1">Who can see it</label>
+            <select
+              value={audience}
+              disabled={busy}
+              onChange={(e) => setAudience(e.target.value as LibraryAudience)}
+              className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:border-zinc-500 disabled:opacity-50"
+            >
+              <option value="internal">{AUDIENCE_META.internal.choice}</option>
+              <option value="shared">{AUDIENCE_META.shared.choice}</option>
+            </select>
+          </>
+        )}
 
         <div className="flex items-center gap-3 mt-5">
           <button

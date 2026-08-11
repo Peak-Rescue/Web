@@ -43,8 +43,8 @@ export default function CoursePhotosSection({
     <div className="p-6 pt-5 border-t border-zinc-800">
       <h3 className="text-sm font-semibold text-zinc-300 mb-1">Photo albums</h3>
       <p className="text-xs text-zinc-500 mb-3">
-        A shared album for this course — everyone on the team can add to it. Share one and students
-        see it on their course page.
+        A shared album for this course — everyone on the team can add to it. Each album is
+        instructors-only until you share it, and a shared one shows on the students&rsquo; course page.
       </p>
 
       {error && <p className="text-xs text-pr-red mb-2">{error}</p>}
@@ -105,10 +105,11 @@ export default function CoursePhotosSection({
       <AddLinkDialog
         open={adding}
         busy={busy}
+        withAudience
         onCancel={() => setAdding(false)}
-        onSubmit={(label, url) =>
+        onSubmit={(label, url, audience) =>
           run(async () => {
-            await addCourseLink(instanceId, { url, label, purpose: 'photos' })
+            await addCourseLink(instanceId, { url, label, purpose: 'photos', audience })
             setAdding(false)
           })
         }
