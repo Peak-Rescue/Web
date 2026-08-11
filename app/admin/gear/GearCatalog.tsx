@@ -10,6 +10,8 @@ type Row = CatalogItem & { active: boolean; uses: number }
 // Sentinel for the "make one up" option. Not a category anything can be saved
 // under — picking it swaps the select for a text field.
 const NEW_CATEGORY = '__new__'
+// Same idea one level down: name a generic item instead of picking one.
+const NEW_TYPE = '__new_type__'
 
 // Cells read as text until you touch them. A catalog is read far more often
 // than it is edited, and forty rows of boxed inputs is a form, not a table.
@@ -91,6 +93,9 @@ export default function GearCatalog({ items }: { items: Row[] }) {
   // unit of work for the only job this page really has right now.
   // Which type has its category picker open.
   const [moving, setMoving] = useState<string | null>(null)
+  // Which product has its link line open. A link is set once and read by
+  // clicking, so it earns an icon and not a field on every row.
+  const [linking, setLinking] = useState<string | null>(null)
 
   const types = useMemo(() => items.filter((i) => !i.parent_id), [items])
   const childrenOf = useMemo(() => {
@@ -182,6 +187,34 @@ export default function GearCatalog({ items }: { items: Row[] }) {
           )
         )}
 
+        {/* Products only — nobody publishes a "brake-assist descender", Petzl
+            publishes a Grigri. The pencil sets it, the arrow follows it, and
+            neither costs a row when there is no link to show. */}
+        {row.parent_id && (
+          <>
+            {row.url && (
+              <a
+                href={row.url} target="_blank" rel="noreferrer"
+                title={`Open ${row.url}`}
+                className="text-zinc-500 hover:text-white transition-colors"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14 21 3" />
+                </svg>
+              </a>
+            )}
+            <button
+              onClick={() => setLinking(linking === row.id ? null : row.id)}
+              title={row.url ? 'Edit the link' : 'Add a link'}
+              className={`transition-colors ${row.url ? 'text-zinc-600 hover:text-white' : 'text-zinc-700 hover:text-white'}`}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+              </svg>
+            </button>
+          </>
+        )}
+
         {/* The count that used to sit here explained why delete was missing.
             Delete is always offered now, so the explanation belongs at the
             moment of the decision instead — in the confirm, which is the only
@@ -242,31 +275,23 @@ export default function GearCatalog({ items }: { items: Row[] }) {
             placeholder="Notes / spec"
             className={`${CELL} flex-1 min-w-0 text-[11px] text-zinc-500`}
           />
-          {/* Only a product has a page to link to. Nobody publishes a
-              "brake-assist descender"; Petzl publishes a Grigri. */}
-          {sub && (
-            <>
-              <input
-                defaultValue={row.url ?? ''}
-                onBlur={(e) => e.target.value !== (row.url ?? '') &&
-                  run(() => upsertGearItem({ id: row.id, name: row.name, url: e.target.value }))}
-                placeholder="Link"
-                className={`${CELL} w-64 shrink-0 text-[11px] text-zinc-500`}
-              />
-              {row.url && (
-                <a
-                  href={row.url} target="_blank" rel="noreferrer"
-                  title="Open link"
-                  className="shrink-0 text-zinc-600 hover:text-white transition-colors"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14 21 3" />
-                  </svg>
-                </a>
-              )}
-            </>
-          )}
         </div>
+
+        {linking === row.id && (
+          <input
+            autoFocus
+            defaultValue={row.url ?? ''}
+            onBlur={(e) => {
+              setLinking(null)
+              if (e.target.value !== (row.url ?? '')) {
+                run(() => upsertGearItem({ id: row.id, name: row.name, url: e.target.value }))
+              }
+            }}
+            onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') setLinking(null) }}
+            placeholder="https://…"
+            className={`${input} mt-1 w-full text-[11px]`}
+          />
+        )}
       </div>
     )
   }
@@ -451,6 +476,10 @@ function AddItem({
   const [brand, setBrand] = useState('')
   const [parentId, setParentId] = useState('')
   const [category, setCategory] = useState<string>(GEAR_CATEGORIES[0])
+  // A generic item named here rather than picked. The category dropdown can
+  // invent one; this one could not, so adding the first product of something
+  // new meant adding the generic item, then starting the form again.
+  const [newType, setNewType] = useState<string | null>(null)
 
   // The types this category holds. Offering all forty of them under every
   // category was how a harness ended up satisfying a rope: the list was the
@@ -475,27 +504,41 @@ function AddItem({
           // The type picked is one of this category's, so changing category
           // un-picks it rather than leaving a product filed against a type
           // that is no longer on offer.
-          onChange={(next) => { setCategory(next); setParentId('') }}
+          onChange={(next) => { setCategory(next); setParentId(''); setNewType(null) }}
           className={`${input} w-44`}
         />
       </div>
       <div>
         <label className="block text-[11px] text-zinc-500 mb-1">Generic item</label>
-        <select
-          value={parentId}
-          onChange={(e) => setParentId(e.target.value)}
-          disabled={inCategory.length === 0}
-          className={`${input} w-44 disabled:opacity-40`}
-        >
-          <option value="">{inCategory.length === 0 ? '— nothing here yet —' : '— none, this is a generic item —'}</option>
-          {inCategory.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-        </select>
+        {newType !== null ? (
+          <input
+            autoFocus
+            value={newType}
+            onChange={(e) => setNewType(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Escape') setNewType(null) }}
+            placeholder="New generic item"
+            className={`${input} w-44`}
+          />
+        ) : (
+          <select
+            value={parentId}
+            onChange={(e) => {
+              if (e.target.value === NEW_TYPE) { setNewType(''); setParentId('') }
+              else setParentId(e.target.value)
+            }}
+            className={`${input} w-44`}
+          >
+            <option value="">— none, this is a generic item —</option>
+            {inCategory.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+            <option value={NEW_TYPE}>+ New generic item…</option>
+          </select>
+        )}
       </div>
       <div>
         <label className="block text-[11px] text-zinc-500 mb-1">Name</label>
         <input value={name} onChange={(e) => setName(e.target.value)} className={`${input} w-48`} />
       </div>
-      {parentId && (
+      {(parentId || newType) && (
         <div>
           <label className="block text-[11px] text-zinc-500 mb-1">Brand — or type a new one</label>
           <input list="gear-brands" value={brand} onChange={(e) => setBrand(e.target.value)} className={`${input} w-48`} />
@@ -503,10 +546,17 @@ function AddItem({
       )}
       <button
         onClick={() => name.trim() && run(async () => {
+          // A named generic item is created first, in this category, and the
+          // product is filed under it — two writes for what reads as one.
+          let parent = parentId
+          if (newType?.trim()) {
+            const { id } = await upsertGearItem({ name: newType.trim(), category })
+            parent = id
+          }
           await upsertGearItem({
-            name, brand: parentId ? brand.trim() || null : null, category, parentId: parentId || null,
+            name, brand: parent ? brand.trim() || null : null, category, parentId: parent || null,
           })
-          setName(''); setBrand(''); setParentId(''); onDone()
+          setName(''); setBrand(''); setParentId(''); setNewType(null); onDone()
         })}
         disabled={busy || !name.trim()}
         className="px-3 py-1.5 rounded bg-pr-red hover:bg-pr-red-dark text-white text-sm font-medium transition-colors disabled:opacity-40"
