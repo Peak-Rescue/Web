@@ -98,7 +98,7 @@ export default async function PortalPage({
     modulesQuery = modulesQuery.in('audience', audienceFilter)
   }
 
-  const [{ data: inst }, { data: offDays }, { data: modules }, { data: instructors }, taskRows, { data: peopleRows }, { data: templateRows }, { data: courseDocRows }, { data: taskDocRows }, { data: mapRows }] =
+  const [{ data: inst }, { data: offDays }, { data: modules }, { data: instructors }, taskRows, { data: peopleRows }, { data: templateRows }, { data: courseDocRows }, { data: taskDocRows }, { data: mapRows }, { data: linkRows }] =
     await Promise.all([
       admin.from('course_instances')
         .select('course_type, custom_title, status, location, client_name, notes, ref_number, starts_at, ends_at, meeting_point, meeting_time, schedule, intro')
@@ -131,6 +131,11 @@ export default async function PortalPage({
       (showTasks
         ? admin.from('course_maps').select('id, url, label, audience, library_items(title, url, edit_url)').eq('instance_id', id).order('sort_order')
         : admin.from('course_maps').select('id, url, label, audience, library_items(title, url)').eq('instance_id', id).eq('audience', 'shared').order('sort_order')),
+      // Links added for this delivery — the photo album, the client's
+      // paperwork. Same audience rule as maps.
+      (showTasks
+        ? admin.from('course_links').select('id, url, label, audience, purpose').eq('instance_id', id).order('purpose').order('sort_order')
+        : admin.from('course_links').select('id, url, label, audience, purpose').eq('instance_id', id).eq('audience', 'shared').order('purpose').order('sort_order')),
     ])
 
   if (!inst) notFound()
@@ -371,6 +376,41 @@ export default async function PortalPage({
             </div>
           )}
         </div>
+
+        {/* Links for this delivery. Grouped, because "the album" and "the
+            waiver" are different errands and a single list of URLs makes you
+            read all of them to find either. */}
+        {(linkRows ?? []).length > 0 && (
+          <div className="mb-8 space-y-3">
+            {PURPOSE_ORDER.map((purpose) => {
+              const rows = ((linkRows ?? []) as CourseLink[]).filter((l) => l.purpose === purpose)
+              if (rows.length === 0) return null
+              return (
+                <div key={purpose}>
+                  <p className="text-[11px] uppercase tracking-wide text-zinc-500 mb-1.5">
+                    {PURPOSE_META[purpose].label}
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {rows.map((l) => (
+                      <a
+                        key={l.id}
+                        href={l.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border border-zinc-700 bg-zinc-900 text-zinc-300 hover:text-white hover:border-zinc-500 transition-colors"
+                      >
+                        {linkLabel(l)}
+                        {showTasks && l.audience === 'internal' && (
+                          <span className="text-zinc-600">· team</span>
+                        )}
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
 
         {/* Instructor roster — named as such, with the role written out. */}
         {(instructors ?? []).length > 0 && (

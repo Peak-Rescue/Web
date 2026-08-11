@@ -32,6 +32,8 @@ import TemplatePicker, { type TemplateOption } from '../TemplatePicker'
 import RemovableRow from '../RemovableRow'
 import { CourseTabs, TabPanel } from '../CourseTabs'
 import CourseGear from '../CourseGear'
+import CourseLinksSection from '../CourseLinksSection'
+import { type CourseLink } from '@/lib/course-links'
 import { type GearItem, type GearList } from '@/app/admin/gear/GearListEditor'
 import { type Schedule } from '@/app/admin/schedules/ScheduleEditor'
 import CourseSchedule from '@/app/admin/courses/CourseSchedule'
@@ -114,6 +116,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
     { data: galleryImageRows },
     { data: estimateReviewRows },
     { data: courseMapRows },
+    { data: courseLinkRows },
     { data: venueRows },
   ] = await Promise.all([
     admin.from('enrollments').select('id, enrolled_at, profiles(first_name, last_name, email)').eq('instance_id', id).order('enrolled_at'),
@@ -150,6 +153,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
     admin.from('gallery_images').select('url, caption, categories').order('created_at', { ascending: false }),
     admin.from('estimate_reviews').select('id, created_at, requested_by, reviewer_id, note, responded_at, approved, response_note').eq('instance_id', id).order('created_at', { ascending: false }).limit(8),
     admin.from('course_maps').select('id, url, label, audience, library_item_id, library_items(title, url, audience)').eq('instance_id', id).order('sort_order'),
+    admin.from('course_links').select('id, url, label, audience, purpose').eq('instance_id', id).order('purpose').order('sort_order'),
     admin.from('venues').select('id, name').eq('active', true).order('name'),
   ])
 
@@ -534,6 +538,8 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
           </AutoSaveForm>
 
           <CourseMapsSection instanceId={id} maps={courseMaps} />
+
+          <CourseLinksSection instanceId={id} links={(courseLinkRows ?? []) as CourseLink[]} />
 
           <h3 className="text-sm font-semibold text-zinc-400 mt-6 mb-2">Dates</h3>
 
