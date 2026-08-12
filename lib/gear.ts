@@ -126,6 +126,13 @@ export type Placed<T> =
   | { kind: 'item'; row: T }
   | { kind: 'choice'; key: string; label: string | null; options: ChoiceBlock<T>[] }
 
+// One branch is a line made of several slots — "rope and rope bag". Two or
+// more is a choice between such lines. The same structure either way; only the
+// chrome differs, so both renderers ask this rather than each deciding.
+export function isChoice<T>(block: { options: ChoiceBlock<T>[] }): boolean {
+  return block.options.length > 1
+}
+
 // A section's rows as they print: plain gear in its own order, and each choice
 // as one block sitting where its first row sat. Anchoring the block to its
 // first row is what keeps a choice from jumping to the end of the section the
@@ -163,20 +170,19 @@ export function placeChoices<T extends ChoiceFields>(rows: T[]): Placed<T>[] {
   return out
 }
 
-// How a line reads once the type, the chosen products and their relationship
-// are resolved: "Descent device — Petzl Rig or Grigri", or "and" when you need
-// both. The operator is printed rather than implied, because two names side by
-// side read equally well as either and the difference is what to go and buy.
+// How a line reads once the item and the products narrowing it are resolved:
+// "Descent device — Petzl Rig or Grigri". Products on one slot are always a
+// disjunction: they are answers to "what satisfies this", and two things you
+// both need are two slots, so each can carry its own quantity.
 export function gearLabel(
   base: string,
-  options: { name: string }[],
-  conjunction: 'and' | 'or' = 'or'
+  options: { name: string }[]
 ): { title: string; detail: string | null } {
   if (options.length === 0) return { title: base, detail: null }
   const names = options.map((o) => o.name)
   const joined =
     names.length === 1
       ? names[0]
-      : `${names.slice(0, -1).join(', ')} ${conjunction} ${names[names.length - 1]}`
+      : `${names.slice(0, -1).join(', ')} or ${names[names.length - 1]}`
   return { title: base, detail: joined }
 }

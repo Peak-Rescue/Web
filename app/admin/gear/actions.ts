@@ -357,24 +357,15 @@ export async function updateGearEntry(
   touch((data?.gear_lists as unknown as { instance_id: string | null } | null)?.instance_id)
 }
 
-// Which products this line names, and how they relate. None means the entry
-// stands as written; one pins it; several read as "A or B" when any will do, or
-// "A and B" when you need both — printed either way, because two names side by
-// side say neither.
+// Which products satisfy this slot. None means the item stands as written; one
+// pins it; several read as "A or B". Always a disjunction — two products you
+// both need are two slots, because only a slot can carry its own quantity.
 export async function setGearEntryOptions(
   entryId: string,
   gearItemIds: string[],
-  instanceId?: string | null,
-  conjunction?: 'and' | 'or'
+  instanceId?: string | null
 ) {
   const admin = await requireAdmin()
-  if (conjunction) {
-    const { error } = await admin
-      .from('gear_list_entries')
-      .update({ options_conjunction: conjunction })
-      .eq('id', entryId)
-    if (error) throw new Error(error.message)
-  }
   await admin.from('gear_entry_options').delete().eq('entry_id', entryId)
   const ids = [...new Set(gearItemIds)]
   if (ids.length) {
@@ -584,6 +575,87 @@ export async function setGearChoiceLabel(scope: ChoiceScope, label: string | nul
   await touchList(admin, scope.listId)
 }
 
+// Add a slot to the line this row is part of — the one mechanism both "+ and"
+// controls point at, at either level.
+//
+// A line is one or more slots sharing a branch. Most rows are a line of one, so
+// the first "+ and" has to make the group: the row is put in a fresh group on
+// branch 0 and the new slot joins it there. After that they are simply two rows
+// that agree, the same way a section is.
+//
+// `pinnedProductId` is what "+ and" on the products means: another product you
+// also need becomes its own slot of the same item, narrowed to that product.
+// That is the only way it can carry its own quantity — two ropes and one bag.
+export async function addSlotBeside(
+  entryId: string,
+  input: { gearItemId?: string | null; name?: string; pinnedProductId?: string | null },
+  instanceId?: string | null
+): Promise<{ id: string } | Failed> {
+  const admin = await requireAdmin()
+
+  const { data: src } = await admin
+    .from('gear_list_entries')
+    .select('list_id, section, group_type, option_group, option_branch, option_label, sort_order')
+    .eq('id', entryId)
+    .single()
+  if (!src) return fail('That row is no longer on the list')
+  if (!input.gearItemId && !input.name?.trim()) return fail('Pick an item or give it a name')
+
+  let key = src.option_group
+  let branch = src.option_branch
+  if (!key) {
+    key = crypto.randomUUID()
+    branch = 0
+    const { error } = await admin
+      .from('gear_list_entries')
+      .update({ option_group: key, option_branch: branch })
+      .eq('id', entryId)
+    if (error) throw new Error(error.message)
+  }
+
+  // Straight after the slot it accompanies, so the line reads in the order it
+  // was built. Everything below shuffles down rather than the new slot landing
+  // at the foot of the section away from what it belongs with.
+  const { data: below } = await admin
+    .from('gear_list_entries')
+    .select('id, sort_order')
+    .eq('list_id', src.list_id)
+    .gt('sort_order', src.sort_order)
+  await Promise.all(
+    (below ?? []).map((r) =>
+      admin.from('gear_list_entries').update({ sort_order: r.sort_order + 1 }).eq('id', r.id)
+    )
+  )
+
+  const { data: added, error } = await admin
+    .from('gear_list_entries')
+    .insert({
+      list_id: src.list_id,
+      gear_item_id: input.gearItemId ?? null,
+      name: input.gearItemId ? null : input.name?.trim() || null,
+      section: src.section,
+      group_type: src.group_type,
+      option_group: key,
+      option_branch: branch,
+      option_label: src.option_label,
+      sort_order: src.sort_order + 1,
+    })
+    .select('id')
+    .single()
+  if (error) throw new Error(error.message)
+
+  if (input.pinnedProductId) {
+    const { error: e2 } = await admin
+      .from('gear_entry_options')
+      .insert({ entry_id: added.id, gear_item_id: input.pinnedProductId, sort_order: 0 })
+    if (e2) throw new Error(e2.message)
+  }
+
+  if (instanceId !== undefined) touch(instanceId)
+  else await touchList(admin, src.list_id)
+  return { id: added.id as string }
+}
+
 // Dissolve the choice and keep the gear. Every alternative becomes an ordinary
 // required row, which is the honest reading — the list no longer says one of
 // them will do, so it says bring them. Deleting the gear instead would throw
@@ -610,13 +682,9 @@ export async function removeGearChoiceBranch(scope: ChoiceScope, branch: number)
   const { error } = await (f.section === null ? del.is('section', null) : del.eq('section', f.section))
   if (error) throw new Error(error.message)
 
-  // One alternative left is not a choice, it's a requirement wearing a heading.
-  const rest = admin.from('gear_list_entries').select('option_branch').match(f.match)
-  const { data: left } = await (f.section === null
-    ? rest.is('section', null)
-    : rest.eq('section', f.section))
-  const branches = new Set((left ?? []).map((r) => r.option_branch))
-  if (branches.size < 2) return ungroupGearChoice(scope)
+  // One branch left is not dissolved: it is still a line made of several slots
+  // — "rope and rope bag" — which is a real thing to be, and the alternative
+  // that was dropped was the only part that stopped being true.
   await touchList(admin, scope.listId)
 }
 
@@ -639,7 +707,7 @@ export async function removeGearEntry(id: string, instanceId?: string | null) {
 type Admin = ReturnType<typeof createAdminClient>
 
 const SOURCE_SELECT =
-  'name, audience, intro, gear_list_entries(gear_item_id, name, note, url, section, group_type, quantity, sort_order, option_group, option_branch, option_label, options_conjunction, gear_entry_options(gear_item_id, sort_order))'
+  'name, audience, intro, gear_list_entries(gear_item_id, name, note, url, section, group_type, quantity, sort_order, option_group, option_branch, option_label, gear_entry_options(gear_item_id, sort_order))'
 
 type OptionRow = { gear_item_id: string; sort_order: number }
 type EntryRow = Record<string, unknown> & { gear_entry_options: OptionRow[] }

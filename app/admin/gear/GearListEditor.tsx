@@ -2,12 +2,13 @@
 
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { useSteadyRefresh } from '@/components/useSteadyRefresh'
-import { GEAR_CATEGORIES, matchesGear, placeChoices, productName, unwrap, type CatalogItem } from '@/lib/gear'
+import { GEAR_CATEGORIES, isChoice, matchesGear, placeChoices, productName, unwrap, type CatalogItem } from '@/lib/gear'
 import {
   addGearEntry, updateGearEntry, removeGearEntry, updateGearList, copyGearList,
   saveGearListIntoTemplate, setGearEntryOptions, upsertGearItem, renameGearSection,
   removeGearSection, ungroupGearSection, moveGearEntry,
   setGearChoiceLabel, ungroupGearChoice, removeGearChoiceBranch, wrapGearEntryInChoice,
+  addSlotBeside,
 } from './actions'
 
 export type GearTemplateOption = { id: string; name: string; audience: string; entries: number }
@@ -38,8 +39,6 @@ export type GearEntry = {
   // The heading over the alternatives. Optional, and carried on every row of
   // the choice because there is no row for the choice itself.
   option_label?: string | null
-  // How this line's products relate: any of them will do, or you need them all.
-  options_conjunction?: 'and' | 'or'
   gear_entry_options?: { gear_item_id: string; sort_order: number }[]
 }
 
@@ -296,7 +295,7 @@ export default function GearListEditor({
       note: null, url: null,
       section: target.section, group_type: target.gt, quantity: null,
       option_group: target.choice, option_branch: target.branch, option_label: target.label ?? null,
-      sort_order: sortOrder, options_conjunction: 'or', gear_entry_options: [],
+      sort_order: sortOrder, gear_entry_options: [],
     }
     apply((es) => [...es, temp], () => addGearEntry(list.id, {
       gearItemId: input.gearItemId, name: input.name,
@@ -567,6 +566,7 @@ function SectionCard({
               gap={gap(p.row.id)}
               apply={s.apply} instanceId={s.instanceId}
               setAdding={s.setAdding} setChoiceDrafts={s.setChoiceDrafts}
+              adding={s.adding} catalog={s.catalog} childrenOf={s.childrenOf}
               busy={s.busy} run={s.run} input={s.input}
             />
           ) : (
@@ -660,6 +660,7 @@ function ChoiceCard({
 }) {
   const dragging = s.drag !== null
   const scope = { listId: s.listId, groupType, section, key: choiceKey }
+  const choice = isChoice({ options })
 
   const patchDraft = (fn: (d: ChoiceDraft) => ChoiceDraft) =>
     s.setChoiceDrafts((xs) => xs.map((d) =>
@@ -677,9 +678,15 @@ function ChoiceCard({
     <div className="px-3 py-2.5">
       <div className="border border-zinc-700/70 rounded-lg overflow-hidden">
         <div className="flex items-center gap-2 px-2.5 py-1.5 bg-zinc-800/40 border-b border-zinc-800">
-          <span className="shrink-0 text-[10px] uppercase tracking-widest text-pr-red font-medium">Bring one of</span>
+          {/* One branch is a line made of several slots; two or more is a
+              choice between such lines. Same structure, different claim, so
+              the header has to say which one this is. */}
+          <span className="shrink-0 text-[10px] uppercase tracking-widest text-pr-red font-medium">
+            {choice ? 'Bring one of' : 'All of'}
+          </span>
           {/* Optional, and it looks optional: a placeholder rather than a
-              value, because the block already says what it is. */}
+              value, because the block already says what it is. A line of slots
+              needs no heading at all — it prints as one bullet. */}
           <input
             defaultValue={label ?? ''}
             key={label ?? ''}
@@ -696,13 +703,14 @@ function ChoiceCard({
           {options.length > 0 && (
             <button
               onClick={() => {
-                if (!confirm(
-                  'Stop offering these as alternatives? The gear stays on the list, but every item becomes required.'
+                if (!confirm(choice
+                  ? 'Stop offering these as alternatives? The gear stays on the list, but every item becomes required.'
+                  : 'Split this line back into separate items? Nothing is removed — they stop being one line.'
                 )) return
                 s.run(() => ungroupGearChoice(scope))
               }}
               disabled={s.busy}
-              title="Keep the gear, drop the choice — every item becomes required"
+              title={choice ? 'Keep the gear, drop the choice — every item becomes required' : 'Split this line back into separate items'}
               className="shrink-0 text-[11px] text-zinc-600 hover:text-white transition-colors disabled:opacity-40"
             >
               ungroup
@@ -737,7 +745,7 @@ function ChoiceCard({
                 dragging && s.over?.startsWith(zoneKey(target, '')) ? 'bg-pr-red/5' : ''
               }`}
             >
-              <div className="flex items-center gap-2 px-2.5 pt-1.5">
+              <div className={`flex items-center gap-2 px-2.5 ${choice || empty ? 'pt-1.5' : 'hidden'}`}>
                 {/* Position, not a stored label: delete the first alternative
                     and the second has to become the one you read first. */}
                 <span className="text-[10px] uppercase tracking-widest text-zinc-500 font-medium">
@@ -773,10 +781,21 @@ function ChoiceCard({
                   Nothing in here yet — add the gear this alternative needs.
                 </p>
               ) : (
-                <div className="divide-y divide-zinc-800/70">
-                  {o.rows.map((e) => (
+                <div>
+                  {o.rows.map((e, ri) => (
+                    <Fragment key={e.id}>
+                      {/* The relationship, between the things it relates. Two
+                          slots stacked with nothing between them read as two
+                          separate requirements, which is what this block
+                          exists to stop them being. */}
+                      {ri > 0 && (
+                        <div className="flex items-center gap-2 px-2.5 py-0.5">
+                          <span className="text-[10px] uppercase tracking-widest text-zinc-400 font-medium">and</span>
+                          <span className="flex-1 h-px bg-zinc-800/70" />
+                        </div>
+                      )}
                     <Row
-                      key={e.id} e={e}
+                      e={e}
                       editingOptions={s.editingOptions} setEditingOptions={s.setEditingOptions}
                       dragging={dragging} isOver={s.over === zoneKey(target, e.id)}
                       onDragStart={() => s.setDrag({ id: e.id })}
@@ -784,8 +803,10 @@ function ChoiceCard({
                       gap={gap(e.id)}
                       apply={s.apply} instanceId={s.instanceId}
                       setAdding={s.setAdding} setChoiceDrafts={s.setChoiceDrafts}
+                      adding={s.adding} catalog={s.catalog} childrenOf={s.childrenOf}
                       busy={s.busy} run={s.run} input={s.input}
                     />
+                    </Fragment>
                   ))}
                 </div>
               )}
@@ -802,7 +823,7 @@ function ChoiceCard({
                   onClick={() => s.setAdding(addKey)}
                   className="w-full text-left px-2.5 py-1.5 text-[11px] text-zinc-600 hover:text-white hover:bg-zinc-800/40 transition-colors"
                 >
-                  + Add gear to this alternative
+                  {choice ? '+ Add gear to this alternative' : '+ Add gear to this line'}
                 </button>
               )}
             </div>
@@ -831,7 +852,7 @@ function ChoiceCard({
 function Row({
   e, editingOptions, setEditingOptions, dragging, isOver,
   onDragStart, onDragEnd, gap, apply, instanceId, busy, run, input,
-  setAdding, setChoiceDrafts,
+  setAdding, setChoiceDrafts, adding, catalog, childrenOf,
 }: {
   e: GearEntry & { r: { name: string; note: string | null; url: string | null; section: string | null; catalogItem?: GearItem; options: GearItem[]; models: GearItem[] } }
   editingOptions: ProductPanel | null
@@ -848,6 +869,9 @@ function Row({
   input: string
   setAdding: (key: string | null) => void
   setChoiceDrafts: (fn: (xs: ChoiceDraft[]) => ChoiceDraft[]) => void
+  adding: string | null
+  catalog: GearItem[]
+  childrenOf: Map<string, GearItem[]>
 }) {
   const row = useRef<HTMLDivElement>(null)
   const [newModel, setNewModel] = useState('')
@@ -873,16 +897,9 @@ function Row({
   // are a disjunction — "any of these will do" — so two you both need cannot
   // share a row without it meaning the opposite of what it says.
 
-  // Whatever this row sits in, so what's added lands beside it rather than at
-  // the bottom of the section.
-  const here: Target = {
-    gt: e.group_type, section: e.r.section,
-    choice: e.option_group, branch: e.option_branch, label: e.option_label ?? null,
-  }
-
-  function alsoNeed() {
-    setAdding(zoneKey(here, 'end'))
-  }
+  // Its own zone, because what's added joins this line rather than landing at
+  // the foot of the section — the panel opens on the row it will sit beside.
+  const slotKey = `slot:${e.id}`
 
   // This row becomes the first alternative, and the panel opens on the second
   // so the next thing you do is name what it's an alternative to. No heading is
@@ -903,15 +920,11 @@ function Row({
 
   // Recommendations are stored as the whole set, so every change to them is
   // "here is the new list of models" — drawn on the row before it is sent.
-  const conj = e.options_conjunction ?? 'or'
-  const setOptions = (ids: string[], next: 'and' | 'or' = conj) => apply(
+  const setOptions = (ids: string[]) => apply(
     (es) => es.map((x) => x.id === e.id
-      ? {
-          ...x, options_conjunction: next,
-          gear_entry_options: ids.map((gear_item_id, i) => ({ gear_item_id, sort_order: i })),
-        }
+      ? { ...x, gear_entry_options: ids.map((gear_item_id, i) => ({ gear_item_id, sort_order: i })) }
       : x),
-    () => setGearEntryOptions(e.id, ids, instanceId, next)
+    () => setGearEntryOptions(e.id, ids, instanceId)
   )
 
   return (
@@ -988,10 +1001,10 @@ function Row({
               dragging ? 'opacity-0' : 'opacity-0 group-hover:opacity-100 focus-within:opacity-100'
             }`}>
               <button
-                onClick={alsoNeed}
+                onClick={() => setAdding(adding === slotKey ? null : slotKey)}
                 disabled={busy}
-                title="Something else that's also needed, alongside this"
-                className={PAIR_BTN}
+                title="Something else that's also needed — joins this line with its own quantity"
+                className={adding === slotKey ? `${PAIR_BTN} border-zinc-500 text-white bg-zinc-800` : PAIR_BTN}
               >
                 + and
               </button>
@@ -1025,7 +1038,7 @@ function Row({
                       one it is decides what the student goes and buys. */}
                   {i > 0 && (
                     <span className="text-[10px] uppercase tracking-widest text-zinc-400 font-medium px-0.5">
-                      {conj}
+                      or
                     </span>
                   )}
                   <span className="inline-flex items-center gap-1.5 text-xs pl-2 pr-1.5 py-1 rounded border border-pr-red/60 bg-pr-red/10 text-white">
@@ -1052,7 +1065,7 @@ function Row({
                   editingOptions?.id === e.id && editingOptions.mode === 'and' ? null : { id: e.id, mode: 'and' }
                 )}
                 disabled={busy}
-                title="Another product you also need, on this same line"
+                title="Another product you also need — joins this line with its own quantity"
                 className={editingOptions?.id === e.id && editingOptions.mode === 'and'
                   ? `${PAIR_BTN} border-zinc-500 text-white bg-zinc-800`
                   : PAIR_BTN}
@@ -1109,6 +1122,24 @@ function Row({
           time anyone recommends something, so naming it here adds it to the
           catalog and recommends it in one go — otherwise the + is a dead end
           on exactly the row where you had a product in mind. */}
+      {adding === slotKey && (
+        <div className="mt-2 rounded border border-zinc-800 overflow-hidden">
+          <AddGear
+            listId=""
+            target={{ gt: e.group_type, section: e.r.section, choice: e.option_group, branch: e.option_branch }}
+            catalog={catalog} childrenOf={childrenOf}
+            addEntry={(input) => {
+              setAdding(null)
+              run(async () => unwrap(((await addSlotBeside(
+                e.id, { gearItemId: input.gearItemId, name: input.name }, instanceId
+              )) ?? {}) as object))
+            }}
+            onClose={() => setAdding(null)}
+            busy={busy} run={run} input={input}
+          />
+        </div>
+      )}
+
       {editingOptions?.id === e.id && type && (() => {
         const mode = editingOptions.mode
         // In "or" mode the products already on the row are the ones there is no
@@ -1118,23 +1149,35 @@ function Row({
         const rest = e.r.models.filter((m) => !e.r.options.some((o) => o.id === m.id))
         // Picking an existing product. "Or" widens what satisfies this line;
         // "and" writes a second line of the same item with that product on it.
-        // Both modes put the product on this line. The only difference is the
-        // word printed between it and what's already there.
-        const pick = (id: string) => setOptions([...e.r.options.map((o) => o.id), id], mode)
+        // "or" widens what satisfies this slot. "and" is a different thing
+        // entirely: another product you also need, which becomes its own slot
+        // of the same item — the only shape that can carry its own quantity,
+        // which is the whole point of two ropes and one bag.
+        const pick = (id: string) => mode === 'or'
+          ? setOptions([...e.r.options.map((o) => o.id), id])
+          : run(async () => {
+              unwrap(((await addSlotBeside(
+                e.id, { gearItemId: e.gear_item_id, pinnedProductId: id }, instanceId
+              )) ?? {}) as object)
+              setEditingOptions(null)
+            })
         // This one waits: the chip can't be drawn from a catalog that doesn't
         // have the product in it yet.
         const addNew = () => run(async () => {
           const { id } = unwrap(await upsertGearItem({
             name: newModel, brand: newBrand.trim() || null, category: type.category, parentId: type.id,
           }))
-          await setGearEntryOptions(e.id, [...e.r.options.map((o) => o.id), id], instanceId, mode)
+          if (mode === 'or') await setGearEntryOptions(e.id, [...e.r.options.map((o) => o.id), id], instanceId)
+          else unwrap(((await addSlotBeside(
+            e.id, { gearItemId: e.gear_item_id, pinnedProductId: id }, instanceId
+          )) ?? {}) as object)
           setNewModel(''); setNewBrand('')
         })
         return (
           <div className="mt-2 p-2 bg-zinc-900 rounded border border-zinc-800 space-y-2">
             <p className="text-[11px] text-zinc-500">
               {mode === 'and'
-                ? 'Another product you also need — it joins this line, with “and” between them.'
+                ? 'Another product you also need. It joins this line as its own slot, so it can carry its own quantity.'
                 : e.r.models.length === 0
                   ? `The catalog has no products of ${type.name.toLowerCase()} yet. Name the one you recommend.`
                   : rest.length > 0

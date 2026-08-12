@@ -224,7 +224,7 @@ export default async function PortalPage({
   // ever see the student one.
   const { data: gearRows } = await admin
     .from('gear_lists')
-    .select('id, name, audience, intro, gear_list_entries(id, gear_item_id, name, note, url, section, group_type, quantity, sort_order, option_group, option_branch, option_label, options_conjunction, gear_items(name, brand, url, category), gear_entry_options(sort_order, gear_items(name, brand)))')
+    .select('id, name, audience, intro, gear_list_entries(id, gear_item_id, name, note, url, section, group_type, quantity, sort_order, option_group, option_branch, option_label, gear_items(name, brand, url, category), gear_entry_options(sort_order, gear_items(name, brand)))')
     .eq('instance_id', id)
   type GearRow = {
     id: string; name: string; audience: string; intro: string | null
@@ -232,7 +232,6 @@ export default async function PortalPage({
       id: string; gear_item_id: string | null; name: string | null; note: string | null; url: string | null
       section: string | null; group_type: 'personal' | 'group'; quantity: string | null; sort_order: number
       option_group: string | null; option_branch: number | null; option_label: string | null
-      options_conjunction: 'and' | 'or'
       gear_items: { name: string; brand: string | null; url: string | null; category: string | null } | null
       gear_entry_options: { sort_order: number; gear_items: { name: string; brand: string | null } | null }[]
     }[]
@@ -882,42 +881,43 @@ export default async function PortalPage({
                         {placeChoices(items).map((p) =>
                           p.kind === 'item' ? (
                             <GearLine key={p.row.id} e={p.row} modelsByType={gearModelsByType} />
-                          ) : p.options.length < 2 ? (
-                            /* One alternative is not a choice. The editor has to
-                               allow it — a choice is built by filling the first
-                               alternative before the second exists — but "bring
-                               one of: this" is nonsense on a course page, so it
-                               prints as ordinary required gear until the second
-                               one turns up. */
-                            p.options.flatMap((o) => o.rows).map((e) => (
-                              <GearLine key={e.id} e={e} modelsByType={gearModelsByType} />
-                            ))
                           ) : (
-                            /* "Bring one of these", drawn as the alternatives it
-                               is. This used to be three rows that all looked
-                               required, with the relationship between them
-                               spelled out in fine print on each one — which only
-                               worked if you read all three in order. */
+                            /* A group is one or more slots per branch. One
+                               branch is a line made of several things — "rope
+                               and rope bag" — and two or more is a choice
+                               between such lines. Same structure, so the same
+                               code draws both; only the words differ. */
                             <li key={p.key} className="px-3 py-2">
-                              {/* The heading is optional and usually absent —
-                                  "bring one of" over a wetsuit and a drysuit
-                                  says everything a title would. */}
-                              <p className="text-[11px] uppercase tracking-wide text-pr-red mb-1.5">
-                                {p.label ? `${p.label} — bring one of` : 'Bring one of'}
-                              </p>
+                              {p.options.length > 1 && (
+                                <p className="text-[11px] uppercase tracking-wide text-pr-red mb-1.5">
+                                  {p.label ? `${p.label} — bring one of` : 'Bring one of'}
+                                </p>
+                              )}
                               <div className="space-y-1.5">
                                 {p.options.map((o, i) => (
                                   <div key={o.branch} className="flex items-start gap-2">
-                                    <span className="shrink-0 w-10 pt-2 text-[10px] uppercase tracking-widest text-zinc-500">
-                                      {i === 0 ? 'Either' : 'Or'}
-                                    </span>
-                                    {/* An alternative made of two things is one
-                                        answer, so it gets one box — the wetsuit
-                                        and the rain jacket go together or not
-                                        at all. */}
-                                    <ul className="min-w-0 flex-1 border border-zinc-800/70 rounded divide-y divide-zinc-800/70">
-                                      {o.rows.map((e) => (
-                                        <GearLine key={e.id} e={e} modelsByType={gearModelsByType} />
+                                    {p.options.length > 1 && (
+                                      <span className="shrink-0 w-10 pt-2 text-[10px] uppercase tracking-widest text-zinc-500">
+                                        {i === 0 ? 'Either' : 'Or'}
+                                      </span>
+                                    )}
+                                    {/* The slots of one line go together or not
+                                        at all — the wetsuit and the rain
+                                        jacket, the rope and the bag — so they
+                                        share a box and say "and" between
+                                        themselves. */}
+                                    <ul className="min-w-0 flex-1 border border-zinc-800/70 rounded">
+                                      {o.rows.map((e, ri) => (
+                                        <React.Fragment key={e.id}>
+                                          {ri > 0 && (
+                                            <li className="px-3 py-0.5 text-[10px] uppercase tracking-widest text-zinc-500 border-t border-zinc-800/70">
+                                              and
+                                            </li>
+                                          )}
+                                          <li className={ri > 0 ? 'border-t border-zinc-800/70' : ''}>
+                                            <ul><GearLine e={e} modelsByType={gearModelsByType} /></ul>
+                                          </li>
+                                        </React.Fragment>
                                       ))}
                                     </ul>
                                   </div>
@@ -952,7 +952,6 @@ export default async function PortalPage({
 type GearLineEntry = {
   id: string; gear_item_id: string | null; name: string | null; note: string | null
   url: string | null; quantity: string | null
-  options_conjunction?: 'and' | 'or'
   gear_items: { name: string; brand: string | null; url: string | null } | null
   gear_entry_options: { sort_order: number; gear_items: { name: string; brand: string | null } | null }[]
 }
@@ -968,8 +967,7 @@ function GearLine({ e, modelsByType }: { e: GearLineEntry; modelsByType: Map<str
       .sort((a, b) => a.sort_order - b.sort_order)
       .map((o) => o.gear_items)
       .filter(Boolean)
-      .map((g) => ({ name: productName(g!) })),
-    e.options_conjunction ?? 'or'
+      .map((g) => ({ name: productName(g!) }))
   )
   // Nothing ticked means any model of the type will do — so list them rather
   // than leave the student with a category name and no idea what to buy.
