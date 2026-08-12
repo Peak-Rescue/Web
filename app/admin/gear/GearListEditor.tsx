@@ -7,7 +7,8 @@ import {
   addGearEntry, updateGearEntry, removeGearEntry, updateGearList, copyGearList,
   saveGearListIntoTemplate, setGearEntryOptions, upsertGearItem, renameGearSection,
   removeGearSection, ungroupGearSection, moveGearEntry,
-  renameGearChoice, ungroupGearChoice, removeGearChoiceBranch, wrapGearEntryInChoice,
+  setGearChoiceLabel, ungroupGearChoice, removeGearChoiceBranch, wrapGearEntryInChoice,
+  addGearEntryAlongside,
 } from './actions'
 
 export type GearTemplateOption = { id: string; name: string; audience: string; entries: number }
@@ -35,6 +36,9 @@ export type GearEntry = {
   // which is nearly all of it.
   option_group: string | null
   option_branch: number | null
+  // The heading over the alternatives. Optional, and carried on every row of
+  // the choice because there is no row for the choice itself.
+  option_label?: string | null
   gear_entry_options?: { gear_item_id: string; sort_order: number }[]
 }
 
@@ -53,7 +57,15 @@ type GroupType = 'personal' | 'group'
 // Everywhere a row can land: a side of the list, a heading under it, and — for
 // gear inside a choice — which alternative. Both choice fields null is the
 // plain run of gear outside every choice, which is where most rows live.
-type Target = { gt: GroupType; section: string | null; choice: string | null; branch: number | null }
+type Target = {
+  gt: GroupType; section: string | null
+  // The choice's opaque key, not its heading.
+  choice: string | null; branch: number | null
+  // Carried so a row added into a choice arrives with the same heading the
+  // rest of it has — every row holds a copy, there being no row for the
+  // choice itself.
+  label?: string | null
+}
 
 const sameTarget = (a: Target, b: Target) =>
   a.gt === b.gt && a.section === b.section && a.choice === b.choice && a.branch === b.branch
@@ -70,6 +82,19 @@ const GROUP_LABEL: Record<GroupType, string> = {
 
 // A row picked up and not yet dropped.
 type Drag = { id: string }
+
+// The and/or pair, which appears at both levels of a row and has to look like
+// one control in two places rather than two controls that happen to rhyme.
+type ProductPanel = { id: string; mode: 'and' | 'or' }
+
+const PAIR_BTN =
+  'text-[11px] px-1.5 py-0.5 rounded border border-zinc-800 text-zinc-600 hover:text-white hover:border-zinc-600 transition-colors disabled:opacity-40'
+
+// A choice, or an alternative inside one, that exists only on screen so far.
+// Keyed like a real one, so the first row to land in it needs no fixing up.
+type ChoiceDraft = {
+  gt: GroupType; section: string | null; key: string; label: string | null; branches: number[]
+}
 
 // Builds a list from the gear catalog instead of retyping it into a document.
 //
@@ -100,7 +125,10 @@ export default function GearListEditor({
   const refresh = useSteadyRefresh()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [editingOptions, setEditingOptions] = useState<string | null>(null)
+  // Which row's product panel is open, and which question it is answering —
+  // another product that would do instead, or another line pinned to a
+  // different product.
+  const [editingOptions, setEditingOptions] = useState<ProductPanel | null>(null)
   // Which section's add panel is open, as "personal:Ropes". One at a time —
   // two open panels and it stops being obvious where the next item lands.
   const [adding, setAdding] = useState<string | null>(null)
@@ -117,9 +145,7 @@ export default function GearListEditor({
   // exist only as the agreement between their rows. A choice you have just
   // named and an alternative you have just opened both hold nothing yet, so
   // they live here until something lands in them.
-  const [choiceDrafts, setChoiceDrafts] = useState<
-    { gt: GroupType; section: string | null; name: string; branches: number[] }[]
-  >([])
+  const [choiceDrafts, setChoiceDrafts] = useState<ChoiceDraft[]>([])
   // The list as the editor has it, ahead of the server. Every write to a row
   // is drawn here first: a click has to land instantly, and the server can't
   // oblige — an add is three round trips to Supabase and then a rebuild of the
@@ -268,7 +294,7 @@ export default function GearListEditor({
       name: input.gearItemId ? null : input.name?.trim() || null,
       note: null, url: null,
       section: target.section, group_type: target.gt, quantity: null,
-      option_group: target.choice, option_branch: target.branch,
+      option_group: target.choice, option_branch: target.branch, option_label: target.label ?? null,
       sort_order: sortOrder, gear_entry_options: [],
     }
     apply((es) => [...es, temp], () => addGearEntry(list.id, {
@@ -380,8 +406,6 @@ type ResolvedRow = GearEntry & {
   }
 }
 
-type ChoiceDraft = { gt: GroupType; section: string | null; name: string; branches: number[] }
-
 // What every container on the list needs to do its job. Passed down whole
 // rather than named field by field at four call sites, which is how the two
 // that already existed drifted apart.
@@ -392,8 +416,8 @@ type Shared = {
   // One add panel open at a time, identified by the zone it would add to.
   adding: string | null
   setAdding: (key: string | null) => void
-  editingOptions: string | null
-  setEditingOptions: (id: string | null) => void
+  editingOptions: ProductPanel | null
+  setEditingOptions: (v: ProductPanel | null) => void
   drag: Drag | null
   setDrag: (d: Drag | null) => void
   over: string | null
@@ -463,11 +487,11 @@ function SectionCard({
 
   const placed = useMemo(() => placeChoices(rows), [rows])
   const realChoices = new Set(
-    placed.filter((p) => p.kind === 'choice').map((p) => (p as { name: string }).name)
+    placed.flatMap((p) => (p.kind === 'choice' ? [p.key] : []))
   )
   // A choice the first item has already landed in is a real choice now.
   const drafts = s.choiceDrafts.filter(
-    (d) => d.gt === groupType && d.section === name && !realChoices.has(d.name)
+    (d) => d.gt === groupType && d.section === name && !realChoices.has(d.key)
   )
 
   const gap = (beforeId: string | 'end') =>
@@ -546,11 +570,11 @@ function SectionCard({
             />
           ) : (
             <ChoiceCard
-              key={`choice:${p.name}`} {...s}
-              groupType={groupType} section={name} choiceName={p.name}
+              key={`choice:${p.key}`} {...s}
+              groupType={groupType} section={name} choiceKey={p.key} label={p.label}
               options={p.options}
               draftBranches={
-                (s.choiceDrafts.find((d) => d.gt === groupType && d.section === name && d.name === p.name)?.branches ?? [])
+                (s.choiceDrafts.find((d) => d.gt === groupType && d.section === name && d.key === p.key)?.branches ?? [])
                   .filter((b) => !p.options.some((o) => o.branch === b))
               }
             />
@@ -559,8 +583,8 @@ function SectionCard({
 
         {drafts.map((d) => (
           <ChoiceCard
-            key={`draft-choice:${d.name}`} {...s}
-            groupType={groupType} section={name} choiceName={d.name}
+            key={`draft-choice:${d.key}`} {...s}
+            groupType={groupType} section={name} choiceKey={d.key} label={d.label}
             options={[]} draftBranches={d.branches} isDraft
           />
         ))}
@@ -586,20 +610,18 @@ function SectionCard({
                 want, and a list is mostly rows that are simply required. */}
             <button
               onClick={() => {
-                const named = prompt(
-                  'Name the choice — students read this as the heading over the alternatives:',
-                  'Exposure protection'
-                )?.trim()
-                if (!named) return
-                const existing = s.choiceDrafts.some(
-                  (d) => d.gt === groupType && d.section === name && d.name === named
-                )
-                if (!existing && !realChoices.has(named)) {
+                // No name asked for. A choice's heading is optional — "bring
+                // one of" over a wetsuit and a drysuit says everything — and
+                // demanding one before you have said what the alternatives are
+                // put a browser prompt in front of the actual work.
+                const key = crypto.randomUUID()
+                s.setChoiceDrafts((xs) => [
+                  ...xs,
                   // Two empty alternatives, because one alternative is not a
                   // choice and you would only have to add the second anyway.
-                  s.setChoiceDrafts((xs) => [...xs, { gt: groupType, section: name, name: named, branches: [0, 1] }])
-                }
-                s.setAdding(zoneKey({ gt: groupType, section: name, choice: named, branch: 0 }, 'end'))
+                  { gt: groupType, section: name, key, label: null, branches: [0, 1] },
+                ])
+                s.setAdding(zoneKey({ gt: groupType, section: name, choice: key, branch: 0 }, 'end'))
               }}
               title="A set of alternatives — bring one of them"
               className="shrink-0 px-3 py-2 text-xs text-zinc-600 hover:text-white transition-colors"
@@ -621,11 +643,14 @@ function SectionCard({
 // is what this replaces — three notes each describing the other two, and a
 // student skimming past all of it seeing three rows that look required.
 function ChoiceCard({
-  groupType, section, choiceName, options, draftBranches, isDraft, ...s
+  groupType, section, choiceKey, label, options, draftBranches, isDraft, ...s
 }: Shared & {
   groupType: GroupType
   section: string | null
-  choiceName: string
+  // The opaque key. The heading is `label`, which is optional — most choices
+  // read perfectly well as a bare "bring one of".
+  choiceKey: string
+  label: string | null
   options: { branch: number; rows: ResolvedRow[] }[]
   // Alternatives opened but not yet filled. Same problem as a named section
   // with no rows: nowhere in the database to be until something lands.
@@ -633,7 +658,12 @@ function ChoiceCard({
   isDraft?: boolean
 }) {
   const dragging = s.drag !== null
-  const scope = { listId: s.listId, groupType, section, name: choiceName }
+  const scope = { listId: s.listId, groupType, section, key: choiceKey }
+
+  const patchDraft = (fn: (d: ChoiceDraft) => ChoiceDraft) =>
+    s.setChoiceDrafts((xs) => xs.map((d) =>
+      d.gt === groupType && d.section === section && d.key === choiceKey ? fn(d) : d
+    ))
 
   // Real and empty alternatives shown as one run, in branch order, so an
   // alternative you just opened appears where it will stay.
@@ -642,44 +672,31 @@ function ChoiceCard({
     ...draftBranches.map((branch) => ({ branch, rows: [] as ResolvedRow[] })),
   ].sort((a, b) => a.branch - b.branch)
 
-  const discardDraftBranch = (branch: number) =>
-    s.setChoiceDrafts((xs) =>
-      xs
-        .map((d) =>
-          d.gt === groupType && d.section === section && d.name === choiceName
-            ? { ...d, branches: d.branches.filter((b) => b !== branch) }
-            : d
-        )
-        .filter((d) => d.branches.length > 0 || options.length > 0)
-    )
-
   return (
     <div className="px-3 py-2.5">
       <div className="border border-zinc-700/70 rounded-lg overflow-hidden">
         <div className="flex items-center gap-2 px-2.5 py-1.5 bg-zinc-800/40 border-b border-zinc-800">
           <span className="shrink-0 text-[10px] uppercase tracking-widest text-pr-red font-medium">Bring one of</span>
+          {/* Optional, and it looks optional: a placeholder rather than a
+              value, because the block already says what it is. */}
           <input
-            defaultValue={choiceName}
-            key={choiceName}
+            defaultValue={label ?? ''}
+            key={label ?? ''}
             onBlur={(ev) => {
-              const next = ev.target.value.trim()
-              if (!next || next === choiceName) { ev.target.value = choiceName; return }
-              if (isDraft) {
-                return s.setChoiceDrafts((xs) => xs.map((d) =>
-                  d.gt === groupType && d.section === section && d.name === choiceName
-                    ? { ...d, name: next } : d
-                ))
-              }
-              s.run(() => renameGearChoice(scope, next))
+              const next = ev.target.value.trim() || null
+              if (next === (label ?? null)) return
+              if (isDraft) return patchDraft((d) => ({ ...d, label: next }))
+              s.run(() => setGearChoiceLabel(scope, next))
             }}
+            placeholder="Heading (optional)"
             aria-label="Choice heading"
-            className="min-w-0 flex-1 text-xs font-semibold text-white bg-transparent rounded px-1.5 py-0.5 border border-transparent hover:border-zinc-700 focus:border-zinc-600 focus:bg-zinc-900 focus:outline-none"
+            className="min-w-0 flex-1 text-xs font-semibold text-white bg-transparent rounded px-1.5 py-0.5 border border-transparent placeholder:font-normal placeholder:text-zinc-600 hover:border-zinc-700 focus:border-zinc-600 focus:bg-zinc-900 focus:outline-none"
           />
           {options.length > 0 && (
             <button
               onClick={() => {
                 if (!confirm(
-                  `Stop offering these as alternatives? The gear stays on the list, but every item becomes required.`
+                  'Stop offering these as alternatives? The gear stays on the list, but every item becomes required.'
                 )) return
                 s.run(() => ungroupGearChoice(scope))
               }}
@@ -693,7 +710,7 @@ function ChoiceCard({
           {isDraft && (
             <button
               onClick={() => s.setChoiceDrafts((xs) => xs.filter(
-                (d) => !(d.gt === groupType && d.section === section && d.name === choiceName)
+                (d) => !(d.gt === groupType && d.section === section && d.key === choiceKey)
               ))}
               title="Discard this choice"
               className="shrink-0 text-xs text-zinc-600 hover:text-red-400 transition-colors"
@@ -704,7 +721,7 @@ function ChoiceCard({
         </div>
 
         {shown.map((o, i) => {
-          const target: Target = { gt: groupType, section, choice: choiceName, branch: o.branch }
+          const target: Target = { gt: groupType, section, choice: choiceKey, branch: o.branch, label }
           const gap = (beforeId: string | 'end') =>
             gapProps({ target, beforeId, dragging, over: s.over, setOver: s.setOver, onDrop: s.onDrop })
           const addKey = zoneKey(target, 'end')
@@ -729,7 +746,15 @@ function ChoiceCard({
                 {shown.length > 2 || empty ? (
                   <button
                     onClick={() => {
-                      if (empty) return discardDraftBranch(o.branch)
+                      if (empty) {
+                        return s.setChoiceDrafts((xs) => xs
+                          .map((d) =>
+                            d.gt === groupType && d.section === section && d.key === choiceKey
+                              ? { ...d, branches: d.branches.filter((b) => b !== o.branch) }
+                              : d
+                          )
+                          .filter((d) => d.branches.length > 0 || options.length > 0))
+                      }
                       if (!confirm(`Drop this alternative and the ${o.rows.length} item${o.rows.length === 1 ? '' : 's'} in it?`)) return
                       s.run(() => removeGearChoiceBranch(scope, o.branch))
                     }}
@@ -787,13 +812,11 @@ function ChoiceCard({
           onClick={() => {
             const next = Math.max(-1, ...shown.map((o) => o.branch)) + 1
             s.setChoiceDrafts((xs) => {
-              const found = xs.find((d) => d.gt === groupType && d.section === section && d.name === choiceName)
-              if (found) {
-                return xs.map((d) => (d === found ? { ...d, branches: [...d.branches, next] } : d))
-              }
-              return [...xs, { gt: groupType, section, name: choiceName, branches: [next] }]
+              const found = xs.find((d) => d.gt === groupType && d.section === section && d.key === choiceKey)
+              if (found) return xs.map((d) => (d === found ? { ...d, branches: [...d.branches, next] } : d))
+              return [...xs, { gt: groupType, section, key: choiceKey, label, branches: [next] }]
             })
-            s.setAdding(zoneKey({ gt: groupType, section, choice: choiceName, branch: next }, 'end'))
+            s.setAdding(zoneKey({ gt: groupType, section, choice: choiceKey, branch: next }, 'end'))
           }}
           className="w-full border-t border-zinc-800 py-1.5 text-[11px] text-zinc-600 hover:text-white hover:bg-zinc-800/40 transition-colors"
         >
@@ -810,8 +833,8 @@ function Row({
   setAdding, setChoiceDrafts,
 }: {
   e: GearEntry & { r: { name: string; note: string | null; url: string | null; section: string | null; catalogItem?: GearItem; options: GearItem[]; models: GearItem[] } }
-  editingOptions: string | null
-  setEditingOptions: (id: string | null) => void
+  editingOptions: ProductPanel | null
+  setEditingOptions: (v: ProductPanel | null) => void
   dragging: boolean
   isOver: boolean
   onDragStart: () => void
@@ -837,24 +860,43 @@ function Row({
   // that was typed in as a one-off, has nothing to recommend under it.
   const type = e.r.catalogItem && !e.r.catalogItem.parent_id ? e.r.catalogItem : null
 
+  // Same pair at both levels, because they are the same two questions asked of
+  // different things: "what else do I also need" and "what would do instead".
+  //
+  //   generic item  + and → another item, alongside this one
+  //                 + or  → this becomes one alternative, you pick the other
+  //   product       + and → another line of this item, pinned to that product
+  //                 + or  → another product that satisfies this same line
+  //
+  // AND at the product level has to be a second line. The products on one row
+  // are a disjunction — "any of these will do" — so two you both need cannot
+  // share a row without it meaning the opposite of what it says.
+
+  // Whatever this row sits in, so what's added lands beside it rather than at
+  // the bottom of the section.
+  const here: Target = {
+    gt: e.group_type, section: e.r.section,
+    choice: e.option_group, branch: e.option_branch, label: e.option_label ?? null,
+  }
+
+  function alsoNeed() {
+    setAdding(zoneKey(here, 'end'))
+  }
+
   // This row becomes the first alternative, and the panel opens on the second
-  // so the next thing you do is name what it's an alternative to. The empty
-  // second alternative is a draft until something lands in it, the same as a
-  // section you have just named.
-  function makeChoice() {
-    const named = prompt(
-      'Name the choice — students read this as the heading over the alternatives:',
-      e.r.section ?? e.r.name
-    )?.trim()
-    if (!named) return
+  // so the next thing you do is name what it's an alternative to. No heading is
+  // asked for — it's optional, and typed into the block afterwards if it earns
+  // its place.
+  function insteadOf() {
+    const key = crypto.randomUUID()
     setChoiceDrafts((xs) => [
       ...xs,
-      { gt: e.group_type, section: e.r.section, name: named, branches: [1] },
+      { gt: e.group_type, section: e.r.section, key, label: null, branches: [1] },
     ])
-    setAdding(zoneKey({ gt: e.group_type, section: e.r.section, choice: named, branch: 1 }, 'end'))
+    setAdding(zoneKey({ gt: e.group_type, section: e.r.section, choice: key, branch: 1 }, 'end'))
     apply(
-      (es) => es.map((x) => (x.id === e.id ? { ...x, option_group: named, option_branch: 0 } : x)),
-      async () => unwrap(((await wrapGearEntryInChoice(e.id, named, instanceId)) ?? {}) as object)
+      (es) => es.map((x) => (x.id === e.id ? { ...x, option_group: key, option_branch: 0 } : x)),
+      async () => unwrap(((await wrapGearEntryInChoice(e.id, instanceId)) ?? {}) as object)
     )
   }
 
@@ -914,18 +956,37 @@ function Row({
                 you reach the thing it is an alternative to. Rows already inside
                 a choice don't get this: the block around them carries both
                 "another alternative" and "add to this one". */}
-            {!e.option_group && (
+            {/* The generic-item counterpart of the pair under the name,
+                which only ever reached the products. Turning a row you have
+                already written into one of two alternatives was otherwise a
+                trip to "+ Choice" and a drag — and you rarely know a row is an
+                alternative until you reach the thing it is an alternative to. */}
+            <span className={`flex items-center gap-1 transition-opacity ${
+              dragging ? 'opacity-0' : 'opacity-0 group-hover:opacity-100 focus-within:opacity-100'
+            }`}>
               <button
-                onClick={makeChoice}
+                onClick={alsoNeed}
                 disabled={busy}
-                title="Offer something else instead of this — students bring one or the other"
-                className={`text-[11px] px-1.5 py-0.5 rounded border border-zinc-800 text-zinc-600 hover:text-white hover:border-zinc-600 transition-all disabled:opacity-40 ${
-                  dragging ? 'opacity-0' : 'opacity-0 group-hover:opacity-100 focus:opacity-100'
-                }`}
+                title="Something else that's also needed, alongside this"
+                className={PAIR_BTN}
               >
-                + or…
+                + and
               </button>
-            )}
+              {/* A row already inside a choice has "+ Another alternative" on
+                  the block around it, which is where an alternative to the
+                  whole thing belongs — offering it here as well would put the
+                  same command in two places one line apart. */}
+              {!e.option_group && (
+                <button
+                  onClick={insteadOf}
+                  disabled={busy}
+                  title="Something that would do instead of this — students bring one or the other"
+                  className={PAIR_BTN}
+                >
+                  + or
+                </button>
+              )}
+            </span>
           </div>
           {/* The products we point people at sit directly under the name,
               ahead of the description, because the model someone has to go and
@@ -954,16 +1015,31 @@ function Row({
               {e.r.options.length === 0 && (
                 <span className="text-[11px] text-zinc-600">Any {e.r.name.toLowerCase()} works</span>
               )}
+              {/* The same pair as on the name above, asking the same two
+                  questions of the products instead of the items. */}
               <button
-                onClick={() => setEditingOptions(editingOptions === e.id ? null : e.id)}
-                title={e.r.options.length === 0 ? 'Recommend a specific model' : 'Recommend another model'}
-                className={`inline-flex items-center justify-center w-6 h-6 rounded border text-sm leading-none transition-colors ${
-                  editingOptions === e.id
-                    ? 'border-zinc-500 text-white bg-zinc-800'
-                    : 'border-zinc-700 text-zinc-500 hover:text-white hover:border-zinc-500'
-                }`}
+                onClick={() => setEditingOptions(
+                  editingOptions?.id === e.id && editingOptions.mode === 'and' ? null : { id: e.id, mode: 'and' }
+                )}
+                disabled={busy}
+                title="Another product you also need — added as its own line of this item"
+                className={editingOptions?.id === e.id && editingOptions.mode === 'and'
+                  ? `${PAIR_BTN} border-zinc-500 text-white bg-zinc-800`
+                  : PAIR_BTN}
               >
-                +
+                + and
+              </button>
+              <button
+                onClick={() => setEditingOptions(
+                  editingOptions?.id === e.id && editingOptions.mode === 'or' ? null : { id: e.id, mode: 'or' }
+                )}
+                disabled={busy}
+                title={e.r.options.length === 0 ? 'Name a product that satisfies this line' : 'Another product that would do instead'}
+                className={editingOptions?.id === e.id && editingOptions.mode === 'or'
+                  ? `${PAIR_BTN} border-zinc-500 text-white bg-zinc-800`
+                  : PAIR_BTN}
+              >
+                + or
               </button>
             </div>
           )}
@@ -1016,32 +1092,48 @@ function Row({
           time anyone recommends something, so naming it here adds it to the
           catalog and recommends it in one go — otherwise the + is a dead end
           on exactly the row where you had a product in mind. */}
-      {editingOptions === e.id && type && (() => {
+      {editingOptions?.id === e.id && type && (() => {
+        const mode = editingOptions.mode
+        // In "or" mode the products already on the row are the ones there is no
+        // point offering again. In "and" mode there is: needing two of the same
+        // product is a quantity, but needing a second line of the same product
+        // is not what anyone means, so they're filtered the same way.
         const rest = e.r.models.filter((m) => !e.r.options.some((o) => o.id === m.id))
+        // Picking an existing product. "Or" widens what satisfies this line;
+        // "and" writes a second line of the same item with that product on it.
+        const pick = (id: string) => mode === 'or'
+          ? setOptions([...e.r.options.map((o) => o.id), id])
+          : run(async () => {
+              unwrap(((await addGearEntryAlongside(e.id, id, instanceId)) ?? {}) as object)
+              setEditingOptions(null)
+            })
         // This one waits: the chip can't be drawn from a catalog that doesn't
         // have the product in it yet.
         const addNew = () => run(async () => {
           const { id } = unwrap(await upsertGearItem({
             name: newModel, brand: newBrand.trim() || null, category: type.category, parentId: type.id,
           }))
-          await setGearEntryOptions(e.id, [...e.r.options.map((o) => o.id), id], instanceId)
+          if (mode === 'or') await setGearEntryOptions(e.id, [...e.r.options.map((o) => o.id), id], instanceId)
+          else unwrap(((await addGearEntryAlongside(e.id, id, instanceId)) ?? {}) as object)
           setNewModel(''); setNewBrand('')
         })
         return (
           <div className="mt-2 p-2 bg-zinc-900 rounded border border-zinc-800 space-y-2">
             <p className="text-[11px] text-zinc-500">
-              {e.r.models.length === 0
-                ? `The catalog has no products of ${type.name.toLowerCase()} yet. Name the one you recommend.`
-                : rest.length > 0
-                  ? 'Recommend a product. Recommend none and any one of them is fine.'
-                  : 'Every product in the catalog is already recommended. Add another below.'}
+              {mode === 'and'
+                ? `Another product you also need. It goes on as its own line of ${type.name.toLowerCase()}, because the products on one line mean "any of these will do".`
+                : e.r.models.length === 0
+                  ? `The catalog has no products of ${type.name.toLowerCase()} yet. Name the one you recommend.`
+                  : rest.length > 0
+                    ? 'Recommend a product. Recommend none and any one of them is fine.'
+                    : 'Every product in the catalog is already recommended. Add another below.'}
             </p>
             {rest.length > 0 && (
               <div className="flex flex-wrap gap-1.5">
                 {rest.map((m) => (
                   <button
                     key={m.id}
-                    onClick={() => setOptions([...e.r.options.map((o) => o.id), m.id])}
+                    onClick={() => pick(m.id)}
                     className="text-xs px-2 py-1 rounded border border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500 transition-colors disabled:opacity-40"
                   >
                     + {productName(m)}
@@ -1067,7 +1159,7 @@ function Row({
               <button
                 onClick={addNew}
                 disabled={busy || !newModel.trim()}
-                title="Adds it to the gear catalog and recommends it here"
+                title="Adds it to the gear catalog and puts it on this line"
                 className="shrink-0 text-xs px-2 py-1.5 rounded bg-pr-red hover:bg-pr-red-dark text-white transition-colors disabled:opacity-40"
               >
                 Add to gear catalog

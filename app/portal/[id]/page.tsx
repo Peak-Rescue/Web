@@ -224,14 +224,14 @@ export default async function PortalPage({
   // ever see the student one.
   const { data: gearRows } = await admin
     .from('gear_lists')
-    .select('id, name, audience, intro, gear_list_entries(id, gear_item_id, name, note, url, section, group_type, quantity, sort_order, option_group, option_branch, gear_items(name, brand, url, category), gear_entry_options(sort_order, gear_items(name, brand)))')
+    .select('id, name, audience, intro, gear_list_entries(id, gear_item_id, name, note, url, section, group_type, quantity, sort_order, option_group, option_branch, option_label, gear_items(name, brand, url, category), gear_entry_options(sort_order, gear_items(name, brand)))')
     .eq('instance_id', id)
   type GearRow = {
     id: string; name: string; audience: string; intro: string | null
     gear_list_entries: {
       id: string; gear_item_id: string | null; name: string | null; note: string | null; url: string | null
       section: string | null; group_type: 'personal' | 'group'; quantity: string | null; sort_order: number
-      option_group: string | null; option_branch: number | null
+      option_group: string | null; option_branch: number | null; option_label: string | null
       gear_items: { name: string; brand: string | null; url: string | null; category: string | null } | null
       gear_entry_options: { sort_order: number; gear_items: { name: string; brand: string | null } | null }[]
     }[]
@@ -897,9 +897,12 @@ export default async function PortalPage({
                                required, with the relationship between them
                                spelled out in fine print on each one — which only
                                worked if you read all three in order. */
-                            <li key={p.name} className="px-3 py-2">
+                            <li key={p.key} className="px-3 py-2">
+                              {/* The heading is optional and usually absent —
+                                  "bring one of" over a wetsuit and a drysuit
+                                  says everything a title would. */}
                               <p className="text-[11px] uppercase tracking-wide text-pr-red mb-1.5">
-                                {p.name} — bring one of
+                                {p.label ? `${p.label} — bring one of` : 'Bring one of'}
                               </p>
                               <div className="space-y-1.5">
                                 {p.options.map((o, i) => (

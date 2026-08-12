@@ -507,7 +507,10 @@ type ChoiceScope = {
   listId: string
   groupType: 'personal' | 'group'
   section: string | null
-  name: string
+  // The opaque grouping key, not the heading. Renaming the heading is now a
+  // plain field edit that can't collide with anything, because the identity of
+  // a choice stopped being the words on it.
+  key: string
 }
 
 // PostgREST's builder types are recursive enough that a generic wrapper around
@@ -519,31 +522,9 @@ type ChoiceScope = {
 // it has to be `is`.
 function scopeFilter(s: ChoiceScope) {
   return {
-    match: { list_id: s.listId, group_type: s.groupType, option_group: s.name },
+    match: { list_id: s.listId, group_type: s.groupType, option_group: s.key },
     section: s.section,
   }
-}
-
-export async function renameGearChoice(scope: ChoiceScope, to: string): Promise<Failed | void> {
-  const admin = await requireAdmin()
-  const next = to.trim().slice(0, 120)
-  if (!next) return fail('Give the choice a name')
-  if (next === scope.name) return
-
-  // Two choices in one section sharing a name would silently become one, and
-  // the merge would be invisible until the alternatives collided on screen.
-  const taken = scopeFilter({ ...scope, name: next })
-  const probe = admin.from('gear_list_entries').select('id').match(taken.match).limit(1)
-  const { data: clash } = await (taken.section === null
-    ? probe.is('section', null)
-    : probe.eq('section', taken.section))
-  if (clash?.length) return fail(`This section already has a choice called "${next}"`)
-
-  const f = scopeFilter(scope)
-  const q = admin.from('gear_list_entries').update({ option_group: next }).match(f.match)
-  const { error } = await (f.section === null ? q.is('section', null) : q.eq('section', f.section))
-  if (error) throw new Error(error.message)
-  await touchList(admin, scope.listId)
 }
 
 // Turn a row that is simply required into the first alternative of a choice.
@@ -551,40 +532,107 @@ export async function renameGearChoice(scope: ChoiceScope, to: string): Promise<
 // The other way round from building a choice and dragging gear into it, and the
 // more common one: you write the list, and only on reaching the drysuit do you
 // realise the wetsuit above it was an alternative rather than a requirement.
+//
+// No heading is asked for. The key is generated and nobody reads it; the
+// heading is optional and typed in place afterwards if it's worth having.
 export async function wrapGearEntryInChoice(
-  entryId: string, name: string, instanceId?: string | null
-): Promise<Failed | void> {
+  entryId: string, instanceId?: string | null
+): Promise<{ key: string } | Failed> {
   const admin = await requireAdmin()
-  const next = name.trim().slice(0, 120)
-  if (!next) return fail('Give the choice a name')
 
   const { data: row } = await admin
     .from('gear_list_entries')
-    .select('list_id, section, group_type, option_group')
+    .select('list_id, option_group')
     .eq('id', entryId)
     .single()
   if (!row) return fail('That row is no longer on the list')
   if (row.option_group) return fail('That item is already one of a set of alternatives')
 
-  const scope: ChoiceScope = {
-    listId: row.list_id, groupType: row.group_type, section: row.section, name: next,
-  }
-  const f = scopeFilter(scope)
-  const probe = admin.from('gear_list_entries').select('id').match(f.match).limit(1)
-  const { data: clash } = await (f.section === null
-    ? probe.is('section', null)
-    : probe.eq('section', f.section))
-  if (clash?.length) return fail(`This section already has a choice called "${next}"`)
-
   // Branch 0, because it is the alternative that was already written down and
   // so the one that reads first.
+  const key = crypto.randomUUID()
   const { error } = await admin
     .from('gear_list_entries')
-    .update({ option_group: next, option_branch: 0 })
+    .update({ option_group: key, option_branch: 0 })
     .eq('id', entryId)
   if (error) throw new Error(error.message)
-  if (instanceId !== undefined) return touch(instanceId)
-  await touchList(admin, row.list_id)
+  if (instanceId !== undefined) touch(instanceId)
+  else await touchList(admin, row.list_id)
+  return { key }
+}
+
+// The heading over the alternatives, which every row of the choice carries a
+// copy of — the same shape as a section, and for the same reason: there is no
+// row for the choice itself to hang it on. Empty is a real answer and the
+// common one.
+export async function setGearChoiceLabel(scope: ChoiceScope, label: string | null) {
+  const admin = await requireAdmin()
+  const next = label?.trim().slice(0, 120) || null
+  const f = scopeFilter(scope)
+  const q = admin.from('gear_list_entries').update({ option_label: next }).match(f.match)
+  const { error } = await (f.section === null ? q.is('section', null) : q.eq('section', f.section))
+  if (error) throw new Error(error.message)
+  await touchList(admin, scope.listId)
+}
+
+// Model-level AND: a second line of the same generic item, with a different
+// product pinned to it.
+//
+// The options on one entry are a disjunction — "any of these will do" — so two
+// products you both need cannot live on one row without that row meaning the
+// opposite of what it says. They are two lines, which is how the swiftwater
+// list already writes its locking carabiners: three rows of one type, each with
+// its own products and its own quantity.
+export async function addGearEntryAlongside(
+  entryId: string, gearItemId: string, instanceId?: string | null
+): Promise<{ id: string } | Failed> {
+  const admin = await requireAdmin()
+
+  const { data: src } = await admin
+    .from('gear_list_entries')
+    .select('list_id, gear_item_id, section, group_type, option_group, option_branch, option_label, sort_order')
+    .eq('id', entryId)
+    .single()
+  if (!src) return fail('That row is no longer on the list')
+
+  // Straight after the row it accompanies, so the pair reads as a pair. Every
+  // row below shuffles down to make room rather than the new one landing at the
+  // bottom of the section away from what it belongs with.
+  const { data: below } = await admin
+    .from('gear_list_entries')
+    .select('id, sort_order')
+    .eq('list_id', src.list_id)
+    .gt('sort_order', src.sort_order)
+  await Promise.all(
+    (below ?? []).map((r) =>
+      admin.from('gear_list_entries').update({ sort_order: r.sort_order + 1 }).eq('id', r.id)
+    )
+  )
+
+  const { data: added, error } = await admin
+    .from('gear_list_entries')
+    .insert({
+      list_id: src.list_id,
+      gear_item_id: src.gear_item_id,
+      section: src.section,
+      group_type: src.group_type,
+      option_group: src.option_group,
+      option_branch: src.option_branch,
+      option_label: src.option_label,
+      sort_order: src.sort_order + 1,
+    })
+    .select('id')
+    .single()
+  if (error) throw new Error(error.message)
+
+  const { error: e2 } = await admin
+    .from('gear_entry_options')
+    .insert({ entry_id: added.id, gear_item_id: gearItemId, sort_order: 0 })
+  if (e2) throw new Error(e2.message)
+
+  if (instanceId !== undefined) touch(instanceId)
+  else await touchList(admin, src.list_id)
+  return { id: added.id as string }
 }
 
 // Dissolve the choice and keep the gear. Every alternative becomes an ordinary
@@ -642,7 +690,7 @@ export async function removeGearEntry(id: string, instanceId?: string | null) {
 type Admin = ReturnType<typeof createAdminClient>
 
 const SOURCE_SELECT =
-  'name, audience, intro, gear_list_entries(gear_item_id, name, note, url, section, group_type, quantity, sort_order, option_group, option_branch, gear_entry_options(gear_item_id, sort_order))'
+  'name, audience, intro, gear_list_entries(gear_item_id, name, note, url, section, group_type, quantity, sort_order, option_group, option_branch, option_label, gear_entry_options(gear_item_id, sort_order))'
 
 type OptionRow = { gear_item_id: string; sort_order: number }
 type EntryRow = Record<string, unknown> & { gear_entry_options: OptionRow[] }

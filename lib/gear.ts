@@ -111,8 +111,12 @@ export function matchesGear(item: CatalogItem, query: string, children: CatalogI
 // that was built.
 
 export type ChoiceFields = {
+  // An opaque key. Nobody reads it — the heading students see is the label,
+  // which is optional, because "bring one of" over a wetsuit and a drysuit
+  // already says everything a title would.
   option_group: string | null
   option_branch: number | null
+  option_label?: string | null
   sort_order: number
 }
 
@@ -120,7 +124,7 @@ export type ChoiceBlock<T> = { branch: number; rows: T[] }
 
 export type Placed<T> =
   | { kind: 'item'; row: T }
-  | { kind: 'choice'; name: string; options: ChoiceBlock<T>[] }
+  | { kind: 'choice'; key: string; label: string | null; options: ChoiceBlock<T>[] }
 
 // A section's rows as they print: plain gear in its own order, and each choice
 // as one block sitting where its first row sat. Anchoring the block to its
@@ -132,17 +136,20 @@ export function placeChoices<T extends ChoiceFields>(rows: T[]): Placed<T>[] {
   const blocks = new Map<string, Extract<Placed<T>, { kind: 'choice' }>>()
 
   for (const row of ordered) {
-    const name = row.option_group
-    if (!name || row.option_branch === null) {
+    const key = row.option_group
+    if (!key || row.option_branch === null) {
       out.push({ kind: 'item', row })
       continue
     }
-    let block = blocks.get(name)
+    let block = blocks.get(key)
     if (!block) {
-      block = { kind: 'choice', name, options: [] }
-      blocks.set(name, block)
+      block = { kind: 'choice', key, label: row.option_label ?? null, options: [] }
+      blocks.set(key, block)
       out.push(block)
     }
+    // The label lives on every row of the choice, so the first one that has it
+    // wins — a row added before the heading was typed carries null.
+    if (!block.label && row.option_label) block.label = row.option_label
     const branch = row.option_branch
     const option = block.options.find((o) => o.branch === branch)
     if (option) option.rows.push(row)
