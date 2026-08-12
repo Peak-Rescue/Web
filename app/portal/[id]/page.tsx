@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { moduleAudience } from '@/lib/library'
-import { gearLabel, productName } from '@/lib/gear'
+import { gearLabel, placeChoices, productName } from '@/lib/gear'
 import { courseDisplayName, computeBlocks } from '@/lib/courses'
 import CourseTasksPanel, { type CourseTask, type TaskPerson } from '@/components/CourseTasksPanel'
 import { loadTasksWithDocs } from '@/lib/course-tasks'
@@ -224,13 +224,14 @@ export default async function PortalPage({
   // ever see the student one.
   const { data: gearRows } = await admin
     .from('gear_lists')
-    .select('id, name, audience, intro, gear_list_entries(id, gear_item_id, name, note, url, section, group_type, quantity, sort_order, gear_items(name, brand, url, category), gear_entry_options(sort_order, gear_items(name, brand)))')
+    .select('id, name, audience, intro, gear_list_entries(id, gear_item_id, name, note, url, section, group_type, quantity, sort_order, option_group, option_branch, gear_items(name, brand, url, category), gear_entry_options(sort_order, gear_items(name, brand)))')
     .eq('instance_id', id)
   type GearRow = {
     id: string; name: string; audience: string; intro: string | null
     gear_list_entries: {
       id: string; gear_item_id: string | null; name: string | null; note: string | null; url: string | null
       section: string | null; group_type: 'personal' | 'group'; quantity: string | null; sort_order: number
+      option_group: string | null; option_branch: number | null
       gear_items: { name: string; brand: string | null; url: string | null; category: string | null } | null
       gear_entry_options: { sort_order: number; gear_items: { name: string; brand: string | null } | null }[]
     }[]
@@ -877,46 +878,50 @@ export default async function PortalPage({
                         <p className="text-[11px] uppercase tracking-wide text-zinc-500 mb-1">{cat}</p>
                       )}
                       <ul className="border border-zinc-800/70 rounded divide-y divide-zinc-800/70">
-                        {items.map((e) => {
-                          const name = e.name ?? (e.gear_items ? productName(e.gear_items) : null) ?? 'Item'
-                          const url = e.url ?? e.gear_items?.url
-                          // "Descent device — Petzl Rig or Grigri" when the
-                          // line accepts more than one model.
-                          const { detail } = gearLabel(
-                            name,
-                            [...(e.gear_entry_options ?? [])]
-                              .sort((a, b) => a.sort_order - b.sort_order)
-                              .map((o) => o.gear_items)
-                              .filter(Boolean)
-                              .map((g) => ({ name: productName(g!) }))
-                          )
-                          // Nothing ticked means any model of the type will do
-                          // — so list them rather than leave the student with a
-                          // category name and no idea what satisfies it.
-                          const anyOf = detail
-                            ? null
-                            : (e.gear_item_id ? gearModelsByType.get(e.gear_item_id) : null) ?? null
-                          return (
-                            <li key={e.id} className="px-3 py-2 text-sm">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                {url ? (
-                                  <a href={url} target="_blank" rel="noreferrer" className="hover:text-pr-red-light transition-colors">{name}</a>
-                                ) : name}
-                                {detail && <span className="text-xs text-zinc-400">{detail}</span>}
-                                {e.quantity && <span className="text-[11px] text-zinc-500">× {e.quantity}</span>}
+                        {placeChoices(items).map((p) =>
+                          p.kind === 'item' ? (
+                            <GearLine key={p.row.id} e={p.row} modelsByType={gearModelsByType} />
+                          ) : p.options.length < 2 ? (
+                            /* One alternative is not a choice. The editor has to
+                               allow it — a choice is built by filling the first
+                               alternative before the second exists — but "bring
+                               one of: this" is nonsense on a course page, so it
+                               prints as ordinary required gear until the second
+                               one turns up. */
+                            p.options.flatMap((o) => o.rows).map((e) => (
+                              <GearLine key={e.id} e={e} modelsByType={gearModelsByType} />
+                            ))
+                          ) : (
+                            /* "Bring one of these", drawn as the alternatives it
+                               is. This used to be three rows that all looked
+                               required, with the relationship between them
+                               spelled out in fine print on each one — which only
+                               worked if you read all three in order. */
+                            <li key={p.name} className="px-3 py-2">
+                              <p className="text-[11px] uppercase tracking-wide text-pr-red mb-1.5">
+                                {p.name} — bring one of
+                              </p>
+                              <div className="space-y-1.5">
+                                {p.options.map((o, i) => (
+                                  <div key={o.branch} className="flex items-start gap-2">
+                                    <span className="shrink-0 w-10 pt-2 text-[10px] uppercase tracking-widest text-zinc-500">
+                                      {i === 0 ? 'Either' : 'Or'}
+                                    </span>
+                                    {/* An alternative made of two things is one
+                                        answer, so it gets one box — the wetsuit
+                                        and the rain jacket go together or not
+                                        at all. */}
+                                    <ul className="min-w-0 flex-1 border border-zinc-800/70 rounded divide-y divide-zinc-800/70">
+                                      {o.rows.map((e) => (
+                                        <GearLine key={e.id} e={e} modelsByType={gearModelsByType} />
+                                      ))}
+                                    </ul>
+                                  </div>
+                                ))}
                               </div>
-                              {e.note && (
-                                <p className="text-[11px] text-zinc-500 mt-0.5">{e.note}</p>
-                              )}
-                              {anyOf && anyOf.length > 0 && (
-                                <p className="text-[11px] text-zinc-600 mt-0.5">
-                                  {anyOf.length === 1 ? 'such as ' : 'any of: '}
-                                  <span className="text-zinc-500">{anyOf.join(' · ')}</span>
-                                </p>
-                              )}
                             </li>
                           )
-                        })}
+                        )}
                       </ul>
                     </div>
                   ))}
@@ -933,5 +938,53 @@ export default async function PortalPage({
         )}
       </div>
     </main>
+  )
+}
+
+// One line of a gear list. Pulled out of the list body because a line inside a
+// choice has to read exactly like a line outside one — same name, same models,
+// same note — or the alternatives look like a different kind of thing from the
+// gear around them.
+type GearLineEntry = {
+  id: string; gear_item_id: string | null; name: string | null; note: string | null
+  url: string | null; quantity: string | null
+  gear_items: { name: string; brand: string | null; url: string | null } | null
+  gear_entry_options: { sort_order: number; gear_items: { name: string; brand: string | null } | null }[]
+}
+
+function GearLine({ e, modelsByType }: { e: GearLineEntry; modelsByType: Map<string, string[]> }) {
+  const name = e.name ?? (e.gear_items ? productName(e.gear_items) : null) ?? 'Item'
+  const url = e.url ?? e.gear_items?.url
+  // "Descent device — Petzl Rig or Grigri" when the line accepts more than one
+  // model.
+  const { detail } = gearLabel(
+    name,
+    [...(e.gear_entry_options ?? [])]
+      .sort((a, b) => a.sort_order - b.sort_order)
+      .map((o) => o.gear_items)
+      .filter(Boolean)
+      .map((g) => ({ name: productName(g!) }))
+  )
+  // Nothing ticked means any model of the type will do — so list them rather
+  // than leave the student with a category name and no idea what to buy.
+  const anyOf = detail ? null : (e.gear_item_id ? modelsByType.get(e.gear_item_id) : null) ?? null
+
+  return (
+    <li className="px-3 py-2 text-sm">
+      <div className="flex items-center gap-2 flex-wrap">
+        {url ? (
+          <a href={url} target="_blank" rel="noreferrer" className="hover:text-pr-red-light transition-colors">{name}</a>
+        ) : name}
+        {detail && <span className="text-xs text-zinc-400">{detail}</span>}
+        {e.quantity && <span className="text-[11px] text-zinc-500">× {e.quantity}</span>}
+      </div>
+      {e.note && <p className="text-[11px] text-zinc-500 mt-0.5">{e.note}</p>}
+      {anyOf && anyOf.length > 0 && (
+        <p className="text-[11px] text-zinc-600 mt-0.5">
+          {anyOf.length === 1 ? 'such as ' : 'any of: '}
+          <span className="text-zinc-500">{anyOf.join(' · ')}</span>
+        </p>
+      )}
+    </li>
   )
 }

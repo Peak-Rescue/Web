@@ -265,6 +265,9 @@ export async function addGearEntry(
     gearItemId?: string | null; name?: string; section?: string | null
     groupType?: 'personal' | 'group'; quantity?: string | null
     sortOrder?: number; instanceId?: string | null
+    // Which alternative of which choice this lands in, when it's being added
+    // straight into one. Both or neither — half a choice isn't a state.
+    optionGroup?: string | null; optionBranch?: number | null
   }
 ) {
   const admin = await requireAdmin()
@@ -298,6 +301,7 @@ export async function addGearEntry(
     sortOrder = last ? (last.sort_order as number) + 1 : 0
   }
 
+  const choice = input.optionGroup?.trim() || null
   const { data: added, error } = await admin.from('gear_list_entries').insert({
     list_id: listId,
     gear_item_id: input.gearItemId ?? null,
@@ -305,6 +309,8 @@ export async function addGearEntry(
     group_type: input.groupType ?? 'personal',
     quantity: input.quantity?.trim() || null,
     sort_order: sortOrder,
+    option_group: choice,
+    option_branch: choice ? input.optionBranch ?? 0 : null,
   }).select('id').single()
   if (error) throw new Error(error.message)
 
@@ -455,9 +461,13 @@ export async function moveGearEntry(
   target: {
     section: string | null; groupType: 'personal' | 'group'; orderedIds: string[]
     instanceId?: string | null
+    // Where inside the section it landed: an alternative of a choice, or the
+    // plain run of gear outside every choice, which is null for both.
+    optionGroup?: string | null; optionBranch?: number | null
   }
 ) {
   const admin = await requireAdmin()
+  const choice = target.optionGroup?.trim() || null
 
   // Renumbering from zero every time keeps the orders dense, so a list can't
   // drift into the state where two rows share a sort_order and the arrangement
@@ -469,7 +479,13 @@ export async function moveGearEntry(
       admin
         .from('gear_list_entries')
         .update(id === entryId
-          ? { sort_order: i, section: target.section?.trim() || null, group_type: target.groupType }
+          ? {
+              sort_order: i,
+              section: target.section?.trim() || null,
+              group_type: target.groupType,
+              option_group: choice,
+              option_branch: choice ? target.optionBranch ?? 0 : null,
+            }
           : { sort_order: i })
         .eq('id', id)
         .eq('list_id', listId)
@@ -479,6 +495,91 @@ export async function moveGearEntry(
   if (failed?.error) throw new Error(failed.error.message)
 
   await touchList(admin, listId, target.instanceId)
+}
+
+// ─── Choices ────────────────────────────────────────────────────────────────
+
+// A choice belongs to one heading on one side of one list, the same way a
+// section does. "Exposure protection" under personal kit and the same words
+// under group kit are two choices that share a name, so every statement below
+// is scoped to all three.
+type ChoiceScope = {
+  listId: string
+  groupType: 'personal' | 'group'
+  section: string | null
+  name: string
+}
+
+// PostgREST's builder types are recursive enough that a generic wrapper around
+// them blows the instantiation depth limit, so the filters go on as a plain
+// object of equalities plus the one case that can't be expressed that way.
+//
+// A null section is "filed under no heading", which is most gear — and
+// `eq(col, null)` matches nothing in PostgREST rather than matching nulls, so
+// it has to be `is`.
+function scopeFilter(s: ChoiceScope) {
+  return {
+    match: { list_id: s.listId, group_type: s.groupType, option_group: s.name },
+    section: s.section,
+  }
+}
+
+export async function renameGearChoice(scope: ChoiceScope, to: string): Promise<Failed | void> {
+  const admin = await requireAdmin()
+  const next = to.trim().slice(0, 120)
+  if (!next) return fail('Give the choice a name')
+  if (next === scope.name) return
+
+  // Two choices in one section sharing a name would silently become one, and
+  // the merge would be invisible until the alternatives collided on screen.
+  const taken = scopeFilter({ ...scope, name: next })
+  const probe = admin.from('gear_list_entries').select('id').match(taken.match).limit(1)
+  const { data: clash } = await (taken.section === null
+    ? probe.is('section', null)
+    : probe.eq('section', taken.section))
+  if (clash?.length) return fail(`This section already has a choice called "${next}"`)
+
+  const f = scopeFilter(scope)
+  const q = admin.from('gear_list_entries').update({ option_group: next }).match(f.match)
+  const { error } = await (f.section === null ? q.is('section', null) : q.eq('section', f.section))
+  if (error) throw new Error(error.message)
+  await touchList(admin, scope.listId)
+}
+
+// Dissolve the choice and keep the gear. Every alternative becomes an ordinary
+// required row, which is the honest reading — the list no longer says one of
+// them will do, so it says bring them. Deleting the gear instead would throw
+// away the drysuit because someone changed their mind about offering it.
+export async function ungroupGearChoice(scope: ChoiceScope) {
+  const admin = await requireAdmin()
+  const f = scopeFilter(scope)
+  const q = admin
+    .from('gear_list_entries')
+    .update({ option_group: null, option_branch: null })
+    .match(f.match)
+  const { error } = await (f.section === null ? q.is('section', null) : q.eq('section', f.section))
+  if (error) throw new Error(error.message)
+  await touchList(admin, scope.listId)
+}
+
+// Drop one alternative. The gear in it goes with it — an alternative is the
+// rows in it, so keeping them would mean deciding which heading they land under
+// on the way out, and the honest answer is that nobody asked for them at all.
+export async function removeGearChoiceBranch(scope: ChoiceScope, branch: number) {
+  const admin = await requireAdmin()
+  const f = scopeFilter(scope)
+  const del = admin.from('gear_list_entries').delete().match(f.match).eq('option_branch', branch)
+  const { error } = await (f.section === null ? del.is('section', null) : del.eq('section', f.section))
+  if (error) throw new Error(error.message)
+
+  // One alternative left is not a choice, it's a requirement wearing a heading.
+  const rest = admin.from('gear_list_entries').select('option_branch').match(f.match)
+  const { data: left } = await (f.section === null
+    ? rest.is('section', null)
+    : rest.eq('section', f.section))
+  const branches = new Set((left ?? []).map((r) => r.option_branch))
+  if (branches.size < 2) return ungroupGearChoice(scope)
+  await touchList(admin, scope.listId)
 }
 
 export async function removeGearEntry(id: string, instanceId?: string | null) {
@@ -500,7 +601,7 @@ export async function removeGearEntry(id: string, instanceId?: string | null) {
 type Admin = ReturnType<typeof createAdminClient>
 
 const SOURCE_SELECT =
-  'name, audience, intro, gear_list_entries(gear_item_id, name, note, url, section, group_type, quantity, sort_order, gear_entry_options(gear_item_id, sort_order))'
+  'name, audience, intro, gear_list_entries(gear_item_id, name, note, url, section, group_type, quantity, sort_order, option_group, option_branch, gear_entry_options(gear_item_id, sort_order))'
 
 type OptionRow = { gear_item_id: string; sort_order: number }
 type EntryRow = Record<string, unknown> & { gear_entry_options: OptionRow[] }

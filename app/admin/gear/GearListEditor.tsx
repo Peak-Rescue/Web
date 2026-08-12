@@ -2,11 +2,12 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSteadyRefresh } from '@/components/useSteadyRefresh'
-import { GEAR_CATEGORIES, matchesGear, productName, unwrap, type CatalogItem } from '@/lib/gear'
+import { GEAR_CATEGORIES, matchesGear, placeChoices, productName, unwrap, type CatalogItem } from '@/lib/gear'
 import {
   addGearEntry, updateGearEntry, removeGearEntry, updateGearList, copyGearList,
   saveGearListIntoTemplate, setGearEntryOptions, upsertGearItem, renameGearSection,
   removeGearSection, ungroupGearSection, moveGearEntry,
+  renameGearChoice, ungroupGearChoice, removeGearChoiceBranch,
 } from './actions'
 
 export type GearTemplateOption = { id: string; name: string; audience: string; entries: number }
@@ -28,6 +29,12 @@ export type GearEntry = {
   group_type: 'personal' | 'group'
   quantity: string | null
   sort_order: number
+  // "Bring one of these". The name groups the alternatives; the branch says
+  // which alternative this row is part of, so two rows sharing both are one
+  // alternative made of two things. Null on both for ordinary required gear,
+  // which is nearly all of it.
+  option_group: string | null
+  option_branch: number | null
   gear_entry_options?: { gear_item_id: string; sort_order: number }[]
 }
 
@@ -42,6 +49,19 @@ export type GearList = {
 }
 
 type GroupType = 'personal' | 'group'
+
+// Everywhere a row can land: a side of the list, a heading under it, and — for
+// gear inside a choice — which alternative. Both choice fields null is the
+// plain run of gear outside every choice, which is where most rows live.
+type Target = { gt: GroupType; section: string | null; choice: string | null; branch: number | null }
+
+const sameTarget = (a: Target, b: Target) =>
+  a.gt === b.gt && a.section === b.section && a.choice === b.choice && a.branch === b.branch
+
+// One identity for a drop zone, so a gap in one alternative can't be confused
+// with the gap at the same index in the one below it.
+const zoneKey = (t: Target, beforeId: string | 'end') =>
+  `${t.gt}|${t.section ?? ''}|${t.choice ?? ''}|${t.branch ?? ''}|${beforeId}`
 
 const GROUP_LABEL: Record<GroupType, string> = {
   personal: 'Personal — each person',
@@ -85,9 +105,21 @@ export default function GearListEditor({
   // two open panels and it stops being obvious where the next item lands.
   const [adding, setAdding] = useState<string | null>(null)
   const [drag, setDrag] = useState<Drag | null>(null)
+  // Which gap the dragged row would land in, as one key for the whole list.
+  // Held here rather than per card because an alternative sits inside a
+  // section: two containers each tracking their own hover both drew a landing
+  // line, and only one of them was where the row was going.
+  const [over, setOver] = useState<string | null>(null)
   // Sections named but not yet filled. A heading with no rows has nowhere to
   // live in the database, so it lives here until the first item lands in it.
   const [drafts, setDrafts] = useState<{ key: GroupType; name: string }[]>([])
+  // The same problem one level in: a choice, and each alternative inside it,
+  // exist only as the agreement between their rows. A choice you have just
+  // named and an alternative you have just opened both hold nothing yet, so
+  // they live here until something lands in them.
+  const [choiceDrafts, setChoiceDrafts] = useState<
+    { gt: GroupType; section: string | null; name: string; branches: number[] }[]
+  >([])
   // The list as the editor has it, ahead of the server. Every write to a row
   // is drawn here first: a click has to land instantly, and the server can't
   // oblige — an add is three round trips to Supabase and then a rebuild of the
@@ -183,31 +215,43 @@ export default function GearListEditor({
   // Dropping is always expressed as "this row goes immediately before that
   // one", with the end of a section standing in for "after everything in it".
   // An empty section has nothing to sit before, so the row goes to the end.
-  function drop(gt: GroupType, section: string | null, beforeId: string | null) {
+  function drop(t: Target, beforeId: string | null) {
     if (!drag) return
     const dragged = ordered.find((e) => e.id === drag.id)
     setDrag(null)
     if (!dragged) return
-    if (dragged.group_type === gt && dragged.r.section === section && beforeId === drag.id) return
+    const from: Target = {
+      gt: dragged.group_type, section: dragged.r.section,
+      choice: dragged.option_group, branch: dragged.option_branch,
+    }
+    if (sameTarget(from, t) && beforeId === drag.id) return
 
     const rest = ordered.filter((e) => e.id !== drag.id)
+    const inTarget = (e: (typeof rest)[number]) =>
+      e.group_type === t.gt && e.r.section === t.section &&
+      e.option_group === t.choice && e.option_branch === t.branch
+
     let at: number
     if (beforeId) {
       at = rest.findIndex((e) => e.id === beforeId)
       if (at < 0) at = rest.length
     } else {
-      // Last row of the section it was dropped into, so it lands under the
-      // gear already there rather than at the bottom of the whole list.
+      // Last row of the zone it was dropped into, so it lands under the gear
+      // already there rather than at the bottom of the whole list.
       let last = -1
-      rest.forEach((e, i) => { if (e.group_type === gt && e.r.section === section) last = i })
+      rest.forEach((e, i) => { if (inTarget(e)) last = i })
       at = last < 0 ? rest.length : last + 1
     }
 
-    const moved = { ...dragged, group_type: gt, section }
+    const moved = {
+      ...dragged, group_type: t.gt, section: t.section,
+      option_group: t.choice, option_branch: t.branch,
+    }
     const next = [...rest.slice(0, at), moved, ...rest.slice(at)]
       .map(({ r: _r, ...e }, i) => ({ ...e, sort_order: i })) // eslint-disable-line @typescript-eslint/no-unused-vars
     apply(() => next, () => moveGearEntry(list.id, drag.id, {
-      section, groupType: gt, orderedIds: next.map((e) => e.id),
+      section: t.section, groupType: t.gt, orderedIds: next.map((e) => e.id),
+      optionGroup: t.choice, optionBranch: t.branch,
       instanceId: list.instance_id,
     }))
   }
@@ -215,19 +259,22 @@ export default function GearListEditor({
   // The added row is drawn from what the catalog already says about the item,
   // under an id the server hasn't issued yet. It is replaced wholesale by the
   // real one when the page catches up.
-  function addEntry(input: { gearItemId?: string | null; name?: string; section: string | null; groupType: GroupType }) {
+  function addEntry(input: { gearItemId?: string | null; name?: string; target: Target }) {
+    const { target } = input
     const sortOrder = entries.reduce((m, e) => Math.max(m, e.sort_order), -1) + 1
     const temp: GearEntry = {
       id: `pending-${sortOrder}-${input.gearItemId ?? input.name ?? ''}`,
       gear_item_id: input.gearItemId ?? null,
       name: input.gearItemId ? null : input.name?.trim() || null,
       note: null, url: null,
-      section: input.section, group_type: input.groupType, quantity: null,
+      section: target.section, group_type: target.gt, quantity: null,
+      option_group: target.choice, option_branch: target.branch,
       sort_order: sortOrder, gear_entry_options: [],
     }
     apply((es) => [...es, temp], () => addGearEntry(list.id, {
       gearItemId: input.gearItemId, name: input.name,
-      section: input.section, groupType: input.groupType,
+      section: target.section, groupType: target.gt,
+      optionGroup: target.choice, optionBranch: target.branch,
       sortOrder, instanceId: list.instance_id,
     }))
   }
@@ -250,6 +297,13 @@ export default function GearListEditor({
         const { loose, sections: real } = grouped[gt]
         // A draft the first item has already landed in is a real section now.
         const draft = drafts.filter((d) => d.key === gt && !real.some((s) => s.name === d.name))
+        const shared = {
+          listId: list.id, catalog, childrenOf,
+          adding, setAdding, editingOptions, setEditingOptions,
+          drag, setDrag, over, setOver, onDrop: drop, apply, addEntry,
+          instanceId: list.instance_id, busy, run, input,
+          choiceDrafts, setChoiceDrafts,
+        }
         return (
           <div key={gt}>
             <h4 className="text-[11px] font-medium text-zinc-600 uppercase tracking-widest mb-2">
@@ -263,21 +317,11 @@ export default function GearListEditor({
                   reads as a section someone forgot to name. So the card appears
                   when it holds something, or while something is being put in
                   it, and is a plain line the rest of the time. */}
-              {loose.length > 0 || adding === `${gt}:loose` ? (
-                <SectionCard
-                  key={`${gt}:loose`}
-                  listId={list.id} groupType={gt} name={null} rows={loose}
-                  catalog={catalog} childrenOf={childrenOf}
-                  adding={adding === `${gt}:loose`}
-                  setAdding={(on) => setAdding(on ? `${gt}:loose` : null)}
-                  editingOptions={editingOptions} setEditingOptions={setEditingOptions}
-                  drag={drag} setDrag={setDrag} onDrop={drop}
-                  apply={apply} addEntry={addEntry} instanceId={list.instance_id}
-                  busy={busy} run={run} input={input}
-                />
+              {loose.length > 0 || adding === zoneKey({ gt, section: null, choice: null, branch: null }, 'end') ? (
+                <SectionCard key={`${gt}:loose`} {...shared} groupType={gt} name={null} rows={loose} />
               ) : (
                 <button
-                  onClick={() => setAdding(`${gt}:loose`)}
+                  onClick={() => setAdding(zoneKey({ gt, section: null, choice: null, branch: null }, 'end'))}
                   className="text-xs text-zinc-600 hover:text-white transition-colors py-1"
                 >
                   + Add gear
@@ -285,34 +329,17 @@ export default function GearListEditor({
               )}
 
               {real.map((s) => (
-                <SectionCard
-                  key={`${gt}:${s.name}`}
-                  listId={list.id} groupType={gt} name={s.name} rows={s.rows}
-                  catalog={catalog} childrenOf={childrenOf}
-                  adding={adding === `${gt}:${s.name}`}
-                  setAdding={(on) => setAdding(on ? `${gt}:${s.name}` : null)}
-                  editingOptions={editingOptions} setEditingOptions={setEditingOptions}
-                  drag={drag} setDrag={setDrag} onDrop={drop}
-                  apply={apply} addEntry={addEntry} instanceId={list.instance_id}
-                  busy={busy} run={run} input={input}
-                />
+                <SectionCard key={`${gt}:${s.name}`} {...shared} groupType={gt} name={s.name} rows={s.rows} />
               ))}
 
               {draft.map((d) => (
                 <SectionCard
-                  key={`draft:${gt}:${d.name}`}
-                  listId={list.id} groupType={gt} name={d.name} rows={[]} isDraft
-                  catalog={catalog} childrenOf={childrenOf}
-                  adding={adding === `${gt}:${d.name}`}
-                  setAdding={(on) => setAdding(on ? `${gt}:${d.name}` : null)}
-                  editingOptions={editingOptions} setEditingOptions={setEditingOptions}
-                  drag={drag} setDrag={setDrag} onDrop={drop}
-                  apply={apply} addEntry={addEntry} instanceId={list.instance_id}
+                  key={`draft:${gt}:${d.name}`} {...shared}
+                  groupType={gt} name={d.name} rows={[]} isDraft
                   onDiscard={() => setDrafts((xs) => xs.filter((x) => !(x.key === gt && x.name === d.name)))}
                   onRename={(next) => setDrafts((xs) => xs.map((x) =>
                     x.key === gt && x.name === d.name ? { ...x, name: next } : x
                   ))}
-                  busy={busy} run={run} input={input}
                 />
               ))}
 
@@ -320,11 +347,12 @@ export default function GearListEditor({
                 onClick={() => {
                   const named = prompt('Name the new section — this is the heading students read:')?.trim()
                   if (!named) return
+                  const zone = zoneKey({ gt, section: named, choice: null, branch: null }, 'end')
                   if (real.some((s) => s.name === named) || draft.some((d) => d.name === named)) {
-                    return setAdding(`${gt}:${named}`)
+                    return setAdding(zone)
                   }
                   setDrafts((xs) => [...xs, { key: gt, name: named }])
-                  setAdding(`${gt}:${named}`)
+                  setAdding(zone)
                 }}
                 className="text-xs text-zinc-500 hover:text-white border border-dashed border-zinc-800 hover:border-zinc-600 rounded-lg w-full py-2 transition-colors"
               >
@@ -345,6 +373,66 @@ export default function GearListEditor({
   )
 }
 
+type ResolvedRow = GearEntry & {
+  r: {
+    name: string; note: string | null; url: string | null; section: string | null
+    catalogItem?: GearItem; options: GearItem[]; models: GearItem[]
+  }
+}
+
+type ChoiceDraft = { gt: GroupType; section: string | null; name: string; branches: number[] }
+
+// What every container on the list needs to do its job. Passed down whole
+// rather than named field by field at four call sites, which is how the two
+// that already existed drifted apart.
+type Shared = {
+  listId: string
+  catalog: GearItem[]
+  childrenOf: Map<string, GearItem[]>
+  // One add panel open at a time, identified by the zone it would add to.
+  adding: string | null
+  setAdding: (key: string | null) => void
+  editingOptions: string | null
+  setEditingOptions: (id: string | null) => void
+  drag: Drag | null
+  setDrag: (d: Drag | null) => void
+  over: string | null
+  setOver: (key: string | null) => void
+  onDrop: (target: Target, beforeId: string | null) => void
+  apply: (optimistic: (es: GearEntry[]) => GearEntry[], fn: () => Promise<unknown>) => void
+  addEntry: (input: { gearItemId?: string | null; name?: string; target: Target }) => void
+  instanceId: string | null
+  busy: boolean
+  run: (fn: () => Promise<unknown>) => void
+  input: string
+  choiceDrafts: ChoiceDraft[]
+  setChoiceDrafts: (fn: (xs: ChoiceDraft[]) => ChoiceDraft[]) => void
+}
+
+// The handlers that make one gap a drop zone. A row's own gap has to win over
+// the container's catch-all, so the line is drawn where the row would land
+// rather than always at the end of whatever holds it.
+function gapProps(s: {
+  target: Target; beforeId: string | 'end'; dragging: boolean
+  over: string | null; setOver: (k: string | null) => void
+  onDrop: (t: Target, beforeId: string | null) => void
+}) {
+  const key = zoneKey(s.target, s.beforeId)
+  return {
+    onDragOver: (e: React.DragEvent) => {
+      if (!s.dragging) return
+      e.preventDefault(); e.stopPropagation()
+      s.setOver(key)
+    },
+    onDragLeave: () => { if (s.over === key) s.setOver(null) },
+    onDrop: (e: React.DragEvent) => {
+      e.preventDefault(); e.stopPropagation()
+      s.setOver(null)
+      s.onDrop(s.target, s.beforeId === 'end' ? null : s.beforeId)
+    },
+  }
+}
+
 // One heading and what sits under it. The header bar is the point: the section
 // name is the thing you scan for and the thing you rename, so it outranks
 // everything else in the card and reads as a field rather than a caption.
@@ -352,64 +440,45 @@ export default function GearListEditor({
 // A null name is the gear filed under no heading, which is most of it. That
 // card has no header — there is nothing to name, rename or delete — but it
 // takes drops and adds like any other.
+//
+// Under the heading sit two kinds of thing: gear that is simply required, and
+// choices. A choice is its own block because "bring one of these" is a claim
+// about several rows at once, and there is nowhere to write that on a row.
 function SectionCard({
-  listId, groupType, name, rows, isDraft, catalog, childrenOf,
-  adding, setAdding, editingOptions, setEditingOptions,
-  drag, setDrag, onDrop, apply, addEntry, instanceId,
-  onDiscard, onRename, busy, run, input,
-}: {
-  listId: string
+  groupType, name, rows, isDraft, onDiscard, onRename, ...s
+}: Shared & {
   groupType: GroupType
   name: string | null
-  rows: (GearEntry & { r: { name: string; note: string | null; url: string | null; section: string | null; catalogItem?: GearItem; options: GearItem[]; models: GearItem[] } })[]
+  rows: ResolvedRow[]
   isDraft?: boolean
-  catalog: GearItem[]
-  childrenOf: Map<string, GearItem[]>
-  adding: boolean
-  setAdding: (on: boolean) => void
-  editingOptions: string | null
-  setEditingOptions: (id: string | null) => void
-  drag: Drag | null
-  setDrag: (d: Drag | null) => void
-  onDrop: (gt: GroupType, section: string | null, beforeId: string | null) => void
-  apply: (optimistic: (es: GearEntry[]) => GearEntry[], fn: () => Promise<unknown>) => void
-  addEntry: (input: { gearItemId?: string | null; name?: string; section: string | null; groupType: GroupType }) => void
-  instanceId: string | null
   onDiscard?: () => void
   onRename?: (next: string) => void
-  busy: boolean
-  run: (fn: () => Promise<unknown>) => void
-  input: string
 }) {
-  // Which gap the row being dragged would land in. Null while nothing hovers,
-  // 'end' for the space under the last row.
-  const [over, setOver] = useState<string | 'end' | null>(null)
-  const dragging = drag !== null
+  const dragging = s.drag !== null
+  const loose: Target = { gt: groupType, section: name, choice: null, branch: null }
 
   // A drag abandoned outside any card would otherwise leave its landing line
-  // drawn across a section nothing is being dropped into.
-  useEffect(() => { if (!dragging) setOver(null) }, [dragging])
+  // drawn across a container nothing is being dropped into.
+  useEffect(() => { if (!dragging) s.setOver(null) }, [dragging]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // A row's own gap has to win over the card's catch-all, so the line is drawn
-  // where the row would land rather than always at the end of the section.
-  const gap = (beforeId: string | 'end') => ({
-    onDragOver: (e: React.DragEvent) => {
-      if (!dragging) return
-      e.preventDefault(); e.stopPropagation()
-      setOver(beforeId)
-    },
-    onDragLeave: () => setOver((o) => (o === beforeId ? null : o)),
-    onDrop: (e: React.DragEvent) => {
-      e.preventDefault(); e.stopPropagation()
-      setOver(null)
-      onDrop(groupType, name, beforeId === 'end' ? null : beforeId)
-    },
-  })
+  const placed = useMemo(() => placeChoices(rows), [rows])
+  const realChoices = new Set(
+    placed.filter((p) => p.kind === 'choice').map((p) => (p as { name: string }).name)
+  )
+  // A choice the first item has already landed in is a real choice now.
+  const drafts = s.choiceDrafts.filter(
+    (d) => d.gt === groupType && d.section === name && !realChoices.has(d.name)
+  )
+
+  const gap = (beforeId: string | 'end') =>
+    gapProps({ target: loose, beforeId, dragging, over: s.over, setOver: s.setOver, onDrop: s.onDrop })
+
+  const addKey = zoneKey(loose, 'end')
 
   return (
     <div
       className={`border rounded-lg overflow-hidden transition-colors ${
-        dragging && over ? 'border-pr-red/70' : 'border-zinc-800'
+        dragging && s.over?.startsWith(`${groupType}|${name ?? ''}|`) ? 'border-pr-red/70' : 'border-zinc-800'
       }`}
       {...gap('end')}
     >
@@ -422,7 +491,7 @@ function SectionCard({
               const next = ev.target.value.trim()
               if (!next || next === name) { ev.target.value = name; return }
               if (isDraft) return onRename?.(next)
-              run(() => renameGearSection(listId, groupType, name, next))
+              s.run(() => renameGearSection(s.listId, groupType, name, next))
             }}
             aria-label="Section heading"
             className="min-w-0 flex-1 text-sm font-semibold text-white bg-transparent rounded px-1.5 py-0.5 -ml-1.5 border border-transparent hover:border-zinc-700 focus:border-zinc-600 focus:bg-zinc-900 focus:outline-none"
@@ -432,8 +501,8 @@ function SectionCard({
           </span>
           {!isDraft && rows.length > 0 && (
             <button
-              onClick={() => run(() => ungroupGearSection(listId, groupType, name))}
-              disabled={busy}
+              onClick={() => s.run(() => ungroupGearSection(s.listId, groupType, name))}
+              disabled={s.busy}
               title="Drop the heading and keep the gear"
               className="shrink-0 text-[11px] text-zinc-600 hover:text-white transition-colors disabled:opacity-40"
             >
@@ -444,9 +513,9 @@ function SectionCard({
             onClick={() => {
               if (isDraft) return onDiscard?.()
               if (!confirm(`Delete “${name}” and the ${rows.length} item${rows.length === 1 ? '' : 's'} under it?`)) return
-              run(() => removeGearSection(listId, groupType, name))
+              s.run(() => removeGearSection(s.listId, groupType, name))
             }}
-            disabled={busy}
+            disabled={s.busy}
             title={isDraft ? 'Discard this section' : 'Delete this section and its gear'}
             className="shrink-0 text-xs text-zinc-600 hover:text-red-400 transition-colors disabled:opacity-40"
           >
@@ -462,36 +531,272 @@ function SectionCard({
       )}
 
       <div className="divide-y divide-zinc-800/70">
-        {rows.map((e) => (
-          <Row
-            key={e.id} e={e}
-            editingOptions={editingOptions} setEditingOptions={setEditingOptions}
-            dragging={dragging} isOver={over === e.id}
-            onDragStart={() => setDrag({ id: e.id })}
-            onDragEnd={() => { setDrag(null); setOver(null) }}
-            gap={gap(e.id)}
-            apply={apply} instanceId={instanceId}
-            busy={busy} run={run} input={input}
+        {placed.map((p) =>
+          p.kind === 'item' ? (
+            <Row
+              key={p.row.id} e={p.row}
+              editingOptions={s.editingOptions} setEditingOptions={s.setEditingOptions}
+              dragging={dragging} isOver={s.over === zoneKey(loose, p.row.id)}
+              onDragStart={() => s.setDrag({ id: p.row.id })}
+              onDragEnd={() => { s.setDrag(null); s.setOver(null) }}
+              gap={gap(p.row.id)}
+              apply={s.apply} instanceId={s.instanceId}
+              busy={s.busy} run={s.run} input={s.input}
+            />
+          ) : (
+            <ChoiceCard
+              key={`choice:${p.name}`} {...s}
+              groupType={groupType} section={name} choiceName={p.name}
+              options={p.options}
+              draftBranches={
+                (s.choiceDrafts.find((d) => d.gt === groupType && d.section === name && d.name === p.name)?.branches ?? [])
+                  .filter((b) => !p.options.some((o) => o.branch === b))
+              }
+            />
+          )
+        )}
+
+        {drafts.map((d) => (
+          <ChoiceCard
+            key={`draft-choice:${d.name}`} {...s}
+            groupType={groupType} section={name} choiceName={d.name}
+            options={[]} draftBranches={d.branches} isDraft
           />
         ))}
       </div>
 
-      <div className={rows.length > 0 ? 'border-t border-zinc-800/70' : ''}>
-        {adding ? (
+      <div className={rows.length > 0 || drafts.length > 0 ? 'border-t border-zinc-800/70' : ''}>
+        {s.adding === addKey ? (
           <AddGear
-            listId={listId} section={name} groupType={groupType}
-            catalog={catalog} childrenOf={childrenOf} addEntry={addEntry}
-            onClose={() => setAdding(false)}
-            busy={busy} run={run} input={input}
+            listId={s.listId} target={loose}
+            catalog={s.catalog} childrenOf={s.childrenOf} addEntry={s.addEntry}
+            onClose={() => s.setAdding(null)}
+            busy={s.busy} run={s.run} input={s.input}
           />
         ) : (
-          <button
-            onClick={() => setAdding(true)}
-            className="w-full text-left px-3 py-2 text-xs text-zinc-500 hover:text-white hover:bg-zinc-800/40 transition-colors"
-          >
-            + Add gear{name ? ` to ${name}` : ''}
-          </button>
+          <div className="flex items-center">
+            <button
+              onClick={() => s.setAdding(addKey)}
+              className="flex-1 text-left px-3 py-2 text-xs text-zinc-500 hover:text-white hover:bg-zinc-800/40 transition-colors"
+            >
+              + Add gear{name ? ` to ${name}` : ''}
+            </button>
+            {/* Kept quiet next to "add gear": a choice is the rarer thing to
+                want, and a list is mostly rows that are simply required. */}
+            <button
+              onClick={() => {
+                const named = prompt(
+                  'Name the choice — students read this as the heading over the alternatives:',
+                  'Exposure protection'
+                )?.trim()
+                if (!named) return
+                const existing = s.choiceDrafts.some(
+                  (d) => d.gt === groupType && d.section === name && d.name === named
+                )
+                if (!existing && !realChoices.has(named)) {
+                  // Two empty alternatives, because one alternative is not a
+                  // choice and you would only have to add the second anyway.
+                  s.setChoiceDrafts((xs) => [...xs, { gt: groupType, section: name, name: named, branches: [0, 1] }])
+                }
+                s.setAdding(zoneKey({ gt: groupType, section: name, choice: named, branch: 0 }, 'end'))
+              }}
+              title="A set of alternatives — bring one of them"
+              className="shrink-0 px-3 py-2 text-xs text-zinc-600 hover:text-white transition-colors"
+            >
+              + Choice
+            </button>
+          </div>
         )}
+      </div>
+    </div>
+  )
+}
+
+// "Bring one of these", where each alternative can be more than one item.
+//
+// The alternatives are the structure, so they are drawn as the structure:
+// separate blocks with a word between them, rather than rows carrying a note
+// that explains their relationship to rows above and below. That prose version
+// is what this replaces — three notes each describing the other two, and a
+// student skimming past all of it seeing three rows that look required.
+function ChoiceCard({
+  groupType, section, choiceName, options, draftBranches, isDraft, ...s
+}: Shared & {
+  groupType: GroupType
+  section: string | null
+  choiceName: string
+  options: { branch: number; rows: ResolvedRow[] }[]
+  // Alternatives opened but not yet filled. Same problem as a named section
+  // with no rows: nowhere in the database to be until something lands.
+  draftBranches: number[]
+  isDraft?: boolean
+}) {
+  const dragging = s.drag !== null
+  const scope = { listId: s.listId, groupType, section, name: choiceName }
+
+  // Real and empty alternatives shown as one run, in branch order, so an
+  // alternative you just opened appears where it will stay.
+  const shown = [
+    ...options.map((o) => ({ branch: o.branch, rows: o.rows })),
+    ...draftBranches.map((branch) => ({ branch, rows: [] as ResolvedRow[] })),
+  ].sort((a, b) => a.branch - b.branch)
+
+  const discardDraftBranch = (branch: number) =>
+    s.setChoiceDrafts((xs) =>
+      xs
+        .map((d) =>
+          d.gt === groupType && d.section === section && d.name === choiceName
+            ? { ...d, branches: d.branches.filter((b) => b !== branch) }
+            : d
+        )
+        .filter((d) => d.branches.length > 0 || options.length > 0)
+    )
+
+  return (
+    <div className="px-3 py-2.5">
+      <div className="border border-zinc-700/70 rounded-lg overflow-hidden">
+        <div className="flex items-center gap-2 px-2.5 py-1.5 bg-zinc-800/40 border-b border-zinc-800">
+          <span className="shrink-0 text-[10px] uppercase tracking-widest text-pr-red font-medium">Bring one of</span>
+          <input
+            defaultValue={choiceName}
+            key={choiceName}
+            onBlur={(ev) => {
+              const next = ev.target.value.trim()
+              if (!next || next === choiceName) { ev.target.value = choiceName; return }
+              if (isDraft) {
+                return s.setChoiceDrafts((xs) => xs.map((d) =>
+                  d.gt === groupType && d.section === section && d.name === choiceName
+                    ? { ...d, name: next } : d
+                ))
+              }
+              s.run(() => renameGearChoice(scope, next))
+            }}
+            aria-label="Choice heading"
+            className="min-w-0 flex-1 text-xs font-semibold text-white bg-transparent rounded px-1.5 py-0.5 border border-transparent hover:border-zinc-700 focus:border-zinc-600 focus:bg-zinc-900 focus:outline-none"
+          />
+          {options.length > 0 && (
+            <button
+              onClick={() => {
+                if (!confirm(
+                  `Stop offering these as alternatives? The gear stays on the list, but every item becomes required.`
+                )) return
+                s.run(() => ungroupGearChoice(scope))
+              }}
+              disabled={s.busy}
+              title="Keep the gear, drop the choice — every item becomes required"
+              className="shrink-0 text-[11px] text-zinc-600 hover:text-white transition-colors disabled:opacity-40"
+            >
+              ungroup
+            </button>
+          )}
+          {isDraft && (
+            <button
+              onClick={() => s.setChoiceDrafts((xs) => xs.filter(
+                (d) => !(d.gt === groupType && d.section === section && d.name === choiceName)
+              ))}
+              title="Discard this choice"
+              className="shrink-0 text-xs text-zinc-600 hover:text-red-400 transition-colors"
+            >
+              ×
+            </button>
+          )}
+        </div>
+
+        {shown.map((o, i) => {
+          const target: Target = { gt: groupType, section, choice: choiceName, branch: o.branch }
+          const gap = (beforeId: string | 'end') =>
+            gapProps({ target, beforeId, dragging, over: s.over, setOver: s.setOver, onDrop: s.onDrop })
+          const addKey = zoneKey(target, 'end')
+          const empty = o.rows.length === 0
+          return (
+            <div
+              key={o.branch}
+              {...gap('end')}
+              // Keeping the trailing separator matters: without it, branch 1
+              // would claim every gap in branch 11.
+              className={`${i > 0 ? 'border-t border-zinc-800' : ''} ${
+                dragging && s.over?.startsWith(zoneKey(target, '')) ? 'bg-pr-red/5' : ''
+              }`}
+            >
+              <div className="flex items-center gap-2 px-2.5 pt-1.5">
+                {/* Position, not a stored label: delete the first alternative
+                    and the second has to become the one you read first. */}
+                <span className="text-[10px] uppercase tracking-widest text-zinc-500 font-medium">
+                  {i === 0 ? 'Either' : 'Or'}
+                </span>
+                <span className="flex-1 h-px bg-zinc-800/70" />
+                {shown.length > 2 || empty ? (
+                  <button
+                    onClick={() => {
+                      if (empty) return discardDraftBranch(o.branch)
+                      if (!confirm(`Drop this alternative and the ${o.rows.length} item${o.rows.length === 1 ? '' : 's'} in it?`)) return
+                      s.run(() => removeGearChoiceBranch(scope, o.branch))
+                    }}
+                    disabled={s.busy}
+                    title={empty ? 'Discard this alternative' : 'Delete this alternative and its gear'}
+                    className="shrink-0 text-[11px] text-zinc-600 hover:text-red-400 transition-colors disabled:opacity-40"
+                  >
+                    ×
+                  </button>
+                ) : null}
+              </div>
+
+              {empty ? (
+                <p className="px-2.5 py-1 text-[11px] text-zinc-600">
+                  Nothing in here yet — add the gear this alternative needs.
+                </p>
+              ) : (
+                <div className="divide-y divide-zinc-800/70">
+                  {o.rows.map((e) => (
+                    <Row
+                      key={e.id} e={e}
+                      editingOptions={s.editingOptions} setEditingOptions={s.setEditingOptions}
+                      dragging={dragging} isOver={s.over === zoneKey(target, e.id)}
+                      onDragStart={() => s.setDrag({ id: e.id })}
+                      onDragEnd={() => { s.setDrag(null); s.setOver(null) }}
+                      gap={gap(e.id)}
+                      apply={s.apply} instanceId={s.instanceId}
+                      busy={s.busy} run={s.run} input={s.input}
+                    />
+                  ))}
+                </div>
+              )}
+
+              {s.adding === addKey ? (
+                <AddGear
+                  listId={s.listId} target={target}
+                  catalog={s.catalog} childrenOf={s.childrenOf} addEntry={s.addEntry}
+                  onClose={() => s.setAdding(null)}
+                  busy={s.busy} run={s.run} input={s.input}
+                />
+              ) : (
+                <button
+                  onClick={() => s.setAdding(addKey)}
+                  className="w-full text-left px-2.5 py-1.5 text-[11px] text-zinc-600 hover:text-white hover:bg-zinc-800/40 transition-colors"
+                >
+                  + Add gear to this alternative
+                </button>
+              )}
+            </div>
+          )
+        })}
+
+        <button
+          onClick={() => {
+            const next = Math.max(-1, ...shown.map((o) => o.branch)) + 1
+            s.setChoiceDrafts((xs) => {
+              const found = xs.find((d) => d.gt === groupType && d.section === section && d.name === choiceName)
+              if (found) {
+                return xs.map((d) => (d === found ? { ...d, branches: [...d.branches, next] } : d))
+              }
+              return [...xs, { gt: groupType, section, name: choiceName, branches: [next] }]
+            })
+            s.setAdding(zoneKey({ gt: groupType, section, choice: choiceName, branch: next }, 'end'))
+          }}
+          className="w-full border-t border-zinc-800 py-1.5 text-[11px] text-zinc-600 hover:text-white hover:bg-zinc-800/40 transition-colors"
+        >
+          + Another alternative
+        </button>
       </div>
     </div>
   )
@@ -809,14 +1114,15 @@ function SaveToShelf({
 // where an item lands and the panel stays open across adds — filling a section
 // means adding six things to it, not confirming the destination six times.
 function AddGear({
-  listId, section, groupType, catalog, childrenOf, addEntry, onClose, busy, run, input,
+  listId, target, catalog, childrenOf, addEntry, onClose, busy, run, input,
 }: {
   listId: string
-  section: string | null
-  groupType: GroupType
+  // Where what's added lands. The panel opens inside that zone, so this is
+  // never a question put to the person using it.
+  target: Target
   catalog: GearItem[]
   childrenOf: Map<string, GearItem[]>
-  addEntry: (input: { gearItemId?: string | null; name?: string; section: string | null; groupType: GroupType }) => void
+  addEntry: (input: { gearItemId?: string | null; name?: string; target: Target }) => void
   onClose: () => void
   busy: boolean
   run: (fn: () => Promise<unknown>) => void
@@ -890,7 +1196,7 @@ function AddGear({
   )
 
   function add(itemId: string | null, name?: string) {
-    addEntry({ gearItemId: itemId, name, groupType, section })
+    addEntry({ gearItemId: itemId, name, target })
     setQuery('')
   }
 
@@ -901,9 +1207,13 @@ function AddGear({
           autoFocus
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder={section
-            ? `Search the catalog — adding to ${section}`
-            : `Search the catalog — adding to ${groupType === 'personal' ? 'personal' : 'group'} kit`}
+          placeholder={
+            target.choice
+              ? `Search the catalog — adding to one alternative of ${target.choice}`
+              : target.section
+                ? `Search the catalog — adding to ${target.section}`
+                : `Search the catalog — adding to ${target.gt === 'personal' ? 'personal' : 'group'} kit`
+          }
           className={`flex-1 min-w-0 ${input}`}
         />
         {/* Searching the catalog is where you find out it's wrong — a type
@@ -1050,7 +1360,10 @@ function AddGear({
                     category: newCategory,
                     parentId: newParent || null,
                   }))
-                  await addGearEntry(listId, { gearItemId: id, groupType, section })
+                  await addGearEntry(listId, {
+                    gearItemId: id, groupType: target.gt, section: target.section,
+                    optionGroup: target.choice, optionBranch: target.branch,
+                  })
                   setQuery(''); setNewParent(''); setNewItemBrand('')
                 })}
                 disabled={busy}

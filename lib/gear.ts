@@ -99,6 +99,63 @@ export function matchesGear(item: CatalogItem, query: string, children: CatalogI
   return haystack.some((h) => h.toLowerCase().includes(q))
 }
 
+// ─── Choices ────────────────────────────────────────────────────────────────
+//
+// A choice is "bring one of these", and each alternative can be more than one
+// item: (wetsuit AND rain jacket) OR drysuit. Like a section, it is not a row
+// of its own — it's the agreement between the entries carrying its name.
+//
+// Grouped here rather than in each renderer because the editor and the course
+// page have to agree on what a choice is down to the ordering, and the two
+// drifting apart would show up as a student list that doesn't match the one
+// that was built.
+
+export type ChoiceFields = {
+  option_group: string | null
+  option_branch: number | null
+  sort_order: number
+}
+
+export type ChoiceBlock<T> = { branch: number; rows: T[] }
+
+export type Placed<T> =
+  | { kind: 'item'; row: T }
+  | { kind: 'choice'; name: string; options: ChoiceBlock<T>[] }
+
+// A section's rows as they print: plain gear in its own order, and each choice
+// as one block sitting where its first row sat. Anchoring the block to its
+// first row is what keeps a choice from jumping to the end of the section the
+// moment someone reorders inside it.
+export function placeChoices<T extends ChoiceFields>(rows: T[]): Placed<T>[] {
+  const ordered = [...rows].sort((a, b) => a.sort_order - b.sort_order)
+  const out: Placed<T>[] = []
+  const blocks = new Map<string, Extract<Placed<T>, { kind: 'choice' }>>()
+
+  for (const row of ordered) {
+    const name = row.option_group
+    if (!name || row.option_branch === null) {
+      out.push({ kind: 'item', row })
+      continue
+    }
+    let block = blocks.get(name)
+    if (!block) {
+      block = { kind: 'choice', name, options: [] }
+      blocks.set(name, block)
+      out.push(block)
+    }
+    const branch = row.option_branch
+    const option = block.options.find((o) => o.branch === branch)
+    if (option) option.rows.push(row)
+    else block.options.push({ branch, rows: [row] })
+  }
+
+  // Branches print in their own order, not in the order the first row of each
+  // happened to be added — otherwise dragging a row about silently reshuffles
+  // which alternative reads as the first one.
+  for (const block of blocks.values()) block.options.sort((a, b) => a.branch - b.branch)
+  return out
+}
+
 // How a line reads once the type, the chosen models and any per-list override
 // are resolved: "Descent device — Petzl Rig or Grigri".
 export function gearLabel(
