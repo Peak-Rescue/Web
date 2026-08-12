@@ -844,9 +844,28 @@ function AddGear({
 
   // Only categories the catalog actually has something in — an empty one is a
   // dead click.
-  const categories = useMemo(
-    () => GEAR_CATEGORIES.filter((c) => types.some((t) => t.category === c)),
-    [types]
+  //
+  // Read off the catalog, not off GEAR_CATEGORIES, because the seed list is a
+  // starting vocabulary and the catalog page lets you rename a category or
+  // invent one. Filtering the seed list instead meant a renamed category held
+  // nothing as far as this panel knew, and everything under it — the wetsuit,
+  // the drysuit, the litter — could only be reached by typing its name. Seed
+  // order first so the familiar ones stay put, then whatever has been added.
+  const categories = useMemo(() => {
+    const used = new Set(types.map((t) => t.category?.trim()).filter(Boolean) as string[])
+    return [
+      ...GEAR_CATEGORIES.filter((c) => used.has(c)),
+      ...[...used].filter((c) => !GEAR_CATEGORIES.includes(c as never)).sort(),
+    ]
+  }, [types])
+
+  // Filing a new item is the other direction: every category is on offer, empty
+  // or not, plus any the catalog has invented since. Offering only the seed list
+  // here made a renamed category unfileable from this panel — the one place
+  // you'd be standing when you noticed something belonged in it.
+  const allCategories = useMemo(
+    () => [...GEAR_CATEGORIES, ...categories.filter((c) => !GEAR_CATEGORIES.includes(c as never))],
+    [categories]
   )
 
   // The types the category being filed under actually holds — what a new model
@@ -997,7 +1016,7 @@ function AddGear({
                   onChange={(e) => { setNewCategory(e.target.value); setNewParent('') }}
                   className={`${input} w-44`}
                 >
-                  {GEAR_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                  {allCategories.map((c) => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
               <div>
