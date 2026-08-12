@@ -692,13 +692,41 @@ export default async function PortalPage({
                       )}
                       <h3 className="font-medium text-sm">{d.title}</h3>
                     </div>
-                    {(d.location || d.notes) && (
-                      <p className="text-xs text-zinc-500 mt-0.5">
-                        {[d.location, d.notes].filter(Boolean).join(' · ')}
+                    {/* Place and notes were joined with a dot, which read as
+                        one sentence — and on the canyon days the note is three
+                        facts long, so the place vanished into it. The pin says
+                        which half is the where. */}
+                    {d.location && (
+                      <p className="flex items-center gap-1.5 text-xs text-zinc-500 mt-0.5">
+                        <svg
+                          aria-hidden
+                          xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24"
+                          fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"
+                          className="shrink-0 text-zinc-600"
+                        >
+                          <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
+                          <circle cx="12" cy="10" r="3" />
+                        </svg>
+                        {d.location}
                       </p>
                     )}
+                    {d.notes && <p className="text-xs text-zinc-500 mt-0.5">{d.notes}</p>}
+                    {/* The pin says where; this says what's being taught.
+                        One glyph for the whole list, in the same gutter as the
+                        pin — fourteen of them down the column would drown the
+                        dots that carry the structure. */}
                     {topics.length > 0 && (
-                      <ul className="mt-2.5 space-y-1.5">
+                      <div className="flex gap-1.5 mt-2.5">
+                        <svg
+                          aria-hidden
+                          xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24"
+                          fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"
+                          className="shrink-0 mt-[5px] text-zinc-600"
+                        >
+                          <path d="M22 9 12 5 2 9l10 4 10-4Z" />
+                          <path d="M6 11v5c0 1.1 2.7 2 6 2s6-.9 6-2v-5" />
+                        </svg>
+                        <ul className="flex-1 min-w-0 space-y-1.5">
                         {topics.map((t) => {
                           const kids = blocks.filter((b) => b.parent_id === t.id)
                           // A dot for topics and a dash for what sits under
@@ -713,7 +741,23 @@ export default async function PortalPage({
                               />
                               {t.time_label && <span className="text-zinc-500 mr-2">{t.time_label}</span>}
                               {t.title}
-                              {t.location && <span className="text-xs text-zinc-500 ml-2">{t.location}</span>}
+                              {/* A block can sit somewhere other than the day
+                                  does — classroom in the morning, canyon after
+                                  lunch. Same pin, smaller. */}
+                              {t.location && (
+                                <span className="inline-flex items-center gap-1 text-xs text-zinc-500 ml-2">
+                                  <svg
+                                    aria-hidden
+                                    xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24"
+                                    fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"
+                                    className="shrink-0 text-zinc-600"
+                                  >
+                                    <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
+                                    <circle cx="12" cy="10" r="3" />
+                                  </svg>
+                                  {t.location}
+                                </span>
+                              )}
                               {kids.length > 0 && (
                                 <ul className="mt-1 ml-4 space-y-0.5">
                                   {kids.map((k) => (
@@ -727,7 +771,8 @@ export default async function PortalPage({
                             </li>
                           )
                         })}
-                      </ul>
+                        </ul>
+                      </div>
                     )}
                   </div>
                 )
