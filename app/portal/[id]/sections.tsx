@@ -32,8 +32,15 @@ export const SECTION_ICON: Record<SectionKey, React.ReactElement> = {
   schedule: (
     <path d="M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z" />
   ),
+  // The open book, matching the one that heads a schedule day's topics. Two
+  // books differing only in being open or closed doesn't read as a
+  // distinction — it reads as a mistake. Same idea, same glyph; where you
+  // meet it says which one you're looking at.
   curriculum: (
-    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z" />
+    <>
+      <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+      <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
+    </>
   ),
   equipment: (
     <path d="M6 2h12l-1 7H7L6 2ZM7 9h10l1.5 11a2 2 0 0 1-2 2h-9a2 2 0 0 1-2-2L7 9ZM10 13h4" />
