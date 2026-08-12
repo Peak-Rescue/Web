@@ -711,10 +711,11 @@ export default async function PortalPage({
                       </p>
                     )}
                     {d.notes && <p className="text-xs text-zinc-500 mt-0.5">{d.notes}</p>}
-                    {/* The pin says where; this says what's being taught.
-                        One glyph for the whole list, in the same gutter as the
-                        pin — fourteen of them down the column would drown the
-                        dots that carry the structure. */}
+                    {/* The pin says where; the open book says what's being
+                        taught. One glyph for the whole list, in the same gutter
+                        as the pin — one per topic would drown the dots that
+                        carry the structure, and every topic is teaching
+                        content anyway, so marking them all says nothing. */}
                     {topics.length > 0 && (
                       <div className="flex gap-1.5 mt-2.5">
                         <svg
@@ -723,8 +724,8 @@ export default async function PortalPage({
                           fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"
                           className="shrink-0 mt-[5px] text-zinc-600"
                         >
-                          <path d="M22 9 12 5 2 9l10 4 10-4Z" />
-                          <path d="M6 11v5c0 1.1 2.7 2 6 2s6-.9 6-2v-5" />
+                          <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+                          <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
                         </svg>
                         <ul className="flex-1 min-w-0 space-y-1.5">
                         {topics.map((t) => {
