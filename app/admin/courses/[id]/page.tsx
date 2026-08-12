@@ -795,10 +795,30 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
 
         {/* ── Content modules ──────────────────────────────────────── */}
         <TabPanel id="gear">
-          <h2 className="text-lg font-semibold mb-1">Gear</h2>
-          <p className="text-xs text-zinc-500 mb-4">
-            Built from the gear catalog and shown on the course.
-          </p>
+          {/* The catalog is what every list here is built out of, so getting to
+              it can't be behind opening an add panel first — fixing a badly
+              named type is usually why you go, not adding a row. It opens in
+              its own tab so a half-built list survives the trip. */}
+          <div className="flex items-start gap-3 mb-4">
+            <div className="min-w-0 flex-1">
+              <h2 className="text-lg font-semibold mb-1">Gear</h2>
+              <p className="text-xs text-zinc-500">
+                Built from the gear catalog and shown on the course.
+              </p>
+            </div>
+            <a
+              href="/admin/gear"
+              target="_blank"
+              rel="noreferrer"
+              title="Rename, merge or retire items — opens in a new tab"
+              className="shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded border border-zinc-700 text-xs text-zinc-400 hover:text-white hover:border-zinc-500 hover:bg-zinc-800/60 transition-colors"
+            >
+              Gear catalog
+              <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M15 3h6v6M10 14 21 3M21 14v7H3V3h7" />
+              </svg>
+            </a>
+          </div>
           <CourseGear
             instanceId={id}
             courseType={courseType}
