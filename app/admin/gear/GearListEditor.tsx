@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { useSteadyRefresh } from '@/components/useSteadyRefresh'
 import { GEAR_CATEGORIES, matchesGear, placeChoices, productName, unwrap, type CatalogItem } from '@/lib/gear'
 import {
@@ -8,7 +8,6 @@ import {
   saveGearListIntoTemplate, setGearEntryOptions, upsertGearItem, renameGearSection,
   removeGearSection, ungroupGearSection, moveGearEntry,
   setGearChoiceLabel, ungroupGearChoice, removeGearChoiceBranch, wrapGearEntryInChoice,
-  addGearEntryAlongside,
 } from './actions'
 
 export type GearTemplateOption = { id: string; name: string; audience: string; entries: number }
@@ -39,6 +38,8 @@ export type GearEntry = {
   // The heading over the alternatives. Optional, and carried on every row of
   // the choice because there is no row for the choice itself.
   option_label?: string | null
+  // How this line's products relate: any of them will do, or you need them all.
+  options_conjunction?: 'and' | 'or'
   gear_entry_options?: { gear_item_id: string; sort_order: number }[]
 }
 
@@ -295,7 +296,7 @@ export default function GearListEditor({
       note: null, url: null,
       section: target.section, group_type: target.gt, quantity: null,
       option_group: target.choice, option_branch: target.branch, option_label: target.label ?? null,
-      sort_order: sortOrder, gear_entry_options: [],
+      sort_order: sortOrder, options_conjunction: 'or', gear_entry_options: [],
     }
     apply((es) => [...es, temp], () => addGearEntry(list.id, {
       gearItemId: input.gearItemId, name: input.name,
@@ -902,11 +903,15 @@ function Row({
 
   // Recommendations are stored as the whole set, so every change to them is
   // "here is the new list of models" — drawn on the row before it is sent.
-  const setOptions = (ids: string[]) => apply(
+  const conj = e.options_conjunction ?? 'or'
+  const setOptions = (ids: string[], next: 'and' | 'or' = conj) => apply(
     (es) => es.map((x) => x.id === e.id
-      ? { ...x, gear_entry_options: ids.map((gear_item_id, i) => ({ gear_item_id, sort_order: i })) }
+      ? {
+          ...x, options_conjunction: next,
+          gear_entry_options: ids.map((gear_item_id, i) => ({ gear_item_id, sort_order: i })),
+        }
       : x),
-    () => setGearEntryOptions(e.id, ids, instanceId)
+    () => setGearEntryOptions(e.id, ids, instanceId, next)
   )
 
   return (
@@ -945,9 +950,27 @@ function Row({
             ) : (
               <span className="text-sm">{e.r.name}</span>
             )}
-            {/* No "× 1" beside the name: the quantity field on the right of
-                this row already holds it, and the same number in two places is
-                two things to keep in step for no gain. */}
+            {/* How many, next to what — not in a column at the far right of
+                the card. The number belongs to the item, and a row reads as one
+                unit only if everything it says about that item is in it. */}
+            <span className="inline-flex items-center text-zinc-600">
+              <span className="text-xs pr-0.5">×</span>
+              <input
+                defaultValue={e.quantity ?? ''}
+                onBlur={(ev) => {
+                  const v = ev.target.value
+                  if (v === (e.quantity ?? '')) return
+                  apply(
+                    (es) => es.map((x) => (x.id === e.id ? { ...x, quantity: v.trim() || null } : x)),
+                    () => updateGearEntry(e.id, { quantity: v }, instanceId)
+                  )
+                }}
+                placeholder="1"
+                aria-label="Quantity"
+                size={1}
+                className="w-14 bg-transparent border border-transparent rounded px-1 py-0.5 text-xs text-zinc-300 placeholder:text-zinc-700 hover:border-zinc-800 focus:border-zinc-600 focus:bg-zinc-900 focus:outline-none transition-colors"
+              />
+            </span>
             {!e.r.catalogItem && <span className="text-[10px] text-zinc-700">one-off</span>}
             {/* The generic-item counterpart of the + under the name, which
                 only ever adds a product. Turning a row you have already written
@@ -995,20 +1018,27 @@ function Row({
               work" — was wording stacked in front of the thing itself. */}
           {type && (
             <div className="flex flex-wrap items-center gap-1.5 mt-1">
-              {e.r.options.map((o) => (
-                <span
-                  key={o.id}
-                  className="inline-flex items-center gap-1.5 text-xs pl-2 pr-1.5 py-1 rounded border border-pr-red/60 bg-pr-red/10 text-white"
-                >
-                  {productName(o)}
-                  <button
-                    onClick={() => setOptions(e.r.options.filter((x) => x.id !== o.id).map((x) => x.id))}
-                    title={`Stop recommending the ${productName(o)}`}
-                    className="text-zinc-500 hover:text-red-400 transition-colors disabled:opacity-40"
-                  >
-                    ×
-                  </button>
-                </span>
+              {e.r.options.map((o, i) => (
+                <Fragment key={o.id}>
+                  {/* The operator is the point of the line. Two names side by
+                      side read equally well as "either" or "both", and which
+                      one it is decides what the student goes and buys. */}
+                  {i > 0 && (
+                    <span className="text-[10px] uppercase tracking-widest text-zinc-400 font-medium px-0.5">
+                      {conj}
+                    </span>
+                  )}
+                  <span className="inline-flex items-center gap-1.5 text-xs pl-2 pr-1.5 py-1 rounded border border-pr-red/60 bg-pr-red/10 text-white">
+                    {productName(o)}
+                    <button
+                      onClick={() => setOptions(e.r.options.filter((x) => x.id !== o.id).map((x) => x.id))}
+                      title={`Take the ${productName(o)} off this line`}
+                      className="text-zinc-500 hover:text-red-400 transition-colors disabled:opacity-40"
+                    >
+                      ×
+                    </button>
+                  </span>
+                </Fragment>
               ))}
               {/* Recommending nothing is a real answer — any model of the type
                   works — but it has to say so, or the line looks unfinished. */}
@@ -1022,7 +1052,7 @@ function Row({
                   editingOptions?.id === e.id && editingOptions.mode === 'and' ? null : { id: e.id, mode: 'and' }
                 )}
                 disabled={busy}
-                title="Another product you also need — added as its own line of this item"
+                title="Another product you also need, on this same line"
                 className={editingOptions?.id === e.id && editingOptions.mode === 'and'
                   ? `${PAIR_BTN} border-zinc-500 text-white bg-zinc-800`
                   : PAIR_BTN}
@@ -1061,19 +1091,6 @@ function Row({
             className="mt-1 w-full bg-transparent border border-transparent rounded px-1 py-0.5 text-[11px] text-zinc-500 placeholder:text-zinc-800 hover:border-zinc-800 focus:border-zinc-600 focus:bg-zinc-900 focus:text-zinc-300 focus:outline-none transition-colors"
           />
         </div>
-        <input
-          defaultValue={e.quantity ?? ''}
-          onBlur={(ev) => {
-            const v = ev.target.value
-            if (v === (e.quantity ?? '')) return
-            apply(
-              (es) => es.map((x) => (x.id === e.id ? { ...x, quantity: v.trim() || null } : x)),
-              () => updateGearEntry(e.id, { quantity: v }, instanceId)
-            )
-          }}
-          placeholder="qty"
-          className={`w-16 shrink-0 ${input}`}
-        />
         <button
           onClick={() => apply(
             (es) => es.filter((x) => x.id !== e.id),
@@ -1101,27 +1118,23 @@ function Row({
         const rest = e.r.models.filter((m) => !e.r.options.some((o) => o.id === m.id))
         // Picking an existing product. "Or" widens what satisfies this line;
         // "and" writes a second line of the same item with that product on it.
-        const pick = (id: string) => mode === 'or'
-          ? setOptions([...e.r.options.map((o) => o.id), id])
-          : run(async () => {
-              unwrap(((await addGearEntryAlongside(e.id, id, instanceId)) ?? {}) as object)
-              setEditingOptions(null)
-            })
+        // Both modes put the product on this line. The only difference is the
+        // word printed between it and what's already there.
+        const pick = (id: string) => setOptions([...e.r.options.map((o) => o.id), id], mode)
         // This one waits: the chip can't be drawn from a catalog that doesn't
         // have the product in it yet.
         const addNew = () => run(async () => {
           const { id } = unwrap(await upsertGearItem({
             name: newModel, brand: newBrand.trim() || null, category: type.category, parentId: type.id,
           }))
-          if (mode === 'or') await setGearEntryOptions(e.id, [...e.r.options.map((o) => o.id), id], instanceId)
-          else unwrap(((await addGearEntryAlongside(e.id, id, instanceId)) ?? {}) as object)
+          await setGearEntryOptions(e.id, [...e.r.options.map((o) => o.id), id], instanceId, mode)
           setNewModel(''); setNewBrand('')
         })
         return (
           <div className="mt-2 p-2 bg-zinc-900 rounded border border-zinc-800 space-y-2">
             <p className="text-[11px] text-zinc-500">
               {mode === 'and'
-                ? `Another product you also need. It goes on as its own line of ${type.name.toLowerCase()}, because the products on one line mean "any of these will do".`
+                ? 'Another product you also need — it joins this line, with “and” between them.'
                 : e.r.models.length === 0
                   ? `The catalog has no products of ${type.name.toLowerCase()} yet. Name the one you recommend.`
                   : rest.length > 0

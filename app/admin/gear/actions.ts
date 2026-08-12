@@ -357,15 +357,24 @@ export async function updateGearEntry(
   touch((data?.gear_lists as unknown as { instance_id: string | null } | null)?.instance_id)
 }
 
-// Which models satisfy this line. None means the entry stands as written; one
-// pins it; several read as "A or B" — the swiftwater list's "an ATC or Reverso
-// works great but the Camp OVO or Kong GiGi is more compact".
+// Which products this line names, and how they relate. None means the entry
+// stands as written; one pins it; several read as "A or B" when any will do, or
+// "A and B" when you need both — printed either way, because two names side by
+// side say neither.
 export async function setGearEntryOptions(
   entryId: string,
   gearItemIds: string[],
-  instanceId?: string | null
+  instanceId?: string | null,
+  conjunction?: 'and' | 'or'
 ) {
   const admin = await requireAdmin()
+  if (conjunction) {
+    const { error } = await admin
+      .from('gear_list_entries')
+      .update({ options_conjunction: conjunction })
+      .eq('id', entryId)
+    if (error) throw new Error(error.message)
+  }
   await admin.from('gear_entry_options').delete().eq('entry_id', entryId)
   const ids = [...new Set(gearItemIds)]
   if (ids.length) {
@@ -575,66 +584,6 @@ export async function setGearChoiceLabel(scope: ChoiceScope, label: string | nul
   await touchList(admin, scope.listId)
 }
 
-// Model-level AND: a second line of the same generic item, with a different
-// product pinned to it.
-//
-// The options on one entry are a disjunction — "any of these will do" — so two
-// products you both need cannot live on one row without that row meaning the
-// opposite of what it says. They are two lines, which is how the swiftwater
-// list already writes its locking carabiners: three rows of one type, each with
-// its own products and its own quantity.
-export async function addGearEntryAlongside(
-  entryId: string, gearItemId: string, instanceId?: string | null
-): Promise<{ id: string } | Failed> {
-  const admin = await requireAdmin()
-
-  const { data: src } = await admin
-    .from('gear_list_entries')
-    .select('list_id, gear_item_id, section, group_type, option_group, option_branch, option_label, sort_order')
-    .eq('id', entryId)
-    .single()
-  if (!src) return fail('That row is no longer on the list')
-
-  // Straight after the row it accompanies, so the pair reads as a pair. Every
-  // row below shuffles down to make room rather than the new one landing at the
-  // bottom of the section away from what it belongs with.
-  const { data: below } = await admin
-    .from('gear_list_entries')
-    .select('id, sort_order')
-    .eq('list_id', src.list_id)
-    .gt('sort_order', src.sort_order)
-  await Promise.all(
-    (below ?? []).map((r) =>
-      admin.from('gear_list_entries').update({ sort_order: r.sort_order + 1 }).eq('id', r.id)
-    )
-  )
-
-  const { data: added, error } = await admin
-    .from('gear_list_entries')
-    .insert({
-      list_id: src.list_id,
-      gear_item_id: src.gear_item_id,
-      section: src.section,
-      group_type: src.group_type,
-      option_group: src.option_group,
-      option_branch: src.option_branch,
-      option_label: src.option_label,
-      sort_order: src.sort_order + 1,
-    })
-    .select('id')
-    .single()
-  if (error) throw new Error(error.message)
-
-  const { error: e2 } = await admin
-    .from('gear_entry_options')
-    .insert({ entry_id: added.id, gear_item_id: gearItemId, sort_order: 0 })
-  if (e2) throw new Error(e2.message)
-
-  if (instanceId !== undefined) touch(instanceId)
-  else await touchList(admin, src.list_id)
-  return { id: added.id as string }
-}
-
 // Dissolve the choice and keep the gear. Every alternative becomes an ordinary
 // required row, which is the honest reading — the list no longer says one of
 // them will do, so it says bring them. Deleting the gear instead would throw
@@ -690,7 +639,7 @@ export async function removeGearEntry(id: string, instanceId?: string | null) {
 type Admin = ReturnType<typeof createAdminClient>
 
 const SOURCE_SELECT =
-  'name, audience, intro, gear_list_entries(gear_item_id, name, note, url, section, group_type, quantity, sort_order, option_group, option_branch, option_label, gear_entry_options(gear_item_id, sort_order))'
+  'name, audience, intro, gear_list_entries(gear_item_id, name, note, url, section, group_type, quantity, sort_order, option_group, option_branch, option_label, options_conjunction, gear_entry_options(gear_item_id, sort_order))'
 
 type OptionRow = { gear_item_id: string; sort_order: number }
 type EntryRow = Record<string, unknown> & { gear_entry_options: OptionRow[] }

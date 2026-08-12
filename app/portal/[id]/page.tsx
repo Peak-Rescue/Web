@@ -224,7 +224,7 @@ export default async function PortalPage({
   // ever see the student one.
   const { data: gearRows } = await admin
     .from('gear_lists')
-    .select('id, name, audience, intro, gear_list_entries(id, gear_item_id, name, note, url, section, group_type, quantity, sort_order, option_group, option_branch, option_label, gear_items(name, brand, url, category), gear_entry_options(sort_order, gear_items(name, brand)))')
+    .select('id, name, audience, intro, gear_list_entries(id, gear_item_id, name, note, url, section, group_type, quantity, sort_order, option_group, option_branch, option_label, options_conjunction, gear_items(name, brand, url, category), gear_entry_options(sort_order, gear_items(name, brand)))')
     .eq('instance_id', id)
   type GearRow = {
     id: string; name: string; audience: string; intro: string | null
@@ -232,6 +232,7 @@ export default async function PortalPage({
       id: string; gear_item_id: string | null; name: string | null; note: string | null; url: string | null
       section: string | null; group_type: 'personal' | 'group'; quantity: string | null; sort_order: number
       option_group: string | null; option_branch: number | null; option_label: string | null
+      options_conjunction: 'and' | 'or'
       gear_items: { name: string; brand: string | null; url: string | null; category: string | null } | null
       gear_entry_options: { sort_order: number; gear_items: { name: string; brand: string | null } | null }[]
     }[]
@@ -951,6 +952,7 @@ export default async function PortalPage({
 type GearLineEntry = {
   id: string; gear_item_id: string | null; name: string | null; note: string | null
   url: string | null; quantity: string | null
+  options_conjunction?: 'and' | 'or'
   gear_items: { name: string; brand: string | null; url: string | null } | null
   gear_entry_options: { sort_order: number; gear_items: { name: string; brand: string | null } | null }[]
 }
@@ -966,7 +968,8 @@ function GearLine({ e, modelsByType }: { e: GearLineEntry; modelsByType: Map<str
       .sort((a, b) => a.sort_order - b.sort_order)
       .map((o) => o.gear_items)
       .filter(Boolean)
-      .map((g) => ({ name: productName(g!) }))
+      .map((g) => ({ name: productName(g!) })),
+    e.options_conjunction ?? 'or'
   )
   // Nothing ticked means any model of the type will do — so list them rather
   // than leave the student with a category name and no idea what to buy.

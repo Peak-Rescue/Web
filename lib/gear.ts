@@ -163,17 +163,20 @@ export function placeChoices<T extends ChoiceFields>(rows: T[]): Placed<T>[] {
   return out
 }
 
-// How a line reads once the type, the chosen models and any per-list override
-// are resolved: "Descent device — Petzl Rig or Grigri".
+// How a line reads once the type, the chosen products and their relationship
+// are resolved: "Descent device — Petzl Rig or Grigri", or "and" when you need
+// both. The operator is printed rather than implied, because two names side by
+// side read equally well as either and the difference is what to go and buy.
 export function gearLabel(
   base: string,
-  options: { name: string }[]
+  options: { name: string }[],
+  conjunction: 'and' | 'or' = 'or'
 ): { title: string; detail: string | null } {
   if (options.length === 0) return { title: base, detail: null }
   const names = options.map((o) => o.name)
   const joined =
     names.length === 1
       ? names[0]
-      : `${names.slice(0, -1).join(', ')} or ${names[names.length - 1]}`
+      : `${names.slice(0, -1).join(', ')} ${conjunction} ${names[names.length - 1]}`
   return { title: base, detail: joined }
 }
