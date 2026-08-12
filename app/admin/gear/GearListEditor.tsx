@@ -7,7 +7,7 @@ import {
   addGearEntry, updateGearEntry, removeGearEntry, updateGearList, copyGearList,
   saveGearListIntoTemplate, setGearEntryOptions, upsertGearItem, renameGearSection,
   removeGearSection, ungroupGearSection, moveGearEntry,
-  renameGearChoice, ungroupGearChoice, removeGearChoiceBranch,
+  renameGearChoice, ungroupGearChoice, removeGearChoiceBranch, wrapGearEntryInChoice,
 } from './actions'
 
 export type GearTemplateOption = { id: string; name: string; audience: string; entries: number }
@@ -541,6 +541,7 @@ function SectionCard({
               onDragEnd={() => { s.setDrag(null); s.setOver(null) }}
               gap={gap(p.row.id)}
               apply={s.apply} instanceId={s.instanceId}
+              setAdding={s.setAdding} setChoiceDrafts={s.setChoiceDrafts}
               busy={s.busy} run={s.run} input={s.input}
             />
           ) : (
@@ -756,6 +757,7 @@ function ChoiceCard({
                       onDragEnd={() => { s.setDrag(null); s.setOver(null) }}
                       gap={gap(e.id)}
                       apply={s.apply} instanceId={s.instanceId}
+                      setAdding={s.setAdding} setChoiceDrafts={s.setChoiceDrafts}
                       busy={s.busy} run={s.run} input={s.input}
                     />
                   ))}
@@ -805,6 +807,7 @@ function ChoiceCard({
 function Row({
   e, editingOptions, setEditingOptions, dragging, isOver,
   onDragStart, onDragEnd, gap, apply, instanceId, busy, run, input,
+  setAdding, setChoiceDrafts,
 }: {
   e: GearEntry & { r: { name: string; note: string | null; url: string | null; section: string | null; catalogItem?: GearItem; options: GearItem[]; models: GearItem[] } }
   editingOptions: string | null
@@ -819,6 +822,8 @@ function Row({
   busy: boolean
   run: (fn: () => Promise<unknown>) => void
   input: string
+  setAdding: (key: string | null) => void
+  setChoiceDrafts: (fn: (xs: ChoiceDraft[]) => ChoiceDraft[]) => void
 }) {
   const row = useRef<HTMLDivElement>(null)
   const [newModel, setNewModel] = useState('')
@@ -831,6 +836,27 @@ function Row({
   // can carry recommendations. A row that already names one specific model, or
   // that was typed in as a one-off, has nothing to recommend under it.
   const type = e.r.catalogItem && !e.r.catalogItem.parent_id ? e.r.catalogItem : null
+
+  // This row becomes the first alternative, and the panel opens on the second
+  // so the next thing you do is name what it's an alternative to. The empty
+  // second alternative is a draft until something lands in it, the same as a
+  // section you have just named.
+  function makeChoice() {
+    const named = prompt(
+      'Name the choice — students read this as the heading over the alternatives:',
+      e.r.section ?? e.r.name
+    )?.trim()
+    if (!named) return
+    setChoiceDrafts((xs) => [
+      ...xs,
+      { gt: e.group_type, section: e.r.section, name: named, branches: [1] },
+    ])
+    setAdding(zoneKey({ gt: e.group_type, section: e.r.section, choice: named, branch: 1 }, 'end'))
+    apply(
+      (es) => es.map((x) => (x.id === e.id ? { ...x, option_group: named, option_branch: 0 } : x)),
+      async () => unwrap(((await wrapGearEntryInChoice(e.id, named, instanceId)) ?? {}) as object)
+    )
+  }
 
   // Recommendations are stored as the whole set, so every change to them is
   // "here is the new list of models" — drawn on the row before it is sent.
@@ -881,6 +907,25 @@ function Row({
                 this row already holds it, and the same number in two places is
                 two things to keep in step for no gain. */}
             {!e.r.catalogItem && <span className="text-[10px] text-zinc-700">one-off</span>}
+            {/* The generic-item counterpart of the + under the name, which
+                only ever adds a product. Turning a row you have already written
+                into one of two alternatives was otherwise a trip to "+ Choice"
+                and a drag — and you rarely know a row is an alternative until
+                you reach the thing it is an alternative to. Rows already inside
+                a choice don't get this: the block around them carries both
+                "another alternative" and "add to this one". */}
+            {!e.option_group && (
+              <button
+                onClick={makeChoice}
+                disabled={busy}
+                title="Offer something else instead of this — students bring one or the other"
+                className={`text-[11px] px-1.5 py-0.5 rounded border border-zinc-800 text-zinc-600 hover:text-white hover:border-zinc-600 transition-all disabled:opacity-40 ${
+                  dragging ? 'opacity-0' : 'opacity-0 group-hover:opacity-100 focus:opacity-100'
+                }`}
+              >
+                + or…
+              </button>
+            )}
           </div>
           {/* The products we point people at sit directly under the name,
               ahead of the description, because the model someone has to go and

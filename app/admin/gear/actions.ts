@@ -546,6 +546,47 @@ export async function renameGearChoice(scope: ChoiceScope, to: string): Promise<
   await touchList(admin, scope.listId)
 }
 
+// Turn a row that is simply required into the first alternative of a choice.
+//
+// The other way round from building a choice and dragging gear into it, and the
+// more common one: you write the list, and only on reaching the drysuit do you
+// realise the wetsuit above it was an alternative rather than a requirement.
+export async function wrapGearEntryInChoice(
+  entryId: string, name: string, instanceId?: string | null
+): Promise<Failed | void> {
+  const admin = await requireAdmin()
+  const next = name.trim().slice(0, 120)
+  if (!next) return fail('Give the choice a name')
+
+  const { data: row } = await admin
+    .from('gear_list_entries')
+    .select('list_id, section, group_type, option_group')
+    .eq('id', entryId)
+    .single()
+  if (!row) return fail('That row is no longer on the list')
+  if (row.option_group) return fail('That item is already one of a set of alternatives')
+
+  const scope: ChoiceScope = {
+    listId: row.list_id, groupType: row.group_type, section: row.section, name: next,
+  }
+  const f = scopeFilter(scope)
+  const probe = admin.from('gear_list_entries').select('id').match(f.match).limit(1)
+  const { data: clash } = await (f.section === null
+    ? probe.is('section', null)
+    : probe.eq('section', f.section))
+  if (clash?.length) return fail(`This section already has a choice called "${next}"`)
+
+  // Branch 0, because it is the alternative that was already written down and
+  // so the one that reads first.
+  const { error } = await admin
+    .from('gear_list_entries')
+    .update({ option_group: next, option_branch: 0 })
+    .eq('id', entryId)
+  if (error) throw new Error(error.message)
+  if (instanceId !== undefined) return touch(instanceId)
+  await touchList(admin, row.list_id)
+}
+
 // Dissolve the choice and keep the gear. Every alternative becomes an ordinary
 // required row, which is the honest reading — the list no longer says one of
 // them will do, so it says bring them. Deleting the gear instead would throw
