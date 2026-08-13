@@ -6,8 +6,12 @@ import { useLiveCoaPrices } from '@/lib/live-coa-prices'
 
 export type QuoteOptionField = { estimate_id?: string | null; title: string; total: number }
 
-const inputCls = 'w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500'
+const inputBase = 'w-full bg-zinc-800 border rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500'
+const inputCls = `${inputBase} border-zinc-700`
+// A price that no longer matches its COA — the one state worth a colour.
+const staleInputCls = `${inputBase} border-yellow-700`
 const labelCls = 'block text-xs text-zinc-400 mb-1'
+const staleLinkCls = 'text-xs text-yellow-300 hover:text-yellow-200 underline transition-colors'
 
 // The price fields of a draft quote, plus the button that re-pulls the COA's
 // current price. A quote's total is a snapshot taken at creation — it has to
@@ -16,6 +20,9 @@ const labelCls = 'block text-xs text-zinc-400 mb-1'
 // the number. It only touches the input; the surrounding form still saves,
 // so pulling a price never discards the other edits in flight. The price it
 // offers comes from the COA's panel as it's typed, not from the last save.
+//
+// Nothing to pull, nothing to show: the button appears only while the two
+// numbers disagree, so it never offers an action that would change nothing.
 export default function QuoteTotalFields({
   total,
   options,
@@ -38,7 +45,6 @@ export default function QuoteTotalFields({
   if (options) {
     // Each option is a different COA, so "update" means re-pulling each one
     // that still exists. Options whose COA was deleted keep their number.
-    const pullable = options.filter((o) => priceOf(o.estimate_id) !== undefined)
     const staleAt = options.map((o, i) => {
       const p = priceOf(o.estimate_id)
       return p !== undefined && p !== Number(optionValues[i])
@@ -59,13 +65,13 @@ export default function QuoteTotalFields({
                 min="0"
                 value={optionValues[i]}
                 onChange={(e) => setOptionValues((v) => v.map((x, j) => (j === i ? e.target.value : x)))}
-                className={`${inputCls} basis-32 shrink-0 text-right ${staleAt[i] ? 'border-yellow-700' : ''}`}
+                className={`${staleAt[i] ? staleInputCls : inputCls} basis-32 shrink-0 text-right`}
                 title={staleAt[i] ? `Its COA now quotes ${fmtMoney(priceOf(o.estimate_id)!)}` : undefined}
               />
             </div>
           ))}
         </div>
-        {pullable.length > 0 && (
+        {stale && (
           <button
             type="button"
             onClick={() =>
@@ -76,11 +82,9 @@ export default function QuoteTotalFields({
                 })
               )
             }
-            className={`mt-2 text-xs underline transition-colors ${
-              stale ? 'text-yellow-300 hover:text-yellow-200' : 'text-zinc-400 hover:text-white'
-            }`}
+            className={`${staleLinkCls} mt-2`}
           >
-            {stale ? 'The estimates have moved — update prices' : 'Update prices from estimates'}
+            The estimates have moved — update prices
           </button>
         )}
       </div>
@@ -99,17 +103,11 @@ export default function QuoteTotalFields({
         min="0"
         value={totalValue}
         onChange={(e) => setTotalValue(e.target.value)}
-        className={`${inputCls} ${stale ? 'border-yellow-700' : ''}`}
+        className={stale ? staleInputCls : inputCls}
       />
-      {current !== undefined && (
-        <button
-          type="button"
-          onClick={() => setTotalValue(String(current))}
-          className={`mt-1 text-xs underline transition-colors ${
-            stale ? 'text-yellow-300 hover:text-yellow-200' : 'text-zinc-400 hover:text-white'
-          }`}
-        >
-          {stale ? `Estimate says ${fmtMoney(current)} — update` : 'Update from estimate'}
+      {stale && (
+        <button type="button" onClick={() => setTotalValue(String(current))} className={`mt-1 ${staleLinkCls}`}>
+          Estimate says {fmtMoney(current!)} — update
         </button>
       )}
     </div>
