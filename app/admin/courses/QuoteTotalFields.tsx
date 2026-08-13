@@ -39,10 +39,11 @@ export default function QuoteTotalFields({
     // Each option is a different COA, so "update" means re-pulling each one
     // that still exists. Options whose COA was deleted keep their number.
     const pullable = options.filter((o) => priceOf(o.estimate_id) !== undefined)
-    const stale = options.some((o, i) => {
+    const staleAt = options.map((o, i) => {
       const p = priceOf(o.estimate_id)
       return p !== undefined && p !== Number(optionValues[i])
     })
+    const stale = staleAt.some(Boolean)
     return (
       <div className="sm:col-span-3">
         <label className={labelCls}>Options (client picks one or more when accepting)</label>
@@ -58,7 +59,8 @@ export default function QuoteTotalFields({
                 min="0"
                 value={optionValues[i]}
                 onChange={(e) => setOptionValues((v) => v.map((x, j) => (j === i ? e.target.value : x)))}
-                className={`${inputCls} basis-32 shrink-0 text-right`}
+                className={`${inputCls} basis-32 shrink-0 text-right ${staleAt[i] ? 'border-yellow-700' : ''}`}
+                title={staleAt[i] ? `Its COA now quotes ${fmtMoney(priceOf(o.estimate_id)!)}` : undefined}
               />
             </div>
           ))}
@@ -74,9 +76,11 @@ export default function QuoteTotalFields({
                 })
               )
             }
-            className="mt-2 text-xs text-zinc-400 hover:text-white underline transition-colors"
+            className={`mt-2 text-xs underline transition-colors ${
+              stale ? 'text-yellow-300 hover:text-yellow-200' : 'text-zinc-400 hover:text-white'
+            }`}
           >
-            Update prices from estimates{stale ? ' (they have changed)' : ''}
+            {stale ? 'The estimates have moved — update prices' : 'Update prices from estimates'}
           </button>
         )}
       </div>
@@ -84,6 +88,7 @@ export default function QuoteTotalFields({
   }
 
   const current = priceOf(estimateId)
+  const stale = current !== undefined && current !== Number(totalValue)
   return (
     <div>
       <label className={labelCls}>Total price (USD)</label>
@@ -94,16 +99,17 @@ export default function QuoteTotalFields({
         min="0"
         value={totalValue}
         onChange={(e) => setTotalValue(e.target.value)}
-        className={inputCls}
+        className={`${inputCls} ${stale ? 'border-yellow-700' : ''}`}
       />
       {current !== undefined && (
         <button
           type="button"
           onClick={() => setTotalValue(String(current))}
-          className="mt-1 text-xs text-zinc-400 hover:text-white underline transition-colors"
+          className={`mt-1 text-xs underline transition-colors ${
+            stale ? 'text-yellow-300 hover:text-yellow-200' : 'text-zinc-400 hover:text-white'
+          }`}
         >
-          Update from estimate
-          {current !== Number(totalValue) && <span className="ml-1 text-zinc-500">({fmtMoney(current)})</span>}
+          {stale ? `Estimate says ${fmtMoney(current)} — update` : 'Update from estimate'}
         </button>
       )}
     </div>
