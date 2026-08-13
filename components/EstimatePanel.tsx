@@ -1,8 +1,9 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { fmtMoney, round2 } from '@/lib/expenses'
 import { impliedMargin } from '@/lib/estimates'
+import { publishCoaPrice, retractCoaPrice } from '@/lib/live-coa-prices'
 import { saveEstimate, deleteEstimateCoa, type EstimateItemInput } from '@/app/admin/courses/finance-actions'
 import { useRouter } from 'next/navigation'
 import { CalculatorIcon, NotesIcon } from '@/components/TaskIcons'
@@ -354,6 +355,16 @@ export default function EstimatePanel({
   const overridden = override.trim() !== '' && Number.isFinite(Number(override))
   const quotePrice = overridden ? round2(Number(override)) : calculated
   const realMargin = overridden ? impliedMargin(subtotal, quotePrice) : null
+
+  // Tell the quote fields what this COA costs as it's typed, so pulling a
+  // price never waits on the save + revalidate round trip.
+  useEffect(() => {
+    if (persistedId) publishCoaPrice(persistedId, quotePrice)
+  }, [persistedId, quotePrice])
+  useEffect(() => {
+    if (!persistedId) return
+    return () => retractCoaPrice(persistedId)
+  }, [persistedId])
 
   const inputCls = 'bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-zinc-500'
 

@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { fmtMoney } from '@/lib/expenses'
+import { useLiveCoaPrices } from '@/lib/live-coa-prices'
 
 export type QuoteOptionField = { estimate_id?: string | null; title: string; total: number }
 
@@ -13,7 +14,8 @@ const labelCls = 'block text-xs text-zinc-400 mb-1'
 // be, or editing a COA would silently change a quote already sent — so this
 // is how a draft catches up after the estimate moves or after you type over
 // the number. It only touches the input; the surrounding form still saves,
-// so pulling a price never discards the other edits in flight.
+// so pulling a price never discards the other edits in flight. The price it
+// offers comes from the COA's panel as it's typed, not from the last save.
 export default function QuoteTotalFields({
   total,
   options,
@@ -23,18 +25,24 @@ export default function QuoteTotalFields({
   total: number
   options: QuoteOptionField[] | null
   estimateId: string | null
-  coaPrices: Record<string, number> // live price of every COA still on the course
+  coaPrices: Record<string, number> // server snapshot: every COA still on the course
 }) {
   const [totalValue, setTotalValue] = useState(String(total))
   const [optionValues, setOptionValues] = useState(() => (options ?? []).map((o) => String(o.total)))
+  // A mounted panel knows its price before the server does; fall back to the
+  // server's for COAs that aren't on screen.
+  const livePrices = useLiveCoaPrices()
+  const priceOf = (id: string | null | undefined): number | undefined =>
+    id ? livePrices[id] ?? coaPrices[id] : undefined
 
   if (options) {
     // Each option is a different COA, so "update" means re-pulling each one
     // that still exists. Options whose COA was deleted keep their number.
-    const pullable = options.filter((o) => o.estimate_id && coaPrices[o.estimate_id] !== undefined)
-    const stale = options.some(
-      (o, i) => o.estimate_id && coaPrices[o.estimate_id] !== undefined && coaPrices[o.estimate_id] !== Number(optionValues[i])
-    )
+    const pullable = options.filter((o) => priceOf(o.estimate_id) !== undefined)
+    const stale = options.some((o, i) => {
+      const p = priceOf(o.estimate_id)
+      return p !== undefined && p !== Number(optionValues[i])
+    })
     return (
       <div className="sm:col-span-3">
         <label className={labelCls}>Options (client picks one or more when accepting)</label>
@@ -61,8 +69,8 @@ export default function QuoteTotalFields({
             onClick={() =>
               setOptionValues((v) =>
                 v.map((x, i) => {
-                  const id = options[i].estimate_id
-                  return id && coaPrices[id] !== undefined ? String(coaPrices[id]) : x
+                  const p = priceOf(options[i].estimate_id)
+                  return p !== undefined ? String(p) : x
                 })
               )
             }
@@ -75,7 +83,7 @@ export default function QuoteTotalFields({
     )
   }
 
-  const current = estimateId ? coaPrices[estimateId] : undefined
+  const current = priceOf(estimateId)
   return (
     <div>
       <label className={labelCls}>Total price (USD)</label>
