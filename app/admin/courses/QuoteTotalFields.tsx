@@ -84,7 +84,7 @@ export default function QuoteTotalFields({
             }
             className={`${staleLinkCls} mt-2`}
           >
-            The estimates have moved — update prices
+            Update prices from estimates
           </button>
         )}
       </div>
@@ -107,7 +107,7 @@ export default function QuoteTotalFields({
       />
       {stale && (
         <button type="button" onClick={() => setTotalValue(String(current))} className={`mt-1 ${staleLinkCls}`}>
-          Estimate says {fmtMoney(current!)} — update
+          Update to {fmtMoney(current!)}
         </button>
       )}
     </div>
