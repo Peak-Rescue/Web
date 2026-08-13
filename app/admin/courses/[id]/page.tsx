@@ -17,7 +17,7 @@ import CoaComparison from '../CoaComparison'
 import QuoteHeroPicker from '../QuoteHeroPicker'
 import { HERO_CHOICES } from '@/lib/quote-heroes'
 import NewCoaMenu, { type CopySource } from '../NewCoaMenu'
-import { guessSeedQty } from '@/lib/estimates'
+import { guessSeedQty, coaPrice } from '@/lib/estimates'
 import { EstimateReviewBanner, EstimateReviewRequest, type EstimateReviewRow } from '../EstimateReviewBar'
 import QuotesSection, { type QuoteRow } from '../QuotesSection'
 import CourseContactsEditor from '@/components/CourseContactsEditor'
@@ -119,14 +119,14 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
     loadTasksWithDocs(admin, id),
     admin.from('profiles').select('id, first_name, last_name, email, role').in('role', ['admin', 'instructor']).order('first_name'),
     admin.from('profiles').select('id, first_name, last_name, email').eq('role', 'admin').order('first_name'),
-    admin.from('course_estimates').select('id, title, margin, created_at, estimate_items(label, qty, rate, notes, qty_factors, rate_id, sort_order)').eq('instance_id', id).order('created_at'),
+    admin.from('course_estimates').select('id, title, margin, price_override, created_at, estimate_items(label, qty, rate, notes, qty_factors, rate_id, sort_order)').eq('instance_id', id).order('created_at'),
     admin.from('pricing_rates').select('id, label, unit, rate, default_line').eq('active', true).order('sort_order'),
-    admin.from('course_quotes').select('id, accept_token, prepared_by, prepared_by_name, quote_seq, status, issue_date, valid_until, total, options, unit_rate_note, scope_bullets, course_blurb, sent_at, accepted_at, accepted_name').eq('instance_id', id).order('quote_seq', { ascending: false }),
+    admin.from('course_quotes').select('id, accept_token, estimate_id, prepared_by, prepared_by_name, quote_seq, status, issue_date, valid_until, total, options, unit_rate_note, scope_bullets, course_blurb, sent_at, accepted_at, accepted_name').eq('instance_id', id).order('quote_seq', { ascending: false }),
     // Copy-picker sources: the recent pool for browsing, plus same-type and
     // same-client courses from any age — relevance shouldn't fall off the
     // recency cap as the course list grows.
     (async () => {
-      const sel = 'id, ref_number, course_type, custom_title, client_name, starts_at, course_estimates(id, title, margin, created_at, estimate_items(qty, rate))'
+      const sel = 'id, ref_number, course_type, custom_title, client_name, starts_at, course_estimates(id, title, margin, price_override, created_at, estimate_items(qty, rate))'
       const sourceQuery = () =>
         admin.from('course_instances').select(sel).neq('id', id).order('starts_at', { ascending: false, nullsFirst: false })
       const client = ((inst.client_name as string | null) ?? '').trim()
@@ -226,7 +226,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
   const quotes: QuoteRow[] = (quoteRows ?? []).map((q) => ({ ...q, total: Number(q.total) }))
   // Copy-picker sources: each course's COAs with their quote prices, plus the
   // relevance flags the picker groups by (same type first, then same client).
-  type SourceEstimate = { id: string; title: string; margin: number; created_at: string; estimate_items: { qty: number; rate: number }[] }
+  type SourceEstimate = { id: string; title: string; margin: number; price_override: number | null; created_at: string; estimate_items: { qty: number; rate: number }[] }
   const currentClient = ((inst.client_name as string | null) ?? '').trim().toLowerCase()
   const copySources: CopySource[] = (estimateSourceRows ?? [])
     .map((s) => ({
@@ -246,7 +246,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
           id: e.id,
           title: e.title,
           price: Math.round(
-            (e.estimate_items ?? []).reduce((t, i) => t + Number(i.qty) * Number(i.rate), 0) * (1 + Number(e.margin))
+            coaPrice({ margin: e.margin, price_override: e.price_override, items: e.estimate_items ?? [] })
           ),
         })),
     }))
@@ -265,6 +265,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
     id: e.id as string | null,
     title: e.title as string,
     margin: Number(e.margin),
+    priceOverride: e.price_override === null ? null : Number(e.price_override),
     items: ((e.estimate_items ?? []) as EstimateItemRow[])
       .sort((a, b) => a.sort_order - b.sort_order)
       .map((i) => ({
@@ -300,6 +301,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
       id: null,
       title: 'COA 1',
       margin: 0.25,
+      priceOverride: null,
       items: (pricingRateRows ?? [])
         .filter((r) => r.default_line)
         .map((r) => {
@@ -975,6 +977,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
                 estimateId={e.id}
                 initialTitle={e.title}
                 initialMargin={e.margin}
+                initialPriceOverride={e.priceOverride}
                 initialItems={e.items}
                 rates={pricingRates}
                 canDelete={estimatePanels.length > 1}
@@ -1014,7 +1017,13 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
             contactEmail={primaryContactEmail(contacts)}
             ccOptions={ccEmailOptions(contacts)}
             people={quotePeople}
-            estimates={estimatePanels.filter((e) => e.id).map((e) => ({ id: e.id!, title: e.title }))}
+            estimates={estimatePanels
+              .filter((e) => e.id)
+              .map((e) => ({
+                id: e.id!,
+                title: e.title,
+                price: coaPrice({ margin: e.margin, price_override: e.priceOverride, items: e.items }),
+              }))}
           />
           </div>
         </TabPanel>

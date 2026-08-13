@@ -2,6 +2,7 @@
 
 import { useRef, useState } from 'react'
 import { fmtMoney, round2 } from '@/lib/expenses'
+import { impliedMargin } from '@/lib/estimates'
 import { saveEstimate, deleteEstimateCoa, type EstimateItemInput } from '@/app/admin/courses/finance-actions'
 import { useRouter } from 'next/navigation'
 import { CalculatorIcon, NotesIcon } from '@/components/TaskIcons'
@@ -46,6 +47,7 @@ export default function EstimatePanel({
   estimateId,
   initialTitle,
   initialMargin,
+  initialPriceOverride,
   initialItems,
   rates,
   canDelete,
@@ -56,6 +58,7 @@ export default function EstimatePanel({
   estimateId: string | null // null = not yet persisted (first COA, untouched)
   initialTitle: string
   initialMargin: number
+  initialPriceOverride: number | null // hand-set price; null = use the calculated one
   initialItems: { label: string; qty: number; rate: number; notes: string | null; factors: number[] | null; factor_labels: (string | null)[] | null; rate_id: string | null }[]
   rates: PricingRate[]
   canDelete: boolean
@@ -85,8 +88,11 @@ export default function EstimatePanel({
   )
   const [calcOpen, setCalcOpen] = useState<Set<number>>(new Set())
   const [margin, setMargin] = useState(initialMargin)
+  // Held as a string so the field can be empty — empty means "no override,
+  // use the calculated price", which is different from an override of $0.
+  const [override, setOverride] = useState(initialPriceOverride === null ? '' : String(initialPriceOverride))
   const [status, setStatus] = useState<'idle' | 'pending' | 'saving' | 'saved' | 'error'>('idle')
-  const stateRef = useRef({ rows, margin, title: initialTitle })
+  const stateRef = useRef({ rows, margin, title: initialTitle, override })
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const saving = useRef(false)
   const rerun = useRef(false)
@@ -110,11 +116,17 @@ export default function EstimatePanel({
     },
   })
 
-  function schedule(nextRows: Row[], nextMargin: number, nextTitle?: string) {
+  function schedule(nextRows: Row[], nextMargin: number, nextTitle?: string, nextOverride?: string) {
     setRows(nextRows)
     setMargin(nextMargin)
     if (nextTitle !== undefined) setTitle(nextTitle)
-    stateRef.current = { rows: nextRows, margin: nextMargin, title: nextTitle ?? stateRef.current.title }
+    if (nextOverride !== undefined) setOverride(nextOverride)
+    stateRef.current = {
+      rows: nextRows,
+      margin: nextMargin,
+      title: nextTitle ?? stateRef.current.title,
+      override: nextOverride ?? stateRef.current.override,
+    }
     setStatus('pending')
     if (timer.current) clearTimeout(timer.current)
     timer.current = setTimeout(() => void flush(), SAVE_DEBOUNCE_MS)
@@ -132,7 +144,7 @@ export default function EstimatePanel({
     saving.current = true
     setStatus('saving')
     try {
-      const { rows: r, margin: m, title: t } = stateRef.current
+      const { rows: r, margin: m, title: t, override: o } = stateRef.current
       const items: EstimateItemInput[] = r
         .filter((row) => row.label.trim())
         .map((row) => {
@@ -148,7 +160,15 @@ export default function EstimatePanel({
             rate_id: row.rateId,
           }
         })
-      const saved = await withSaveTimeout(saveEstimate(instanceId, estimateIdRef.current, { title: t, margin: m, items }))
+      const priceOverride = o.trim() === '' ? null : Number(o)
+      const saved = await withSaveTimeout(
+        saveEstimate(instanceId, estimateIdRef.current, {
+          title: t,
+          margin: m,
+          priceOverride: priceOverride !== null && Number.isFinite(priceOverride) ? priceOverride : null,
+          items,
+        })
+      )
       estimateIdRef.current = saved.id
       setPersistedId(saved.id)
       setStatus('saved')
@@ -328,7 +348,12 @@ export default function EstimatePanel({
 
   const subtotal = round2(rows.reduce((s, r) => s + (Number(r.qty) || 0) * (Number(r.rate) || 0), 0))
   const marginAmount = round2(subtotal * margin)
-  const quotePrice = round2(subtotal + marginAmount)
+  const calculated = round2(subtotal + marginAmount)
+  // What this COA actually quotes at, and — when that's a hand-set number —
+  // the margin it really implies, so overriding can't hide what it did.
+  const overridden = override.trim() !== '' && Number.isFinite(Number(override))
+  const quotePrice = overridden ? round2(Number(override)) : calculated
+  const realMargin = overridden ? impliedMargin(subtotal, quotePrice) : null
 
   const inputCls = 'bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-zinc-500'
 
@@ -563,7 +588,28 @@ export default function EstimatePanel({
           <div className="text-right text-sm space-y-0.5">
             <p className="text-zinc-400">Cost: {fmtMoney(subtotal)}</p>
             <p className="text-zinc-400">Margin ({Math.round(margin * 100)}%): {fmtMoney(marginAmount)}</p>
-            <p className="text-base font-semibold">Quote price: {fmtMoney(quotePrice)}</p>
+            <p className={overridden ? 'text-zinc-500' : 'text-base font-semibold'}>
+              Calculated: {fmtMoney(calculated)}
+            </p>
+            <div className="flex items-center justify-end gap-1.5 pt-0.5">
+              <span className="text-xs text-zinc-400">Quote price</span>
+              <span className="text-zinc-600 text-xs">$</span>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={override}
+                onChange={(e) => schedule(rows, margin, undefined, e.target.value)}
+                placeholder={String(calculated)}
+                title="Set the price by hand — leave empty to quote the calculated number"
+                className={`${inputCls} w-28 text-right ${overridden ? 'font-semibold' : 'placeholder:text-zinc-500'}`}
+              />
+            </div>
+            {overridden && (
+              <p className="text-[10px] text-zinc-500">
+                set by hand{realMargin !== null ? ` · ${Math.round(realMargin * 100)}% margin` : ''}
+              </p>
+            )}
           </div>
         </div>
       </div>

@@ -3,6 +3,29 @@
 // similar past one and by the "copy from previous course" action.
 
 import { type createAdminClient } from '@/lib/supabase/admin'
+import { round2 } from '@/lib/expenses'
+
+// The one place that answers "what does this COA quote at?" — the calculated
+// cost + margin, unless a hand-set price_override replaces it. The panel, the
+// COA comparison, the copy picker and quote creation all go through here, so
+// they can't drift into showing different numbers for the same COA.
+export function coaPrice(e: {
+  margin: number | null
+  price_override?: number | string | null
+  items: { qty: number; rate: number }[]
+}): number {
+  if (e.price_override !== null && e.price_override !== undefined) return round2(Number(e.price_override))
+  const subtotal = e.items.reduce((s, i) => s + (Number(i.qty) || 0) * (Number(i.rate) || 0), 0)
+  return round2(subtotal * (1 + Number(e.margin ?? 0.25)))
+}
+
+// The margin an overridden price actually implies, so setting one doesn't
+// silently hide what it did to the margin. Null when there is no cost to
+// measure against.
+export function impliedMargin(subtotal: number, price: number): number | null {
+  if (subtotal <= 0) return null
+  return price / subtotal - 1
+}
 
 // Quantity guess for a seeded default estimate line, derived from the rate's
 // unit ("per person", "per student per day") the same way the panel's library

@@ -1,15 +1,17 @@
 import SaveButton from '@/components/SaveButton'
 import { createQuote, updateQuote, setQuoteStatus, deleteQuote, sendQuote } from './finance-actions'
+import QuoteTotalFields from './QuoteTotalFields'
 import { quoteNumber } from '@/lib/quotes'
 import { fmtMoney } from '@/lib/expenses'
 
 export type QuotePerson = { id: string; name: string; email: string | null }
 
-export type QuoteOption = { title: string; total: number; chosen?: boolean }
+export type QuoteOption = { estimate_id?: string | null; title: string; total: number; chosen?: boolean }
 
 export type QuoteRow = {
   id: string
   accept_token: string
+  estimate_id: string | null
   prepared_by: string | null
   prepared_by_name: string | null
   quote_seq: number
@@ -59,8 +61,11 @@ export default function QuotesSection({
   contactEmail: string | null
   ccOptions: string[]
   people: QuotePerson[]
-  estimates: { id: string; title: string }[]
+  estimates: { id: string; title: string; price: number }[]
 }) {
+  // Current price of every COA on the course, for the "update from estimate"
+  // buttons on draft quotes.
+  const coaPrices = Object.fromEntries(estimates.map((e) => [e.id, e.price]))
   return (
     <div>
       <div className="space-y-3">
@@ -156,25 +161,12 @@ export default function QuotesSection({
 
             {q.status === 'draft' && (
               <form action={updateQuote.bind(null, instanceId, q.id)} className="px-4 pb-4 grid sm:grid-cols-3 gap-3 border-t border-zinc-800 pt-3">
-                {q.options ? (
-                  <div className="sm:col-span-3">
-                    <label className={labelCls}>Options (client picks one or more when accepting)</label>
-                    <div className="space-y-2">
-                      {q.options.map((o, i) => (
-                        <div key={i} className="flex items-center gap-2">
-                          <input name={`opt_title_${i}`} defaultValue={o.title} className={`${inputCls} flex-1`} />
-                          <span className="text-zinc-600 text-xs">$</span>
-                          <input name={`opt_total_${i}`} type="number" step="0.01" min="0" defaultValue={o.total} className={`${inputCls} basis-32 shrink-0 text-right`} />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ) : (
-                  <div>
-                    <label className={labelCls}>Total price (USD)</label>
-                    <input name="total" type="number" step="0.01" min="0" defaultValue={q.total} className={inputCls} />
-                  </div>
-                )}
+                <QuoteTotalFields
+                  total={q.total}
+                  options={q.options}
+                  estimateId={q.estimate_id}
+                  coaPrices={coaPrices}
+                />
                 <div>
                   <label className={labelCls}>Valid through</label>
                   <input name="valid_until" type="date" defaultValue={q.valid_until ?? ''} className={inputCls} />
@@ -220,7 +212,7 @@ export default function QuotesSection({
         {estimates.length > 1 ? (
           <select name="estimate_id" className="bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm">
             {estimates.map((e) => (
-              <option key={e.id} value={e.id}>{e.title}</option>
+              <option key={e.id} value={e.id}>{e.title} — {fmtMoney(e.price)}</option>
             ))}
             <option value="__all__">All COAs as options — client picks</option>
           </select>

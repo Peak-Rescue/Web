@@ -1,4 +1,5 @@
 import { fmtMoney, round2 } from '@/lib/expenses'
+import { coaPrice } from '@/lib/estimates'
 
 // Side-by-side snapshot of every COA's bottom line — the at-a-glance view
 // for weighing options internally (server-rendered from saved estimates, so
@@ -6,12 +7,16 @@ import { fmtMoney, round2 } from '@/lib/expenses'
 export default function CoaComparison({
   coas,
 }: {
-  coas: { title: string; margin: number; items: { qty: number; rate: number }[] }[]
+  coas: { title: string; margin: number; priceOverride?: number | null; items: { qty: number; rate: number }[] }[]
 }) {
   const cols = coas.map((c) => {
     const cost = round2(c.items.reduce((s, i) => s + (Number(i.qty) || 0) * (Number(i.rate) || 0), 0))
     const marginAmount = round2(cost * c.margin)
-    return { title: c.title, margin: c.margin, cost, marginAmount, quote: round2(cost + marginAmount) }
+    // The quote row shows the price that would actually go out — a hand-set
+    // override included, since comparing calculated numbers against a COA
+    // that's been overridden would compare the wrong things.
+    const quote = coaPrice({ margin: c.margin, price_override: c.priceOverride ?? null, items: c.items })
+    return { title: c.title, margin: c.margin, cost, marginAmount, quote, overridden: c.priceOverride != null }
   })
 
   return (
@@ -43,7 +48,12 @@ export default function CoaComparison({
           <tr className="border-t border-zinc-800">
             <td className="px-4 py-2.5 text-xs text-zinc-400">Quote price</td>
             {cols.map((c, i) => (
-              <td key={i} className="px-4 py-2.5 text-right font-semibold">{fmtMoney(c.quote)}</td>
+              <td key={i} className="px-4 py-2.5 text-right font-semibold">
+                {c.overridden && (
+                  <span className="text-zinc-600 text-[10px] font-normal mr-1.5" title="Price set by hand">set</span>
+                )}
+                {fmtMoney(c.quote)}
+              </td>
             ))}
           </tr>
         </tbody>

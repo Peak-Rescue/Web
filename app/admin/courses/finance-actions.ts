@@ -6,7 +6,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { after } from 'next/server'
 import { syncCourseCalendar } from '@/lib/google-calendar'
 import { parseContacts, primaryContactEmail, ccEmailOptions } from '@/lib/contacts'
-import { guessSeedQty, type SeedCounts } from '@/lib/estimates'
+import { guessSeedQty, coaPrice, type SeedCounts } from '@/lib/estimates'
 
 async function requireAdmin() {
   const supabase = await createClient()
@@ -53,7 +53,7 @@ function cleanFactors(
 export async function saveEstimate(
   instanceId: string,
   estimateId: string | null,
-  input: { title: string; margin: number; items: EstimateItemInput[] }
+  input: { title: string; margin: number; priceOverride: number | null; items: EstimateItemInput[] }
 ): Promise<{ id: string }> {
   const admin = await requireAdmin()
   if (!Number.isFinite(input.margin) || input.margin < 0 || input.margin > 5) {
@@ -61,18 +61,25 @@ export async function saveEstimate(
   }
   const title = input.title.trim().slice(0, 80) || 'COA 1'
 
+  // null clears the override and hands pricing back to cost × (1 + margin).
+  const priceOverride =
+    input.priceOverride === null ? null : Math.round(Number(input.priceOverride) * 100) / 100
+  if (priceOverride !== null && (!Number.isFinite(priceOverride) || priceOverride < 0)) {
+    throw new Error('Quote price must be a non-negative number')
+  }
+
   let id = estimateId
   if (id) {
     const { error } = await admin
       .from('course_estimates')
-      .update({ margin: input.margin, title })
+      .update({ margin: input.margin, title, price_override: priceOverride })
       .eq('id', id)
       .eq('instance_id', instanceId)
     if (error) throw new Error(error.message)
   } else {
     const { data, error } = await admin
       .from('course_estimates')
-      .insert({ instance_id: instanceId, margin: input.margin, title })
+      .insert({ instance_id: instanceId, margin: input.margin, title, price_override: priceOverride })
       .select('id')
       .single()
     if (error || !data) throw new Error(error?.message ?? 'Could not save estimate')
@@ -145,7 +152,13 @@ async function seedDefaultCoa(admin: Awaited<ReturnType<typeof requireAdmin>>, i
   })
   if (rows.length > 0) await admin.from('estimate_items').insert(rows)
 
-  return { title: estimate.title as string, margin: estimate.margin as number | null, estimate_items: rows }
+  return {
+    id: estimate.id as string,
+    title: estimate.title as string,
+    margin: estimate.margin as number | null,
+    price_override: null,
+    estimate_items: rows,
+  }
 }
 
 // Adds another COA, seeded with the default-line rates (quantities guessed
@@ -407,7 +420,7 @@ export async function createQuote(instanceId: string, formData: FormData) {
   const allCoas = estimateId === '__all__'
   let estimateQuery = admin
     .from('course_estimates')
-    .select('title, margin, estimate_items(qty, rate)')
+    .select('id, title, margin, price_override, estimate_items(qty, rate)')
     .eq('instance_id', instanceId)
   if (allCoas) {
     estimateQuery = estimateQuery.order('created_at')
@@ -438,16 +451,18 @@ export async function createQuote(instanceId: string, formData: FormData) {
     estimate = await seedDefaultCoa(admin, instanceId)
   }
 
-  const quotePrice = (e: { margin: number | null; estimate_items: unknown } | null) => {
-    const items = (e?.estimate_items ?? []) as { qty: number; rate: number }[]
-    const subtotal = items.reduce((s, i) => s + Number(i.qty) * Number(i.rate), 0)
-    return Math.round(subtotal * (1 + Number(e?.margin ?? 0.25)) * 100) / 100
-  }
+  const quotePrice = (e: { margin: number | null; price_override: unknown; estimate_items: unknown } | null) =>
+    coaPrice({
+      margin: e?.margin ?? null,
+      price_override: (e?.price_override ?? null) as number | null,
+      items: (e?.estimate_items ?? []) as { qty: number; rate: number }[],
+    })
 
   // Multi-option: snapshot every COA as { title, total }; the quote's own
   // total stays 0 until the client picks (it becomes the sum of the chosen).
+  // estimate_id rides along so each option can be re-pulled from its COA.
   const options = allCoas
-    ? (estimates ?? []).map((e) => ({ title: e.title, total: quotePrice(e) }))
+    ? (estimates ?? []).map((e) => ({ estimate_id: e.id, title: e.title, total: quotePrice(e) }))
     : null
   if (allCoas && (options?.length ?? 0) < 2) throw new Error('Need at least two COAs for an options quote')
   const total = allCoas ? 0 : quotePrice(estimate)
@@ -474,6 +489,8 @@ export async function createQuote(instanceId: string, formData: FormData) {
     quote_seq: (lastQuote?.quote_seq ?? 0) + 1,
     total,
     options,
+    // Options quotes carry a COA per option instead of one for the quote.
+    estimate_id: allCoas ? null : estimate?.id ?? null,
     valid_until: validUntil.toISOString().slice(0, 10),
     scope_bullets: bullets,
     course_blurb: blurb,
