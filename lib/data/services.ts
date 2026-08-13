@@ -146,8 +146,8 @@ export const services: Service[] = [
   },
   {
     slug: 'water-mobility',
-    title: 'Water Mobility',
-    shortTitle: 'Water Mobility',
+    title: 'Swiftwater Mobility',
+    shortTitle: 'Swiftwater Mobility',
     category: 'tactical',
     heroImage: '/images/services/water-mobility.jpg',
     tagline: 'Expertise in aquatic and amphibious operations for military teams.',

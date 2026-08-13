@@ -41,13 +41,19 @@ export function computeBlocks(starts_at: string, ends_at: string, offDays: OffDa
 
 export { categoryMeta }
 
+// Six of the tactical offerings are "<terrain> Mobility", so the word is pure
+// repetition once you're inside the Tactical group — the terrain is the choice.
+// Only the grouped picker drops it; everywhere a course name stands on its own
+// (calendar events, staffing emails, quotes) keeps the full shortTitle.
+const pickerLabel = (shortTitle: string) => shortTitle.replace(/ Mobility$/, '')
+
 export const COURSE_TYPE_OPTIONS = [
   ...(['tactical', 'sar', 'industrial', 'specialty'] as ServiceCategory[]).map(cat => ({
     category: cat,
     label: categoryMeta[cat].label,
     options: services
       .filter(s => s.category === cat)
-      .map(s => ({ value: s.slug, label: s.shortTitle })),
+      .map(s => ({ value: s.slug, label: pickerLabel(s.shortTitle) })),
   })),
 ]
 
