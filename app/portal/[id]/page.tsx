@@ -906,17 +906,18 @@ export default async function PortalPage({
                                         jacket, the rope and the bag — so they
                                         share a box and say "and" between
                                         themselves. */}
-                                    <ul className="min-w-0 flex-1 border border-zinc-800/70 rounded">
+                                    {/* The slots of one line as blocks beside
+                                        each other, with the word that binds
+                                        them in the space they share. */}
+                                    <ul className="min-w-0 flex-1 flex flex-wrap items-stretch gap-2">
                                       {o.rows.map((e, ri) => (
                                         <React.Fragment key={e.id}>
                                           {ri > 0 && (
-                                            <li className="px-3 py-0.5 text-[10px] uppercase tracking-widest text-zinc-500 border-t border-zinc-800/70">
+                                            <span className="self-center shrink-0 text-[10px] uppercase tracking-widest text-zinc-500">
                                               and
-                                            </li>
+                                            </span>
                                           )}
-                                          <li className={ri > 0 ? 'border-t border-zinc-800/70' : ''}>
-                                            <ul><GearLine e={e} modelsByType={gearModelsByType} /></ul>
-                                          </li>
+                                          <GearLine e={e} modelsByType={gearModelsByType} card />
                                         </React.Fragment>
                                       ))}
                                     </ul>
@@ -956,7 +957,16 @@ type GearLineEntry = {
   gear_entry_options: { sort_order: number; gear_items: { name: string; brand: string | null } | null }[]
 }
 
-function GearLine({ e, modelsByType }: { e: GearLineEntry; modelsByType: Map<string, string[]> }) {
+function GearLine({
+  e, modelsByType, card,
+}: {
+  e: GearLineEntry
+  modelsByType: Map<string, string[]>
+  // A slot of a multi-slot line draws as a card, so the slots read as peers
+  // beside each other rather than as separate requirements stacked up. The
+  // operator between them is drawn by whatever holds them.
+  card?: boolean
+}) {
   const name = e.name ?? (e.gear_items ? productName(e.gear_items) : null) ?? 'Item'
   const url = e.url ?? e.gear_items?.url
   // "Descent device — Petzl Rig or Grigri" when the line accepts more than one
@@ -974,7 +984,10 @@ function GearLine({ e, modelsByType }: { e: GearLineEntry; modelsByType: Map<str
   const anyOf = detail ? null : (e.gear_item_id ? modelsByType.get(e.gear_item_id) : null) ?? null
 
   return (
-    <li className="px-3 py-2 text-sm">
+    <li className={card
+      ? 'flex-1 min-w-[13rem] rounded border border-zinc-800/70 bg-zinc-900/40 px-3 py-2 text-sm'
+      : 'px-3 py-2 text-sm'}
+    >
       <div className="flex items-center gap-2 flex-wrap">
         {url ? (
           <a href={url} target="_blank" rel="noreferrer" className="hover:text-pr-red-light transition-colors">{name}</a>

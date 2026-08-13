@@ -748,7 +748,9 @@ function ChoiceCard({
               <div className={`flex items-center gap-2 px-2.5 ${choice || empty ? 'pt-1.5' : 'hidden'}`}>
                 {/* Position, not a stored label: delete the first alternative
                     and the second has to become the one you read first. */}
-                <span className="text-[10px] uppercase tracking-widest text-zinc-500 font-medium">
+                <span className={`text-[10px] uppercase tracking-widest font-medium ${
+                  i === 0 ? 'text-zinc-500' : 'text-pr-red'
+                }`}>
                   {i === 0 ? 'Either' : 'Or'}
                 </span>
                 <span className="flex-1 h-px bg-zinc-800/70" />
@@ -781,21 +783,19 @@ function ChoiceCard({
                   Nothing in here yet — add the gear this alternative needs.
                 </p>
               ) : (
-                <div>
+                <div className="flex flex-wrap items-stretch gap-2 px-2.5 py-2">
                   {o.rows.map((e, ri) => (
                     <Fragment key={e.id}>
-                      {/* The relationship, between the things it relates. Two
-                          slots stacked with nothing between them read as two
-                          separate requirements, which is what this block
-                          exists to stop them being. */}
+                      {/* Between the blocks, not above one of them. The claim
+                          is about the pair, so it belongs in the space the pair
+                          shares. */}
                       {ri > 0 && (
-                        <div className="flex items-center gap-2 px-2.5 py-0.5">
-                          <span className="text-[10px] uppercase tracking-widest text-zinc-400 font-medium">and</span>
-                          <span className="flex-1 h-px bg-zinc-800/70" />
-                        </div>
+                        <span className="self-center shrink-0 text-[10px] uppercase tracking-widest text-zinc-400 font-medium">
+                          and
+                        </span>
                       )}
                     <Row
-                      e={e}
+                      e={e} card
                       editingOptions={s.editingOptions} setEditingOptions={s.setEditingOptions}
                       dragging={dragging} isOver={s.over === zoneKey(target, e.id)}
                       onDragStart={() => s.setDrag({ id: e.id })}
@@ -852,7 +852,7 @@ function ChoiceCard({
 function Row({
   e, editingOptions, setEditingOptions, dragging, isOver,
   onDragStart, onDragEnd, gap, apply, instanceId, busy, run, input,
-  setAdding, setChoiceDrafts, adding, catalog, childrenOf,
+  setAdding, setChoiceDrafts, adding, catalog, childrenOf, card,
 }: {
   e: GearEntry & { r: { name: string; note: string | null; url: string | null; section: string | null; catalogItem?: GearItem; options: GearItem[]; models: GearItem[] } }
   editingOptions: ProductPanel | null
@@ -872,6 +872,10 @@ function Row({
   adding: string | null
   catalog: GearItem[]
   childrenOf: Map<string, GearItem[]>
+  // A slot of a multi-slot line draws as a card, so the slots read as peers
+  // sitting beside each other rather than as a run of separate requirements.
+  // The operator is drawn between the cards by whatever holds them.
+  card?: boolean
 }) {
   const row = useRef<HTMLDivElement>(null)
   const [newModel, setNewModel] = useState('')
@@ -931,7 +935,13 @@ function Row({
     <div
       ref={row}
       {...gap}
-      className={`px-3 py-2 group ${isOver ? 'border-t-2 border-pr-red' : ''}`}
+      className={
+        card
+          ? `flex-1 min-w-[15rem] rounded-lg border bg-zinc-900/40 px-2.5 py-2 group transition-colors ${
+              isOver ? 'border-pr-red' : 'border-zinc-800'
+            }`
+          : `px-3 py-2 group ${isOver ? 'border-t-2 border-pr-red' : ''}`
+      }
     >
       <div className="flex items-start gap-2">
         {/* Only the handle starts a drag, so the quantity field and the model
