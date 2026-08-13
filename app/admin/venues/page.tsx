@@ -19,7 +19,7 @@ export default async function VenuesPage() {
   if (profile?.role !== 'admin') redirect('/dashboard')
 
   const [{ data: venueRows }, { data: counts }] = await Promise.all([
-    admin.from('venues').select('id, name, region, client_name, notes, active').order('name'),
+    admin.from('venues').select('id, name, region, region_code, client_name, notes, active').order('name'),
     admin.from('library_items').select('venue_id').not('venue_id', 'is', null),
   ])
 

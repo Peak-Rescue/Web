@@ -62,7 +62,7 @@ export default async function LibraryPage({
   // nothing to approve about a kit list you wrote yourself.
   const [{ data: itemRows }, { data: venueRows }, gearRes, scheduleRes, catalogRes] = await Promise.all([
     showDocs ? query : Promise.resolve({ data: [] }),
-    admin.from('venues').select('id, name, region, client_name, notes, active').order('name'),
+    admin.from('venues').select('id, name, region, region_code, client_name, notes, active').order('name'),
     showTemplates && shelves.includes('gear')
       ? (() => {
           let g = admin.from('gear_lists')

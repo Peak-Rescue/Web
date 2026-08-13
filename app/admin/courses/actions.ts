@@ -82,6 +82,9 @@ export async function createInstance(formData: FormData) {
   const custom_categories = course_type === 'custom' ? (formData.getAll('custom_categories') as string[]) : null
   const status           = (formData.get('status') as string) || 'tentative'
   const location         = (formData.get('location') as string) || null
+  const regionRaw        = (formData.get('region') as string) || ''
+  const region           = isValidRegion(regionRaw) ? regionRaw : null
+  const venue_id         = (formData.get('venue_id') as string) || null
   const client_name      = (formData.get('client_name') as string) || null
   const contacts         = contactsFromForm(formData.get('contacts_json'))
   const notes            = (formData.get('notes') as string) || null
@@ -125,7 +128,7 @@ export async function createInstance(formData: FormData) {
 
   const { data, error } = await admin
     .from('course_instances')
-    .insert({ course_category, course_type, custom_title, custom_categories, status, starts_at, ends_at, location, client_name, contacts, notes, max_students, instructor_slots, slug })
+    .insert({ course_category, course_type, custom_title, custom_categories, status, starts_at, ends_at, location, region, venue_id, client_name, contacts, notes, max_students, instructor_slots, slug })
     .select('id')
     .single()
 

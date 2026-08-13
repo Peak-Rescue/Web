@@ -6,7 +6,7 @@ import { updateLibraryItem, deleteLibraryItem } from './actions'
 import { KIND_META, LIBRARY_KINDS, AUDIENCE_META, BUCKET_META, BUCKET_ORDER, type LibraryBucket, type LibraryItem, type Venue } from '@/lib/library'
 import { AudiencePills } from '@/components/AudiencePills'
 import { CAPABILITY_META, CAPABILITY_ORDER } from '@/lib/capabilities'
-import { US_STATES, CA_PROVINCES, COUNTRIES } from '@/lib/regions'
+import RegionSelect from '@/components/RegionSelect'
 
 const input =
   'w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-zinc-500'
@@ -106,18 +106,11 @@ export default function LibraryRow({ item, venues, hideProvenance = false }: { i
           </div>
           <div>
             <label className={label}>State / country</label>
-            <select className={input} value={form.region} onChange={(e) => setForm({ ...form, region: e.target.value })}>
-              <option value="">— not set —</option>
-              <optgroup label="United States">
-                {US_STATES.map((s) => <option key={s.code} value={s.code}>{s.name}</option>)}
-              </optgroup>
-              <optgroup label="Canada">
-                {CA_PROVINCES.map((p) => <option key={p.code} value={p.code}>{p.name}</option>)}
-              </optgroup>
-              <optgroup label="Other countries">
-                {COUNTRIES.map((c) => <option key={c.code} value={c.code}>{c.name}</option>)}
-              </optgroup>
-            </select>
+            <RegionSelect
+              defaultValue={form.region}
+              className={input}
+              onChange={(code) => setForm({ ...form, region: code })}
+            />
           </div>
           <div>
             <label className={label}>Library</label>

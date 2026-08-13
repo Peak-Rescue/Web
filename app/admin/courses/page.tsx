@@ -9,6 +9,7 @@ import { courseShortName, courseEventTitle, crewFirstNames } from '@/lib/courses
 import CourseCalendar, { type CalendarCourse } from '@/components/CourseCalendar'
 import CourseContactsEditor from '@/components/CourseContactsEditor'
 import CourseList, { type Instance } from './CourseList'
+import CourseLocationFields from '@/components/CourseLocationFields'
 
 function firstStartDate(inst: Instance): string | null {
   return inst.starts_at ?? null
@@ -28,15 +29,18 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
   const { data: profile } = await admin.from('profiles').select('role').eq('id', user.id).single()
   if (profile?.role !== 'admin') redirect('/dashboard')
 
-  const { data: raw } = await admin
-    .from('course_instances')
-    .select(`
-      id, ref_number, slug, course_type, course_category, custom_title, status, location, client_name, starts_at, ends_at, max_students,
-      instance_instructors(count),
-      crew:instance_instructors(role, instructors(name)),
-      enrollments(count),
-      course_estimates(count)
-    `)
+  const [{ data: raw }, { data: venueRows }] = await Promise.all([
+    admin
+      .from('course_instances')
+      .select(`
+        id, ref_number, slug, course_type, course_category, custom_title, status, location, client_name, starts_at, ends_at, max_students,
+        instance_instructors(count),
+        crew:instance_instructors(role, instructors(name)),
+        enrollments(count),
+        course_estimates(count)
+      `),
+    admin.from('venues').select('id, name, region_code').eq('active', true).order('name'),
+  ])
 
   const instances = (raw ?? []) as unknown as Instance[]
 
@@ -102,6 +106,7 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
               <label className="block text-xs text-zinc-400 mb-1">Location</label>
               <input name="location" className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
             </div>
+            <CourseLocationFields venues={venueRows ?? []} />
             <div>
               <label className="block text-xs text-zinc-400 mb-1">Client / organization</label>
               <input name="client_name" placeholder="e.g. 24th STS" className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />

@@ -143,6 +143,7 @@ export type Venue = {
   id: string
   name: string
   region: string | null
+  region_code: string | null
   client_name: string | null
   notes: string | null
   active: boolean

@@ -5,6 +5,8 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { updateVenue, deleteVenue } from '../library/actions'
 import { type Venue } from '@/lib/library'
+import RegionSelect from '@/components/RegionSelect'
+import { regionLabel } from '@/lib/regions'
 
 const input = 'w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-zinc-500'
 const label = 'block text-[11px] text-zinc-500 mb-1'
@@ -16,6 +18,7 @@ export default function VenueRow({ venue, itemCount }: { venue: Venue; itemCount
   const [form, setForm] = useState({
     name: venue.name,
     region: venue.region ?? '',
+    region_code: venue.region_code ?? '',
     client_name: venue.client_name ?? '',
     notes: venue.notes ?? '',
   })
@@ -37,7 +40,7 @@ export default function VenueRow({ venue, itemCount }: { venue: Venue; itemCount
             {!venue.active && <span className="text-[10px] text-zinc-600">inactive</span>}
           </div>
           <p className="text-[11px] text-zinc-600 mt-0.5">
-            {venue.region ?? 'no region'} ·{' '}
+            {venue.region || regionLabel(venue.region_code) || 'no region'} ·{' '}
             <Link href={`/admin/library?status=all&venue=${venue.id}`} className="hover:text-zinc-400 transition-colors underline">
               {itemCount} item{itemCount === 1 ? '' : 's'}
             </Link>
@@ -57,6 +60,16 @@ export default function VenueRow({ venue, itemCount }: { venue: Venue; itemCount
           <div>
             <label className={label}>Region</label>
             <input className={input} value={form.region} onChange={(e) => setForm({ ...form, region: e.target.value })} />
+          </div>
+          {/* The code, not the label above it: this is what puts the venue in a
+              state's list when a course is created there. */}
+          <div className="sm:col-span-2">
+            <label className={label}>Country / state</label>
+            <RegionSelect
+              defaultValue={form.region_code}
+              className={input}
+              onChange={(code) => setForm({ ...form, region_code: code })}
+            />
           </div>
           <div className="sm:col-span-2">
             <label className={label}>Client</label>

@@ -176,11 +176,12 @@ export async function createVenue(formData: FormData) {
   revalidate()
 }
 
-export async function updateVenue(id: string, patch: { name?: string; region?: string | null; client_name?: string | null; notes?: string | null; active?: boolean }) {
+export async function updateVenue(id: string, patch: { name?: string; region?: string | null; region_code?: string | null; client_name?: string | null; notes?: string | null; active?: boolean }) {
   const admin = await requireAdmin()
   const update: Record<string, unknown> = {}
   if (patch.name !== undefined) update.name = patch.name.trim().slice(0, 120)
   if (patch.region !== undefined) update.region = patch.region?.trim() || null
+  if (patch.region_code !== undefined) update.region_code = isValidRegion(patch.region_code) ? patch.region_code : null
   if (patch.client_name !== undefined) update.client_name = patch.client_name?.trim() || null
   if (patch.notes !== undefined) update.notes = patch.notes?.trim() || null
   if (patch.active !== undefined) update.active = patch.active

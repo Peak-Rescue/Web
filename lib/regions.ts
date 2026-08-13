@@ -41,6 +41,20 @@ const CA_NAMES: Record<string, string> = {
 export const US_STATES = US_SUBDIVISIONS.split(',').map((c) => ({ code: `US-${c}`, name: US_NAMES[c] }))
 export const CA_PROVINCES = CA_SUBDIVISIONS.split(',').map((c) => ({ code: `CA-${c}`, name: CA_NAMES[c] }))
 
+// The two countries we hold subdivisions for. Everywhere else is stored as the
+// bare country code, so the list a picker shows is keyed off this.
+export const SUBDIVISIONS: Record<string, { code: string; name: string }[]> = {
+  US: US_STATES,
+  CA: CA_PROVINCES,
+}
+
+// 'US-WA' → { country: 'US', sub: 'US-WA' }; 'FR' → { country: 'FR', sub: '' }.
+export function splitRegion(code: string | null | undefined): { country: string; sub: string } {
+  if (!code) return { country: '', sub: '' }
+  const [country] = code.split('-')
+  return { country, sub: code.includes('-') ? code : '' }
+}
+
 // Every ISO 3166-1 country, so a course somewhere unanticipated never needs a
 // code added here. Names come from Intl, pinned to 'en' so server and client
 // render the same string.
@@ -66,10 +80,10 @@ function countryName(code: string): string {
   }
 }
 
-// US and Canada already appear as subdivision groups; offering them again as
-// bare countries would let the same place be stored two ways.
+// One alphabetical list of every country, US and Canada included. A single flat
+// list is what makes type-ahead work: in a native select, typing jumps within
+// the whole list, so "F" reaches France instead of stopping at Florida.
 export const COUNTRIES = COUNTRY_CODES.split(',')
-  .filter((c) => c !== 'US' && c !== 'CA')
   .map((code) => ({ code, name: countryName(code) }))
   .sort((a, b) => a.name.localeCompare(b.name))
 

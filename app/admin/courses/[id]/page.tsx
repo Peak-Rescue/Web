@@ -39,7 +39,7 @@ import { type GearItem, type GearList } from '@/app/admin/gear/GearListEditor'
 import { type Schedule } from '@/app/admin/schedules/ScheduleEditor'
 import CourseSchedule from '@/app/admin/courses/CourseSchedule'
 import CourseMapsSection, { type CourseMap } from '../CourseMapsSection'
-import RegionSelect from '@/components/RegionSelect'
+import CourseLocationFields from '@/components/CourseLocationFields'
 
 const STATUS_STYLES: Record<string, string> = {
   tentative: 'bg-yellow-900/40 text-yellow-300 border-yellow-700',
@@ -149,7 +149,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
     admin.from('estimate_reviews').select('id, created_at, requested_by, reviewer_id, note, responded_at, approved, response_note').eq('instance_id', id).order('created_at', { ascending: false }).limit(8),
     admin.from('course_maps').select('id, url, label, audience, library_item_id, library_items(title, url, audience)').eq('instance_id', id).order('sort_order'),
     admin.from('course_links').select('id, url, label, audience, purpose').eq('instance_id', id).order('purpose').order('sort_order'),
-    admin.from('venues').select('id, name').eq('active', true).order('name'),
+    admin.from('venues').select('id, name, region_code').eq('active', true).order('name'),
   ])
 
   // Quote-hero photo pool: the curated static shots plus every gallery upload,
@@ -493,19 +493,11 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
               <label className="block text-xs text-zinc-400 mb-1">Location</label>
               <input name="location" defaultValue={inst.location ?? ''} className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
             </div>
-            <div>
-              <label className="block text-xs text-zinc-400 mb-1">Venue</label>
-              <select name="venue_id" defaultValue={inst.venue_id ?? ''} className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500">
-                <option value="">— none —</option>
-                {(venueRows ?? []).map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
-              </select>
-              <p className="text-xs text-zinc-500 mt-1">Brings in its maps, permits and rescue plans.</p>
-            </div>
-            <div>
-              <label className="block text-xs text-zinc-400 mb-1">State / country</label>
-              <RegionSelect name="region" defaultValue={inst.region} className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
-              <p className="text-xs text-zinc-500 mt-1">Suggests maps for this course.</p>
-            </div>
+            <CourseLocationFields
+              venues={venueRows ?? []}
+              defaultRegion={inst.region}
+              defaultVenueId={inst.venue_id}
+            />
             <div>
               <label className="block text-xs text-zinc-400 mb-1">Client / organization</label>
               <input name="client_name" defaultValue={inst.client_name ?? ''} className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
