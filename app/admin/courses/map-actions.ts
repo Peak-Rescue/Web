@@ -222,7 +222,7 @@ async function promoteToLibrary(
   // second copy that would then drift from the first.
   const { data: existing } = await admin
     .from('library_items')
-    .select('id')
+    .select('id, audience')
     .eq('bucket', 'map')
     .eq('url', row.url)
     .neq('status', 'archived')
@@ -254,9 +254,15 @@ async function promoteToLibrary(
 
   // The row is either a library item or a link, never both — hand over the
   // link as the item id goes on.
+  //
+  // Attaching to an item that already exists brings its ceiling with it: a row
+  // left saying 'shared' would point at an instructors-only map, with the
+  // pills claiming students and the portal believing them. The item wins.
+  const clamped = existing?.audience === 'internal' ? { audience: 'internal' } : {}
+
   const { error } = await admin
     .from('course_maps')
-    .update({ library_item_id: libraryItemId, url: null, label: null })
+    .update({ library_item_id: libraryItemId, url: null, label: null, ...clamped })
     .eq('id', mapId)
     .eq('instance_id', instanceId)
   if (error) throw new Error(error.message)

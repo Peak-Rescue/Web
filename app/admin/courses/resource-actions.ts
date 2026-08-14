@@ -229,7 +229,7 @@ async function promoteToLibrary(
 
   const { data: existing } = await admin
     .from('library_items')
-    .select('id')
+    .select('id, audience')
     .eq('bucket', 'resource')
     .eq('url', row.url)
     .neq('status', 'archived')
@@ -259,9 +259,16 @@ async function promoteToLibrary(
     libraryItemId = created.id
   }
 
+  // Attaching to an item that already exists brings its ceiling with it. Left
+  // alone, a row saying 'shared' would keep pointing at an instructors-only
+  // document — the pills claiming students while the library says otherwise,
+  // and the portal believing the pills. The item wins; the row comes down with
+  // it, and the locked row explains itself on a link to where it is changed.
+  const clamped = existing?.audience === 'internal' ? { audience: 'internal' } : {}
+
   const { error } = await admin
     .from('course_resources')
-    .update({ library_item_id: libraryItemId, url: null, label: null })
+    .update({ library_item_id: libraryItemId, url: null, label: null, ...clamped })
     .eq('id', resourceId)
     .eq('instance_id', instanceId)
   if (error) throw new Error(error.message)

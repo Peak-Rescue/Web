@@ -20,6 +20,12 @@ async function requireAdmin() {
 function revalidate() {
   revalidatePath('/admin/library')
   revalidatePath('/admin/venues')
+  // Courses and portals render library items — title, link, and the audience
+  // that caps what a course can share. Editing the item here and not saying so
+  // leaves a course page insisting a document is instructors-only well after
+  // it stopped being. Which course is unknowable from here, so both trees go.
+  revalidatePath('/admin/courses/[id]', 'page')
+  revalidatePath('/portal/[id]', 'page')
 }
 
 const VALID_KINDS = new Set<string>(LIBRARY_KINDS)

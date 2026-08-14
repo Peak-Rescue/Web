@@ -137,14 +137,14 @@ export default async function PortalPage({
       // This reads with the service role, so the audience filter is applied
       // here rather than by RLS.
       (showTasks
-        ? admin.from('course_maps').select('id, url, label, audience, library_items(title, url, edit_url)').eq('instance_id', id).order('sort_order')
-        : admin.from('course_maps').select('id, url, label, audience, library_items(title, url)').eq('instance_id', id).eq('audience', 'shared').order('sort_order')),
+        ? admin.from('course_maps').select('id, url, label, audience, library_items(title, url, edit_url, audience)').eq('instance_id', id).order('sort_order')
+        : admin.from('course_maps').select('id, url, label, audience, library_items(title, url, audience)').eq('instance_id', id).eq('audience', 'shared').order('sort_order')),
       // The resources shelf — med plan, permits, tech notes for this place.
       // Same audience rule as maps, and read the same way: a student sees
       // only the rows shared with them.
       (showTasks
-        ? admin.from('course_resources').select('id, url, label, audience, library_items(id, title, url, kind)').eq('instance_id', id).order('sort_order')
-        : admin.from('course_resources').select('id, url, label, audience, library_items(id, title, url, kind)').eq('instance_id', id).eq('audience', 'shared').order('sort_order')),
+        ? admin.from('course_resources').select('id, url, label, audience, library_items(id, title, url, kind, audience)').eq('instance_id', id).order('sort_order')
+        : admin.from('course_resources').select('id, url, label, audience, library_items(id, title, url, kind, audience)').eq('instance_id', id).eq('audience', 'shared').order('sort_order')),
       // Links added for this delivery — the photo album, the client's
       // paperwork. Same audience rule as maps.
       (showTasks
@@ -195,32 +195,36 @@ export default async function PortalPage({
 
   // Library maps take their title and link from the library item; the edit
   // twin (CalTopo edit URL) is only ever handed to the team.
+  // A library item's audience is the ceiling, and it is enforced here rather
+  // than trusted from the row: the row can be stale — the item was marked
+  // instructors-only after a course shared it — and a stale row must not be
+  // what decides a student sees an evac plan.
   const maps = (mapRows ?? []).map((r) => {
-    const item = r.library_items as unknown as { title: string; url: string | null; edit_url?: string | null } | null
+    const item = r.library_items as unknown as { title: string; url: string | null; edit_url?: string | null; audience?: string } | null
     return {
       id: r.id,
       label: item?.title ?? r.label ?? 'Map',
       url: item?.url ?? r.url,
       editUrl: showTasks ? item?.edit_url ?? null : null,
-      internal: r.audience !== 'shared',
+      internal: r.audience !== 'shared' || item?.audience === 'internal',
     }
-  }).filter((m) => m.url || m.editUrl)
+  }).filter((m) => (m.url || m.editUrl) && (showTasks || !m.internal))
 
   // The resources shelf. A Drive document goes through the portal's own proxy
   // rather than out to Google — the same rule the curriculum follows, and the
   // only reason a student can open one at all: Drive would send them to the
   // request-access screen.
   const resources = (resourceRows ?? []).map((r) => {
-    const item = r.library_items as unknown as { id: string; title: string; url: string | null; kind: string } | null
+    const item = r.library_items as unknown as { id: string; title: string; url: string | null; kind: string; audience?: string } | null
     const isDrive = /drive\.google\.com|docs\.google\.com/.test(item?.url ?? '')
     return {
       id: r.id,
       label: item?.title ?? r.label ?? 'Document',
       kind: item ? KIND_META[item.kind as LibraryKind] ?? null : null,
       url: item && isDrive ? `/api/library/${item.id}` : item?.url ?? r.url,
-      internal: r.audience !== 'shared',
+      internal: r.audience !== 'shared' || item?.audience === 'internal',
     }
-  }).filter((r) => r.url)
+  }).filter((r) => r.url && (showTasks || !r.internal))
 
   const blocks = inst.starts_at && inst.ends_at
     ? computeBlocks(inst.starts_at, inst.ends_at, offDays ?? [])
