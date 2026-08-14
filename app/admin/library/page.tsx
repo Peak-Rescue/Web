@@ -25,7 +25,11 @@ export default async function LibraryPage({
 }: {
   searchParams: Promise<{ status?: string; discipline?: string; kind?: string; audience?: string; venue?: string; bucket?: string; q?: string }>
 }) {
-  const { status = 'pending', discipline, kind, audience, venue, bucket, q } = await searchParams
+  // Published is the library. Pending review is a queue that Google Classroom
+  // imports drop into, and landing on it meant the shelf you came to look at
+  // read as empty — an item added by hand is published the moment it's added,
+  // so the queue is usually empty and the answer usually isn't there.
+  const { status = 'published', discipline, kind, audience, venue, bucket, q } = await searchParams
 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -60,7 +64,7 @@ export default async function LibraryPage({
   // Templates take the same search box and discipline tags the documents use.
   // They have no review status, so the status tabs pass them by — there's
   // nothing to approve about a kit list you wrote yourself.
-  const [{ data: itemRows }, { data: venueRows }, gearRes, scheduleRes, catalogRes] = await Promise.all([
+  const [{ data: itemRows }, { data: venueRows }, gearRes, scheduleRes, catalogRes, { count: pendingCount }] = await Promise.all([
     showDocs ? query : Promise.resolve({ data: [] }),
     admin.from('venues').select('id, name, region, region_code, client_name, notes, active').order('name'),
     showTemplates && shelves.includes('gear')
@@ -90,6 +94,10 @@ export default async function LibraryPage({
     showTemplates && shelves.includes('gear')
       ? admin.from('gear_items').select('id, name, brand, info, url, category, parent_id, aliases, disciplines').eq('active', true).order('name')
       : Promise.resolve({ data: [] }),
+    // Counted whatever tab you are on: the queue is no longer the page you
+    // land on, so the only thing keeping an import from rotting there unseen
+    // is the number on the tab.
+    admin.from('library_items').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
   ])
 
   const items = (itemRows ?? []) as LibraryItem[]
@@ -132,15 +140,20 @@ export default async function LibraryPage({
     return `/admin/library?${p.toString()}`
   }
 
-  const tab = (key: string, text: string) => (
+  const tab = (key: string, text: string, badge?: number) => (
     <Link
       href={href({ status: key })}
       scroll={false}
-      className={`px-3 py-1.5 rounded text-sm transition-colors ${
+      className={`px-3 py-1.5 rounded text-sm transition-colors inline-flex items-center gap-1.5 ${
         status === key ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:text-zinc-300'
       }`}
     >
       {text}
+      {Boolean(badge) && (
+        <span className="text-[10px] leading-none px-1.5 py-1 rounded bg-amber-950/60 text-amber-400">
+          {badge}
+        </span>
+      )}
     </Link>
   )
 
@@ -184,10 +197,12 @@ export default async function LibraryPage({
 
         {/* ── Filters ──────────────────────────────────────────────────── */}
         <div className="flex items-center gap-1 mb-3 flex-wrap">
-          {tab('pending', 'Pending review')}
+          {/* The shelves first, in the order you'd read them; the import queue
+              last, where an exception belongs, carrying its own count. */}
           {tab('published', 'Published')}
           {tab('archived', 'Archived')}
           {tab('all', 'All')}
+          {tab('pending', 'Pending review', pendingCount ?? 0)}
         </div>
 
         <form className="grid grid-cols-2 sm:grid-cols-6 gap-2 mb-6" action="/admin/library">

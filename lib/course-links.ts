@@ -8,9 +8,10 @@
 export const LINK_PURPOSES = ['photos', 'resource', 'form', 'other'] as const
 export type LinkPurpose = (typeof LINK_PURPOSES)[number]
 
-// The library defaults to the pending queue, so anything pointing at a shelf
-// has to ask for everything — a link that lands on an empty review list reads
-// as "there's nothing there", which is the opposite of the point.
+// The library lands on Published now, so a link here would mostly be right on
+// its own. It still asks for everything: a link followed to check on a
+// document should find it whatever state it is in, and an archived one going
+// missing reads as "it was deleted".
 export const LIBRARY_HREF = '/admin/library?status=all'
 
 export const PURPOSE_META: Record<
