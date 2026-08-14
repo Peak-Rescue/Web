@@ -13,6 +13,7 @@ import {
 import { LinkIcon, PencilIcon } from '@/components/TaskIcons'
 import UploadNameDialog from '@/components/UploadNameDialog'
 import AddLinkDialog from '@/components/AddLinkDialog'
+import { AudiencePills } from '@/components/AudiencePills'
 
 export type CourseFile = {
   id: string
@@ -145,11 +146,18 @@ export default function CourseFilesSection({
       />
       <div className="flex items-start justify-between gap-3 mb-3">
         <div>
-          <h3 className="text-sm font-semibold text-zinc-300 mb-1">Files</h3>
-          {/* Said out loud because the rest of this tab is audience-switched
-              and these aren't: there's no Shared option here, and a file
-              students need reaches them attached to a course update. */}
-          <p className="text-xs text-zinc-500">Documents and task attachments — instructors only.</p>
+          <div className="flex items-center gap-2 mb-1">
+            <h3 className="text-sm font-semibold text-zinc-300">Files</h3>
+            {/* The pill rather than prose, because every other block on this
+                tab carries one: a lone Instructors pill with no Students pill
+                beside it reads as a fact about this block, where the same
+                thing said in words reads as a note someone left. It isn't a
+                toggle here — there's no shared state to reach. */}
+            <AudiencePills audience="internal" />
+          </div>
+          <p className="text-xs text-zinc-500">
+            Documents and task attachments. A document students need goes on the Resources shelf below.
+          </p>
         </div>
         <div className="shrink-0 flex items-center gap-2">
           <button
