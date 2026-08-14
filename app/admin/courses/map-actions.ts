@@ -136,6 +136,7 @@ export async function addCourseMapLink(
   instanceId: string,
   url: string,
   label: string,
+  audience: LibraryAudience = 'internal',
   toLibrary = false
 ) {
   const { user, admin } = await requireAdmin()
@@ -147,7 +148,10 @@ export async function addCourseMapLink(
       instance_id: instanceId,
       url: link.url,
       label: link.filename,
-      audience: 'internal', // opt in to students deliberately, never by default
+      // Asked in the dialog, and defaulting to instructors-only: a library item
+      // inherits this and then caps the course row, so a wrong guess here is a
+      // map you cannot share afterwards.
+      audience: audience === 'shared' ? 'shared' : 'internal',
       sort_order: sort,
       added_by: user.id,
     })

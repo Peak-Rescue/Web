@@ -112,9 +112,17 @@ export default function CourseMapsSection({
               {m.fromLibrary ? (
                 <Link
                   href="/admin/library?status=all&bucket=map"
-                  className="text-[11px] text-zinc-600 hover:text-zinc-300 transition-colors"
+                  className={`text-[11px] transition-colors ${
+                    m.libraryLocked
+                      ? 'text-amber-600/80 hover:text-amber-400'
+                      : 'text-zinc-600 hover:text-zinc-300'
+                  }`}
                 >
-                  From the map library
+                  {/* A greyed-out toggle with only a tooltip is a dead end. Say
+                      what is blocking it, on a link to where it is changed. */}
+                  {m.libraryLocked
+                    ? 'Instructors-only in the library — change it there to share it'
+                    : 'From the map library'}
                 </Link>
               ) : (
                 <span className="text-[11px] text-zinc-600">Link added for this course</span>
@@ -249,11 +257,12 @@ export default function CourseMapsSection({
       <AddLinkDialog
         open={linkOpen}
         busy={busy}
+        withAudience
         libraryPlace={placeLabel}
         onCancel={() => setLinkOpen(false)}
-        onSubmit={(name, url, _audience, toLibrary) =>
+        onSubmit={(name, url, audience, toLibrary) =>
           run(async () => {
-            await addCourseMapLink(instanceId, url, name, toLibrary)
+            await addCourseMapLink(instanceId, url, name, audience, toLibrary)
             setLinkOpen(false)
             if (toLibrary) setPicker(null) // the shelf just changed
           })

@@ -113,9 +113,17 @@ export default function CourseResourcesSection({
               {r.fromLibrary ? (
                 <Link
                   href="/admin/library?status=all&bucket=resource"
-                  className="text-[11px] text-zinc-600 hover:text-zinc-300 transition-colors"
+                  className={`text-[11px] transition-colors ${
+                    r.libraryLocked
+                      ? 'text-amber-600/80 hover:text-amber-400'
+                      : 'text-zinc-600 hover:text-zinc-300'
+                  }`}
                 >
-                  From the resource library
+                  {/* A greyed-out toggle with only a tooltip is a dead end. Say
+                      what is blocking it, on a link to where it is changed. */}
+                  {r.libraryLocked
+                    ? 'Instructors-only in the library — change it there to share it'
+                    : 'From the resource library'}
                 </Link>
               ) : (
                 <span className="text-[11px] text-zinc-600">Link added for this course</span>
@@ -254,11 +262,12 @@ export default function CourseResourcesSection({
       <AddLinkDialog
         open={linkOpen}
         busy={busy}
+        withAudience
         libraryPlace={placeLabel}
         onCancel={() => setLinkOpen(false)}
-        onSubmit={(name, url, _audience, toLibrary) =>
+        onSubmit={(name, url, audience, toLibrary) =>
           run(async () => {
-            await addCourseResourceLink(instanceId, url, name, toLibrary)
+            await addCourseResourceLink(instanceId, url, name, audience, toLibrary)
             setLinkOpen(false)
             if (toLibrary) setPicker(null) // the shelf just changed
           })
