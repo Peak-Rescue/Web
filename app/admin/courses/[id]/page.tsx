@@ -173,7 +173,9 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
       id: r.id,
       label: item?.title ?? r.label ?? 'Map',
       url: item?.url ?? r.url,
-      audience: r.audience as LibraryAudience,
+      // Shown through the same ceiling the portal reads through, so the pills
+      // can never claim students while the line under them says instructors.
+      audience: (item?.audience === 'internal' ? 'internal' : r.audience) as LibraryAudience,
       fromLibrary: Boolean(r.library_item_id),
       libraryLocked: item?.audience === 'internal',
     }
@@ -188,7 +190,9 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
       id: r.id,
       label: item?.title ?? r.label ?? 'Document',
       url: item?.url ?? r.url,
-      audience: r.audience as LibraryAudience,
+      // Shown through the same ceiling the portal reads through, so the pills
+      // can never claim students while the line under them says instructors.
+      audience: (item?.audience === 'internal' ? 'internal' : r.audience) as LibraryAudience,
       fromLibrary: Boolean(r.library_item_id),
       libraryLocked: item?.audience === 'internal',
     }
