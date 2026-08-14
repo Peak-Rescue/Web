@@ -8,6 +8,7 @@ const serviceLinks = Object.entries(categoryMeta).map(([key, val]) => ({
 }))
 
 const companyLinks = [
+  { href: '/services', label: 'Training' },
   { href: '/team', label: 'Our Team' },
   { href: '/gallery', label: 'Gallery' },
   { href: '/blog', label: 'Blog' },
