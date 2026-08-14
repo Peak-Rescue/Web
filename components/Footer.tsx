@@ -9,7 +9,6 @@ const serviceLinks = Object.entries(categoryMeta).map(([key, val]) => ({
 
 const companyLinks = [
   { href: '/team', label: 'Our Team' },
-  { href: '/courses', label: 'Courses' },
   { href: '/gallery', label: 'Gallery' },
   { href: '/blog', label: 'Blog' },
   { href: '/contact', label: 'Contact' },
@@ -49,7 +48,7 @@ export default function Footer() {
 
           {/* Training */}
           <div>
-            <h3 className="section-label mb-5">Training Programs</h3>
+            <h3 className="section-label mb-5">Training</h3>
             <ul className="flex flex-col gap-2">
               {serviceLinks.map((link) => (
                 <li key={link.href}>
