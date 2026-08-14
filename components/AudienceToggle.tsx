@@ -88,3 +88,53 @@ export default function AudienceToggle({
     </span>
   )
 }
+
+// The same pills as a first answer rather than a change to an existing one.
+//
+// The toggle above assumes a document that already has an audience, and puts
+// the direction with a consequence behind a confirm. Adding is the other case:
+// there is no state to flip yet, so both pills start off and picking one *is*
+// the decision — which is why the dialog won't submit until one is picked. No
+// default, because a default here is a guess about a document only the person
+// pasting it has read, and the guess gets copied onto a library item that then
+// caps every course using it.
+//
+// Students implies instructors, exactly as AudiencePills renders it: choosing
+// Students lights both, choosing Instructors lights one.
+export function AudienceChoice({
+  audience,
+  onChange,
+  disabled,
+}: {
+  audience: LibraryAudience | null
+  onChange: (next: LibraryAudience) => void
+  disabled?: boolean
+}) {
+  const pill = 'text-[11px] leading-none px-2 py-1.5 rounded transition-colors disabled:opacity-40'
+  const off = 'bg-zinc-800/60 text-zinc-600 hover:text-zinc-400'
+
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <button
+        type="button"
+        onClick={() => onChange('shared')}
+        disabled={disabled}
+        aria-pressed={audience === 'shared'}
+        title="Students and the course team can see this"
+        className={`${pill} ${audience === 'shared' ? STUDENTS_ON : off}`}
+      >
+        Students
+      </button>
+      <button
+        type="button"
+        onClick={() => onChange('internal')}
+        disabled={disabled}
+        aria-pressed={audience !== null}
+        title="Only the course team can see this"
+        className={`${pill} ${audience !== null ? INSTRUCTORS : off}`}
+      >
+        Instructors
+      </button>
+    </span>
+  )
+}

@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { AUDIENCE_META, type LibraryAudience } from '@/lib/library'
+import { type LibraryAudience } from '@/lib/library'
+import { AudienceChoice } from '@/components/AudienceToggle'
 
 // Modal for attaching an external link (Google Drive, Dropbox, CalTopo…)
 // alongside file uploads — used by the course Files section and task
@@ -29,7 +30,9 @@ export default function AddLinkDialog({
 }) {
   const [name, setName] = useState('')
   const [url, setUrl] = useState('')
-  const [audience, setAudience] = useState<LibraryAudience>('internal')
+  // Null until asked and answered. Dialogs that don't ask (photos, task files)
+  // fall back to instructors-only on submit, as they always did.
+  const [audience, setAudience] = useState<LibraryAudience | null>(null)
   const [toLibrary, setToLibrary] = useState(false)
 
   // Reopening starts a fresh link — reset the drafts during render
@@ -39,7 +42,7 @@ export default function AddLinkDialog({
     setPrevOpen(open)
     setName('')
     setUrl('')
-    setAudience('internal')
+    setAudience(null)
     setToLibrary(false)
   }
 
@@ -53,8 +56,10 @@ export default function AddLinkDialog({
 
   if (!open) return null
 
-  const canSubmit = !busy && url.trim().length > 0
-  const submit = () => canSubmit && onSubmit(name, url, audience, toLibrary)
+  // Where the audience is asked, it is required — an unanswered question must
+  // not resolve itself into the more restrictive answer behind your back.
+  const canSubmit = !busy && url.trim().length > 0 && (!withAudience || audience !== null)
+  const submit = () => canSubmit && onSubmit(name, url, audience ?? 'internal', toLibrary)
 
   return (
     <div
@@ -93,16 +98,8 @@ export default function AddLinkDialog({
 
         {withAudience && (
           <>
-            <label className="block text-xs text-zinc-500 mt-3 mb-1">Who can see it</label>
-            <select
-              value={audience}
-              disabled={busy}
-              onChange={(e) => setAudience(e.target.value as LibraryAudience)}
-              className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:border-zinc-500 disabled:opacity-50"
-            >
-              <option value="internal">{AUDIENCE_META.internal.choice}</option>
-              <option value="shared">{AUDIENCE_META.shared.choice}</option>
-            </select>
+            <label className="block text-xs text-zinc-500 mt-3 mb-1.5">Who can see it</label>
+            <AudienceChoice audience={audience} onChange={setAudience} disabled={busy} />
           </>
         )}
 
