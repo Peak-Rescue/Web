@@ -141,6 +141,35 @@ export async function addCourseMapLink(
 ) {
   const { user, admin } = await requireAdmin()
   const link = normalizeDocLink(url, label)
+
+  // Pasting a map the shelf already holds used to go through quietly and
+  // attach to the existing item, inheriting settings nobody chose on this
+  // screen. Say so instead: the shelf copy is the one to use, and the picker
+  // is where you use it.
+  const { data: onShelf } = await admin
+    .from('library_items')
+    .select('title')
+    .eq('bucket', 'map')
+    .eq('url', link.url)
+    .neq('status', 'archived')
+    .limit(1)
+    .maybeSingle()
+  if (onShelf) {
+    throw new Error(
+      `“${onShelf.title}” is already in the map library — add it with “Choose from map library” so this course points at that copy.`
+    )
+  }
+
+  // The same link twice on one course is a mistake, not a use case.
+  const { data: onCourse } = await admin
+    .from('course_maps')
+    .select('id')
+    .eq('instance_id', instanceId)
+    .eq('url', link.url)
+    .limit(1)
+    .maybeSingle()
+  if (onCourse) throw new Error('That map is already on this course.')
+
   const sort = await nextSort(admin, instanceId)
   const { data: row, error } = await admin
     .from('course_maps')

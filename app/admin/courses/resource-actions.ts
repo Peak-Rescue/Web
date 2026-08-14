@@ -140,6 +140,36 @@ export async function addCourseResourceLink(
 ) {
   const { user, admin } = await requireAdmin()
   const link = normalizeDocLink(url, label)
+
+  // Pasting a document the shelf already holds used to go through quietly and
+  // attach to the existing item, inheriting settings nobody chose on this
+  // screen. Say so instead: the shelf copy is the one to use, and the picker
+  // is where you use it.
+  const { data: onShelf } = await admin
+    .from('library_items')
+    .select('title')
+    .eq('bucket', 'resource')
+    .eq('url', link.url)
+    .neq('status', 'archived')
+    .limit(1)
+    .maybeSingle()
+  if (onShelf) {
+    throw new Error(
+      `“${onShelf.title}” is already in the resource library — add it with “Choose from resource library” so this course points at that copy.`
+    )
+  }
+
+  // The same link twice on one course is a mistake, not a use case — the index
+  // says so for library items, and this says so for pasted links.
+  const { data: onCourse } = await admin
+    .from('course_resources')
+    .select('id')
+    .eq('instance_id', instanceId)
+    .eq('url', link.url)
+    .limit(1)
+    .maybeSingle()
+  if (onCourse) throw new Error('That document is already on this course.')
+
   const sort = await nextSort(admin, instanceId)
   const { data: row, error } = await admin
     .from('course_resources')

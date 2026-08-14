@@ -267,9 +267,15 @@ export default function CourseResourcesSection({
         onCancel={() => setLinkOpen(false)}
         onSubmit={(name, url, audience, toLibrary) =>
           run(async () => {
-            await addCourseResourceLink(instanceId, url, name, audience, toLibrary)
-            setLinkOpen(false)
-            if (toLibrary) setPicker(null) // the shelf just changed
+            // Close either way: a refusal ("already in the library") is
+            // reported under the section, and a dialog left open would sit
+            // on top of the sentence explaining what to do instead.
+            try {
+              await addCourseResourceLink(instanceId, url, name, audience, toLibrary)
+              if (toLibrary) setPicker(null) // the shelf just changed
+            } finally {
+              setLinkOpen(false)
+            }
           })
         }
       />
