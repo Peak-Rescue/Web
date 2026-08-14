@@ -8,22 +8,29 @@ import { AUDIENCE_META, type LibraryAudience } from '@/lib/library'
 // attachments. The parent owns the save and passes `busy` to lock controls.
 // Where the link has an audience (photo albums), `withAudience` asks for it
 // here: who it's for is part of adding it, not a setting to find afterwards.
+// `libraryPlace` does the same for reuse — naming a Maui med plan is the moment
+// you know it belongs to Maui, not something to remember on a later screen.
 export default function AddLinkDialog({
   open,
   busy,
   withAudience = false,
+  libraryPlace = null,
   onSubmit,
   onCancel,
 }: {
   open: boolean
   busy: boolean
   withAudience?: boolean
-  onSubmit: (name: string, url: string, audience: LibraryAudience) => void
+  // The venue or region this course sits in, when it has one. Null hides the
+  // offer — there is nowhere to file the document against.
+  libraryPlace?: string | null
+  onSubmit: (name: string, url: string, audience: LibraryAudience, toLibrary: boolean) => void
   onCancel: () => void
 }) {
   const [name, setName] = useState('')
   const [url, setUrl] = useState('')
   const [audience, setAudience] = useState<LibraryAudience>('internal')
+  const [toLibrary, setToLibrary] = useState(false)
 
   // Reopening starts a fresh link — reset the drafts during render
   // (React's "adjust state when a prop changes" pattern, no effect needed).
@@ -33,6 +40,7 @@ export default function AddLinkDialog({
     setName('')
     setUrl('')
     setAudience('internal')
+    setToLibrary(false)
   }
 
   useEffect(() => {
@@ -46,7 +54,7 @@ export default function AddLinkDialog({
   if (!open) return null
 
   const canSubmit = !busy && url.trim().length > 0
-  const submit = () => canSubmit && onSubmit(name, url, audience)
+  const submit = () => canSubmit && onSubmit(name, url, audience, toLibrary)
 
   return (
     <div
@@ -96,6 +104,23 @@ export default function AddLinkDialog({
               <option value="shared">{AUDIENCE_META.shared.choice}</option>
             </select>
           </>
+        )}
+
+        {libraryPlace && (
+          <label className="flex items-start gap-2 mt-3 text-xs text-zinc-400 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={toLibrary}
+              disabled={busy}
+              onChange={(e) => setToLibrary(e.target.checked)}
+              className="accent-red-600 mt-0.5 shrink-0 disabled:opacity-50"
+            />
+            <span>
+              Also save to the resource library for{' '}
+              <span className="text-zinc-300">{libraryPlace}</span> — the next course here will
+              find it.
+            </span>
+          </label>
         )}
 
         <div className="flex items-center gap-3 mt-5">

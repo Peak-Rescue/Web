@@ -33,9 +33,13 @@ export type CourseResource = {
 export default function CourseResourcesSection({
   instanceId,
   resources,
+  placeLabel,
 }: {
   instanceId: string
   resources: CourseResource[]
+  // Venue name, or the region when there is no venue — what the library would
+  // file a document under. Null when the course has neither set yet.
+  placeLabel: string | null
 }) {
   const router = useRouter()
   const [busy, setBusy] = useState(false)
@@ -215,7 +219,8 @@ export default function CourseResourcesSection({
             ))}
             {picker !== null && available.length === 0 && (
               <p className="text-xs text-zinc-500 px-2.5 py-4">
-                Nothing on the resource shelf yet — add a document under Library and set its library to Resources.
+                Nothing on the resource shelf yet — add a link below and tick &ldquo;save to the
+                resource library&rdquo; to put the first one there.
               </p>
             )}
             {picker === null && <p className="text-xs text-zinc-500 px-2.5 py-4">Loading resources…</p>}
@@ -249,11 +254,13 @@ export default function CourseResourcesSection({
       <AddLinkDialog
         open={linkOpen}
         busy={busy}
+        libraryPlace={placeLabel}
         onCancel={() => setLinkOpen(false)}
-        onSubmit={(name, url) =>
+        onSubmit={(name, url, _audience, toLibrary) =>
           run(async () => {
-            await addCourseResourceLink(instanceId, url, name)
+            await addCourseResourceLink(instanceId, url, name, toLibrary)
             setLinkOpen(false)
+            if (toLibrary) setPicker(null) // the shelf just changed
           })
         }
       />

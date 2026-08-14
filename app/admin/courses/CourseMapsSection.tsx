@@ -32,9 +32,13 @@ export type CourseMap = {
 export default function CourseMapsSection({
   instanceId,
   maps,
+  placeLabel,
 }: {
   instanceId: string
   maps: CourseMap[]
+  // Venue name, or the region when there is no venue — what the library would
+  // file a map under. Null when the course has neither set yet.
+  placeLabel: string | null
 }) {
   const router = useRouter()
   const [busy, setBusy] = useState(false)
@@ -245,11 +249,13 @@ export default function CourseMapsSection({
       <AddLinkDialog
         open={linkOpen}
         busy={busy}
+        libraryPlace={placeLabel}
         onCancel={() => setLinkOpen(false)}
-        onSubmit={(name, url) =>
+        onSubmit={(name, url, _audience, toLibrary) =>
           run(async () => {
-            await addCourseMapLink(instanceId, url, name)
+            await addCourseMapLink(instanceId, url, name, toLibrary)
             setLinkOpen(false)
+            if (toLibrary) setPicker(null) // the shelf just changed
           })
         }
       />

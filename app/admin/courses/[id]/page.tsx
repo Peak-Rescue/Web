@@ -41,6 +41,7 @@ import CourseSchedule from '@/app/admin/courses/CourseSchedule'
 import CourseMapsSection, { type CourseMap } from '../CourseMapsSection'
 import CourseResourcesSection, { type CourseResource } from '../CourseResourcesSection'
 import CourseLocationFields from '@/components/CourseLocationFields'
+import { regionLabel } from '@/lib/regions'
 
 const STATUS_STYLES: Record<string, string> = {
   tentative: 'bg-yellow-900/40 text-yellow-300 border-yellow-700',
@@ -192,6 +193,14 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
       libraryLocked: item?.audience === 'internal',
     }
   })
+
+  // What a promoted map or resource would be filed under: the venue if this
+  // course has one, the region otherwise — the same venue-beats-region order
+  // both pickers rank by. Null when neither is set, and there is nothing to
+  // offer.
+  const coursePlace =
+    (venueRows ?? []).find((v) => v.id === inst.venue_id)?.name ??
+    (regionLabel(inst.region) || null) // '' when unset, which is not an offer
 
   // One "Files" view across every attachment on the course: general uploads,
   // external links, task documents, and expense receipts — uploads signed
@@ -547,9 +556,9 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
 
           <CourseFilesSection instanceId={id} files={courseFiles} />
 
-          <CourseMapsSection instanceId={id} maps={courseMaps} />
+          <CourseMapsSection instanceId={id} maps={courseMaps} placeLabel={coursePlace} />
 
-          <CourseResourcesSection instanceId={id} resources={courseResources} />
+          <CourseResourcesSection instanceId={id} resources={courseResources} placeLabel={coursePlace} />
 
           <CoursePhotosSection
             instanceId={id}

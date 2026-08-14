@@ -129,20 +129,38 @@ export async function addCourseMapsFromLibrary(instanceId: string, itemIds: stri
   revalidate(instanceId)
 }
 
-export async function addCourseMapLink(instanceId: string, url: string, label: string) {
+// `toLibrary` is the checkbox in the add dialog: file it against this course's
+// place in the same breath as naming it, rather than adding it here and
+// remembering to promote it afterwards.
+export async function addCourseMapLink(
+  instanceId: string,
+  url: string,
+  label: string,
+  toLibrary = false
+) {
   const { user, admin } = await requireAdmin()
   const link = normalizeDocLink(url, label)
   const sort = await nextSort(admin, instanceId)
-  const { error } = await admin.from('course_maps').insert({
-    instance_id: instanceId,
-    url: link.url,
-    label: link.filename,
-    audience: 'internal', // opt in to students deliberately, never by default
-    sort_order: sort,
-    added_by: user.id,
-  })
+  const { data: row, error } = await admin
+    .from('course_maps')
+    .insert({
+      instance_id: instanceId,
+      url: link.url,
+      label: link.filename,
+      audience: 'internal', // opt in to students deliberately, never by default
+      sort_order: sort,
+      added_by: user.id,
+    })
+    .select('id')
+    .single()
   if (error) throw new Error(error.message)
+
+  // The map is on the course either way — a library failure must not lose it,
+  // so the promotion reports itself rather than unwinding the add.
+  if (toLibrary) await promoteToLibrary(admin, instanceId, row.id)
+
   revalidate(instanceId)
+  if (toLibrary) revalidatePath('/admin/library')
 }
 
 export async function setCourseMapAudience(instanceId: string, mapId: string, audience: LibraryAudience) {
@@ -178,7 +196,16 @@ export async function setCourseMapAudience(instanceId: string, mapId: string, au
 // it everywhere.
 export async function saveCourseMapToLibrary(instanceId: string, mapId: string) {
   const { admin } = await requireAdmin()
+  await promoteToLibrary(admin, instanceId, mapId)
+  revalidate(instanceId)
+  revalidatePath('/admin/library')
+}
 
+async function promoteToLibrary(
+  admin: ReturnType<typeof createAdminClient>,
+  instanceId: string,
+  mapId: string
+) {
   const [{ data: row }, { data: inst }] = await Promise.all([
     admin.from('course_maps').select('id, url, label, audience, library_item_id').eq('id', mapId).eq('instance_id', instanceId).single(),
     admin.from('course_instances').select('region, venue_id').eq('id', instanceId).single(),
@@ -229,9 +256,6 @@ export async function saveCourseMapToLibrary(instanceId: string, mapId: string) 
     .eq('id', mapId)
     .eq('instance_id', instanceId)
   if (error) throw new Error(error.message)
-
-  revalidate(instanceId)
-  revalidatePath('/admin/library')
 }
 
 export async function renameCourseMap(instanceId: string, mapId: string, label: string) {
