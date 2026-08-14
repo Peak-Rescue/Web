@@ -13,7 +13,8 @@ export type SectionKey =
   | 'about'
   | 'schedule'
   | 'curriculum'
-  | 'equipment'
+  | 'resources'
+  | 'gear'
   | 'documents'
   | 'tasks'
   | 'notes'
@@ -42,7 +43,16 @@ export const SECTION_ICON: Record<SectionKey, React.ReactElement> = {
       <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
     </>
   ),
-  equipment: (
+  // Reference for this place — the med plan, the permit. A document with a
+  // bookmark, not the plain page 'documents' uses: what marks these out is
+  // that you come back to them mid-course, not that they are files.
+  resources: (
+    <>
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6" />
+      <path d="M15 22v-7l-2.5 1.75L10 15v7" />
+    </>
+  ),
+  gear: (
     <path d="M6 2h12l-1 7H7L6 2ZM7 9h10l1.5 11a2 2 0 0 1-2 2h-9a2 2 0 0 1-2-2L7 9ZM10 13h4" />
   ),
   documents: (
@@ -67,7 +77,8 @@ export const SECTION_LABEL: Record<SectionKey, string> = {
   about: 'Course info',
   schedule: 'Schedule',
   curriculum: 'Curriculum',
-  equipment: 'Equipment',
+  resources: 'Resources',
+  gear: 'Gear',
   documents: 'Documents',
   tasks: 'Tasks',
   notes: 'Notes',

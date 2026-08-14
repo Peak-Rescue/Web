@@ -21,7 +21,7 @@ export default async function GearCatalogPage() {
       .eq('active', true)
       .order('name'),
     admin.from('gear_list_entries').select('gear_item_id'),
-    // Saved lists are browsed and edited on the library's equipment shelf, not
+    // Saved lists are browsed and edited on the library's gear shelf, not
     // here — this page is the catalog the lists draw from.
     admin.from('gear_lists').select('id', { count: 'exact', head: true }).eq('is_template', true),
   ])
@@ -43,17 +43,17 @@ export default async function GearCatalogPage() {
         <GearCatalog items={rows} />
 
         <section className="mt-12 pt-8 border-t border-zinc-800">
-          <h2 className="text-lg font-semibold mb-1">Saved equipment lists</h2>
+          <h2 className="text-lg font-semibold mb-1">Saved gear lists</h2>
           <p className="text-sm text-zinc-500">
             {templateCount
-              ? `${templateCount} reusable list${templateCount === 1 ? '' : 's'} live on the library's equipment shelf, where they can be edited, retagged and retired.`
-              : 'Reusable lists live on the library’s equipment shelf. There aren’t any yet — start one there, or save one from a course.'}
+              ? `${templateCount} reusable list${templateCount === 1 ? '' : 's'} live on the library's gear shelf, where they can be edited, retagged and retired.`
+              : 'Reusable lists live on the library’s gear shelf. There aren’t any yet — start one there, or save one from a course.'}
           </p>
           <Link
             href="/admin/library?bucket=gear&status=all"
             className="mt-3 inline-block text-xs px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded transition-colors"
           >
-            Open the equipment shelf
+            Open the gear shelf
           </Link>
         </section>
       </div>

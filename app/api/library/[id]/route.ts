@@ -39,25 +39,42 @@ export async function GET(
 
   if (!isStaff) {
     // A student may open it only through a course they're on, and only if it
-    // isn't held back to instructors there.
-    const { data: placements } = await admin
-      .from('course_items')
-      .select('audience, course_modules!inner(audience, instance_id)')
-      .eq('library_item_id', id)
+    // isn't held back to instructors there. Two ways an item lands on a
+    // course — as curriculum, or on the resources shelf — and either one
+    // earns access, so the check asks both before giving up.
+    const [{ data: placements }, { data: resourceRows }] = await Promise.all([
+      admin
+        .from('course_items')
+        .select('audience, course_modules!inner(audience, instance_id)')
+        .eq('library_item_id', id),
+      admin
+        .from('course_resources')
+        .select('audience, instance_id')
+        .eq('library_item_id', id),
+    ])
     type Placement = { audience: string | null; course_modules: { audience: string; instance_id: string } }
 
-    const visible = ((placements ?? []) as unknown as Placement[]).filter((p) => {
-      const sectionInternal = p.course_modules.audience === 'instructor'
-      const itemAudience = p.audience ?? item.audience
-      return !sectionInternal && itemAudience !== 'internal'
-    })
+    const visible = ((placements ?? []) as unknown as Placement[])
+      .filter((p) => {
+        const sectionInternal = p.course_modules.audience === 'instructor'
+        const itemAudience = p.audience ?? item.audience
+        return !sectionInternal && itemAudience !== 'internal'
+      })
+      .map((p) => p.course_modules.instance_id)
+      .concat(
+        // The resources shelf has no section above it, so the row's own
+        // audience is the whole answer.
+        ((resourceRows ?? []) as { audience: string; instance_id: string }[])
+          .filter((r) => r.audience === 'shared' && item.audience !== 'internal')
+          .map((r) => r.instance_id)
+      )
     if (visible.length === 0) return NextResponse.json({ error: 'Not available' }, { status: 403 })
 
     const { data: enrolled } = await admin
       .from('enrollments')
       .select('id')
       .eq('user_id', user.id)
-      .in('instance_id', visible.map((p) => p.course_modules.instance_id))
+      .in('instance_id', visible)
       .limit(1)
     if (!enrolled?.length) return NextResponse.json({ error: 'Not available' }, { status: 403 })
   }

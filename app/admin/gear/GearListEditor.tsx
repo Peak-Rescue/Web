@@ -115,7 +115,7 @@ export default function GearListEditor({
   list: GearList
   catalog: GearItem[]
   courseType?: string | null
-  // The equipment shelf's templates, so a list refined on a course can be saved
+  // The gear shelf's templates, so a list refined on a course can be saved
   // back over the one it started from instead of only spawning another.
   templates?: GearTemplateOption[]
 }) {
@@ -1238,7 +1238,7 @@ function Row({
   )
 }
 
-// Two ways onto the equipment shelf: a new template, or over one that's already
+// Two ways onto the gear shelf: a new template, or over one that's already
 // there. Overwriting is the one that needed building — a template you'd refined
 // on a course could only be re-saved under another name, so the shelf collected
 // three near-identical lists and no way to tell which was current.

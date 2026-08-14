@@ -34,7 +34,7 @@ export default async function LibraryPage({
   const { data: profile } = await admin.from('profiles').select('role').eq('id', user.id).single()
   if (profile?.role !== 'admin') redirect('/dashboard')
 
-  // Equipment lists and schedules are shelves too, but they're rows in their own
+  // Gear lists and schedules are shelves too, but they're rows in their own
   // tables — so which of the two lists below runs depends on the shelf picked.
   // Filters that only a document can answer (type, venue, who-can-see, review
   // status) rule the template shelves out rather than showing them unfiltered.
@@ -153,7 +153,7 @@ export default async function LibraryPage({
           <div>
             <h1 className="text-2xl font-bold">Content Library</h1>
             <p className="text-zinc-400 mt-1">
-              Course material, references, maps and permits — plus the equipment lists and schedules we build here.
+              Course material, references, maps and permits — plus the gear lists and schedules we build here.
               Tagged once, reused everywhere.
             </p>
           </div>
@@ -216,7 +216,7 @@ export default async function LibraryPage({
         </form>
 
         {/* ── Add ──────────────────────────────────────────────────────── */}
-        {/* Documents only — an equipment list or schedule is started from its
+        {/* Documents only — a gear list or schedule is started from its
             own shelf below, where the editor is. */}
         <details className={`mb-6 group ${showDocs ? '' : 'hidden'}`}>
           <summary className="cursor-pointer list-none text-sm text-zinc-400 hover:text-zinc-200 transition-colors">

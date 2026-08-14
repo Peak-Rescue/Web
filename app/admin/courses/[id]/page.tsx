@@ -39,6 +39,7 @@ import { type GearItem, type GearList } from '@/app/admin/gear/GearListEditor'
 import { type Schedule } from '@/app/admin/schedules/ScheduleEditor'
 import CourseSchedule from '@/app/admin/courses/CourseSchedule'
 import CourseMapsSection, { type CourseMap } from '../CourseMapsSection'
+import CourseResourcesSection, { type CourseResource } from '../CourseResourcesSection'
 import CourseLocationFields from '@/components/CourseLocationFields'
 
 const STATUS_STYLES: Record<string, string> = {
@@ -111,6 +112,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
     { data: galleryImageRows },
     { data: estimateReviewRows },
     { data: courseMapRows },
+    { data: courseResourceRows },
     { data: courseLinkRows },
     { data: venueRows },
   ] = await Promise.all([
@@ -148,6 +150,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
     admin.from('gallery_images').select('url, caption, categories').order('created_at', { ascending: false }),
     admin.from('estimate_reviews').select('id, created_at, requested_by, reviewer_id, note, responded_at, approved, response_note').eq('instance_id', id).order('created_at', { ascending: false }).limit(8),
     admin.from('course_maps').select('id, url, label, audience, library_item_id, library_items(title, url, audience)').eq('instance_id', id).order('sort_order'),
+    admin.from('course_resources').select('id, url, label, audience, library_item_id, library_items(title, url, audience)').eq('instance_id', id).order('sort_order'),
     admin.from('course_links').select('id, url, label, audience, purpose').eq('instance_id', id).order('purpose').order('sort_order'),
     admin.from('venues').select('id, name, region_code').eq('active', true).order('name'),
   ])
@@ -168,6 +171,21 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
     return {
       id: r.id,
       label: item?.title ?? r.label ?? 'Map',
+      url: item?.url ?? r.url,
+      audience: r.audience as LibraryAudience,
+      fromLibrary: Boolean(r.library_item_id),
+      libraryLocked: item?.audience === 'internal',
+    }
+  })
+
+  // Same split as a map: a library document, or a link pasted for this
+  // delivery. Kept apart from Files because these are the ones students can
+  // be shown — Files has no audience at all.
+  const courseResources: CourseResource[] = (courseResourceRows ?? []).map((r) => {
+    const item = r.library_items as unknown as { title: string; url: string | null; audience: string } | null
+    return {
+      id: r.id,
+      label: item?.title ?? r.label ?? 'Document',
       url: item?.url ?? r.url,
       audience: r.audience as LibraryAudience,
       fromLibrary: Boolean(r.library_item_id),
@@ -530,6 +548,8 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
           <CourseFilesSection instanceId={id} files={courseFiles} />
 
           <CourseMapsSection instanceId={id} maps={courseMaps} />
+
+          <CourseResourcesSection instanceId={id} resources={courseResources} />
 
           <CoursePhotosSection
             instanceId={id}

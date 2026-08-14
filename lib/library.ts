@@ -23,7 +23,7 @@ export const BUCKET_META: Record<LibraryBucket, { label: string; hint: string }>
 export const BUCKET_ORDER: LibraryBucket[] = ['teaching', 'resource', 'map', 'instructor']
 
 // Two more shelves, browsed beside the four above but stored in their own
-// tables: an equipment list and a schedule are structured rows, not links, so
+// tables: a gear list and a schedule are structured rows, not links, so
 // they can't be library_items. What they share with the rest of the library is
 // the vocabulary — a name, what it's for, disciplines, topics — and one place
 // to find them.
@@ -32,9 +32,9 @@ export type LibraryShelf = LibraryBucket | TemplateShelf
 
 export const TEMPLATE_SHELF_META: Record<TemplateShelf, { label: string; hint: string; noun: string }> = {
   gear: {
-    label: 'Equipment lists',
+    label: 'Gear lists',
     hint: 'Reusable kit lists — copied onto a course as its starting point',
-    noun: 'equipment list',
+    noun: 'gear list',
   },
   schedule: {
     label: 'Schedules',

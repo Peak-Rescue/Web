@@ -16,7 +16,7 @@ async function requireAdmin() {
 
 function touch(instanceId?: string | null) {
   revalidatePath('/admin/gear')
-  // Templates live on the library's equipment shelf, so an edit to one has to
+  // Templates live on the library's gear shelf, so an edit to one has to
   // reach that page too — it's where they're browsed and renamed.
   revalidatePath('/admin/library')
   if (instanceId) {

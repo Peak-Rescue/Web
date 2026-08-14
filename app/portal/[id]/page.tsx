@@ -4,12 +4,13 @@ import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { moduleAudience } from '@/lib/library'
+import { moduleAudience, KIND_META, type LibraryKind } from '@/lib/library'
 import { gearLabel, placeChoices, productName } from '@/lib/gear'
 import { courseDisplayName, computeBlocks } from '@/lib/courses'
 import CourseTasksPanel, { type CourseTask, type TaskPerson } from '@/components/CourseTasksPanel'
 import { loadTasksWithDocs } from '@/lib/course-tasks'
 import { LinkIcon, PaperclipIcon } from '@/components/TaskIcons'
+import { AudiencePills } from '@/components/AudiencePills'
 import PortalSectionNav from './PortalSectionNav'
 import CourseUpdates, { type CourseUpdate } from './CourseUpdates'
 import CourseMessages, { type CourseMessage } from './CourseMessages'
@@ -105,7 +106,7 @@ export default async function PortalPage({
     modulesQuery = modulesQuery.in('audience', audienceFilter)
   }
 
-  const [{ data: inst }, { data: offDays }, { data: modules }, { data: instructors }, taskRows, { data: peopleRows }, { data: templateRows }, { data: courseDocRows }, { data: taskDocRows }, { data: mapRows }, { data: linkRows }, { data: updateRows }, { count: enrolledCount }, { data: messageRows }] =
+  const [{ data: inst }, { data: offDays }, { data: modules }, { data: instructors }, taskRows, { data: peopleRows }, { data: templateRows }, { data: courseDocRows }, { data: taskDocRows }, { data: mapRows }, { data: resourceRows }, { data: linkRows }, { data: updateRows }, { count: enrolledCount }, { data: messageRows }] =
     await Promise.all([
       admin.from('course_instances')
         .select('course_type, custom_title, status, location, client_name, notes, ref_number, starts_at, ends_at, meeting_point, meeting_time, intro')
@@ -138,6 +139,12 @@ export default async function PortalPage({
       (showTasks
         ? admin.from('course_maps').select('id, url, label, audience, library_items(title, url, edit_url)').eq('instance_id', id).order('sort_order')
         : admin.from('course_maps').select('id, url, label, audience, library_items(title, url)').eq('instance_id', id).eq('audience', 'shared').order('sort_order')),
+      // The resources shelf — med plan, permits, tech notes for this place.
+      // Same audience rule as maps, and read the same way: a student sees
+      // only the rows shared with them.
+      (showTasks
+        ? admin.from('course_resources').select('id, url, label, audience, library_items(id, title, url, kind)').eq('instance_id', id).order('sort_order')
+        : admin.from('course_resources').select('id, url, label, audience, library_items(id, title, url, kind)').eq('instance_id', id).eq('audience', 'shared').order('sort_order')),
       // Links added for this delivery — the photo album, the client's
       // paperwork. Same audience rule as maps.
       (showTasks
@@ -198,6 +205,22 @@ export default async function PortalPage({
       internal: r.audience !== 'shared',
     }
   }).filter((m) => m.url || m.editUrl)
+
+  // The resources shelf. A Drive document goes through the portal's own proxy
+  // rather than out to Google — the same rule the curriculum follows, and the
+  // only reason a student can open one at all: Drive would send them to the
+  // request-access screen.
+  const resources = (resourceRows ?? []).map((r) => {
+    const item = r.library_items as unknown as { id: string; title: string; url: string | null; kind: string } | null
+    const isDrive = /drive\.google\.com|docs\.google\.com/.test(item?.url ?? '')
+    return {
+      id: r.id,
+      label: item?.title ?? r.label ?? 'Document',
+      kind: item ? KIND_META[item.kind as LibraryKind] ?? null : null,
+      url: item && isDrive ? `/api/library/${item.id}` : item?.url ?? r.url,
+      internal: r.audience !== 'shared',
+    }
+  }).filter((r) => r.url)
 
   const blocks = inst.starts_at && inst.ends_at
     ? computeBlocks(inst.starts_at, inst.ends_at, offDays ?? [])
@@ -281,7 +304,8 @@ export default async function PortalPage({
   const hasAbout = Boolean(inst.intro || inst.meeting_point || inst.meeting_time)
   const hasSchedule = Boolean(sched && schedDays.length > 0)
   const hasCurriculum = orderedModules.length > 0
-  const hasEquipment = Boolean(gearList && gearList.gear_list_entries.length > 0)
+  const hasGear = Boolean(gearList && gearList.gear_list_entries.length > 0)
+  const hasResources = resources.length > 0
   const hasNotes = showTasks && Boolean(inst.notes)
   // Everyone on the course sees updates; staff also get the box to write one,
   // so the section shows for them even when there's nothing posted yet.
@@ -380,8 +404,9 @@ export default async function PortalPage({
     hasDocuments && 'documents',
     hasAbout && 'about',
     hasSchedule && 'schedule',
+    hasResources && 'resources',
     hasCurriculum && 'curriculum',
-    hasEquipment && 'equipment',
+    hasGear && 'gear',
   ].filter(Boolean) as SectionKey[]).map((id) => ({
     id,
     label: SECTION_LABEL[id],
@@ -783,6 +808,43 @@ export default async function PortalPage({
           </Section>
         )}
 
+        {/* Resources — what's true about this place: the med plan, the permit,
+            the evacuation annex. Above the curriculum and visibly not part of
+            it, because "what do I do if someone gets hurt" is not lesson four.
+            Rows the team can see but students can't are badged, so an
+            instructor reading the same page knows which is which. */}
+        {hasResources && (
+          <Section id="resources" blurb="Reference for this course and this place">
+            <ul className="space-y-1.5">
+              {resources.map((r) => (
+                <li key={r.id}>
+                  <a
+                    href={r.url!}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg border border-zinc-800 bg-zinc-900 hover:border-zinc-600 transition-colors group"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-zinc-400">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M16 13H8M16 17H8" />
+                    </svg>
+                    <span className="text-sm text-zinc-200 group-hover:text-white transition-colors min-w-0 truncate">
+                      {r.label}
+                    </span>
+                    {r.kind && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400 shrink-0">
+                        {r.kind}
+                      </span>
+                    )}
+                    {showTasks && r.internal && (
+                      <AudiencePills audience="internal" className="ml-auto shrink-0" />
+                    )}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </Section>
+        )}
+
         {/* Curriculum — the modules, each its own named group rather than a
             page-length run of link rows. */}
         {hasCurriculum && (
@@ -848,8 +910,8 @@ export default async function PortalPage({
         )}
 
         {/* Gear */}
-        {hasEquipment && gearList && (
-          <Section id="equipment" blurb={gearList.name}>
+        {hasGear && gearList && (
+          <Section id="gear" blurb={gearList.name}>
             {gearList.intro && <p className="text-sm text-zinc-400 mb-3 whitespace-pre-line">{gearList.intro}</p>}
             {(['personal', 'group'] as const).map((gt) => {
               const rows = gearList.gear_list_entries
