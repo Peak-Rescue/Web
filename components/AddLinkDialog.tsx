@@ -107,18 +107,16 @@ export default function AddLinkDialog({
         )}
 
         {libraryPlace && (
-          <label className="flex items-start gap-2 mt-3 text-xs text-zinc-400 cursor-pointer">
+          <label className="flex items-center gap-2.5 mt-3 px-3 py-2.5 rounded border border-zinc-700 bg-zinc-800/50 hover:border-zinc-600 text-sm text-zinc-200 cursor-pointer transition-colors">
             <input
               type="checkbox"
               checked={toLibrary}
               disabled={busy}
               onChange={(e) => setToLibrary(e.target.checked)}
-              className="accent-red-600 mt-0.5 shrink-0 disabled:opacity-50"
+              className="accent-red-600 w-4 h-4 shrink-0 disabled:opacity-50"
             />
             <span>
-              Also save to the resource library for{' '}
-              <span className="text-zinc-300">{libraryPlace}</span> — the next course here will
-              find it.
+              Add to library for <span className="font-medium">{libraryPlace}</span>
             </span>
           </label>
         )}

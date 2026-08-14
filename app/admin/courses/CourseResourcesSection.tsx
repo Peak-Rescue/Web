@@ -219,8 +219,8 @@ export default function CourseResourcesSection({
             ))}
             {picker !== null && available.length === 0 && (
               <p className="text-xs text-zinc-500 px-2.5 py-4">
-                Nothing on the resource shelf yet — add a link below and tick &ldquo;save to the
-                resource library&rdquo; to put the first one there.
+                Nothing on the resource shelf yet — add a link below and tick &ldquo;Add to
+                library&rdquo; to put the first one there.
               </p>
             )}
             {picker === null && <p className="text-xs text-zinc-500 px-2.5 py-4">Loading resources…</p>}
