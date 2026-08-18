@@ -25,6 +25,13 @@ export default function DayOutline({
 }) {
   const [rows, setRows] = useState<Row[]>(() => fromBlocks(blocks))
   const [saving, setSaving] = useState(false)
+  // A run of whole lines, held by index: Shift+arrows extend it, a drag down
+  // the margin draws it, and Shift+click reaches for the far end. Everything
+  // that works on the line you're on — Tab, Backspace, Alt+arrows — works on
+  // the run instead once there is one.
+  const [sel, setSel] = useState<{ a: number; b: number } | null>(null)
+  const lo = sel ? Math.min(sel.a, sel.b) : -1
+  const hi = sel ? Math.max(sel.a, sel.b) : -1
 
   const inputs = useRef(new Map<string, HTMLInputElement>())
   const focusNext = useRef<{ key: string; caret: number } | null>(null)
@@ -92,6 +99,9 @@ export default function DayOutline({
 
   const edit = useCallback((next: Row[]) => {
     setRows(next)
+    // Indices don't survive a change of shape. An operation that means to keep
+    // its run says so again, after this.
+    setSel(null)
     pending.current = next
     if (timer.current) clearTimeout(timer.current)
     timer.current = setTimeout(() => {
@@ -108,7 +118,123 @@ export default function DayOutline({
   useEffect(() => { flushRef.current = flush })
   useEffect(() => () => flushRef.current(), [])
 
+  // Dragging down the lines selects them. The mouse can leave the outline
+  // mid-drag, so the button coming up is watched on the window.
+  const dragFrom = useRef<number | null>(null)
+  // Where the caret last was, so Shift+click has a far end to reach from.
+  const focused = useRef(0)
+  useEffect(() => {
+    const up = () => { dragFrom.current = null }
+    window.addEventListener('mouseup', up)
+    return () => window.removeEventListener('mouseup', up)
+  }, [])
+
+  // Selected lines leave as text, indented the way they'd come back in.
+  const asText = (from: number, to: number) =>
+    rows.slice(from, to + 1).map((r) => (r.depth === 1 ? '  ' : '') + r.title).join('\n')
+
+  // Whatever the run is replaced by, the run itself goes: the rows leave and
+  // the caret lands on what takes their place.
+  function replaceRun(from: number, to: number, put: Row[], caret?: number) {
+    const next = [...rows]
+    next.splice(from, to - from + 1, ...put)
+    const landing = put[put.length - 1] ?? next[from - 1] ?? next[0]
+    if (!next.length) next.push(blankRow())
+    const at = landing ?? next[0]
+    focusNext.current = { key: at.key, caret: caret ?? (put.length ? 0 : at.title.length) }
+    edit(next)
+  }
+
+  // Keys that mean something to a run of lines rather than to a caret. Runs
+  // through before the single-line handling below, and falls through to it
+  // when there's no run.
+  function runKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'Escape') { e.preventDefault(); setSel(null); return true }
+
+    // Alt with an arrow means move, and the line handling below already moves
+    // a whole run when there is one.
+    if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && e.altKey) return false
+
+    if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && !e.altKey) {
+      e.preventDefault()
+      const down = e.key === 'ArrowDown'
+      if (e.shiftKey) {
+        const b = Math.min(Math.max(sel!.b + (down ? 1 : -1), 0), rows.length - 1)
+        focusNext.current = { key: rows[b].key, caret: 0 }
+        setSel({ a: sel!.a, b })
+      } else {
+        // Stepping off a run leaves you at the end you stepped towards.
+        const at = down ? hi : lo
+        focusNext.current = { key: rows[at].key, caret: down ? rows[at].title.length : 0 }
+        setSel(null)
+      }
+      return true
+    }
+
+    if (e.key === 'Tab') {
+      e.preventDefault()
+      const depth: 0 | 1 = e.shiftKey ? 0 : 1
+      const next = rows.map((r, n) =>
+        // The first line of a day has nothing to hang off, so it stays a topic
+        // even when the rest of the run indents around it.
+        n >= lo && n <= hi && !(depth === 1 && n === 0) ? { ...r, depth } : r
+      )
+      focusNext.current = { key: rows[hi].key, caret: 0 }
+      edit(next)
+      setSel(sel)
+      return true
+    }
+
+    if (e.key === 'Backspace' || e.key === 'Delete') {
+      e.preventDefault()
+      replaceRun(lo, hi, [])
+      return true
+    }
+
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      const put = blankRow()
+      replaceRun(lo, hi, [put])
+      return true
+    }
+
+    if ((e.metaKey || e.ctrlKey) && (e.key === 'c' || e.key === 'x')) {
+      e.preventDefault()
+      void navigator.clipboard?.writeText(asText(lo, hi)).catch(() => {})
+      if (e.key === 'x') replaceRun(lo, hi, [])
+      return true
+    }
+
+    if ((e.metaKey || e.ctrlKey) && e.key === 'a') {
+      e.preventDefault()
+      setSel({ a: 0, b: rows.length - 1 })
+      return true
+    }
+
+    // Typing over a run does what typing over a selection does anywhere: the
+    // run goes, the character stays.
+    if (e.key.length === 1 && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      e.preventDefault()
+      replaceRun(lo, hi, [{ ...blankRow(), title: e.key, depth: rows[lo].depth }], 1)
+      return true
+    }
+
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+      e.preventDefault()
+      const at = e.key === 'ArrowLeft' ? lo : hi
+      focusNext.current = { key: rows[at].key, caret: e.key === 'ArrowLeft' ? 0 : rows[at].title.length }
+      setSel(null)
+      return true
+    }
+
+    // A modifier held on its own isn't a keystroke yet, and a shortcut this
+    // doesn't claim — paste above all — has to reach the browser intact.
+    if (e.metaKey || e.ctrlKey) return false
+    return !['Shift', 'Meta', 'Control', 'Alt'].includes(e.key)
+  }
+
   function keyDown(e: React.KeyboardEvent<HTMLInputElement>, i: number) {
+    if (sel && runKeyDown(e)) return
     const el = e.currentTarget
     const caret = el.selectionStart ?? 0
     const selected = (el.selectionEnd ?? 0) !== caret
@@ -173,15 +299,40 @@ export default function DayOutline({
     }
 
     // Alt+arrow moves the line itself, so reordering is a keystroke rather
-    // than a drag.
+    // than a drag. With a run selected it moves all of them, together.
     if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && e.altKey) {
       e.preventDefault()
-      const to = e.key === 'ArrowUp' ? i - 1 : i + 1
-      if (to < 0 || to >= rows.length) return
+      const up = e.key === 'ArrowUp'
+      const from = sel ? lo : i
+      const to = sel ? hi : i
+      const landing = up ? from - 1 : to + 1
+      if (landing < 0 || landing >= rows.length) return
       const next = [...rows]
-      next.splice(to, 0, next.splice(i, 1)[0])
+      const moved = next.splice(from, to - from + 1)
+      next.splice(up ? from - 1 : from + 1, 0, ...moved)
       focusNext.current = { key: row.key, caret }
       edit(next)
+      if (sel) setSel({ a: up ? lo - 1 : lo + 1, b: up ? hi - 1 : hi + 1 })
+      return
+    }
+
+    // Shift with an up or down arrow can only mean whole lines here — a
+    // one-line field has no line above to select into.
+    if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && e.shiftKey) {
+      e.preventDefault()
+      const b = Math.min(Math.max(i + (e.key === 'ArrowDown' ? 1 : -1), 0), rows.length - 1)
+      if (b === i) return
+      focusNext.current = { key: rows[b].key, caret: 0 }
+      setSel({ a: i, b })
+      return
+    }
+
+    // Select-all takes the field first and the day second, the way a word
+    // processor widens from the paragraph to the document.
+    if ((e.metaKey || e.ctrlKey) && e.key === 'a') {
+      if (row.title && !(caret === 0 && el.selectionEnd === row.title.length)) return
+      e.preventDefault()
+      setSel({ a: 0, b: rows.length - 1 })
       return
     }
 
@@ -198,14 +349,16 @@ export default function DayOutline({
       return
     }
 
-    if (e.key === 'Escape') el.blur()
+    // Escape steps back from the caret to the line it sits on — from there
+    // the arrows walk the selection out over the ones around it.
+    if (e.key === 'Escape') { e.preventDefault(); setSel({ a: i, b: i }) }
   }
 
   // Pasting an outline mid-line splits it into lines here rather than in a
   // separate import box — indentation still means sub-topic.
   function paste(e: React.ClipboardEvent<HTMLInputElement>, i: number) {
     const text = e.clipboardData.getData('text/plain')
-    if (!text.includes('\n')) return
+    if (!sel && !text.includes('\n')) return
     e.preventDefault()
     const el = e.currentTarget
     const caret = el.selectionStart ?? 0
@@ -219,6 +372,10 @@ export default function DayOutline({
       depth: (/^(\s{2,}|\t|\s*[○·])/.test(line) ? 1 : 0) as 0 | 1,
     }))
     if (!parsed.length) return
+
+    // Pasting over a run replaces it whole rather than landing inside the line
+    // the caret happened to be on.
+    if (sel) { replaceRun(lo, hi, parsed, parsed[parsed.length - 1].title.length); return }
 
     parsed[0] = { ...parsed[0], title: row.title.slice(0, caret) + parsed[0].title, depth: row.depth }
     const last = parsed[parsed.length - 1]
@@ -239,7 +396,31 @@ export default function DayOutline({
       onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) flush() }}
     >
       {rows.map((row, i) => (
-        <div key={row.key} className="flex items-center gap-1 group">
+        <div
+          key={row.key}
+          onMouseDown={(e) => {
+            // Shift reaches from wherever the caret is to the line clicked;
+            // a plain press starts a drag and drops any run already held.
+            if (e.shiftKey) {
+              e.preventDefault()
+              const from = sel ? sel.a : focused.current
+              focusNext.current = { key: row.key, caret: 0 }
+              setSel({ a: from, b: i })
+              return
+            }
+            dragFrom.current = i
+            setSel(null)
+          }}
+          onMouseEnter={() => {
+            const from = dragFrom.current
+            if (from === null || from === i) return
+            focusNext.current = { key: row.key, caret: 0 }
+            setSel({ a: from, b: i })
+          }}
+          className={`flex items-center gap-1 rounded ${
+            sel && i >= lo && i <= hi ? 'bg-zinc-700/50' : ''
+          }`}
+        >
           {row.depth === 0 ? (
             <input
               value={row.time}
@@ -267,6 +448,7 @@ export default function DayOutline({
             onChange={(e) => edit(rows.map((r, n) => (n === i ? { ...r, title: e.target.value } : r)))}
             onKeyDown={(e) => keyDown(e, i)}
             onPaste={(e) => paste(e, i)}
+            onFocus={() => { focused.current = i }}
             placeholder={i === 0 && rows.length === 1 ? 'Type a topic — Tab indents, Enter starts the next line' : ''}
             className={`flex-1 min-w-0 ${row.depth === 1 ? 'text-[13px] text-zinc-300' : 'text-sm'} ${input}`}
           />
@@ -274,7 +456,9 @@ export default function DayOutline({
       ))}
       <div className="flex items-center justify-between pl-[4.5rem] pt-1">
         <p className="text-[10px] text-zinc-700">
-          Tab indents · Shift+Tab outdents · Alt+↑↓ moves a line
+          {sel && hi > lo
+            ? `${hi - lo + 1} lines · Tab indents · Alt+↑↓ moves them · ⌫ deletes`
+            : 'Tab indents · Shift+Tab outdents · Alt+↑↓ moves a line · Shift+↑↓ selects'}
         </p>
         <span className={`text-[10px] transition-opacity ${saving ? 'text-zinc-500 opacity-100' : 'opacity-0'}`}>
           Saving…
