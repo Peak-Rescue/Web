@@ -4,7 +4,7 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { moduleAudience, KIND_META, type LibraryKind } from '@/lib/library'
-import { gearLabel, placeChoices, productName } from '@/lib/gear'
+import { GEAR_ENTRY_COLUMNS, gearLabel, placeChoices, productName } from '@/lib/gear'
 import { courseDisplayName, computeBlocks } from '@/lib/courses'
 import CourseTasksPanel, { type CourseTask, type TaskPerson } from '@/components/CourseTasksPanel'
 import { loadTasksWithDocs } from '@/lib/course-tasks'
@@ -249,7 +249,7 @@ export default async function CourseView({
   // ever see the student one.
   const { data: gearRows } = await admin
     .from('gear_lists')
-    .select('id, name, audience, intro, gear_list_entries(id, gear_item_id, name, note, url, section, group_type, quantity, sort_order, option_group, option_branch, option_label, gear_items(name, brand, url, category), gear_entry_options(sort_order, gear_items(name, brand)))')
+    .select(`id, name, audience, intro, gear_list_entries(id, ${GEAR_ENTRY_COLUMNS}, gear_items(name, brand, url, category), gear_entry_options(sort_order, gear_items(name, brand)))`)
     .eq('instance_id', id)
   type GearRow = {
     id: string; name: string; audience: string; intro: string | null

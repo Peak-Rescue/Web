@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { GEAR_ENTRIES_COPY_SELECT } from '@/lib/gear'
 
 async function requireAdmin() {
   const supabase = await createClient()
@@ -717,8 +718,7 @@ export async function removeGearEntry(id: string, instanceId?: string | null) {
 
 type Admin = ReturnType<typeof createAdminClient>
 
-const SOURCE_SELECT =
-  'name, audience, intro, gear_list_entries(gear_item_id, name, note, url, section, group_type, quantity, sort_order, option_group, option_branch, option_label, gear_entry_options(gear_item_id, sort_order))'
+const SOURCE_SELECT = `name, audience, intro, ${GEAR_ENTRIES_COPY_SELECT}`
 
 type OptionRow = { gear_item_id: string; sort_order: number }
 type EntryRow = Record<string, unknown> & { gear_entry_options: OptionRow[] }

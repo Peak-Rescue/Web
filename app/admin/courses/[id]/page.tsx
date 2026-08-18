@@ -37,6 +37,7 @@ import CoursePhotosSection from '../CoursePhotosSection'
 import { LIBRARY_HREF, type CourseLink } from '@/lib/course-links'
 import AudienceSetter from '../AudienceSetter'
 import { type GearItem, type GearList } from '@/app/admin/gear/GearListEditor'
+import { GEAR_ENTRIES_SELECT } from '@/lib/gear'
 import { type Schedule } from '@/app/admin/schedules/ScheduleEditor'
 import CourseSchedule from '@/app/admin/courses/CourseSchedule'
 import CourseMapsSection, { type CourseMap } from '../CourseMapsSection'
@@ -403,7 +404,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
   const gearAdmin = createAdminClient()
   const [{ data: gearListRows }, { data: gearCatalog }, { data: gearTemplateRows }] = await Promise.all([
     gearAdmin.from('gear_lists')
-      .select('id, name, audience, intro, instance_id, is_template, gear_list_entries(id, gear_item_id, name, note, url, section, group_type, quantity, sort_order, gear_entry_options(gear_item_id, sort_order))')
+      .select(`id, name, audience, intro, instance_id, is_template, ${GEAR_ENTRIES_SELECT}`)
       .eq('instance_id', id),
     gearAdmin.from('gear_items').select('id, name, brand, info, url, category, parent_id, aliases, disciplines').eq('active', true).order('name'),
     gearAdmin.from('gear_lists')

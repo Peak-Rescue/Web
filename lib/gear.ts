@@ -190,3 +190,30 @@ export function gearLabel(
       : `${names.slice(0, -1).join(', ')} or ${names[names.length - 1]}`
   return { title: base, detail: joined }
 }
+
+// ─── Reading a list ─────────────────────────────────────────────────────────
+//
+// The columns a gear row is made of, written once. Four places load these rows
+// — the course page, the gear shelf, the student's portal, and the copy that
+// puts one list onto another — and none of them can check the string it sends
+// against the shape it casts the answer to, because the Supabase client has no
+// generated types to check against.
+//
+// So a column added here and forgotten in one of those selects arrives as
+// undefined and is silently treated as absent. That is exactly how choices
+// stopped working in both editors: `option_group` was written to the database
+// and never asked for on the way back, so every alternative read as ordinary
+// required gear the moment the page refreshed.
+export const GEAR_ENTRY_COLUMNS =
+  'gear_item_id, name, note, url, section, group_type, quantity, sort_order, ' +
+  'option_group, option_branch, option_label'
+
+// What the editor loads: the columns plus the row's own id, which it needs to
+// address a row it is about to change.
+export const GEAR_ENTRIES_SELECT =
+  `gear_list_entries(id, ${GEAR_ENTRY_COLUMNS}, gear_entry_options(gear_item_id, sort_order))`
+
+// What a copy carries: the same columns without the ids, because the rows it
+// creates get their own.
+export const GEAR_ENTRIES_COPY_SELECT =
+  `gear_list_entries(${GEAR_ENTRY_COLUMNS}, gear_entry_options(gear_item_id, sort_order))`

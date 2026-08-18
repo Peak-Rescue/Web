@@ -9,6 +9,7 @@ import {
 } from '@/lib/library'
 import { CAPABILITY_META, CAPABILITY_ORDER } from '@/lib/capabilities'
 import { type GearItem, type GearList } from '@/app/admin/gear/GearListEditor'
+import { GEAR_ENTRIES_SELECT } from '@/lib/gear'
 import { type Schedule } from '@/app/admin/schedules/ScheduleEditor'
 import RegionSelect from '@/components/RegionSelect'
 import LibraryRow from './LibraryRow'
@@ -70,7 +71,7 @@ export default async function LibraryPage({
     showTemplates && shelves.includes('gear')
       ? (() => {
           let g = admin.from('gear_lists')
-            .select('id, name, description, audience, intro, course_type, disciplines, topics, instance_id, is_template, gear_list_entries(id, gear_item_id, name, note, url, section, group_type, quantity, sort_order, gear_entry_options(gear_item_id, sort_order))')
+            .select(`id, name, description, audience, intro, course_type, disciplines, topics, instance_id, is_template, ${GEAR_ENTRIES_SELECT}`)
             .eq('is_template', true)
             .order('name')
           if (q) g = g.ilike('name', `%${q}%`)
