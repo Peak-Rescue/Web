@@ -165,97 +165,6 @@ export async function removeScheduleDay(id: string) {
 
 // ─── Blocks ─────────────────────────────────────────────────────────────────
 
-export async function addScheduleBlock(
-  dayId: string,
-  input: { title: string; parentId?: string | null; timeLabel?: string | null; location?: string | null }
-) {
-  const admin = await requireAdmin()
-  const title = input.title.trim()
-  if (!title) throw new Error('Give the block a title')
-
-  // Sort within siblings: a sub-topic orders against its parent's children,
-  // a topic against the day's other topics.
-  const q = admin.from('schedule_blocks').select('sort_order').eq('day_id', dayId)
-  const { data: last } = await (input.parentId ? q.eq('parent_id', input.parentId) : q.is('parent_id', null))
-    .order('sort_order', { ascending: false }).limit(1).maybeSingle()
-
-  const { error } = await admin.from('schedule_blocks').insert({
-    day_id: dayId,
-    parent_id: input.parentId ?? null,
-    title: title.slice(0, 300),
-    time_label: input.timeLabel?.trim() || null,
-    location: input.location?.trim() || null,
-    sort_order: last ? (last.sort_order as number) + 1 : 0,
-  })
-  if (error) throw new Error(error.message)
-  touch(await instanceOfDay(admin, dayId))
-}
-
-// Paste a block of lines as topics — the fastest way to move an existing
-// outline in, since that's how these were written in the first place. A line
-// indented with spaces, a tab, or a bullet becomes a sub-topic of the line
-// above it.
-export async function addScheduleBlocks(dayId: string, text: string) {
-  const admin = await requireAdmin()
-  const lines = text.split('\n').filter((l) => l.trim())
-  if (!lines.length) return
-
-  const { data: last } = await admin
-    .from('schedule_blocks').select('sort_order')
-    .eq('day_id', dayId).is('parent_id', null)
-    .order('sort_order', { ascending: false }).limit(1).maybeSingle()
-  let order = last ? (last.sort_order as number) + 1 : 0
-
-  const clean = (l: string) => l.replace(/^[\s ]*[-*•○·]?\s*/, '').trim().slice(0, 300)
-
-  let parentId: string | null = null
-  let childOrder = 0
-  for (const line of lines) {
-    const indented = /^(\s{2,}|\t|\s*[○·])/.test(line)
-    const title = clean(line)
-    if (!title) continue
-
-    if (indented && parentId) {
-      const { error } = await admin.from('schedule_blocks').insert({
-        day_id: dayId, parent_id: parentId, title, sort_order: childOrder++,
-      })
-      if (error) throw new Error(error.message)
-      continue
-    }
-    const { data, error } = await admin
-      .from('schedule_blocks')
-      .insert({ day_id: dayId, parent_id: null, title, sort_order: order++ })
-      .select('id').single()
-    if (error) throw new Error(error.message)
-    parentId = data.id
-    childOrder = 0
-  }
-  touch(await instanceOfDay(admin, dayId))
-}
-
-export async function updateScheduleBlock(
-  id: string,
-  patch: { title?: string; timeLabel?: string | null; location?: string | null }
-) {
-  const admin = await requireAdmin()
-  const update: Record<string, unknown> = {}
-  if (patch.title !== undefined) update.title = patch.title.trim().slice(0, 300) || 'Untitled'
-  if (patch.timeLabel !== undefined) update.time_label = patch.timeLabel?.trim() || null
-  if (patch.location !== undefined) update.location = patch.location?.trim() || null
-  const { data, error } = await admin
-    .from('schedule_blocks').update(update).eq('id', id).select('day_id').single()
-  if (error) throw new Error(error.message)
-  if (data?.day_id) touch(await instanceOfDay(admin, data.day_id))
-}
-
-export async function removeScheduleBlock(id: string) {
-  const admin = await requireAdmin()
-  const { data } = await admin.from('schedule_blocks').select('day_id').eq('id', id).single()
-  const { error } = await admin.from('schedule_blocks').delete().eq('id', id)
-  if (error) throw new Error(error.message)
-  if (data?.day_id) touch(await instanceOfDay(admin, data.day_id))
-}
-
 // ─── Templates ──────────────────────────────────────────────────────────────
 
 const SOURCE_SELECT =
@@ -363,4 +272,65 @@ export async function saveScheduleIntoTemplate(sourceId: string, templateId: str
 
   touch()
   return { name: target.name as string, days }
+}
+
+// The outline editor hands back a whole day at once — every row, in order,
+// each one either a topic or a sub-topic of the topic above it. Blocks carry
+// no identity anything else points at, so replacing them wholesale is both
+// simpler and safer than diffing rows that were reordered mid-sentence.
+export async function replaceDayOutline(
+  dayId: string,
+  rows: { title: string; timeLabel?: string | null; depth: number }[]
+) {
+  const admin = await requireAdmin()
+
+  const clean = rows
+    .map((r) => ({
+      title: r.title.trim().slice(0, 300),
+      time: r.timeLabel?.trim().slice(0, 60) || null,
+      depth: r.depth > 0 ? 1 : 0,
+    }))
+    .filter((r) => r.title)
+
+  const { error: eDel } = await admin.from('schedule_blocks').delete().eq('day_id', dayId)
+  if (eDel) throw new Error(eDel.message)
+
+  // A sub-topic before any topic is a typo, not a structure — it lands as a
+  // topic rather than disappearing.
+  const topics: { row: (typeof clean)[number]; order: number }[] = []
+  const kids: { parentOrder: number; row: (typeof clean)[number]; order: number }[] = []
+  for (const r of clean) {
+    if (r.depth === 0 || !topics.length) topics.push({ row: r, order: topics.length })
+    else {
+      const parentOrder = topics[topics.length - 1].order
+      kids.push({ parentOrder, row: r, order: kids.filter((k) => k.parentOrder === parentOrder).length })
+    }
+  }
+
+  if (topics.length) {
+    const { data: inserted, error } = await admin
+      .from('schedule_blocks')
+      .insert(topics.map((t) => ({
+        day_id: dayId, parent_id: null, title: t.row.title, time_label: t.row.time, sort_order: t.order,
+      })))
+      .select('id, sort_order')
+    if (error) throw new Error(error.message)
+
+    // Read the ids back by sort_order rather than trusting insert order.
+    const byOrder = new Map((inserted ?? []).map((b) => [b.sort_order as number, b.id as string]))
+    if (kids.length) {
+      const { error: e2 } = await admin.from('schedule_blocks').insert(
+        kids.map((k) => ({
+          day_id: dayId,
+          parent_id: byOrder.get(k.parentOrder) ?? null,
+          title: k.row.title,
+          time_label: k.row.time,
+          sort_order: k.order,
+        }))
+      )
+      if (e2) throw new Error(e2.message)
+    }
+  }
+
+  touch(await instanceOfDay(admin, dayId))
 }
