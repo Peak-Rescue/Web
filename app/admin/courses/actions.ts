@@ -876,10 +876,11 @@ export async function deleteInstance(instanceId: string) {
 // expiresIn: days from now, 'never' for no expiry, or omitted for the default —
 // valid through the course plus a week of margin; 30 days from now when the
 // course has no end date or already ended.
-export async function generateInviteLink(instanceId: string, expiresIn?: number | 'never') {
-  await requireAdmin()
+// When a link should die. Shared by the invite link and the view-only links,
+// because "valid until a week after the course" is the same sensible default
+// whichever kind you just minted, and two copies of it drift.
+async function linkExpiry(instanceId: string, expiresIn?: number | 'never'): Promise<Date | null> {
   const admin = createAdminClient()
-
   const { data: inst } = await admin
     .from('course_instances')
     .select('ends_at')
@@ -888,22 +889,62 @@ export async function generateInviteLink(instanceId: string, expiresIn?: number 
   if (!inst) throw new Error('Course not found')
 
   const dayMs = 24 * 60 * 60 * 1000
-  let expires: Date | null
-  if (expiresIn === 'never') {
-    expires = null
-  } else if (expiresIn != null) {
+  if (expiresIn === 'never') return null
+  if (expiresIn != null) {
     if (!Number.isInteger(expiresIn) || expiresIn < 1 || expiresIn > 365) {
       throw new Error('Expiry must be between 1 and 365 days')
     }
-    expires = new Date(Date.now() + expiresIn * dayMs)
-  } else {
-    const fromCourseEnd = inst.ends_at
-      ? new Date(new Date(inst.ends_at + 'T00:00:00').getTime() + 7 * dayMs)
-      : null
-    expires = fromCourseEnd && fromCourseEnd.getTime() > Date.now()
-      ? fromCourseEnd
-      : new Date(Date.now() + 30 * dayMs)
+    return new Date(Date.now() + expiresIn * dayMs)
   }
+  const fromCourseEnd = inst.ends_at
+    ? new Date(new Date(inst.ends_at + 'T00:00:00').getTime() + 7 * dayMs)
+    : null
+  return fromCourseEnd && fromCourseEnd.getTime() > Date.now()
+    ? fromCourseEnd
+    : new Date(Date.now() + 30 * dayMs)
+}
+
+// Read-only links to the student page, for people who shouldn't have an
+// account: the client's POC, an instructor being sounded out. One row per
+// person you send it to, so revoking one doesn't kill the others.
+export async function createViewShare(
+  instanceId: string,
+  label: string,
+  expiresIn?: number | 'never'
+) {
+  const user = await requireAdmin()
+  const admin = createAdminClient()
+
+  const expires = await linkExpiry(instanceId, expiresIn)
+  const { error } = await admin.from('course_view_shares').insert({
+    instance_id: instanceId,
+    label: label.trim().slice(0, 120) || null,
+    created_by: user.id,
+    expires_at: expires ? expires.toISOString() : null,
+  })
+  if (error) throw new Error(error.message)
+  revalidatePath(`/admin/courses/${instanceId}`)
+}
+
+// Revoked rather than deleted: a link that stopped working is a thing you may
+// have to account for later, and a row that is gone answers no questions.
+export async function revokeViewShare(shareId: string, instanceId: string) {
+  await requireAdmin()
+  const admin = createAdminClient()
+  const { error } = await admin
+    .from('course_view_shares')
+    .update({ revoked_at: new Date().toISOString() })
+    .eq('id', shareId)
+    .eq('instance_id', instanceId)
+  if (error) throw new Error(error.message)
+  revalidatePath(`/admin/courses/${instanceId}`)
+}
+
+export async function generateInviteLink(instanceId: string, expiresIn?: number | 'never') {
+  await requireAdmin()
+  const admin = createAdminClient()
+
+  const expires = await linkExpiry(instanceId, expiresIn)
 
   const { error } = await admin
     .from('course_instances')

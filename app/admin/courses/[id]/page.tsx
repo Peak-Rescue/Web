@@ -9,6 +9,7 @@ import StaffingInterest from '../StaffingInterest'
 import GuestInstructorButton from '../GuestInstructorButton'
 import CourseFilesSection, { type CourseFile } from '../CourseFilesSection'
 import StudentInvitePanel from '../StudentInvitePanel'
+import ViewSharePanel, { type ViewShare } from '../ViewSharePanel'
 import AutoSaveForm from '@/components/AutoSaveForm'
 import DeleteInstanceButton from '../DeleteInstanceButton'
 import CourseTasksPanel, { type TaskPerson } from '@/components/CourseTasksPanel'
@@ -116,6 +117,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
     { data: courseResourceRows },
     { data: courseLinkRows },
     { data: venueRows },
+    { data: viewShareRows },
   ] = await Promise.all([
     admin.from('enrollments').select('id, enrolled_at, profiles(first_name, last_name, email)').eq('instance_id', id).order('enrolled_at'),
     admin.from('expense_items').select('id', { count: 'exact', head: true }).eq('instance_id', id),
@@ -154,6 +156,13 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
     admin.from('course_resources').select('id, url, label, audience, library_item_id, library_items(title, url, audience)').eq('instance_id', id).order('sort_order'),
     admin.from('course_links').select('id, url, label, audience, purpose').eq('instance_id', id).order('purpose').order('sort_order'),
     admin.from('venues').select('id, name, region_code').eq('active', true).order('name'),
+    // Revoked links stay in the table but not on the screen: the panel is for
+    // links you might still need to kill, and a dead one is only clutter.
+    admin.from('course_view_shares')
+      .select('id, token, label, expires_at, viewed_at, view_count')
+      .eq('instance_id', id)
+      .is('revoked_at', null)
+      .order('created_at', { ascending: false }),
   ])
 
   // Quote-hero photo pool: the curated static shots plus every gallery upload,
@@ -237,6 +246,17 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
   ].sort((a, b) => b.created_at.localeCompare(a.created_at))
 
   const enrollments = enrollmentRows ?? []
+  const viewShares: ViewShare[] = ((viewShareRows ?? []) as {
+    id: string; token: string; label: string | null
+    expires_at: string | null; viewed_at: string | null; view_count: number
+  }[]).map((r) => ({
+    id: r.id,
+    url: `${process.env.NEXT_PUBLIC_SITE_URL}/share/${r.token}`,
+    label: r.label,
+    expiresAt: r.expires_at,
+    viewedAt: r.viewed_at,
+    viewCount: r.view_count,
+  }))
   const staffedProfileIds = new Set(
     (assigned ?? [])
       .map((a) => (a.instructors as unknown as { profile_id: string | null } | null)?.profile_id)
@@ -803,6 +823,8 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
               expiresAt={inst.invite_expires_at ?? null}
               expired={!!inst.invite_expires_at && new Date(inst.invite_expires_at) < new Date()}
             />
+
+            <ViewSharePanel instanceId={id} shares={viewShares} />
           </div>
         </TabPanel>
 
