@@ -738,7 +738,24 @@ export default async function CourseView({
                         {d.location}
                       </p>
                     )}
-                    {d.notes && <p className="text-xs text-zinc-500 mt-0.5">{d.notes}</p>}
+                    {/* Under a pinned location, an unmarked grey line read as
+                        more of the address. The page corner says this one is
+                        someone's note about the day — usually something to
+                        bring, and worth not skimming past. */}
+                    {d.notes && (
+                      <p className="flex gap-1.5 text-xs text-zinc-500 mt-0.5">
+                        <svg
+                          aria-hidden
+                          xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24"
+                          fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"
+                          className="shrink-0 mt-[3px] text-zinc-600"
+                        >
+                          <path d="M15 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h9l5-5V5a2 2 0 0 0-2-2Z" />
+                          <path d="M14 21v-3a2 2 0 0 1 2-2h3" />
+                        </svg>
+                        <span className="flex-1 min-w-0">{d.notes}</span>
+                      </p>
+                    )}
                     {/* What the day is for, before what it consists of — the
                         target sits in the same gutter as the pin and the book,
                         so a day reads as where, why, then what. */}

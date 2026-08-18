@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   updateSchedule, addScheduleDay, updateScheduleDay, removeScheduleDay,
@@ -131,33 +131,39 @@ export default function ScheduleEditor({
               </button>
             </div>
             <div className="grid sm:grid-cols-2 gap-2">
-              <input
-                defaultValue={day.location ?? ''}
-                onBlur={(e) => e.target.value !== (day.location ?? '') && run(() => updateScheduleDay(day.id, { location: e.target.value }))}
-                placeholder="Location"
-                className={`w-full ${input}`}
-              />
-              <input
-                defaultValue={day.notes ?? ''}
-                onBlur={(e) => e.target.value !== (day.notes ?? '') && run(() => updateScheduleDay(day.id, { notes: e.target.value }))}
-                placeholder="Notes — e.g. bring tactical gear"
-                className={`w-full ${input}`}
-              />
+              <Marked icon={<PinIcon />}>
+                <input
+                  defaultValue={day.location ?? ''}
+                  onBlur={(e) => e.target.value !== (day.location ?? '') && run(() => updateScheduleDay(day.id, { location: e.target.value }))}
+                  placeholder="Location"
+                  className={`w-full pl-7 ${input}`}
+                />
+              </Marked>
+              <Marked icon={<NoteIcon />}>
+                <input
+                  defaultValue={day.notes ?? ''}
+                  onBlur={(e) => e.target.value !== (day.notes ?? '') && run(() => updateScheduleDay(day.id, { notes: e.target.value }))}
+                  placeholder="Notes — e.g. bring tactical gear"
+                  className={`w-full pl-7 ${input}`}
+                />
+              </Marked>
             </div>
             {/* What the day is for, as opposed to what happens on it — the
                 course objectives are too coarse to teach a Tuesday from. */}
-            <textarea
-              defaultValue={day.objectives.join('\n')}
-              onBlur={(e) => {
-                const next = e.target.value.split('\n').map((o) => o.trim()).filter(Boolean)
-                if (next.join('\n') !== day.objectives.join('\n')) {
-                  run(() => updateScheduleDay(day.id, { objectives: next }))
-                }
-              }}
-              rows={2}
-              placeholder="Objectives for this day — one per line, optional"
-              className={`w-full resize-y ${input}`}
-            />
+            <Marked icon={<TargetIcon />} top>
+              <textarea
+                defaultValue={day.objectives.join('\n')}
+                onBlur={(e) => {
+                  const next = e.target.value.split('\n').map((o) => o.trim()).filter(Boolean)
+                  if (next.join('\n') !== day.objectives.join('\n')) {
+                    run(() => updateScheduleDay(day.id, { objectives: next }))
+                  }
+                }}
+                rows={2}
+                placeholder="Objectives for this day — one per line, optional"
+                className={`w-full resize-y pl-7 ${input}`}
+              />
+            </Marked>
           </div>
 
           <DayOutline dayId={day.id} blocks={day.schedule_blocks} onError={setError} />
@@ -240,5 +246,57 @@ function SaveToShelf({
         </>
       )}
     </div>
+  )
+}
+
+// A placeholder only says what a field is until you fill it in — after that,
+// two grey lines under a day title are just two grey lines. These are the same
+// marks the course page reads with, so the field you type into is the one the
+// students see.
+function Marked({ icon, top, children }: { icon: ReactNode; top?: boolean; children: ReactNode }) {
+  return (
+    <div className="relative">
+      <span
+        aria-hidden
+        className={`absolute left-2 text-zinc-600 ${top ? 'top-2.5' : 'top-1/2 -translate-y-1/2'}`}
+      >
+        {icon}
+      </span>
+      {children}
+    </div>
+  )
+}
+
+const glyph = {
+  xmlns: 'http://www.w3.org/2000/svg', width: 12, height: 12, viewBox: '0 0 24 24',
+  fill: 'none', stroke: 'currentColor', strokeWidth: 1.75,
+  strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const,
+}
+
+function PinIcon() {
+  return (
+    <svg {...glyph}>
+      <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
+      <circle cx="12" cy="10" r="3" />
+    </svg>
+  )
+}
+
+function NoteIcon() {
+  return (
+    <svg {...glyph}>
+      <path d="M15 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h9l5-5V5a2 2 0 0 0-2-2Z" />
+      <path d="M14 21v-3a2 2 0 0 1 2-2h3" />
+    </svg>
+  )
+}
+
+function TargetIcon() {
+  return (
+    <svg {...glyph}>
+      <circle cx="12" cy="12" r="9" />
+      <circle cx="12" cy="12" r="4.5" />
+      <circle cx="12" cy="12" r="0.5" fill="currentColor" />
+    </svg>
   )
 }
