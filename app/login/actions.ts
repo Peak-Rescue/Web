@@ -1,17 +1,20 @@
 'use server'
 
-import { createClient as createAnonClient } from '@supabase/supabase-js'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { checkRateLimit, clientIp } from '@/lib/rate-limit'
+import { normalizeEmail } from '@/lib/email'
+import { redeemSignInCode, sendSignInCode } from '@/lib/sign-in-code'
 
-export type LoginLinkResult = { ok: true } | { ok: false; error: string }
+export type LoginResult = { ok: true } | { ok: false; error: string }
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 // Runs server-side so the browser never talks to Supabase directly — some
 // corporate networks block *.supabase.co, which left the login form hanging
 // on "Sending…" for those users.
-export async function sendLoginLink(email: string): Promise<LoginLinkResult> {
-  const normalizedEmail = email.trim().toLowerCase()
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+export async function sendLoginCode(email: string): Promise<LoginResult> {
+  const normalizedEmail = normalizeEmail(email)
+  if (!EMAIL_RE.test(normalizedEmail)) {
     return { ok: false, error: 'Please enter a valid email address.' }
   }
 
@@ -25,28 +28,32 @@ export async function sendLoginLink(email: string): Promise<LoginLinkResult> {
     return { ok: false, error: 'Too many sign-in attempts just now. Please try again shortly.' }
   }
 
-  const anon = createAnonClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    { auth: { flowType: 'implicit' } }
-  )
-  const { error } = await anon.auth.signInWithOtp({
-    email: normalizedEmail,
-    options: {
-      emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/confirm`,
-      // Accounts are created by invite only — an unknown email here must
-      // not create an auth user (and a profile row via trigger).
-      shouldCreateUser: false,
-    },
-  })
+  const error = await sendSignInCode(admin, normalizedEmail)
 
-  // Deliberately identical outcome whether or not the address has an
-  // account: a distinct "no account found" reply would let anyone test which
-  // emails belong to Peak Rescue staff and students. Rate-limit errors still
-  // surface, since those are actionable for a real user.
-  if (error && !error.message.toLowerCase().includes('signup')) {
-    return { ok: false, error: error.message }
+  // An address with no account gets the same reply as one with an account:
+  // a distinct "no account found" would let anyone test which addresses
+  // belong to Peak Rescue staff and students.
+  return error ? { ok: false, error } : { ok: true }
+}
+
+// Capped separately from sending: the code is eight digits, and without a
+// ceiling on guesses a caller could work through them.
+export async function verifyLoginCode(email: string, code: string): Promise<LoginResult> {
+  const normalizedEmail = normalizeEmail(email)
+  const digits = code.replace(/\D/g, '')
+  if (!EMAIL_RE.test(normalizedEmail) || digits.length < 6) {
+    return { ok: false, error: 'Enter the code from your email.' }
   }
 
-  return { ok: true }
+  const admin = createAdminClient()
+  const ip = await clientIp()
+  const withinLimits =
+    (await checkRateLimit(admin, 'login_verify_email', normalizedEmail, { limit: 10, windowMinutes: 60 })) &&
+    (await checkRateLimit(admin, 'login_verify_ip', ip, { limit: 30, windowMinutes: 60 }))
+  if (!withinLimits) {
+    return { ok: false, error: 'Too many attempts. Please request a new code shortly.' }
+  }
+
+  const error = await redeemSignInCode(normalizedEmail, digits)
+  return error ? { ok: false, error } : { ok: true }
 }

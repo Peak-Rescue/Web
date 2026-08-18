@@ -2,14 +2,15 @@
 
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
-import { createClient as createAnonClient } from '@supabase/supabase-js'
 import { checkRateLimit, clientIp } from '@/lib/rate-limit'
 import { ilikeExact, normalizeEmail } from '@/lib/email'
+import { findUserIdByEmail, sendSignInCode } from '@/lib/sign-in-code'
 import { courseDisplayName } from '@/lib/courses'
 
 // `signedIn: true` means the session cookies are already set and the caller
 // should navigate straight into the portal. `signedIn: false` is the one case
-// that still needs a mailbox round-trip: the address already has an account.
+// that still needs a mailbox round-trip — the address already has an account —
+// and that trip is a typed code, never a link.
 export type JoinResult =
   | { ok: true; signedIn: true }
   | { ok: true; signedIn: false; email: string }
@@ -209,9 +210,9 @@ export async function joinCourse(
 
       // Account and seat are real; only the session mint failed. Fall through
       // to the emailed link rather than stranding them.
-      const mailError = await sendSignInLink(normalizedEmail)
+      const mailError = await sendSignInCode(admin, normalizedEmail)
       return mailError
-        ? { ok: false, error: "You're enrolled, but we couldn't sign you in. Request a link from the login page, or contact your course organizer." }
+        ? { ok: false, error: "You're enrolled, but we couldn't sign you in. Request a code from the login page, or contact your course organizer." }
         : { ok: true, signedIn: false, email: normalizedEmail }
     }
 
@@ -224,7 +225,7 @@ export async function joinCourse(
     // make them prove the mailbox is theirs before handing over a session —
     // otherwise the invite link would be an impersonation tool. Their existing
     // profile name is left untouched.
-    const userId = await existingUserId(admin, normalizedEmail)
+    const userId = await findUserIdByEmail(admin, normalizedEmail)
     if (!userId) {
       console.error('joinCourse existing-user lookup failed for', normalizedEmail)
       return { ok: false, error: 'Something went wrong. Please try again.' }
@@ -233,13 +234,13 @@ export async function joinCourse(
     await enroll(admin, instance.id, userId)
     await sendEnrolledReceipt(normalizedEmail, first, instance)
 
-    const mailError = await sendSignInLink(normalizedEmail)
+    const mailError = await sendSignInCode(admin, normalizedEmail)
     if (mailError) {
       // They ARE enrolled at this point — only the email failed.
-      console.error('joinCourse sign-in email failed:', mailError)
+      console.error('joinCourse sign-in code failed:', mailError)
       return {
         ok: false,
-        error: "You're enrolled, but we couldn't send your sign-in email. Request a link from the login page, or contact your course organizer.",
+        error: "You're enrolled, but we couldn't send your sign-in code. Request one from the login page, or contact your course organizer.",
       }
     }
     return { ok: true, signedIn: false, email: normalizedEmail }
@@ -247,39 +248,6 @@ export async function joinCourse(
     console.error('joinCourse failed:', err instanceof Error ? err.message : err)
     return { ok: false, error: 'Something went wrong. Please try again.' }
   }
-}
-
-// profiles.email is copied from auth at signup (migration 068), so this is a
-// plain indexed lookup; generateLink is the fallback for any row that predates
-// that trigger.
-async function existingUserId(admin: Admin, email: string): Promise<string | null> {
-  const { data: profile } = await admin
-    .from('profiles')
-    .select('id')
-    .ilike('email', ilikeExact(email))
-    .maybeSingle()
-  if (profile) return profile.id
-
-  const { data: link } = await admin.auth.admin.generateLink({ type: 'magiclink', email })
-  return link?.user?.id ?? null
-}
-
-// Sent from an anon client server-side: some corporate networks block
-// *.supabase.co in the browser.
-async function sendSignInLink(email: string): Promise<string | null> {
-  const anon = createAnonClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    { auth: { flowType: 'implicit' } }
-  )
-  const { error } = await anon.auth.signInWithOtp({
-    email,
-    options: {
-      emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/confirm`,
-      shouldCreateUser: false,
-    },
-  })
-  return error ? error.message : null
 }
 
 // Already signed in — the invite link itself is the only step. No form, no

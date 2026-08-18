@@ -2,12 +2,14 @@
 
 import { useState } from 'react'
 import { joinCourse } from '../actions'
+import { verifyLoginCode } from '@/app/login/actions'
 
 export default function JoinForm({ token }: { token: string }) {
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
   const [email, setEmail] = useState('')
   const [submitted, setSubmitted] = useState(false)
+  const [code, setCode] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -37,15 +39,64 @@ export default function JoinForm({ token }: { token: string }) {
     setLoading(false)
   }
 
+  // The address already had an account, so the seat is theirs but the session
+  // is not: they prove the mailbox with a typed code. No link is emailed —
+  // scanners open those before the recipient can.
+  async function handleVerify(e: React.SyntheticEvent<HTMLFormElement>) {
+    e.preventDefault()
+    setLoading(true)
+    setError('')
+
+    let result
+    try {
+      result = await verifyLoginCode(email, code)
+    } catch {
+      result = { ok: false as const, error: 'Something went wrong. Please try again.' }
+    }
+
+    if (!result.ok) {
+      setError(result.error)
+      setLoading(false)
+      return
+    }
+
+    window.location.assign('/dashboard')
+  }
+
   if (submitted) {
     return (
-      <div className="text-center">
-        <h2 className="text-xl font-bold text-white mb-3">You&rsquo;re enrolled</h2>
-        <p className="text-zinc-400">
-          This address already has a Peak Rescue account, so we sent a sign-in link to{' '}
-          <span className="text-white">{email}</span>. Click it to open your course portal.
-        </p>
-      </div>
+      <form onSubmit={handleVerify} className="space-y-4">
+        <div className="text-center">
+          <h2 className="text-xl font-bold text-white mb-2">You&rsquo;re enrolled</h2>
+          <p className="text-sm text-zinc-400">
+            This address already has a Peak Rescue account. We emailed a code to{' '}
+            <span className="text-white">{email}</span> — enter it to open your portal.
+          </p>
+        </div>
+
+        <input
+          id="code"
+          type="text"
+          inputMode="numeric"
+          autoComplete="one-time-code"
+          autoFocus
+          required
+          value={code}
+          onChange={e => setCode(e.target.value)}
+          placeholder="12345678"
+          className="w-full px-4 py-2.5 bg-zinc-900 border border-zinc-700 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-pr-red text-center text-2xl tracking-[0.3em] font-mono"
+        />
+
+        {error && <p className="text-red-400 text-sm">{error}</p>}
+
+        <button
+          type="submit"
+          disabled={loading}
+          className="w-full py-2.5 bg-pr-red hover:bg-pr-red-dark disabled:opacity-50 text-white font-semibold rounded-lg transition-colors"
+        >
+          {loading ? 'Signing in…' : 'Sign in'}
+        </button>
+      </form>
     )
   }
 
