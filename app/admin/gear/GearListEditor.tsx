@@ -2,6 +2,7 @@
 
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { useSteadyRefresh } from '@/components/useSteadyRefresh'
+import CategorySelect, { NEW_TYPE } from './CategorySelect'
 import { GEAR_CATEGORIES, isChoice, matchesGear, placeChoices, productName, unwrap, type CatalogItem } from '@/lib/gear'
 import {
   addGearEntry, updateGearEntry, removeGearEntry, updateGearList, copyGearList,
@@ -1310,6 +1311,8 @@ function AddGear({
   const [browsing, setBrowsing] = useState<string | null>(null)
   const [newCategory, setNewCategory] = useState<string>(GEAR_CATEGORIES[0])
   const [newParent, setNewParent] = useState('')
+  // A generic item named here rather than picked, same as the catalog page.
+  const [newType, setNewType] = useState<string | null>(null)
   // Only a product has a maker, so this is asked for only once one is
   // being made — a brand on a type is a question with no answer.
   const [newItemBrand, setNewItemBrand] = useState('')
@@ -1499,27 +1502,48 @@ function AddGear({
                   that never changed and so never said which of them fitted. */}
               <div>
                 <label className="block text-[11px] text-zinc-500 mb-1">Category</label>
-                <select
+                <CategorySelect
                   value={newCategory}
-                  onChange={(e) => { setNewCategory(e.target.value); setNewParent('') }}
+                  options={allCategories}
+                  allowEmpty={false}
+                  // The type picked is one of this category's, so changing
+                  // category un-picks it rather than leaving a product filed
+                  // against a type that is no longer on offer.
+                  onChange={(next) => { setNewCategory(next); setNewParent(''); setNewType(null) }}
                   className={`${input} w-44`}
-                >
-                  {allCategories.map((c) => <option key={c} value={c}>{c}</option>)}
-                </select>
+                />
               </div>
               <div>
                 <label className="block text-[11px] text-zinc-500 mb-1">Generic item</label>
-                <select
-                  value={newParent}
-                  onChange={(e) => setNewParent(e.target.value)}
-                  disabled={typesHere.length === 0}
-                  className={`${input} w-44 disabled:opacity-40`}
-                >
-                  <option value="">{typesHere.length === 0 ? '— nothing here yet —' : '— none, this is a generic item —'}</option>
-                  {typesHere.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-                </select>
+                {/* Naming one here rather than picking it. Without this, the
+                    first product of something new meant leaving for the catalog
+                    page, adding the type, and coming back to a search box you
+                    had already emptied. */}
+                {newType !== null ? (
+                  <input
+                    autoFocus
+                    value={newType}
+                    onChange={(e) => setNewType(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Escape') setNewType(null) }}
+                    placeholder="New generic item"
+                    className={`${input} w-44`}
+                  />
+                ) : (
+                  <select
+                    value={newParent}
+                    onChange={(e) => {
+                      if (e.target.value === NEW_TYPE) { setNewType(''); setNewParent('') }
+                      else setNewParent(e.target.value)
+                    }}
+                    className={`${input} w-44`}
+                  >
+                    <option value="">{typesHere.length === 0 ? '— nothing here yet —' : '— none, this is a generic item —'}</option>
+                    {typesHere.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                    <option value={NEW_TYPE}>+ New generic item…</option>
+                  </select>
+                )}
               </div>
-              {newParent && (
+              {(newParent || newType) && (
                 <div>
                   <label className="block text-[11px] text-zinc-500 mb-1">Brand</label>
                   <input
@@ -1532,17 +1556,27 @@ function AddGear({
               )}
               <button
                 onClick={() => run(async () => {
+                  // A named generic item is created first, in this category,
+                  // and the product filed under it — two writes for what reads
+                  // as one.
+                  let parent = newParent
+                  if (newType?.trim()) {
+                    const { id } = unwrap(await upsertGearItem({
+                      name: newType.trim(), category: newCategory,
+                    }))
+                    parent = id
+                  }
                   const { id } = unwrap(await upsertGearItem({
                     name: query,
-                    brand: newParent ? newItemBrand.trim() || null : null,
+                    brand: parent ? newItemBrand.trim() || null : null,
                     category: newCategory,
-                    parentId: newParent || null,
+                    parentId: parent || null,
                   }))
                   await addGearEntry(listId, {
                     gearItemId: id, groupType: target.gt, section: target.section,
                     optionGroup: target.choice, optionBranch: target.branch,
                   })
-                  setQuery(''); setNewParent(''); setNewItemBrand('')
+                  setQuery(''); setNewParent(''); setNewItemBrand(''); setNewType(null)
                 })}
                 disabled={busy}
                 className="px-3 py-1.5 rounded bg-pr-red hover:bg-pr-red-dark text-white text-sm font-medium transition-colors disabled:opacity-40"

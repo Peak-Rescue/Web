@@ -4,12 +4,9 @@ import { useMemo, useState } from 'react'
 import { useSteadyRefresh } from '@/components/useSteadyRefresh'
 import { GEAR_CATEGORIES, matchesGear, unwrap, type CatalogItem } from '@/lib/gear'
 import { upsertGearItem, retireGearItem, renameGearCategory } from './actions'
+import CategorySelect, { NEW_TYPE } from './CategorySelect'
 
 type Row = CatalogItem & { active: boolean; uses: number }
-
-// Sentinel for the "make one up" option. Not a category anything can be saved
-// under — picking it swaps the select for a text field.
-const NEW_CATEGORY = '__new__'
 
 function toggled(set: Set<string>, value: string): Set<string> {
   const next = new Set(set)
@@ -27,71 +24,11 @@ const GAP_LABEL: Record<Gap, string> = {
   'no-link': 'A product with no link',
   unused: 'On no lists',
 }
-// Same idea one level down: name a generic item instead of picking one.
-const NEW_TYPE = '__new_type__'
 
 // Cells read as text until you touch them. A catalog is read far more often
 // than it is edited, and forty rows of boxed inputs is a form, not a table.
 const CELL =
   'w-full bg-transparent border border-transparent rounded px-1.5 py-1 hover:border-zinc-700 focus:border-zinc-500 focus:bg-zinc-800 focus:outline-none'
-
-// Category picker that can also invent one. Categories are free text on the
-// item, so a new one needs nothing but typing it; the seed list in lib/gear is
-// a starting vocabulary, not a closed set.
-function CategorySelect({
-  value, options, onChange, className, disabled, autoFocus, onDismiss,
-}: {
-  value: string | null
-  options: readonly string[]
-  onChange: (next: string) => void
-  className: string
-  disabled?: boolean
-  autoFocus?: boolean
-  // Opened in place of a control, it has to be able to close again without
-  // choosing — clicking away is how people back out of a menu.
-  onDismiss?: () => void
-}) {
-  const [naming, setNaming] = useState(false)
-  const [draft, setDraft] = useState('')
-
-  if (naming) {
-    const commit = () => {
-      const next = draft.trim()
-      setNaming(false); setDraft('')
-      if (next) onChange(next)
-    }
-    return (
-      <input
-        autoFocus
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        onBlur={commit}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') commit()
-          if (e.key === 'Escape') { setNaming(false); setDraft('') }
-        }}
-        placeholder="New category name"
-        className={className}
-      />
-    )
-  }
-
-  return (
-    <select
-      value={value ?? ''}
-      disabled={disabled}
-      autoFocus={autoFocus}
-      onBlur={() => onDismiss?.()}
-      onKeyDown={(e) => { if (e.key === 'Escape') onDismiss?.() }}
-      onChange={(e) => (e.target.value === NEW_CATEGORY ? setNaming(true) : onChange(e.target.value))}
-      className={className}
-    >
-      <option value="">— category —</option>
-      {options.map((c) => <option key={c} value={c}>{c}</option>)}
-      <option value={NEW_CATEGORY}>+ New category…</option>
-    </select>
-  )
-}
 
 // A facet is a button until you need it. Twenty-eight outlined boxes across
 // five rows was most of the screen above the thing being filtered, and the
