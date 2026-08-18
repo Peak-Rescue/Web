@@ -600,36 +600,17 @@ function SectionCard({
             busy={s.busy} run={s.run} input={s.input}
           />
         ) : (
-          <div className="flex items-center">
-            <button
-              onClick={() => s.setAdding(addKey)}
-              className="flex-1 text-left px-3 py-2 text-xs text-zinc-500 hover:text-white hover:bg-zinc-800/40 transition-colors"
-            >
-              + Add gear{name ? ` to ${name}` : ''}
-            </button>
-            {/* Kept quiet next to "add gear": a choice is the rarer thing to
-                want, and a list is mostly rows that are simply required. */}
-            <button
-              onClick={() => {
-                // No name asked for. A choice's heading is optional — "bring
-                // one of" over a wetsuit and a drysuit says everything — and
-                // demanding one before you have said what the alternatives are
-                // put a browser prompt in front of the actual work.
-                const key = crypto.randomUUID()
-                s.setChoiceDrafts((xs) => [
-                  ...xs,
-                  // Two empty alternatives, because one alternative is not a
-                  // choice and you would only have to add the second anyway.
-                  { gt: groupType, section: name, key, label: null, branches: [0, 1] },
-                ])
-                s.setAdding(zoneKey({ gt: groupType, section: name, choice: key, branch: 0 }, 'end'))
-              }}
-              title="A set of alternatives — bring one of them"
-              className="shrink-0 px-3 py-2 text-xs text-zinc-600 hover:text-white transition-colors"
-            >
-              + Choice
-            </button>
-          </div>
+          /* Only one command here, because a choice is not a different kind of
+             thing to add — it is a row plus "+ or". Offering "+ Choice" beside
+             this asked you to know, before naming anything, that what you were
+             about to write had an alternative; you rarely do. Write the row,
+             then say what would do instead. */
+          <button
+            onClick={() => s.setAdding(addKey)}
+            className="w-full text-left px-3 py-2 text-xs text-zinc-500 hover:text-white hover:bg-zinc-800/40 transition-colors"
+          >
+            + Add gear{name ? ` to ${name}` : ''}
+          </button>
         )}
       </div>
     </div>
@@ -995,18 +976,12 @@ function Row({
               />
             </span>
             {!e.r.catalogItem && <span className="text-[10px] text-zinc-700">one-off</span>}
-            {/* The generic-item counterpart of the + under the name, which
-                only ever adds a product. Turning a row you have already written
-                into one of two alternatives was otherwise a trip to "+ Choice"
-                and a drag — and you rarely know a row is an alternative until
-                you reach the thing it is an alternative to. Rows already inside
-                a choice don't get this: the block around them carries both
-                "another alternative" and "add to this one". */}
             {/* The generic-item counterpart of the pair under the name,
-                which only ever reached the products. Turning a row you have
-                already written into one of two alternatives was otherwise a
-                trip to "+ Choice" and a drag — and you rarely know a row is an
-                alternative until you reach the thing it is an alternative to. */}
+                which only ever reaches the products. This pair is the only way
+                a choice gets built: you write the row, then say what would do
+                instead of it — which is the order you learn it in. Rows already
+                inside a choice don't get "+ or": the block around them carries
+                both "another alternative" and "add to this one". */}
             <span className={`flex items-center gap-1 transition-opacity ${
               dragging ? 'opacity-0' : 'opacity-0 group-hover:opacity-100 focus-within:opacity-100'
             }`}>
