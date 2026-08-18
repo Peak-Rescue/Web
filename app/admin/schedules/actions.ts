@@ -280,7 +280,13 @@ export async function saveScheduleIntoTemplate(sourceId: string, templateId: str
 // simpler and safer than diffing rows that were reordered mid-sentence.
 export async function replaceDayOutline(
   dayId: string,
-  rows: { title: string; timeLabel?: string | null; depth: number }[]
+  rows: { title: string; timeLabel?: string | null; depth: number }[],
+  // Mid-sentence saves stay quiet. Revalidating tells the router the course
+  // page is stale, and re-rendering that page means re-reading its gear
+  // catalog, roster and staffing — a second of work nobody asked for while
+  // you're still typing. The outline on screen is already right; the rest of
+  // the page finds out when you're done with it.
+  opts?: { quiet?: boolean }
 ) {
   const admin = await requireAdmin()
 
@@ -332,5 +338,12 @@ export async function replaceDayOutline(
     }
   }
 
+  if (!opts?.quiet) touch(await instanceOfDay(admin, dayId))
+}
+
+// The other half of a quiet save: once the typing stops, tell the pages that
+// read this day about it, without writing anything.
+export async function touchDay(dayId: string) {
+  const admin = await requireAdmin()
   touch(await instanceOfDay(admin, dayId))
 }

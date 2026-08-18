@@ -56,16 +56,24 @@ export default function ScheduleEditor({
   const router = useRouter()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // A removed day leaves the screen on the click, not on the round trip — the
+  // course page behind it takes about a second to rebuild, and watching a day
+  // you've already confirmed sit there is the slowest part of editing one.
+  const [removed, setRemoved] = useState<string[]>([])
 
   const days = useMemo(
-    () => [...schedule.schedule_days].sort((a, b) => a.sort_order - b.sort_order),
-    [schedule.schedule_days]
+    () => [...schedule.schedule_days]
+      .filter((d) => !removed.includes(d.id))
+      .sort((a, b) => a.sort_order - b.sort_order),
+    [schedule.schedule_days, removed]
   )
 
+  // Reports whether it landed, so a caller that already took the change on
+  // screen can put it back if the server disagreed.
   async function run(fn: () => Promise<unknown>) {
     setBusy(true); setError(null)
-    try { await fn(); router.refresh() }
-    catch (e) { setError(e instanceof Error ? e.message : 'That didn’t save') }
+    try { await fn(); router.refresh(); return true }
+    catch (e) { setError(e instanceof Error ? e.message : 'That didn’t save'); return false }
     finally { setBusy(false) }
   }
 
@@ -109,8 +117,13 @@ export default function ScheduleEditor({
                 className={`flex-1 font-medium ${input}`}
               />
               <button
-                onClick={() => { if (confirm(`Remove "${day.title}"?`)) run(() => removeScheduleDay(day.id)) }}
-                disabled={busy}
+                onClick={() => {
+                  if (!confirm(`Remove "${day.title}"?`)) return
+                  setRemoved((r) => [...r, day.id])
+                  void run(() => removeScheduleDay(day.id)).then((ok) => {
+                    if (!ok) setRemoved((r) => r.filter((x) => x !== day.id))
+                  })
+                }}
                 className="shrink-0 text-xs text-zinc-600 hover:text-red-400 transition-colors"
               >
                 Remove day

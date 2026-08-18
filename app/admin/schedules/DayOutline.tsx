@@ -1,10 +1,11 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { replaceDayOutline } from './actions'
+import { replaceDayOutline, touchDay } from './actions'
 import type { ScheduleBlock } from './ScheduleEditor'
 
 type Row = { key: string; title: string; time: string; depth: 0 | 1 }
+type Job = { rows: Row[]; quiet: boolean }
 
 let seq = 0
 const newKey = () => `r${++seq}`
@@ -45,46 +46,66 @@ export default function DayOutline({
   // versions of a day never race each other into the same table.
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const inFlight = useRef(false)
-  const queued = useRef<Row[] | null>(null)
+  const queued = useRef<Job | null>(null)
+  const pending = useRef<Row[] | null>(null)
 
-  const push = useCallback(async (next: Row[]) => {
-    if (inFlight.current) { queued.current = next; return }
+  // Set by every quiet save, spent by the one that isn't — so a day saved
+  // three times mid-sentence still refreshes the page once at the end.
+  const owed = useRef(false)
+
+  const push = useCallback(async (first: Job) => {
+    if (inFlight.current) { queued.current = first; return }
     inFlight.current = true
     setSaving(true)
     try {
-      await replaceDayOutline(dayId, next.map((r) => ({ title: r.title, timeLabel: r.time, depth: r.depth })))
-      onError(null)
-    } catch (e) {
-      onError(e instanceof Error ? e.message : 'That didn’t save')
+      // Drain rather than recurse: edits made while a save is in the air go
+      // out after it, in order, and the last one still wins.
+      let job: Job | null = first
+      while (job) {
+        try {
+          await replaceDayOutline(
+            dayId,
+            job.rows.map((r) => ({ title: r.title, timeLabel: r.time, depth: r.depth })),
+            { quiet: job.quiet }
+          )
+          owed.current = job.quiet
+          onError(null)
+        } catch (e) {
+          onError(e instanceof Error ? e.message : 'That didn’t save')
+        }
+        job = queued.current
+        queued.current = null
+      }
     } finally {
       inFlight.current = false
-      const again = queued.current
-      queued.current = null
-      if (again) void push(again)
-      else setSaving(false)
+      setSaving(false)
     }
   }, [dayId, onError])
 
-  const pending = useRef<Row[] | null>(null)
-
   const flush = useCallback(() => {
     if (timer.current) { clearTimeout(timer.current); timer.current = null }
-    const next = pending.current
+    const rows = pending.current
     pending.current = null
-    if (next) void push(next)
-  }, [push])
+    if (rows) void push({ rows, quiet: false })
+    else if (owed.current) { owed.current = false; void touchDay(dayId).catch(() => {}) }
+  }, [push, dayId])
 
   const edit = useCallback((next: Row[]) => {
     setRows(next)
     pending.current = next
     if (timer.current) clearTimeout(timer.current)
-    timer.current = setTimeout(flush, 600)
-  }, [flush])
+    timer.current = setTimeout(() => {
+      timer.current = null
+      const rows = pending.current
+      pending.current = null
+      if (rows) void push({ rows, quiet: true })
+    }, 600)
+  }, [push])
 
   // A day left mid-edit still lands — leaving the outline, or the page,
   // spends whatever the timer was still holding.
   const flushRef = useRef(flush)
-  flushRef.current = flush
+  useEffect(() => { flushRef.current = flush })
   useEffect(() => () => flushRef.current(), [])
 
   function keyDown(e: React.KeyboardEvent<HTMLInputElement>, i: number) {
