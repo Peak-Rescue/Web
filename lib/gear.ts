@@ -29,6 +29,10 @@ export const GEAR_CATEGORIES = [
   'Descent and belay',
   'Ascenders and rope grabs',
   'Pulleys',
+  // What you build the anchor out of — pickets, bolts and hangers, anchor
+  // plates, straps. Not the slings and connectors used to rig it: those are
+  // what they are wherever they end up, and a category says what a thing is.
+  'Anchors',
   'Harness and personal rigging',
   'Helmets and protection',
   'Clothing and exposure',
