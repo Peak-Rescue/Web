@@ -1,11 +1,9 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { joinCourse } from '../actions'
 
 export default function JoinForm({ token }: { token: string }) {
-  const router = useRouter()
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
   const [email, setEmail] = useState('')
@@ -26,9 +24,12 @@ export default function JoinForm({ token }: { token: string }) {
       return
     }
 
-    // The action already set the session cookies — no mailbox round-trip.
+    // The action already set the session cookies — no mailbox round-trip. Go
+    // with a full load, not router.replace: the cached layout was rendered for
+    // a signed-out visitor, so a client navigation lands them in the portal
+    // under a header still offering "Sign in".
     if (result.signedIn) {
-      router.replace('/dashboard')
+      window.location.assign('/dashboard')
       return
     }
 

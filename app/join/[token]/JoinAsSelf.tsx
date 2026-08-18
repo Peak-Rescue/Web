@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { joinAsCurrentUser } from '../actions'
 import JoinForm from './JoinForm'
 
@@ -9,7 +8,6 @@ import JoinForm from './JoinForm'
 // no email — but still a button, so a shared laptop can't enroll the wrong
 // person just by opening a link.
 export default function JoinAsSelf({ token, email }: { token: string; email: string }) {
-  const router = useRouter()
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [useForm, setUseForm] = useState(false)
@@ -33,7 +31,8 @@ export default function JoinAsSelf({ token, email }: { token: string; email: str
       return
     }
 
-    router.replace('/dashboard')
+    // Full load so the portal renders against the new enrollment.
+    window.location.assign('/dashboard')
   }
 
   return (
