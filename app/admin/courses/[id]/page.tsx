@@ -423,7 +423,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
   // Schedule: this course's running order and any templates for this offering.
   const [{ data: scheduleRows }, { data: scheduleTemplateRows }] = await Promise.all([
     gearAdmin.from('course_schedules')
-      .select('id, name, overview, objectives, instance_id, is_template, schedule_days(id, title, location, notes, sort_order, schedule_blocks(id, parent_id, title, time_label, location, sort_order))')
+      .select('id, name, overview, objectives, instance_id, is_template, schedule_days(id, title, location, notes, objectives, sort_order, schedule_blocks(id, parent_id, title, time_label, location, sort_order))')
       .eq('instance_id', id)
       .limit(1),
     gearAdmin.from('course_schedules')

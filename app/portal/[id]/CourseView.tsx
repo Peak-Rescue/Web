@@ -283,11 +283,11 @@ export default async function CourseView({
   // The running order, same for everyone on the course.
   const { data: schedRows } = await admin
     .from('course_schedules')
-    .select('id, name, overview, objectives, schedule_days(id, title, location, notes, sort_order, schedule_blocks(id, parent_id, title, time_label, location, sort_order))')
+    .select('id, name, overview, objectives, schedule_days(id, title, location, notes, objectives, sort_order, schedule_blocks(id, parent_id, title, time_label, location, sort_order))')
     .eq('instance_id', id)
     .limit(1)
   type SchedBlock = { id: string; parent_id: string | null; title: string; time_label: string | null; location: string | null; sort_order: number }
-  type SchedDay = { id: string; title: string; location: string | null; notes: string | null; sort_order: number; schedule_blocks: SchedBlock[] }
+  type SchedDay = { id: string; title: string; location: string | null; notes: string | null; objectives: string[] | null; sort_order: number; schedule_blocks: SchedBlock[] }
   const sched = ((schedRows ?? []) as unknown as {
     id: string; name: string; overview: string | null; objectives: string[]; schedule_days: SchedDay[]
   }[])[0]
@@ -739,6 +739,26 @@ export default async function CourseView({
                       </p>
                     )}
                     {d.notes && <p className="text-xs text-zinc-500 mt-0.5">{d.notes}</p>}
+                    {/* What the day is for, before what it consists of — the
+                        target sits in the same gutter as the pin and the book,
+                        so a day reads as where, why, then what. */}
+                    {(d.objectives ?? []).length > 0 && (
+                      <div className="flex gap-1.5 mt-2.5">
+                        <svg
+                          aria-hidden
+                          xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24"
+                          fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"
+                          className="shrink-0 mt-[5px] text-zinc-600"
+                        >
+                          <circle cx="12" cy="12" r="9" />
+                          <circle cx="12" cy="12" r="4.5" />
+                          <circle cx="12" cy="12" r="0.5" fill="currentColor" />
+                        </svg>
+                        <ul className="flex-1 min-w-0 space-y-1 text-xs text-zinc-400">
+                          {(d.objectives ?? []).map((o, i) => <li key={i}>{o}</li>)}
+                        </ul>
+                      </div>
+                    )}
                     {/* The pin says where; the open book says what's being
                         taught. One glyph for the whole list, in the same gutter
                         as the pin — one per topic would drown the dots that

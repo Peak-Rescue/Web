@@ -24,6 +24,7 @@ export type ScheduleDay = {
   title: string
   location: string | null
   notes: string | null
+  objectives: string[]
   sort_order: number
   schedule_blocks: ScheduleBlock[]
 }
@@ -92,7 +93,7 @@ export default function ScheduleEditor({
       />
 
       <div>
-        <label className="block text-[11px] text-zinc-500 mb-1">Learning objectives — one per line, optional</label>
+        <label className="block text-[11px] text-zinc-500 mb-1">Course objectives — one per line, optional</label>
         <textarea
           defaultValue={schedule.objectives.join('\n')}
           onBlur={(e) => {
@@ -143,6 +144,20 @@ export default function ScheduleEditor({
                 className={`w-full ${input}`}
               />
             </div>
+            {/* What the day is for, as opposed to what happens on it — the
+                course objectives are too coarse to teach a Tuesday from. */}
+            <textarea
+              defaultValue={day.objectives.join('\n')}
+              onBlur={(e) => {
+                const next = e.target.value.split('\n').map((o) => o.trim()).filter(Boolean)
+                if (next.join('\n') !== day.objectives.join('\n')) {
+                  run(() => updateScheduleDay(day.id, { objectives: next }))
+                }
+              }}
+              rows={2}
+              placeholder="Objectives for this day — one per line, optional"
+              className={`w-full resize-y ${input}`}
+            />
           </div>
 
           <DayOutline dayId={day.id} blocks={day.schedule_blocks} onError={setError} />

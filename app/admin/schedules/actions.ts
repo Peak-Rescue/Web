@@ -143,13 +143,16 @@ export async function addScheduleDay(scheduleId: string, title?: string) {
 
 export async function updateScheduleDay(
   id: string,
-  patch: { title?: string; location?: string | null; notes?: string | null }
+  patch: { title?: string; location?: string | null; notes?: string | null; objectives?: string[] }
 ) {
   const admin = await requireAdmin()
   const update: Record<string, unknown> = {}
   if (patch.title !== undefined) update.title = patch.title.trim().slice(0, 200) || 'Day'
   if (patch.location !== undefined) update.location = patch.location?.trim() || null
   if (patch.notes !== undefined) update.notes = patch.notes?.trim() || null
+  if (patch.objectives !== undefined) {
+    update.objectives = patch.objectives.map((o) => o.trim().slice(0, 300)).filter(Boolean)
+  }
   const { error } = await admin.from('schedule_days').update(update).eq('id', id)
   if (error) throw new Error(error.message)
   touch(await instanceOfDay(admin, id))
@@ -168,10 +171,10 @@ export async function removeScheduleDay(id: string) {
 // ─── Templates ──────────────────────────────────────────────────────────────
 
 const SOURCE_SELECT =
-  'name, overview, objectives, schedule_days(id, title, location, notes, sort_order, schedule_blocks(id, parent_id, title, time_label, location, sort_order))'
+  'name, overview, objectives, schedule_days(id, title, location, notes, objectives, sort_order, schedule_blocks(id, parent_id, title, time_label, location, sort_order))'
 
 type BlockRow = { id: string; parent_id: string | null; title: string; time_label: string | null; location: string | null; sort_order: number }
-type DayRow = { id: string; title: string; location: string | null; notes: string | null; sort_order: number; schedule_blocks: BlockRow[] }
+type DayRow = { id: string; title: string; location: string | null; notes: string | null; objectives: string[] | null; sort_order: number; schedule_blocks: BlockRow[] }
 
 // Lay one schedule's days onto another. Shared by "start from a template" and
 // "save back into a template" so the two carry the same thing.
@@ -181,7 +184,10 @@ async function copyDaysInto(admin: Admin, source: { schedule_days?: unknown }, s
   for (const d of days) {
     const { data: newDay, error } = await admin
       .from('schedule_days')
-      .insert({ schedule_id: scheduleId, title: d.title, location: d.location, notes: d.notes, sort_order: d.sort_order })
+      .insert({
+        schedule_id: scheduleId, title: d.title, location: d.location, notes: d.notes,
+        objectives: d.objectives ?? [], sort_order: d.sort_order,
+      })
       .select('id').single()
     if (error) throw new Error(error.message)
 
