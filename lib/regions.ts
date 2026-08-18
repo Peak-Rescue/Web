@@ -60,7 +60,7 @@ export function splitRegion(code: string | null | undefined): { country: string;
 // render the same string.
 const COUNTRY_CODES =
   'AD,AE,AF,AG,AI,AL,AM,AO,AQ,AR,AT,AU,AW,AX,AZ,BA,BB,BD,BE,BF,BG,BH,BI,BJ,BL,' +
-  'BM,BN,BO,BQ,BR,BS,BT,BV,BW,BY,BZ,CC,CD,CF,CG,CH,CI,CK,CL,CM,CN,CO,CR,CU,CV,' +
+  'BM,BN,BO,BQ,BR,BS,BT,BV,BW,BY,BZ,CA,CC,CD,CF,CG,CH,CI,CK,CL,CM,CN,CO,CR,CU,CV,' +
   'CW,CX,CY,CZ,DE,DJ,DK,DM,DO,DZ,EC,EE,EG,EH,ER,ES,ET,FI,FJ,FK,FM,FO,FR,GA,GB,' +
   'GD,GE,GF,GG,GH,GI,GL,GM,GN,GP,GQ,GR,GS,GT,GW,GY,HK,HM,HN,HR,HT,HU,ID,IE,IL,' +
   'IM,IN,IO,IQ,IR,IS,IT,JE,JM,JO,JP,KE,KG,KH,KI,KM,KN,KP,KR,KW,KY,KZ,LA,LB,LC,' +
@@ -68,7 +68,7 @@ const COUNTRY_CODES =
   'MV,MW,MX,MY,MZ,NA,NC,NE,NF,NG,NI,NL,NO,NP,NR,NU,NZ,OM,PA,PE,PF,PG,PH,PK,PL,' +
   'PM,PN,PS,PT,PW,PY,QA,RE,RO,RS,RU,RW,SA,SB,SC,SD,SE,SG,SH,SI,SJ,SK,SL,SM,SN,' +
   'SO,SR,SS,ST,SV,SX,SY,SZ,TC,TD,TF,TG,TH,TJ,TK,TL,TM,TN,TO,TR,TT,TV,TW,TZ,UA,' +
-  'UG,UM,UY,UZ,VA,VC,VE,VG,VN,VU,WF,WS,YE,YT,ZA,ZM,ZW'
+  'UG,UM,US,UY,UZ,VA,VC,VE,VG,VN,VU,WF,WS,YE,YT,ZA,ZM,ZW'
 
 const displayNames = new Intl.DisplayNames(['en'], { type: 'region' })
 
@@ -83,7 +83,12 @@ function countryName(code: string): string {
 // One alphabetical list of every country, US and Canada included. A single flat
 // list is what makes type-ahead work: in a native select, typing jumps within
 // the whole list, so "F" reaches France instead of stopping at Florida.
-export const COUNTRIES = COUNTRY_CODES.split(',')
+//
+// The subdivision countries are unioned in rather than trusted to the list
+// above, which had lost both of them: a country you hold states for and cannot
+// pick is the worst cell in the table — every US course, and no way back to
+// one once another country is chosen.
+export const COUNTRIES = [...new Set([...COUNTRY_CODES.split(','), ...Object.keys(SUBDIVISIONS)])]
   .map((code) => ({ code, name: countryName(code) }))
   .sort((a, b) => a.name.localeCompare(b.name))
 
