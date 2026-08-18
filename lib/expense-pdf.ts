@@ -4,7 +4,8 @@
 // signature blocks. Final page: itemized details for "Other" charges and meals
 // paid for others (the form's "page 2" rule).
 
-import { PDFDocument, PDFFont, PDFPage, StandardFonts, rgb } from 'pdf-lib'
+import { PDFDocument, PDFPage, StandardFonts, rgb } from 'pdf-lib'
+import { truncate, winAnsiSafe } from '@/lib/pdf-text'
 import {
   type ExpenseCategory,
   computeTotals,
@@ -93,30 +94,6 @@ function colX(key: string): number {
 }
 
 const GRID_W = COLS.reduce((s, c) => s + c.w, 0)
-
-// The standard fonts use WinAnsi encoding, which rejects control characters
-// and anything beyond Latin-1-ish text — one stray newline or emoji in a
-// description would otherwise fail the whole PDF. Drop what can't render.
-function winAnsiSafe(font: PDFFont, text: string): string {
-  return Array.from(text.replace(/\s+/g, ' '))
-    .filter((ch) => {
-      try {
-        font.widthOfTextAtSize(ch, 8)
-        return true
-      } catch {
-        return false
-      }
-    })
-    .join('')
-}
-
-function truncate(font: PDFFont, text: string, size: number, maxW: number): string {
-  text = winAnsiSafe(font, text)
-  if (font.widthOfTextAtSize(text, size) <= maxW) return text
-  let t = text
-  while (t.length > 1 && font.widthOfTextAtSize(t + '…', size) > maxW) t = t.slice(0, -1)
-  return t + '…'
-}
 
 export async function generateExpensePdf(report: PdfReport): Promise<Uint8Array> {
   const doc = await PDFDocument.create()

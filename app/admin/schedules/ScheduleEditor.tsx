@@ -7,6 +7,7 @@ import {
   copySchedule, saveScheduleIntoTemplate,
 } from './actions'
 import DayOutline from './DayOutline'
+import PdfLink from '@/components/PdfLink'
 
 export type ScheduleTemplateOption = { id: string; name: string; days: number }
 
@@ -83,6 +84,12 @@ export default function ScheduleEditor({
   return (
     <div className="space-y-5">
       {error && <p className="text-sm text-pr-red">{error}</p>}
+
+      {/* The sheet this running order becomes when it's handed out or pinned
+          to the van window. */}
+      <div className="flex justify-end">
+        <PdfLink href={`/api/schedules/${schedule.id}/pdf`} label="Printable PDF" />
+      </div>
 
       <textarea
         defaultValue={schedule.overview ?? ''}

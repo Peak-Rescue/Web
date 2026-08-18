@@ -7,6 +7,7 @@ import { moduleAudience, KIND_META, type LibraryKind } from '@/lib/library'
 import { GEAR_ENTRY_COLUMNS, gearLabel, placeChoices, productName } from '@/lib/gear'
 import { courseDisplayName, computeBlocks } from '@/lib/courses'
 import CourseTasksPanel, { type CourseTask, type TaskPerson } from '@/components/CourseTasksPanel'
+import PdfLink from '@/components/PdfLink'
 import { loadTasksWithDocs } from '@/lib/course-tasks'
 import { LinkIcon, PaperclipIcon } from '@/components/TaskIcons'
 import { AudiencePills } from '@/components/AudiencePills'
@@ -695,7 +696,11 @@ export default async function CourseView({
 
         {/* Running order */}
         {hasSchedule && (
-          <Section id="schedule" blurb="Day by day, what we're doing and where">
+          <Section
+            id="schedule"
+            blurb="Day by day, what we're doing and where"
+            action={<PdfLink href={`/api/schedules/${sched.id}/pdf`} />}
+          >
             {sched.overview && <p className="text-sm text-zinc-400 mb-3 whitespace-pre-line">{sched.overview}</p>}
             {sched.objectives.length > 0 && (
               <div className="mb-4">
@@ -950,7 +955,7 @@ export default async function CourseView({
 
         {/* Gear */}
         {hasGear && gearList && (
-          <Section id="gear" blurb={gearList.name}>
+          <Section id="gear" blurb={gearList.name} action={<PdfLink href={`/api/gear-lists/${gearList.id}/pdf`} />}>
             {gearList.intro && <p className="text-sm text-zinc-400 mb-3 whitespace-pre-line">{gearList.intro}</p>}
             {(['personal', 'group'] as const).map((gt) => {
               const rows = gearList.gear_list_entries

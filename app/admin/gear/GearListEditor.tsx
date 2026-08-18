@@ -3,6 +3,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { useSteadyRefresh } from '@/components/useSteadyRefresh'
 import CategorySelect, { NEW_TYPE } from './CategorySelect'
+import PdfLink from '@/components/PdfLink'
 import { GEAR_CATEGORIES, isChoice, matchesGear, placeChoices, productName, unwrap, type CatalogItem } from '@/lib/gear'
 import {
   addGearEntry, updateGearEntry, removeGearEntry, updateGearList, copyGearList,
@@ -311,6 +312,13 @@ export default function GearListEditor({
   return (
     <div className="space-y-5">
       {error && <p className="text-sm text-pr-red">{error}</p>}
+
+      {/* The sheet this list becomes when it's handed out. Up here rather than
+          beside the template controls at the foot: printing is what you do
+          with a list you've finished, not part of saving it. */}
+      <div className="flex justify-end">
+        <PdfLink href={`/api/gear-lists/${list.id}/pdf`} label="Printable PDF" />
+      </div>
 
       <textarea
         defaultValue={list.intro ?? ''}

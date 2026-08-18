@@ -92,6 +92,7 @@ export function Section({
   blurb,
   team,
   unread,
+  action,
   children,
 }: {
   id: SectionKey
@@ -101,6 +102,9 @@ export function Section({
   team?: boolean
   /** Something in here is newer than this reader's last visit. */
   unread?: boolean
+  /** A control for the block as a whole — the PDF of a gear list, say. Sits at
+      the far end of the heading row, where the audience pill sits. */
+  action?: React.ReactNode
   children: React.ReactNode
 }) {
   return (
@@ -148,6 +152,7 @@ export function Section({
         {/* The same pills the library and the course editor use, so who can
             see a block reads identically wherever you meet it. */}
         {team && <AudiencePills audience="internal" className="ml-auto shrink-0" />}
+        {action && <div className={team ? 'shrink-0' : 'ml-auto shrink-0'}>{action}</div>}
       </div>
       {children}
     </section>
