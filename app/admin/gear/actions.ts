@@ -35,6 +35,10 @@ function touch(instanceId?: string | null) {
 type Failed = { error: string }
 const fail = (error: string): Failed => ({ error })
 
+// Keys minted by the browser and sent here, so they are checked like any other
+// input before going into a column the rest of a choice is matched on.
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 // ─── Catalog ────────────────────────────────────────────────────────────────
 
 export async function upsertGearItem(input: {
@@ -533,12 +537,20 @@ function scopeFilter(s: ChoiceScope) {
 // more common one: you write the list, and only on reaching the drysuit do you
 // realise the wetsuit above it was an alternative rather than a requirement.
 //
-// No heading is asked for. The key is generated and nobody reads it; the
-// heading is optional and typed in place afterwards if it's worth having.
+// No heading is asked for: it is optional, and typed in place afterwards if it
+// earns its place.
+//
+// The key is opaque — nobody reads it — but it comes from the caller, because the second alternative is opened on
+// screen at the same moment this row becomes the first one. Minting a key here
+// instead would leave the empty alternative pointing at a group the row it is
+// an alternative to never joined — two choices side by side, one of them the
+// original row on its own.
 export async function wrapGearEntryInChoice(
-  entryId: string, instanceId?: string | null
+  entryId: string, key: string, instanceId?: string | null
 ): Promise<{ key: string } | Failed> {
   const admin = await requireAdmin()
+
+  if (!UUID.test(key)) return fail('That choice couldn’t be started')
 
   const { data: row } = await admin
     .from('gear_list_entries')
@@ -550,7 +562,6 @@ export async function wrapGearEntryInChoice(
 
   // Branch 0, because it is the alternative that was already written down and
   // so the one that reads first.
-  const key = crypto.randomUUID()
   const { error } = await admin
     .from('gear_list_entries')
     .update({ option_group: key, option_branch: 0 })

@@ -73,17 +73,13 @@ export async function sendSignInCode(admin: Admin, email: string): Promise<strin
     to: [email],
     subject: `${code} is your Peak Rescue sign-in code`,
     text: [
-      'Your sign-in code for the Peak Rescue portal:',
+      'Your Peak Rescue sign-in code:',
       '',
       code,
       '',
-      'Type it into the page you started from. It works once, and only for a short while.',
+      'Enter it on the sign-in page. It works once.',
       '',
-      "There is no link in this email on purpose — some mail systems open links automatically, which used to spend the sign-in before the recipient could use it.",
-      '',
-      "If you didn't ask to sign in, you can ignore this.",
-      '',
-      '— Peak Rescue',
+      "If you didn't ask to sign in, ignore this.",
     ].join('\n'),
   })
   if (mailError) {

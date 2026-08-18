@@ -642,7 +642,6 @@ function ChoiceCard({
 }) {
   const dragging = s.drag !== null
   const scope = { listId: s.listId, groupType, section, key: choiceKey }
-  const choice = isChoice({ options })
 
   const patchDraft = (fn: (d: ChoiceDraft) => ChoiceDraft) =>
     s.setChoiceDrafts((xs) => xs.map((d) =>
@@ -655,6 +654,12 @@ function ChoiceCard({
     ...options.map((o) => ({ branch: o.branch, rows: o.rows })),
     ...draftBranches.map((branch) => ({ branch, rows: [] as ResolvedRow[] })),
   ].sort((a, b) => a.branch - b.branch)
+
+  // Counted over what is on screen, not over what is saved. An alternative you
+  // have just opened is empty, so a choice being built would otherwise announce
+  // itself as "all of" — the opposite of what you asked for — right up until
+  // the moment the first item lands in it.
+  const choice = isChoice({ options: shown })
 
   return (
     <div className="px-3 py-2.5">
@@ -900,7 +905,9 @@ function Row({
     setAdding(zoneKey({ gt: e.group_type, section: e.r.section, choice: key, branch: 1 }, 'end'))
     apply(
       (es) => es.map((x) => (x.id === e.id ? { ...x, option_group: key, option_branch: 0 } : x)),
-      async () => unwrap(((await wrapGearEntryInChoice(e.id, instanceId)) ?? {}) as object)
+      // The same key the draft alternative above was opened under, so the row
+      // and the alternative to it land in one choice rather than two.
+      async () => unwrap(((await wrapGearEntryInChoice(e.id, key, instanceId)) ?? {}) as object)
     )
   }
 
@@ -1389,8 +1396,10 @@ function AddGear({
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder={
+            /* The key is opaque and means nothing to anyone reading it — what
+               the panel has to say is which alternative it is filling. */
             target.choice
-              ? `Search the catalog — adding to one alternative of ${target.choice}`
+              ? `Search the catalog — adding to ${target.label ? `one alternative of ${target.label}` : 'this alternative'}`
               : target.section
                 ? `Search the catalog — adding to ${target.section}`
                 : `Search the catalog — adding to ${target.gt === 'personal' ? 'personal' : 'group'} kit`
