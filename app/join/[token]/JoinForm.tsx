@@ -1,9 +1,11 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { joinCourse } from '../actions'
 
 export default function JoinForm({ token }: { token: string }) {
+  const router = useRouter()
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
   const [email, setEmail] = useState('')
@@ -24,6 +26,12 @@ export default function JoinForm({ token }: { token: string }) {
       return
     }
 
+    // The action already set the session cookies — no mailbox round-trip.
+    if (result.signedIn) {
+      router.replace('/dashboard')
+      return
+    }
+
     setSubmitted(true)
     setLoading(false)
   }
@@ -31,10 +39,10 @@ export default function JoinForm({ token }: { token: string }) {
   if (submitted) {
     return (
       <div className="text-center">
-        <h2 className="text-xl font-bold text-white mb-3">Check your email</h2>
+        <h2 className="text-xl font-bold text-white mb-3">You&rsquo;re enrolled</h2>
         <p className="text-zinc-400">
-          We sent a link to <span className="text-white">{email}</span>.
-          Click it to finish setting up your account and access the course portal.
+          This address already has a Peak Rescue account, so we sent a sign-in link to{' '}
+          <span className="text-white">{email}</span>. Click it to open your course portal.
         </p>
       </div>
     )

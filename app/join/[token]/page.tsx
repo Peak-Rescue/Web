@@ -1,6 +1,8 @@
 import { createAdminClient } from '@/lib/supabase/admin'
+import { createClient } from '@/lib/supabase/server'
 import { courseDisplayName } from '@/lib/courses'
 import JoinForm from './JoinForm'
+import JoinAsSelf from './JoinAsSelf'
 
 export const metadata = { robots: { index: false } }
 
@@ -50,6 +52,11 @@ export default async function JoinPage({ params }: { params: Promise<{ token: st
     }
   }
 
+  // A student who is still signed in from a previous course never has to type
+  // anything, or wait on an email, to take the next one.
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
   const name = courseDisplayName(inst.course_type, inst.custom_title)
   const dates = inst.starts_at
     ? inst.ends_at && inst.ends_at !== inst.starts_at
@@ -67,7 +74,9 @@ export default async function JoinPage({ params }: { params: Promise<{ token: st
             {[dates, inst.location].filter(Boolean).join(' · ')}
           </p>
         </div>
-        <JoinForm token={token} />
+        {user?.email
+          ? <JoinAsSelf token={token} email={user.email} />
+          : <JoinForm token={token} />}
       </div>
     </main>
   )

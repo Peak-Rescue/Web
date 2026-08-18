@@ -1,13 +1,23 @@
 'use client'
 
-import { useState } from 'react'
+import { Suspense, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { sendLoginLink } from './actions'
 
-export default function LoginPage() {
+function LoginInner() {
   const [email, setEmail] = useState('')
   const [submitted, setSubmitted] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+
+  // A sign-in link that fails verification lands here with no explanation,
+  // which reads as "nothing happened" — so people request another link, and
+  // another. Say what went wrong instead. (Corporate mail scanners open links
+  // before the recipient does, which spends the one-time token.)
+  const notice =
+    useSearchParams().get('error') === 'auth_failed'
+      ? 'That sign-in link had already been used or expired. Enter your email for a fresh one — and open it in a browser rather than previewing it.'
+      : ''
 
   async function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -60,6 +70,12 @@ export default function LoginPage() {
           </p>
         </div>
 
+        {notice && (
+          <p className="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+            {notice}
+          </p>
+        )}
+
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label htmlFor="email" className="block text-sm font-medium text-zinc-300 mb-1">
@@ -88,5 +104,17 @@ export default function LoginPage() {
         </form>
       </div>
     </main>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <main className="min-h-screen flex items-center justify-center bg-zinc-950 pt-16 md:pt-20">
+        <p className="text-zinc-400">Loading…</p>
+      </main>
+    }>
+      <LoginInner />
+    </Suspense>
   )
 }
