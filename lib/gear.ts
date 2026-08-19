@@ -103,90 +103,93 @@ export function matchesGear(item: CatalogItem, query: string, children: CatalogI
   return haystack.some((h) => h.toLowerCase().includes(q))
 }
 
-// ─── Choices ────────────────────────────────────────────────────────────────
+// ─── Sets: "bring both" and "bring one of" ──────────────────────────────────
 //
-// A choice is "bring one of these", and each alternative can be more than one
-// item: (wetsuit AND rain jacket) OR drysuit. Like a section, it is not a row
-// of its own — it's the agreement between the entries carrying its name.
+// A row says how it is joined to the row immediately above it, and nothing
+// else. A set is then a run of adjacent rows connected by those joiners.
 //
-// Grouped here rather than in each renderer because the editor and the course
-// page have to agree on what a choice is down to the ordering, and the two
-// drifting apart would show up as a student list that doesn't match the one
-// that was built.
+// The relationship is the unit, not a container the rows point at. An operator
+// with no row above it refers to nothing and is ignored, so there is no key to
+// dangle, no alternative to be alone on, and nothing that can exist before it
+// has contents — which is the entire family of bugs the old container model
+// kept producing.
+//
+// AND binds tighter than OR, the way it reads out loud: a run splits into
+// alternatives at each OR, and each alternative is the rows AND-ed together
+// inside it. That is exactly the shape the old two columns could hold — an
+// alternative is a flat line of slots, and nothing nests deeper.
+//
+//   Wetsuit                    ┐ one alternative
+//      and     Rain jacket     ┘
+//      or      Drysuit         ← the other
+//
+// Parsed here rather than in each renderer because the editor, the portal and
+// the printed sheet have to agree down to the ordering: the two drifting apart
+// shows up as a student list that doesn't match the one that was built.
 
-export type ChoiceFields = {
-  // An opaque key. Nobody reads it — the heading students see is the label,
-  // which is optional, because "bring one of" over a wetsuit and a drysuit
-  // already says everything a title would.
-  option_group: string | null
-  option_branch: number | null
-  option_label?: string | null
+export type Joiner = 'and' | 'or' | 'or_if_needed'
+
+export type JoinerFields = {
+  // How this row is joined to the one above it. Null is an ordinary required
+  // row, which is nearly all of them.
+  joined_above?: Joiner | null
   sort_order: number
 }
 
-export type ChoiceBlock<T> = { branch: number; rows: T[] }
+// One alternative: the rows that go together, and whether it is offered as an
+// equal or as a fallback. Preference is already implicit in the order — the
+// alternative written first is the one we recommend — and `ifNeeded` is that
+// said out loud, for when the second choice is acceptable rather than equal.
+export type Alternative<T> = { rows: T[]; ifNeeded: boolean }
 
 export type Placed<T> =
   | { kind: 'item'; row: T }
-  | { kind: 'choice'; key: string; label: string | null; options: ChoiceBlock<T>[] }
+  | { kind: 'set'; rows: T[]; alternatives: Alternative<T>[] }
 
-// One branch is a line made of several slots — "rope and rope bag". Two or
-// more is a choice between such lines. The same structure either way; only the
-// chrome differs, so both renderers ask this rather than each deciding.
-export function isChoice<T>(block: { options: ChoiceBlock<T>[] }): boolean {
-  return block.options.length > 1
+// Two or more alternatives is a choice; one is a line of things that go
+// together. Same structure, different claim, so every renderer asks this rather
+// than each deciding what counts.
+export function isChoice<T>(set: { alternatives: Alternative<T>[] }): boolean {
+  return set.alternatives.length > 1
 }
 
-// A block worn down to one slot, which is no longer a group of anything.
-//
-// It happens: drop one alternative of a choice and the survivor stays grouped,
-// because one branch is still "rope and rope bag" — but delete the rope bag too
-// and what's left is a lone row that still says it belongs to a line. There is
-// no "and" and no "bring one of" to draw, so every renderer was left marking it
-// as special — indented on the printed sheet, boxed on the portal — with
-// nothing on the page to say why.
-//
-// Read as a plain row instead. This is the reading rule only; the editor
-// dissolves the group in the database when it drops to a single row, so a list
-// edited since then never gets here.
-export function isLoneSlot<T>(block: { options: ChoiceBlock<T>[] }): boolean {
-  return block.options.length === 1 && block.options[0].rows.length === 1
-}
-
-// A section's rows as they print: plain gear in its own order, and each choice
-// as one block sitting where its first row sat. Anchoring the block to its
-// first row is what keeps a choice from jumping to the end of the section the
-// moment someone reorders inside it.
-export function placeChoices<T extends ChoiceFields>(rows: T[]): Placed<T>[] {
+// A section's rows as they read: ordinary gear on its own, and each run of
+// joined rows as one set sitting exactly where it sits. Pass the rows of one
+// side of one section — the joiner on the first row of those refers to nothing
+// above it and is ignored, which is what makes a stranded operator impossible
+// rather than merely unlikely.
+export function placeSets<T extends JoinerFields>(rows: T[]): Placed<T>[] {
   const ordered = [...rows].sort((a, b) => a.sort_order - b.sort_order)
   const out: Placed<T>[] = []
-  const blocks = new Map<string, Extract<Placed<T>, { kind: 'choice' }>>()
 
-  for (const row of ordered) {
-    const key = row.option_group
-    if (!key || row.option_branch === null) {
-      out.push({ kind: 'item', row })
+  for (let i = 0; i < ordered.length; ) {
+    // The run is this row plus everything that says it belongs with what came
+    // before it.
+    let end = i + 1
+    while (end < ordered.length && ordered[end].joined_above) end += 1
+
+    const run = ordered.slice(i, end)
+    if (run.length === 1) {
+      out.push({ kind: 'item', row: run[0] })
+      i = end
       continue
     }
-    let block = blocks.get(key)
-    if (!block) {
-      block = { kind: 'choice', key, label: row.option_label ?? null, options: [] }
-      blocks.set(key, block)
-      out.push(block)
+
+    // Split at each OR. Everything else in a run is an AND, so it joins the
+    // alternative being built rather than starting a new one.
+    const alternatives: Alternative<T>[] = [{ rows: [run[0]], ifNeeded: false }]
+    for (const row of run.slice(1)) {
+      const joiner = row.joined_above
+      if (joiner === 'or' || joiner === 'or_if_needed') {
+        alternatives.push({ rows: [row], ifNeeded: joiner === 'or_if_needed' })
+      } else {
+        alternatives[alternatives.length - 1].rows.push(row)
+      }
     }
-    // The label lives on every row of the choice, so the first one that has it
-    // wins — a row added before the heading was typed carries null.
-    if (!block.label && row.option_label) block.label = row.option_label
-    const branch = row.option_branch
-    const option = block.options.find((o) => o.branch === branch)
-    if (option) option.rows.push(row)
-    else block.options.push({ branch, rows: [row] })
+    out.push({ kind: 'set', rows: run, alternatives })
+    i = end
   }
 
-  // Branches print in their own order, not in the order the first row of each
-  // happened to be added — otherwise dragging a row about silently reshuffles
-  // which alternative reads as the first one.
-  for (const block of blocks.values()) block.options.sort((a, b) => a.branch - b.branch)
   return out
 }
 
@@ -221,8 +224,7 @@ export function gearLabel(
 // and never asked for on the way back, so every alternative read as ordinary
 // required gear the moment the page refreshed.
 export const GEAR_ENTRY_COLUMNS =
-  'gear_item_id, name, note, url, section, group_type, quantity, sort_order, ' +
-  'option_group, option_branch, option_label'
+  'gear_item_id, name, note, url, section, group_type, quantity, sort_order, joined_above'
 
 // What the editor loads: the columns plus the row's own id, which it needs to
 // address a row it is about to change.

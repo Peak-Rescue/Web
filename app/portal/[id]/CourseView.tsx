@@ -4,7 +4,7 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { moduleAudience, KIND_META, type LibraryKind } from '@/lib/library'
-import { GEAR_ENTRY_COLUMNS, gearLabel, isLoneSlot, placeChoices, productName } from '@/lib/gear'
+import { GEAR_ENTRY_COLUMNS, gearLabel, isChoice, placeSets, productName } from '@/lib/gear'
 import { courseDisplayName, computeBlocks } from '@/lib/courses'
 import CourseTasksPanel, { type CourseTask, type TaskPerson } from '@/components/CourseTasksPanel'
 import PdfLink from '@/components/PdfLink'
@@ -257,7 +257,7 @@ export default async function CourseView({
     gear_list_entries: {
       id: string; gear_item_id: string | null; name: string | null; note: string | null; url: string | null
       section: string | null; group_type: 'personal' | 'group'; quantity: string | null; sort_order: number
-      option_group: string | null; option_branch: number | null; option_label: string | null
+      joined_above: 'and' | 'or' | 'or_if_needed' | null
       gear_items: { name: string; brand: string | null; url: string | null; category: string | null } | null
       gear_entry_options: { sort_order: number; gear_items: { name: string; brand: string | null } | null }[]
     }[]
@@ -984,57 +984,61 @@ export default async function CourseView({
                         <p className="text-[11px] uppercase tracking-wide text-zinc-500 mb-1">{cat}</p>
                       )}
                       <ul className="border border-zinc-800/70 rounded divide-y divide-zinc-800/70">
-                        {placeChoices(items).map((p) =>
+                        {placeSets(items).map((p) =>
                           p.kind === 'item' ? (
                             <GearLine key={p.row.id} e={p.row} modelsByType={gearModelsByType} />
-                          ) : isLoneSlot(p) ? (
-                            /* A block worn down to one slot is not a group any
-                               more — no "and" to draw and nothing to choose
-                               between — so it reads as the plain row it has
-                               become rather than as a card among plain rows. */
-                            <GearLine key={p.key} e={p.options[0].rows[0]} modelsByType={gearModelsByType} />
                           ) : (
-                            /* A group is one or more slots per branch. One
-                               branch is a line made of several things — "rope
-                               and rope bag" — and two or more is a choice
-                               between such lines. Same structure, so the same
-                               code draws both; only the words differ. */
-                            <li key={p.key} className="px-3 py-2">
-                              {p.options.length > 1 && (
+                            /* A set is drawn as a set: boxed off, with the
+                               claim written above it, because "bring one of
+                               these" is the whole point and a student skimming
+                               a list of bullets will read every line as
+                               required. One alternative is a line of things
+                               that go together — "rope and rope bag" — and two
+                               or more is a choice between such lines. */
+                            <li key={p.rows[0].id} className="px-3 py-2">
+                              <div className="rounded border border-pr-red/40 bg-pr-red/[0.04] px-2.5 py-2">
                                 <p className="text-[11px] uppercase tracking-wide text-pr-red mb-1.5">
-                                  {p.label ? `${p.label} — bring one of` : 'Bring one of'}
+                                  {isChoice(p) ? 'Bring one of' : 'Bring both'}
                                 </p>
-                              )}
-                              <div className="space-y-1.5">
-                                {p.options.map((o, i) => (
-                                  <div key={o.branch} className="flex items-start gap-2">
-                                    {p.options.length > 1 && (
-                                      <span className="shrink-0 w-10 pt-2 text-[10px] uppercase tracking-widest text-zinc-500">
-                                        {i === 0 ? 'Either' : 'Or'}
-                                      </span>
-                                    )}
-                                    {/* The slots of one line go together or not
-                                        at all — the wetsuit and the rain
-                                        jacket, the rope and the bag — so they
-                                        share a box and say "and" between
-                                        themselves. */}
-                                    {/* The slots of one line as blocks beside
-                                        each other, with the word that binds
-                                        them in the space they share. */}
-                                    <ul className="min-w-0 flex-1 flex flex-wrap items-stretch gap-2">
-                                      {o.rows.map((e, ri) => (
-                                        <React.Fragment key={e.id}>
-                                          {ri > 0 && (
-                                            <span className="self-center shrink-0 text-[10px] uppercase tracking-widest text-zinc-500">
-                                              and
-                                            </span>
-                                          )}
-                                          <GearLine e={e} modelsByType={gearModelsByType} card />
-                                        </React.Fragment>
-                                      ))}
-                                    </ul>
-                                  </div>
-                                ))}
+                                <div className="space-y-1.5">
+                                  {p.alternatives.map((o, i) => (
+                                    <div key={o.rows[0].id} className="flex items-start gap-2">
+                                      {isChoice(p) && (
+                                        /* Preference is in the order — the one
+                                           written first is what we recommend —
+                                           and a fallback says so outright, in
+                                           dimmer type, so "acceptable if you
+                                           haven't got one" doesn't read as an
+                                           equal choice. */
+                                        <span className={`shrink-0 w-24 pt-2 text-[10px] uppercase tracking-widest ${
+                                          i === 0 ? 'text-zinc-500' : o.ifNeeded ? 'text-zinc-600' : 'text-zinc-500'
+                                        }`}>
+                                          {i === 0 ? 'Either' : o.ifNeeded ? 'Or, if needed' : 'Or'}
+                                        </span>
+                                      )}
+                                      {/* The parts of one alternative go
+                                          together or not at all — the wetsuit
+                                          and the rain jacket, the rope and the
+                                          bag — so they sit beside each other
+                                          with the word that binds them in the
+                                          space they share. */}
+                                      <ul className={`min-w-0 flex-1 flex flex-wrap items-stretch gap-2 ${
+                                        o.ifNeeded ? 'opacity-75' : ''
+                                      }`}>
+                                        {o.rows.map((e, ri) => (
+                                          <React.Fragment key={e.id}>
+                                            {ri > 0 && (
+                                              <span className="self-center shrink-0 text-[10px] uppercase tracking-widest text-zinc-500">
+                                                and
+                                              </span>
+                                            )}
+                                            <GearLine e={e} modelsByType={gearModelsByType} card />
+                                          </React.Fragment>
+                                        ))}
+                                      </ul>
+                                    </div>
+                                  ))}
+                                </div>
                               </div>
                             </li>
                           )

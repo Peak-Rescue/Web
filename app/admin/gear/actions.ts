@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { GEAR_ENTRIES_COPY_SELECT } from '@/lib/gear'
+import { GEAR_ENTRIES_COPY_SELECT, type Joiner } from '@/lib/gear'
 
 async function requireAdmin() {
   const supabase = await createClient()
@@ -35,10 +35,6 @@ function touch(instanceId?: string | null) {
 // Genuine faults still throw: a failed write is not advice.
 type Failed = { error: string }
 const fail = (error: string): Failed => ({ error })
-
-// Keys minted by the browser and sent here, so they are checked like any other
-// input before going into a column the rest of a choice is matched on.
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 // ─── Catalog ────────────────────────────────────────────────────────────────
 
@@ -270,9 +266,9 @@ export async function addGearEntry(
     gearItemId?: string | null; name?: string; section?: string | null
     groupType?: 'personal' | 'group'; quantity?: string | null
     sortOrder?: number; instanceId?: string | null
-    // Which alternative of which choice this lands in, when it's being added
-    // straight into one. Both or neither — half a choice isn't a state.
-    optionGroup?: string | null; optionBranch?: number | null
+    // How it is joined to the row above it, when it is being added as part of
+    // a set rather than on its own.
+    joinedAbove?: Joiner | null
   }
 ) {
   const admin = await requireAdmin()
@@ -306,7 +302,6 @@ export async function addGearEntry(
     sortOrder = last ? (last.sort_order as number) + 1 : 0
   }
 
-  const choice = input.optionGroup?.trim() || null
   const { data: added, error } = await admin.from('gear_list_entries').insert({
     list_id: listId,
     gear_item_id: input.gearItemId ?? null,
@@ -314,8 +309,7 @@ export async function addGearEntry(
     group_type: input.groupType ?? 'personal',
     quantity: input.quantity?.trim() || null,
     sort_order: sortOrder,
-    option_group: choice,
-    option_branch: choice ? input.optionBranch ?? 0 : null,
+    joined_above: input.joinedAbove ?? null,
   }).select('id').single()
   if (error) throw new Error(error.message)
 
@@ -466,13 +460,32 @@ export async function moveGearEntry(
   target: {
     section: string | null; groupType: 'personal' | 'group'; orderedIds: string[]
     instanceId?: string | null
-    // Where inside the section it landed: an alternative of a choice, or the
-    // plain run of gear outside every choice, which is null for both.
-    optionGroup?: string | null; optionBranch?: number | null
+    // The operator already in the gap it was dropped into, which the row takes
+    // as its own: dropping between two alternatives makes it another one,
+    // dropping into a line makes it another part of that line, and dropping
+    // where nothing was joined leaves it an ordinary requirement.
+    joinedAbove?: Joiner | null
   }
 ) {
   const admin = await requireAdmin()
-  const choice = target.optionGroup?.trim() || null
+
+  // Where it is leaving from, read before anything moves. The row that followed
+  // it is joined to a neighbour that is about to be somewhere else, so that
+  // seam is broken rather than left to re-point at whatever slides up into the
+  // gap.
+  const { data: was } = await admin
+    .from('gear_list_entries')
+    .select('group_type, section, sort_order')
+    .eq('id', entryId)
+    .single()
+  if (was) {
+    await breakSeamBelow(admin, {
+      listId,
+      groupType: was.group_type as 'personal' | 'group',
+      section: was.section as string | null,
+      sortOrder: was.sort_order as number,
+    })
+  }
 
   // Renumbering from zero every time keeps the orders dense, so a list can't
   // drift into the state where two rows share a sort_order and the arrangement
@@ -488,8 +501,7 @@ export async function moveGearEntry(
               sort_order: i,
               section: target.section?.trim() || null,
               group_type: target.groupType,
-              option_group: choice,
-              option_branch: choice ? target.optionBranch ?? 0 : null,
+              joined_above: target.joinedAbove ?? null,
             }
           : { sort_order: i })
         .eq('id', id)
@@ -502,102 +514,91 @@ export async function moveGearEntry(
   await touchList(admin, listId, target.instanceId)
 }
 
-// ─── Choices ────────────────────────────────────────────────────────────────
+// ─── Joiners ────────────────────────────────────────────────────────────────
+//
+// How a row is joined to the row above it, and the one rule that keeps that
+// honest: a joiner names a neighbour by position, so when a neighbour leaves,
+// the row that follows must not silently inherit the relationship. Deleting the
+// rain jacket out of "wetsuit or rain jacket and drysuit" would otherwise leave
+// the drysuit claiming to accompany the wetsuit — a sentence nobody wrote,
+// printed on a list someone packs from.
 
-// A choice belongs to one heading on one side of one list, the same way a
-// section does. "Exposure protection" under personal kit and the same words
-// under group kit are two choices that share a name, so every statement below
-// is scoped to all three.
-type ChoiceScope = {
-  listId: string
-  groupType: 'personal' | 'group'
-  section: string | null
-  // The opaque grouping key, not the heading. Renaming the heading is now a
-  // plain field edit that can't collide with anything, because the identity of
-  // a choice stopped being the words on it.
-  key: string
+// The row immediately below the one at `sortOrder`, within the same side of the
+// same section — which is where "above" is defined, so it is the only place a
+// seam can be left.
+async function breakSeamBelow(
+  admin: Admin,
+  where: { listId: string; groupType: 'personal' | 'group'; section: string | null; sortOrder: number }
+) {
+  // `eq(col, null)` matches nothing in PostgREST rather than matching nulls, so
+  // "filed under no heading" — which is most gear — has to be `is`.
+  const q = admin
+    .from('gear_list_entries')
+    .select('id, joined_above')
+    .eq('list_id', where.listId)
+    .eq('group_type', where.groupType)
+    .gt('sort_order', where.sortOrder)
+    .order('sort_order')
+    .limit(1)
+  const { data: below } = await (where.section === null ? q.is('section', null) : q.eq('section', where.section))
+
+  const next = below?.[0]
+  if (!next?.joined_above) return
+  const { error } = await admin
+    .from('gear_list_entries')
+    .update({ joined_above: null })
+    .eq('id', next.id)
+  if (error) throw new Error(error.message)
 }
 
-// PostgREST's builder types are recursive enough that a generic wrapper around
-// them blows the instantiation depth limit, so the filters go on as a plain
-// object of equalities plus the one case that can't be expressed that way.
-//
-// A null section is "filed under no heading", which is most gear — and
-// `eq(col, null)` matches nothing in PostgREST rather than matching nulls, so
-// it has to be `is`.
-function scopeFilter(s: ChoiceScope) {
-  return {
-    match: { list_id: s.listId, group_type: s.groupType, option_group: s.key },
-    section: s.section,
-  }
-}
-
-// Turn a row that is simply required into the first alternative of a choice.
-//
-// The other way round from building a choice and dragging gear into it, and the
-// more common one: you write the list, and only on reaching the drysuit do you
-// realise the wetsuit above it was an alternative rather than a requirement.
-//
-// No heading is asked for: it is optional, and typed in place afterwards if it
-// earns its place.
-//
-// The key is opaque — nobody reads it — but it comes from the caller, because the second alternative is opened on
-// screen at the same moment this row becomes the first one. Minting a key here
-// instead would leave the empty alternative pointing at a group the row it is
-// an alternative to never joined — two choices side by side, one of them the
-// original row on its own.
-export async function wrapGearEntryInChoice(
-  entryId: string, key: string, instanceId?: string | null
-): Promise<{ key: string } | Failed> {
+// Relate a row to the one above it, or stop relating them. The whole of what
+// used to be five actions and three columns: there is no container to make, no
+// key to mint, no branch to number, and nothing to clean up afterwards.
+export async function setGearJoiner(
+  entryId: string,
+  joiner: Joiner | null,
+  instanceId?: string | null
+): Promise<Failed | void> {
   const admin = await requireAdmin()
-
-  if (!UUID.test(key)) return fail('That choice couldn’t be started')
 
   const { data: row } = await admin
     .from('gear_list_entries')
-    .select('list_id, option_group')
+    .select('list_id, group_type, section, sort_order')
     .eq('id', entryId)
     .single()
   if (!row) return fail('That row is no longer on the list')
-  if (row.option_group) return fail('That item is already one of a set of alternatives')
 
-  // Branch 0, because it is the alternative that was already written down and
-  // so the one that reads first.
+  // Nothing above it in its own section means nothing to be joined to. Saying
+  // so beats writing an operator that points at empty space, which is the shape
+  // the old model let through.
+  if (joiner) {
+    const q = admin
+      .from('gear_list_entries')
+      .select('id')
+      .eq('list_id', row.list_id)
+      .eq('group_type', row.group_type)
+      .lt('sort_order', row.sort_order)
+      .limit(1)
+    const { data: above } = await (row.section === null ? q.is('section', null) : q.eq('section', row.section))
+    if (!above?.length) return fail('There is nothing above this to join it to')
+  }
+
   const { error } = await admin
     .from('gear_list_entries')
-    .update({ option_group: key, option_branch: 0 })
+    .update({ joined_above: joiner })
     .eq('id', entryId)
   if (error) throw new Error(error.message)
+
   if (instanceId !== undefined) touch(instanceId)
-  else await touchList(admin, row.list_id)
-  return { key }
+  else await touchList(admin, row.list_id as string)
 }
 
-// The heading over the alternatives, which every row of the choice carries a
-// copy of — the same shape as a section, and for the same reason: there is no
-// row for the choice itself to hang it on. Empty is a real answer and the
-// common one.
-export async function setGearChoiceLabel(scope: ChoiceScope, label: string | null) {
-  const admin = await requireAdmin()
-  const next = label?.trim().slice(0, 120) || null
-  const f = scopeFilter(scope)
-  const q = admin.from('gear_list_entries').update({ option_label: next }).match(f.match)
-  const { error } = await (f.section === null ? q.is('section', null) : q.eq('section', f.section))
-  if (error) throw new Error(error.message)
-  await touchList(admin, scope.listId)
-}
-
-// Add a slot to the line this row is part of — the one mechanism both "+ and"
-// controls point at, at either level.
-//
-// A line is one or more slots sharing a branch. Most rows are a line of one, so
-// the first "+ and" has to make the group: the row is put in a fresh group on
-// branch 0 and the new slot joins it there. After that they are simply two rows
-// that agree, the same way a section is.
+// "+ and": another thing needed alongside this one, as its own row directly
+// below and joined to it. Its own row because that is the only shape that can
+// carry its own quantity — two ropes and one bag.
 //
 // `pinnedProductId` is what "+ and" on the products means: another product you
-// also need becomes its own slot of the same item, narrowed to that product.
-// That is the only way it can carry its own quantity — two ropes and one bag.
+// also need becomes its own row of the same item, narrowed to that product.
 export async function addSlotBeside(
   entryId: string,
   input: { gearItemId?: string | null; name?: string; pinnedProductId?: string | null },
@@ -607,27 +608,15 @@ export async function addSlotBeside(
 
   const { data: src } = await admin
     .from('gear_list_entries')
-    .select('list_id, section, group_type, option_group, option_branch, option_label, sort_order')
+    .select('list_id, section, group_type, sort_order')
     .eq('id', entryId)
     .single()
   if (!src) return fail('That row is no longer on the list')
   if (!input.gearItemId && !input.name?.trim()) return fail('Pick an item or give it a name')
 
-  let key = src.option_group
-  let branch = src.option_branch
-  if (!key) {
-    key = crypto.randomUUID()
-    branch = 0
-    const { error } = await admin
-      .from('gear_list_entries')
-      .update({ option_group: key, option_branch: branch })
-      .eq('id', entryId)
-    if (error) throw new Error(error.message)
-  }
-
-  // Straight after the slot it accompanies, so the line reads in the order it
-  // was built. Everything below shuffles down rather than the new slot landing
-  // at the foot of the section away from what it belongs with.
+  // Straight after the row it accompanies, so the line reads in the order it
+  // was built and everything below shuffles down — a new slot landing at the
+  // foot of the section would be joined to whatever happened to be there.
   const { data: below } = await admin
     .from('gear_list_entries')
     .select('id, sort_order')
@@ -647,10 +636,8 @@ export async function addSlotBeside(
       name: input.gearItemId ? null : input.name?.trim() || null,
       section: src.section,
       group_type: src.group_type,
-      option_group: key,
-      option_branch: branch,
-      option_label: src.option_label,
       sort_order: src.sort_order + 1,
+      joined_above: 'and',
     })
     .select('id')
     .single()
@@ -668,80 +655,26 @@ export async function addSlotBeside(
   return { id: added.id as string }
 }
 
-// A group that has come down to a single row stops being a group.
-//
-// One branch of two is still worth keeping — it is a line made of several
-// slots, "rope and rope bag", and only the alternative to it went away. One
-// row is different: there is nothing left for it to be a line of, and it would
-// go on carrying a group key that every renderer has to special-case and that
-// no reader can see the point of. So the key comes off, and it becomes the
-// ordinary required row it already is in substance.
-//
-// The label goes with it: it titled a choice, and there is no longer a choice.
-async function dissolveLoneSlot(admin: Admin, listId: string, key: string | null) {
-  if (!key) return
-  const { data: left, error } = await admin
-    .from('gear_list_entries')
-    .select('id')
-    .eq('list_id', listId)
-    .eq('option_group', key)
-  if (error) throw new Error(error.message)
-  if ((left ?? []).length !== 1) return
-  const { error: e2 } = await admin
-    .from('gear_list_entries')
-    .update({ option_group: null, option_branch: null, option_label: null })
-    .eq('id', left![0].id)
-  if (e2) throw new Error(e2.message)
-}
-
-// Dissolve the choice and keep the gear. Every alternative becomes an ordinary
-// required row, which is the honest reading — the list no longer says one of
-// them will do, so it says bring them. Deleting the gear instead would throw
-// away the drysuit because someone changed their mind about offering it.
-export async function ungroupGearChoice(scope: ChoiceScope) {
-  const admin = await requireAdmin()
-  const f = scopeFilter(scope)
-  const q = admin
-    .from('gear_list_entries')
-    .update({ option_group: null, option_branch: null })
-    .match(f.match)
-  const { error } = await (f.section === null ? q.is('section', null) : q.eq('section', f.section))
-  if (error) throw new Error(error.message)
-  await touchList(admin, scope.listId)
-}
-
-// Drop one alternative. The gear in it goes with it — an alternative is the
-// rows in it, so keeping them would mean deciding which heading they land under
-// on the way out, and the honest answer is that nobody asked for them at all.
-export async function removeGearChoiceBranch(scope: ChoiceScope, branch: number) {
-  const admin = await requireAdmin()
-  const f = scopeFilter(scope)
-  const del = admin.from('gear_list_entries').delete().match(f.match).eq('option_branch', branch)
-  const { error } = await (f.section === null ? del.is('section', null) : del.eq('section', f.section))
-  if (error) throw new Error(error.message)
-
-  // One branch left is not dissolved: it is still a line made of several slots
-  // — "rope and rope bag" — which is a real thing to be, and the alternative
-  // that was dropped was the only part that stopped being true. One *row* left
-  // is a different case, and that one does dissolve.
-  await dissolveLoneSlot(admin, scope.listId, scope.key)
-  await touchList(admin, scope.listId)
-}
-
 export async function removeGearEntry(id: string, instanceId?: string | null) {
   const admin = await requireAdmin()
-  // Read the row's grouping before it goes: deleting the rope bag is what
-  // leaves the rope alone in a line of one, and afterwards there is nothing
-  // left to ask which group it was in.
+  // Read where it sits before it goes: the row below is joined to this one by
+  // position, and once it is deleted there is nothing left to ask.
   const { data } = await admin
     .from('gear_list_entries')
-    .select('list_id, option_group, gear_lists(instance_id)')
+    .select('list_id, group_type, section, sort_order, gear_lists(instance_id)')
     .eq('id', id)
     .single()
 
   const { error } = await admin.from('gear_list_entries').delete().eq('id', id)
   if (error) throw new Error(error.message)
-  if (data?.list_id) await dissolveLoneSlot(admin, data.list_id as string, data.option_group as string | null)
+  if (data?.list_id) {
+    await breakSeamBelow(admin, {
+      listId: data.list_id as string,
+      groupType: data.group_type as 'personal' | 'group',
+      section: data.section as string | null,
+      sortOrder: data.sort_order as number,
+    })
+  }
 
   if (instanceId !== undefined) return touch(instanceId)
   touch((data?.gear_lists as unknown as { instance_id: string | null } | null)?.instance_id)

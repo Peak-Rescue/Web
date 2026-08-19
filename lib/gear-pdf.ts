@@ -7,11 +7,11 @@
 // says it on paper. The two drifting apart would show up as a student packing
 // from a sheet that doesn't match the course.
 
-import { gearLabel, isLoneSlot, placeChoices, productName, type ChoiceFields } from '@/lib/gear'
+import { gearLabel, isChoice, placeSets, productName, type JoinerFields } from '@/lib/gear'
 import { CONTENT_W, FAINT, INK, MARGIN, MUTED, PdfBuilder, RED } from '@/lib/pdf-layout'
 import { rgb } from 'pdf-lib'
 
-export type GearPdfEntry = ChoiceFields & {
+export type GearPdfEntry = JoinerFields & {
   id: string
   gear_item_id: string | null
   name: string | null
@@ -153,48 +153,49 @@ export async function generateGearListPdf(data: GearPdf): Promise<Uint8Array> {
         b.y -= 13
       }
 
-      for (const placed of placeChoices(items)) {
+      for (const placed of placeSets(items)) {
         if (placed.kind === 'item') {
           drawEntry(placed.row, 0)
           continue
         }
 
-        // Worn down to one slot: nothing to choose between and nothing to
-        // pair with, so it reads as the plain row it has become.
-        if (isLoneSlot(placed)) {
-          drawEntry(placed.options[0].rows[0], 0)
-          continue
-        }
+        // A set is marked on the sheet as a set. Someone packing from paper
+        // reads a run of bullets as a run of requirements, so the claim goes
+        // above it and the alternatives are indented under that claim.
+        const choice = isChoice(placed)
+        b.ensure(34)
+        b.text((choice ? 'Bring one of' : 'Bring both').toUpperCase(), {
+          size: 7.5,
+          bold: true,
+          color: RED,
+        })
+        b.y -= 13
 
-        const isChoice = placed.options.length > 1
-        if (isChoice) {
-          b.ensure(34)
-          b.text((placed.label ? `${placed.label} — bring one of` : 'Bring one of').toUpperCase(), {
-            size: 7.5,
-            bold: true,
-            color: RED,
-          })
-          b.y -= 13
-        }
-
-        placed.options.forEach((option, oi) => {
-          if (isChoice) {
+        placed.alternatives.forEach((option, oi) => {
+          if (choice) {
             b.ensure(22)
-            b.text(oi === 0 ? 'Either' : 'Or', { x: MARGIN + 6, size: 7.5, color: MUTED })
+            // Preference is in the order, and a fallback says so — a second
+            // choice that is acceptable rather than equal shouldn't read as an
+            // even swap on a sheet someone shops from.
+            b.text(oi === 0 ? 'Either' : option.ifNeeded ? 'Or, if needed' : 'Or', {
+              x: MARGIN + 6,
+              size: 7.5,
+              color: option.ifNeeded ? FAINT : MUTED,
+            })
             b.y -= 11
           }
-          // Slots of one branch go together or not at all — the rope and the
-          // bag — so the word that binds them sits between them.
+          // The parts of one alternative go together or not at all — the rope
+          // and the bag — so the word that binds them sits between them.
           option.rows.forEach((row, ri) => {
             if (ri > 0) {
               b.ensure(14)
-              b.text('and', { x: MARGIN + (isChoice ? 20 : 6), size: 7.5, color: FAINT })
+              b.text('and', { x: MARGIN + (choice ? 20 : 6), size: 7.5, color: FAINT })
               b.y -= 11
             }
-            drawEntry(row, isChoice ? 18 : 6)
+            drawEntry(row, choice ? 18 : 6)
           })
         })
-        if (isChoice) b.y -= 3
+        b.y -= 3
       }
       b.y -= 4
     }
