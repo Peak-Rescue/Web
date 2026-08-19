@@ -76,24 +76,12 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
 
   const entries = list.gear_list_entries ?? []
 
-  // A line that names a type with no model ticked prints a few of the models
-  // under it, so it has to know what they are.
-  const typeIds = [...new Set(entries.map((e) => e.gear_item_id).filter(Boolean))] as string[]
-  const { data: models } = typeIds.length
-    ? await admin.from('gear_items').select('name, parent_id').in('parent_id', typeIds).eq('active', true).order('name')
-    : { data: [] }
-  const modelsByType = new Map<string, string[]>()
-  for (const m of (models ?? []) as { name: string; parent_id: string }[]) {
-    modelsByType.set(m.parent_id, [...(modelsByType.get(m.parent_id) ?? []), m.name])
-  }
-
   const bytes = await generateGearListPdf({
     courseTitle,
     courseSubtitle: subtitle,
     listName: list.name,
     intro: list.intro,
     entries,
-    modelsByType,
     // A student asking for the course's totals gets their own sheet instead:
     // the roster size is staff's to know, and a sheet saying "× 12" is not the
     // list they were given.

@@ -34,7 +34,6 @@ export type GearPdf = {
   entries: GearPdfEntry[]
   // Models under a type, so a line that accepts any of them can name a few
   // rather than leave someone holding "Descent device" in a shop.
-  modelsByType: Map<string, string[]>
   // Who is packing from this sheet. 'course' is the POC's: every quantity is
   // what the whole course needs, to buy or pull from storage. 'person' is the
   // student's: what one of them puts in a bag. Same list, same rows — the
@@ -56,7 +55,7 @@ const SUB_LEAD = 11
 const ROW_GAP = 7
 
 // What one line says, resolved the way the portal resolves it.
-function readEntry(e: GearPdfEntry, modelsByType: Map<string, string[]>) {
+function readEntry(e: GearPdfEntry) {
   const name = e.name ?? (e.gear_items ? productName(e.gear_items) : null) ?? 'Item'
   const { detail } = gearLabel(
     name,
@@ -66,15 +65,14 @@ function readEntry(e: GearPdfEntry, modelsByType: Map<string, string[]>) {
       .filter(Boolean)
       .map((g) => ({ name: productName(g!) }))
   )
-  // Nothing ticked means any model of the type will do, so the sheet lists a
-  // few instead of printing a category name and leaving it there.
-  const anyOf = detail ? null : (e.gear_item_id ? modelsByType.get(e.gear_item_id) : null) ?? null
+  // Only the models someone put on this row. Listing the rest of the catalog
+  // when none were ticked printed examples nobody chose — every model we happen
+  // to hold under "helmet", presented on a sheet people shop from as if we had
+  // recommended them. A line that names a type and nothing else is saying any
+  // one of them will do, which is the whole point of naming the type.
   const sub: string[] = []
   if (detail) sub.push(detail)
   if (e.note) sub.push(e.note)
-  if (anyOf && anyOf.length > 0) {
-    sub.push(`${anyOf.length === 1 ? 'such as ' : 'any of: '}${anyOf.join(' · ')}`)
-  }
   return { name, sub }
 }
 
@@ -107,7 +105,7 @@ export async function generateGearListPdf(data: GearPdf): Promise<Uint8Array> {
   // editor and the portal draw them, and a sheet that stacks what the screen
   // pairs is a third dialect of the same list.
   const entryBox = (e: GearPdfEntry, x: number, width: number) => {
-    const { name, sub } = readEntry(e, data.modelsByType)
+    const { name, sub } = readEntry(e)
     const q = gearQuantity(e, { students: data.students, view: data.view })
     // No number and a rule means there is no roster to count against — a
     // template on the shelf. The rule is what the row actually knows, and it is

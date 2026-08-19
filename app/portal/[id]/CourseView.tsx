@@ -268,16 +268,6 @@ export default async function CourseView({
   // Which models sit under each type. A line that ticked nothing accepts any
   // of them, and saying so is the whole point of the catalog — before this the
   // student read a bare "Hand ascender" and had to guess what to buy.
-  const { data: gearModelRows } = await admin
-    .from('gear_items')
-    .select('name, parent_id')
-    .not('parent_id', 'is', null)
-    .eq('active', true)
-    .order('name')
-  const gearModelsByType = new Map<string, string[]>()
-  for (const m of (gearModelRows ?? []) as { name: string; parent_id: string }[]) {
-    gearModelsByType.set(m.parent_id, [...(gearModelsByType.get(m.parent_id) ?? []), m.name])
-  }
   const gearList = showTasks
     ? gearAll.find((g) => g.audience === 'instructor') ?? gearAll[0]
     : gearAll.find((g) => g.audience === 'student')
@@ -987,7 +977,7 @@ export default async function CourseView({
                       <ul className="border border-zinc-800/70 rounded divide-y divide-zinc-800/70">
                         {placeSets(items).map((p) =>
                           p.kind === 'item' ? (
-                            <GearLine key={p.row.id} e={p.row} modelsByType={gearModelsByType} students={inst.max_students ?? null} />
+                            <GearLine key={p.row.id} e={p.row} students={inst.max_students ?? null} />
                           ) : (
                             /* A set is drawn as a set: boxed off, with the
                                claim written above it, because "bring one of
@@ -1033,7 +1023,7 @@ export default async function CourseView({
                                                 and
                                               </span>
                                             )}
-                                            <GearLine e={e} modelsByType={gearModelsByType} students={inst.max_students ?? null} card />
+                                            <GearLine e={e} students={inst.max_students ?? null} card />
                                           </React.Fragment>
                                         ))}
                                       </ul>
@@ -1076,10 +1066,9 @@ type GearLineEntry = {
 }
 
 function GearLine({
-  e, modelsByType, students, card,
+  e, students, card,
 }: {
   e: GearLineEntry
-  modelsByType: Map<string, string[]>
   // The course's maximum, for the rows that count by it. A student's list is
   // what one person packs, so per-head gear reads as one and only shared kit —
   // one between four — shows the number the group ends up with.
@@ -1101,9 +1090,6 @@ function GearLine({
       .filter(Boolean)
       .map((g) => ({ name: productName(g!) }))
   )
-  // Nothing ticked means any model of the type will do — so list them rather
-  // than leave the student with a category name and no idea what to buy.
-  const anyOf = detail ? null : (e.gear_item_id ? modelsByType.get(e.gear_item_id) : null) ?? null
   // One person's share. "Bring one" is what a list for one person means by
   // saying nothing, so a per-head row prints no number at all.
   const qty = gearQuantity(e, { students, view: 'person' })
@@ -1121,12 +1107,6 @@ function GearLine({
         {qty.text && <span className="text-[11px] text-zinc-500">× {qty.text}</span>}
       </div>
       {e.note && <p className="text-[11px] text-zinc-500 mt-0.5">{e.note}</p>}
-      {anyOf && anyOf.length > 0 && (
-        <p className="text-[11px] text-zinc-600 mt-0.5">
-          {anyOf.length === 1 ? 'such as ' : 'any of: '}
-          <span className="text-zinc-500">{anyOf.join(' · ')}</span>
-        </p>
-      )}
     </li>
   )
 }
