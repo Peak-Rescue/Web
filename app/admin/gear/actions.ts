@@ -668,6 +668,32 @@ export async function addSlotBeside(
   return { id: added.id as string }
 }
 
+// A group that has come down to a single row stops being a group.
+//
+// One branch of two is still worth keeping — it is a line made of several
+// slots, "rope and rope bag", and only the alternative to it went away. One
+// row is different: there is nothing left for it to be a line of, and it would
+// go on carrying a group key that every renderer has to special-case and that
+// no reader can see the point of. So the key comes off, and it becomes the
+// ordinary required row it already is in substance.
+//
+// The label goes with it: it titled a choice, and there is no longer a choice.
+async function dissolveLoneSlot(admin: Admin, listId: string, key: string | null) {
+  if (!key) return
+  const { data: left, error } = await admin
+    .from('gear_list_entries')
+    .select('id')
+    .eq('list_id', listId)
+    .eq('option_group', key)
+  if (error) throw new Error(error.message)
+  if ((left ?? []).length !== 1) return
+  const { error: e2 } = await admin
+    .from('gear_list_entries')
+    .update({ option_group: null, option_branch: null, option_label: null })
+    .eq('id', left![0].id)
+  if (e2) throw new Error(e2.message)
+}
+
 // Dissolve the choice and keep the gear. Every alternative becomes an ordinary
 // required row, which is the honest reading — the list no longer says one of
 // them will do, so it says bring them. Deleting the gear instead would throw
@@ -696,21 +722,28 @@ export async function removeGearChoiceBranch(scope: ChoiceScope, branch: number)
 
   // One branch left is not dissolved: it is still a line made of several slots
   // — "rope and rope bag" — which is a real thing to be, and the alternative
-  // that was dropped was the only part that stopped being true.
+  // that was dropped was the only part that stopped being true. One *row* left
+  // is a different case, and that one does dissolve.
+  await dissolveLoneSlot(admin, scope.listId, scope.key)
   await touchList(admin, scope.listId)
 }
 
 export async function removeGearEntry(id: string, instanceId?: string | null) {
   const admin = await requireAdmin()
-  if (instanceId !== undefined) {
-    const { error } = await admin.from('gear_list_entries').delete().eq('id', id)
-    if (error) throw new Error(error.message)
-    return touch(instanceId)
-  }
+  // Read the row's grouping before it goes: deleting the rope bag is what
+  // leaves the rope alone in a line of one, and afterwards there is nothing
+  // left to ask which group it was in.
+  const { data } = await admin
+    .from('gear_list_entries')
+    .select('list_id, option_group, gear_lists(instance_id)')
+    .eq('id', id)
+    .single()
 
-  const { data } = await admin.from('gear_list_entries').select('gear_lists(instance_id)').eq('id', id).single()
   const { error } = await admin.from('gear_list_entries').delete().eq('id', id)
   if (error) throw new Error(error.message)
+  if (data?.list_id) await dissolveLoneSlot(admin, data.list_id as string, data.option_group as string | null)
+
+  if (instanceId !== undefined) return touch(instanceId)
   touch((data?.gear_lists as unknown as { instance_id: string | null } | null)?.instance_id)
 }
 

@@ -4,7 +4,7 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { moduleAudience, KIND_META, type LibraryKind } from '@/lib/library'
-import { GEAR_ENTRY_COLUMNS, gearLabel, placeChoices, productName } from '@/lib/gear'
+import { GEAR_ENTRY_COLUMNS, gearLabel, isLoneSlot, placeChoices, productName } from '@/lib/gear'
 import { courseDisplayName, computeBlocks } from '@/lib/courses'
 import CourseTasksPanel, { type CourseTask, type TaskPerson } from '@/components/CourseTasksPanel'
 import PdfLink from '@/components/PdfLink'
@@ -987,6 +987,12 @@ export default async function CourseView({
                         {placeChoices(items).map((p) =>
                           p.kind === 'item' ? (
                             <GearLine key={p.row.id} e={p.row} modelsByType={gearModelsByType} />
+                          ) : isLoneSlot(p) ? (
+                            /* A block worn down to one slot is not a group any
+                               more — no "and" to draw and nothing to choose
+                               between — so it reads as the plain row it has
+                               become rather than as a card among plain rows. */
+                            <GearLine key={p.key} e={p.options[0].rows[0]} modelsByType={gearModelsByType} />
                           ) : (
                             /* A group is one or more slots per branch. One
                                branch is a line made of several things — "rope

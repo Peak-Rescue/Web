@@ -7,7 +7,7 @@
 // says it on paper. The two drifting apart would show up as a student packing
 // from a sheet that doesn't match the course.
 
-import { gearLabel, placeChoices, productName, type ChoiceFields } from '@/lib/gear'
+import { gearLabel, isLoneSlot, placeChoices, productName, type ChoiceFields } from '@/lib/gear'
 import { CONTENT_W, FAINT, INK, MARGIN, MUTED, PdfBuilder, RED } from '@/lib/pdf-layout'
 import { rgb } from 'pdf-lib'
 
@@ -156,6 +156,13 @@ export async function generateGearListPdf(data: GearPdf): Promise<Uint8Array> {
       for (const placed of placeChoices(items)) {
         if (placed.kind === 'item') {
           drawEntry(placed.row, 0)
+          continue
+        }
+
+        // Worn down to one slot: nothing to choose between and nothing to
+        // pair with, so it reads as the plain row it has become.
+        if (isLoneSlot(placed)) {
+          drawEntry(placed.options[0].rows[0], 0)
           continue
         }
 

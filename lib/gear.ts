@@ -137,6 +137,22 @@ export function isChoice<T>(block: { options: ChoiceBlock<T>[] }): boolean {
   return block.options.length > 1
 }
 
+// A block worn down to one slot, which is no longer a group of anything.
+//
+// It happens: drop one alternative of a choice and the survivor stays grouped,
+// because one branch is still "rope and rope bag" — but delete the rope bag too
+// and what's left is a lone row that still says it belongs to a line. There is
+// no "and" and no "bring one of" to draw, so every renderer was left marking it
+// as special — indented on the printed sheet, boxed on the portal — with
+// nothing on the page to say why.
+//
+// Read as a plain row instead. This is the reading rule only; the editor
+// dissolves the group in the database when it drops to a single row, so a list
+// edited since then never gets here.
+export function isLoneSlot<T>(block: { options: ChoiceBlock<T>[] }): boolean {
+  return block.options.length === 1 && block.options[0].rows.length === 1
+}
+
 // A section's rows as they print: plain gear in its own order, and each choice
 // as one block sitting where its first row sat. Anchoring the block to its
 // first row is what keeps a choice from jumping to the end of the section the
