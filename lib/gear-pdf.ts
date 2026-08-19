@@ -163,7 +163,9 @@ export async function generateGearListPdf(data: GearPdf): Promise<Uint8Array> {
   // three of them — or when the page is already indented — the pair stacks
   // instead and the word goes above, which is the arrangement this used to have
   // everywhere.
-  const AND_W = 30
+  // Wide enough that the left column's quantity and the word between the
+  // columns cannot be read as one thing: "× 8 and" is a sentence nobody meant.
+  const AND_W = 44
   const MIN_COL = 150
   const drawAlternative = (rows: GearPdfEntry[], indent: number) => {
     const avail = CONTENT_W - indent
@@ -190,8 +192,11 @@ export async function generateGearListPdf(data: GearPdf): Promise<Uint8Array> {
     const top = b.y
     boxes.forEach((box, ri) => {
       if (ri > 0) {
+        // Centred in the gutter it owns, so it reads as belonging to the space
+        // between the two rather than to either of them.
         b.y = top - 2
-        b.text('and', { x: box.x - AND_W + 4, size: 7.5, color: FAINT })
+        const w = b.font.widthOfTextAtSize('and', 7.5)
+        b.text('and', { x: box.x - AND_W / 2 - w / 2, size: 7.5, color: FAINT })
       }
       b.y = top
       drawBox(box)
