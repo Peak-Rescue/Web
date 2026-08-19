@@ -276,6 +276,9 @@ export async function addGearEntry(
     // How it is joined to the row above it, when it is being added as part of
     // a set rather than on its own.
     joinedAbove?: Joiner | null
+    // The row it goes above, when it is being put somewhere in particular
+    // rather than at the end. Everything from there down shifts to make room.
+    beforeId?: string | null
   }
 ) {
   const admin = await requireAdmin()
@@ -298,6 +301,30 @@ export async function addGearEntry(
   if (!input.gearItemId && !seed.name) throw new Error('Pick an item or give it a name')
 
   let sortOrder = input.sortOrder
+  // Added into a gap: the new row takes the place of the one below it, and
+  // everything from there down moves along. Read here rather than trusted from
+  // the caller, because a stale position would put the row somewhere nobody
+  // pointed at.
+  if (input.beforeId) {
+    const { data: below } = await admin
+      .from('gear_list_entries')
+      .select('sort_order')
+      .eq('id', input.beforeId)
+      .maybeSingle()
+    if (below) {
+      sortOrder = below.sort_order as number
+      const { data: after } = await admin
+        .from('gear_list_entries')
+        .select('id, sort_order')
+        .eq('list_id', listId)
+        .gte('sort_order', sortOrder)
+      await Promise.all(
+        (after ?? []).map((r) =>
+          admin.from('gear_list_entries').update({ sort_order: (r.sort_order as number) + 1 }).eq('id', r.id)
+        )
+      )
+    }
+  }
   if (sortOrder === undefined) {
     const { data: last } = await admin
       .from('gear_list_entries')

@@ -64,7 +64,12 @@ type GroupType = 'personal' | 'group'
 // Everywhere a row can land: a side of the list and a heading under it. There
 // is nowhere else — a set is not a place, it is a relationship between rows
 // that are already next to each other.
-type Target = { gt: GroupType; section: string | null }
+type Target = {
+  gt: GroupType; section: string | null
+  // The row this lands above, when gear is being added in a particular gap
+  // rather than at the foot of the section.
+  before?: string
+}
 
 const sameTarget = (a: Target, b: Target) => a.gt === b.gt && a.section === b.section
 
@@ -435,7 +440,12 @@ export default function GearListEditor({
   // real one when the page catches up.
   function addEntry(input: { gearItemId?: string | null; name?: string; target: Target }) {
     const { target } = input
-    const sortOrder = entries.reduce((m, e) => Math.max(m, e.sort_order), -1) + 1
+    // Where it goes: above the row whose gap this was added in, or at the end
+    // of the list when it was added from the foot of a section.
+    const below = target.before ? entries.find((x) => x.id === target.before) : undefined
+    const sortOrder = below
+      ? below.sort_order
+      : entries.reduce((m, e) => Math.max(m, e.sort_order), -1) + 1
     const temp: GearEntry = {
       id: `pending-${sortOrder}-${input.gearItemId ?? input.name ?? ''}`,
       gear_item_id: input.gearItemId ?? null,
@@ -455,7 +465,7 @@ export default function GearListEditor({
     const settle = addGearEntry(list.id, {
       gearItemId: input.gearItemId, name: input.name,
       section: target.section, groupType: target.gt,
-      sortOrder, instanceId: list.instance_id,
+      sortOrder, beforeId: target.before ?? null, instanceId: list.instance_id,
     }).then(({ id }) => {
       // The row on screen becomes the row in the database, so the click after
       // this one has nothing to wait for.
@@ -463,7 +473,12 @@ export default function GearListEditor({
       return id
     })
     realIds.current.set(temp.id, settle)
-    apply((es) => [...es, temp], () => settle)
+    apply(
+      (es) => below
+        ? [...es.map((x) => (x.sort_order >= sortOrder ? { ...x, sort_order: x.sort_order + 1 } : x)), temp]
+        : [...es, temp],
+      () => settle
+    )
   }
 
   // Say how a row relates to the one above it, or stop saying it. The whole of
@@ -807,7 +822,22 @@ function SectionCard({
                 gap={gap(leadRow(p).id)}
                 join={s.join}
                 busy={s.busy}
+                adding={s.adding}
+                setAdding={s.setAdding}
+                addKey={zoneKey(here, leadRow(p).id)}
               />
+            )}
+            {/* Opened from the gap, so it lands in the gap. */}
+            {s.adding === zoneKey(here, leadRow(p).id) && (
+              <div className="border-y border-zinc-800/70">
+                <AddGear
+                  listId={s.listId}
+                  target={{ ...here, before: leadRow(p).id }}
+                  catalog={s.catalog} childrenOf={s.childrenOf} addEntry={s.addEntry}
+                  onClose={() => s.setAdding(null)}
+                  busy={s.busy} run={s.run} input={s.input}
+                />
+              </div>
             )}
             {p.kind === 'item' ? (
               <div className="border-t border-zinc-800/70 first:border-t-0">
@@ -912,7 +942,7 @@ function JoinControls({
 // build a set meant that when it declined there was no way at all — so the
 // click is here, and the drag is the shortcut rather than the mechanism.
 function Gap({
-  rowBelow, dragging, isOver, gap, join, busy,
+  rowBelow, dragging, isOver, gap, join, busy, adding, setAdding, addKey,
 }: {
   rowBelow: ResolvedRow
   dragging: boolean
@@ -920,6 +950,12 @@ function Gap({
   gap: Record<string, string>
   join: (rowId: string, joiner: Joiner | null) => void
   busy: boolean
+  // Adding here rather than at the foot of the section, so gear that belongs
+  // with the row above it arrives next to it instead of at the bottom with a
+  // drag still to do.
+  adding: string | null
+  setAdding: (key: string | null) => void
+  addKey: string
 }) {
   return (
     <div
@@ -946,6 +982,16 @@ function Gap({
           className={PAIR_BTN}
         >
           + or
+        </button>
+        {/* The gap is where you say what goes between two rows. Usually that is
+            how they relate; sometimes it is another item. */}
+        <button
+          onClick={() => setAdding(adding === addKey ? null : addKey)}
+          disabled={busy}
+          title="Add gear here, between these two rows"
+          className={adding === addKey ? `${PAIR_BTN} border-zinc-500 text-white bg-zinc-800` : PAIR_BTN}
+        >
+          + gear here
         </button>
       </span>
     </div>
