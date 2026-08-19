@@ -343,9 +343,10 @@ export async function updateGearEntry(
   patch: {
     name?: string | null; note?: string | null; url?: string | null; section?: string | null
     groupType?: 'personal' | 'group'; quantity?: string | null
-    // How many, as a ratio to the students on the course. Passing null for
-    // `perStudents` takes the rule off the row; the two travel together because
-    // an `each` with nothing to count against is not a rule.
+    // How many, and what it is counted against: `perStudents` of 1 is one each,
+    // 4 is one between four, and null is per course — a number the roster
+    // doesn't touch. `each` of null is no rule at all, and takes the unit with
+    // it, because a unit with nothing to count is not a rule.
     each?: number | null; perStudents?: number | null
   },
   instanceId?: string | null
@@ -359,18 +360,21 @@ export async function updateGearEntry(
     if (v !== undefined) update[k] = (v as string)?.trim() || null
   }
   if (patch.groupType !== undefined) update.group_type = patch.groupType
-  if (patch.perStudents !== undefined) {
-    const per = patch.perStudents === null ? null : Math.round(patch.perStudents)
-    if (per !== null && !(per > 0)) return fail('One unit has to cover at least one student')
-    const each = patch.each === undefined ? null : patch.each
-    if (per !== null && each !== null && !(each > 0)) return fail('Give a number greater than zero')
-    update.qty_per_students = per
-    // No rule, no `each` — a leftover multiplier on a row that no longer counts
-    // by anything is the stranded value all of this is built to make impossible.
-    update.qty_each = per === null ? null : each ?? 1
-  } else if (patch.each !== undefined) {
+  if (patch.each !== undefined) {
     if (patch.each !== null && !(patch.each > 0)) return fail('Give a number greater than zero')
     update.qty_each = patch.each
+    // The unit goes with the number it counted. A row that counts nothing must
+    // not keep a "per 4 students" nobody can see the effect of — that stranded
+    // half is the shape every bug in this area has come in.
+    if (patch.each === null) update.qty_per_students = null
+  }
+  if (patch.perStudents !== undefined && patch.each !== null) {
+    const per = patch.perStudents === null ? null : Math.round(patch.perStudents)
+    if (per !== null && !(per > 0)) return fail('One unit has to cover at least one student')
+    update.qty_per_students = per
+    // No defaulting of `each` here: the caller says what the row counts and
+    // what it counts by in the same breath, and inventing a 1 for a row that
+    // already had a 2 would quietly halve the kit for the course.
   }
 
   if (instanceId !== undefined) {

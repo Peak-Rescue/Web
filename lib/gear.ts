@@ -256,7 +256,11 @@ export type ReadQuantity = {
 // next to an item you can only have whole numbers of.
 const fmtQty = (n: number): string => String(Number(n.toFixed(2)))
 
-export function quantityRule(each: number, perStudents: number): string {
+// What the pair says, in the words the panel offers it in. Per course is not
+// the absence of a rule — it is a unit, and the honest name for a quantity that
+// doesn't move: one radio for the course, forty feet of webbing for the course.
+export function quantityRule(each: number, perStudents: number | null): string {
+  if (perStudents === null) return each === 1 ? 'One per course' : `${fmtQty(each)} per course`
   if (perStudents === 1) return each === 1 ? 'One each' : `${fmtQty(each)} each`
   return `${fmtQty(each)} per ${perStudents} students`
 }
@@ -266,16 +270,23 @@ export function gearQuantity(
   o: { students?: number | null; view: QuantityView }
 ): ReadQuantity {
   const per = e.qty_per_students ?? null
-  // A rule with no `each` is one of the thing, which is nearly every rule.
-  const each = Number(e.qty_each ?? 1)
-  const rule = per ? quantityRule(each, per) : null
+  // A number and what it is counted against. No number at all is no rule: the
+  // row is whatever `quantity` says, which is what a spool of webbing and a
+  // sample of ladder types need.
+  const counted = e.qty_each == null ? null : Number(e.qty_each)
+  const rule = counted === null && per === null ? null : quantityRule(counted ?? 1, per)
 
   // Whatever was typed wins, and says so. On a row with no rule this is simply
   // the quantity — "20 ft", "sample of ladder types" — which is what the column
   // has always been for.
   const typed = e.quantity?.trim() || null
   if (typed) return { text: typed, rule, overridden: Boolean(rule) }
-  if (!per) return { text: null, rule: null, overridden: false }
+  if (!rule) return { text: null, rule: null, overridden: false }
+  const each = counted ?? 1
+
+  // Per course is a number the roster doesn't touch, so it is the same number
+  // on both sheets — the POC pulls one Sked and the course has one Sked.
+  if (per === null) return { text: fmtQty(each), rule, overridden: false }
 
   // One person's share of a per-head rule is the rule itself, and one of a
   // thing needs no number: a student's list reads "Harness", not "Harness × 1".
