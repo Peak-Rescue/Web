@@ -694,17 +694,31 @@ function SectionCard({
       )}
 
       <div>
-        {placed.map((p) => (
+        {placed.map((p, i) => (
           <Fragment key={leadRow(p).id}>
             {/* The gap is where the relationship is made. Nothing to open
                 first, nothing held on screen that isn't on the list: you write
                 both rows, then say what they have to do with each other in the
                 space between them, which is where you are already looking. */}
-            <Gap
-              dragging={dragging}
-              isOver={s.over === zoneKey(here, leadRow(p).id)}
-              gap={gap(leadRow(p).id)}
-            />
+            {/* Nothing sits above the first thing in a section for it to be
+                joined to, so that gap only takes drops. */}
+            {i === 0 ? (
+              <div
+                {...gap(leadRow(p).id)}
+                className={`transition-colors ${dragging ? 'h-3' : 'h-1'} ${
+                  s.over === zoneKey(here, leadRow(p).id) ? 'border-t-2 border-pr-red' : ''
+                }`}
+              />
+            ) : (
+              <Gap
+                rowBelow={leadRow(p)}
+                dragging={dragging}
+                isOver={s.over === zoneKey(here, leadRow(p).id)}
+                gap={gap(leadRow(p).id)}
+                join={s.join}
+                busy={s.busy}
+              />
+            )}
             {p.kind === 'item' ? (
               <div className="border-t border-zinc-800/70 first:border-t-0">
                 <Row
@@ -801,24 +815,52 @@ function JoinControls({
   )
 }
 
-// The space between two things on the list: somewhere to move a row to, and
-// nothing else. Relating two rows is done by dropping one onto the other, so
-// there is one gesture for "put it here" and one for "these two go together",
-// and no button that has to explain which of the two it is.
+// The space between two things on the list: somewhere to drop a row, and a
+// place to say what the two rows either side of it have to do with each other.
+//
+// Both, not one. Dragging one row onto another is the better gesture when it
+// works, but it is the browser that decides whether a gesture is a drag, and it
+// declines for reasons nothing in the page can see. Making it the only way to
+// build a set meant that when it declined there was no way at all — so the
+// click is here, and the drag is the shortcut rather than the mechanism.
 function Gap({
-  dragging, isOver, gap,
+  rowBelow, dragging, isOver, gap, join, busy,
 }: {
+  rowBelow: ResolvedRow
   dragging: boolean
   isOver: boolean
   gap: { onDragOver: (e: React.DragEvent) => void; onDragLeave: () => void; onDrop: (e: React.DragEvent) => void }
+  join: (rowId: string, joiner: Joiner | null) => void
+  busy: boolean
 }) {
   return (
     <div
       {...gap}
-      className={`transition-colors ${dragging ? 'h-3' : 'h-1'} ${
-        isOver ? 'border-t-2 border-pr-red' : ''
-      }`}
-    />
+      className={`flex items-center gap-1 px-3 group/gap transition-colors ${
+        dragging ? 'h-4' : 'min-h-[1.1rem] py-0.5'
+      } ${isOver ? 'border-t-2 border-pr-red' : ''}`}
+    >
+      <span className={`flex items-center gap-1 transition-opacity ${
+        dragging ? 'opacity-0' : 'opacity-0 group-hover/gap:opacity-100 focus-within:opacity-100'
+      }`}>
+        <button
+          onClick={() => join(rowBelow.id, 'and')}
+          disabled={busy}
+          title="Both are needed — they go together"
+          className={PAIR_BTN}
+        >
+          + and
+        </button>
+        <button
+          onClick={() => join(rowBelow.id, 'or')}
+          disabled={busy}
+          title="Either will do — students bring one or the other"
+          className={PAIR_BTN}
+        >
+          + or
+        </button>
+      </span>
+    </div>
   )
 }
 
@@ -1045,6 +1087,14 @@ function Row({
             background is not something anyone finds. This says the row moves;
             it is not the only place you can take hold of it. */}
         <span
+          draggable
+          onDragStart={(ev) => {
+            ev.dataTransfer.effectAllowed = 'move'
+            ev.dataTransfer.setData('text/plain', e.id)
+            if (row.current) ev.dataTransfer.setDragImage(row.current, 12, 12)
+            onDragStart()
+          }}
+          onDragEnd={onDragEnd}
           title="Drag onto another row to relate them, or between rows to move it"
           className={`shrink-0 mt-0.5 cursor-grab active:cursor-grabbing select-none transition-colors ${
             dragging ? 'text-zinc-400' : 'text-zinc-700 group-hover:text-zinc-400'
