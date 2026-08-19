@@ -1308,11 +1308,10 @@ function Row({
                   </span>
                 </Fragment>
               ))}
-              {/* Recommending nothing is a real answer — any model of the type
-                  works — but it has to say so, or the line looks unfinished. */}
-              {e.r.options.length === 0 && (
-                <span className="text-[11px] text-zinc-600">Any {e.r.name.toLowerCase()} works</span>
-              )}
+              {/* Naming no model at all is the ordinary case and needs no
+                  sentence: the row already says what to bring, and "any tube-style
+                  belay device works" was a line of prose restating the row above
+                  it on every row that hadn't been narrowed. */}
               {/* One button, one meaning: another model that satisfies this
                   line. It used to be a pair reading "+ and" and "+ or", which
                   are the words the operators between rows use for a different
@@ -1322,13 +1321,13 @@ function Row({
                 onClick={() => setEditingOptions(editingOptions?.id === e.id ? null : { id: e.id })}
                 disabled={busy}
                 title={e.r.options.length === 0
-                  ? 'Name a model that satisfies this line'
+                  ? `Name the models that count as this — otherwise any ${e.r.name.toLowerCase()} does`
                   : 'Another model that would also satisfy this line'}
                 className={editingOptions?.id === e.id
                   ? `${PAIR_BTN} border-zinc-500 text-white bg-zinc-800`
                   : PAIR_BTN}
               >
-                + model
+                {e.r.options.length === 0 ? '+ specific model' : '+ another model'}
               </button>
             </div>
           )}
