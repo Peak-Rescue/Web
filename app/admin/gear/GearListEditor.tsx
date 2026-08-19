@@ -993,6 +993,10 @@ function Row({
   card?: boolean
 }) {
   const row = useRef<HTMLDivElement>(null)
+  // Whether this row's ratio is spelled out in boxes rather than named by a
+  // button. Held on the row because it is a way of looking at the row, not
+  // something the row is.
+  const [spellRatio, setSpellRatio] = useState(false)
   const [newModel, setNewModel] = useState('')
   // Brand is its own column in the catalog now, so it has to be its own
   // field here — typed into the name it would rebuild the very drift the
@@ -1151,30 +1155,38 @@ function Row({
                     : 'border-transparent text-zinc-300 placeholder:text-zinc-500 hover:border-zinc-800 focus:border-zinc-600'
                 }`}
               />
-              {/* What the number is made of, said in two words. It is on the row
-                  rather than behind a hover because "each" and "per 4" are the
-                  difference between twelve helmets and three. */}
+              {/* Where the number came from. A row that counts by students says
+                  so on its face, because "one each" and "1 per 4 students" are
+                  the difference between sixteen helmets and four.
+
+                  A row that doesn't counts as nothing but itself: × 1 is one,
+                  and a word explaining that one is one is a word in the way. So
+                  on those rows the chip waits for the pointer, like the buttons
+                  beside it — there when you want to change how the row counts,
+                  invisible when you are reading the list. */}
               <button
                 onClick={() => setRatioFor(ratioFor === e.id ? null : e.id)}
                 disabled={busy}
                 title={
                   auto.rule
                     ? `${auto.rule} — click to change how this counts`
-                    : 'The same however many students come — click to count it by students'
+                    : 'A fixed number, whatever the roster does — click to count it by students'
                 }
                 className={`text-[10px] ml-0.5 px-1 py-0.5 rounded border transition-colors ${
                   ratioFor === e.id
                     ? 'border-zinc-500 text-white bg-zinc-800'
                     : e.qty_per_students
                       ? 'border-transparent text-zinc-500 hover:text-white hover:border-zinc-700'
-                      : 'border-transparent text-zinc-700 hover:text-white hover:border-zinc-700'
+                      : `border-transparent text-zinc-600 hover:text-white hover:border-zinc-700 ${
+                          dragging ? 'opacity-0' : 'opacity-0 group-hover:opacity-100 focus-within:opacity-100 focus:opacity-100'
+                        }`
                 }`}
               >
                 {/* The rule, not the unit it is counted in. Beside a total,
                     a bare "each" reads as a quantity of its own — "× 16 each"
                     is sixteen apiece, which is the opposite of what it says:
                     sixteen because everyone brings one. */}
-                ({auto.rule ? auto.rule.toLowerCase() : 'fixed'})
+                ({auto.rule ? auto.rule.toLowerCase() : 'fixed number'})
               </button>
             </span>
             {!e.r.catalogItem && <span className="text-[10px] text-zinc-700">one-off</span>}
@@ -1261,73 +1273,103 @@ function Row({
         </button>
       </div>
 
-      {/* How many this row counts by. A ratio to the students on the course,
-          written as the sentence it is — "take 1 for every 4 students" — because
-          two bare number boxes beside each other don't say which is which, and
-          getting them the wrong way round is the difference between three
-          helmets and forty-eight. */}
+      {/* How many this row counts by. Four answers cover nearly every row on
+          nearly every list, so they are the control: one click, no numbers to
+          type, no way to get them the wrong way round.
+
+          The ratio spelled out — "take 1 for every 4 students" — is behind the
+          fifth, because a pair of number boxes sitting open beside the buttons
+          asked the same question twice and left both of them looking like the
+          real one. It says the whole sentence when it does appear: two bare
+          boxes side by side don't say which number is which, and reading them
+          backwards is the difference between four helmets and sixty-four. */}
       {ratioFor === e.id && (() => {
         const per = e.qty_per_students
         const each = Number(e.qty_each ?? 1)
+        const total = per && students ? Math.ceil(students / per) * each : null
+        // A ratio none of the buttons stands for — 2 per 3, a rope between
+        // five — brings its own boxes with it, so a row never has a rule it
+        // can see the effect of but not the shape of.
+        const named = per !== null && each === 1 && (per === 1 || per === 2 || per === 4)
+        const spelled = spellRatio || (per !== null && !named)
+        const CHOICE = 'text-[11px] px-2 py-1 rounded border transition-colors disabled:opacity-40'
+        const chosen = (on: boolean) => on
+          ? `${CHOICE} border-zinc-500 text-white bg-zinc-800`
+          : `${CHOICE} border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500`
         const preset = (label: string, rule: { each: number; perStudents: number } | null, hint: string) => (
           <button
             key={label}
-            onClick={() => setRatio(e.id, rule)}
+            onClick={() => { setSpellRatio(false); setRatio(e.id, rule) }}
             disabled={busy}
             title={hint}
-            className={`text-[11px] px-2 py-1 rounded border transition-colors disabled:opacity-40 ${
-              (rule?.perStudents ?? null) === per && (!rule || rule.each === each)
-                ? 'border-zinc-500 text-white bg-zinc-800'
-                : 'border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500'
-            }`}
+            className={chosen(
+              !spelled && (rule?.perStudents ?? null) === per && (!rule || rule.each === each)
+            )}
           >
             {label}
           </button>
         )
         return (
           <div className="mt-2 p-2 bg-zinc-900 rounded border border-zinc-800 space-y-2">
-            <p className="text-[11px] text-zinc-500">
-              {students
-                ? `Worked out from ${students} students — this course's maximum, on the Details tab. Change it there and every quantity here follows it.`
-                : 'This course has no maximum number of students yet. Set it on the Details tab and the quantities work themselves out; until then the rule is all this row can say.'}
-            </p>
-            <div className="flex items-center gap-2 flex-wrap text-[11px] text-zinc-400">
-              <span>Take</span>
-              <input
-                key={`each:${each}:${per}`}
-                type="number" min="1" step="1" defaultValue={each}
-                onBlur={(ev) => {
-                  const v = Number(ev.target.value)
-                  if (!(v > 0) || v === each) return
-                  setRatio(e.id, { each: v, perStudents: per ?? 1 })
-                }}
-                className={`w-16 ${input} py-1`}
-              />
-              <span>for every</span>
-              <input
-                key={`per:${each}:${per}`}
-                type="number" min="1" step="1" defaultValue={per ?? 1}
-                onBlur={(ev) => {
-                  const v = Number(ev.target.value)
-                  if (!(v > 0) || v === per) return
-                  setRatio(e.id, { each, perStudents: v })
-                }}
-                className={`w-16 ${input} py-1`}
-              />
-              <span>{(per ?? 1) === 1 ? 'student' : 'students'}</span>
-              {/* The whole point, said back: what the course ends up needing. */}
-              {per && students && (
-                <span className="text-zinc-500">
-                  → {Math.ceil(students / per) * each} for this course
-                </span>
-              )}
-            </div>
             <div className="flex flex-wrap gap-1.5">
               {preset('One each', { each: 1, perStudents: 1 }, 'Everyone brings one — the usual for personal kit')}
               {preset('One between two', { each: 1, perStudents: 2 }, 'One for every two students')}
               {preset('One between four', { each: 1, perStudents: 4 }, 'One for every four students')}
-              {preset('Same however many', null, 'A fixed number that doesn’t move with the roster — one radio, 40 ft of webbing')}
+              {preset('Fixed number', null, 'A number that doesn’t move with the roster — one radio, 40 ft of webbing')}
+              <button
+                onClick={() => {
+                  // Opening it on a row that counts by nothing has to give it
+                  // something to count by, or the boxes would show a ratio the
+                  // row hasn't got — which is what "1 for every 1 student" was
+                  // doing under a chosen "fixed number".
+                  if (!spelled && per === null) setRatio(e.id, { each: 1, perStudents: 1 })
+                  setSpellRatio(!spelled)
+                }}
+                disabled={busy}
+                title="Any other ratio — two between three, one for every five"
+                className={chosen(spelled)}
+              >
+                Another ratio
+              </button>
             </div>
+
+            {spelled && (
+              <div className="flex items-center gap-2 flex-wrap text-[11px] text-zinc-400">
+                <span>Take</span>
+                <input
+                  key={`each:${each}:${per}`}
+                  type="number" min="1" step="1" defaultValue={each}
+                  onBlur={(ev) => {
+                    const v = Number(ev.target.value)
+                    if (!(v > 0) || v === each) return
+                    setRatio(e.id, { each: v, perStudents: per ?? 1 })
+                  }}
+                  className={`w-16 ${input} py-1`}
+                />
+                <span>for every</span>
+                <input
+                  key={`per:${each}:${per}`}
+                  type="number" min="1" step="1" defaultValue={per ?? 1}
+                  onBlur={(ev) => {
+                    const v = Number(ev.target.value)
+                    if (!(v > 0) || v === per) return
+                    setRatio(e.id, { each, perStudents: v })
+                  }}
+                  className={`w-16 ${input} py-1`}
+                />
+                <span>{(per ?? 1) === 1 ? 'student' : 'students'}</span>
+              </div>
+            )}
+
+            {/* What the choice above comes to on this course, which is the only
+                reason anyone opened the panel. */}
+            <p className="text-[11px] text-zinc-500">
+              {!students
+                ? 'This course has no maximum number of students yet — set it on the Details tab and these work themselves out.'
+                : per
+                  ? `${students} students on this course, so ${total} of these. Change the maximum on the Details tab and every quantity follows it.`
+                  : `Stays as it is — the ${students} students on this course don’t change it.`}
+            </p>
             {qty.overridden && (
               <p className="text-[11px] text-amber-300/80">
                 This row is set to {qty.text} for this course, over its rule. Clear the quantity box to hand it back.
