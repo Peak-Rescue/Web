@@ -135,6 +135,75 @@ export default function GearListEditor({
   // on a row.
   const [ratioFor, setRatioFor] = useState<string | null>(null)
   const [drag, setDrag] = useState<Drag | null>(null)
+  // Where the pointer went down on a row, and whether it has travelled far
+  // enough to mean a drag rather than a click. Held in a ref because every
+  // pointer move would otherwise re-render the whole list.
+  const press = useRef<{ id: string; x: number; y: number; active: boolean } | null>(null)
+  // The row the pointer is over, when it is over a row rather than a gap.
+  const [overRow, setOverRow] = useState<string | null>(null)
+
+  // What is under the pointer: a gap to drop into, a row to be joined to, or
+  // nothing. Read from the document rather than from React, because the thing
+  // being dragged is following the cursor across other people's elements.
+  function targetAt(x: number, y: number) {
+    const el = document.elementFromPoint(x, y) as HTMLElement | null
+    // Rows first. A section card is itself the drop zone for its own end, and
+    // it wraps every row in it — asked the other way round, a row would always
+    // answer "the bottom of this section" and nothing could ever be dropped
+    // onto anything.
+    const row = el?.closest('[data-row]') as HTMLElement | null
+    if (row) return { kind: 'row' as const, id: row.dataset.row as string }
+    const gap = el?.closest('[data-gap]') as HTMLElement | null
+    if (gap) {
+      return {
+        kind: 'gap' as const,
+        key: gap.dataset.gap as string,
+        target: { gt: gap.dataset.gt as GroupType, section: gap.dataset.section || null },
+        before: gap.dataset.before as string,
+      }
+    }
+    return null
+  }
+
+  function onRowPointerDown(id: string, ev: React.PointerEvent) {
+    // Left button only, and never from something you were trying to type in or
+    // click on.
+    if (ev.button !== 0) return
+    if ((ev.target as HTMLElement).closest('input, textarea, button, a, select')) return
+    press.current = { id, x: ev.clientX, y: ev.clientY, active: false }
+  }
+
+  function onPointerMove(ev: React.PointerEvent) {
+    const p = press.current
+    if (!p) return
+    if (!p.active) {
+      // A few pixels of travel is what separates a drag from a click on a row.
+      if (Math.abs(ev.clientX - p.x) + Math.abs(ev.clientY - p.y) < 6) return
+      p.active = true
+      setDrag({ id: p.id })
+    }
+    ev.preventDefault()
+    const t = targetAt(ev.clientX, ev.clientY)
+    setOver(t?.kind === 'gap' ? t.key : null)
+    setOverRow(t?.kind === 'row' && t.id !== p.id ? t.id : null)
+  }
+
+  function endPointerDrag(ev: React.PointerEvent) {
+    const p = press.current
+    press.current = null
+    if (!p?.active) return
+    const t = targetAt(ev.clientX, ev.clientY)
+    setOver(null); setOverRow(null)
+    if (t?.kind === 'row' && t.id !== p.id) {
+      // Landing on a row asks what the two have to do with each other; landing
+      // in a gap is a move and needs no question.
+      setDrag(null)
+      setJoining({ targetId: t.id, draggedId: p.id })
+      return
+    }
+    if (t?.kind === 'gap') return drop(t.target, t.before === 'end' ? null : t.before)
+    setDrag(null)
+  }
   // A row let go on top of another row, waiting to be told what the two have to
   // do with each other. The drop is not a write on its own: "and" and "or" are
   // different lists to pack from, and a gesture must not guess between them.
@@ -423,7 +492,12 @@ export default function GearListEditor({
   const input = 'bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-zinc-500'
 
   return (
-    <div className="space-y-5">
+    <div
+      className={`space-y-5 ${drag ? 'select-none' : ''}`}
+      onPointerMove={onPointerMove}
+      onPointerUp={endPointerDrag}
+      onPointerCancel={() => { press.current = null; setDrag(null); setOver(null); setOverRow(null) }}
+    >
       {error && <p className="text-sm text-pr-red">{error}</p>}
 
       {/* The sheet this list becomes when it's handed out. Up here rather than
@@ -455,7 +529,7 @@ export default function GearListEditor({
           listId: list.id, catalog, childrenOf,
           adding, setAdding, editingOptions, setEditingOptions,
           drag, setDrag, over, setOver, onDrop: drop, apply, onRow, addEntry,
-          joining, setJoining, joinOnto,
+          joining, setJoining, joinOnto, overRow, onRowPointerDown,
           instanceId: list.instance_id, busy, run, input, join,
           students: students ?? null, ratioFor, setRatioFor, setRatio,
         }
@@ -564,6 +638,10 @@ type Shared = {
   input: string
   // Relate a row to the one above it, or stop relating them.
   join: (rowId: string, joiner: Joiner | null) => void
+  // The row the pointer is over mid-drag, which is the one it would be joined
+  // to if let go here.
+  overRow: string | null
+  onRowPointerDown: (id: string, ev: React.PointerEvent) => void
   // A row let go on top of another row, and the question that follows.
   joining: { targetId: string; draggedId: string } | null
   setJoining: (v: { targetId: string; draggedId: string } | null) => void
@@ -583,19 +661,15 @@ function gapProps(s: {
   over: string | null; setOver: (k: string | null) => void
   onDrop: (t: Target, beforeId: string | null) => void
 }) {
-  const key = zoneKey(s.target, s.beforeId)
+  // Data rather than handlers: the drag is tracked by where the pointer is, so
+  // a gap only has to say what it is and let the editor find it. HTML5's own
+  // drag events decided for themselves whether a gesture counted, and declined
+  // on some rows and not others with nothing in the page to explain it.
   return {
-    onDragOver: (e: React.DragEvent) => {
-      if (!s.dragging) return
-      e.preventDefault(); e.stopPropagation()
-      s.setOver(key)
-    },
-    onDragLeave: () => { if (s.over === key) s.setOver(null) },
-    onDrop: (e: React.DragEvent) => {
-      e.preventDefault(); e.stopPropagation()
-      s.setOver(null)
-      s.onDrop(s.target, s.beforeId === 'end' ? null : s.beforeId)
-    },
+    'data-gap': zoneKey(s.target, s.beforeId),
+    'data-gt': s.target.gt,
+    'data-section': s.target.section ?? '',
+    'data-before': s.beforeId,
   }
 }
 
@@ -724,12 +798,10 @@ function SectionCard({
                 <Row
                   e={p.row}
                   editingOptions={s.editingOptions} setEditingOptions={s.setEditingOptions}
-                  dragId={s.drag?.id ?? null}
                   joining={s.joining} setJoining={s.setJoining} joinOnto={s.joinOnto}
-                  dragging={dragging} isOver={false}
-                  onDragStart={() => s.setDrag({ id: p.row.id })}
-                  onDragEnd={() => { s.setDrag(null); s.setOver(null) }}
-                  gap={{ onDragOver: () => {}, onDragLeave: () => {}, onDrop: () => {} }}
+                  dragging={dragging}
+                  onPointerDown={s.onRowPointerDown}
+                  isJoinTarget={s.overRow === p.row.id}
                   apply={s.apply} onRow={s.onRow} instanceId={s.instanceId}
                   busy={s.busy} run={s.run} input={s.input}
                   students={s.students} ratioFor={s.ratioFor}
@@ -829,7 +901,7 @@ function Gap({
   rowBelow: ResolvedRow
   dragging: boolean
   isOver: boolean
-  gap: { onDragOver: (e: React.DragEvent) => void; onDragLeave: () => void; onDrop: (e: React.DragEvent) => void }
+  gap: Record<string, string>
   join: (rowId: string, joiner: Joiner | null) => void
   busy: boolean
 }) {
@@ -939,12 +1011,10 @@ function SetBlock({
                   <Row
                     e={e} card
                     editingOptions={s.editingOptions} setEditingOptions={s.setEditingOptions}
-                    dragId={s.drag?.id ?? null}
                     joining={s.joining} setJoining={s.setJoining} joinOnto={s.joinOnto}
-                    dragging={dragging} isOver={s.over === zoneKey(here, e.id)}
-                    onDragStart={() => s.setDrag({ id: e.id })}
-                    onDragEnd={() => { s.setDrag(null); s.setOver(null) }}
-                    gap={gap(e.id)}
+                    dragging={dragging}
+                    onPointerDown={s.onRowPointerDown}
+                    isJoinTarget={s.overRow === e.id}
                     apply={s.apply} onRow={s.onRow} instanceId={s.instanceId}
                     busy={s.busy} run={s.run} input={s.input}
                     students={s.students} ratioFor={s.ratioFor}
@@ -961,22 +1031,21 @@ function SetBlock({
 }
 
 function Row({
-  e, editingOptions, setEditingOptions, dragging, dragId, isOver, joining, setJoining, joinOnto,
-  onDragStart, onDragEnd, gap, apply, onRow, instanceId, busy, run, input, card,
+  e, editingOptions, setEditingOptions, dragging, isJoinTarget, joining, setJoining, joinOnto,
+  onPointerDown, apply, onRow, instanceId, busy, run, input, card,
   students, ratioFor, setRatioFor, setRatio,
 }: {
   e: GearEntry & { r: { name: string; note: string | null; url: string | null; section: string | null; catalogItem?: GearItem; options: GearItem[]; models: GearItem[] } }
   editingOptions: ProductPanel | null
   setEditingOptions: (v: ProductPanel | null) => void
   dragging: boolean
-  dragId: string | null
-  isOver: boolean
+  // The pointer is over this row mid-drag, so letting go here would relate the
+  // two rows rather than move one.
+  isJoinTarget: boolean
   joining: { targetId: string; draggedId: string } | null
   setJoining: (v: { targetId: string; draggedId: string } | null) => void
   joinOnto: (targetId: string, draggedId: string, joiner: Joiner) => void
-  onDragStart: () => void
-  onDragEnd: () => void
-  gap: { onDragOver: (e: React.DragEvent) => void; onDragLeave: () => void; onDrop: (e: React.DragEvent) => void }
+  onPointerDown: (id: string, ev: React.PointerEvent) => void
   apply: (optimistic: (es: GearEntry[]) => GearEntry[], fn: () => Promise<unknown>) => void
   onRow: <T,>(id: string, fn: (real: string) => Promise<T>) => Promise<T>
   instanceId: string | null
@@ -1037,52 +1106,21 @@ function Row({
   const qty = gearQuantity(e, { students, view: 'course' })
   const auto = gearQuantity({ ...e, quantity: null }, { students, view: 'course' })
 
-  const [onMe, setOnMe] = useState(false)
   const asking = joining?.targetId === e.id
 
   return (
     <div
       ref={row}
-      {...gap}
-      draggable
-      onDragStart={(ev) => {
-        // Anything you can click is not something you can drag from: the
-        // quantity box, the note, the model buttons, a link to the shop.
-        // Starting a drag on one of those would take the row away instead of
-        // putting the cursor in the field.
-        const from = ev.target as HTMLElement
-        if (from.closest('input, textarea, button, a, select')) {
-          ev.preventDefault()
-          return
-        }
-        ev.dataTransfer.effectAllowed = 'move'
-        ev.dataTransfer.setData('text/plain', e.id)
-        if (row.current) ev.dataTransfer.setDragImage(row.current, 12, 12)
-        onDragStart()
-      }}
-      onDragEnd={onDragEnd}
-      onDragOver={(ev) => {
-        // A row landing on a row is a different question from a row landing
-        // between two, so it takes the event before the gap under it can.
-        if (!dragging) return
-        ev.preventDefault(); ev.stopPropagation()
-        setOnMe(true)
-      }}
-      onDragLeave={() => setOnMe(false)}
-      onDrop={(ev) => {
-        ev.preventDefault(); ev.stopPropagation()
-        setOnMe(false)
-        const dropped = ev.dataTransfer.getData('text/plain') || dragId || ''
-        if (dropped && dropped !== e.id) setJoining({ targetId: e.id, draggedId: dropped })
-      }}
+      data-row={e.id}
+      onPointerDown={(ev) => onPointerDown(e.id, ev)}
       className={
         card
           ? `flex-1 min-w-[15rem] rounded-lg border bg-zinc-900/40 px-2.5 py-2 group transition-colors ${
-              onMe ? 'border-pr-red bg-pr-red/10' : isOver ? 'border-pr-red' : 'border-zinc-800'
+              isJoinTarget ? 'border-pr-red bg-pr-red/10' : 'border-zinc-800'
             }`
-          : `px-3 py-2 group transition-colors ${
-              onMe ? 'bg-pr-red/10 ring-1 ring-inset ring-pr-red/60 rounded' : isOver ? 'border-t-2 border-pr-red' : ''
-            }`
+          : `px-3 py-2 group transition-colors rounded ${
+              isJoinTarget ? 'bg-pr-red/10 ring-1 ring-inset ring-pr-red/60' : ''
+            } ${dragging ? 'cursor-grabbing' : ''}`
       }
     >
       <div className="flex items-start gap-2">
@@ -1091,14 +1129,6 @@ function Row({
             background is not something anyone finds. This says the row moves;
             it is not the only place you can take hold of it. */}
         <span
-          draggable
-          onDragStart={(ev) => {
-            ev.dataTransfer.effectAllowed = 'move'
-            ev.dataTransfer.setData('text/plain', e.id)
-            if (row.current) ev.dataTransfer.setDragImage(row.current, 12, 12)
-            onDragStart()
-          }}
-          onDragEnd={onDragEnd}
           title="Drag onto another row to relate them, or between rows to move it"
           className={`shrink-0 mt-0.5 cursor-grab active:cursor-grabbing select-none transition-colors ${
             dragging ? 'text-zinc-400' : 'text-zinc-700 group-hover:text-zinc-400'
