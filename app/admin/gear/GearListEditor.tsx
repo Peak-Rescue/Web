@@ -96,6 +96,12 @@ const PAIR_BTN =
 // Keyed like a real one, so the first row to land in it needs no fixing up.
 type ChoiceDraft = {
   gt: GroupType; section: string | null; key: string; label: string | null; branches: number[]
+  // The row "+ or" was clicked on, which becomes the first alternative the
+  // moment a second one exists. Until then it is an ordinary required row that
+  // happens to be drawn inside this block: writing the grouping to it up front
+  // left rows permanently claiming alternatives nobody ever named, and a row
+  // in a group has no "+ or" button, so there was no way back either.
+  from?: string
 }
 
 // Builds a list from the gear catalog instead of retyping it into a document.
@@ -154,12 +160,34 @@ export default function GearListEditor({
   // whole course page, which is most of a second even when nothing is wrong.
   const [pending, setPending] = useState<GearEntry[] | null>(null)
   const inflight = useRef(0)
+  // A row drawn ahead of the server carries an id the server has never issued.
+  // Anything done to it in the second that follows — a note, a quantity, "+ or"
+  // — would name a row the database has no idea about: clicking "+ or" on an
+  // item you had just added sent `pending-33-…` to Postgres, which rejected it
+  // as a malformed uuid, so the row never joined the choice and the alternative
+  // you then filled in became a set with one thing in it and nothing to choose
+  // between. So the add's own promise is kept under the temporary id, and every
+  // call that names a row waits on it first. Rows the server has already
+  // answered for — nearly all of them — resolve without waiting for anything.
+  const realIds = useRef(new Map<string, Promise<string>>())
 
   const entries = pending ?? list.gear_list_entries
   // Fresh props mean the server has caught up — unless writes are still in the
   // air, in which case the props are behind what's on screen and dropping the
   // local copy would flash rows out of existence and back.
-  useEffect(() => { if (inflight.current === 0) setPending(null) }, [list.gear_list_entries])
+  useEffect(() => {
+    if (inflight.current > 0) return
+    setPending(null)
+    // Every id on screen is the server's own now, so the temporary ones have
+    // nothing left to stand for.
+    realIds.current.clear()
+  }, [list.gear_list_entries])
+
+  const settled = (id: string) => realIds.current.get(id) ?? Promise.resolve(id)
+  // Naming a row to the server: whatever id it was drawn under, the call is
+  // made with the one the row actually has.
+  const onRow = <T,>(id: string, fn: (real: string) => Promise<T>): Promise<T> =>
+    settled(id).then(fn)
 
   const patch = (fn: (es: GearEntry[]) => GearEntry[]) =>
     setPending((p) => fn(p ?? list.gear_list_entries))
@@ -275,13 +303,31 @@ export default function GearListEditor({
       ...dragged, group_type: t.gt, section: t.section,
       option_group: t.choice, option_branch: t.branch,
     }
+    // Dragging gear into an alternative that has only been opened is the other
+    // way a choice becomes real, so the row it was opened from joins here too.
+    const opened = t.choice ? choiceDrafts.find((d) => d.key === t.choice && d.from) : undefined
     const next = [...rest.slice(0, at), moved, ...rest.slice(at)]
       .map(({ r: _r, ...e }, i) => ({ ...e, sort_order: i })) // eslint-disable-line @typescript-eslint/no-unused-vars
-    apply(() => next, () => moveGearEntry(list.id, drag.id, {
-      section: t.section, groupType: t.gt, orderedIds: next.map((e) => e.id),
-      optionGroup: t.choice, optionBranch: t.branch,
-      instanceId: list.instance_id,
-    }))
+      .map((e) => (e.id === opened?.from
+        ? { ...e, option_group: opened.key, option_branch: 0, option_label: t.label ?? null }
+        : e))
+    apply(() => next, async () => {
+      if (opened?.from) {
+        await onRow(opened.from, async (id) => unwrap(
+          ((await wrapGearEntryInChoice(id, opened.key, list.instance_id)) ?? {}) as object
+        ))
+        setChoiceDrafts((xs) => xs.map((d) => (d.key === opened.key ? { ...d, from: undefined } : d)))
+      }
+      const [moving, orderedIds] = await Promise.all([
+        settled(drag.id),
+        Promise.all(next.map((e) => settled(e.id))),
+      ])
+      return moveGearEntry(list.id, moving, {
+        section: t.section, groupType: t.gt, orderedIds,
+        optionGroup: t.choice, optionBranch: t.branch,
+        instanceId: list.instance_id,
+      })
+    })
   }
 
   // The added row is drawn from what the catalog already says about the item,
@@ -299,12 +345,42 @@ export default function GearListEditor({
       option_group: target.choice, option_branch: target.branch, option_label: target.label ?? null,
       sort_order: sortOrder, gear_entry_options: [],
     }
-    apply((es) => [...es, temp], () => addGearEntry(list.id, {
-      gearItemId: input.gearItemId, name: input.name,
-      section: target.section, groupType: target.gt,
-      optionGroup: target.choice, optionBranch: target.branch,
-      sortOrder, instanceId: list.instance_id,
-    }))
+    // The row "+ or" was clicked on, if this is the alternative that makes that
+    // click mean something. It becomes the first alternative now, in the same
+    // breath as the second one — before this, nothing has been written about it
+    // at all, so an abandoned "+ or" leaves the list exactly as it found it.
+    const opened = target.choice
+      ? choiceDrafts.find((d) => d.key === target.choice && d.from)
+      : undefined
+
+    const settle = (async () => {
+      if (opened?.from) {
+        await onRow(opened.from, async (id) => unwrap(
+          ((await wrapGearEntryInChoice(id, opened.key, list.instance_id)) ?? {}) as object
+        ))
+        setChoiceDrafts((xs) => xs.map((d) => (d.key === opened.key ? { ...d, from: undefined } : d)))
+      }
+      const { id } = await addGearEntry(list.id, {
+        gearItemId: input.gearItemId, name: input.name,
+        section: target.section, groupType: target.gt,
+        optionGroup: target.choice, optionBranch: target.branch,
+        sortOrder, instanceId: list.instance_id,
+      })
+      // The row on screen becomes the row in the database, so the click after
+      // this one has nothing to wait for.
+      setPending((es) => es && es.map((x) => (x.id === temp.id ? { ...x, id } : x)))
+      return id
+    })()
+    realIds.current.set(temp.id, settle)
+    apply(
+      (es) => [
+        ...es.map((x) => (x.id === opened?.from
+          ? { ...x, option_group: opened.key, option_branch: 0, option_label: target.label ?? null }
+          : x)),
+        temp,
+      ],
+      () => settle
+    )
   }
 
   const input = 'bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-zinc-500'
@@ -335,7 +411,7 @@ export default function GearListEditor({
         const shared = {
           listId: list.id, catalog, childrenOf,
           adding, setAdding, editingOptions, setEditingOptions,
-          drag, setDrag, over, setOver, onDrop: drop, apply, addEntry,
+          drag, setDrag, over, setOver, onDrop: drop, apply, onRow, addEntry,
           instanceId: list.instance_id, busy, run, input,
           choiceDrafts, setChoiceDrafts,
         }
@@ -433,6 +509,10 @@ type Shared = {
   setOver: (key: string | null) => void
   onDrop: (target: Target, beforeId: string | null) => void
   apply: (optimistic: (es: GearEntry[]) => GearEntry[], fn: () => Promise<unknown>) => void
+  // Every server call that names a row goes through this, so a row added a
+  // moment ago is addressed by the id the server gave it rather than the one
+  // it was drawn under.
+  onRow: <T,>(id: string, fn: (real: string) => Promise<T>) => Promise<T>
   addEntry: (input: { gearItemId?: string | null; name?: string; target: Target }) => void
   instanceId: string | null
   busy: boolean
@@ -494,14 +574,17 @@ function SectionCard({
   // drawn across a container nothing is being dropped into.
   useEffect(() => { if (!dragging) s.setOver(null) }, [dragging]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const placed = useMemo(() => placeChoices(rows), [rows])
-  const realChoices = new Set(
-    placed.flatMap((p) => (p.kind === 'choice' ? [p.key] : []))
-  )
   // A choice the first item has already landed in is a real choice now.
+  const realChoices = new Set(rows.map((r) => r.option_group).filter(Boolean) as string[])
   const drafts = s.choiceDrafts.filter(
     (d) => d.gt === groupType && d.section === name && !realChoices.has(d.key)
   )
+  // The row "+ or" was clicked on is drawn inside the block from the moment it
+  // is clicked, and taken out of the run above so it isn't in two places at
+  // once. Nothing has been written about it — it is still an ordinary required
+  // row until the alternative to it exists.
+  const claimed = new Set(drafts.map((d) => d.from).filter(Boolean) as string[])
+  const placed = placeChoices(rows.filter((r) => !claimed.has(r.id)))
 
   const gap = (beforeId: string | 'end') =>
     gapProps({ target: loose, beforeId, dragging, over: s.over, setOver: s.setOver, onDrop: s.onDrop })
@@ -573,7 +656,7 @@ function SectionCard({
               onDragStart={() => s.setDrag({ id: p.row.id })}
               onDragEnd={() => { s.setDrag(null); s.setOver(null) }}
               gap={gap(p.row.id)}
-              apply={s.apply} instanceId={s.instanceId}
+              apply={s.apply} onRow={s.onRow} instanceId={s.instanceId}
               setAdding={s.setAdding} setChoiceDrafts={s.setChoiceDrafts}
               adding={s.adding} catalog={s.catalog} childrenOf={s.childrenOf}
               busy={s.busy} run={s.run} input={s.input}
@@ -591,13 +674,17 @@ function SectionCard({
           )
         )}
 
-        {drafts.map((d) => (
-          <ChoiceCard
-            key={`draft-choice:${d.key}`} {...s}
-            groupType={groupType} section={name} choiceKey={d.key} label={d.label}
-            options={[]} draftBranches={d.branches} isDraft
-          />
-        ))}
+        {drafts.map((d) => {
+          const from = d.from ? rows.find((r) => r.id === d.from) : undefined
+          return (
+            <ChoiceCard
+              key={`draft-choice:${d.key}`} {...s}
+              groupType={groupType} section={name} choiceKey={d.key} label={d.label}
+              options={from ? [{ branch: 0, rows: [from] }] : []}
+              draftBranches={d.branches} isDraft
+            />
+          )
+        })}
       </div>
 
       <div className={rows.length > 0 || drafts.length > 0 ? 'border-t border-zinc-800/70' : ''}>
@@ -669,6 +756,21 @@ function ChoiceCard({
   // the moment the first item lands in it.
   const choice = isChoice({ options: shown })
 
+  // What this block claims, in the words the student's list uses. Two
+  // alternatives is a choice; one line of several slots is a conjunction; one
+  // line of one slot claims nothing at all, because there is nothing yet for
+  // it to be true of — it is one item, and saying "all of" over a single item
+  // reads as a relationship that isn't there.
+  const slots = shown.reduce((n, o) => n + o.rows.length, 0)
+  const claim = choice ? 'Bring one of' : slots > 1 ? 'All of these' : null
+
+  // A group with one item in it and nothing beside it. It says nothing — there
+  // is no choice and no line — so it is nearly always the wreckage of a "+ or"
+  // that was started and left, or an alternative that was deleted out from
+  // under it. It says so plainly instead of sitting there as an item in a box:
+  // an accident you can't see is one you can't undo.
+  const stranded = !isDraft && !choice && slots === 1
+
   return (
     <div className="px-3 py-2.5">
       <div className="border border-zinc-700/70 rounded-lg overflow-hidden">
@@ -676,9 +778,18 @@ function ChoiceCard({
           {/* One branch is a line made of several slots; two or more is a
               choice between such lines. Same structure, different claim, so
               the header has to say which one this is. */}
-          <span className="shrink-0 text-[10px] uppercase tracking-widest text-pr-red font-medium">
-            {choice ? 'Bring one of' : 'All of'}
-          </span>
+          {stranded ? (
+            <span
+              title="This item is in a group by itself. Add an alternative, or ungroup it and it goes back to being an ordinary item."
+              className="shrink-0 text-[10px] uppercase tracking-widest text-amber-500 font-medium"
+            >
+              Group of one
+            </span>
+          ) : claim && (
+            <span className="shrink-0 text-[10px] uppercase tracking-widest text-pr-red font-medium">
+              {claim}
+            </span>
+          )}
           {/* Optional, and it looks optional: a placeholder rather than a
               value, because the block already says what it is. A line of slots
               needs no heading at all — it prints as one bullet. */}
@@ -695,17 +806,23 @@ function ChoiceCard({
             aria-label="Choice heading"
             className="min-w-0 flex-1 text-xs font-semibold text-white bg-transparent rounded px-1.5 py-0.5 border border-transparent placeholder:font-normal placeholder:text-zinc-600 hover:border-zinc-700 focus:border-zinc-600 focus:bg-zinc-900 focus:outline-none"
           />
-          {options.length > 0 && (
+          {!isDraft && options.length > 0 && (
             <button
               onClick={() => {
-                if (!confirm(choice
+                // Nothing is being taken apart when there is one item in it, so
+                // there is nothing to warn about — the click is the undo.
+                if (!stranded && !confirm(choice
                   ? 'Stop offering these as alternatives? The gear stays on the list, but every item becomes required.'
                   : 'Split this line back into separate items? Nothing is removed — they stop being one line.'
                 )) return
                 s.run(() => ungroupGearChoice(scope))
               }}
               disabled={s.busy}
-              title={choice ? 'Keep the gear, drop the choice — every item becomes required' : 'Split this line back into separate items'}
+              title={stranded
+                ? 'Take it out of the group — nothing is removed, it goes back to being an ordinary item'
+                : choice
+                  ? 'Keep the gear, drop the choice — every item becomes required'
+                  : 'Split this line back into separate items'}
               className="shrink-0 text-[11px] text-zinc-600 hover:text-white transition-colors disabled:opacity-40"
             >
               ungroup
@@ -752,6 +869,14 @@ function ChoiceCard({
                 {shown.length > 2 || empty ? (
                   <button
                     onClick={() => {
+                      // A draft has no rows in the database to delete: dropping
+                      // the alternative that was written first is dropping the
+                      // idea, and the row goes back to being required.
+                      if (isDraft && !empty) {
+                        return s.setChoiceDrafts((xs) => xs.filter(
+                          (d) => !(d.gt === groupType && d.section === section && d.key === choiceKey)
+                        ))
+                      }
                       if (empty) {
                         return s.setChoiceDrafts((xs) => xs
                           .map((d) =>
@@ -796,7 +921,7 @@ function ChoiceCard({
                       onDragStart={() => s.setDrag({ id: e.id })}
                       onDragEnd={() => { s.setDrag(null); s.setOver(null) }}
                       gap={gap(e.id)}
-                      apply={s.apply} instanceId={s.instanceId}
+                      apply={s.apply} onRow={s.onRow} instanceId={s.instanceId}
                       setAdding={s.setAdding} setChoiceDrafts={s.setChoiceDrafts}
                       adding={s.adding} catalog={s.catalog} childrenOf={s.childrenOf}
                       busy={s.busy} run={s.run} input={s.input}
@@ -846,7 +971,7 @@ function ChoiceCard({
 
 function Row({
   e, editingOptions, setEditingOptions, dragging, isOver,
-  onDragStart, onDragEnd, gap, apply, instanceId, busy, run, input,
+  onDragStart, onDragEnd, gap, apply, onRow, instanceId, busy, run, input,
   setAdding, setChoiceDrafts, adding, catalog, childrenOf, card,
 }: {
   e: GearEntry & { r: { name: string; note: string | null; url: string | null; section: string | null; catalogItem?: GearItem; options: GearItem[]; models: GearItem[] } }
@@ -858,6 +983,7 @@ function Row({
   onDragEnd: () => void
   gap: { onDragOver: (e: React.DragEvent) => void; onDragLeave: () => void; onDrop: (e: React.DragEvent) => void }
   apply: (optimistic: (es: GearEntry[]) => GearEntry[], fn: () => Promise<unknown>) => void
+  onRow: <T,>(id: string, fn: (real: string) => Promise<T>) => Promise<T>
   instanceId: string | null
   busy: boolean
   run: (fn: () => Promise<unknown>) => void
@@ -908,15 +1034,9 @@ function Row({
     const key = crypto.randomUUID()
     setChoiceDrafts((xs) => [
       ...xs,
-      { gt: e.group_type, section: e.r.section, key, label: null, branches: [1] },
+      { gt: e.group_type, section: e.r.section, key, label: null, branches: [1], from: e.id },
     ])
     setAdding(zoneKey({ gt: e.group_type, section: e.r.section, choice: key, branch: 1 }, 'end'))
-    apply(
-      (es) => es.map((x) => (x.id === e.id ? { ...x, option_group: key, option_branch: 0 } : x)),
-      // The same key the draft alternative above was opened under, so the row
-      // and the alternative to it land in one choice rather than two.
-      async () => unwrap(((await wrapGearEntryInChoice(e.id, key, instanceId)) ?? {}) as object)
-    )
   }
 
   // Recommendations are stored as the whole set, so every change to them is
@@ -925,7 +1045,7 @@ function Row({
     (es) => es.map((x) => x.id === e.id
       ? { ...x, gear_entry_options: ids.map((gear_item_id, i) => ({ gear_item_id, sort_order: i })) }
       : x),
-    () => setGearEntryOptions(e.id, ids, instanceId)
+    () => onRow(e.id, (id) => setGearEntryOptions(id, ids, instanceId))
   )
 
   return (
@@ -982,7 +1102,7 @@ function Row({
                   if (v === (e.quantity ?? '')) return
                   apply(
                     (es) => es.map((x) => (x.id === e.id ? { ...x, quantity: v.trim() || null } : x)),
-                    () => updateGearEntry(e.id, { quantity: v }, instanceId)
+                    () => onRow(e.id, (id) => updateGearEntry(id, { quantity: v }, instanceId))
                   )
                 }}
                 placeholder="1"
@@ -1013,7 +1133,7 @@ function Row({
                   the block around it, which is where an alternative to the
                   whole thing belongs — offering it here as well would put the
                   same command in two places one line apart. */}
-              {!e.option_group && (
+              {!e.option_group && !card && (
                 <button
                   onClick={insteadOf}
                   disabled={busy}
@@ -1098,7 +1218,7 @@ function Row({
               if (v === (e.r.note ?? '')) return
               apply(
                 (es) => es.map((x) => (x.id === e.id ? { ...x, note: v.trim() || null } : x)),
-                () => updateGearEntry(e.id, { note: v }, instanceId)
+                () => onRow(e.id, (id) => updateGearEntry(id, { note: v }, instanceId))
               )
             }}
             placeholder="Add a note for this course"
@@ -1108,7 +1228,7 @@ function Row({
         <button
           onClick={() => apply(
             (es) => es.filter((x) => x.id !== e.id),
-            () => removeGearEntry(e.id, instanceId)
+            () => onRow(e.id, (id) => removeGearEntry(id, instanceId))
           )}
           className="shrink-0 text-xs text-zinc-600 hover:text-red-400 transition-colors"
         >
@@ -1131,9 +1251,9 @@ function Row({
             catalog={catalog} childrenOf={childrenOf}
             addEntry={(input) => {
               setAdding(null)
-              run(async () => unwrap(((await addSlotBeside(
-                e.id, { gearItemId: input.gearItemId, name: input.name }, instanceId
-              )) ?? {}) as object))
+              run(() => onRow(e.id, async (id) => unwrap(((await addSlotBeside(
+                id, { gearItemId: input.gearItemId, name: input.name }, instanceId
+              )) ?? {}) as object)))
             }}
             onClose={() => setAdding(null)}
             busy={busy} run={run} input={input}
@@ -1157,9 +1277,9 @@ function Row({
         const pick = (id: string) => mode === 'or'
           ? setOptions([...e.r.options.map((o) => o.id), id])
           : run(async () => {
-              unwrap(((await addSlotBeside(
-                e.id, { gearItemId: e.gear_item_id, pinnedProductId: id }, instanceId
-              )) ?? {}) as object)
+              await onRow(e.id, async (rowId) => unwrap(((await addSlotBeside(
+                rowId, { gearItemId: e.gear_item_id, pinnedProductId: id }, instanceId
+              )) ?? {}) as object))
               setEditingOptions(null)
             })
         // This one waits: the chip can't be drawn from a catalog that doesn't
@@ -1168,10 +1288,10 @@ function Row({
           const { id } = unwrap(await upsertGearItem({
             name: newModel, brand: newBrand.trim() || null, category: type.category, parentId: type.id,
           }))
-          if (mode === 'or') await setGearEntryOptions(e.id, [...e.r.options.map((o) => o.id), id], instanceId)
-          else unwrap(((await addSlotBeside(
-            e.id, { gearItemId: e.gear_item_id, pinnedProductId: id }, instanceId
-          )) ?? {}) as object)
+          if (mode === 'or') await onRow(e.id, (rowId) => setGearEntryOptions(rowId, [...e.r.options.map((o) => o.id), id], instanceId))
+          else await onRow(e.id, async (rowId) => unwrap(((await addSlotBeside(
+            rowId, { gearItemId: e.gear_item_id, pinnedProductId: id }, instanceId
+          )) ?? {}) as object))
           setNewModel(''); setNewBrand('')
         })
         return (
