@@ -210,6 +210,89 @@ export function gearLabel(
   return { title: base, detail: joined }
 }
 
+// ─── How many ───────────────────────────────────────────────────────────────
+//
+// A row can say how many it needs as a ratio to the students on the course —
+// one each, one between four — instead of a number typed for one course and
+// wrong on the next.
+//
+// The ratio is what is stored; the number is worked out wherever the list is
+// read, from `max_students` on the course. That is the same number the quote is
+// priced on, so the gear list and the quote can't disagree about how many
+// people are coming, and a roster that changes carries every quantity with it
+// without anyone pressing anything.
+//
+// The same row is then two different readings depending on who is holding it,
+// which is the whole reason the ratio beats a number:
+//
+//   course — what has to exist. The POC's purchasing and pull-from-storage
+//            sheet: twelve harnesses.
+//   person — what one person packs. The student's list: a harness.
+//
+// A number typed into `quantity` on a row with a rule overrides it for this
+// course, and clearing the box hands the row back to the rule.
+
+export type QuantityFields = {
+  quantity: string | null
+  qty_each: number | null
+  qty_per_students: number | null
+}
+
+export type QuantityView = 'course' | 'person'
+
+export type ReadQuantity = {
+  // What to print beside the item, or nothing. Nothing is a real answer: one
+  // each needs no number on a student's list, and a rule on a template has no
+  // course to count.
+  text: string | null
+  // The rule in words, for wherever the number has to explain itself — and for
+  // wherever there is no number to show.
+  rule: string | null
+  // A number typed over the rule.
+  overridden: boolean
+}
+
+// Trailing zeros come back from a numeric column and read as false precision
+// next to an item you can only have whole numbers of.
+const fmtQty = (n: number): string => String(Number(n.toFixed(2)))
+
+export function quantityRule(each: number, perStudents: number): string {
+  if (perStudents === 1) return each === 1 ? 'One each' : `${fmtQty(each)} each`
+  return `${fmtQty(each)} per ${perStudents} students`
+}
+
+export function gearQuantity(
+  e: QuantityFields,
+  o: { students?: number | null; view: QuantityView }
+): ReadQuantity {
+  const per = e.qty_per_students ?? null
+  // A rule with no `each` is one of the thing, which is nearly every rule.
+  const each = Number(e.qty_each ?? 1)
+  const rule = per ? quantityRule(each, per) : null
+
+  // Whatever was typed wins, and says so. On a row with no rule this is simply
+  // the quantity — "20 ft", "sample of ladder types" — which is what the column
+  // has always been for.
+  const typed = e.quantity?.trim() || null
+  if (typed) return { text: typed, rule, overridden: Boolean(rule) }
+  if (!per) return { text: null, rule: null, overridden: false }
+
+  // One person's share of a per-head rule is the rule itself, and one of a
+  // thing needs no number: a student's list reads "Harness", not "Harness × 1".
+  // Any other ratio is a fact about the group — one between four is not a
+  // fraction of a helmet — so it reads as the total even here.
+  if (o.view === 'person' && per === 1) {
+    return { text: each === 1 ? null : fmtQty(each), rule, overridden: false }
+  }
+
+  const students = o.students ?? null
+  // No course, or a course nobody has said the size of yet. The rule is the
+  // honest thing to show — inventing a total would be inventing the roster.
+  if (!students || students <= 0) return { text: null, rule, overridden: false }
+
+  return { text: fmtQty(Math.ceil(students / per) * each), rule, overridden: false }
+}
+
 // ─── Reading a list ─────────────────────────────────────────────────────────
 //
 // The columns a gear row is made of, written once. Four places load these rows
@@ -224,7 +307,7 @@ export function gearLabel(
 // and never asked for on the way back, so every alternative read as ordinary
 // required gear the moment the page refreshed.
 export const GEAR_ENTRY_COLUMNS =
-  'gear_item_id, name, note, url, section, group_type, quantity, sort_order, joined_above'
+  'gear_item_id, name, note, url, section, group_type, quantity, qty_each, qty_per_students, sort_order, joined_above'
 
 // What the editor loads: the columns plus the row's own id, which it needs to
 // address a row it is about to change.

@@ -255,6 +255,13 @@ export async function deleteGearList(id: string) {
 
 // ─── Entries ────────────────────────────────────────────────────────────────
 
+// What a new row counts by, before anyone says otherwise. See
+// `gearQuantity` for what the pair means and how it is read.
+const QTY_FOR_SIDE = {
+  personal: { qty_each: 1, qty_per_students: 1 },
+  group: { qty_each: null, qty_per_students: null },
+} as const
+
 // instanceId and sortOrder are passed in by the editor, which already knows
 // both, purely to save a round trip each. Neither decides anything the caller
 // isn't allowed to decide — the first only picks which pages to revalidate,
@@ -308,6 +315,12 @@ export async function addGearEntry(
     ...seed,
     group_type: input.groupType ?? 'personal',
     quantity: input.quantity?.trim() || null,
+    // Personal kit is one each, which is what the side of the list already
+    // says — so the POC's total is right the moment the row exists, without
+    // anyone setting a ratio on gear whose ratio was never in doubt. Group kit
+    // gets no rule: one radio for the course is the common case there, and it
+    // is the ratios that have to be said out loud.
+    ...QTY_FOR_SIDE[input.groupType ?? 'personal'],
     sort_order: sortOrder,
     joined_above: input.joinedAbove ?? null,
   }).select('id').single()
@@ -327,7 +340,14 @@ async function touchList(admin: Admin, listId: string, known?: string | null) {
 
 export async function updateGearEntry(
   id: string,
-  patch: { name?: string | null; note?: string | null; url?: string | null; section?: string | null; groupType?: 'personal' | 'group'; quantity?: string | null },
+  patch: {
+    name?: string | null; note?: string | null; url?: string | null; section?: string | null
+    groupType?: 'personal' | 'group'; quantity?: string | null
+    // How many, as a ratio to the students on the course. Passing null for
+    // `perStudents` takes the rule off the row; the two travel together because
+    // an `each` with nothing to count against is not a rule.
+    each?: number | null; perStudents?: number | null
+  },
   instanceId?: string | null
 ) {
   const admin = await requireAdmin()
@@ -339,6 +359,19 @@ export async function updateGearEntry(
     if (v !== undefined) update[k] = (v as string)?.trim() || null
   }
   if (patch.groupType !== undefined) update.group_type = patch.groupType
+  if (patch.perStudents !== undefined) {
+    const per = patch.perStudents === null ? null : Math.round(patch.perStudents)
+    if (per !== null && !(per > 0)) return fail('One unit has to cover at least one student')
+    const each = patch.each === undefined ? null : patch.each
+    if (per !== null && each !== null && !(each > 0)) return fail('Give a number greater than zero')
+    update.qty_per_students = per
+    // No rule, no `each` — a leftover multiplier on a row that no longer counts
+    // by anything is the stranded value all of this is built to make impossible.
+    update.qty_each = per === null ? null : each ?? 1
+  } else if (patch.each !== undefined) {
+    if (patch.each !== null && !(patch.each > 0)) return fail('Give a number greater than zero')
+    update.qty_each = patch.each
+  }
 
   if (instanceId !== undefined) {
     const { error } = await admin.from('gear_list_entries').update(update).eq('id', id)
@@ -638,6 +671,10 @@ export async function addSlotBeside(
       group_type: src.group_type,
       sort_order: src.sort_order + 1,
       joined_above: 'and',
+      // The slot beside is a different item — a bag, not a second rope — so it
+      // counts by its side of the list like any new row, not by whatever the
+      // row it accompanies happens to count by.
+      ...QTY_FOR_SIDE[src.group_type as 'personal' | 'group'],
     })
     .select('id')
     .single()

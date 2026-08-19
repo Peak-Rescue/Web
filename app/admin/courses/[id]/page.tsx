@@ -872,6 +872,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
           <CourseGear
             instanceId={id}
             courseType={courseType}
+            students={(inst.max_students as number | null) ?? null}
             lists={gearLists}
             templates={gearTemplates}
             catalog={(gearCatalog ?? []) as GearItem[]}

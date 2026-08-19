@@ -9,8 +9,13 @@ import { GEAR_ENTRY_COLUMNS } from '@/lib/gear'
 // on the course, and a library template to admins — the same two audiences
 // that can see the list on screen.
 
-export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params
+  // Which sheet this is. The student's — what one person packs — unless it was
+  // asked for as the course's, which is the POC's purchasing and pull sheet.
+  // Asked for, not inferred: the same list serves both, and the only thing that
+  // knows which one you want is the page you printed it from.
+  const wantsCourse = new URL(req.url).searchParams.get('for') === 'course'
 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -45,19 +50,25 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
   // a student can reach the course.
   let courseTitle = list.name
   let subtitle: string | null = null
+  let students: number | null = null
+  // A template has no course, so no roster: its rows print their rules. Only
+  // staff ever reach one, so nothing is gated on the reading there.
+  let isStaff = true
   if (list.instance_id) {
     const access = await courseAccess(admin, user.id, list.instance_id)
     if (!access.allowed) return new Response('Not found', { status: 404 })
     if (list.audience === 'instructor' && !access.isStaff) return new Response('Not found', { status: 404 })
+    isStaff = access.isStaff
 
     const { data: inst } = await admin
       .from('course_instances')
-      .select('course_type, custom_title, starts_at, ends_at, location, client_name')
+      .select('course_type, custom_title, starts_at, ends_at, location, client_name, max_students')
       .eq('id', list.instance_id)
       .single()
     if (inst) {
       courseTitle = courseDisplayName(inst.course_type, inst.custom_title)
       subtitle = courseSubtitle(inst)
+      students = (inst.max_students as number | null) ?? null
     }
   } else if (!(await isAdmin(admin, user.id))) {
     return new Response('Not found', { status: 404 })
@@ -83,6 +94,11 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
     intro: list.intro,
     entries,
     modelsByType,
+    // A student asking for the course's totals gets their own sheet instead:
+    // the roster size is staff's to know, and a sheet saying "× 12" is not the
+    // list they were given.
+    view: wantsCourse && isStaff ? 'course' : 'person',
+    students,
   })
 
   const filename = `${courseTitle} - ${list.name}.pdf`.replace(/[^\w .-]/g, '')

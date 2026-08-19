@@ -15,9 +15,14 @@ export default function CourseGear({
   lists,
   templates,
   catalog,
+  students,
 }: {
   instanceId: string
   courseType: string | null
+  // The course's maximum number of students, from the Details tab. Rows that
+  // count by students — one each, one between four — are worked out from it, so
+  // a roster that changes carries the whole list with it.
+  students: number | null
   lists: GearList[]
   templates: { id: string; name: string; description?: string | null; audience: string; entries: number }[]
   catalog: GearItem[]
@@ -57,7 +62,10 @@ export default function CourseGear({
               Delete list
             </button>
           </div>
-          <GearListEditor list={l} catalog={catalog} courseType={courseType} templates={templates} />
+          <GearListEditor
+            list={l} catalog={catalog} courseType={courseType}
+            templates={templates} students={students}
+          />
         </section>
       ))}
 

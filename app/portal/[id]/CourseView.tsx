@@ -4,7 +4,7 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { moduleAudience, KIND_META, type LibraryKind } from '@/lib/library'
-import { GEAR_ENTRY_COLUMNS, gearLabel, isChoice, placeSets, productName } from '@/lib/gear'
+import { GEAR_ENTRY_COLUMNS, gearLabel, gearQuantity, isChoice, placeSets, productName } from '@/lib/gear'
 import { courseDisplayName, computeBlocks } from '@/lib/courses'
 import CourseTasksPanel, { type CourseTask, type TaskPerson } from '@/components/CourseTasksPanel'
 import PdfLink from '@/components/PdfLink'
@@ -108,7 +108,7 @@ export default async function CourseView({
   const [{ data: inst }, { data: offDays }, { data: modules }, { data: instructors }, taskRows, { data: peopleRows }, { data: templateRows }, { data: courseDocRows }, { data: taskDocRows }, { data: mapRows }, { data: resourceRows }, { data: linkRows }, { data: updateRows }, { count: enrolledCount }, { data: messageRows }] =
     await Promise.all([
       admin.from('course_instances')
-        .select('course_type, custom_title, status, location, client_name, notes, ref_number, starts_at, ends_at, meeting_point, meeting_time, intro')
+        .select('course_type, custom_title, status, location, client_name, notes, ref_number, starts_at, ends_at, meeting_point, meeting_time, intro, max_students')
         .eq('id', id)
         .single(),
       admin.from('instance_off_days')
@@ -256,7 +256,8 @@ export default async function CourseView({
     id: string; name: string; audience: string; intro: string | null
     gear_list_entries: {
       id: string; gear_item_id: string | null; name: string | null; note: string | null; url: string | null
-      section: string | null; group_type: 'personal' | 'group'; quantity: string | null; sort_order: number
+      section: string | null; group_type: 'personal' | 'group'; quantity: string | null
+      qty_each: number | null; qty_per_students: number | null; sort_order: number
       joined_above: 'and' | 'or' | 'or_if_needed' | null
       gear_items: { name: string; brand: string | null; url: string | null; category: string | null } | null
       gear_entry_options: { sort_order: number; gear_items: { name: string; brand: string | null } | null }[]
@@ -986,7 +987,7 @@ export default async function CourseView({
                       <ul className="border border-zinc-800/70 rounded divide-y divide-zinc-800/70">
                         {placeSets(items).map((p) =>
                           p.kind === 'item' ? (
-                            <GearLine key={p.row.id} e={p.row} modelsByType={gearModelsByType} />
+                            <GearLine key={p.row.id} e={p.row} modelsByType={gearModelsByType} students={inst.max_students ?? null} />
                           ) : (
                             /* A set is drawn as a set: boxed off, with the
                                claim written above it, because "bring one of
@@ -1032,7 +1033,7 @@ export default async function CourseView({
                                                 and
                                               </span>
                                             )}
-                                            <GearLine e={e} modelsByType={gearModelsByType} card />
+                                            <GearLine e={e} modelsByType={gearModelsByType} students={inst.max_students ?? null} card />
                                           </React.Fragment>
                                         ))}
                                       </ul>
@@ -1069,15 +1070,20 @@ export default async function CourseView({
 type GearLineEntry = {
   id: string; gear_item_id: string | null; name: string | null; note: string | null
   url: string | null; quantity: string | null
+  qty_each: number | null; qty_per_students: number | null
   gear_items: { name: string; brand: string | null; url: string | null } | null
   gear_entry_options: { sort_order: number; gear_items: { name: string; brand: string | null } | null }[]
 }
 
 function GearLine({
-  e, modelsByType, card,
+  e, modelsByType, students, card,
 }: {
   e: GearLineEntry
   modelsByType: Map<string, string[]>
+  // The course's maximum, for the rows that count by it. A student's list is
+  // what one person packs, so per-head gear reads as one and only shared kit —
+  // one between four — shows the number the group ends up with.
+  students: number | null
   // A slot of a multi-slot line draws as a card, so the slots read as peers
   // beside each other rather than as separate requirements stacked up. The
   // operator between them is drawn by whatever holds them.
@@ -1098,6 +1104,9 @@ function GearLine({
   // Nothing ticked means any model of the type will do — so list them rather
   // than leave the student with a category name and no idea what to buy.
   const anyOf = detail ? null : (e.gear_item_id ? modelsByType.get(e.gear_item_id) : null) ?? null
+  // One person's share. "Bring one" is what a list for one person means by
+  // saying nothing, so a per-head row prints no number at all.
+  const qty = gearQuantity(e, { students, view: 'person' })
 
   return (
     <li className={card
@@ -1109,7 +1118,7 @@ function GearLine({
           <a href={url} target="_blank" rel="noreferrer" className="hover:text-pr-red-light transition-colors">{name}</a>
         ) : name}
         {detail && <span className="text-xs text-zinc-400">{detail}</span>}
-        {e.quantity && <span className="text-[11px] text-zinc-500">× {e.quantity}</span>}
+        {qty.text && <span className="text-[11px] text-zinc-500">× {qty.text}</span>}
       </div>
       {e.note && <p className="text-[11px] text-zinc-500 mt-0.5">{e.note}</p>}
       {anyOf && anyOf.length > 0 && (

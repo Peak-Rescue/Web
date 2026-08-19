@@ -4,7 +4,10 @@ import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { useSteadyRefresh } from '@/components/useSteadyRefresh'
 import CategorySelect, { NEW_TYPE } from './CategorySelect'
 import PdfLink from '@/components/PdfLink'
-import { GEAR_CATEGORIES, isChoice, matchesGear, placeSets, productName, unwrap, type CatalogItem, type Joiner } from '@/lib/gear'
+import {
+  GEAR_CATEGORIES, gearQuantity, isChoice, matchesGear, placeSets, productName, unwrap,
+  type CatalogItem, type Joiner,
+} from '@/lib/gear'
 import {
   addGearEntry, updateGearEntry, removeGearEntry, updateGearList, copyGearList,
   saveGearListIntoTemplate, setGearEntryOptions, upsertGearItem, renameGearSection,
@@ -28,7 +31,14 @@ export type GearEntry = {
   // per list — not the catalog's category, which is how instructors find gear.
   section: string | null
   group_type: 'personal' | 'group'
+  // How many, as typed. On a row that counts by students this is a number
+  // written over the rule for this course, and clearing it hands the row back.
   quantity: string | null
+  // How many per unit of students, and how many students one unit covers. One
+  // each is 1 and 1; one between four is 1 and 4; no rule at all is null, and
+  // the row is however many `quantity` says.
+  qty_each: number | null
+  qty_per_students: number | null
   sort_order: number
   // How this row is joined to the row above it: "and" for things that go
   // together, "or" for alternatives, "or_if_needed" for one that is acceptable
@@ -92,10 +102,16 @@ export default function GearListEditor({
   catalog,
   courseType,
   templates,
+  students,
 }: {
   list: GearList
   catalog: GearItem[]
   courseType?: string | null
+  // The course's maximum number of students, from the Details tab. Quantities
+  // that count by students are worked out from it here rather than stored, so
+  // changing it there carries every one of them with it. A template has no
+  // course and so no number: its rows show the rule instead of a total.
+  students?: number | null
   // The gear shelf's templates, so a list refined on a course can be saved
   // back over the one it started from instead of only spawning another.
   templates?: GearTemplateOption[]
@@ -113,6 +129,9 @@ export default function GearListEditor({
   // Which section's add panel is open, as "personal:Ropes". One at a time —
   // two open panels and it stops being obvious where the next item lands.
   const [adding, setAdding] = useState<string | null>(null)
+  // Which row's "how many" panel is open. One at a time, like every other panel
+  // on a row.
+  const [ratioFor, setRatioFor] = useState<string | null>(null)
   const [drag, setDrag] = useState<Drag | null>(null)
   // Which gap the dragged row would land in, as one key for the whole list.
   // Held here rather than per card because an alternative sits inside a
@@ -314,6 +333,11 @@ export default function GearListEditor({
       name: input.gearItemId ? null : input.name?.trim() || null,
       note: null, url: null,
       section: target.section, group_type: target.gt, quantity: null,
+      // The same default the server gives it, so the number doesn't jump when
+      // the page catches up: personal kit is one each, group kit counts by
+      // nothing until someone says a ratio.
+      qty_each: target.gt === 'personal' ? 1 : null,
+      qty_per_students: target.gt === 'personal' ? 1 : null,
       // Gear arrives on its own. What it has to do with the row above it is
       // said afterwards, in the gap between them, by someone who can see both.
       joined_above: null,
@@ -343,6 +367,19 @@ export default function GearListEditor({
     )
   }
 
+  // Say how many a row counts by, or stop counting by students. Both halves go
+  // together: an "each" with nothing to count against is not a rule.
+  function setRatio(rowId: string, rule: { each: number; perStudents: number } | null) {
+    apply(
+      (es) => es.map((x) => (x.id === rowId
+        ? { ...x, qty_each: rule?.each ?? null, qty_per_students: rule?.perStudents ?? null }
+        : x)),
+      () => onRow(rowId, async (id) => unwrap(((await updateGearEntry(id, {
+        each: rule?.each ?? null, perStudents: rule?.perStudents ?? null,
+      }, list.instance_id)) ?? {}) as object))
+    )
+  }
+
   const input = 'bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-zinc-500'
 
   return (
@@ -353,7 +390,13 @@ export default function GearListEditor({
           beside the template controls at the foot: printing is what you do
           with a list you've finished, not part of saving it. */}
       <div className="flex justify-end">
-        <PdfLink href={`/api/gear-lists/${list.id}/pdf`} label="Printable PDF" />
+        {/* Printed from here it is the POC's sheet: every quantity is what the
+            whole course needs. The same list printed from the portal is what
+            one person packs. */}
+        <PdfLink
+          href={`/api/gear-lists/${list.id}/pdf?for=course`}
+          label="Printable PDF"
+        />
       </div>
 
       <textarea
@@ -373,6 +416,7 @@ export default function GearListEditor({
           adding, setAdding, editingOptions, setEditingOptions,
           drag, setDrag, over, setOver, onDrop: drop, apply, onRow, addEntry,
           instanceId: list.instance_id, busy, run, input, join,
+          students: students ?? null, ratioFor, setRatioFor, setRatio,
         }
         return (
           <div key={gt}>
@@ -479,6 +523,11 @@ type Shared = {
   input: string
   // Relate a row to the one above it, or stop relating them.
   join: (rowId: string, joiner: Joiner | null) => void
+  // The course's maximum number of students, or null on a template.
+  students: number | null
+  ratioFor: string | null
+  setRatioFor: (id: string | null) => void
+  setRatio: (rowId: string, rule: { each: number; perStudents: number } | null) => void
 }
 
 // The handlers that make one gap a drop zone. A row's own gap has to win over
@@ -627,6 +676,8 @@ function SectionCard({
                   setAdding={s.setAdding}
                   adding={s.adding} catalog={s.catalog} childrenOf={s.childrenOf}
                   busy={s.busy} run={s.run} input={s.input}
+                  students={s.students} ratioFor={s.ratioFor}
+                  setRatioFor={s.setRatioFor} setRatio={s.setRatio}
                 />
               </div>
             ) : (
@@ -837,6 +888,8 @@ function SetBlock({
                     setAdding={s.setAdding}
                     adding={s.adding} catalog={s.catalog} childrenOf={s.childrenOf}
                     busy={s.busy} run={s.run} input={s.input}
+                    students={s.students} ratioFor={s.ratioFor}
+                    setRatioFor={s.setRatioFor} setRatio={s.setRatio}
                   />
                 </Fragment>
               ))}
@@ -852,6 +905,7 @@ function Row({
   e, editingOptions, setEditingOptions, dragging, isOver,
   onDragStart, onDragEnd, gap, apply, onRow, instanceId, busy, run, input,
   setAdding, adding, catalog, childrenOf, card,
+  students, ratioFor, setRatioFor, setRatio,
 }: {
   e: GearEntry & { r: { name: string; note: string | null; url: string | null; section: string | null; catalogItem?: GearItem; options: GearItem[]; models: GearItem[] } }
   editingOptions: ProductPanel | null
@@ -871,6 +925,10 @@ function Row({
   adding: string | null
   catalog: GearItem[]
   childrenOf: Map<string, GearItem[]>
+  students: number | null
+  ratioFor: string | null
+  setRatioFor: (id: string | null) => void
+  setRatio: (rowId: string, rule: { each: number; perStudents: number } | null) => void
   // A slot of a multi-slot line draws as a card, so the slots read as peers
   // sitting beside each other rather than as a run of separate requirements.
   // The operator is drawn between the cards by whatever holds them.
@@ -912,6 +970,11 @@ function Row({
       : x),
     () => onRow(e.id, (id) => setGearEntryOptions(id, ids, instanceId))
   )
+
+  // What this row says it needs, and what it would say without the override —
+  // which is what the box shows you while it is empty.
+  const qty = gearQuantity(e, { students, view: 'course' })
+  const auto = gearQuantity({ ...e, quantity: null }, { students, view: 'course' })
 
   return (
     <div
@@ -957,9 +1020,18 @@ function Row({
             )}
             {/* How many, next to what — not in a column at the far right of
                 the card. The number belongs to the item, and a row reads as one
-                unit only if everything it says about that item is in it. */}
+                unit only if everything it says about that item is in it.
+
+                What the course needs, which is what this editor is for: the
+                POC reads it to buy or pull the gear. The student's copy of the
+                same row shows one person's share. */}
             <span className="inline-flex items-center text-zinc-600">
               <span className="text-xs pr-0.5">×</span>
+              {/* The box holds the override and nothing else. What the rule
+                  works out sits in it as the placeholder — greyed, because it
+                  is what the row says while the box is empty — so typing is how
+                  you overrule it and clearing is how you take that back. There
+                  is no third state to get into and no button to find. */}
               <input
                 defaultValue={e.quantity ?? ''}
                 onBlur={(ev) => {
@@ -970,11 +1042,45 @@ function Row({
                     () => onRow(e.id, (id) => updateGearEntry(id, { quantity: v }, instanceId))
                   )
                 }}
-                placeholder="1"
+                placeholder={auto.text ?? '1'}
                 aria-label="Quantity"
+                title={
+                  qty.overridden
+                    ? `Typed over the rule — ${auto.rule?.toLowerCase()}${auto.text ? `, so ${auto.text}` : ''}. Clear the box to go back to it.`
+                    : auto.rule
+                      ? `${auto.rule}${students ? ` — ${students} students` : ', once this course has a number of students'}`
+                      : 'This many, however many students come'
+                }
                 size={1}
-                className="w-14 bg-transparent border border-transparent rounded px-1 py-0.5 text-xs text-zinc-300 placeholder:text-zinc-700 hover:border-zinc-800 focus:border-zinc-600 focus:bg-zinc-900 focus:outline-none transition-colors"
+                className={`w-14 bg-transparent border rounded px-1 py-0.5 text-xs focus:bg-zinc-900 focus:outline-none transition-colors ${
+                  qty.overridden
+                    ? 'border-zinc-700 text-amber-300/90 hover:border-zinc-600 focus:border-zinc-500'
+                    : 'border-transparent text-zinc-300 placeholder:text-zinc-500 hover:border-zinc-800 focus:border-zinc-600'
+                }`}
               />
+              {/* What the number is made of, said in two words. It is on the row
+                  rather than behind a hover because "each" and "per 4" are the
+                  difference between twelve helmets and three. */}
+              <button
+                onClick={() => setRatioFor(ratioFor === e.id ? null : e.id)}
+                disabled={busy}
+                title={
+                  auto.rule
+                    ? `${auto.rule} — click to change how this counts`
+                    : 'The same however many students come — click to count it by students'
+                }
+                className={`text-[10px] ml-0.5 px-1 py-0.5 rounded border transition-colors ${
+                  ratioFor === e.id
+                    ? 'border-zinc-500 text-white bg-zinc-800'
+                    : e.qty_per_students
+                      ? 'border-transparent text-zinc-500 hover:text-white hover:border-zinc-700'
+                      : 'border-transparent text-zinc-700 hover:text-white hover:border-zinc-700'
+                }`}
+              >
+                {e.qty_per_students
+                  ? e.qty_per_students === 1 ? 'each' : `per ${e.qty_per_students}`
+                  : 'flat'}
+              </button>
             </span>
             {!e.r.catalogItem && <span className="text-[10px] text-zinc-700">one-off</span>}
             {/* "+ and" adds a second row directly below this one, already
@@ -1085,6 +1191,82 @@ function Row({
           ×
         </button>
       </div>
+
+      {/* How many this row counts by. A ratio to the students on the course,
+          written as the sentence it is — "take 1 for every 4 students" — because
+          two bare number boxes beside each other don't say which is which, and
+          getting them the wrong way round is the difference between three
+          helmets and forty-eight. */}
+      {ratioFor === e.id && (() => {
+        const per = e.qty_per_students
+        const each = Number(e.qty_each ?? 1)
+        const preset = (label: string, rule: { each: number; perStudents: number } | null, hint: string) => (
+          <button
+            key={label}
+            onClick={() => setRatio(e.id, rule)}
+            disabled={busy}
+            title={hint}
+            className={`text-[11px] px-2 py-1 rounded border transition-colors disabled:opacity-40 ${
+              (rule?.perStudents ?? null) === per && (!rule || rule.each === each)
+                ? 'border-zinc-500 text-white bg-zinc-800'
+                : 'border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500'
+            }`}
+          >
+            {label}
+          </button>
+        )
+        return (
+          <div className="mt-2 p-2 bg-zinc-900 rounded border border-zinc-800 space-y-2">
+            <p className="text-[11px] text-zinc-500">
+              {students
+                ? `Worked out from ${students} students — this course's maximum, on the Details tab. Change it there and every quantity here follows it.`
+                : 'This course has no maximum number of students yet. Set it on the Details tab and the quantities work themselves out; until then the rule is all this row can say.'}
+            </p>
+            <div className="flex items-center gap-2 flex-wrap text-[11px] text-zinc-400">
+              <span>Take</span>
+              <input
+                key={`each:${each}:${per}`}
+                type="number" min="1" step="1" defaultValue={each}
+                onBlur={(ev) => {
+                  const v = Number(ev.target.value)
+                  if (!(v > 0) || v === each) return
+                  setRatio(e.id, { each: v, perStudents: per ?? 1 })
+                }}
+                className={`w-16 ${input} py-1`}
+              />
+              <span>for every</span>
+              <input
+                key={`per:${each}:${per}`}
+                type="number" min="1" step="1" defaultValue={per ?? 1}
+                onBlur={(ev) => {
+                  const v = Number(ev.target.value)
+                  if (!(v > 0) || v === per) return
+                  setRatio(e.id, { each, perStudents: v })
+                }}
+                className={`w-16 ${input} py-1`}
+              />
+              <span>{(per ?? 1) === 1 ? 'student' : 'students'}</span>
+              {/* The whole point, said back: what the course ends up needing. */}
+              {per && students && (
+                <span className="text-zinc-500">
+                  → {Math.ceil(students / per) * each} for this course
+                </span>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {preset('One each', { each: 1, perStudents: 1 }, 'Everyone brings one — the usual for personal kit')}
+              {preset('One between two', { each: 1, perStudents: 2 }, 'One for every two students')}
+              {preset('One between four', { each: 1, perStudents: 4 }, 'One for every four students')}
+              {preset('Same however many', null, 'A fixed number that doesn’t move with the roster — one radio, 40 ft of webbing')}
+            </div>
+            {qty.overridden && (
+              <p className="text-[11px] text-amber-300/80">
+                This row is set to {qty.text} for this course, over its rule. Clear the quantity box to hand it back.
+              </p>
+            )}
+          </div>
+        )
+      })()}
 
       {/* The panel only ever adds. Taking a recommendation back is the × on
           the chip itself, where the thing being removed is.
