@@ -710,6 +710,7 @@ function SectionCard({
                 <Row
                   e={p.row}
                   editingOptions={s.editingOptions} setEditingOptions={s.setEditingOptions}
+                  dragId={s.drag?.id ?? null}
                   joining={s.joining} setJoining={s.setJoining} joinOnto={s.joinOnto}
                   dragging={dragging} isOver={false}
                   onDragStart={() => s.setDrag({ id: p.row.id })}
@@ -896,6 +897,7 @@ function SetBlock({
                   <Row
                     e={e} card
                     editingOptions={s.editingOptions} setEditingOptions={s.setEditingOptions}
+                    dragId={s.drag?.id ?? null}
                     joining={s.joining} setJoining={s.setJoining} joinOnto={s.joinOnto}
                     dragging={dragging} isOver={s.over === zoneKey(here, e.id)}
                     onDragStart={() => s.setDrag({ id: e.id })}
@@ -917,7 +919,7 @@ function SetBlock({
 }
 
 function Row({
-  e, editingOptions, setEditingOptions, dragging, isOver, joining, setJoining, joinOnto,
+  e, editingOptions, setEditingOptions, dragging, dragId, isOver, joining, setJoining, joinOnto,
   onDragStart, onDragEnd, gap, apply, onRow, instanceId, busy, run, input, card,
   students, ratioFor, setRatioFor, setRatio,
 }: {
@@ -925,6 +927,7 @@ function Row({
   editingOptions: ProductPanel | null
   setEditingOptions: (v: ProductPanel | null) => void
   dragging: boolean
+  dragId: string | null
   isOver: boolean
   joining: { targetId: string; draggedId: string } | null
   setJoining: (v: { targetId: string; draggedId: string } | null) => void
@@ -995,6 +998,23 @@ function Row({
     <div
       ref={row}
       {...gap}
+      draggable
+      onDragStart={(ev) => {
+        // Anything you can click is not something you can drag from: the
+        // quantity box, the note, the model buttons, a link to the shop.
+        // Starting a drag on one of those would take the row away instead of
+        // putting the cursor in the field.
+        const from = ev.target as HTMLElement
+        if (from.closest('input, textarea, button, a, select')) {
+          ev.preventDefault()
+          return
+        }
+        ev.dataTransfer.effectAllowed = 'move'
+        ev.dataTransfer.setData('text/plain', e.id)
+        if (row.current) ev.dataTransfer.setDragImage(row.current, 12, 12)
+        onDragStart()
+      }}
+      onDragEnd={onDragEnd}
       onDragOver={(ev) => {
         // A row landing on a row is a different question from a row landing
         // between two, so it takes the event before the gap under it can.
@@ -1006,7 +1026,7 @@ function Row({
       onDrop={(ev) => {
         ev.preventDefault(); ev.stopPropagation()
         setOnMe(false)
-        const dropped = ev.dataTransfer.getData('text/plain')
+        const dropped = ev.dataTransfer.getData('text/plain') || dragId || ''
         if (dropped && dropped !== e.id) setJoining({ targetId: e.id, draggedId: dropped })
       }}
       className={
@@ -1020,22 +1040,14 @@ function Row({
       }
     >
       <div className="flex items-start gap-2">
-        {/* Only the handle starts a drag, so the quantity field and the model
-            buttons still take a click. The row is the drag image, because a
-            lone handle floating across the page says nothing about what's
-            moving. */}
+        {/* The whole row is the handle — dragging is the only way to relate two
+            rows now, and a mark that appears on hover and fades to near the
+            background is not something anyone finds. This says the row moves;
+            it is not the only place you can take hold of it. */}
         <span
-          draggable
-          onDragStart={(ev) => {
-            ev.dataTransfer.effectAllowed = 'move'
-            ev.dataTransfer.setData('text/plain', e.id)
-            if (row.current) ev.dataTransfer.setDragImage(row.current, 12, 12)
-            onDragStart()
-          }}
-          onDragEnd={onDragEnd}
-          title="Drag to reorder, or into another section"
-          className={`shrink-0 mt-0.5 cursor-grab active:cursor-grabbing select-none text-zinc-700 hover:text-zinc-400 transition-opacity ${
-            dragging ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+          title="Drag onto another row to relate them, or between rows to move it"
+          className={`shrink-0 mt-0.5 cursor-grab active:cursor-grabbing select-none transition-colors ${
+            dragging ? 'text-zinc-400' : 'text-zinc-700 group-hover:text-zinc-400'
           }`}
         >
           ⠿
