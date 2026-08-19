@@ -11,7 +11,7 @@ import {
 import {
   addGearEntry, updateGearEntry, removeGearEntry, updateGearList, copyGearList,
   saveGearListIntoTemplate, setGearEntryOptions, upsertGearItem, renameGearSection,
-  removeGearSection, ungroupGearSection, moveGearEntry, setGearJoiner, addSlotBeside,
+  removeGearSection, ungroupGearSection, moveGearEntry, setGearJoiner,
 } from './actions'
 
 export type GearTemplateOption = { id: string; name: string; audience: string; entries: number }
@@ -80,9 +80,11 @@ const GROUP_LABEL: Record<GroupType, string> = {
 // A row picked up and not yet dropped.
 type Drag = { id: string }
 
-// The and/or pair, which appears at both levels of a row and has to look like
-// one control in two places rather than two controls that happen to rhyme.
-type ProductPanel = { id: string; mode: 'and' | 'or' }
+// Which row has its model picker open. One question — which models count as
+// this item — so no mode: the row-making buttons that used to sit beside it
+// said "and" and "or" while meaning something other than the operators between
+// rows, one line away from them.
+type ProductPanel = { id: string }
 
 const PAIR_BTN =
   'text-[11px] px-1.5 py-0.5 rounded border border-zinc-800 text-zinc-600 hover:text-white hover:border-zinc-600 transition-colors disabled:opacity-40'
@@ -133,6 +135,10 @@ export default function GearListEditor({
   // on a row.
   const [ratioFor, setRatioFor] = useState<string | null>(null)
   const [drag, setDrag] = useState<Drag | null>(null)
+  // A row let go on top of another row, waiting to be told what the two have to
+  // do with each other. The drop is not a write on its own: "and" and "or" are
+  // different lists to pack from, and a gesture must not guess between them.
+  const [joining, setJoining] = useState<{ targetId: string; draggedId: string } | null>(null)
   // Which gap the dragged row would land in, as one key for the whole list.
   // Held here rather than per card because an alternative sits inside a
   // section: two containers each tracking their own hover both drew a landing
@@ -310,6 +316,40 @@ export default function GearListEditor({
     })
   }
 
+  // Landing a row on another row: it goes directly under the one it was dropped
+  // on, joined to it by the operator just chosen. Everything else is the
+  // ordinary move, seam rules included.
+  function joinOnto(targetId: string, draggedId: string, joiner: Joiner) {
+    setJoining(null)
+    const target = ordered.find((e) => e.id === targetId)
+    const dragged = ordered.find((e) => e.id === draggedId)
+    if (!target || !dragged || target.id === dragged.id) return
+
+    const rest = ordered.filter((e) => e.id !== draggedId)
+    const at = rest.findIndex((e) => e.id === targetId) + 1
+    const moved = {
+      ...dragged,
+      group_type: target.group_type,
+      section: target.r.section,
+      joined_above: joiner,
+    }
+    const orphan = orphanedSeam(draggedId)
+    const next = [...rest.slice(0, at), moved, ...rest.slice(at)]
+      .map(({ r: _r, ...e }, i) => ({ ...e, sort_order: i })) // eslint-disable-line @typescript-eslint/no-unused-vars
+      .map((e) => (e.id === orphan ? { ...e, joined_above: null } : e))
+
+    apply(() => next, async () => {
+      const [moving, orderedIds] = await Promise.all([
+        settled(draggedId),
+        Promise.all(next.map((e) => settled(e.id))),
+      ])
+      return moveGearEntry(list.id, moving, {
+        section: target.r.section, groupType: target.group_type, orderedIds,
+        joinedAbove: joiner, instanceId: list.instance_id,
+      })
+    })
+  }
+
   // The row that sits immediately below `id` on its own side of its own
   // section — the one whose "joined to the row above" is about to be a lie.
   function orphanedSeam(id: string): string | undefined {
@@ -415,6 +455,7 @@ export default function GearListEditor({
           listId: list.id, catalog, childrenOf,
           adding, setAdding, editingOptions, setEditingOptions,
           drag, setDrag, over, setOver, onDrop: drop, apply, onRow, addEntry,
+          joining, setJoining, joinOnto,
           instanceId: list.instance_id, busy, run, input, join,
           students: students ?? null, ratioFor, setRatioFor, setRatio,
         }
@@ -523,6 +564,10 @@ type Shared = {
   input: string
   // Relate a row to the one above it, or stop relating them.
   join: (rowId: string, joiner: Joiner | null) => void
+  // A row let go on top of another row, and the question that follows.
+  joining: { targetId: string; draggedId: string } | null
+  setJoining: (v: { targetId: string; draggedId: string } | null) => void
+  joinOnto: (targetId: string, draggedId: string, joiner: Joiner) => void
   // The course's maximum number of students, or null on a template.
   students: number | null
   ratioFor: string | null
@@ -649,16 +694,13 @@ function SectionCard({
       )}
 
       <div>
-        {placed.map((p, i) => (
+        {placed.map((p) => (
           <Fragment key={leadRow(p).id}>
             {/* The gap is where the relationship is made. Nothing to open
                 first, nothing held on screen that isn't on the list: you write
                 both rows, then say what they have to do with each other in the
                 space between them, which is where you are already looking. */}
             <Gap
-              {...s}
-              rowBelow={leadRow(p)}
-              first={i === 0}
               dragging={dragging}
               isOver={s.over === zoneKey(here, leadRow(p).id)}
               gap={gap(leadRow(p).id)}
@@ -668,13 +710,12 @@ function SectionCard({
                 <Row
                   e={p.row}
                   editingOptions={s.editingOptions} setEditingOptions={s.setEditingOptions}
+                  joining={s.joining} setJoining={s.setJoining} joinOnto={s.joinOnto}
                   dragging={dragging} isOver={false}
                   onDragStart={() => s.setDrag({ id: p.row.id })}
                   onDragEnd={() => { s.setDrag(null); s.setOver(null) }}
                   gap={{ onDragOver: () => {}, onDragLeave: () => {}, onDrop: () => {} }}
                   apply={s.apply} onRow={s.onRow} instanceId={s.instanceId}
-                  setAdding={s.setAdding}
-                  adding={s.adding} catalog={s.catalog} childrenOf={s.childrenOf}
                   busy={s.busy} run={s.run} input={s.input}
                   students={s.students} ratioFor={s.ratioFor}
                   setRatioFor={s.setRatioFor} setRatio={s.setRatio}
@@ -742,7 +783,7 @@ function JoinControls({
           title={JOINER_TITLE[j]}
           className={PAIR_BTN}
         >
-          {current ? JOINER_WORD[j] : `+ ${JOINER_WORD[j]}`}
+          {JOINER_WORD[j]}
         </button>
       ))}
       {current && (
@@ -759,49 +800,24 @@ function JoinControls({
   )
 }
 
-// The space between two things on the list, which is where a relationship is
-// made. Nothing to open first, nothing held on screen that isn't on the list:
-// you write both rows, then say what they have to do with each other in the
-// space between them, which is where you are already looking.
+// The space between two things on the list: somewhere to move a row to, and
+// nothing else. Relating two rows is done by dropping one onto the other, so
+// there is one gesture for "put it here" and one for "these two go together",
+// and no button that has to explain which of the two it is.
 function Gap({
-  rowBelow, dragging, isOver, gap, join, busy, first,
-}: Shared & {
-  rowBelow: ResolvedRow
+  dragging, isOver, gap,
+}: {
   dragging: boolean
   isOver: boolean
   gap: { onDragOver: (e: React.DragEvent) => void; onDragLeave: () => void; onDrop: (e: React.DragEvent) => void }
-  // The gap above the first thing in a section: still somewhere a row can be
-  // dropped, but with nothing above it there is no relationship to offer.
-  first?: boolean
 }) {
-  const joiner = rowBelow.joined_above
-  if (first) {
-    return (
-      <div
-        {...gap}
-        className={`h-1.5 transition-colors ${isOver ? 'border-t-2 border-pr-red' : ''}`}
-      />
-    )
-  }
   return (
     <div
       {...gap}
-      className={`relative flex items-center gap-1.5 px-3 min-h-[1.25rem] py-0.5 group/gap transition-colors ${
+      className={`transition-colors ${dragging ? 'h-3' : 'h-1'} ${
         isOver ? 'border-t-2 border-pr-red' : ''
       }`}
-    >
-      {joiner && (
-        <>
-          <span className={`text-[10px] uppercase tracking-widest font-medium ${
-            joiner === 'or_if_needed' ? 'text-zinc-500' : 'text-pr-red'
-          }`}>
-            {JOINER_WORD[joiner]}
-          </span>
-          <span className="flex-1 h-px bg-zinc-800/70" />
-        </>
-      )}
-      <JoinControls rowId={rowBelow.id} current={joiner} join={join} busy={busy} dragging={dragging} />
-    </div>
+    />
   )
 }
 
@@ -880,13 +896,12 @@ function SetBlock({
                   <Row
                     e={e} card
                     editingOptions={s.editingOptions} setEditingOptions={s.setEditingOptions}
+                    joining={s.joining} setJoining={s.setJoining} joinOnto={s.joinOnto}
                     dragging={dragging} isOver={s.over === zoneKey(here, e.id)}
                     onDragStart={() => s.setDrag({ id: e.id })}
                     onDragEnd={() => { s.setDrag(null); s.setOver(null) }}
                     gap={gap(e.id)}
                     apply={s.apply} onRow={s.onRow} instanceId={s.instanceId}
-                    setAdding={s.setAdding}
-                    adding={s.adding} catalog={s.catalog} childrenOf={s.childrenOf}
                     busy={s.busy} run={s.run} input={s.input}
                     students={s.students} ratioFor={s.ratioFor}
                     setRatioFor={s.setRatioFor} setRatio={s.setRatio}
@@ -902,9 +917,8 @@ function SetBlock({
 }
 
 function Row({
-  e, editingOptions, setEditingOptions, dragging, isOver,
-  onDragStart, onDragEnd, gap, apply, onRow, instanceId, busy, run, input,
-  setAdding, adding, catalog, childrenOf, card,
+  e, editingOptions, setEditingOptions, dragging, isOver, joining, setJoining, joinOnto,
+  onDragStart, onDragEnd, gap, apply, onRow, instanceId, busy, run, input, card,
   students, ratioFor, setRatioFor, setRatio,
 }: {
   e: GearEntry & { r: { name: string; note: string | null; url: string | null; section: string | null; catalogItem?: GearItem; options: GearItem[]; models: GearItem[] } }
@@ -912,6 +926,9 @@ function Row({
   setEditingOptions: (v: ProductPanel | null) => void
   dragging: boolean
   isOver: boolean
+  joining: { targetId: string; draggedId: string } | null
+  setJoining: (v: { targetId: string; draggedId: string } | null) => void
+  joinOnto: (targetId: string, draggedId: string, joiner: Joiner) => void
   onDragStart: () => void
   onDragEnd: () => void
   gap: { onDragOver: (e: React.DragEvent) => void; onDragLeave: () => void; onDrop: (e: React.DragEvent) => void }
@@ -921,10 +938,6 @@ function Row({
   busy: boolean
   run: (fn: () => Promise<unknown>) => void
   input: string
-  setAdding: (key: string | null) => void
-  adding: string | null
-  catalog: GearItem[]
-  childrenOf: Map<string, GearItem[]>
   students: number | null
   ratioFor: string | null
   setRatioFor: (id: string | null) => void
@@ -960,7 +973,6 @@ function Row({
 
   // Its own zone, because what's added joins this line rather than landing at
   // the foot of the section — the panel opens on the row it will sit beside.
-  const slotKey = `slot:${e.id}`
 
   // Recommendations are stored as the whole set, so every change to them is
   // "here is the new list of models" — drawn on the row before it is sent.
@@ -976,16 +988,35 @@ function Row({
   const qty = gearQuantity(e, { students, view: 'course' })
   const auto = gearQuantity({ ...e, quantity: null }, { students, view: 'course' })
 
+  const [onMe, setOnMe] = useState(false)
+  const asking = joining?.targetId === e.id
+
   return (
     <div
       ref={row}
       {...gap}
+      onDragOver={(ev) => {
+        // A row landing on a row is a different question from a row landing
+        // between two, so it takes the event before the gap under it can.
+        if (!dragging) return
+        ev.preventDefault(); ev.stopPropagation()
+        setOnMe(true)
+      }}
+      onDragLeave={() => setOnMe(false)}
+      onDrop={(ev) => {
+        ev.preventDefault(); ev.stopPropagation()
+        setOnMe(false)
+        const dropped = ev.dataTransfer.getData('text/plain')
+        if (dropped && dropped !== e.id) setJoining({ targetId: e.id, draggedId: dropped })
+      }}
       className={
         card
           ? `flex-1 min-w-[15rem] rounded-lg border bg-zinc-900/40 px-2.5 py-2 group transition-colors ${
-              isOver ? 'border-pr-red' : 'border-zinc-800'
+              onMe ? 'border-pr-red bg-pr-red/10' : isOver ? 'border-pr-red' : 'border-zinc-800'
             }`
-          : `px-3 py-2 group ${isOver ? 'border-t-2 border-pr-red' : ''}`
+          : `px-3 py-2 group transition-colors ${
+              onMe ? 'bg-pr-red/10 ring-1 ring-inset ring-pr-red/60 rounded' : isOver ? 'border-t-2 border-pr-red' : ''
+            }`
       }
     >
       <div className="flex items-start gap-2">
@@ -1077,29 +1108,14 @@ function Row({
                       : 'border-transparent text-zinc-700 hover:text-white hover:border-zinc-700'
                 }`}
               >
-                {e.qty_per_students
-                  ? e.qty_per_students === 1 ? 'each' : `per ${e.qty_per_students}`
-                  : 'flat'}
+                {/* The rule, not the unit it is counted in. Beside a total,
+                    a bare "each" reads as a quantity of its own — "× 16 each"
+                    is sixteen apiece, which is the opposite of what it says:
+                    sixteen because everyone brings one. */}
+                ({auto.rule ? auto.rule.toLowerCase() : 'fixed'})
               </button>
             </span>
             {!e.r.catalogItem && <span className="text-[10px] text-zinc-700">one-off</span>}
-            {/* "+ and" adds a second row directly below this one, already
-                joined to it — the shape that can carry its own quantity, two
-                ropes and one bag. "Or" is not offered here: an alternative is a
-                relationship between two rows that both exist, and it is made in
-                the gap between them once they do. */}
-            <span className={`flex items-center gap-1 transition-opacity ${
-              dragging ? 'opacity-0' : 'opacity-0 group-hover:opacity-100 focus-within:opacity-100'
-            }`}>
-              <button
-                onClick={() => setAdding(adding === slotKey ? null : slotKey)}
-                disabled={busy}
-                title="Something else that's also needed — joins this line with its own quantity"
-                className={adding === slotKey ? `${PAIR_BTN} border-zinc-500 text-white bg-zinc-800` : PAIR_BTN}
-              >
-                + and
-              </button>
-            </span>
           </div>
           {/* The products we point people at sit directly under the name,
               ahead of the description, because the model someone has to go and
@@ -1135,31 +1151,22 @@ function Row({
               {e.r.options.length === 0 && (
                 <span className="text-[11px] text-zinc-600">Any {e.r.name.toLowerCase()} works</span>
               )}
-              {/* The same pair as on the name above, asking the same two
-                  questions of the products instead of the items. */}
+              {/* One button, one meaning: another model that satisfies this
+                  line. It used to be a pair reading "+ and" and "+ or", which
+                  are the words the operators between rows use for a different
+                  thing entirely — "or" here is "either model will do", not
+                  "bring one or the other". */}
               <button
-                onClick={() => setEditingOptions(
-                  editingOptions?.id === e.id && editingOptions.mode === 'and' ? null : { id: e.id, mode: 'and' }
-                )}
+                onClick={() => setEditingOptions(editingOptions?.id === e.id ? null : { id: e.id })}
                 disabled={busy}
-                title="Another product you also need — joins this line with its own quantity"
-                className={editingOptions?.id === e.id && editingOptions.mode === 'and'
+                title={e.r.options.length === 0
+                  ? 'Name a model that satisfies this line'
+                  : 'Another model that would also satisfy this line'}
+                className={editingOptions?.id === e.id
                   ? `${PAIR_BTN} border-zinc-500 text-white bg-zinc-800`
                   : PAIR_BTN}
               >
-                + and
-              </button>
-              <button
-                onClick={() => setEditingOptions(
-                  editingOptions?.id === e.id && editingOptions.mode === 'or' ? null : { id: e.id, mode: 'or' }
-                )}
-                disabled={busy}
-                title={e.r.options.length === 0 ? 'Name a product that satisfies this line' : 'Another product that would do instead'}
-                className={editingOptions?.id === e.id && editingOptions.mode === 'or'
-                  ? `${PAIR_BTN} border-zinc-500 text-white bg-zinc-800`
-                  : PAIR_BTN}
-              >
-                + or
+                + model
               </button>
             </div>
           )}
@@ -1275,67 +1282,73 @@ function Row({
           time anyone recommends something, so naming it here adds it to the
           catalog and recommends it in one go — otherwise the + is a dead end
           on exactly the row where you had a product in mind. */}
-      {adding === slotKey && (
-        <div className="mt-2 rounded border border-zinc-800 overflow-hidden">
-          <AddGear
-            listId=""
-            target={{ gt: e.group_type, section: e.r.section }}
-            catalog={catalog} childrenOf={childrenOf}
-            addEntry={(input) => {
-              setAdding(null)
-              run(() => onRow(e.id, async (id) => unwrap(((await addSlotBeside(
-                id, { gearItemId: input.gearItemId, name: input.name }, instanceId
-              )) ?? {}) as object)))
-            }}
-            onClose={() => setAdding(null)}
-            busy={busy} run={run} input={input}
-          />
+      {/* Asked where it was let go, because "and" and "or" are two different
+          lists to pack from and a drop cannot be allowed to guess. Nothing is
+          written until one of them is picked; leaving it alone leaves the list
+          as it was. */}
+      {asking && joining && (
+        <div className="mt-2 flex flex-wrap items-center gap-1.5 rounded border border-pr-red/50 bg-pr-red/[0.06] px-2 py-1.5">
+          <span className="text-[10px] uppercase tracking-widest text-pr-red font-medium">
+            Joined to “{e.r.name}” how?
+          </span>
+          <button
+            onClick={() => joinOnto(e.id, joining.draggedId, 'and')}
+            className={PAIR_BTN}
+            title="Both are needed — they go together"
+          >
+            and
+          </button>
+          <button
+            onClick={() => joinOnto(e.id, joining.draggedId, 'or')}
+            className={PAIR_BTN}
+            title="Either will do — students bring one or the other"
+          >
+            or
+          </button>
+          <button
+            onClick={() => joinOnto(e.id, joining.draggedId, 'or_if_needed')}
+            className={PAIR_BTN}
+            title="Acceptable instead of this one, if they haven’t got it"
+          >
+            or, if needed
+          </button>
+          <span className="flex-1" />
+          <button
+            onClick={() => setJoining(null)}
+            className={PAIR_BTN}
+            title="Leave the list as it was"
+          >
+            cancel
+          </button>
         </div>
       )}
 
       {editingOptions?.id === e.id && type && (() => {
-        const mode = editingOptions.mode
-        // In "or" mode the products already on the row are the ones there is no
-        // point offering again. In "and" mode there is: needing two of the same
-        // product is a quantity, but needing a second line of the same product
-        // is not what anyone means, so they're filtered the same way.
+        // Models already on the line are the ones there is no point offering
+        // again.
         const rest = e.r.models.filter((m) => !e.r.options.some((o) => o.id === m.id))
-        // Picking an existing product. "Or" widens what satisfies this line;
-        // "and" writes a second line of the same item with that product on it.
-        // "or" widens what satisfies this slot. "and" is a different thing
-        // entirely: another product you also need, which becomes its own slot
-        // of the same item — the only shape that can carry its own quantity,
-        // which is the whole point of two ropes and one bag.
-        const pick = (id: string) => mode === 'or'
-          ? setOptions([...e.r.options.map((o) => o.id), id])
-          : run(async () => {
-              await onRow(e.id, async (rowId) => unwrap(((await addSlotBeside(
-                rowId, { gearItemId: e.gear_item_id, pinnedProductId: id }, instanceId
-              )) ?? {}) as object))
-              setEditingOptions(null)
-            })
+        // Widening what satisfies this line. Not an operator: every model here
+        // is an answer to "what counts as this item", and the student brings
+        // one of them — which is why two things you both need are two rows,
+        // joined by dragging one onto the other, each with its own quantity.
+        const pick = (id: string) => setOptions([...e.r.options.map((o) => o.id), id])
         // This one waits: the chip can't be drawn from a catalog that doesn't
         // have the product in it yet.
         const addNew = () => run(async () => {
           const { id } = unwrap(await upsertGearItem({
             name: newModel, brand: newBrand.trim() || null, category: type.category, parentId: type.id,
           }))
-          if (mode === 'or') await onRow(e.id, (rowId) => setGearEntryOptions(rowId, [...e.r.options.map((o) => o.id), id], instanceId))
-          else await onRow(e.id, async (rowId) => unwrap(((await addSlotBeside(
-            rowId, { gearItemId: e.gear_item_id, pinnedProductId: id }, instanceId
-          )) ?? {}) as object))
+          await onRow(e.id, (rowId) => setGearEntryOptions(rowId, [...e.r.options.map((o) => o.id), id], instanceId))
           setNewModel(''); setNewBrand('')
         })
         return (
           <div className="mt-2 p-2 bg-zinc-900 rounded border border-zinc-800 space-y-2">
             <p className="text-[11px] text-zinc-500">
-              {mode === 'and'
-                ? 'Another product you also need. It joins this line as its own slot, so it can carry its own quantity.'
-                : e.r.models.length === 0
-                  ? `The catalog has no products of ${type.name.toLowerCase()} yet. Name the one you recommend.`
-                  : rest.length > 0
-                    ? 'Recommend a product. Recommend none and any one of them is fine.'
-                    : 'Every product in the catalog is already recommended. Add another below.'}
+              {e.r.models.length === 0
+                ? `The catalog has no models of ${type.name.toLowerCase()} yet. Name the one you recommend.`
+                : rest.length > 0
+                  ? 'Recommend a model. Recommend none and any one of them is fine.'
+                  : 'Every model in the catalog is already recommended. Add another below.'}
             </p>
             {rest.length > 0 && (
               <div className="flex flex-wrap gap-1.5">
