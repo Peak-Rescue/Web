@@ -728,6 +728,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
             qualified={qualified}
             unassigned={unassigned}
             hasLead={(assigned ?? []).some(a => a.role === 'lead')}
+            anyone={internal}
           />
 
           <GuestInstructorButton

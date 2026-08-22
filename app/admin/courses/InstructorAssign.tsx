@@ -10,13 +10,18 @@ export default function InstructorAssign({
   qualified,
   unassigned,
   hasLead,
+  anyone = false,
 }: {
   instanceId: string
   qualified: Instructor[]
   unassigned: Instructor[]
   hasLead: boolean
+  // Internal events don't run by the staffing rules — who comes to a CE day or
+  // a planning day is a choice, not a qualification — so the list opens on
+  // everyone rather than on whoever the expertise map would have allowed.
+  anyone?: boolean
 }) {
-  const [showAll, setShowAll] = useState(false)
+  const [showAll, setShowAll] = useState(anyone)
 
   const toShow = showAll ? unassigned : qualified
   const hasUnqualified = unassigned.length > qualified.length

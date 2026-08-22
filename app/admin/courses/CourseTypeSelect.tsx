@@ -62,28 +62,6 @@ export function CourseTypeSelect({
         </select>
       </div>
 
-      {/* Orthogonal to the type — a canyon course with no students is still a
-          canyon course; what differs is that nobody enrols, everyone on it is
-          crew, and only they can see it. Covers instructor development and CE,
-          a consultation, anything that isn't a class. A client and a quote are
-          still fair game. Rare enough to be one line rather than a field of
-          its own. */}
-      <label className="sm:col-span-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-zinc-300 cursor-pointer">
-        <input
-          type="checkbox"
-          name="internal"
-          checked={internal}
-          onChange={e => setInternal(e.target.checked)}
-          className="accent-red-600"
-        />
-        No students — internal work, a consultation, anything without a roster
-        {internal && (
-          <span className="text-[11px] text-zinc-500">
-            · seen only by the people added to it — add whoever is attending as crew
-          </span>
-        )}
-      </label>
-
       {/* Step 3 — custom name (only if custom selected) */}
       {isCustom && (
         <div className="sm:col-span-2">
@@ -98,28 +76,49 @@ export function CourseTypeSelect({
         </div>
       )}
 
-      {/* Step 4 — expertise categories (custom only). Standard courses derive
-          these from their type; custom courses need an explicit tag so the
-          right instructors see them on their calendar and count as qualified. */}
-      {isCustom && (
+      {/* Step 4 — what a custom event is, since it has no type to derive it
+          from. Two unrelated things share the box because they appear on the
+          same trigger: whether anyone enrols, and which expertise it draws on.
+          Internal events belong here rather than in a field of their own —
+          they are custom by nature, a CE day or a planning day or a
+          consultation, and this block is already on screen the moment you say
+          custom. It stays on screen for a typed course already marked, so no
+          change of type can quietly drop the flag. */}
+      {(isCustom || internal) && (
         <div className="sm:col-span-2">
-          <label className="block text-xs text-zinc-400 mb-1">Expertise categories</label>
+          <label className="block text-xs text-zinc-400 mb-1">Custom event</label>
           <div className="flex flex-wrap gap-x-4 gap-y-2 p-3 bg-zinc-800/50 border border-zinc-700 rounded">
-            {CAPABILITY_ORDER.map(cat => (
-              <label key={cat} className="flex items-center gap-1.5 text-sm text-zinc-300 cursor-pointer">
-                <input
-                  type="checkbox"
-                  name="custom_categories"
-                  value={cat}
-                  defaultChecked={defaultCustomCategories.includes(cat)}
-                  className="accent-red-600"
-                />
-                {CAPABILITY_META[cat].label}
-              </label>
-            ))}
+            <label className="w-full flex items-center gap-1.5 text-sm text-zinc-300 cursor-pointer">
+              <input
+                type="checkbox"
+                name="internal"
+                checked={internal}
+                onChange={e => setInternal(e.target.checked)}
+                className="accent-red-600"
+              />
+              Internal — nobody enrols as a student
+            </label>
+            {isCustom && (
+              <div className="w-full flex flex-wrap gap-x-4 gap-y-2 pt-2 mt-1 border-t border-zinc-700">
+                {CAPABILITY_ORDER.map(cat => (
+                  <label key={cat} className="flex items-center gap-1.5 text-sm text-zinc-300 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      name="custom_categories"
+                      value={cat}
+                      defaultChecked={defaultCustomCategories.includes(cat)}
+                      className="accent-red-600"
+                    />
+                    {CAPABILITY_META[cat].label}
+                  </label>
+                ))}
+              </div>
+            )}
           </div>
           <p className="text-[11px] text-zinc-500 mt-1">
-            Instructors with expertise in a checked category see this course in their “All courses” calendar and count as qualified for staffing.
+            {internal
+              ? 'Seen only by the people added to it, and anyone can be added — the expertise tags are just a record of what it drew on.'
+              : 'Instructors with expertise in a checked category see this course in their “All courses” calendar and count as qualified for staffing.'}
           </p>
         </div>
       )}
