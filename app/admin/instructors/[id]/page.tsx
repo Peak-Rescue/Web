@@ -10,6 +10,7 @@ import SaveButton from '@/components/SaveButton'
 import CapabilityPanel from '@/app/admin/instructors/CapabilityPanel'
 import SectorPanel from '@/app/admin/instructors/SectorPanel'
 import TeamPageToggle from '@/app/admin/instructors/TeamPageToggle'
+import CalendarInviteToggle from '@/app/admin/instructors/CalendarInviteToggle'
 import ExemptToggle from '@/app/admin/instructors/ExemptToggle'
 import DeleteInstructorButton from '@/app/admin/instructors/DeleteInstructorButton'
 import { InviteButton } from '@/app/admin/instructors/InviteButton'
@@ -176,21 +177,11 @@ export default async function AdminInstructorDetailPage({ params }: { params: Pr
           </form>
         </section>
 
-        {/* Calendar invites — set by the instructor; shown here so a missing
-            guest list reads as a preference rather than a broken sync. */}
+        {/* Calendar invites — the instructor can set this on their own
+            profile; an admin can set it for them. */}
         <section className="mb-10">
-          <h2 className="text-lg font-semibold mb-1">Calendar</h2>
-          <p className="text-xs text-zinc-500 mb-4">Set by the instructor in their profile.</p>
-          <div className="p-6 bg-zinc-900 rounded-lg border border-zinc-800 text-sm">
-            {instructor.calendar_invites ? (
-              <span className="text-zinc-300">Invited to the calendar event for their courses.</span>
-            ) : (
-              <span className="text-zinc-400">
-                Not invited to course calendar events — they follow the shared course calendars
-                instead. Portal emails are unaffected.
-              </span>
-            )}
-          </div>
+          <h2 className="text-lg font-semibold mb-4">Calendar</h2>
+          <CalendarInviteToggle instructorId={instructor.id} initialValue={instructor.calendar_invites} />
         </section>
 
         {/* Public profile — bio + photo */}

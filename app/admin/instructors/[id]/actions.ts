@@ -350,6 +350,22 @@ export async function adminSetShowOnTeamPage(instructorId: string, show: boolean
   await revalidateInstructor(instructorId)
 }
 
+// Whether this instructor is invited to the calendar event for their courses.
+// They can set this themselves on /instructor; admins can set it for them,
+// since the people who most need it off are the ones least likely to go
+// looking for the checkbox.
+export async function adminSetCalendarInvites(instructorId: string, invited: boolean) {
+  await requireAdmin()
+
+  const { error } = await createAdminClient()
+    .from('instructors')
+    .update({ calendar_invites: invited })
+    .eq('id', instructorId)
+
+  if (error) throw new Error(error.message)
+  await revalidateInstructor(instructorId)
+}
+
 const VALID_SECTORS = new Set(['military', 'civilian'])
 
 // Which client sectors this instructor can work. Separate from expertise:
