@@ -38,6 +38,9 @@ function calendarIds() {
     military: process.env.GCAL_MILITARY_CALENDAR_ID || null,
     civilian: process.env.GCAL_CIVILIAN_CALENDAR_ID || null,
     prospective: process.env.GCAL_PROSPECTIVE_CALENDAR_ID || null,
+    // The admin calendar. Not required for sync to be considered on — an
+    // internal course falls back to the client calendars if it's unset.
+    general: process.env.GCAL_GENERAL_CALENDAR_ID || null,
   }
 }
 
@@ -128,17 +131,22 @@ type CourseRow = {
   starts_at: string | null
   ends_at: string | null
   status: string
+  internal?: boolean | null
   notes: string | null
   gcal_event_id: string | null
   gcal_calendar_id: string | null
 }
 
 const COURSE_COLS =
-  'id, ref_number, course_type, course_category, custom_title, client_name, location, starts_at, ends_at, status, notes, gcal_event_id, gcal_calendar_id'
+  'id, ref_number, course_type, course_category, custom_title, client_name, location, starts_at, ends_at, status, internal, notes, gcal_event_id, gcal_calendar_id'
 
 function targetCalendar(c: CourseRow): string | null {
   if (c.status === 'cancelled' || !c.starts_at) return null
   const ids = calendarIds()
+  // An internal course isn't client work in either sector — it's ours, so it
+  // belongs on the admin calendar whatever its type or status says. That also
+  // keeps it off the two calendars people scan to see what we're selling.
+  if (c.internal && ids.general) return ids.general
   if (c.status === 'tentative' || c.status === 'quoted') return ids.prospective
   // confirmed / completed: military vs civilian by course designation
   return c.course_category === 'tactical' ? ids.military : ids.civilian

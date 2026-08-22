@@ -32,10 +32,18 @@ const CATEGORY_STYLE = {
     solid: 'bg-cyan-900/80 text-cyan-100 border-cyan-700',
     outline: 'border-cyan-700 text-cyan-300',
   },
+  // Internal courses are ours, not client work in either sector, and sync to
+  // the admin calendar rather than the military or civilian one — so they read
+  // as neither colour here either.
+  internal: {
+    swatch: 'bg-zinc-700 border-zinc-500 text-zinc-100',
+    solid: 'bg-zinc-700/80 text-zinc-100 border-zinc-500',
+    outline: 'border-zinc-500 text-zinc-300',
+  },
 }
 
 function chipStyle(c: CalendarCourse): string {
-  const s = CATEGORY_STYLE[c.category === 'tactical' ? 'military' : 'civilian']
+  const s = CATEGORY_STYLE[c.internal ? 'internal' : c.category === 'tactical' ? 'military' : 'civilian']
   switch (c.status) {
     case 'tentative':
       return `${s.outline} border-dashed`
@@ -71,8 +79,9 @@ export default function CourseCalendar({
 }) {
   const catFilter = category === 'military' || category === 'civilian' ? category : null
   const isMilitary = (c: CalendarCourse) => c.category === 'tactical'
+  // Asking for one sector's courses excludes the ones belonging to neither.
   const visible = catFilter
-    ? courses.filter((c) => (catFilter === 'military') === isMilitary(c))
+    ? courses.filter((c) => !c.internal && (catFilter === 'military') === isMilitary(c))
     : courses
 
   const navHref = (m?: string) => {
@@ -205,10 +214,14 @@ export default function CourseCalendar({
 
       {courses.some((c) => c.category !== undefined) && (
         <div className="flex items-center gap-4 mt-2 text-[10px]">
-          {/* The diamond only needs explaining on a calendar that has one. */}
+          {/* Only worth a legend entry on a calendar that has one. Not a
+              filter link: the sector checkboxes already drop these. */}
           {courses.some((c) => c.internal) && (
-            <span className="flex items-center gap-1.5 text-zinc-500" title="Instructor development / continuing education — no client, visible only to the crew on it">
-              <span aria-hidden>◇</span>
+            <span
+              className="flex items-center gap-1.5 text-zinc-400"
+              title="Instructor development / continuing education — ours, not client work; visible only to the crew on it"
+            >
+              <span className={`w-3 h-3 rounded-sm border ${CATEGORY_STYLE.internal.swatch}`} />
               Internal
             </span>
           )}

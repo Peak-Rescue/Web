@@ -55,13 +55,14 @@ function InstanceCard({ inst }: { inst: Instance }) {
           </span>
           <span className="text-xs font-mono text-zinc-500">PR-{String(inst.ref_number).padStart(4, '0')}</span>
           <span className="font-medium truncate">{displayName}</span>
-          {/* Same diamond the calendar chips use for an internal course. */}
+          {/* The list has no colour coding, so the calendar's grey chip is a
+              word here. */}
           {inst.internal && (
             <span
               title="Internal — instructor development / CE"
               className="text-[10px] text-zinc-500 whitespace-nowrap"
             >
-              ◇ Internal
+              Internal
             </span>
           )}
         </div>

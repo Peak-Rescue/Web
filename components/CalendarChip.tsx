@@ -74,32 +74,31 @@ export default function CalendarChip({
             <p className="text-zinc-400 mt-1">Crew: {course.crew!.join(', ')}</p>
           )}
           <p className="flex items-center gap-1.5 text-zinc-500 mt-1.5">
-            <span className={`w-2 h-2 rounded-full ${isMilitary ? 'bg-orange-700' : 'bg-cyan-700'}`} />
-            {isMilitary ? 'Military' : 'Civilian'}
+            <span
+              className={`w-2 h-2 rounded-full ${
+                course.internal ? 'bg-zinc-500' : isMilitary ? 'bg-orange-700' : 'bg-cyan-700'
+              }`}
+            />
+            {course.internal ? 'Internal' : isMilitary ? 'Military' : 'Civilian'}
             <span className="capitalize">· {course.status}</span>
           </p>
           {course.internal && (
-            <p className="text-zinc-500 mt-0.5">◇ Internal — instructor development / CE</p>
+            <p className="text-zinc-500 mt-0.5">Instructor development / CE</p>
           )}
         </div>
       </div>,
       document.body
     )
 
-  // Color is already spoken for (military/civilian) and so is solidity
-  // (status), so the third distinction is a glyph: internal courses lead with
-  // a diamond, explained in the legend below the grid.
-  const body = (
-    <>
-      {course.internal && <span aria-hidden className="mr-1 opacity-70">◇</span>}
+  return course.href ? (
+    <Link key={course.id} href={course.href} {...chipProps}>
       {course.label}
       {tooltip}
-    </>
-  )
-
-  return course.href ? (
-    <Link key={course.id} href={course.href} {...chipProps}>{body}</Link>
+    </Link>
   ) : (
-    <span key={course.id} {...chipProps}>{body}</span>
+    <span key={course.id} {...chipProps}>
+      {course.label}
+      {tooltip}
+    </span>
   )
 }
