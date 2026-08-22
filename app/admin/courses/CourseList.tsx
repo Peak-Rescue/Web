@@ -55,14 +55,13 @@ function InstanceCard({ inst }: { inst: Instance }) {
           </span>
           <span className="text-xs font-mono text-zinc-500">PR-{String(inst.ref_number).padStart(4, '0')}</span>
           <span className="font-medium truncate">{displayName}</span>
-          {/* The list has no colour coding, so the calendar's grey chip is a
-              word here. */}
+          {/* The list has no colour coding, so the flag is a word here. */}
           {inst.internal && (
             <span
-              title="Internal — ours, not client work"
+              title="No students — internal work, a consultation, anything without a roster"
               className="text-[10px] text-zinc-500 whitespace-nowrap"
             >
-              Internal
+              No students
             </span>
           )}
         </div>

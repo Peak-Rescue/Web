@@ -56,6 +56,9 @@ export default function CalendarChip({
   }
 
   const isMilitary = course.category === 'tactical'
+  // Ours only when there's no client at all — a consultation has no students
+  // but is still that client's job.
+  const ours = !!course.internal && !course.client
   const tooltip =
     tip &&
     createPortal(
@@ -76,14 +79,14 @@ export default function CalendarChip({
           <p className="flex items-center gap-1.5 text-zinc-500 mt-1.5">
             <span
               className={`w-2 h-2 rounded-full ${
-                course.internal ? 'bg-zinc-500' : isMilitary ? 'bg-orange-700' : 'bg-cyan-700'
+                ours ? 'bg-zinc-500' : isMilitary ? 'bg-orange-700' : 'bg-cyan-700'
               }`}
             />
-            {course.internal ? 'Internal' : isMilitary ? 'Military' : 'Civilian'}
+            {ours ? 'Internal' : isMilitary ? 'Military' : 'Civilian'}
             <span className="capitalize">· {course.status}</span>
           </p>
           {course.internal && (
-            <p className="text-zinc-500 mt-0.5">Ours — no client</p>
+            <p className="text-zinc-500 mt-0.5">No students</p>
           )}
         </div>
       </div>,

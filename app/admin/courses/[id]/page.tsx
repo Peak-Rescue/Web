@@ -97,11 +97,12 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
 
   const contacts = parseContacts(inst.contacts)
 
-  // Internal course — instructor development / CE laid on for our own people.
-  // Everyone on it is crew, so there's no client to quote and no roster to
-  // invite; the sections that serve those jobs step out of the way. They come
-  // back the moment there's data in them, so nothing is ever hidden with
-  // content inside it.
+  // A course with nobody enrolled as a student: instructor development, CE, a
+  // consultation, any job that isn't a class. Everyone on it is crew, so the
+  // roster and its invite links step out of the way — but a client, and the
+  // quote that comes with one, are still entirely possible. The hidden
+  // sections come back the moment there's data in them, so nothing is ever
+  // hidden with content inside it.
   const internal = !!inst.internal
 
   // One parallel round for everything section-shaped (all keyed by id only).
@@ -351,9 +352,11 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
       : null
   const estimateCounts = { instructors: instructorCount, students: (inst.max_students as number | null) ?? null, days: courseDays }
 
-  // Pricing exists to quote a client, and an internal course has none — but it
-  // stays if anything was already put in it.
-  const showPricing = !internal || (estimateRows ?? []).length > 0 || (quoteRows ?? []).length > 0
+  // Pricing exists to quote a client. A course with no students can still have
+  // one — a consultation is billable work — so it goes only when there's no
+  // client either, and stays regardless if anything was put in it.
+  const showPricing =
+    !internal || !!inst.client_name || (estimateRows ?? []).length > 0 || (quoteRows ?? []).length > 0
 
   // No estimates yet: show a virtual first COA pre-populated with the
   // always-recurring lines, quantities guessed from the course (nothing

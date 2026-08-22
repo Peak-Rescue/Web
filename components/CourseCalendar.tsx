@@ -32,18 +32,22 @@ const CATEGORY_STYLE = {
     solid: 'bg-cyan-900/80 text-cyan-100 border-cyan-700',
     outline: 'border-cyan-700 text-cyan-300',
   },
-  // Internal courses are ours, not client work in either sector, and sync to
-  // the admin calendar rather than the military or civilian one — so they read
-  // as neither colour here either.
-  internal: {
+  // Work of ours with no client belongs to neither sector and syncs to the
+  // admin calendar rather than the military or civilian one — so it reads as
+  // neither colour here either. A client job with no students keeps its
+  // sector; the client is what the colour is about.
+  ours: {
     swatch: 'bg-zinc-700 border-zinc-500 text-zinc-100',
     solid: 'bg-zinc-700/80 text-zinc-100 border-zinc-500',
     outline: 'border-zinc-500 text-zinc-300',
   },
 }
 
+// No client of any kind — see CATEGORY_STYLE.ours.
+const isOurs = (c: CalendarCourse) => !!c.internal && !c.client
+
 function chipStyle(c: CalendarCourse): string {
-  const s = CATEGORY_STYLE[c.internal ? 'internal' : c.category === 'tactical' ? 'military' : 'civilian']
+  const s = CATEGORY_STYLE[isOurs(c) ? 'ours' : c.category === 'tactical' ? 'military' : 'civilian']
   switch (c.status) {
     case 'tentative':
       return `${s.outline} border-dashed`
@@ -81,7 +85,7 @@ export default function CourseCalendar({
   const isMilitary = (c: CalendarCourse) => c.category === 'tactical'
   // Asking for one sector's courses excludes the ones belonging to neither.
   const visible = catFilter
-    ? courses.filter((c) => !c.internal && (catFilter === 'military') === isMilitary(c))
+    ? courses.filter((c) => !isOurs(c) && (catFilter === 'military') === isMilitary(c))
     : courses
 
   const navHref = (m?: string) => {
@@ -216,12 +220,12 @@ export default function CourseCalendar({
         <div className="flex items-center gap-4 mt-2 text-[10px]">
           {/* Only worth a legend entry on a calendar that has one. Not a
               filter link: the sector checkboxes already drop these. */}
-          {courses.some((c) => c.internal) && (
+          {courses.some(isOurs) && (
             <span
               className="flex items-center gap-1.5 text-zinc-400"
-              title="Ours, not client work — instructor development, CE, or anything else with no client; visible only to the people added to it"
+              title="Ours — no client and no students: instructor development, CE, or anything else we lay on for ourselves"
             >
-              <span className={`w-3 h-3 rounded-sm border ${CATEGORY_STYLE.internal.swatch}`} />
+              <span className={`w-3 h-3 rounded-sm border ${CATEGORY_STYLE.ours.swatch}`} />
               Internal
             </span>
           )}

@@ -62,11 +62,12 @@ export function CourseTypeSelect({
         </select>
       </div>
 
-      {/* Orthogonal to the type — an internal canyon course is still a canyon
-          course; what differs is that there's no client, our own people are on
-          it, and only they can see it. Covers instructor development and CE,
-          and anything else worth tracking that no student attends. Rare enough
-          to be one line rather than a field of its own. */}
+      {/* Orthogonal to the type — a canyon course with no students is still a
+          canyon course; what differs is that nobody enrols, everyone on it is
+          crew, and only they can see it. Covers instructor development and CE,
+          a consultation, anything that isn't a class. A client and a quote are
+          still fair game. Rare enough to be one line rather than a field of
+          its own. */}
       <label className="sm:col-span-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-zinc-300 cursor-pointer">
         <input
           type="checkbox"
@@ -75,7 +76,7 @@ export function CourseTypeSelect({
           onChange={e => setInternal(e.target.checked)}
           className="accent-red-600"
         />
-        Internal — our own course or event, not client work
+        No students — internal work, a consultation, anything without a roster
         {internal && (
           <span className="text-[11px] text-zinc-500">
             · seen only by the people added to it — add whoever is attending as crew

@@ -143,10 +143,12 @@ const COURSE_COLS =
 function targetCalendar(c: CourseRow): string | null {
   if (c.status === 'cancelled' || !c.starts_at) return null
   const ids = calendarIds()
-  // An internal course isn't client work in either sector — it's ours, so it
-  // belongs on the admin calendar whatever its type or status says. That also
-  // keeps it off the two calendars people scan to see what we're selling.
-  if (c.internal && ids.general) return ids.general
+  // Work of our own with no client at all belongs on the admin calendar
+  // whatever its type or status says — it keeps CE days and instructor
+  // training off the two calendars people scan to see what we're selling.
+  // A consultation has no students either but is still a client job, so it
+  // stays on that client's calendar.
+  if (c.internal && !c.client_name && ids.general) return ids.general
   if (c.status === 'tentative' || c.status === 'quoted') return ids.prospective
   // confirmed / completed: military vs civilian by course designation
   return c.course_category === 'tactical' ? ids.military : ids.civilian
