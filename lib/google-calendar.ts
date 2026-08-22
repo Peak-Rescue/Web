@@ -154,7 +154,7 @@ function targetCalendar(c: CourseRow): string | null {
   return c.course_category === 'tactical' ? ids.military : ids.civilian
 }
 
-type CrewMember = { name: string; email: string | null }
+type CrewMember = { name: string; email: string | null; invite: boolean }
 
 function buildEvent(c: CourseRow, crew: CrewMember[]) {
   const ref = `PR-${String(c.ref_number).padStart(4, '0')}`
@@ -198,24 +198,31 @@ export async function syncCourseCalendar(admin: Admin, instanceId: string): Prom
       admin.from('course_instances').select(COURSE_COLS).eq('id', instanceId).maybeSingle(),
       admin
         .from('instance_instructors')
-        .select('role, instructors(name, email)')
+        .select('role, instructors(name, email, calendar_invites)')
         .eq('instance_id', instanceId),
     ])
     if (!c) return
     const course = c as CourseRow
     const target = targetCalendar(course)
     const crew: CrewMember[] = (
-      (crewRows ?? []) as unknown as { role: string; instructors: { name: string; email: string | null } | null }[]
+      (crewRows ?? []) as unknown as {
+        role: string
+        instructors: { name: string; email: string | null; calendar_invites: boolean } | null
+      }[]
     )
       .filter((a) => a.instructors)
       .sort((a, b) => (a.role === 'lead' ? 0 : 1) - (b.role === 'lead' ? 0 : 1))
-      .map((a) => ({ name: a.instructors!.name, email: a.instructors!.email }))
+      .map((a) => ({
+        name: a.instructors!.name,
+        email: a.instructors!.email,
+        invite: a.instructors!.calendar_invites,
+      }))
 
-    // No event should exist (cancelled / dateless): remove if present, telling
-    // any invited instructors the event is off.
+    // No event should exist (cancelled / dateless): remove if present. The
+    // portal has already emailed the crew about whichever change caused it.
     if (!target) {
       if (course.gcal_event_id && course.gcal_calendar_id) {
-        await deleteEvent(course.gcal_calendar_id, course.gcal_event_id, true)
+        await deleteEvent(course.gcal_calendar_id, course.gcal_event_id)
         await admin
           .from('course_instances')
           .update({ gcal_event_id: null, gcal_calendar_id: null })
@@ -228,13 +235,10 @@ export async function syncCourseCalendar(admin: Admin, instanceId: string): Prom
     const event = buildEvent(course, crew)
 
     // Current Google copy, fetched before any move: RSVPs must be carried
-    // through our patches (sending attendees without responseStatus resets
-    // them), and comparing it tells us whether this change warrants emailing
-    // attendees or can be applied silently.
+    // through our patches, since sending attendees without responseStatus
+    // resets them.
     type ExistingEvent = {
       attendees?: { email?: string; responseStatus?: string }[]
-      start?: { date?: string }
-      end?: { date?: string }
     }
     let existing: ExistingEvent | null = null
     if (course.gcal_event_id && course.gcal_calendar_id) {
@@ -250,10 +254,13 @@ export async function syncCourseCalendar(admin: Admin, instanceId: string): Prom
     }
 
     // Attendees only while impersonating (GCAL_INVITE_AS) — the plain service
-    // identity is rejected outright for events that carry them.
+    // identity is rejected outright for events that carry them. Anyone who has
+    // turned calendar invites off in their profile is left off the guest list;
+    // they still appear in the title, and the portal still emails them about
+    // date changes and cancellations.
     const attendees = canInvite
       ? crew
-          .filter((m) => m.email)
+          .filter((m) => m.email && m.invite)
           .map((m) => {
             const prev = existing?.attendees?.find(
               (a) => a.email?.toLowerCase() === m.email!.toLowerCase()
@@ -267,14 +274,11 @@ export async function syncCourseCalendar(admin: Admin, instanceId: string): Prom
       : null
     const eventBody = attendees ? { ...event, attendees } : event
 
-    // Email attendees only for changes worth their attention: a new event or
-    // moved dates. Everything else — including crew changes, which rewrite the
-    // title — applies silently; Google can't email just the affected person,
-    // so a crew-change notification would blast the whole existing crew too.
-    const datesChanged =
-      existing !== null &&
-      (existing.start?.date !== event.start.date || existing.end?.date !== event.end.date)
-    const sendUpdates = existing === null || datesChanged ? 'all' : 'none'
+    // Google never emails anyone about a course. Every notice worth sending —
+    // staffing, moved dates, cancellation — comes from the portal, which knows
+    // the whole crew rather than just the guest list, and can link to the
+    // course page. Leaving sendUpdates on would double up on all of it.
+    const sendUpdates = 'none'
 
     // Existing event on the wrong calendar → move it silently (the follow-up
     // patch sends the notification if the change is meaningful).
@@ -309,7 +313,7 @@ export async function syncCourseCalendar(admin: Admin, instanceId: string): Prom
     if (!course.gcal_event_id) {
       const res = await gcal(
         'POST',
-        `/calendars/${encodeURIComponent(target)}/events?sendUpdates=all`,
+        `/calendars/${encodeURIComponent(target)}/events?sendUpdates=${sendUpdates}`,
         eventBody
       )
       if (!res.ok) {
@@ -339,19 +343,19 @@ export async function removeCourseEvent(admin: Admin, instanceId: string): Promi
       .eq('id', instanceId)
       .maybeSingle()
     if (c?.gcal_event_id && c.gcal_calendar_id) {
-      await deleteEvent(c.gcal_calendar_id, c.gcal_event_id, true)
+      await deleteEvent(c.gcal_calendar_id, c.gcal_event_id)
     }
   } catch (e) {
     console.error('Calendar event removal failed:', e)
   }
 }
 
-// notify=true emails any invited attendees a cancellation; imports and
-// internal cleanup stay silent.
-async function deleteEvent(calendarId: string, eventId: string, notify = false): Promise<void> {
+// Always silent: a course coming off the calendar is announced by the portal,
+// which reaches the whole crew rather than just the guest list.
+async function deleteEvent(calendarId: string, eventId: string): Promise<void> {
   const res = await gcal(
     'DELETE',
-    `/calendars/${encodeURIComponent(calendarId)}/events/${eventId}?sendUpdates=${notify ? 'all' : 'none'}`
+    `/calendars/${encodeURIComponent(calendarId)}/events/${eventId}?sendUpdates=none`
   )
   if (!res.ok && res.status !== 404 && res.status !== 410) {
     console.error(`gcal delete failed (${res.status}): ${await res.text()}`)

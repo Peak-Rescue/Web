@@ -9,6 +9,65 @@ import { contactsFromForm } from '@/lib/contacts'
 import { syncCourseCalendar, removeCourseEvent } from '@/lib/google-calendar'
 import { isValidRegion } from '@/lib/regions'
 
+const fmtLong = (d: string) =>
+  new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+
+function dateRange(starts: string | null, ends: string | null): string {
+  if (!starts) return 'dates TBD'
+  return ends && ends !== starts ? `${fmtLong(starts)} – ${fmtLong(ends)}` : fmtLong(starts)
+}
+
+// Every instructor staffed on a course, for the emails the portal sends about
+// it. Not the calendar guest list — someone who has turned calendar invites
+// off still needs to hear that their course moved.
+async function assignedEmails(
+  admin: ReturnType<typeof createAdminClient>,
+  instanceId: string
+): Promise<string[]> {
+  const { data } = await admin
+    .from('instance_instructors')
+    .select('instructors(email)')
+    .eq('instance_id', instanceId)
+  return (data ?? [])
+    .map((a) => (a.instructors as unknown as { email: string | null } | null)?.email)
+    .filter((e): e is string => Boolean(e))
+}
+
+// A course stops existing in two ways: cancelled (the row stays, marked) or
+// deleted outright. The instructors staffed on it can't tell the difference
+// and don't need to — either way it's off their schedule.
+async function emailCourseOff(
+  recipients: string[],
+  course: {
+    courseName: string
+    client_name: string | null
+    location: string | null
+    when: string
+  }
+) {
+  if (recipients.length === 0 || !process.env.RESEND_API_KEY) return
+  try {
+    const { Resend } = await import('resend')
+    const resend = new Resend(process.env.RESEND_API_KEY)
+    await resend.emails.send({
+      from: 'Peak Rescue Portal <noreply@peak-rescue.com>',
+      to: recipients,
+      subject: `Cancelled — ${course.courseName} (${course.when})`,
+      text: [
+        `The following course has been cancelled:`,
+        '',
+        `Course: ${course.courseName}${course.client_name ? ` · ${course.client_name}` : ''}`,
+        `Dates: ${course.when}`,
+        course.location ? `Location: ${course.location}` : null,
+        '',
+        'It has been removed from your upcoming courses in the portal, and from your calendar. Any open tasks for it no longer need to be done.',
+      ].filter((l): l is string => l !== null).join('\n'),
+    })
+  } catch (e) {
+    console.error('Course cancellation email failed:', e)
+  }
+}
+
 function toSlugPart(s: string) {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
 }
@@ -178,48 +237,20 @@ export async function updateInstanceDetails(id: string, formData: FormData) {
   // Course cancelled → tell every assigned instructor (best-effort). It
   // disappears from their portal home, so silence would leave them planning
   // around a course that no longer exists.
-  if (status === 'cancelled' && before?.status !== 'cancelled' && process.env.RESEND_API_KEY) {
+  if (status === 'cancelled' && before?.status !== 'cancelled') {
     after(async () => {
-    try {
-      const { data: assigned } = await admin
-        .from('instance_instructors')
-        .select('instructors(name, email)')
-        .eq('instance_id', id)
-      const recipients = (assigned ?? [])
-        .map((a) => (a.instructors as unknown as { name: string; email: string | null } | null)?.email)
-        .filter((e): e is string => Boolean(e))
-
-      if (recipients.length > 0) {
-        const { courseShortName } = await import('@/lib/courses')
-        const courseName = courseShortName(course_type, custom_title)
-        const { data: dates } = await admin
-          .from('course_instances')
-          .select('starts_at, ends_at')
-          .eq('id', id)
-          .single()
-        const when = dates?.starts_at
-          ? `${dates.starts_at}${dates.ends_at && dates.ends_at !== dates.starts_at ? ` – ${dates.ends_at}` : ''}`
-          : 'dates TBD'
-        const { Resend } = await import('resend')
-        const resend = new Resend(process.env.RESEND_API_KEY)
-        await resend.emails.send({
-          from: 'Peak Rescue Portal <noreply@peak-rescue.com>',
-          to: recipients,
-          subject: `Cancelled — ${courseName} (${when})`,
-          text: [
-            `The following course has been cancelled:`,
-            '',
-            `Course: ${courseName}${client_name ? ` · ${client_name}` : ''}`,
-            `Dates: ${when}`,
-            location ? `Location: ${location}` : null,
-            '',
-            'It has been removed from your upcoming courses in the portal. Any open tasks for it no longer need to be done.',
-          ].filter((l): l is string => l !== null).join('\n'),
-        })
-      }
-    } catch (e) {
-      console.error('Course cancellation email failed:', e)
-    }
+      const { courseShortName } = await import('@/lib/courses')
+      const { data: dates } = await admin
+        .from('course_instances')
+        .select('starts_at, ends_at')
+        .eq('id', id)
+        .single()
+      await emailCourseOff(await assignedEmails(admin, id), {
+        courseName: courseShortName(course_type, custom_title),
+        client_name,
+        location,
+        when: dateRange(dates?.starts_at ?? null, dates?.ends_at ?? null),
+      })
     })
   }
 
@@ -270,12 +301,62 @@ export async function updateInstanceDates(id: string, formData: FormData) {
   const ends_at   = (formData.get('ends_at') as string) || null
 
   const admin = createAdminClient()
+  const { data: before } = await admin
+    .from('course_instances')
+    .select('starts_at, ends_at, status, course_type, custom_title, client_name, location')
+    .eq('id', id)
+    .single()
+
   const { error } = await admin
     .from('course_instances')
     .update({ starts_at, ends_at })
     .eq('id', id)
 
   if (error) throw new Error(error.message)
+
+  // Moved dates → tell every assigned instructor. They plan travel and time
+  // off around these dates, and the calendar event changes under them
+  // silently: the sync never emails, precisely so this can (best-effort).
+  const moved =
+    before !== null &&
+    before.status !== 'cancelled' &&
+    (before.starts_at !== starts_at || before.ends_at !== ends_at)
+
+  if (moved && process.env.RESEND_API_KEY) {
+    after(async () => {
+      try {
+        const recipients = await assignedEmails(admin, id)
+        if (recipients.length === 0) return
+
+        const { courseShortName } = await import('@/lib/courses')
+        const courseName = courseShortName(before.course_type, before.custom_title)
+        const wasScheduled = Boolean(before.starts_at)
+        const when = dateRange(starts_at, ends_at)
+        const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://peak-rescue.com'
+
+        const { Resend } = await import('resend')
+        const resend = new Resend(process.env.RESEND_API_KEY)
+        await resend.emails.send({
+          from: 'Peak Rescue Portal <noreply@peak-rescue.com>',
+          to: recipients,
+          subject: `${starts_at ? (wasScheduled ? 'New dates' : 'Dates set') : 'Dates removed'} — ${courseName} (${when})`,
+          text: [
+            starts_at
+              ? `${courseName} is now scheduled for ${when}.`
+              : `${courseName} no longer has dates on the calendar.`,
+            wasScheduled ? `Previously: ${dateRange(before.starts_at, before.ends_at)}` : null,
+            '',
+            `Course: ${courseName}${before.client_name ? ` · ${before.client_name}` : ''}`,
+            before.location ? `Location: ${before.location}` : null,
+            '',
+            `Details: ${siteUrl}/portal/${id}`,
+          ].filter((l): l is string => l !== null).join('\n'),
+        })
+      } catch (e) {
+        console.error('Course date-change email failed:', e)
+      }
+    })
+  }
 
   // The start date is part of the slug, so moving a course has to rewrite it.
   await resyncSlug(admin, id)
@@ -859,6 +940,17 @@ export async function deleteInstance(instanceId: string) {
   await requireAdmin()
   const admin = createAdminClient()
 
+  // Who to tell, and what to tell them, has to be read before the delete —
+  // the assignments cascade away with the row.
+  const [{ data: course }, recipients] = await Promise.all([
+    admin
+      .from('course_instances')
+      .select('course_type, custom_title, client_name, location, starts_at, ends_at, status')
+      .eq('id', instanceId)
+      .single(),
+    assignedEmails(admin, instanceId),
+  ])
+
   // Remove the mirrored Google event before the row (and its pointers) go.
   await removeCourseEvent(admin, instanceId)
 
@@ -868,6 +960,20 @@ export async function deleteInstance(instanceId: string) {
     .eq('id', instanceId)
 
   if (error) throw new Error(error.message)
+
+  // A deleted course reads the same as a cancelled one from the crew's side —
+  // unless it was already cancelled, in which case they've heard.
+  if (course && course.status !== 'cancelled') {
+    after(async () => {
+      const { courseShortName } = await import('@/lib/courses')
+      await emailCourseOff(recipients, {
+        courseName: courseShortName(course.course_type, course.custom_title),
+        client_name: course.client_name,
+        location: course.location,
+        when: dateRange(course.starts_at, course.ends_at),
+      })
+    })
+  }
   revalidatePath('/admin/courses')
   revalidatePath('/admin/expenses')
 }
