@@ -191,6 +191,23 @@ export async function updateInstructorProfile(formData: FormData) {
   revalidatePath('/instructor')
 }
 
+// Whether this instructor's courses are added to their Google Calendar as
+// invitations. Off for anyone who subscribes to the shared course calendars —
+// an accepted invite would show them the same course twice.
+export async function updateCalendarInvites(formData: FormData) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Not authenticated')
+
+  const { error } = await createAdminClient()
+    .from('instructors')
+    .update({ calendar_invites: formData.get('calendar_invites') === 'on' })
+    .eq('profile_id', user.id)
+
+  if (error) throw new Error(error.message)
+  revalidatePath('/instructor')
+}
+
 export async function deleteCert(id: string) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()

@@ -46,7 +46,7 @@ export default async function AdminInstructorDetailPage({ params }: { params: Pr
   // Look up by instructors.id (the URL param)
   const { data: instructor } = await admin
     .from('instructors')
-    .select('id, name, email, slug, profile_id, invite_sent_at, show_on_team_page, bio, avatar, avatar_position, avatar_scale, sectors, instructor_capabilities(category, role)')
+    .select('id, name, email, slug, profile_id, invite_sent_at, show_on_team_page, bio, avatar, avatar_position, avatar_scale, sectors, calendar_invites, instructor_capabilities(category, role)')
     .eq('id', id)
     .single()
 
@@ -174,6 +174,23 @@ export default async function AdminInstructorDetailPage({ params }: { params: Pr
               Save
             </SaveButton>
           </form>
+        </section>
+
+        {/* Calendar invites — set by the instructor; shown here so a missing
+            guest list reads as a preference rather than a broken sync. */}
+        <section className="mb-10">
+          <h2 className="text-lg font-semibold mb-1">Calendar</h2>
+          <p className="text-xs text-zinc-500 mb-4">Set by the instructor in their profile.</p>
+          <div className="p-6 bg-zinc-900 rounded-lg border border-zinc-800 text-sm">
+            {instructor.calendar_invites ? (
+              <span className="text-zinc-300">Invited to the calendar event for their courses.</span>
+            ) : (
+              <span className="text-zinc-400">
+                Not invited to course calendar events — they follow the shared course calendars
+                instead. Portal emails are unaffected.
+              </span>
+            )}
+          </div>
         </section>
 
         {/* Public profile — bio + photo */}

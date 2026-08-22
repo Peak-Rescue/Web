@@ -7,7 +7,7 @@ import CertGrid from './CertGrid'
 import ProfileForm from './ProfileForm'
 import AvatarEditor from '@/components/AvatarEditor'
 import SaveButton from '@/components/SaveButton'
-import { upsertCert, deleteCert, addCertDocument, deleteCertDocument, updateProfile, updateInstructorProfile } from './actions'
+import { upsertCert, deleteCert, addCertDocument, deleteCertDocument, updateProfile, updateInstructorProfile, updateCalendarInvites } from './actions'
 import { signOut } from '@/app/actions'
 import { CAPABILITY_META, CAPABILITY_ORDER } from '@/lib/capabilities'
 
@@ -20,7 +20,7 @@ export default async function InstructorPage() {
 
   const [{ data: profile }, { data: instructor }] = await Promise.all([
     admin.from('profiles').select('first_name, last_name, email, phone, emergency_name, emergency_relationship, emergency_phone').eq('id', user.id).single(),
-    admin.from('instructors').select('id, name, bio, avatar, avatar_position, avatar_scale, instructor_capabilities(category, role)').eq('profile_id', user.id).maybeSingle(),
+    admin.from('instructors').select('id, name, bio, avatar, avatar_position, avatar_scale, calendar_invites, instructor_capabilities(category, role)').eq('profile_id', user.id).maybeSingle(),
   ])
 
   if (!instructor) redirect('/dashboard')
@@ -90,6 +90,35 @@ export default async function InstructorPage() {
             initialEmergencyPhone={profile?.emergency_phone ?? null}
             onUpdateProfile={updateProfile}
           />
+        </section>
+
+        {/* Calendar */}
+        <section className="mb-10">
+          <h2 className="text-lg font-semibold mb-4">Calendar</h2>
+          <form action={updateCalendarInvites} className="p-6 bg-zinc-900 rounded-lg border border-zinc-800">
+            <label className="flex items-start gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                name="calendar_invites"
+                defaultChecked={instructor.calendar_invites}
+                className="mt-0.5 w-4 h-4 accent-pr-red shrink-0"
+              />
+              <span className="text-sm">
+                Add my courses to my Google Calendar
+                <span className="block text-xs text-zinc-500 mt-1">
+                  You&apos;ll get an invitation for each course you&apos;re staffed on. Turn this off if
+                  you already subscribe to the Peak Rescue course calendars — otherwise your courses
+                  show up twice. Either way, the portal emails you when a course is scheduled, moved,
+                  or cancelled.
+                </span>
+              </span>
+            </label>
+            <div className="mt-4">
+              <SaveButton className="px-4 py-2 bg-pr-red hover:bg-pr-red-dark text-white rounded text-sm font-medium transition-colors">
+                Save
+              </SaveButton>
+            </div>
+          </form>
         </section>
 
         {/* Certifications */}
