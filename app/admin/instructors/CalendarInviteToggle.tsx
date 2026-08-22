@@ -27,8 +27,7 @@ export default function CalendarInviteToggle({
       <div>
         <p className="text-sm font-medium">Google Calendar invites</p>
         <p className="text-xs text-zinc-500 mt-0.5">
-          Turn off for anyone who already subscribes to the course calendars — otherwise their
-          courses show up twice. Portal emails are unaffected either way.
+          Off for anyone who subscribes to the course calendars, or courses appear twice.
         </p>
       </div>
       <button
