@@ -62,27 +62,25 @@ export function CourseTypeSelect({
         </select>
       </div>
 
-      {/* Who it's for. Orthogonal to the type — an internal course is still a
-          canyon course; what differs is that our own people are the students,
-          there's no client, and only the crew on it can see it. */}
-      <div className="sm:col-span-2">
-        <label className="block text-xs text-zinc-400 mb-1">Who it&rsquo;s for</label>
-        <select
+      {/* Orthogonal to the type — an internal course is still a canyon course;
+          what differs is that our own people are the students and only the
+          crew on it can see it. Rare enough to be one line rather than a
+          field of its own. */}
+      <label className="sm:col-span-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-zinc-300 cursor-pointer">
+        <input
+          type="checkbox"
           name="internal"
-          value={internal ? 'internal' : 'client'}
-          onChange={e => setInternal(e.target.value === 'internal')}
-          className="w-full sm:w-1/2 bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500"
-        >
-          <option value="client">A client</option>
-          <option value="internal">Our own instructors — development / CE</option>
-        </select>
+          checked={internal}
+          onChange={e => setInternal(e.target.checked)}
+          className="accent-red-600"
+        />
+        Internal course — instructor development / CE
         {internal && (
-          <p className="text-[11px] text-zinc-500 mt-1">
-            Only the crew assigned to it will see this course — it stays off everyone else&rsquo;s
-            &ldquo;All courses&rdquo; calendar. Add the instructors attending as crew.
-          </p>
+          <span className="text-[11px] text-zinc-500">
+            · seen only by the crew assigned to it; add the instructors attending as crew
+          </span>
         )}
-      </div>
+      </label>
 
       {/* Step 3 — custom name (only if custom selected) */}
       {isCustom && (

@@ -81,7 +81,7 @@ export async function createInstance(formData: FormData) {
   const custom_title     = (formData.get('custom_title') as string) || null
   const custom_categories = course_type === 'custom' ? (formData.getAll('custom_categories') as string[]) : null
   const status           = (formData.get('status') as string) || 'tentative'
-  const internal         = formData.get('internal') === 'internal'
+  const internal         = formData.get('internal') !== null
   const location         = (formData.get('location') as string) || null
   const regionRaw        = (formData.get('region') as string) || ''
   const region           = isValidRegion(regionRaw) ? regionRaw : null
@@ -155,7 +155,7 @@ export async function updateInstanceDetails(id: string, formData: FormData) {
   const custom_title     = (formData.get('custom_title') as string) || null
   const custom_categories = course_type === 'custom' ? (formData.getAll('custom_categories') as string[]) : null
   const status           = formData.get('status') as string
-  const internal         = formData.get('internal') === 'internal'
+  const internal         = formData.get('internal') !== null
   const location         = (formData.get('location') as string) || null
   const regionRaw        = (formData.get('region') as string) || ''
   const region           = isValidRegion(regionRaw) ? regionRaw : null
