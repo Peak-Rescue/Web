@@ -96,7 +96,7 @@ export function CourseTypeSelect({
                 onChange={e => setInternal(e.target.checked)}
                 className="accent-red-600"
               />
-              Internal — nobody enrols as a student
+              Internal — no students
             </label>
             {isCustom && (
               <div className="w-full flex flex-wrap gap-x-4 gap-y-2 pt-2 mt-1 border-t border-zinc-700">
