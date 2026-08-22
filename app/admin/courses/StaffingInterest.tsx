@@ -32,15 +32,23 @@ export default function StaffingInterest({
   candidates,
   invites,
   hasLead,
+  preselect = true,
 }: {
   instanceId: string
   candidates: InterestCandidate[]
   invites: InterestInviteRow[]
   hasLead: boolean
+  // Whether opening the picker starts with everyone qualified already ticked.
+  // On a client course that's the usual intent. On an internal one, offering a
+  // place is deliberate — who gets asked is the decision, so nobody is
+  // pre-ticked and the "All qualified" button is one click away.
+  preselect?: boolean
 }) {
   const invitedIds = new Set(invites.map((i) => i.instructorId))
   const defaultSelection = () =>
-    new Set(candidates.filter((c) => c.qualified && c.hasEmail && !invitedIds.has(c.id)).map((c) => c.id))
+    preselect
+      ? new Set(candidates.filter((c) => c.qualified && c.hasEmail && !invitedIds.has(c.id)).map((c) => c.id))
+      : new Set<string>()
 
   const [showPicker, setShowPicker] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(defaultSelection)

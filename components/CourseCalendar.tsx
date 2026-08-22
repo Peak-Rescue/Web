@@ -219,7 +219,7 @@ export default function CourseCalendar({
           {courses.some((c) => c.internal) && (
             <span
               className="flex items-center gap-1.5 text-zinc-400"
-              title="Instructor development / continuing education — ours, not client work; visible only to the crew on it"
+              title="Ours, not client work — instructor development, CE, or anything else with no client; visible only to the people added to it"
             >
               <span className={`w-3 h-3 rounded-sm border ${CATEGORY_STYLE.internal.swatch}`} />
               Internal

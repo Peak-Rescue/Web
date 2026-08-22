@@ -732,17 +732,17 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
             hasLead={(assigned ?? []).some(a => a.role === 'lead')}
           />
 
-          {/* Asking for interest means emailing every qualified instructor —
-              the exact audience an internal course is being kept from. It
-              still shows if invites already went out. */}
-          {(!internal || interestInvites.length > 0) && (
-            <StaffingInterest
-              instanceId={id}
-              candidates={interestCandidates}
-              invites={interestInvites}
-              hasLead={(assigned ?? []).some(a => a.role === 'lead')}
-            />
-          )}
+          {/* Internal courses can be offered around too — a CE day with places
+              to fill is worth asking about. What changes is that nobody is
+              pre-ticked, so the invite goes to who you choose rather than to
+              everyone qualified by default. */}
+          <StaffingInterest
+            instanceId={id}
+            candidates={interestCandidates}
+            invites={interestInvites}
+            hasLead={(assigned ?? []).some(a => a.role === 'lead')}
+            preselect={!internal}
+          />
 
           <div className="mt-10 pt-8 border-t border-zinc-800">
             <h2 className="text-lg font-semibold mb-4">Tasks</h2>

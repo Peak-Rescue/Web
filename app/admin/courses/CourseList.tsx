@@ -59,7 +59,7 @@ function InstanceCard({ inst }: { inst: Instance }) {
               word here. */}
           {inst.internal && (
             <span
-              title="Internal — instructor development / CE"
+              title="Internal — ours, not client work"
               className="text-[10px] text-zinc-500 whitespace-nowrap"
             >
               Internal

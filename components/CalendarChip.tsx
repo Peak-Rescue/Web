@@ -83,7 +83,7 @@ export default function CalendarChip({
             <span className="capitalize">· {course.status}</span>
           </p>
           {course.internal && (
-            <p className="text-zinc-500 mt-0.5">Instructor development / CE</p>
+            <p className="text-zinc-500 mt-0.5">Ours — no client</p>
           )}
         </div>
       </div>,
