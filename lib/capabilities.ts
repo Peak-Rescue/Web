@@ -54,12 +54,8 @@ export const CATEGORY_COURSE_TYPES: Record<CapabilityCategory, string[]> = {
   // holding either — the same pool it had when the two were one offering.
   // Fall protection is industry work; every rope-access holder holds industry
   // too, so it loses nobody by being listed only there.
-  //
-  // 'fall-protection-rope-access' is the retired slug. It stays until the
-  // migration re-tagging those instances has run, or the courses still on it
-  // drop off their instructors' calendars in the meantime.
-  industry:        ['emergency-response-team', 'firefighter-survival', 'fall-protection', 'rope-access', 'fall-protection-rope-access', 'rope-rescue', 'standby-rescue', 'tv-rigging-safety', 'confined-space-rescue'],
-  rope_access:     ['rope-rescue', 'rope-access', 'fall-protection-rope-access'],
+  industry:        ['emergency-response-team', 'firefighter-survival', 'fall-protection', 'rope-access', 'rope-rescue', 'standby-rescue', 'tv-rigging-safety', 'confined-space-rescue'],
+  rope_access:     ['rope-rescue', 'rope-access'],
   aerial_evac:     ['aerial-tramway-rescue', 'zipline-adventure-park-rescue', 'stableflight', 'aerial-assets'],
   canyoning:       ['class-c-canyon-rescue', 'canyoneering'],
   swift_water:     ['swiftwater-rescue', 'water-mobility'],

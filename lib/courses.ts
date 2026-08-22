@@ -57,28 +57,14 @@ export const COURSE_TYPE_OPTIONS = [
   })),
 ]
 
-// Offerings that no longer exist but are still on courses in the database.
-// A course whose type isn't in the services list falls back to printing the
-// raw slug as its name, so a retired slug lives here for as long as instances
-// carry it: the migration that re-tags them runs after this code deploys, and
-// in between the courses have to keep reading as courses.
-const RETIRED_COURSE_TYPES: Record<string, { title: string; shortTitle: string }> = {
-  // Split into 'fall-protection' and 'rope-access' (Aug 2026).
-  'fall-protection-rope-access': { title: 'Fall Protection & Rope Access', shortTitle: 'Rope Access' },
-}
-
 export function courseDisplayName(course_type: string, custom_title: string | null): string {
   if (course_type === 'custom') return custom_title ?? 'Custom Course'
-  return services.find(s => s.slug === course_type)?.title
-    ?? RETIRED_COURSE_TYPES[course_type]?.title
-    ?? custom_title ?? course_type
+  return services.find(s => s.slug === course_type)?.title ?? custom_title ?? course_type
 }
 
 export function courseShortName(course_type: string, custom_title: string | null): string {
   if (course_type === 'custom') return custom_title ?? 'Custom Course'
-  return services.find(s => s.slug === course_type)?.shortTitle
-    ?? RETIRED_COURSE_TYPES[course_type]?.shortTitle
-    ?? custom_title ?? course_type
+  return services.find(s => s.slug === course_type)?.shortTitle ?? custom_title ?? course_type
 }
 
 // Calendar-event title, shared by the Google Calendar sync and the portal
