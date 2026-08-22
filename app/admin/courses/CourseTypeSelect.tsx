@@ -117,7 +117,7 @@ export function CourseTypeSelect({
           </div>
           <p className="text-[11px] text-zinc-500 mt-1">
             {internal
-              ? 'Seen only by the people added to it, and anyone can be added — the expertise tags are just a record of what it drew on.'
+              ? 'Seen only by the people added to it — anyone can be added.'
               : 'Instructors with expertise in a checked category see this course in their “All courses” calendar and count as qualified for staffing.'}
           </p>
         </div>
