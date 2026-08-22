@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import InfoHint from '@/components/InfoHint'
 import { adminSetExempt } from './[id]/actions'
 
 export default function ExemptToggle({
@@ -24,11 +25,9 @@ export default function ExemptToggle({
 
   return (
     <div className="flex items-center justify-between px-4 py-3 bg-zinc-900 border border-zinc-800 rounded-lg">
-      <div>
+      <div className="flex items-center gap-1.5">
         <p className="text-sm font-medium">FLSA exempt</p>
-        <p className="text-xs text-zinc-500 mt-0.5">
-          Exempt employees can claim covered meals without receipts.
-        </p>
+        <InfoHint text="Exempt employees can claim covered meals without receipts. Non-exempt employees are overtime-eligible and cannot." />
       </div>
       <button
         onClick={handleToggle}

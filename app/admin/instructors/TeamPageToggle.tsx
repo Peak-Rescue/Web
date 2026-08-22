@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import InfoHint from '@/components/InfoHint'
 import { adminSetShowOnTeamPage } from './[id]/actions'
 
 export default function TeamPageToggle({
@@ -24,9 +25,9 @@ export default function TeamPageToggle({
 
   return (
     <div className="flex items-center justify-between px-4 py-3 bg-zinc-900 border border-zinc-800 rounded-lg">
-      <div>
+      <div className="flex items-center gap-1.5">
         <p className="text-sm font-medium">Show on the public team page</p>
-        <p className="text-xs text-zinc-500 mt-0.5">/team</p>
+        <InfoHint text="Controls whether this instructor appears at /team." />
       </div>
       <button
         onClick={handleToggle}

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import InfoHint from '@/components/InfoHint'
 import { adminSetCalendarInvites } from './[id]/actions'
 
 export default function CalendarInviteToggle({
@@ -23,12 +24,10 @@ export default function CalendarInviteToggle({
   }
 
   return (
-    <div className="flex items-center justify-between gap-4 px-4 py-3 bg-zinc-900 border border-zinc-800 rounded-lg">
-      <div>
+    <div className="flex items-center justify-between px-4 py-3 bg-zinc-900 border border-zinc-800 rounded-lg">
+      <div className="flex items-center gap-1.5">
         <p className="text-sm font-medium">Google Calendar invites</p>
-        <p className="text-xs text-zinc-500 mt-0.5">
-          Off for anyone who subscribes to the course calendars, or courses appear twice.
-        </p>
+        <InfoHint text="Off for anyone who subscribes to the course calendars — otherwise their courses appear twice. Portal emails are unaffected." />
       </div>
       <button
         onClick={handleToggle}
