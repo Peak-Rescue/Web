@@ -60,13 +60,11 @@ export default function SectorPanel({
           )
         })}
       </div>
-      <p className="text-xs text-zinc-500 mt-2">
-        {sectors.length === 0
-          ? 'Not set — this instructor won’t be filtered by sector yet.'
-          : sectors.length === 2
-            ? 'Can work both military and civilian courses.'
-            : `${sectors.includes('military') ? 'Military' : 'Civilian'} courses only.`}
-      </p>
+      {/* Which sectors are on is already legible from the buttons. The only
+          thing worth saying is what an empty selection means. */}
+      {sectors.length === 0 && (
+        <p className="text-xs text-zinc-500 mt-2">Not set — no sector filtering yet.</p>
+      )}
     </div>
   )
 }
