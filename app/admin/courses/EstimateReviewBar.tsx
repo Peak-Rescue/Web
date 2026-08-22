@@ -47,7 +47,7 @@ export function EstimateReviewBanner({
           </p>
           {r.note && <p className="text-sm text-zinc-300 mt-1">&ldquo;{r.note}&rdquo;</p>}
           <p className="text-xs text-zinc-400 mt-2">
-            Look over the numbers above — you can edit anything directly (it autosaves), then sign off or send notes back.
+            Edit anything above — it autosaves — then sign off or send notes back.
           </p>
           <form action={respondEstimateReview.bind(null, r.id)} className="mt-3 flex items-start gap-2 flex-wrap">
             <textarea

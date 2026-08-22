@@ -16,6 +16,7 @@ import {
   setCourseResourceAudience,
   type ResourcePickerItem,
 } from './resource-actions'
+import InfoHint from '@/components/InfoHint'
 
 export type CourseResource = {
   id: string
@@ -85,10 +86,12 @@ export default function CourseResourcesSection({
 
   return (
     <div className="p-6 pt-5 border-t border-zinc-800">
-      <h3 className="text-sm font-semibold text-zinc-300 mb-1">Resources</h3>
+      <div className="flex items-center gap-1.5 mb-1">
+        <h3 className="text-sm font-semibold text-zinc-300">Resources</h3>
+        <InfoHint text="Students meet these in their own section, apart from the curriculum." />
+      </div>
       <p className="text-xs text-zinc-500 mb-3">
         Med plans, permits, tech notes for this place — instructors-only until you share it.
-        Students meet these in their own section, apart from the curriculum.
       </p>
 
       <div className="bg-zinc-950/40 border border-zinc-800 rounded-lg divide-y divide-zinc-800">

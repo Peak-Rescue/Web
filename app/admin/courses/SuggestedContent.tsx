@@ -7,6 +7,7 @@ import { KIND_META, AUDIENCE_META, BUCKET_META, BUCKET_ORDER, type LibraryAudien
 import { AudiencePills } from '@/components/AudiencePills'
 import { CAPABILITY_META, CAPABILITY_ORDER, type CapabilityCategory } from '@/lib/capabilities'
 import { type PickerItem } from './LibraryPicker'
+import InfoHint from '@/components/InfoHint'
 
 // Library material offered for a course, grouped by the topic it came from —
 // each group becomes a section. Suggested material (this course's expertise or
@@ -154,11 +155,11 @@ export default function SuggestedContent({
     <div className="mb-6 p-4 bg-zinc-900 border border-zinc-700 rounded-lg">
       <div className="flex items-start justify-between gap-3 flex-wrap mb-3">
         <div>
-          <h3 className="text-sm font-semibold">Add content from the library</h3>
-          <p className="text-xs text-zinc-500 mt-0.5 max-w-2xl">
-            Each group becomes a section. Tick what this delivery needs, set who sees each section, and override
-            individual items where they differ.
-          </p>
+          <div className="flex items-center gap-1.5">
+            <h3 className="text-sm font-semibold">Add content from the library</h3>
+            <InfoHint text="Tick what this delivery needs, set who sees each section, and override individual items where they differ." />
+          </div>
+          <p className="text-xs text-zinc-500 mt-0.5">Each group becomes a section.</p>
         </div>
         <div className="flex items-center gap-2">
           <input

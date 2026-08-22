@@ -14,6 +14,7 @@ import { LinkIcon, PencilIcon } from '@/components/TaskIcons'
 import UploadNameDialog from '@/components/UploadNameDialog'
 import AddLinkDialog from '@/components/AddLinkDialog'
 import { AudiencePills } from '@/components/AudiencePills'
+import InfoHint from '@/components/InfoHint'
 
 export type CourseFile = {
   id: string
@@ -148,6 +149,7 @@ export default function CourseFilesSection({
         <div>
           <div className="flex items-center gap-2 mb-1">
             <h3 className="text-sm font-semibold text-zinc-300">Files</h3>
+            <InfoHint text="A document students need goes on the Resources shelf below." />
             {/* The pill rather than prose, because every other block on this
                 tab carries one: a lone Instructors pill with no Students pill
                 beside it reads as a fact about this block, where the same
@@ -155,9 +157,7 @@ export default function CourseFilesSection({
                 toggle here — there's no shared state to reach. */}
             <AudiencePills audience="internal" />
           </div>
-          <p className="text-xs text-zinc-500">
-            Documents and task attachments. A document students need goes on the Resources shelf below.
-          </p>
+          <p className="text-xs text-zinc-500">Documents and task attachments.</p>
         </div>
         <div className="shrink-0 flex items-center gap-2">
           <button

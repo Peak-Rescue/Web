@@ -151,7 +151,7 @@ export default function QuoteHeroPicker({ instanceId, choices, currentImage, cur
               <div>
                 <h3 className="text-sm font-semibold">Quote page photo</h3>
                 <p className="text-xs text-zinc-500 mt-0.5">
-                  Shown as the header of the client-facing quote page. Leave on automatic to use the course type&apos;s photo.
+                  Header of the client-facing quote page — automatic uses the course type&apos;s photo.
                 </p>
               </div>
               <button

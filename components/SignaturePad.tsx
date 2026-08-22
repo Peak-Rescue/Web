@@ -2,6 +2,7 @@
 
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { saveSignature } from '@/app/instructor/expenses/actions'
+import InfoHint from '@/components/InfoHint'
 
 export type SignaturePadHandle = {
   // Flushes any drawn-but-unsaved strokes. Resolves to whether a signature
@@ -130,8 +131,10 @@ const SignaturePad = forwardRef<SignaturePadHandle, {
     return (
       <div className="flex items-center justify-between px-4 py-3 bg-zinc-900 border border-zinc-800 rounded-lg">
         <div>
-          <p className="text-sm font-medium">Signature on file <span className="text-teal-400">✓</span></p>
-          <p className="text-xs text-zinc-500 mt-0.5">Stamped onto the employee-signature line of each submitted report.</p>
+          <p className="flex items-center gap-1.5 text-sm font-medium">
+            Signature on file <span className="text-teal-400">✓</span>
+            <InfoHint text="Stamped onto the employee-signature line of each submitted report." />
+          </p>
         </div>
         <button
           onClick={() => { setEditing(true); setStatus('blank') }}
@@ -151,9 +154,7 @@ const SignaturePad = forwardRef<SignaturePadHandle, {
           {status === 'saving' ? 'Saving…' : status === 'saved' ? 'Saved ✓' : status === 'error' ? 'Save failed — draw again' : ''}
         </span>
       </div>
-      <p className="text-xs text-zinc-500 mb-3">
-        Use your finger or mouse — it saves by itself and is reused on every report you submit.
-      </p>
+      <p className="text-xs text-zinc-500 mb-3">Finger or mouse — it saves by itself.</p>
       <canvas
         ref={canvasRef}
         onPointerDown={start}

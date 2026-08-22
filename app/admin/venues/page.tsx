@@ -6,6 +6,7 @@ import { createVenue } from '../library/actions'
 import VenueRow from './VenueRow'
 import RegionSelect from '@/components/RegionSelect'
 import { type Venue } from '@/lib/library'
+import InfoHint from '@/components/InfoHint'
 
 const input = 'w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500'
 const label = 'block text-xs text-zinc-400 mb-1'
@@ -35,11 +36,11 @@ export default async function VenuesPage() {
       <div className="max-w-3xl mx-auto px-4 py-10">
         <Link href="/admin/library?status=all" className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors mb-6 inline-block">← Library</Link>
 
-        <h1 className="text-2xl font-bold">Venues</h1>
-        <p className="text-zinc-400 mt-1 mb-8">
-          Places you run courses and standing client sites. Maps, permits, lodging and rescue plans attach here once —
-          setting a course&rsquo;s venue pulls them in automatically.
-        </p>
+        <h1 className="flex items-center gap-2 text-2xl font-bold">
+          Venues
+          <InfoHint text="Maps, permits, lodging and rescue plans attach here once — setting a course's venue pulls them in automatically." />
+        </h1>
+        <p className="text-zinc-400 mt-1 mb-8">Places you run courses, and standing client sites.</p>
 
         <div className="space-y-2 mb-10">
           {venues.map((v) => <VenueRow key={v.id} venue={v} itemCount={itemCount.get(v.id) ?? 0} />)}

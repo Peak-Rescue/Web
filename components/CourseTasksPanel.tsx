@@ -549,7 +549,7 @@ export default function CourseTasksPanel({
               return (
                 <div className="p-4 bg-zinc-900 border border-dashed border-zinc-700 rounded-lg">
                   <p className="text-xs text-zinc-500 mb-2">
-                    Check the tasks this course needs and who owns each — only assigned tasks show on the course.
+                    Only assigned tasks show on the course.
                   </p>
                   {standard.length > 0 && (
                     <>

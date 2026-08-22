@@ -49,7 +49,7 @@ export default function UploadNameDialog({
           Name {files.length === 1 ? 'this file' : `these ${files.length} files`}
         </h3>
         <p className="text-xs text-zinc-500 mb-4">
-          Give each file a clear name — this is what everyone on the course sees.
+          This is what everyone on the course sees.
         </p>
 
         <div className="space-y-3 max-h-72 overflow-y-auto">

@@ -140,7 +140,7 @@ export function GalleryEditor({ images }: { images: GalleryImage[] }) {
       {error && <p className="text-sm text-pr-red" role="alert">{error}</p>}
 
       <p className="text-xs text-zinc-500">
-        Drag a photo (or use its ‹ › arrows) to change the order — this is the order the public gallery shows.
+        Drag to reorder — this is the order the public gallery shows.
       </p>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

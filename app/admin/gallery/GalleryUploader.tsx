@@ -92,7 +92,7 @@ export function GalleryUploader() {
           onChange={() => { setResult(''); setError('') }}
           className="block text-sm text-zinc-400 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:font-medium file:bg-zinc-700 file:text-white hover:file:bg-zinc-600 file:cursor-pointer transition-colors disabled:opacity-50"
         />
-        <p className="text-xs text-zinc-600">JPG or PNG, up to 25 MB each. Exact duplicates are skipped automatically.</p>
+        <p className="text-xs text-zinc-600">JPG or PNG, up to 25 MB each. Duplicates are skipped.</p>
       </div>
 
       <div className="space-y-1.5">

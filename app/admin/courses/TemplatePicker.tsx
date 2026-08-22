@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { applyCourseTemplate, previewCourseTemplate } from './actions'
+import InfoHint from '@/components/InfoHint'
 
 export type TemplateOption = {
   id: string
@@ -85,9 +86,9 @@ export default function TemplatePicker({
 
   return (
     <div className="mb-4 p-3 bg-zinc-900 border border-zinc-800 rounded-lg">
-      <p className="text-xs text-zinc-500 mb-2">
-        <span className="text-zinc-300 font-medium">Start with a standard setup.</span> Adds the sections and
-        material this kind of course normally uses — change anything afterwards.
+      <p className="text-xs text-zinc-500 mb-2 flex items-center gap-1.5">
+        <span className="text-zinc-300 font-medium">Start with a standard setup.</span>
+        <InfoHint text="Adds the sections and material this kind of course normally uses — change anything afterwards." />
       </p>
       <div className="flex flex-wrap gap-2">
         {templates.map((t) => (

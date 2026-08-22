@@ -72,7 +72,7 @@ export default function AddLinkDialog({
       >
         <h3 className="text-sm font-semibold text-zinc-200 mb-1">Add a link</h3>
         <p className="text-xs text-zinc-500 mb-4">
-          Paste a link to Google Drive, Dropbox, CalTopo — anywhere the document already lives.
+          Google Drive, Dropbox, CalTopo — wherever it already lives.
         </p>
 
         <label className="block text-xs text-zinc-500 mb-1">Link</label>

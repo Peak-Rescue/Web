@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { createViewShare, revokeViewShare } from './actions'
+import InfoHint from '@/components/InfoHint'
 
 export type ViewShare = {
   id: string
@@ -53,10 +54,12 @@ export default function ViewSharePanel({
   return (
     <div className="mt-4 p-4 bg-zinc-900 border border-zinc-800 rounded-lg space-y-3">
       <div>
-        <h3 className="text-sm font-medium">View-only links</h3>
+        <div className="flex items-center gap-1.5">
+          <h3 className="text-sm font-medium">View-only links</h3>
+          <InfoHint text="For the client contact, or an instructor you haven't staffed yet." />
+        </div>
         <p className="text-xs text-zinc-500 mt-0.5">
           The student page — schedule, gear, everything — with no account and no enrolment.
-          For the client contact, or an instructor you haven&apos;t staffed yet.
         </p>
       </div>
 

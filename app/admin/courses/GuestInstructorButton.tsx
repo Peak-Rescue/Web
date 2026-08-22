@@ -73,7 +73,7 @@ export default function GuestInstructorButton({
   return (
     <div className="mt-3 p-4 bg-zinc-900 border border-dashed border-zinc-700 rounded-lg">
       <p className="text-xs text-zinc-500 mb-3">
-        Adds them to the instructor roster, staffs them on this course, and emails an invite to create their portal login.
+        Adds them to the roster, staffs them here, and emails a portal invite.
       </p>
       <div className="flex items-end gap-2 flex-wrap">
         <div>

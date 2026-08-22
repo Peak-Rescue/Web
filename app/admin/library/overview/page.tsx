@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { KIND_META, type LibraryKind } from '@/lib/library'
 import { CAPABILITY_META, CAPABILITY_ORDER, type CapabilityCategory } from '@/lib/capabilities'
+import InfoHint from '@/components/InfoHint'
 
 // A shape-of-the-library view: what exists at each level, and — more useful —
 // what doesn't. Counting rows tells you nothing about whether the canyon set
@@ -193,13 +194,10 @@ export default async function LibraryOverviewPage() {
 
         {untagged.length > 0 && (
           <section>
-            <h2 className="text-sm font-semibold text-zinc-400 mb-2">
+            <h2 className="flex items-center gap-1.5 text-sm font-semibold text-zinc-400 mb-2">
               Not tied to any expertise ({untagged.length})
+              <InfoHint text="These never surface as suggestions on a course — only by search or their Classroom class. Company documents belong here; teaching material probably doesn't." />
             </h2>
-            <p className="text-xs text-zinc-600 mb-2">
-              These never surface as suggestions on a course — they&rsquo;re only reachable by search or by their
-              Classroom class. Company documents belong here; teaching material probably doesn&rsquo;t.
-            </p>
             <div className={`${card} px-4 py-3 text-xs text-zinc-500 space-y-1`}>
               {[...new Set(untagged.map((i) => i.source_class ?? 'Added in the portal'))].map((c) => (
                 <p key={c}>

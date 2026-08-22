@@ -113,7 +113,6 @@ export default function AvatarEditor({ name, currentAvatar, currentPosition, cur
 
           {src && (
             <>
-              <p className="text-xs text-zinc-500">Drag the preview to reposition. Use the slider to zoom.</p>
               <div className="flex items-center gap-3">
                 <span className="text-xs text-zinc-400 w-10">Zoom</span>
                 <input

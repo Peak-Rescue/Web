@@ -11,6 +11,7 @@ import CourseFilesSection, { type CourseFile } from '../CourseFilesSection'
 import StudentInvitePanel from '../StudentInvitePanel'
 import ViewSharePanel, { type ViewShare } from '../ViewSharePanel'
 import AutoSaveForm from '@/components/AutoSaveForm'
+import { AudiencePills } from '@/components/AudiencePills'
 import DeleteInstanceButton from '../DeleteInstanceButton'
 import CourseTasksPanel, { type TaskPerson } from '@/components/CourseTasksPanel'
 import EstimatePanel, { type PricingRate } from '@/components/EstimatePanel'
@@ -581,7 +582,10 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
               <input name="instructor_slots" type="number" min="1" defaultValue={inst.instructor_slots ?? ''} className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
             </div>
             <div className="sm:col-span-2">
-              <label className="block text-xs text-zinc-400 mb-1">Notes</label>
+              <label className="flex items-center gap-1.5 text-xs text-zinc-400 mb-1">
+                Notes
+                <AudiencePills audience="internal" />
+              </label>
               {/* field-sizing auto-grows with content; rows is the fallback for
                   browsers without it (sized to the saved note), drag always works. */}
               <textarea
@@ -590,7 +594,6 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
                 defaultValue={inst.notes ?? ''}
                 className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500 resize-y [field-sizing:content] min-h-14 max-h-80"
               />
-              <p className="text-xs text-zinc-500 mt-1">Instructors only.</p>
             </div>
           </AutoSaveForm>
 
