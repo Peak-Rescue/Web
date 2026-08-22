@@ -32,6 +32,7 @@ export type Instance = {
   starts_at: string | null
   ends_at: string | null
   max_students: number | null
+  internal?: boolean | null
   instance_instructors: { count: number }[]
   crew?: { role: string; instructors: { name: string } | null }[] | null
   enrollments: { count: number }[]
@@ -54,6 +55,15 @@ function InstanceCard({ inst }: { inst: Instance }) {
           </span>
           <span className="text-xs font-mono text-zinc-500">PR-{String(inst.ref_number).padStart(4, '0')}</span>
           <span className="font-medium truncate">{displayName}</span>
+          {/* Same diamond the calendar chips use for an internal course. */}
+          {inst.internal && (
+            <span
+              title="Internal — instructor development / CE"
+              className="text-[10px] text-zinc-500 whitespace-nowrap"
+            >
+              ◇ Internal
+            </span>
+          )}
         </div>
         <div className="text-sm text-zinc-400 flex flex-wrap gap-x-4 gap-y-0.5">
           {inst.starts_at && inst.ends_at && <span>{formatDateRange(inst.starts_at, inst.ends_at)}</span>}

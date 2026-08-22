@@ -97,6 +97,13 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
 
   const contacts = parseContacts(inst.contacts)
 
+  // Internal course — instructor development / CE laid on for our own people.
+  // Everyone on it is crew, so there's no client to quote and no roster to
+  // invite; the sections that serve those jobs step out of the way. They come
+  // back the moment there's data in them, so nothing is ever hidden with
+  // content inside it.
+  const internal = !!inst.internal
+
   // One parallel round for everything section-shaped (all keyed by id only).
   const [
     { data: enrollmentRows },
@@ -344,6 +351,10 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
       : null
   const estimateCounts = { instructors: instructorCount, students: (inst.max_students as number | null) ?? null, days: courseDays }
 
+  // Pricing exists to quote a client, and an internal course has none — but it
+  // stays if anything was already put in it.
+  const showPricing = !internal || (estimateRows ?? []).length > 0 || (quoteRows ?? []).length > 0
+
   // No estimates yet: show a virtual first COA pre-populated with the
   // always-recurring lines, quantities guessed from the course (nothing
   // saves until touched).
@@ -516,10 +527,10 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
             { id: 'details', label: 'Details' },
             { id: 'instructors', label: 'Staffing' },
             { id: 'gear', label: 'Gear' },
-            { id: 'estimates', label: 'Pricing' },
+            ...(showPricing ? [{ id: 'estimates', label: 'Pricing' }] : []),
             { id: 'content', label: 'Curriculum' },
             { id: 'schedule', label: 'Schedule' },
-            { id: 'participants', label: 'Students' },
+            { id: 'participants', label: internal ? 'Logistics' : 'Students' },
           ]}
         >
 
@@ -532,6 +543,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
               defaultType={inst.course_type}
               defaultCustomTitle={inst.custom_title ?? ''}
               defaultCustomCategories={inst.custom_categories ?? []}
+              defaultInternal={internal}
             />
             <div>
               <label className="block text-xs text-zinc-400 mb-1">Status</label>
@@ -720,12 +732,17 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
             hasLead={(assigned ?? []).some(a => a.role === 'lead')}
           />
 
-          <StaffingInterest
-            instanceId={id}
-            candidates={interestCandidates}
-            invites={interestInvites}
-            hasLead={(assigned ?? []).some(a => a.role === 'lead')}
-          />
+          {/* Asking for interest means emailing every qualified instructor —
+              the exact audience an internal course is being kept from. It
+              still shows if invites already went out. */}
+          {(!internal || interestInvites.length > 0) && (
+            <StaffingInterest
+              instanceId={id}
+              candidates={interestCandidates}
+              invites={interestInvites}
+              hasLead={(assigned ?? []).some(a => a.role === 'lead')}
+            />
+          )}
 
           <div className="mt-10 pt-8 border-t border-zinc-800">
             <h2 className="text-lg font-semibold mb-4">Tasks</h2>
@@ -787,6 +804,11 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
             </div>
           </AutoSaveForm>
 
+          {/* On an internal course the attendees are the crew, enrolled through
+              Staffing — there is no roster to invite and nobody outside to
+              share the course with. Both come back if either has anything in
+              it already. */}
+          {(!internal || enrollments.length > 0 || viewShares.length > 0) && (
           <div className="mt-10 pt-8 border-t border-zinc-800">
             <h2 className="text-lg font-semibold mb-4">Students
               <span className="ml-2 text-sm font-normal text-zinc-500">
@@ -827,6 +849,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
 
             <ViewSharePanel instanceId={id} shares={viewShares} />
           </div>
+          )}
         </TabPanel>
 
         <TabPanel id="schedule">
@@ -1020,6 +1043,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
           </form>
         </TabPanel>
 
+        {showPricing && (
         <TabPanel id="estimates">
           <h2 className="text-lg font-semibold mb-4">Estimates</h2>
           <p className="text-xs text-zinc-500 mb-4">
@@ -1084,6 +1108,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
           />
           </div>
         </TabPanel>
+        )}
         </CourseTabs>
 
         <div className="pt-4 border-t border-zinc-800">

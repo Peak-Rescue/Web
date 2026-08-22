@@ -31,6 +31,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     starts_at: string | null
     ends_at: string | null
     status: string
+    internal?: boolean | null
     custom_categories?: string[] | null
     instance_instructors?: { role: string; instructors: { name: string } | null }[] | null
   }
@@ -45,7 +46,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     showAllCourses
       ? admin
           .from('course_instances')
-          .select('id, ref_number, course_type, course_category, custom_title, custom_categories, client_name, location, starts_at, ends_at, status, instance_instructors(role, instructors(name))')
+          .select('id, ref_number, course_type, course_category, custom_title, custom_categories, client_name, location, starts_at, ends_at, status, internal, instance_instructors(role, instructors(name))')
           .neq('status', 'cancelled')
       : Promise.resolve({ data: null }),
     admin
@@ -113,12 +114,17 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   const myCategories = new Set(
     ((capRow?.instructor_capabilities ?? []) as { category: string }[]).map((c) => c.category)
   )
+  // Internal courses (instructor development, CE) are the exception to the
+  // expertise rule: a canyon course laid on for three people would otherwise
+  // show to every canyon-qualified instructor, who then wonders why they
+  // weren't asked. Only the crew on it — and admins — see it at all.
   const calendarSource: InstRow[] = showAllCourses
     ? ((allInstancesRes.data ?? []) as unknown as InstRow[]).filter(
         (i) =>
           showAsAdmin ||
           assignedIds.has(i.id) ||
-          courseCapabilityCategories(i.course_type, i.custom_categories).some((c) => myCategories.has(c))
+          (!i.internal &&
+            courseCapabilityCategories(i.course_type, i.custom_categories).some((c) => myCategories.has(c)))
       )
     : (assignmentRows ?? []).map((a) => a.course_instances as unknown as InstRow)
   // Chip labels mirror the Google Calendar event titles: name — client —
@@ -139,6 +145,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       ends_at: i.ends_at! >= i.starts_at! ? i.ends_at! : i.starts_at!,
       href: showAsAdmin || assignedIds.has(i.id) ? portalHref(i.id) : undefined,
       category: i.course_category ?? null,
+      internal: !!i.internal,
       name: courseShortName(i.course_type, i.custom_title),
       client: i.client_name,
       location: i.location,

@@ -9,14 +9,17 @@ export function CourseTypeSelect({
   defaultType = '',
   defaultCustomTitle = '',
   defaultCustomCategories = [],
+  defaultInternal = false,
 }: {
   defaultCategory?: string
   defaultType?: string
   defaultCustomTitle?: string
   defaultCustomCategories?: string[]
+  defaultInternal?: boolean
 }) {
   const [category, setCategory] = useState(defaultCategory)
   const [courseType, setCourseType] = useState(defaultType)
+  const [internal, setInternal] = useState(defaultInternal)
 
   const selectedGroup = COURSE_TYPE_OPTIONS.find(g => g.category === category)
   const isCustom = courseType === 'custom'
@@ -57,6 +60,28 @@ export function CourseTypeSelect({
           ))}
           {category && <option value="custom">Custom…</option>}
         </select>
+      </div>
+
+      {/* Who it's for. Orthogonal to the type — an internal course is still a
+          canyon course; what differs is that our own people are the students,
+          there's no client, and only the crew on it can see it. */}
+      <div className="sm:col-span-2">
+        <label className="block text-xs text-zinc-400 mb-1">Who it&rsquo;s for</label>
+        <select
+          name="internal"
+          value={internal ? 'internal' : 'client'}
+          onChange={e => setInternal(e.target.value === 'internal')}
+          className="w-full sm:w-1/2 bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500"
+        >
+          <option value="client">A client</option>
+          <option value="internal">Our own instructors — development / CE</option>
+        </select>
+        {internal && (
+          <p className="text-[11px] text-zinc-500 mt-1">
+            Only the crew assigned to it will see this course — it stays off everyone else&rsquo;s
+            &ldquo;All courses&rdquo; calendar. Add the instructors attending as crew.
+          </p>
+        )}
       </div>
 
       {/* Step 3 — custom name (only if custom selected) */}

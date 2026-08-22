@@ -9,6 +9,7 @@ export type CalendarCourse = {
   ends_at: string
   href?: string // absent → rendered as a non-clickable chip
   category?: string | null // course_category; 'tactical' → military, anything else → civilian
+  internal?: boolean // instructor development / CE — ours, no client
   // Optional structured fields for the hover tooltip (falls back to label).
   name?: string
   client?: string | null
@@ -204,6 +205,13 @@ export default function CourseCalendar({
 
       {courses.some((c) => c.category !== undefined) && (
         <div className="flex items-center gap-4 mt-2 text-[10px]">
+          {/* The diamond only needs explaining on a calendar that has one. */}
+          {courses.some((c) => c.internal) && (
+            <span className="flex items-center gap-1.5 text-zinc-500" title="Instructor development / continuing education — no client, visible only to the crew on it">
+              <span aria-hidden>◇</span>
+              Internal
+            </span>
+          )}
           {/* Checkbox semantics: both checked by default; unchecking one
               leaves the other. Unchecking the last checked box flips to the
               other category instead of an empty calendar. */}

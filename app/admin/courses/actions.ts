@@ -81,6 +81,7 @@ export async function createInstance(formData: FormData) {
   const custom_title     = (formData.get('custom_title') as string) || null
   const custom_categories = course_type === 'custom' ? (formData.getAll('custom_categories') as string[]) : null
   const status           = (formData.get('status') as string) || 'tentative'
+  const internal         = formData.get('internal') === 'internal'
   const location         = (formData.get('location') as string) || null
   const regionRaw        = (formData.get('region') as string) || ''
   const region           = isValidRegion(regionRaw) ? regionRaw : null
@@ -128,7 +129,7 @@ export async function createInstance(formData: FormData) {
 
   const { data, error } = await admin
     .from('course_instances')
-    .insert({ course_category, course_type, custom_title, custom_categories, status, starts_at, ends_at, location, region, venue_id, client_name, contacts, notes, max_students, instructor_slots, slug })
+    .insert({ course_category, course_type, custom_title, custom_categories, status, internal, starts_at, ends_at, location, region, venue_id, client_name, contacts, notes, max_students, instructor_slots, slug })
     .select('id')
     .single()
 
@@ -154,6 +155,7 @@ export async function updateInstanceDetails(id: string, formData: FormData) {
   const custom_title     = (formData.get('custom_title') as string) || null
   const custom_categories = course_type === 'custom' ? (formData.getAll('custom_categories') as string[]) : null
   const status           = formData.get('status') as string
+  const internal         = formData.get('internal') === 'internal'
   const location         = (formData.get('location') as string) || null
   const regionRaw        = (formData.get('region') as string) || ''
   const region           = isValidRegion(regionRaw) ? regionRaw : null
@@ -166,7 +168,7 @@ export async function updateInstanceDetails(id: string, formData: FormData) {
 
   const { error } = await admin
     .from('course_instances')
-    .update({ course_category, course_type, custom_title, custom_categories, status, location, region, venue_id, client_name, notes, max_students, instructor_slots, ...(contactsRaw !== null ? { contacts: contactsFromForm(contactsRaw) } : {}) })
+    .update({ course_category, course_type, custom_title, custom_categories, status, internal, location, region, venue_id, client_name, notes, max_students, instructor_slots, ...(contactsRaw !== null ? { contacts: contactsFromForm(contactsRaw) } : {}) })
     .eq('id', id)
 
   if (error) throw new Error(error.message)

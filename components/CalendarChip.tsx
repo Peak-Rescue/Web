@@ -78,20 +78,28 @@ export default function CalendarChip({
             {isMilitary ? 'Military' : 'Civilian'}
             <span className="capitalize">· {course.status}</span>
           </p>
+          {course.internal && (
+            <p className="text-zinc-500 mt-0.5">◇ Internal — instructor development / CE</p>
+          )}
         </div>
       </div>,
       document.body
     )
 
+  // Color is already spoken for (military/civilian) and so is solidity
+  // (status), so the third distinction is a glyph: internal courses lead with
+  // a diamond, explained in the legend below the grid.
+  const body = (
+    <>
+      {course.internal && <span aria-hidden className="mr-1 opacity-70">◇</span>}
+      {course.label}
+      {tooltip}
+    </>
+  )
+
   return course.href ? (
-    <Link key={course.id} href={course.href} {...chipProps}>
-      {course.label}
-      {tooltip}
-    </Link>
+    <Link key={course.id} href={course.href} {...chipProps}>{body}</Link>
   ) : (
-    <span key={course.id} {...chipProps}>
-      {course.label}
-      {tooltip}
-    </span>
+    <span key={course.id} {...chipProps}>{body}</span>
   )
 }
