@@ -11,6 +11,18 @@ const nextConfig: NextConfig = {
       },
     ]
   },
+  async redirects() {
+    return [
+      // 'Fall Protection & Rope Access' was one offering until Aug 2026 and
+      // has been linked to for years. Rope access is the half people search
+      // for by name, and the old page's photo was a rope access shot.
+      {
+        source: '/services/fall-protection-rope-access',
+        destination: '/services/rope-access',
+        permanent: true,
+      },
+    ]
+  },
   images: {
     minimumCacheTTL: 2678400, // 31 days — replaced images need a new filename/URL
     remotePatterns: [

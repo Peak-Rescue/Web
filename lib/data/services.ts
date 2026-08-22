@@ -310,22 +310,44 @@ export const services: Service[] = [
       'Lock-out/tag-out procedures and rescuer safety protocols',
     ],
   },
+  // Fall protection and rope access were one offering until Aug 2026. They are
+  // two products with two certifications, sold to different people: a 2-day
+  // fall protection class for anyone exposed to a fall, and a 5-day SPRAT
+  // course for technicians who work on rope. Listing them together meant every
+  // fall protection course on the calendar was labelled "Rope Access".
   {
-    slug: 'fall-protection-rope-access',
-    title: 'Fall Protection & Rope Access',
-    shortTitle: 'Rope Access',
+    slug: 'fall-protection',
+    title: 'Fall Protection',
+    shortTitle: 'Fall Protection',
     category: 'industrial',
-    heroImage: '/images/services/fall-protection-rope-access.jpg',
-    tagline: 'Fall protection systems and SPRAT-aligned rope access training for industrial work-at-height.',
+    tagline: 'Fall protection systems, planning, and supervisor training for industrial work-at-height.',
     description:
-      'Covers fall protection and rope access for workers at height. Fall Protection training (2-day) develops proficiency in protection systems, equipment usage, freefall distance calculations, and fall protection planning. Rope Access training offers three SPRAT-certified levels for workers needing rope-based access to elevated worksites.',
+      'Two-day fall protection training for workers exposed to a fall, developing proficiency in protection systems, equipment usage, freefall distance calculations, and fall protection planning. A separate supervisor course covers running the program itself — its components, rescue planning, and incident investigation.',
     details: [
       'Fall hazard identification, protection hierarchy, and guardrail applications',
       'Personal fall arrest systems — harness, lanyard, and anchor selection',
       'Travel restraint, fall restraint, and work positioning systems',
-      'Rope access ascent, descent, changeovers, and obstruction navigation (SPRAT-aligned)',
+      'Freefall distance and clearance calculation, and fall protection planning',
       'Rescue from suspension and elevated position patient lowering',
       'Fall Protection for Supervisors: program components, rescue planning, incident investigation',
+    ],
+  },
+  {
+    slug: 'rope-access',
+    title: 'Rope Access',
+    shortTitle: 'Rope Access',
+    category: 'industrial',
+    heroImage: '/images/services/rope-access.jpg',
+    tagline: 'SPRAT-certified rope access training at three levels for workers who reach the job on rope.',
+    description:
+      'Rope access training for workers needing rope-based access to elevated worksites. Three SPRAT-certified levels take a technician from supervised ascent and descent through rigging and rescue responsibility for a team, trained on real structures with current equipment.',
+    details: [
+      'Ascent, descent, changeovers, and obstruction navigation (SPRAT-aligned)',
+      'Anchor selection, rigging, and rope protection on industrial structures',
+      'Work positioning and aid climbing on rope',
+      'Rescue from suspension and elevated position patient lowering',
+      'Three SPRAT-certified levels, technician through supervisor',
+      'Applicable to tower, facility, confined space, and work-at-height access',
     ],
   },
   {
