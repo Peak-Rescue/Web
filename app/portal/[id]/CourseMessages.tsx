@@ -17,7 +17,7 @@ export type CourseMessage = {
 
 const AUDIENCE_LABEL: Record<MessageAudience, string> = {
   students: 'Students',
-  instructors: 'The crew',
+  instructors: 'The instructors',
   everyone: 'Everyone',
 }
 

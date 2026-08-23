@@ -112,7 +112,7 @@ async function notify(
   )].filter((e) => e.toLowerCase() !== mine)
 
   if (recipients.length === 0) {
-    const who = audience === 'instructors' ? 'nobody else on the crew' : audience === 'students' ? 'nobody enrolled' : 'nobody else on the course'
+    const who = audience === 'instructors' ? 'nobody else instructing' : audience === 'students' ? 'nobody enrolled' : 'nobody else on the course'
     return { recipients: 0, sent: 0, problem: `There is ${who} to email yet, so this is on the course page only.` }
   }
   if (!process.env.RESEND_API_KEY) {

@@ -74,7 +74,7 @@ export default function CalendarChip({
           {course.client && <p className="text-zinc-300 mt-1">{course.client}</p>}
           {course.location && <p className="text-zinc-400">{course.location}</p>}
           {(course.crew?.length ?? 0) > 0 && (
-            <p className="text-zinc-400 mt-1">Crew: {course.crew!.join(', ')}</p>
+            <p className="text-zinc-400 mt-1">Instructors: {course.crew!.join(', ')}</p>
           )}
           <p className="flex items-center gap-1.5 text-zinc-500 mt-1.5">
             <span

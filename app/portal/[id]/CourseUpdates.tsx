@@ -35,7 +35,7 @@ export type NotifyCounts = { students: number; instructors: number; everyone: nu
 
 const AUDIENCE_LABEL: Record<UpdateAudience, string> = {
   students: 'the students',
-  instructors: 'the crew',
+  instructors: 'the instructors',
   everyone: 'the course',
 }
 
@@ -152,11 +152,11 @@ export default function CourseUpdates({
                       </span>
                     )}
                     {/* Only worth saying when it isn't the default. A
-                        crew-only note sitting in a list the students also read
+                        instructors-only note sitting in a list the students also read
                         needs to look different from the ones they can see. */}
                     {canPost && u.audience !== 'everyone' && (
                       <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded-full border border-teal-500/30 bg-teal-500/10 text-teal-300">
-                        {u.audience === 'instructors' ? 'Crew only' : 'Students only'}
+                        {u.audience === 'instructors' ? 'Instructors only' : 'Students only'}
                       </span>
                     )}
                   </div>
@@ -270,10 +270,10 @@ function Composer({
   // two independent yes/nos in the writer's head, and both unticked is simply
   // not offered — the Post button goes dead instead.
   const [toStudents, setToStudents] = useState(initial ? initial.audience !== 'instructors' : true)
-  const [toCrew, setToCrew] = useState(initial ? initial.audience !== 'students' : true)
+  const [toInstructors, setToInstructors] = useState(initial ? initial.audience !== 'students' : true)
   const audience: UpdateAudience =
-    toStudents && toCrew ? 'everyone' : toCrew ? 'instructors' : 'students'
-  const reach = toStudents || toCrew ? notifyCounts[audience] : 0
+    toStudents && toInstructors ? 'everyone' : toInstructors ? 'instructors' : 'students'
+  const reach = toStudents || toInstructors ? notifyCounts[audience] : 0
   const [addingLink, setAddingLink] = useState(false)
   const [linkUrl, setLinkUrl] = useState('')
   const [uploading, setUploading] = useState(false)
@@ -412,12 +412,12 @@ function Composer({
 
         {/* Who it's for, beside the link and file icons rather than above the
             box — it's part of addressing the note, not a setting you go
-            looking for. A crew-only update is hidden from the students as well
+            looking for. An instructors-only update is hidden from the students as well
             as unsent to them, which is why it says "sees" and not "gets". */}
         <span className="ml-auto flex items-center gap-3 text-[11px] text-zinc-500">
           <span className="text-zinc-600">Who sees it</span>
           <Tick label="Students" count={notifyCounts.students} on={toStudents} set={setToStudents} />
-          <Tick label="Crew" count={notifyCounts.instructors} on={toCrew} set={setToCrew} />
+          <Tick label="Instructors" count={notifyCounts.instructors} on={toInstructors} set={setToInstructors} />
         </span>
       </div>
 
@@ -446,7 +446,7 @@ function Composer({
       <div className="flex items-center gap-3 flex-wrap">
         <button
           onClick={() => onSubmit({ body, links, attachments, audience })}
-          disabled={busy || uploading || empty || (!toStudents && !toCrew)}
+          disabled={busy || uploading || empty || (!toStudents && !toInstructors)}
           className="px-3 py-1.5 rounded bg-pr-red hover:bg-pr-red-dark text-white text-sm font-medium transition-colors disabled:opacity-40"
         >
           {busy ? 'Working…' : submitLabel}
@@ -460,7 +460,7 @@ function Composer({
             count is live state, not explanation, so it stays on screen. */}
         {!onCancel && (
           <span className="inline-flex items-center gap-1.5 text-xs text-zinc-500">
-            {!toStudents && !toCrew
+            {!toStudents && !toInstructors
               ? 'Tick who this is for.'
               : reach === 0
                 ? `Nobody in ${AUDIENCE_LABEL[audience]} to email yet — posts to this page only.`
