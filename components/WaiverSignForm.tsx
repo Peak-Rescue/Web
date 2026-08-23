@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import WaiverDocument from '@/components/WaiverDocument'
 import SignatureField from '@/components/SignatureField'
-import { ADULT_AGE, isMinor, type WaiverBody, type WaiverPrefill } from '@/lib/waiver'
+import { ADULT_AGE, isMinor, missingWaiverFields, type WaiverBody, type WaiverPrefill } from '@/lib/waiver'
 
 // The act of signing, wherever it happens.
 //
@@ -69,8 +69,9 @@ export default function WaiverSignForm({
   const field = 'w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500'
   const labelCls = 'block text-xs text-zinc-400 mb-1'
 
+  const missing = missingWaiverFields(form)
   const ready = Boolean(
-    form.firstName.trim() && form.lastName.trim() && form.email.trim() && validDob &&
+    missing.length === 0 &&
     signature && consent &&
     (body.initials_after_clause === null || initials) &&
     (!minor || (guardian.firstName.trim() && guardian.lastName.trim() && guardian.dateOfBirth))
@@ -156,9 +157,9 @@ export default function WaiverSignForm({
       <div>
         <h4 className="text-sm font-semibold text-zinc-300 mb-3">Emergency contact</h4>
         <div className="grid sm:grid-cols-2 gap-3">
-          <div><label className={labelCls}>First name</label><input value={form.emergencyFirstName} onChange={set('emergencyFirstName')} className={field} /></div>
-          <div><label className={labelCls}>Last name</label><input value={form.emergencyLastName} onChange={set('emergencyLastName')} className={field} /></div>
-          <div><label className={labelCls}>Phone</label><input value={form.emergencyPhone} onChange={set('emergencyPhone')} className={field} /></div>
+          <div><label className={labelCls}>First name *</label><input value={form.emergencyFirstName} onChange={set('emergencyFirstName')} className={field} /></div>
+          <div><label className={labelCls}>Last name *</label><input value={form.emergencyLastName} onChange={set('emergencyLastName')} className={field} /></div>
+          <div><label className={labelCls}>Phone *</label><input value={form.emergencyPhone} onChange={set('emergencyPhone')} className={field} /></div>
           <div><label className={labelCls}>Relationship to participant</label><input value={form.emergencyRelationship} onChange={set('emergencyRelationship')} className={field} /></div>
         </div>
       </div>
@@ -166,12 +167,12 @@ export default function WaiverSignForm({
       <div>
         <h4 className="text-sm font-semibold text-zinc-300 mb-3">Participant address</h4>
         <div className="grid sm:grid-cols-2 gap-3">
-          <div className="sm:col-span-2"><label className={labelCls}>Address line 1</label><input value={form.addressLine1} onChange={set('addressLine1')} className={field} /></div>
+          <div className="sm:col-span-2"><label className={labelCls}>Address line 1 *</label><input value={form.addressLine1} onChange={set('addressLine1')} className={field} /></div>
           <div className="sm:col-span-2"><label className={labelCls}>Address line 2</label><input value={form.addressLine2} onChange={set('addressLine2')} className={field} /></div>
-          <div><label className={labelCls}>City</label><input value={form.city} onChange={set('city')} className={field} /></div>
-          <div><label className={labelCls}>State / province</label><input value={form.state} onChange={set('state')} className={field} /></div>
-          <div><label className={labelCls}>ZIP / postal code</label><input value={form.postalCode} onChange={set('postalCode')} className={field} /></div>
-          <div><label className={labelCls}>Country</label><input value={form.country} onChange={set('country')} className={field} /></div>
+          <div><label className={labelCls}>City *</label><input value={form.city} onChange={set('city')} className={field} /></div>
+          <div><label className={labelCls}>State / province *</label><input value={form.state} onChange={set('state')} className={field} /></div>
+          <div><label className={labelCls}>ZIP / postal code *</label><input value={form.postalCode} onChange={set('postalCode')} className={field} /></div>
+          <div><label className={labelCls}>Country *</label><input value={form.country} onChange={set('country')} className={field} /></div>
         </div>
       </div>
 
@@ -218,12 +219,11 @@ export default function WaiverSignForm({
             button to be argued with. */}
         {!ready && !busy && (
           <span className="text-xs text-zinc-500">
-            {!validDob ? 'Add your date of birth'
+            {missing.length > 0 ? `Still needed: ${missing.join(', ')}`
               : minor && !guardian.lastName.trim() ? 'A guardian must complete their details'
               : body.initials_after_clause !== null && !initials ? 'Initial the document above'
               : !signature ? 'Sign above'
-              : !consent ? 'Consent to signing electronically'
-              : 'Fill in the required fields'}
+              : 'Consent to signing electronically'}
           </span>
         )}
       </div>

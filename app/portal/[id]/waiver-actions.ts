@@ -6,7 +6,7 @@ import { headers } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { clientIp } from '@/lib/rate-limit'
-import { isMinor } from '@/lib/waiver'
+import { isMinor, missingFieldsMessage, missingWaiverFields } from '@/lib/waiver'
 import { normalizeEmail } from '@/lib/email'
 import { courseWaiverVersion, loadWaiverPdfData, syncProfileFromWaiver } from '@/lib/waiver-data'
 
@@ -98,17 +98,18 @@ export async function signWaiver(instanceId: string, input: WaiverInput): Promis
   if (!input.esignConsent) {
     throw new Error('Please consent to signing electronically before submitting.')
   }
-  const firstName = trim(input.firstName, 80)
-  const lastName = trim(input.lastName, 80)
-  if (!firstName || !lastName) throw new Error('Please enter your first and last name.')
+  // The same list the form works from, checked again here: a disabled button
+  // is a courtesy, not a control.
+  const missing = missingWaiverFields(input)
+  if (missing.length) throw new Error(missingFieldsMessage(missing))
 
-  const email = trim(input.email, 200)
-  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+  const firstName = trim(input.firstName, 80)!
+  const lastName = trim(input.lastName, 80)!
+  const email = trim(input.email, 200)!
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     throw new Error('Please enter a valid email address for your copy.')
   }
-
-  const dob = trim(input.dateOfBirth, 10)
-  if (!dob || !/^\d{4}-\d{2}-\d{2}$/.test(dob)) throw new Error('Please enter a valid date of birth.')
+  const dob = trim(input.dateOfBirth, 10)!
 
   const signatureImage = requirePng(input.signatureImage, 'signature')
   if (!signatureImage) throw new Error('Please sign before submitting.')

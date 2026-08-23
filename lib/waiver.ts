@@ -178,3 +178,68 @@ export function matchSignature(
 
   return { kind: 'none', suggestions: scored }
 }
+
+// ─── What has to be filled in ───────────────────────────────────────────────
+
+/** The subset of the form that is checked for completeness. */
+export type WaiverFieldValues = {
+  firstName: string
+  lastName: string
+  email: string
+  dateOfBirth: string
+  emergencyFirstName?: string | null
+  emergencyLastName?: string | null
+  emergencyPhone?: string | null
+  addressLine1?: string | null
+  city?: string | null
+  state?: string | null
+  postalCode?: string | null
+  country?: string | null
+}
+
+/**
+ * Which required fields are still empty, named the way the form names them.
+ *
+ * One list, used by the form to decide when submitting is allowed and by both
+ * server paths to refuse a row that got past it. Three copies of this would
+ * drift, and the copy that drifts is the one that lets an incomplete waiver
+ * through.
+ *
+ * The required set follows the document we replaced, asterisk for asterisk:
+ * an emergency contact and a home address are the two things you actually need
+ * from somebody lying at the bottom of a canyon, which is why that form
+ * insisted on them. Relationship and the second address line were optional
+ * there and stay optional here.
+ */
+export function missingWaiverFields(v: WaiverFieldValues): string[] {
+  const missing: string[] = []
+  const need = (value: string | null | undefined, label: string) => {
+    if (!value?.trim()) missing.push(label)
+  }
+
+  need(v.firstName, 'first name')
+  need(v.lastName, 'last name')
+  need(v.email, 'email')
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(v.dateOfBirth?.trim() ?? '')) missing.push('date of birth')
+
+  need(v.emergencyFirstName, 'emergency contact first name')
+  need(v.emergencyLastName, 'emergency contact last name')
+  need(v.emergencyPhone, 'emergency contact phone')
+
+  need(v.addressLine1, 'address')
+  need(v.city, 'city')
+  need(v.state, 'state or province')
+  need(v.postalCode, 'ZIP or postal code')
+  need(v.country, 'country')
+
+  return missing
+}
+
+/** The same list as a sentence, for a server that has to refuse the write. */
+export function missingFieldsMessage(missing: string[]): string {
+  return `Please fill in your ${
+    missing.length > 1
+      ? `${missing.slice(0, -1).join(', ')} and ${missing[missing.length - 1]}`
+      : missing[0]
+  }.`
+}

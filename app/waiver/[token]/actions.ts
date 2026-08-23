@@ -5,7 +5,7 @@ import { headers } from 'next/headers'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { checkRateLimit, clientIp } from '@/lib/rate-limit'
 import { normalizeEmail } from '@/lib/email'
-import { isMinor, matchSignature, type MatchCandidate } from '@/lib/waiver'
+import { isMinor, matchSignature, missingFieldsMessage, missingWaiverFields, type MatchCandidate } from '@/lib/waiver'
 import { loadWaiverPdfData, resolvePublicWaiverToken } from '@/lib/waiver-data'
 import type { WaiverInput } from '@/app/portal/[id]/waiver-actions'
 
@@ -62,14 +62,16 @@ export async function signWaiverPublicly(
   // ─── The same rules the portal applies ────────────────────────────────────
 
   if (!input.esignConsent) throw new Error('Please consent to signing electronically.')
-  const firstName = input.firstName?.trim().slice(0, 80)
-  const lastName = input.lastName?.trim().slice(0, 80)
-  if (!firstName || !lastName) throw new Error('Please enter your first and last name.')
+
+  const missing = missingWaiverFields(input)
+  if (missing.length) throw new Error(missingFieldsMessage(missing))
+
+  const firstName = input.firstName.trim().slice(0, 80)
+  const lastName = input.lastName.trim().slice(0, 80)
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     throw new Error('Please enter a valid email address for your copy.')
   }
-  const dob = input.dateOfBirth?.trim()
-  if (!dob || !/^\d{4}-\d{2}-\d{2}$/.test(dob)) throw new Error('Please enter a valid date of birth.')
+  const dob = input.dateOfBirth.trim()
 
   const signatureImage = input.signatureImage
   if (!signatureImage?.startsWith('data:image/png;base64,')) throw new Error('Please sign before submitting.')
