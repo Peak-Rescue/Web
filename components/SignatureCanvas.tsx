@@ -134,14 +134,12 @@ export default SignatureCanvas
 
 // ─── Typed signatures ───────────────────────────────────────────────────────
 
-/** The handwriting choices, matching the "Change Font" the old waiver offered. */
-export const SIGNATURE_FONTS = [
-  { id: 'brush', label: 'Brush', css: "'Brush Script MT', 'Segoe Script', cursive" },
-  { id: 'formal', label: 'Formal', css: "'Snell Roundhand', 'Apple Chancery', cursive" },
-  { id: 'plain', label: 'Plain', css: "'Georgia', serif" },
-] as const
-
-export type SignatureFontId = (typeof SIGNATURE_FONTS)[number]['id']
+// Plain text, and no menu of alternatives. A typed signature is a person
+// stating their name; dressing it in a script face makes it look like a
+// drawn one without being any more evidence than the letters themselves,
+// and choosing between faces is shopping at the moment someone should be
+// reading the clause above.
+const SIGNATURE_FONT = "system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif"
 
 /**
  * A typed name rendered to the same kind of PNG a drawn one produces, so
@@ -150,7 +148,6 @@ export type SignatureFontId = (typeof SIGNATURE_FONTS)[number]['id']
  */
 export function renderTypedSignature(
   text: string,
-  fontId: SignatureFontId,
   { width = 420, height = 120 }: { width?: number; height?: number } = {}
 ): string | null {
   if (!text.trim()) return null
@@ -166,13 +163,12 @@ export function renderTypedSignature(
   ctx.fillStyle = '#111'
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
-  const family = SIGNATURE_FONTS.find((f) => f.id === fontId)?.css ?? 'cursive'
 
   // Shrink to fit rather than overflow: long names are common and a signature
   // clipped at the edge of the box looks like a rendering bug on the PDF.
   let size = Math.round(height * 0.5)
   do {
-    ctx.font = `${size}px ${family}`
+    ctx.font = `${size}px ${SIGNATURE_FONT}`
     if (ctx.measureText(text).width <= width - 24) break
     size -= 2
   } while (size > 12)
@@ -180,3 +176,4 @@ export function renderTypedSignature(
   ctx.fillText(text, width / 2, height / 2)
   return canvas.toDataURL('image/png')
 }
+

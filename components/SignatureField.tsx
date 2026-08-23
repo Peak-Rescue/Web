@@ -3,9 +3,7 @@
 import { useRef, useState } from 'react'
 import SignatureCanvas, {
   renderTypedSignature,
-  SIGNATURE_FONTS,
   type SignatureCanvasHandle,
-  type SignatureFontId,
 } from './SignatureCanvas'
 
 // Sign by typing or by drawing, the same two ways the waiver has always
@@ -54,7 +52,6 @@ export default function SignatureField({
 
   const [mode, setMode] = useState<'type' | 'draw'>('type')
   const [typed, setTyped] = useState('')
-  const [font, setFont] = useState<SignatureFontId>('brush')
   // What they have made so far, not yet committed. The parent doesn't see it.
   const [draft, setDraft] = useState<string | null>(null)
   const canvasRef = useRef<SignatureCanvasHandle>(null)
@@ -63,10 +60,9 @@ export default function SignatureField({
   const height = initials ? 100 : 120
   const noun = initials ? 'initials' : 'signature'
 
-  function retype(text: string, fontId: SignatureFontId) {
+  function retype(text: string) {
     setTyped(text)
-    setFont(fontId)
-    setDraft(renderTypedSignature(text, fontId, { width, height }))
+    setDraft(renderTypedSignature(text, { width, height }))
   }
 
   function clear() {
@@ -133,42 +129,15 @@ export default function SignatureField({
         <>
           <input
             value={typed}
-            onChange={(e) => retype(e.target.value, font)}
+            onChange={(e) => retype(e.target.value)}
             placeholder={initials ? 'Your initials' : (suggestedText ?? 'Your full name')}
             aria-label={`Type your ${noun}`}
-            // Shown in the hand it will be drawn in, so choosing a style is a
-            // thing you can see rather than guess at.
-            style={{
-              fontFamily: SIGNATURE_FONTS.find((f) => f.id === font)?.css,
-              fontSize: '1.4rem',
-            }}
-            className={`w-full rounded px-3 py-2 focus:outline-none ${input}`}
+            className={`w-full rounded px-3 py-2 text-sm focus:outline-none ${input}`}
           />
-          {/* Style is offered for a signature and not for initials. Two or three
-              letters carry no handwriting worth choosing, so the picker is
-              three buttons of clutter in the middle of the document. */}
-          {!initials && (
-          <div className="flex items-center gap-2 mt-3 flex-wrap">
-            <span className={`text-xs ${muted}`}>Style</span>
-            {SIGNATURE_FONTS.map((f) => (
-              <button
-                key={f.id}
-                type="button"
-                onClick={() => retype(typed, f.id)}
-                style={{ fontFamily: f.css }}
-                className={`px-3 py-1 rounded text-sm transition-colors ${
-                  font === f.id ? tabOn : tabOff
-                }`}
-              >
-                {f.label}
-              </button>
-            ))}
-          </div>
-          )}
           {suggestedText && !typed && !initials && (
             <button
               type="button"
-              onClick={() => retype(suggestedText, font)}
+              onClick={() => retype(suggestedText)}
               className={`mt-3 text-xs underline transition-colors ${muted} hover:opacity-80`}
             >
               Use “{suggestedText}”
