@@ -173,7 +173,7 @@ export default function SignatureField({
       ) : (
         <>
           <p className={`text-xs mb-2 ${muted}`}>
-            Finger, stylus or mouse — take as many strokes as you need.
+            Finger, stylus or mouse.
           </p>
           <SignatureCanvas
             ref={canvasRef}
@@ -205,11 +205,6 @@ export default function SignatureField({
         >
           Clear
         </button>
-        {!draft && (
-          <span className={`text-xs ${muted}`}>
-            {mode === 'type' ? `Type your ${noun} above` : `Draw your ${noun} above`}
-          </span>
-        )}
       </div>
     </div>
   )
