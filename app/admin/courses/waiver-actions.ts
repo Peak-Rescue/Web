@@ -79,69 +79,6 @@ export async function setCourseWaiver(instanceId: string, templateId: string | n
   revalidatePath(`/portal/${instanceId}`)
 }
 
-// ─── The course QR code ─────────────────────────────────────────────────────
-
-const siteUrl = () => process.env.NEXT_PUBLIC_SITE_URL || 'https://peak-rescue.com'
-
-/**
- * Mint (or replace) the code an instructor holds up at the tailgate.
- *
- * One per course, not one per person: it is shown from a phone to whoever is
- * standing there, and a code per head would defeat the point. Replacing it
- * kills the old one immediately, which is what makes a printed sheet from a
- * finished course safe to leave in a truck.
- */
-export async function generateWaiverQr(
-  instanceId: string,
-  expiresInDays?: number | 'never'
-): Promise<{ token: string; url: string }> {
-  const admin = await requireAdmin()
-
-  const { data: course } = await admin
-    .from('course_instances')
-    .select('waiver_template_id, ends_at')
-    .eq('id', instanceId)
-    .single()
-  // A code that opens a page with nothing to sign wastes somebody's time at
-  // the worst possible moment.
-  if (!course?.waiver_template_id) {
-    throw new Error('Choose a waiver for this course first — there would be nothing to sign.')
-  }
-
-  // Defaults to a week past the course, matching the invite links: long enough
-  // for a late signer, short enough that an old screenshot stops working.
-  let expiresAt: string | null = null
-  if (expiresInDays === undefined) {
-    const end = course.ends_at ? new Date(`${course.ends_at}T00:00:00`) : new Date()
-    end.setDate(end.getDate() + 7)
-    expiresAt = end.toISOString()
-  } else if (expiresInDays !== 'never') {
-    const d = new Date()
-    d.setDate(d.getDate() + expiresInDays)
-    expiresAt = d.toISOString()
-  }
-
-  const token = crypto.randomUUID()
-  const { error } = await admin
-    .from('course_instances')
-    .update({ waiver_token: token, waiver_token_expires_at: expiresAt })
-    .eq('id', instanceId)
-  if (error) throw new Error(error.message)
-
-  revalidatePath(`/admin/courses/${instanceId}`)
-  return { token, url: `${siteUrl()}/waiver/${token}` }
-}
-
-export async function revokeWaiverQr(instanceId: string): Promise<void> {
-  const admin = await requireAdmin()
-  const { error } = await admin
-    .from('course_instances')
-    .update({ waiver_token: null, waiver_token_expires_at: null })
-    .eq('id', instanceId)
-  if (error) throw new Error(error.message)
-  revalidatePath(`/admin/courses/${instanceId}`)
-}
-
 // ─── Working the unmatched queue ────────────────────────────────────────────
 
 /**

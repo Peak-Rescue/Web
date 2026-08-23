@@ -17,6 +17,7 @@ import CourseNotes from './CourseNotes'
 import type { UpdateAudience } from './update-actions'
 import CourseMessages, { type CourseMessage } from './CourseMessages'
 import WaiverPanel from './WaiverPanel'
+import WaiverQrPanel, { type WaiverQr } from '@/components/WaiverQrPanel'
 import { loadStudentWaiver } from '@/lib/waiver-data'
 import { Section, SubHead, InstructorCard, StudentCard, SECTION_LABEL, type SectionKey } from './sections'
 import { PURPOSE_META, PURPOSE_ORDER, linkLabel, type CourseLink } from '@/lib/course-links'
@@ -112,7 +113,7 @@ export default async function CourseView({
   const [{ data: inst }, { data: offDays }, { data: modules }, { data: instructors }, taskRows, { data: peopleRows }, { data: templateRows }, { data: courseDocRows }, { data: taskDocRows }, { data: mapRows }, { data: resourceRows }, { data: linkRows }, { data: updateRows }, { data: enrollmentRows }, { data: messageRows }] =
     await Promise.all([
       admin.from('course_instances')
-        .select('course_type, custom_title, status, location, client_name, notes, ref_number, starts_at, ends_at, meeting_point, meeting_time, intro, max_students, internal, waiver_template_id')
+        .select('course_type, custom_title, status, location, client_name, notes, ref_number, starts_at, ends_at, meeting_point, meeting_time, intro, max_students, internal, waiver_template_id, waiver_token, waiver_token_expires_at')
         .eq('id', id)
         .single(),
       admin.from('instance_off_days')
@@ -434,6 +435,20 @@ export default async function CourseView({
         .not('enrollment_id', 'is', null)
         .order('signed_at', { ascending: false })
     : { data: [] }
+  // The code an instructor holds up at the trailhead, rendered here because
+  // that is the page they have open — the admin editor is somewhere they may
+  // not be able to reach and, more to the point, aren't standing in front of.
+  let waiverQr: WaiverQr | null = null
+  if (showTasks && inst.waiver_token) {
+    const url = `${process.env.NEXT_PUBLIC_SITE_URL || 'https://peak-rescue.com'}/waiver/${inst.waiver_token}`
+    const QRCode = (await import('qrcode')).default
+    waiverQr = {
+      url,
+      svg: await QRCode.toString(url, { type: 'svg', margin: 1, width: 148 }),
+      expiresAt: (inst.waiver_token_expires_at as string | null) ?? null,
+    }
+  }
+
   const signedByEnrollment = new Map<string, { unverified: boolean }>()
   for (const r of (rosterSigRows ?? []) as { enrollment_id: string; identity: string }[]) {
     if (!signedByEnrollment.has(r.enrollment_id)) {
@@ -780,6 +795,16 @@ export default async function CourseView({
                   ', which the office sends to the client contact.'
                 )}
               </p>
+            )}
+
+            {showTasks && (
+              <div className="mt-4 pt-4 border-t border-zinc-800">
+                <WaiverQrPanel
+                  instanceId={id}
+                  qr={waiverQr}
+                  hasWaiver={Boolean(inst.waiver_template_id)}
+                />
+              </div>
             )}
           </Section>
         )}

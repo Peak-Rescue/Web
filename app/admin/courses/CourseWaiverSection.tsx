@@ -4,8 +4,9 @@ import Link from 'next/link'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import InfoHint from '@/components/InfoHint'
+import WaiverQrPanel, { type WaiverQr } from '@/components/WaiverQrPanel'
 import {
-  generateWaiverQr, linkWaiverSignature, revokeWaiverQr, setCourseWaiver, unlinkWaiverSignature,
+  linkWaiverSignature, setCourseWaiver, unlinkWaiverSignature,
   type WaiverTemplateOption,
 } from './waiver-actions'
 
@@ -52,15 +53,12 @@ export default function CourseWaiverSection({
   selectedId: string | null
   roster: WaiverRosterRow[]
   /** The course code, once one exists: its link, the rendered QR, and when it dies. */
-  qr: { url: string; svg: string; expiresAt: string | null } | null
+  qr: WaiverQr | null
   unmatched: UnmatchedWaiver[]
 }) {
   const router = useRouter()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-
-  const [copied, setCopied] = useState(false)
-  const [showQr, setShowQr] = useState(false)
 
   const signed = roster.filter((r) => r.signature)
   const outstanding = roster.length - signed.length
@@ -182,82 +180,8 @@ export default function CourseWaiverSection({
             </div>
           )}
 
-          {/* The code for whoever turns up without a login. Folded away by
-              default: it is the exception, and a QR sitting open on the page
-              invites use of the weaker path when the better one is available. */}
           <div className="mt-4 pt-4 border-t border-zinc-800">
-            <button
-              onClick={() => setShowQr((v) => !v)}
-              className="text-xs text-zinc-400 hover:text-zinc-200 transition-colors"
-            >
-              {showQr ? '▾' : '▸'} Signing without a login {qr ? '· code active' : ''}
-            </button>
-
-            {showQr && (
-              <div className="mt-3">
-                <p className="text-xs text-zinc-500 mb-3">
-                  For someone added at the last minute, or who can’t get into the portal. They still
-                  sign the same waiver — but it records that nobody was logged in, and it has to be
-                  matched to a person afterwards.
-                </p>
-
-                {qr ? (
-                  <div className="flex flex-wrap items-start gap-4">
-                    <div
-                      className="bg-white p-2 rounded shrink-0"
-                      // Rendered on the server by the qrcode library; no user
-                      // input reaches it, only a token we generated.
-                      dangerouslySetInnerHTML={{ __html: qr.svg }}
-                    />
-                    <div className="min-w-0 space-y-2">
-                      <p className="text-xs text-zinc-400 break-all">{qr.url}</p>
-                      <p className="text-[11px] text-zinc-500">
-                        {qr.expiresAt
-                          ? `Stops working ${new Date(qr.expiresAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
-                          : 'Never expires'}
-                      </p>
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          onClick={async () => {
-                            await navigator.clipboard.writeText(qr.url)
-                            setCopied(true)
-                            setTimeout(() => setCopied(false), 2000)
-                          }}
-                          className="px-3 py-1.5 rounded text-xs font-medium bg-zinc-700 hover:bg-zinc-600 text-zinc-200 transition-colors"
-                        >
-                          {copied ? 'Copied' : 'Copy link'}
-                        </button>
-                        <button
-                          disabled={busy}
-                          onClick={() => run(() => generateWaiverQr(instanceId))}
-                          className="px-3 py-1.5 rounded text-xs font-medium bg-zinc-800 hover:bg-zinc-700 text-zinc-300 disabled:opacity-50 transition-colors"
-                        >
-                          Replace
-                        </button>
-                        <button
-                          disabled={busy}
-                          onClick={() => run(() => revokeWaiverQr(instanceId))}
-                          className="px-3 py-1.5 rounded text-xs font-medium text-zinc-400 hover:text-pr-red-light disabled:opacity-50 transition-colors"
-                        >
-                          Turn off
-                        </button>
-                      </div>
-                      <p className="text-[11px] text-zinc-600">
-                        Replacing kills the old code straight away.
-                      </p>
-                    </div>
-                  </div>
-                ) : (
-                  <button
-                    disabled={busy}
-                    onClick={() => run(() => generateWaiverQr(instanceId))}
-                    className="px-4 py-2 rounded text-sm font-medium bg-zinc-700 hover:bg-zinc-600 text-zinc-200 disabled:opacity-50 transition-colors"
-                  >
-                    Create a QR code
-                  </button>
-                )}
-              </div>
-            )}
+            <WaiverQrPanel instanceId={instanceId} qr={qr} hasWaiver={Boolean(selectedId)} />
           </div>
 
           {/* Anything the matcher wouldn't decide. Always shown when it isn't
