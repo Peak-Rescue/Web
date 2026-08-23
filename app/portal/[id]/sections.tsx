@@ -14,6 +14,7 @@ export type SectionKey =
   | 'schedule'
   | 'curriculum'
   | 'resources'
+  | 'waiver'
   | 'gear'
   | 'documents'
   | 'roster'
@@ -56,6 +57,14 @@ export const SECTION_ICON: Record<SectionKey, React.ReactElement> = {
   gear: (
     <path d="M6 2h12l-1 7H7L6 2ZM7 9h10l1.5 11a2 2 0 0 1-2 2h-9a2 2 0 0 1-2-2L7 9ZM10 13h4" />
   ),
+  // A page with a signature across it. Deliberately not the 'documents' page
+  // glyph: what marks this one out is that you have to do something to it.
+  waiver: (
+    <>
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6" />
+      <path d="M8 17c1.2-2.5 2.2-2.5 3 0s1.8 2.5 3 0" />
+    </>
+  ),
   documents: (
     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M16 13H8M16 17H8" />
   ),
@@ -88,6 +97,7 @@ export const SECTION_LABEL: Record<SectionKey, string> = {
   schedule: 'Schedule',
   curriculum: 'Curriculum',
   resources: 'Resources',
+  waiver: 'Waiver',
   gear: 'Gear',
   documents: 'Documents',
   roster: 'Roster',

@@ -16,6 +16,8 @@ import CourseUpdates, { type CourseUpdate, type NotifyCounts } from './CourseUpd
 import CourseNotes from './CourseNotes'
 import type { UpdateAudience } from './update-actions'
 import CourseMessages, { type CourseMessage } from './CourseMessages'
+import WaiverPanel from './WaiverPanel'
+import { loadStudentWaiver } from '@/lib/waiver-data'
 import { Section, SubHead, InstructorCard, StudentCard, SECTION_LABEL, type SectionKey } from './sections'
 import { PURPOSE_META, PURPOSE_ORDER, linkLabel, type CourseLink } from '@/lib/course-links'
 
@@ -438,6 +440,14 @@ export default async function CourseView({
     everyone: new Set([...studentAddresses, ...crewAddresses]).size,
   }
 
+  // The viewer's own waiver. Only ever their own — a waiver carries a date of
+  // birth and a home address, so the course page shows you yours and nobody
+  // else's. Staff track who has signed from the admin side.
+  //
+  // Skipped for a share-link guest (no account to be enrolled by) and while an
+  // admin previews as a student, where "your waiver" would be a fiction.
+  const waiver = userId && !viewAs ? await loadStudentWaiver(id, userId) : null
+
   const hasUpdates = canPostUpdates || courseUpdates.length > 0
   const hasDocuments = showTasks && courseDocs.length > 0
   // Shown to staff even when empty: "nobody has enrolled yet" is the answer an
@@ -454,6 +464,7 @@ export default async function CourseView({
     'details',
     // Team blocks lead for staff; students only ever get the four below them.
     hasUpdates && 'updates',
+    waiver && 'waiver',
     showTasks && 'message',
     hasRoster && 'roster',
     hasNotes && 'notes',
@@ -654,6 +665,29 @@ export default async function CourseView({
               updates={courseUpdates.map((u) => ({ ...u, isNew: isNew(u) }))}
               canPost={canPostUpdates}
               notifyCounts={notifyCounts}
+            />
+          </Section>
+        )}
+
+        {/* The waiver, for the person who has to sign it. Sits near the top
+            rather than down with the reference material because it is the only
+            thing on this page a student is asked to *do*, and an unsigned one
+            found on the morning of day one is everybody's problem. */}
+        {waiver && (
+          <Section
+            id="waiver"
+            blurb={
+              waiver.signed
+                ? 'Signed — your copy of the agreement'
+                : 'Please read and sign before the course starts'
+            }
+          >
+            <WaiverPanel
+              instanceId={id}
+              body={waiver.version.body}
+              templateName={waiver.version.templateName}
+              prefill={waiver.prefill}
+              signed={waiver.signed}
             />
           </Section>
         )}

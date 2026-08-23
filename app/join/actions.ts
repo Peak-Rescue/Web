@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { checkRateLimit, clientIp } from '@/lib/rate-limit'
 import { ilikeExact, normalizeEmail } from '@/lib/email'
+import { claimWaiversForEmail } from '@/lib/waiver-data'
 import { findUserIdByEmail, sendSignInCode } from '@/lib/sign-in-code'
 import { courseDisplayName } from '@/lib/courses'
 
@@ -62,7 +63,7 @@ async function openInvite(
   return { ok: true, instance: inst }
 }
 
-async function enroll(admin: Admin, instanceId: string, userId: string) {
+async function enroll(admin: Admin, instanceId: string, userId: string, email?: string) {
   const { error } = await admin
     .from('enrollments')
     .upsert(
@@ -70,6 +71,21 @@ async function enroll(admin: Admin, instanceId: string, userId: string) {
       { onConflict: 'instance_id,user_id', ignoreDuplicates: true }
     )
   if (error) throw new Error(error.message)
+
+  // A waiver signed at the tailgate under this address, before there was an
+  // account to attach it to, now finds its person. Runs after the enrollment
+  // exists so it has a seat to point at.
+  //
+  // Never allowed to break joining: somebody standing at the start of a course
+  // needs their seat more than they need the paperwork tidied, and an
+  // unclaimed waiver is still a valid signed waiver an admin can attach later.
+  if (email) {
+    try {
+      await claimWaiversForEmail(userId, email, admin)
+    } catch (err) {
+      console.error('Claiming waivers failed for', email, err)
+    }
+  }
 }
 
 // Signs the browser in without ever putting a token in an email. We mint a
@@ -201,7 +217,7 @@ export async function joinCourse(
         })
 
     if (created?.user) {
-      await enroll(admin, instance.id, created.user.id)
+      await enroll(admin, instance.id, created.user.id, normalizedEmail)
 
       if (await startSession(admin, normalizedEmail)) {
         await sendEnrolledReceipt(normalizedEmail, first, instance)
@@ -231,7 +247,7 @@ export async function joinCourse(
       return { ok: false, error: 'Something went wrong. Please try again.' }
     }
 
-    await enroll(admin, instance.id, userId)
+    await enroll(admin, instance.id, userId, normalizedEmail)
     await sendEnrolledReceipt(normalizedEmail, first, instance)
 
     const mailError = await sendSignInCode(admin, normalizedEmail)
@@ -264,7 +280,9 @@ export async function joinAsCurrentUser(token: string): Promise<JoinResult> {
   if (!invite.ok) return invite
 
   try {
-    await enroll(admin, invite.instance.id, user.id)
+    // Their own address off the session — a returning student who signed at a
+    // tailgate under it gets that waiver attached as they take their seat.
+    await enroll(admin, invite.instance.id, user.id, user.email ?? undefined)
     return { ok: true, signedIn: true }
   } catch (err) {
     console.error('joinAsCurrentUser failed:', err instanceof Error ? err.message : err)
