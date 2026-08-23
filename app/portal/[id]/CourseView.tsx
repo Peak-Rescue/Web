@@ -14,7 +14,7 @@ import { AudiencePills } from '@/components/AudiencePills'
 import PortalSectionNav from './PortalSectionNav'
 import CourseUpdates, { type CourseUpdate } from './CourseUpdates'
 import CourseMessages, { type CourseMessage } from './CourseMessages'
-import { Section, SubHead, InstructorCard, SECTION_LABEL, type SectionKey } from './sections'
+import { Section, SubHead, InstructorCard, StudentCard, SECTION_LABEL, type SectionKey } from './sections'
 import { PURPOSE_META, PURPOSE_ORDER, linkLabel, type CourseLink } from '@/lib/course-links'
 
 // Status is a sales/ops state — "quoted", "confirmed" — and means nothing to a
@@ -105,10 +105,10 @@ export default async function CourseView({
     modulesQuery = modulesQuery.in('audience', audienceFilter)
   }
 
-  const [{ data: inst }, { data: offDays }, { data: modules }, { data: instructors }, taskRows, { data: peopleRows }, { data: templateRows }, { data: courseDocRows }, { data: taskDocRows }, { data: mapRows }, { data: resourceRows }, { data: linkRows }, { data: updateRows }, { count: enrolledCount }, { data: messageRows }] =
+  const [{ data: inst }, { data: offDays }, { data: modules }, { data: instructors }, taskRows, { data: peopleRows }, { data: templateRows }, { data: courseDocRows }, { data: taskDocRows }, { data: mapRows }, { data: resourceRows }, { data: linkRows }, { data: updateRows }, { data: enrollmentRows }, { data: messageRows }] =
     await Promise.all([
       admin.from('course_instances')
-        .select('course_type, custom_title, status, location, client_name, notes, ref_number, starts_at, ends_at, meeting_point, meeting_time, intro, max_students')
+        .select('course_type, custom_title, status, location, client_name, notes, ref_number, starts_at, ends_at, meeting_point, meeting_time, intro, max_students, internal')
         .eq('id', id)
         .single(),
       admin.from('instance_off_days')
@@ -155,10 +155,15 @@ export default async function CourseView({
         .select('id, body, created_at, updated_at, created_by, sent_count, recipient_count, notify_count, emailed_at, links, attachments, profiles(first_name, last_name)')
         .eq('instance_id', id)
         .order('created_at', { ascending: false }),
-      // Only needed to say "emails 12 students" before the button is pressed.
+      // The roster. Staff-only, and the same read answers both questions the
+      // page asks of it: who is on the course, and how many inboxes "emails 12
+      // students" is promising before the button is pressed.
       showTasks
-        ? admin.from('enrollments').select('id', { count: 'exact', head: true }).eq('instance_id', id)
-        : Promise.resolve({ count: 0 }),
+        ? admin.from('enrollments')
+            .select('id, enrolled_at, profiles(first_name, last_name, email, phone)')
+            .eq('instance_id', id)
+            .order('enrolled_at')
+        : Promise.resolve({ data: [] }),
       // The outbox — staff only, and never loaded for a student.
       showTasks
         ? admin.from('course_messages')
@@ -382,8 +387,29 @@ export default async function CourseView({
       .filter(Boolean)
       .map((e) => e!.trim().toLowerCase())
   ).size
+  // The roster, in the order people enrolled. Names come from the profile the
+  // student made on the invite link, so a half-filled one is normal and the
+  // row says so rather than rendering a blank.
+  const roster = ((enrollmentRows ?? []) as unknown as {
+    id: string; enrolled_at: string | null
+    profiles: { first_name: string | null; last_name: string | null; email: string | null; phone: string | null } | null
+  }[]).map((e) => ({
+    id: e.id,
+    name: [e.profiles?.first_name, e.profiles?.last_name].filter(Boolean).join(' ').trim() || 'Unnamed',
+    email: e.profiles?.email ?? null,
+    phone: e.profiles?.phone ?? null,
+    enrolledAt: e.enrolled_at,
+  }))
+  const enrolledCount = roster.length
+
   const hasUpdates = canPostUpdates || courseUpdates.length > 0
   const hasDocuments = showTasks && courseDocs.length > 0
+  // Shown to staff even when empty: "nobody has enrolled yet" is the answer an
+  // instructor came for, and a missing section reads as a missing feature. The
+  // exception is an internal course, where the attendees are the crew already
+  // named at the top of the page — unless somebody did enroll, in which case
+  // hiding them would be hiding the truth.
+  const hasRoster = showTasks && (!inst.internal || roster.length > 0)
   const hasTasks = showTasks && (tasks.length > 0 || canManageTasks)
 
   const navSections = ([
@@ -393,6 +419,7 @@ export default async function CourseView({
     // Team blocks lead for staff; students only ever get the four below them.
     hasUpdates && 'updates',
     showTasks && 'message',
+    hasRoster && 'roster',
     hasNotes && 'notes',
     hasTasks && 'tasks',
     hasDocuments && 'documents',
@@ -404,7 +431,7 @@ export default async function CourseView({
   ].filter(Boolean) as SectionKey[]).map((id) => ({
     id,
     label: SECTION_LABEL[id],
-    team: id === 'notes' || id === 'tasks' || id === 'documents' || id === 'message',
+    team: id === 'notes' || id === 'tasks' || id === 'documents' || id === 'message' || id === 'roster',
     unread: id === 'updates' && unreadUpdates > 0,
   }))
 
@@ -589,7 +616,7 @@ export default async function CourseView({
               instanceId={id}
               updates={courseUpdates.map((u) => ({ ...u, isNew: isNew(u) }))}
               canPost={canPostUpdates}
-              enrolledCount={enrolledCount ?? 0}
+              enrolledCount={enrolledCount}
             />
           </Section>
         )}
@@ -601,9 +628,54 @@ export default async function CourseView({
             <CourseMessages
               instanceId={id}
               messages={courseMessages}
-              studentCount={enrolledCount ?? 0}
+              studentCount={enrolledCount}
               instructorCount={crewCount}
             />
+          </Section>
+        )}
+
+        {/* Roster (team only) — who is actually on the course. The course
+            editor has had this all along, but only admins can open it, so an
+            instructor had no way to see the names of the people they were
+            about to meet. */}
+        {hasRoster && (
+          <Section
+            id="roster"
+            blurb={
+              inst.max_students
+                ? `${enrolledCount} of ${inst.max_students} places taken`
+                : `${enrolledCount} enrolled`
+            }
+            team
+          >
+            {roster.length > 0 ? (
+              <div className="grid sm:grid-cols-2 gap-2">
+                {roster.map((student) => (
+                  <StudentCard
+                    key={student.id}
+                    name={student.name}
+                    email={student.email}
+                    phone={student.phone}
+                    enrolledAt={student.enrolledAt}
+                  />
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-zinc-500">
+                Nobody has enrolled yet. Students join through the invite link
+                {isAdmin ? (
+                  <>
+                    {' '}on the{' '}
+                    <Link href={`/admin/courses/${id}`} className="text-zinc-300 hover:text-white underline underline-offset-2">
+                      course editor
+                    </Link>
+                    .
+                  </>
+                ) : (
+                  ', which the office sends to the client contact.'
+                )}
+              </p>
+            )}
           </Section>
         )}
 

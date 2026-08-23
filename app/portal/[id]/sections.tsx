@@ -16,6 +16,7 @@ export type SectionKey =
   | 'resources'
   | 'gear'
   | 'documents'
+  | 'roster'
   | 'tasks'
   | 'notes'
   | 'updates'
@@ -58,6 +59,15 @@ export const SECTION_ICON: Record<SectionKey, React.ReactElement> = {
   documents: (
     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M16 13H8M16 17H8" />
   ),
+  // Two figures, not one: the roster is the group on the course, and the
+  // single-person glyph is already what an avatar slot means elsewhere.
+  roster: (
+    <>
+      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+      <path d="M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" />
+      <path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
+    </>
+  ),
   tasks: (
     <path d="M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
   ),
@@ -80,6 +90,7 @@ export const SECTION_LABEL: Record<SectionKey, string> = {
   resources: 'Resources',
   gear: 'Gear',
   documents: 'Documents',
+  roster: 'Roster',
   tasks: 'Tasks',
   notes: 'Notes',
   updates: 'Updates',
@@ -253,5 +264,60 @@ export function InstructorCard({
     <Link href={`/team/${slug}`} className={`${box} group hover:border-zinc-600 transition-colors`}>
       {inner}
     </Link>
+  )
+}
+
+/**
+ * A student on the course, for the team's roster. Deliberately not an
+ * InstructorCard: there is no bio page to link to and no role to spell out —
+ * what an instructor wants off this row is a way to reach the person, so the
+ * email and phone are live links rather than text to copy out.
+ */
+export function StudentCard({
+  name,
+  email,
+  phone,
+  enrolledAt,
+}: {
+  name: string
+  email?: string | null
+  phone?: string | null
+  enrolledAt?: string | null
+}) {
+  const initials = name
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((p) => p[0])
+    .join('')
+    .toUpperCase()
+
+  return (
+    <div className="flex items-center gap-2.5 px-3 py-2 rounded-lg border border-zinc-800 bg-zinc-900">
+      <span className="grid place-items-center w-9 h-9 rounded-full bg-zinc-800 text-zinc-400 text-xs font-semibold shrink-0">
+        {initials || '?'}
+      </span>
+      <div className="min-w-0">
+        <div className="text-sm font-medium leading-tight truncate">{name}</div>
+        <div className="text-[11px] text-zinc-500 leading-tight truncate">
+          {email && (
+            <a href={`mailto:${email}`} className="hover:text-zinc-300 transition-colors">
+              {email}
+            </a>
+          )}
+          {email && phone && <span className="text-zinc-700"> · </span>}
+          {phone && (
+            <a href={`tel:${phone}`} className="hover:text-zinc-300 transition-colors">
+              {phone}
+            </a>
+          )}
+          {!email && !phone && 'No contact details on file'}
+        </div>
+      </div>
+      {enrolledAt && (
+        <span className="ml-auto shrink-0 text-[11px] text-zinc-600">
+          Joined {new Date(enrolledAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+        </span>
+      )}
+    </div>
   )
 }
