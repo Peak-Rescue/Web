@@ -444,9 +444,11 @@ export default async function CourseView({
   // birth and a home address, so the course page shows you yours and nobody
   // else's. Staff track who has signed from the admin side.
   //
-  // Skipped for a share-link guest (no account to be enrolled by) and while an
-  // admin previews as a student, where "your waiver" would be a fiction.
-  const waiver = userId && !viewAs ? await loadStudentWaiver(id, userId) : null
+  // Skipped only for a share-link guest, who has no account to be enrolled by.
+  // Being enrolled is the whole gate — an admin previewing as a student is
+  // still the person whose waiver it is, and hiding it there is how you end up
+  // testing the feature and concluding it doesn't work.
+  const waiver = userId ? await loadStudentWaiver(id, userId) : null
 
   const hasUpdates = canPostUpdates || courseUpdates.length > 0
   const hasDocuments = showTasks && courseDocs.length > 0
