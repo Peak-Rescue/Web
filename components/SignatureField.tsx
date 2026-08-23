@@ -144,6 +144,10 @@ export default function SignatureField({
             }}
             className={`w-full rounded px-3 py-2 focus:outline-none ${input}`}
           />
+          {/* Style is offered for a signature and not for initials. Two or three
+              letters carry no handwriting worth choosing, so the picker is
+              three buttons of clutter in the middle of the document. */}
+          {!initials && (
           <div className="flex items-center gap-2 mt-3 flex-wrap">
             <span className={`text-xs ${muted}`}>Style</span>
             {SIGNATURE_FONTS.map((f) => (
@@ -160,6 +164,7 @@ export default function SignatureField({
               </button>
             ))}
           </div>
+          )}
           {suggestedText && !typed && !initials && (
             <button
               type="button"
