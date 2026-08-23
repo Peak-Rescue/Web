@@ -18,6 +18,8 @@ import type { UpdateAudience } from './update-actions'
 import CourseMessages, { type CourseMessage } from './CourseMessages'
 import WaiverPanel from './WaiverPanel'
 import WaiverQrPanel, { type WaiverQr } from '@/components/WaiverQrPanel'
+import UnmatchedWaivers from '@/components/UnmatchedWaivers'
+import { loadUnmatchedWaivers } from '@/lib/waiver-data'
 import { loadStudentWaiver } from '@/lib/waiver-data'
 import { Section, SubHead, InstructorCard, StudentCard, SECTION_LABEL, type SectionKey } from './sections'
 import { PURPOSE_META, PURPOSE_ORDER, linkLabel, type CourseLink } from '@/lib/course-links'
@@ -449,6 +451,13 @@ export default async function CourseView({
     }
   }
 
+  // Walk-ups the matcher wouldn't decide on. Loaded for staff beside the QR
+  // that creates them, so the person who ran the code is the one who resolves
+  // what it couldn't work out.
+  const unmatchedWaivers = showTasks && inst.waiver_template_id
+    ? await loadUnmatchedWaivers(id, admin)
+    : []
+
   const signedByEnrollment = new Map<string, { unverified: boolean }>()
   for (const r of (rosterSigRows ?? []) as { enrollment_id: string; identity: string }[]) {
     if (!signedByEnrollment.has(r.enrollment_id)) {
@@ -795,6 +804,12 @@ export default async function CourseView({
                   ', which the office sends to the client contact.'
                 )}
               </p>
+            )}
+
+            {showTasks && unmatchedWaivers.length > 0 && (
+              <div className="mt-4 pt-4 border-t border-zinc-800">
+                <UnmatchedWaivers instanceId={id} unmatched={unmatchedWaivers} />
+              </div>
             )}
 
             {showTasks && (

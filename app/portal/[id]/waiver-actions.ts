@@ -321,3 +321,77 @@ export async function revokeWaiverQr(instanceId: string): Promise<void> {
   revalidatePath(`/admin/courses/${instanceId}`)
   revalidatePath(`/portal/${instanceId}`)
 }
+
+// ─── Working the unmatched queue ────────────────────────────────────────────
+//
+// Also the instructor's, and for the same reason the QR is: a walk-up that
+// doesn't match is a problem discovered at the trailhead, and the person who
+// knows which of eight faces just signed is the one standing in front of them.─
+
+/**
+ * Attach a signature to the student it belongs to, decided by a person.
+ *
+ * The signature itself doesn't change — it can't, the database won't allow it.
+ * What changes is who we say it is about, and the row records that a human
+ * said so rather than a rule having fired.
+ */
+export async function linkWaiverSignature(
+  instanceId: string,
+  signatureId: string,
+  enrollmentId: string
+): Promise<void> {
+  // Scoped to the course before anything is read: the permission being checked
+  // has to be for the course the caller says they are working on, not one
+  // inferred afterwards from the row they asked to change.
+  const { admin, user } = await requireCourseStaff(instanceId)
+
+  const { data: enrollment } = await admin
+    .from('enrollments')
+    .select('id, user_id, instance_id')
+    .eq('id', enrollmentId)
+    .maybeSingle()
+  if (!enrollment || enrollment.instance_id !== instanceId) {
+    throw new Error('That student is no longer enrolled on this course.')
+  }
+
+  const { data: sig } = await admin
+    .from('waiver_signatures')
+    .select('id, instance_id')
+    .eq('id', signatureId)
+    .maybeSingle()
+  if (!sig) throw new Error('That waiver no longer exists.')
+  // Attaching a waiver to somebody on a different course would be a filing
+  // error with legal consequences, so it is refused rather than trusted.
+  if (sig.instance_id !== enrollment.instance_id) {
+    throw new Error('That waiver belongs to a different course.')
+  }
+
+  const { error } = await admin
+    .from('waiver_signatures')
+    .update({
+      enrollment_id: enrollment.id,
+      profile_id: enrollment.user_id,
+      link_method: 'manual',
+      linked_at: new Date().toISOString(),
+      // Who decided. 'manual' without a name would be the same shrug as a
+      // machine guess, which is the distinction this column exists for.
+      linked_by: user.id,
+    })
+    .eq('id', signatureId)
+  if (error) throw new Error(error.message)
+
+  revalidatePath(`/admin/courses/${instanceId}`)
+  revalidatePath(`/portal/${instanceId}`)
+}
+
+/** Detach a signature linked to the wrong person. It stays a valid waiver. */
+export async function unlinkWaiverSignature(instanceId: string, signatureId: string): Promise<void> {
+  const { admin } = await requireCourseStaff(instanceId)
+  const { error } = await admin
+    .from('waiver_signatures')
+    .update({ enrollment_id: null, profile_id: null, link_method: null, linked_at: null })
+    .eq('id', signatureId)
+  if (error) throw new Error(error.message)
+  revalidatePath(`/admin/courses/${instanceId}`)
+  revalidatePath(`/portal/${instanceId}`)
+}

@@ -5,19 +5,11 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import InfoHint from '@/components/InfoHint'
 import WaiverQrPanel, { type WaiverQr } from '@/components/WaiverQrPanel'
-import {
-  linkWaiverSignature, setCourseWaiver, unlinkWaiverSignature,
-  type WaiverTemplateOption,
-} from './waiver-actions'
+import UnmatchedWaivers, { type UnmatchedWaiver } from '@/components/UnmatchedWaivers'
+import { unlinkWaiverSignature } from '@/app/portal/[id]/waiver-actions'
+import { setCourseWaiver, type WaiverTemplateOption } from './waiver-actions'
 
-export type UnmatchedWaiver = {
-  id: string
-  name: string
-  email: string
-  signedAt: string
-  source: 'portal' | 'qr'
-  suggestions: { enrollmentId: string; profileId: string; name: string; email: string | null }[]
-}
+export type { UnmatchedWaiver }
 
 export type WaiverRosterRow = {
   enrollmentId: string
@@ -157,7 +149,7 @@ export default function CourseWaiverSection({
                   {r.signature && r.signature.identity === 'unverified' && (
                     <button
                       disabled={busy}
-                      onClick={() => run(() => unlinkWaiverSignature(r.signature!.id, instanceId))}
+                      onClick={() => run(() => unlinkWaiverSignature(instanceId, r.signature!.id))}
                       title="Detach this waiver — it stays valid, just unattached"
                       className="text-xs text-zinc-500 hover:text-pr-red-light disabled:opacity-50 transition-colors"
                     >
@@ -184,58 +176,9 @@ export default function CourseWaiverSection({
             <WaiverQrPanel instanceId={instanceId} qr={qr} hasWaiver={Boolean(selectedId)} />
           </div>
 
-          {/* Anything the matcher wouldn't decide. Always shown when it isn't
-              empty — a queue you have to remember to open is a queue that
-              quietly loses waivers. */}
           {unmatched.length > 0 && (
             <div className="mt-4 pt-4 border-t border-zinc-800">
-              <p className="text-xs uppercase tracking-wide text-amber-400 mb-1">
-                {unmatched.length} signed {unmatched.length === 1 ? 'waiver' : 'waivers'} not matched to anyone
-              </p>
-              <p className="text-xs text-zinc-500 mb-3">
-                These are valid and signed. They just aren’t attached to a student yet.
-              </p>
-              <div className="space-y-2">
-                {unmatched.map((u) => (
-                  <div key={u.id} className="px-4 py-3 rounded-lg border border-amber-900/50 bg-amber-950/10">
-                    <div className="flex items-baseline gap-2 flex-wrap">
-                      <span className="text-sm text-zinc-200">{u.name}</span>
-                      <span className="text-xs text-zinc-500">{u.email}</span>
-                      <a
-                        href={`/api/waivers/${u.id}/pdf`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="ml-auto text-xs text-zinc-400 hover:text-zinc-200 underline transition-colors"
-                      >
-                        PDF
-                      </a>
-                    </div>
-                    <p className="text-[11px] text-zinc-500 mt-0.5">
-                      Signed {new Date(u.signedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                      {u.source === 'qr' && ' · via QR code'}
-                    </p>
-                    {u.suggestions.length > 0 ? (
-                      <div className="flex flex-wrap items-center gap-2 mt-2">
-                        <span className="text-[11px] text-zinc-500">Is this…</span>
-                        {u.suggestions.map((sug) => (
-                          <button
-                            key={sug.enrollmentId}
-                            disabled={busy}
-                            onClick={() => run(() => linkWaiverSignature(u.id, sug.enrollmentId))}
-                            className="px-2.5 py-1 rounded-full text-xs border border-zinc-700 bg-zinc-900 text-zinc-300 hover:border-zinc-500 hover:text-white disabled:opacity-50 transition-colors"
-                          >
-                            {sug.name}
-                          </button>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-[11px] text-zinc-500 mt-2">
-                        Nobody on this course resembles them — they may need enrolling first.
-                      </p>
-                    )}
-                  </div>
-                ))}
-              </div>
+              <UnmatchedWaivers instanceId={instanceId} unmatched={unmatched} />
             </div>
           )}
 
