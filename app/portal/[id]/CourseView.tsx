@@ -463,19 +463,15 @@ export default async function CourseView({
   // birth and a home address, so the course page shows you yours and nobody
   // else's. Staff track who has signed from the admin side.
   //
-  // Students sign; the people running the course don't. An instructor assigned
-  // to a delivery is working it, not taking part in it, and asking them to
-  // release us from liability for their own course is nonsense on its face.
+  // Being enrolled is the whole gate, and it is enough. Instructors and admins
+  // aren't enrolled on the courses they run, so they are never asked; enroll
+  // one and they are asked, which is how you get a waiver out of an instructor
+  // who is taking the course rather than teaching it.
   //
-  // Keyed on who gets the staff view of this course: an instructor assigned to
-  // it, or an admin, who gets that view everywhere. So an admin taking a course
-  // as a student is never asked to sign either — which is the call, not an
-  // oversight. If that ever needs to change, the honest fix is a real
-  // participant role rather than reading it off the job title.
-  //
-  // Previewing as a student shows it, which is how the student's view stays
-  // checkable by the people who can't otherwise see it.
-  const waiver = userId && !showTasks ? await loadStudentWaiver(id, userId) : null
+  // Nothing here reads a job title. A rule about who someone *is* would have to
+  // guess at the case this handles by asking what they are *doing on this
+  // course*, which the enrollment already says.
+  const waiver = userId ? await loadStudentWaiver(id, userId) : null
 
   const hasUpdates = canPostUpdates || courseUpdates.length > 0
   const hasDocuments = showTasks && courseDocs.length > 0
