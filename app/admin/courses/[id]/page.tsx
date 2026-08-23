@@ -50,6 +50,7 @@ import CourseLocationFields from '@/components/CourseLocationFields'
 import { regionLabel } from '@/lib/regions'
 import MeetingDetails from '@/app/portal/[id]/MeetingDetails'
 import { courseNotifyCounts } from '@/lib/course-notify'
+import { meetingDetails } from '@/lib/meeting-details'
 
 const STATUS_STYLES: Record<string, string> = {
   tentative: 'bg-yellow-900/40 text-yellow-300 border-yellow-700',
@@ -266,6 +267,9 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
   // page shows, so the promise made before an irreversible send is the same
   // number on both screens.
   const notifyCounts = await courseNotifyCounts(admin, id, user.email ?? null)
+  // Signed here rather than in the component: the bucket the pin's photo sits
+  // in is private, and a client component can't sign anything.
+  const meeting = await meetingDetails(admin, inst)
 
   // The waiver picture for this course. Signatures are read for the whole
   // course rather than per student, so one query answers the roster; the
@@ -847,7 +851,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
         {/* ── Participants: shared logistics + the student roster ───── */}
         <TabPanel id="participants">
           <h2 className="text-lg font-semibold mb-4">Participant info
-            {!inst.meeting_point && !inst.meeting_time && (
+            {!meeting.meetingPoint && !meeting.meetingTime && (
               <span className="ml-3 text-[11px] font-normal px-2 py-0.5 rounded bg-yellow-900/40 text-yellow-300 align-middle">
                 not set yet
               </span>
@@ -874,8 +878,10 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
           <div className="mt-4 p-6 bg-zinc-900 border border-zinc-800 rounded-lg">
             <MeetingDetails
               instanceId={id}
-              meetingPoint={inst.meeting_point}
-              meetingTime={inst.meeting_time}
+              meetingPoint={meeting.meetingPoint}
+              meetingTime={meeting.meetingTime}
+              links={meeting.links}
+              files={meeting.files}
               canEdit
               notifyCounts={notifyCounts}
             />

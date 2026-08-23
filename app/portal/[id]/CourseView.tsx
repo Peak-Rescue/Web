@@ -23,6 +23,7 @@ import UnmatchedWaivers from '@/components/UnmatchedWaivers'
 import { loadUnmatchedWaivers } from '@/lib/waiver-data'
 import { loadStudentWaiver } from '@/lib/waiver-data'
 import { notifyCountsFrom } from '@/lib/course-notify'
+import { meetingDetails } from '@/lib/meeting-details'
 import { Section, SubHead, InstructorCard, StudentCard, SECTION_LABEL, type SectionKey } from './sections'
 import { PURPOSE_META, PURPOSE_ORDER, linkLabel, type CourseLink } from '@/lib/course-links'
 
@@ -117,7 +118,7 @@ export default async function CourseView({
   const [{ data: inst }, { data: offDays }, { data: modules }, { data: instructors }, taskRows, { data: peopleRows }, { data: templateRows }, { data: courseDocRows }, { data: taskDocRows }, { data: mapRows }, { data: resourceRows }, { data: linkRows }, { data: updateRows }, { data: enrollmentRows }, { data: messageRows }] =
     await Promise.all([
       admin.from('course_instances')
-        .select('course_type, custom_title, status, location, client_name, notes, ref_number, starts_at, ends_at, meeting_point, meeting_time, intro, max_students, internal, waiver_template_id, waiver_token, waiver_token_expires_at')
+        .select('course_type, custom_title, status, location, client_name, notes, ref_number, starts_at, ends_at, meeting_point, meeting_time, meeting_links, meeting_attachments, intro, max_students, internal, waiver_template_id, waiver_token, waiver_token_expires_at')
         .eq('id', id)
         .single(),
       admin.from('instance_off_days')
@@ -314,7 +315,10 @@ export default async function CourseView({
   // Staff get this section whether or not anything is in it. An unset meeting
   // point is the thing they most need to notice, and hiding the block hides
   // the only place they can fix it.
-  const hasAbout = Boolean(inst.intro || inst.meeting_point || inst.meeting_time) || showTasks
+  const meeting = await meetingDetails(admin, inst)
+  const hasAbout = Boolean(
+    inst.intro || meeting.meetingPoint || meeting.meetingTime || meeting.links.length || meeting.files.length
+  ) || showTasks
   const hasSchedule = Boolean(sched && schedDays.length > 0)
   const hasCurriculum = orderedModules.length > 0
   const hasGear = Boolean(gearList && gearList.gear_list_entries.length > 0)
@@ -876,8 +880,10 @@ export default async function CourseView({
               )}
               <MeetingDetails
                 instanceId={id}
-                meetingPoint={inst.meeting_point}
-                meetingTime={inst.meeting_time}
+                meetingPoint={meeting.meetingPoint}
+                meetingTime={meeting.meetingTime}
+                links={meeting.links}
+                files={meeting.files}
                 canEdit={showTasks}
                 notifyCounts={notifyCounts}
               />

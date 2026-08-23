@@ -3,6 +3,11 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Composer, { type Draft } from './UpdateComposer'
+import AttachmentFields from './AttachmentFields'
+import { linkLabel } from '@/lib/course-links'
+import { LinkIcon, PaperclipIcon } from '@/components/TaskIcons'
+import type { MeetingLink, MeetingFile } from '@/lib/meeting-details'
+import type { UpdateLink, UpdateAttachment } from './update-actions'
 import type { NotifyCounts } from '@/lib/course-notify'
 import { postCourseUpdate } from './update-actions'
 import { saveMeetingDetails } from './logistics-actions'
@@ -17,12 +22,20 @@ export default function MeetingDetails({
   instanceId,
   meetingPoint,
   meetingTime,
+  links,
+  files,
   canEdit,
   notifyCounts,
 }: {
   instanceId: string
   meetingPoint: string | null
   meetingTime: string | null
+  /** The pin, the gate-code page. Kept with the meeting point rather than on
+      the announcement about it — a day later the announcement is somewhere
+      down the updates feed. */
+  links: MeetingLink[]
+  /** Signed on the server: the bucket is private. */
+  files: MeetingFile[]
   canEdit: boolean
   notifyCounts: NotifyCounts
 }) {
@@ -30,6 +43,10 @@ export default function MeetingDetails({
   const [editing, setEditing] = useState(false)
   const [point, setPoint] = useState(meetingPoint ?? '')
   const [time, setTime] = useState(meetingTime ?? '')
+  const [draftLinks, setDraftLinks] = useState<UpdateLink[]>(links)
+  const [draftFiles, setDraftFiles] = useState<UpdateAttachment[]>(
+    files.map(({ path, filename }) => ({ path, filename }))
+  )
   // Set once the fields are saved and it's time to say so — holds the wording
   // the announcement starts from, which differs for a plan that moved.
   const [telling, setTelling] = useState<{ moved: boolean } | null>(null)
@@ -37,7 +54,7 @@ export default function MeetingDetails({
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<string | null>(null)
 
-  const isSet = Boolean(meetingPoint || meetingTime)
+  const isSet = Boolean(meetingPoint || meetingTime || links.length || files.length)
 
   // Never quotes the point or the time. Quoting it would put a second copy on
   // the same page — one in the field, one in the feed — and when the lot
@@ -51,7 +68,12 @@ export default function MeetingDetails({
   async function save(thenTell: boolean) {
     setBusy(true); setError(null); setResult(null)
     try {
-      const r = await saveMeetingDetails(instanceId, { meetingPoint: point, meetingTime: time })
+      const r = await saveMeetingDetails(instanceId, {
+        meetingPoint: point,
+        meetingTime: time,
+        links: draftLinks,
+        attachments: draftFiles,
+      })
       setEditing(false)
       if (thenTell) setTelling({ moved: r.had && r.changed })
       else setResult('Saved. Nobody was emailed.')
@@ -106,6 +128,15 @@ export default function MeetingDetails({
           />
         </label>
       </div>
+      <AttachmentFields
+        instanceId={instanceId}
+        links={draftLinks}
+        setLinks={setDraftLinks}
+        attachments={draftFiles}
+        setAttachments={setDraftFiles}
+        disabled={busy}
+      />
+
       {error && <p className="text-xs text-pr-red">{error}</p>}
       <div className="flex items-center gap-3 flex-wrap">
         <button
@@ -125,6 +156,8 @@ export default function MeetingDetails({
         <button
           onClick={() => {
             setPoint(meetingPoint ?? ''); setTime(meetingTime ?? '')
+            setDraftLinks(links)
+            setDraftFiles(files.map(({ path, filename }) => ({ path, filename })))
             setError(null); setEditing(false)
           }}
           disabled={busy}
@@ -136,7 +169,41 @@ export default function MeetingDetails({
     </div>
   )
 
+  // The pin sits under the two boxes, not inside the prose: a URL typed into
+  // the meeting point is unclickable text, and on a phone at 0855 what you
+  // want is something to tap.
+  const pins = (links.length > 0 || files.length > 0) && (
+    <div className="flex flex-wrap gap-2">
+      {links.map((l, i) => (
+        <a
+          key={`l${i}`}
+          href={l.url}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-1.5 max-w-full px-3 py-1.5 rounded-full border border-teal-500/30 bg-teal-500/10 text-teal-300 hover:border-teal-400 hover:text-teal-100 text-sm transition-colors"
+        >
+          <LinkIcon />
+          <span className="truncate">{linkLabel(l)}</span>
+          <span className="text-teal-400/70 shrink-0">↗</span>
+        </a>
+      ))}
+      {files.map((f, i) => (
+        <a
+          key={`f${i}`}
+          href={f.url}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-1.5 max-w-full px-3 py-1.5 rounded-full border border-zinc-700 bg-zinc-800 text-zinc-300 hover:border-zinc-500 hover:text-white text-sm transition-colors"
+        >
+          <span className="shrink-0"><PaperclipIcon /></span>
+          <span className="truncate">{f.filename}</span>
+        </a>
+      ))}
+    </div>
+  )
+
   const readout = isSet ? (
+    <div className="space-y-3">
     <dl className="grid sm:grid-cols-2 gap-3">
       {meetingPoint && (
         <div className="px-3 py-2 rounded-lg border border-zinc-800 bg-zinc-900">
@@ -151,6 +218,8 @@ export default function MeetingDetails({
         </div>
       )}
     </dl>
+    {pins}
+    </div>
   ) : (
     canEdit && (
       <p className="text-xs text-zinc-600">

@@ -2,6 +2,8 @@
 
 import { revalidatePath } from 'next/cache'
 import { requireCourseStaff } from '@/lib/course-access'
+import { normalizeDocLink } from '@/lib/doc-links'
+import type { UpdateLink, UpdateAttachment } from './update-actions'
 
 const MAX_FIELD = 500
 
@@ -22,7 +24,16 @@ export type MeetingSaveResult = { had: boolean; changed: boolean }
 // the trailhead all live.
 export async function saveMeetingDetails(
   instanceId: string,
-  input: { meetingPoint: string; meetingTime: string }
+  input: {
+    meetingPoint: string
+    meetingTime: string
+    // The dropped pin, the photo of the gate. They belong to the meeting
+    // point rather than to the announcement about it: a day later the
+    // announcement is somewhere down the updates feed, which is the one place
+    // nobody looks when they are already driving.
+    links: UpdateLink[]
+    attachments: UpdateAttachment[]
+  }
 ): Promise<MeetingSaveResult> {
   const { admin } = await requireCourseStaff(instanceId)
 
@@ -41,9 +52,20 @@ export async function saveMeetingDetails(
     (before?.meeting_point ?? null) !== (point || null) ||
     (before?.meeting_time ?? null) !== (time || null)
 
+  const links = (input.links ?? []).slice(0, 20).map((l) => {
+    const { url, filename } = normalizeDocLink(l.url, l.label ?? '')
+    return { label: filename, url }
+  })
+  const attachments = (input.attachments ?? []).slice(0, 20)
+
   const { error } = await admin
     .from('course_instances')
-    .update({ meeting_point: point || null, meeting_time: time || null })
+    .update({
+      meeting_point: point || null,
+      meeting_time: time || null,
+      meeting_links: links,
+      meeting_attachments: attachments,
+    })
     .eq('id', instanceId)
   if (error) throw new Error(error.message)
 
