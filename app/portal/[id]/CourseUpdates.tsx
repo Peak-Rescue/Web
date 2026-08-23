@@ -3,9 +3,10 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { linkLabel } from '@/lib/course-links'
+import InfoHint from '@/components/InfoHint'
 import {
   postCourseUpdate, editCourseUpdate, deleteCourseUpdate, renotifyCourseUpdate,
-  createUpdateUploadTargets, type UpdateLink, type UpdateAttachment,
+  createUpdateUploadTargets, type UpdateLink, type UpdateAttachment, type UpdateAudience,
 } from './update-actions'
 
 export type CourseUpdate = {
@@ -19,11 +20,23 @@ export type CourseUpdate = {
   recipient_count: number
   notify_count: number
   emailed_at: string | null
+  audience: UpdateAudience
   links: UpdateLink[]
   // Signed on the server — attachments live in a private bucket.
   attachments: (UpdateAttachment & { url: string })[]
   /** Posted since this reader last opened the course. */
   isNew?: boolean
+}
+
+/** How many inboxes each choice of audience reaches, you excepted. `everyone`
+    is counted separately rather than added up, because an instructor who is
+    also enrolled would otherwise be counted twice. */
+export type NotifyCounts = { students: number; instructors: number; everyone: number }
+
+const AUDIENCE_LABEL: Record<UpdateAudience, string> = {
+  students: 'the students',
+  instructors: 'the crew',
+  everyone: 'the course',
 }
 
 // Updates for the people on the course. The email only points here, so this
@@ -33,12 +46,14 @@ export default function CourseUpdates({
   instanceId,
   updates,
   canPost,
-  enrolledCount,
+  notifyCounts,
 }: {
   instanceId: string
   updates: CourseUpdate[]
   canPost: boolean
-  enrolledCount: number
+  /** Inboxes per group, you excepted — counted by address on the server, since
+      the button promises a number before it sends anything. */
+  notifyCounts: NotifyCounts
 }) {
   const router = useRouter()
   const [busy, setBusy] = useState(false)
@@ -69,14 +84,15 @@ export default function CourseUpdates({
           key={updates.length}
           instanceId={instanceId}
           busy={busy}
-          enrolledCount={enrolledCount}
+          notifyCounts={notifyCounts}
           submitLabel="Post and notify"
           onSubmit={(draft) =>
             run(async () => {
-              const who = enrolledCount === 1 ? '1 student' : `${enrolledCount} students`
+              const n = notifyCounts[draft.audience]
+              const who = n === 1 ? '1 person' : `${n} people`
               if (!confirm(`Post this and email ${who} a link to it?`)) return
               const r = await postCourseUpdate(instanceId, draft)
-              return r.emailProblem ?? `Posted. ${r.sent} ${r.sent === 1 ? 'student' : 'students'} emailed a link to it.`
+              return r.emailProblem ?? `Posted. ${r.sent} ${r.sent === 1 ? 'person' : 'people'} emailed a link to it.`
             })
           }
         />
@@ -98,9 +114,9 @@ export default function CourseUpdates({
                   <Composer
                     instanceId={instanceId}
                     busy={busy}
-                    enrolledCount={enrolledCount}
+                    notifyCounts={notifyCounts}
                     submitLabel="Save changes"
-                    initial={{ body: u.body, links: u.links, attachments: u.attachments }}
+                    initial={{ body: u.body, links: u.links, attachments: u.attachments, audience: u.audience }}
                     onCancel={() => setEditing(null)}
                     onSubmit={(draft) =>
                       run(async () => {
@@ -133,6 +149,14 @@ export default function CourseUpdates({
                       <span className="text-[11px] text-zinc-600">
                         {u.emailed_at ? `notified ${u.sent_count}/${u.recipient_count}` : 'not emailed'}
                         {u.notify_count > 1 && ` ×${u.notify_count}`}
+                      </span>
+                    )}
+                    {/* Only worth saying when it isn't the default. A
+                        crew-only note sitting in a list the students also read
+                        needs to look different from the ones they can see. */}
+                    {canPost && u.audience !== 'everyone' && (
+                      <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded-full border border-teal-500/30 bg-teal-500/10 text-teal-300">
+                        {u.audience === 'instructors' ? 'Crew only' : 'Students only'}
                       </span>
                     )}
                   </div>
@@ -186,7 +210,7 @@ export default function CourseUpdates({
                           run(async () => {
                             if (!confirm('Email everyone again to say this changed?')) return
                             const r = await renotifyCourseUpdate(instanceId, u.id)
-                            return r.emailProblem ?? `${r.sent} ${r.sent === 1 ? 'student' : 'students'} emailed again.`
+                            return r.emailProblem ?? `${r.sent} ${r.sent === 1 ? 'person' : 'people'} emailed again.`
                           })
                         }
                         disabled={busy}
@@ -218,14 +242,14 @@ export default function CourseUpdates({
   )
 }
 
-type Draft = { body: string; links: UpdateLink[]; attachments: UpdateAttachment[] }
+type Draft = { body: string; links: UpdateLink[]; attachments: UpdateAttachment[]; audience: UpdateAudience }
 
 // Writing an update: the message, plus links and files. Uploads go straight to
 // the private bucket from the browser and only their paths reach the action.
 function Composer({
   instanceId,
   busy,
-  enrolledCount,
+  notifyCounts,
   submitLabel,
   initial,
   onSubmit,
@@ -233,7 +257,7 @@ function Composer({
 }: {
   instanceId: string
   busy: boolean
-  enrolledCount: number
+  notifyCounts: NotifyCounts
   submitLabel: string
   initial?: Draft
   onSubmit: (draft: Draft) => void
@@ -242,6 +266,14 @@ function Composer({
   const [body, setBody] = useState(initial?.body ?? '')
   const [links, setLinks] = useState<UpdateLink[]>(initial?.links ?? [])
   const [attachments, setAttachments] = useState<UpdateAttachment[]>(initial?.attachments ?? [])
+  // Held as two ticks rather than one three-way choice: "who is this for" is
+  // two independent yes/nos in the writer's head, and both unticked is simply
+  // not offered — the Post button goes dead instead.
+  const [toStudents, setToStudents] = useState(initial ? initial.audience !== 'instructors' : true)
+  const [toCrew, setToCrew] = useState(initial ? initial.audience !== 'students' : true)
+  const audience: UpdateAudience =
+    toStudents && toCrew ? 'everyone' : toCrew ? 'instructors' : 'students'
+  const reach = toStudents || toCrew ? notifyCounts[audience] : 0
   const [addingLink, setAddingLink] = useState(false)
   const [linkUrl, setLinkUrl] = useState('')
   const [uploading, setUploading] = useState(false)
@@ -377,6 +409,16 @@ function Composer({
         </label>
 
         {uploading && <span className="text-[11px] text-zinc-500 ml-1">Uploading…</span>}
+
+        {/* Who it's for, beside the link and file icons rather than above the
+            box — it's part of addressing the note, not a setting you go
+            looking for. A crew-only update is hidden from the students as well
+            as unsent to them, which is why it says "sees" and not "gets". */}
+        <span className="ml-auto flex items-center gap-3 text-[11px] text-zinc-500">
+          <span className="text-zinc-600">Who sees it</span>
+          <Tick label="Students" count={notifyCounts.students} on={toStudents} set={setToStudents} />
+          <Tick label="Crew" count={notifyCounts.instructors} on={toCrew} set={setToCrew} />
+        </span>
       </div>
 
       {addingLink && (
@@ -403,8 +445,8 @@ function Composer({
 
       <div className="flex items-center gap-3 flex-wrap">
         <button
-          onClick={() => onSubmit({ body, links, attachments })}
-          disabled={busy || uploading || empty}
+          onClick={() => onSubmit({ body, links, attachments, audience })}
+          disabled={busy || uploading || empty || (!toStudents && !toCrew)}
           className="px-3 py-1.5 rounded bg-pr-red hover:bg-pr-red-dark text-white text-sm font-medium transition-colors disabled:opacity-40"
         >
           {busy ? 'Working…' : submitLabel}
@@ -414,14 +456,43 @@ function Composer({
             Cancel
           </button>
         )}
+        {/* The line says what happens; the icon holds why you'd want it. The
+            count is live state, not explanation, so it stays on screen. */}
         {!onCancel && (
-          <span className="text-xs text-zinc-500">
-            {enrolledCount === 0
-              ? 'Nobody is enrolled yet — this will post to the course page only.'
-              : `Emails ${enrolledCount === 1 ? 'the 1 student' : `all ${enrolledCount} students`} a link to this page. You can edit it afterwards.`}
+          <span className="inline-flex items-center gap-1.5 text-xs text-zinc-500">
+            {!toStudents && !toCrew
+              ? 'Tick who this is for.'
+              : reach === 0
+                ? `Nobody in ${AUDIENCE_LABEL[audience]} to email yet — posts to this page only.`
+                : `Emails ${reach === 1 ? '1 person' : `${reach} people`} a link to this page.`}
+            <InfoHint text="The email only points here, so editing this later corrects what everyone sees. If it has to reach them tonight even without logging in, send an email instead." />
           </span>
         )}
       </div>
     </div>
+  )
+}
+
+// One audience checkbox, with the size of that group beside it — "Students 12"
+// answers "who am I about to interrupt" without a second glance at the roster.
+function Tick({
+  label, count, on, set,
+}: {
+  label: string
+  count: number
+  on: boolean
+  set: (v: boolean) => void
+}) {
+  return (
+    <label className={`inline-flex items-center gap-1.5 cursor-pointer transition-colors ${on ? 'text-zinc-300' : 'hover:text-zinc-300'}`}>
+      <input
+        type="checkbox"
+        checked={on}
+        onChange={(e) => set(e.target.checked)}
+        className="accent-pr-red w-3 h-3"
+      />
+      {label}
+      <span className="text-zinc-600">{count}</span>
+    </label>
   )
 }

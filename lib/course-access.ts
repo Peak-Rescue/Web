@@ -51,3 +51,37 @@ export function courseSubtitle(inst: {
     : null
   return [dates, inst.location, inst.client_name].filter(Boolean).join('  ·  ') || null
 }
+
+// The gate for anything the team writes onto a course from the portal: an
+// update, an edit to the internal notes. Admins, and the instructors actually
+// assigned to this course — a meeting point moves the morning of day two and
+// the person who needs to say so is the one standing there, not whoever is at
+// a desk.
+//
+// Lives here rather than beside one set of actions because a 'use server' file
+// can only export actions, so the second caller would otherwise copy it.
+export async function requireCourseStaff(instanceId: string) {
+  const { createClient } = await import('@/lib/supabase/server')
+  const { createAdminClient } = await import('@/lib/supabase/admin')
+
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Not authenticated')
+  const admin = createAdminClient()
+
+  const { data: profile } = await admin
+    .from('profiles').select('role, first_name, last_name').eq('id', user.id).single()
+
+  if (profile?.role !== 'admin') {
+    const { data: assigned } = await admin
+      .from('instance_instructors')
+      .select('id, instructors!inner(profile_id)')
+      .eq('instance_id', instanceId)
+      .eq('instructors.profile_id', user.id)
+      .maybeSingle()
+    if (!assigned) throw new Error('Not authorized')
+  }
+
+  const name = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ').trim()
+  return { user, admin, authorName: name || 'Your instructor' }
+}

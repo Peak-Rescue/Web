@@ -12,7 +12,8 @@ import { loadTasksWithDocs } from '@/lib/course-tasks'
 import { LinkIcon, PaperclipIcon } from '@/components/TaskIcons'
 import { AudiencePills } from '@/components/AudiencePills'
 import PortalSectionNav from './PortalSectionNav'
-import CourseUpdates, { type CourseUpdate } from './CourseUpdates'
+import CourseUpdates, { type CourseUpdate, type NotifyCounts } from './CourseUpdates'
+import type { UpdateAudience } from './update-actions'
 import CourseMessages, { type CourseMessage } from './CourseMessages'
 import { Section, SubHead, InstructorCard, StudentCard, SECTION_LABEL, type SectionKey } from './sections'
 import { PURPOSE_META, PURPOSE_ORDER, linkLabel, type CourseLink } from '@/lib/course-links'
@@ -149,10 +150,12 @@ export default async function CourseView({
       (showTasks
         ? admin.from('course_links').select('id, url, label, audience, purpose').eq('instance_id', id).order('purpose').order('sort_order')
         : admin.from('course_links').select('id, url, label, audience, purpose').eq('instance_id', id).eq('audience', 'shared').order('purpose').order('sort_order')),
-      // Updates are posted to everyone on the course, so there's no audience
-      // filter — an update students can't see would defeat the point.
+      // Read whole, filtered below: staff see every update, a student sees the
+      // ones addressed to them. Same rule as maps and resources, and applied
+      // here for the same reason — this reads with the service role, so RLS
+      // isn't the thing standing between a crew-only note and a student.
       admin.from('course_updates')
-        .select('id, body, created_at, updated_at, created_by, sent_count, recipient_count, notify_count, emailed_at, links, attachments, profiles(first_name, last_name)')
+        .select('id, body, audience, created_at, updated_at, created_by, sent_count, recipient_count, notify_count, emailed_at, links, attachments, profiles(first_name, last_name)')
         .eq('instance_id', id)
         .order('created_at', { ascending: false }),
       // The roster. Staff-only, and the same read answers both questions the
@@ -309,13 +312,15 @@ export default async function CourseView({
   // Everyone on the course sees updates; staff also get the box to write one,
   // so the section shows for them even when there's nothing posted yet.
   type UpdateRow = {
-    id: string; body: string; created_at: string; updated_at: string | null; created_by: string | null
+    id: string; body: string; audience: UpdateAudience
+    created_at: string; updated_at: string | null; created_by: string | null
     sent_count: number; recipient_count: number; notify_count: number; emailed_at: string | null
     links: { label: string; url: string }[] | null
     attachments: { path: string; filename: string }[] | null
     profiles: { first_name: string | null; last_name: string | null } | null
   }
-  const updateRowsTyped = (updateRows ?? []) as unknown as UpdateRow[]
+  const updateRowsTyped = ((updateRows ?? []) as unknown as UpdateRow[])
+    .filter((u) => showTasks || u.audience !== 'instructors')
 
   // Attachments sit in the private bucket, so they're signed here — one call
   // for every update on the page rather than one per file.
@@ -328,6 +333,7 @@ export default async function CourseView({
   const courseUpdates: CourseUpdate[] = updateRowsTyped.map((u) => ({
     id: u.id,
     body: u.body,
+    audience: u.audience,
     created_at: u.created_at,
     updated_at: u.updated_at,
     created_by: u.created_by,
@@ -387,6 +393,14 @@ export default async function CourseView({
       .filter(Boolean)
       .map((e) => e!.trim().toLowerCase())
   ).size
+  // How many inboxes an update reaches: the students plus the rest of the
+  // crew, minus your own — the same set the action emails, worked out here so
+  // the button can promise a number before it sends anything.
+  const crewEmails = (instructors ?? []).map((r) => r.instructors as unknown as {
+    email: string | null; profile_id: string | null
+  } | null)
+  const ownEmail = crewEmails.find((p) => p?.profile_id && p.profile_id === userId)?.email?.trim().toLowerCase() ?? null
+
   // The roster, in the order people enrolled. Names come from the profile the
   // student made on the invite link, so a half-filled one is normal and the
   // row says so rather than rendering a blank.
@@ -401,6 +415,24 @@ export default async function CourseView({
     enrolledAt: e.enrolled_at,
   }))
   const enrolledCount = roster.length
+  // Counted by address and never by head: an instructor who is also enrolled is
+  // one inbox, and your own doesn't count because the poster is never emailed
+  // their own post. "everyone" is its own union for exactly that reason —
+  // adding the two groups would double-count that person.
+  const addresses = (emails: (string | null | undefined)[]) =>
+    new Set(
+      emails
+        .filter(Boolean)
+        .map((e) => e!.trim().toLowerCase())
+        .filter((e) => e && e !== ownEmail)
+    )
+  const studentAddresses = addresses(roster.map((r) => r.email))
+  const crewAddresses = addresses(crewEmails.map((p) => p?.email))
+  const notifyCounts: NotifyCounts = {
+    students: studentAddresses.size,
+    instructors: crewAddresses.size,
+    everyone: new Set([...studentAddresses, ...crewAddresses]).size,
+  }
 
   const hasUpdates = canPostUpdates || courseUpdates.length > 0
   const hasDocuments = showTasks && courseDocs.length > 0
@@ -604,19 +636,20 @@ export default async function CourseView({
 
         <PortalSectionNav sections={navSections} />
 
-        {/* Updates — posted by the team, emailed to the students, and kept
-            here so the course page stays the record of what was said. */}
+        {/* Updates — posted by the team, emailed to everyone on the course,
+            and kept here so the course page stays the record of what was
+            said. */}
         {hasUpdates && (
           <Section
             id="updates"
-            blurb="Posted to everyone on this course, and emailed to the students"
+            blurb={showTasks ? 'Posted here and emailed' : 'Posted by your instructors, and emailed to you'}
             unread={unreadUpdates > 0}
           >
             <CourseUpdates
               instanceId={id}
               updates={courseUpdates.map((u) => ({ ...u, isNew: isNew(u) }))}
               canPost={canPostUpdates}
-              enrolledCount={enrolledCount}
+              notifyCounts={notifyCounts}
             />
           </Section>
         )}

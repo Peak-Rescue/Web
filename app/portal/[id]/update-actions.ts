@@ -1,8 +1,8 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { requireCourseStaff } from '@/lib/course-access'
 import { normalizeDocLink } from '@/lib/doc-links'
 import { courseDisplayName } from '@/lib/courses'
 
@@ -19,33 +19,19 @@ const DOC_BUCKET = 'task-documents'
 const MAX_BODY = 4000
 const MAX_DOC_BYTES = 20 * 1024 * 1024
 
+// Same three values as a course message, and the same meaning — with one
+// addition: on an update the audience also decides who can see it on the page.
+// Emailing only the crew while the words sit on a page the students are
+// reading would be worse than not sending it at all.
+export type UpdateAudience = 'students' | 'instructors' | 'everyone'
+
 export type UpdateLink = { label: string; url: string }
 export type UpdateAttachment = { path: string; filename: string }
 
-// Admins, and instructors assigned to this course. A meeting point moves the
-// morning of day two and the person who needs to say so is the one standing
-// there, not whoever is at a desk.
-async function requireCourseStaff(instanceId: string) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) throw new Error('Not authenticated')
-  const admin = createAdminClient()
-
-  const { data: profile } = await admin
-    .from('profiles').select('role, first_name, last_name').eq('id', user.id).single()
-
-  if (profile?.role !== 'admin') {
-    const { data: assigned } = await admin
-      .from('instance_instructors')
-      .select('id, instructors!inner(profile_id)')
-      .eq('instance_id', instanceId)
-      .eq('instructors.profile_id', user.id)
-      .maybeSingle()
-    if (!assigned) throw new Error('Not authorized')
-  }
-
-  const name = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ').trim()
-  return { user, admin, authorName: name || 'Your instructor' }
+// Both boxes unticked is not a state the UI offers, but a stale client could
+// send it — and an update addressed to nobody is a page nobody reads.
+function cleanAudience(value: unknown): UpdateAudience {
+  return value === 'students' || value === 'instructors' ? value : 'everyone'
 }
 
 function cleanLinks(links: UpdateLink[] | undefined): UpdateLink[] {
@@ -85,25 +71,49 @@ export async function createUpdateUploadTargets(
 
 type NotifyOutcome = { recipients: number; sent: number; problem: string | null }
 
+// The crew is a real audience, not an afterthought: a gear change posted the
+// night before is exactly as much news to the instructor driving up in the
+// morning as to the people meeting them, and the co-instructor who never opens
+// the portal was the one person the first version left in the dark.
+//
+// The author is dropped from whichever groups are chosen — nobody needs an
+// email telling them to go and read what they just wrote.
 async function notify(
   admin: ReturnType<typeof createAdminClient>,
   instanceId: string,
   authorName: string,
+  authorEmail: string | null,
+  audience: UpdateAudience,
   isReminder: boolean
 ): Promise<NotifyOutcome> {
-  const [{ data: inst }, { data: enrollments }] = await Promise.all([
+  const wantStudents = audience === 'students' || audience === 'everyone'
+  const wantCrew = audience === 'instructors' || audience === 'everyone'
+
+  const [{ data: inst }, { data: enrollments }, { data: crew }] = await Promise.all([
     admin.from('course_instances').select('course_type, custom_title').eq('id', instanceId).single(),
-    admin.from('enrollments').select('profiles(email)').eq('instance_id', instanceId),
+    wantStudents
+      ? admin.from('enrollments').select('profiles(email)').eq('instance_id', instanceId)
+      : Promise.resolve({ data: [] }),
+    wantCrew
+      ? admin.from('instance_instructors').select('instructors(email)').eq('instance_id', instanceId)
+      : Promise.resolve({ data: [] }),
   ])
 
+  const mine = authorEmail?.trim().toLowerCase() ?? null
   const recipients = [...new Set(
-    (enrollments ?? [])
-      .map((e) => (e.profiles as unknown as { email: string | null } | null)?.email)
+    [
+      ...((enrollments ?? []) as unknown as { profiles: { email: string | null } | null }[])
+        .map((e) => e.profiles?.email),
+      ...((crew ?? []) as unknown as { instructors: { email: string | null } | null }[])
+        .map((c) => c.instructors?.email),
+    ]
+      .map((e) => e?.trim())
       .filter((e): e is string => Boolean(e))
-  )]
+  )].filter((e) => e.toLowerCase() !== mine)
 
   if (recipients.length === 0) {
-    return { recipients: 0, sent: 0, problem: 'Nobody is enrolled yet, so this is on the course page only.' }
+    const who = audience === 'instructors' ? 'nobody else on the crew' : audience === 'students' ? 'nobody enrolled' : 'nobody else on the course'
+    return { recipients: 0, sent: 0, problem: `There is ${who} to email yet, so this is on the course page only.` }
   }
   if (!process.env.RESEND_API_KEY) {
     return { recipients: recipients.length, sent: 0, problem: 'Email isn’t configured, so this is on the course page only.' }
@@ -120,10 +130,12 @@ async function notify(
     : `${courseName} — new update from ${authorName}`
   const text = [
     isReminder
-      ? `${authorName} has updated the information for your ${courseName} course.`
-      : `${authorName} posted an update for your ${courseName} course.`,
+      // Wording that fits an instructor as well as a student — the same
+      // notice goes to both.
+      ? `${authorName} has updated the information for the ${courseName} course.`
+      : `${authorName} posted an update on the ${courseName} course.`,
     '',
-    `Read it on your course page: ${link}`,
+    `Read it on the course page: ${link}`,
     '',
     'The course page always has the current version, including any links or files attached.',
     '',
@@ -164,13 +176,14 @@ export type PostResult = { recipients: number; sent: number; emailProblem: strin
 
 export async function postCourseUpdate(
   instanceId: string,
-  input: { body: string; links?: UpdateLink[]; attachments?: UpdateAttachment[] }
+  input: { body: string; links?: UpdateLink[]; attachments?: UpdateAttachment[]; audience?: UpdateAudience }
 ): Promise<PostResult> {
   const { user, admin, authorName } = await requireCourseStaff(instanceId)
 
   const text = input.body.trim().slice(0, MAX_BODY)
   const links = cleanLinks(input.links)
   const attachments = (input.attachments ?? []).slice(0, 20)
+  const audience = cleanAudience(input.audience)
   if (!text && links.length === 0 && attachments.length === 0) {
     throw new Error('Write something, or attach a file or link')
   }
@@ -184,13 +197,14 @@ export async function postCourseUpdate(
       body: text,
       links,
       attachments,
+      audience,
       created_by: user.id,
     })
     .select('id')
     .single()
   if (error) throw new Error(error.message)
 
-  const outcome = await notify(admin, instanceId, authorName, false)
+  const outcome = await notify(admin, instanceId, authorName, user.email ?? null, audience, false)
 
   await admin
     .from('course_updates')
@@ -212,7 +226,7 @@ export async function postCourseUpdate(
 export async function editCourseUpdate(
   instanceId: string,
   updateId: string,
-  input: { body: string; links?: UpdateLink[]; attachments?: UpdateAttachment[] }
+  input: { body: string; links?: UpdateLink[]; attachments?: UpdateAttachment[]; audience?: UpdateAudience }
 ) {
   const { admin } = await requireCourseStaff(instanceId)
 
@@ -225,7 +239,7 @@ export async function editCourseUpdate(
 
   const { error } = await admin
     .from('course_updates')
-    .update({ body: text, links, attachments, updated_at: new Date().toISOString() })
+    .update({ body: text, links, attachments, audience: cleanAudience(input.audience), updated_at: new Date().toISOString() })
     .eq('id', updateId)
     .eq('instance_id', instanceId)
   if (error) throw new Error(error.message)
@@ -238,17 +252,19 @@ export async function renotifyCourseUpdate(
   instanceId: string,
   updateId: string
 ): Promise<PostResult> {
-  const { admin, authorName } = await requireCourseStaff(instanceId)
+  const { user, admin, authorName } = await requireCourseStaff(instanceId)
 
   const { data: existing } = await admin
     .from('course_updates')
-    .select('notify_count')
+    .select('notify_count, audience')
     .eq('id', updateId)
     .eq('instance_id', instanceId)
     .single()
   if (!existing) throw new Error('That update no longer exists')
 
-  const outcome = await notify(admin, instanceId, authorName, true)
+  // The group it was addressed to, not whoever is on the course now — a second
+  // notice goes to the same people as the first.
+  const outcome = await notify(admin, instanceId, authorName, user.email ?? null, cleanAudience(existing.audience), true)
 
   await admin
     .from('course_updates')
