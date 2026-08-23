@@ -1,8 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import WaiverDocument from '@/components/WaiverDocument'
-import SignatureField from '@/components/SignatureField'
+import SignatureField, { type SignatureFieldHandle } from '@/components/SignatureField'
 import { ADULT_AGE, isMinor, missingWaiverFields, type WaiverBody, type WaiverPrefill } from '@/lib/waiver'
 
 // The act of signing, wherever it happens.
@@ -54,6 +54,12 @@ export default function WaiverSignForm({
   const [initials, setInitials] = useState<string | null>(null)
   const [signature, setSignature] = useState<string | null>(null)
   const [consent, setConsent] = useState(false)
+  // Drawn but not yet accepted. Counts as signed for deciding whether the form
+  // can go, because to the person who drew it, it is.
+  const [initialsDraft, setInitialsDraft] = useState(false)
+  const [signatureDraft, setSignatureDraft] = useState(false)
+  const initialsRef = useRef<SignatureFieldHandle>(null)
+  const signatureRef = useRef<SignatureFieldHandle>(null)
 
   const set = (k: keyof WaiverPrefill) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm((f) => ({ ...f, [k]: e.target.value }))
@@ -70,10 +76,12 @@ export default function WaiverSignForm({
   const labelCls = 'block text-xs text-zinc-400 mb-1'
 
   const missing = missingWaiverFields(form)
+  const hasSignature = Boolean(signature || signatureDraft)
+  const hasInitials = Boolean(initials || initialsDraft)
   const ready = Boolean(
     missing.length === 0 &&
-    signature && consent &&
-    (body.initials_after_clause === null || initials) &&
+    hasSignature && consent &&
+    (body.initials_after_clause === null || hasInitials) &&
     (!minor || (guardian.firstName.trim() && guardian.lastName.trim() && guardian.dateOfBirth))
   )
 
@@ -81,10 +89,13 @@ export default function WaiverSignForm({
     setBusy(true)
     setError(null)
     try {
+      // Take whatever is on the pad, accepted or not.
+      const finalSignature = signatureRef.current?.acceptIfDrawn() ?? signature
+      const finalInitials = initialsRef.current?.acceptIfDrawn() ?? initials
       await onSubmit({
         ...form,
-        initialsImage: initials,
-        signatureImage: signature ?? '',
+        initialsImage: finalInitials,
+        signatureImage: finalSignature ?? '',
         esignConsent: consent,
         guardian: minor ? guardian : undefined,
       })
@@ -102,7 +113,14 @@ export default function WaiverSignForm({
           <div className="border-t border-zinc-200 pt-3">
             <p className="text-xs font-medium text-zinc-700 mb-2">Initial here to acknowledge the above</p>
             <div className="max-w-xs">
-              <SignatureField kind="initials" tone="light" value={initials} onChange={setInitials} />
+              <SignatureField
+                ref={initialsRef}
+                kind="initials"
+                tone="light"
+                value={initials}
+                onChange={setInitials}
+                onDraftChange={setInitialsDraft}
+              />
             </div>
           </div>
         }
@@ -180,7 +198,13 @@ export default function WaiverSignForm({
         <h4 className="text-sm font-semibold text-zinc-300 mb-3">
           {minor ? 'Parent or guardian signature *' : 'Your signature *'}
         </h4>
-        <SignatureField value={signature} onChange={setSignature} suggestedText={signerName || undefined} />
+        <SignatureField
+          ref={signatureRef}
+          value={signature}
+          onChange={setSignature}
+          onDraftChange={setSignatureDraft}
+          suggestedText={signerName || undefined}
+        />
       </div>
 
       <label className="flex gap-3 items-start px-4 py-3 rounded-lg border border-zinc-800 bg-zinc-900 cursor-pointer">
@@ -218,12 +242,12 @@ export default function WaiverSignForm({
         {/* Says which requirement is outstanding rather than leaving a disabled
             button to be argued with. */}
         {!ready && !busy && (
-          <span className="text-xs text-zinc-500">
+          <span className="text-xs text-amber-400">
             {missing.length > 0 ? `Still needed: ${missing.join(', ')}`
               : minor && !guardian.lastName.trim() ? 'A guardian must complete their details'
-              : body.initials_after_clause !== null && !initials ? 'Initial the document above'
-              : !signature ? 'Sign above'
-              : 'Consent to signing electronically'}
+              : body.initials_after_clause !== null && !hasInitials ? 'Initial the document above'
+              : !hasSignature ? 'Sign above'
+              : 'Tick the electronic signature consent'}
           </span>
         )}
       </div>

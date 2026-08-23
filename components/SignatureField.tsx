@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { forwardRef, useImperativeHandle, useRef, useState } from 'react'
 import SignatureCanvas, {
   renderTypedSignature,
   type SignatureCanvasHandle,
@@ -15,16 +15,18 @@ import SignatureCanvas, {
 // without it, the first keystroke or the first pen stroke *is* the signature,
 // the field flips to showing it, and there is no way to type a second letter
 // or draw a second stroke. Signing your name is more than one movement.
+//
+// But forgetting to press Accept must not be a dead end. Somebody who has
+// drawn their name has signed as far as they're concerned, and a form that
+// silently refuses to submit — while saying "sign above" to a person looking
+// at their own signature — is the form's fault. Submitting takes the draft.
 
-export default function SignatureField({
-  value,
-  onChange,
-  /** Seeds the typed tab, so a signer isn't retyping a name already on screen. */
-  suggestedText,
-  kind = 'signature',
-  tone = 'dark',
-  disabled,
-}: {
+export type SignatureFieldHandle = {
+  /** Commits a drawn-but-unaccepted mark. Returns whatever now stands. */
+  acceptIfDrawn: () => string | null
+}
+
+const SignatureField = forwardRef<SignatureFieldHandle, {
   value: string | null
   onChange: (dataUrl: string | null) => void
   suggestedText?: string
@@ -32,8 +34,19 @@ export default function SignatureField({
   /** 'light' for the initials block, which sits inside the document itself —
       a dark control on white paper reads as a rendering fault, not a field. */
   tone?: 'dark' | 'light'
+  /** Told when a mark exists but hasn't been accepted, so the form can let
+      submitting stand in for the button they didn't press. */
+  onDraftChange?: (hasDraft: boolean) => void
   disabled?: boolean
-}) {
+}>(function SignatureField({
+  value,
+  onChange,
+  suggestedText,
+  kind = 'signature',
+  tone = 'dark',
+  onDraftChange,
+  disabled,
+}, ref) {
   const initials = kind === 'initials'
   const light = tone === 'light'
   const box = light ? 'bg-zinc-50 border border-zinc-300' : 'bg-zinc-900 border border-zinc-800'
@@ -52,9 +65,28 @@ export default function SignatureField({
 
   const [mode, setMode] = useState<'type' | 'draw'>('type')
   const [typed, setTyped] = useState('')
-  // What they have made so far, not yet committed. The parent doesn't see it.
-  const [draft, setDraft] = useState<string | null>(null)
+  // What they have made so far, not yet committed.
+  const [draft, setDraftState] = useState<string | null>(null)
+  const draftRef = useRef<string | null>(null)
   const canvasRef = useRef<SignatureCanvasHandle>(null)
+
+  function setDraft(next: string | null) {
+    draftRef.current = next
+    setDraftState(next)
+    onDraftChange?.(Boolean(next))
+  }
+
+  useImperativeHandle(ref, () => ({
+    acceptIfDrawn() {
+      if (value) return value
+      const pending = draftRef.current
+      if (pending) {
+        onChange(pending)
+        return pending
+      }
+      return null
+    },
+  }))
 
   const width = initials ? 200 : 420
   const height = initials ? 100 : 120
@@ -182,4 +214,6 @@ export default function SignatureField({
       </div>
     </div>
   )
-}
+})
+
+export default SignatureField
