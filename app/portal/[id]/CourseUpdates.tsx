@@ -416,8 +416,8 @@ function Composer({
             as unsent to them, which is why it says "sees" and not "gets". */}
         <span className="ml-auto flex items-center gap-3 text-[11px] text-zinc-500">
           <span className="text-zinc-600">Who sees it</span>
-          <Tick label="Students" count={notifyCounts.students} on={toStudents} set={setToStudents} />
-          <Tick label="Instructors" count={notifyCounts.instructors} on={toInstructors} set={setToInstructors} />
+          <Tick label="Students" on={toStudents} set={setToStudents} />
+          <Tick label="Instructors" on={toInstructors} set={setToInstructors} />
         </span>
       </div>
 
@@ -473,13 +473,15 @@ function Composer({
   )
 }
 
-// One audience checkbox, with the size of that group beside it — "Students 12"
-// answers "who am I about to interrupt" without a second glance at the roster.
+// One audience checkbox. No number beside it: the only count worth showing is
+// how many inboxes the post reaches, and that already sits under the button as
+// a sentence. A number here read as "how many people see it", which it wasn't —
+// your own address is excluded, so it never matched the list of instructors
+// further up the page.
 function Tick({
-  label, count, on, set,
+  label, on, set,
 }: {
   label: string
-  count: number
   on: boolean
   set: (v: boolean) => void
 }) {
@@ -492,7 +494,6 @@ function Tick({
         className="accent-pr-red w-3 h-3"
       />
       {label}
-      <span className="text-zinc-600">{count}</span>
     </label>
   )
 }
