@@ -112,7 +112,7 @@ export default async function CourseView({
   const [{ data: inst }, { data: offDays }, { data: modules }, { data: instructors }, taskRows, { data: peopleRows }, { data: templateRows }, { data: courseDocRows }, { data: taskDocRows }, { data: mapRows }, { data: resourceRows }, { data: linkRows }, { data: updateRows }, { data: enrollmentRows }, { data: messageRows }] =
     await Promise.all([
       admin.from('course_instances')
-        .select('course_type, custom_title, status, location, client_name, notes, ref_number, starts_at, ends_at, meeting_point, meeting_time, intro, max_students, internal')
+        .select('course_type, custom_title, status, location, client_name, notes, ref_number, starts_at, ends_at, meeting_point, meeting_time, intro, max_students, internal, waiver_template_id')
         .eq('id', id)
         .single(),
       admin.from('instance_off_days')
@@ -421,6 +421,25 @@ export default async function CourseView({
     enrolledAt: e.enrolled_at,
   }))
   const enrolledCount = roster.length
+
+  // Who has signed, for the staff roster. Read only when staff are looking and
+  // only when the course actually has a waiver to sign — a column of "not
+  // signed" on a course that never asked for one is a false alarm.
+  const waiverOnCourse = Boolean(inst.waiver_template_id)
+  const { data: rosterSigRows } = showTasks && waiverOnCourse
+    ? await admin
+        .from('waiver_signatures')
+        .select('enrollment_id, identity, signed_at')
+        .eq('instance_id', id)
+        .not('enrollment_id', 'is', null)
+        .order('signed_at', { ascending: false })
+    : { data: [] }
+  const signedByEnrollment = new Map<string, { unverified: boolean }>()
+  for (const r of (rosterSigRows ?? []) as { enrollment_id: string; identity: string }[]) {
+    if (!signedByEnrollment.has(r.enrollment_id)) {
+      signedByEnrollment.set(r.enrollment_id, { unverified: r.identity === 'unverified' })
+    }
+  }
   // Counted by address and never by head: an instructor who is also enrolled is
   // one inbox, and your own doesn't count because the poster is never emailed
   // their own post. "everyone" is its own union for exactly that reason —
@@ -730,6 +749,15 @@ export default async function CourseView({
                     email={student.email}
                     phone={student.phone}
                     enrolledAt={student.enrolledAt}
+                    href={`/portal/${id}/people/${student.id}`}
+                    waiver={
+                      waiverOnCourse
+                        ? {
+                            signed: signedByEnrollment.has(student.id),
+                            unverified: signedByEnrollment.get(student.id)?.unverified ?? false,
+                          }
+                        : undefined
+                    }
                   />
                 ))}
               </div>

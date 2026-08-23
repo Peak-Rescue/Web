@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import InfoHint from '@/components/InfoHint'
@@ -126,7 +127,14 @@ export default function CourseWaiverSection({
                     }`}
                   />
                   <div className="min-w-0">
-                    <div className="text-sm text-zinc-200 truncate">{r.name}</div>
+                    <div className="text-sm text-zinc-200 truncate">
+                      <Link
+                        href={`/portal/${instanceId}/people/${r.enrollmentId}`}
+                        className="hover:text-white hover:underline transition-colors"
+                      >
+                        {r.name}
+                      </Link>
+                    </div>
                     <div className="text-[11px] text-zinc-500 truncate">
                       {r.signature ? (
                         <>

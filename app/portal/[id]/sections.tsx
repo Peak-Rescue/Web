@@ -288,11 +288,19 @@ export function StudentCard({
   email,
   phone,
   enrolledAt,
+  href,
+  waiver,
 }: {
   name: string
   email?: string | null
   phone?: string | null
   enrolledAt?: string | null
+  /** Their page, for staff. Students never get one to follow. */
+  href?: string
+  /** Whether they've signed, and how much the signature is worth. Undefined
+      when the course has no waiver, so the row says nothing rather than
+      implying something is outstanding. */
+  waiver?: { signed: boolean; unverified: boolean }
 }) {
   const initials = name
     .split(/\s+/)
@@ -301,13 +309,22 @@ export function StudentCard({
     .join('')
     .toUpperCase()
 
+  // Only the name is a link. The row can't be one: the email and phone below
+  // are links of their own, and an anchor inside an anchor is neither valid
+  // nor tappable in the way either of them wants to be.
   return (
     <div className="flex items-center gap-2.5 px-3 py-2 rounded-lg border border-zinc-800 bg-zinc-900">
       <span className="grid place-items-center w-9 h-9 rounded-full bg-zinc-800 text-zinc-400 text-xs font-semibold shrink-0">
         {initials || '?'}
       </span>
       <div className="min-w-0">
-        <div className="text-sm font-medium leading-tight truncate">{name}</div>
+        <div className="text-sm font-medium leading-tight truncate">
+          {href ? (
+            <Link href={href} className="hover:text-white hover:underline transition-colors">
+              {name}
+            </Link>
+          ) : name}
+        </div>
         <div className="text-[11px] text-zinc-500 leading-tight truncate">
           {email && (
             <a href={`mailto:${email}`} className="hover:text-zinc-300 transition-colors">
@@ -323,11 +340,20 @@ export function StudentCard({
           {!email && !phone && 'No contact details on file'}
         </div>
       </div>
-      {enrolledAt && (
-        <span className="ml-auto shrink-0 text-[11px] text-zinc-600">
-          Joined {new Date(enrolledAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-        </span>
-      )}
+      <div className="ml-auto shrink-0 text-right">
+        {waiver && (
+          <div className={`text-[11px] ${waiver.signed ? 'text-teal-400' : 'text-amber-400'}`}>
+            {waiver.signed
+              ? waiver.unverified ? 'Waiver · via QR' : 'Waiver signed'
+              : 'Waiver not signed'}
+          </div>
+        )}
+        {enrolledAt && (
+          <span className="text-[11px] text-zinc-600">
+            Joined {new Date(enrolledAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+          </span>
+        )}
+      </div>
     </div>
   )
 }
