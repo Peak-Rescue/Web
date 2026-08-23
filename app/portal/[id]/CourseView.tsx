@@ -13,6 +13,7 @@ import { LinkIcon, PaperclipIcon } from '@/components/TaskIcons'
 import { AudiencePills } from '@/components/AudiencePills'
 import PortalSectionNav from './PortalSectionNav'
 import CourseUpdates, { type CourseUpdate, type NotifyCounts } from './CourseUpdates'
+import CourseNotes from './CourseNotes'
 import type { UpdateAudience } from './update-actions'
 import CourseMessages, { type CourseMessage } from './CourseMessages'
 import { Section, SubHead, InstructorCard, StudentCard, SECTION_LABEL, type SectionKey } from './sections'
@@ -308,7 +309,10 @@ export default async function CourseView({
   const hasCurriculum = orderedModules.length > 0
   const hasGear = Boolean(gearList && gearList.gear_list_entries.length > 0)
   const hasResources = resources.length > 0
-  const hasNotes = showTasks && Boolean(inst.notes)
+  // Staff get the notes section whether or not there is anything in it — it is
+  // where the first note gets written, and an empty section that says so beats
+  // sending someone to the admin editor to type one line.
+  const hasNotes = showTasks
   // Everyone on the course sees updates; staff also get the box to write one,
   // so the section shows for them even when there's nothing posted yet.
   type UpdateRow = {
@@ -712,12 +716,12 @@ export default async function CourseView({
           </Section>
         )}
 
-        {/* Notes (instructors + admin only) */}
+        {/* Notes (instructors + admin only) — written here as well as read,
+            so the gate code someone just learned lands on the course while
+            they are still looking at it. */}
         {hasNotes && (
           <Section id="notes" blurb="Internal notes on this course" team>
-            <div className="p-4 bg-zinc-900 border border-zinc-800 rounded-lg text-sm text-zinc-300 whitespace-pre-wrap">
-              {inst.notes}
-            </div>
+            <CourseNotes instanceId={id} notes={inst.notes} canEdit={showTasks} />
           </Section>
         )}
 
