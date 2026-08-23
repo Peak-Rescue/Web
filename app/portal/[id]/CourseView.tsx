@@ -463,11 +463,19 @@ export default async function CourseView({
   // birth and a home address, so the course page shows you yours and nobody
   // else's. Staff track who has signed from the admin side.
   //
-  // Skipped only for a share-link guest, who has no account to be enrolled by.
-  // Being enrolled is the whole gate — an admin previewing as a student is
-  // still the person whose waiver it is, and hiding it there is how you end up
-  // testing the feature and concluding it doesn't work.
-  const waiver = userId ? await loadStudentWaiver(id, userId) : null
+  // Students sign; the people running the course don't. An instructor assigned
+  // to a delivery is working it, not taking part in it, and asking them to
+  // release us from liability for their own course is nonsense on its face.
+  //
+  // Keyed on who gets the staff view of this course: an instructor assigned to
+  // it, or an admin, who gets that view everywhere. So an admin taking a course
+  // as a student is never asked to sign either — which is the call, not an
+  // oversight. If that ever needs to change, the honest fix is a real
+  // participant role rather than reading it off the job title.
+  //
+  // Previewing as a student shows it, which is how the student's view stays
+  // checkable by the people who can't otherwise see it.
+  const waiver = userId && !showTasks ? await loadStudentWaiver(id, userId) : null
 
   const hasUpdates = canPostUpdates || courseUpdates.length > 0
   const hasDocuments = showTasks && courseDocs.length > 0
