@@ -14,6 +14,7 @@ import { AudiencePills } from '@/components/AudiencePills'
 import PortalSectionNav from './PortalSectionNav'
 import CourseUpdates, { type CourseUpdate, type NotifyCounts } from './CourseUpdates'
 import CourseNotes from './CourseNotes'
+import MeetingDetails from './MeetingDetails'
 import type { UpdateAudience } from './update-actions'
 import CourseMessages, { type CourseMessage } from './CourseMessages'
 import WaiverPanel from './WaiverPanel'
@@ -309,7 +310,10 @@ export default async function CourseView({
 
   // Which named sections this course actually has — drives both the jump bar
   // and the order things render in, so the two can never disagree.
-  const hasAbout = Boolean(inst.intro || inst.meeting_point || inst.meeting_time)
+  // Staff get this section whether or not anything is in it. An unset meeting
+  // point is the thing they most need to notice, and hiding the block hides
+  // the only place they can fix it.
+  const hasAbout = Boolean(inst.intro || inst.meeting_point || inst.meeting_time) || showTasks
   const hasSchedule = Boolean(sched && schedDays.length > 0)
   const hasCurriculum = orderedModules.length > 0
   const hasGear = Boolean(gearList && gearList.gear_list_entries.length > 0)
@@ -882,22 +886,13 @@ export default async function CourseView({
               {inst.intro && (
                 <p className="text-sm text-zinc-300 whitespace-pre-line">{inst.intro}</p>
               )}
-              {(inst.meeting_point || inst.meeting_time) && (
-                <dl className="grid sm:grid-cols-2 gap-3">
-                  {inst.meeting_point && (
-                    <div className="px-3 py-2 rounded-lg border border-zinc-800 bg-zinc-900">
-                      <dt className="text-[11px] uppercase tracking-wide text-zinc-500">Meeting point</dt>
-                      <dd className="text-sm text-zinc-200 mt-0.5">{inst.meeting_point}</dd>
-                    </div>
-                  )}
-                  {inst.meeting_time && (
-                    <div className="px-3 py-2 rounded-lg border border-zinc-800 bg-zinc-900">
-                      <dt className="text-[11px] uppercase tracking-wide text-zinc-500">Meeting time</dt>
-                      <dd className="text-sm text-zinc-200 mt-0.5">{inst.meeting_time}</dd>
-                    </div>
-                  )}
-                </dl>
-              )}
+              <MeetingDetails
+                instanceId={id}
+                meetingPoint={inst.meeting_point}
+                meetingTime={inst.meeting_time}
+                canEdit={showTasks}
+                notifyCounts={notifyCounts}
+              />
             </div>
           </Section>
         )}

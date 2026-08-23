@@ -865,7 +865,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
               <input
                 name="meeting_point"
                 defaultValue={inst.meeting_point ?? ''}
-                placeholder="e.g. Garfield Ledges trailhead, lower lot"
+                placeholder="e.g. lower lot, by the big cedar"
                 className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500"
               />
             </div>

@@ -84,7 +84,8 @@ async function notify(
   authorName: string,
   authorEmail: string | null,
   audience: UpdateAudience,
-  isReminder: boolean
+  isReminder: boolean,
+  subjectNote: string | null
 ): Promise<NotifyOutcome> {
   const wantStudents = audience === 'students' || audience === 'everyone'
   const wantCrew = audience === 'instructors' || audience === 'everyone'
@@ -125,9 +126,15 @@ async function notify(
   // Deliberately says nothing about the update itself. Anything quoted here
   // is a second copy that an edit can't reach — which is the whole reason the
   // message lives on the portal.
-  const subject = isReminder
-    ? `${courseName} — updated information`
-    : `${courseName} — new update from ${authorName}`
+  // A generic "new update" is a mail some people won't open at 2100 the night
+  // before. Where the caller knows what kind of news this is, it says so —
+  // still only that something changed, never what it changed to, so nothing
+  // freezes in an inbox.
+  const subject = subjectNote
+    ? `${courseName} — ${subjectNote}`
+    : isReminder
+      ? `${courseName} — updated information`
+      : `${courseName} — new update from ${authorName}`
   const text = [
     isReminder
       // Wording that fits an instructor as well as a student — the same
@@ -176,7 +183,12 @@ export type PostResult = { recipients: number; sent: number; emailProblem: strin
 
 export async function postCourseUpdate(
   instanceId: string,
-  input: { body: string; links?: UpdateLink[]; attachments?: UpdateAttachment[]; audience?: UpdateAudience }
+  input: {
+    body: string; links?: UpdateLink[]; attachments?: UpdateAttachment[]; audience?: UpdateAudience
+    /** Replaces "new update from X" in the email subject — the meeting details
+        moving deserves a line that says so. Never carries a value. */
+    subjectNote?: string
+  }
 ): Promise<PostResult> {
   const { user, admin, authorName } = await requireCourseStaff(instanceId)
 
@@ -204,7 +216,7 @@ export async function postCourseUpdate(
     .single()
   if (error) throw new Error(error.message)
 
-  const outcome = await notify(admin, instanceId, authorName, user.email ?? null, audience, false)
+  const outcome = await notify(admin, instanceId, authorName, user.email ?? null, audience, false, (input.subjectNote ?? '').trim().slice(0, 120) || null)
 
   await admin
     .from('course_updates')
@@ -264,7 +276,7 @@ export async function renotifyCourseUpdate(
 
   // The group it was addressed to, not whoever is on the course now — a second
   // notice goes to the same people as the first.
-  const outcome = await notify(admin, instanceId, authorName, user.email ?? null, cleanAudience(existing.audience), true)
+  const outcome = await notify(admin, instanceId, authorName, user.email ?? null, cleanAudience(existing.audience), true, null)
 
   await admin
     .from('course_updates')
