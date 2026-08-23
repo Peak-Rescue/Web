@@ -234,10 +234,14 @@ export async function loadWaiverPdfData(
     .maybeSingle()
   if (!sig) return null
 
-  const [{ data: version }, { data: inst }] = await Promise.all([
+  // The version and its template are read separately rather than embedded:
+  // there are two foreign keys between these tables — a version belongs to a
+  // template, and a template points at its current version — so an embed is
+  // ambiguous and PostgREST refuses it outright.
+  const [{ data: version, error: versionError }, { data: inst }] = await Promise.all([
     admin
       .from('waiver_template_versions')
-      .select('version, body, waiver_templates(name)')
+      .select('version, body, template_id')
       .eq('id', sig.version_id)
       .single(),
     admin
@@ -246,9 +250,16 @@ export async function loadWaiverPdfData(
       .eq('id', sig.instance_id)
       .single(),
   ])
+  // Loudly: returning null here means a signed waiver can't be produced, and
+  // the last time that happened quietly it looked like two unrelated bugs.
+  if (versionError) console.error('Waiver version lookup failed:', versionError.message)
   if (!version || !inst) return null
 
-  const template = version.waiver_templates as unknown as { name: string } | null
+  const { data: template } = await admin
+    .from('waiver_templates')
+    .select('name')
+    .eq('id', version.template_id)
+    .maybeSingle()
 
   return {
     courseTitle: courseDisplayName(inst.course_type, inst.custom_title),
