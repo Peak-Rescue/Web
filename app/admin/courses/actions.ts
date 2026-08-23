@@ -535,18 +535,26 @@ export async function addLibraryItems(instanceId: string, moduleId: string, item
   revalidatePath(`/portal/${instanceId}`)
 }
 
-// Per-delivery logistics — meeting point, time, running order. Participant
-// facing by definition, and the one part of course content that must be
-// rewritten every delivery rather than pulled from the library.
+// Per-delivery logistics — the welcome, and once the meeting point and time.
+// Participant facing by definition, and the one part of course content that
+// must be rewritten every delivery rather than pulled from the library.
+//
+// Only the fields the form actually submitted are written. Meeting point and
+// time moved out to their own control, and blanket-writing every column would
+// have had a save of the welcome text quietly null the meeting point — on the
+// morning of, on a course where that is the one thing nobody can guess.
 export async function updateCourseLogistics(id: string, formData: FormData) {
   await requireAdmin()
+  const patch: Record<string, string | null> = {}
+  for (const field of ['intro', 'meeting_point', 'meeting_time']) {
+    if (!formData.has(field)) continue
+    patch[field] = ((formData.get(field) as string) || '').trim() || null
+  }
+  if (Object.keys(patch).length === 0) return
+
   const { error } = await createAdminClient()
     .from('course_instances')
-    .update({
-      intro: ((formData.get('intro') as string) || '').trim() || null,
-      meeting_point: ((formData.get('meeting_point') as string) || '').trim() || null,
-      meeting_time: ((formData.get('meeting_time') as string) || '').trim() || null,
-    })
+    .update(patch)
     .eq('id', id)
   if (error) throw new Error(error.message)
   revalidatePath(`/admin/courses/${id}`)

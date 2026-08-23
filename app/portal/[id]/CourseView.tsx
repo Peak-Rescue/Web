@@ -22,6 +22,7 @@ import WaiverQrPanel, { type WaiverQr } from '@/components/WaiverQrPanel'
 import UnmatchedWaivers from '@/components/UnmatchedWaivers'
 import { loadUnmatchedWaivers } from '@/lib/waiver-data'
 import { loadStudentWaiver } from '@/lib/waiver-data'
+import { notifyCountsFrom } from '@/lib/course-notify'
 import { Section, SubHead, InstructorCard, StudentCard, SECTION_LABEL, type SectionKey } from './sections'
 import { PURPOSE_META, PURPOSE_ORDER, linkLabel, type CourseLink } from '@/lib/course-links'
 
@@ -468,24 +469,11 @@ export default async function CourseView({
       signedByEnrollment.set(r.enrollment_id, { unverified: r.identity === 'unverified' })
     }
   }
-  // Counted by address and never by head: an instructor who is also enrolled is
-  // one inbox, and your own doesn't count because the poster is never emailed
-  // their own post. "everyone" is its own union for exactly that reason —
-  // adding the two groups would double-count that person.
-  const addresses = (emails: (string | null | undefined)[]) =>
-    new Set(
-      emails
-        .filter(Boolean)
-        .map((e) => e!.trim().toLowerCase())
-        .filter((e) => e && e !== ownEmail)
-    )
-  const studentAddresses = addresses(roster.map((r) => r.email))
-  const crewAddresses = addresses(crewEmails.map((p) => p?.email))
-  const notifyCounts: NotifyCounts = {
-    students: studentAddresses.size,
-    instructors: crewAddresses.size,
-    everyone: new Set([...studentAddresses, ...crewAddresses]).size,
-  }
+  const notifyCounts: NotifyCounts = notifyCountsFrom(
+    roster.map((r) => r.email),
+    crewEmails.map((p) => p?.email),
+    ownEmail
+  )
 
   // The viewer's own waiver. Only ever their own — a waiver carries a date of
   // birth and a home address, so the course page shows you yours and nobody

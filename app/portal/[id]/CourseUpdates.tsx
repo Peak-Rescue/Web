@@ -28,10 +28,8 @@ export type CourseUpdate = {
   isNew?: boolean
 }
 
-/** How many inboxes each choice of audience reaches, you excepted. `everyone`
-    is counted separately rather than added up, because an instructor who is
-    also enrolled would otherwise be counted twice. */
-export type NotifyCounts = { students: number; instructors: number; everyone: number }
+import type { NotifyCounts } from '@/lib/course-notify'
+export type { NotifyCounts }
 
 // Updates for the people on the course. The email only points here, so this
 // page is the one copy: editing an update corrects what everyone sees, and

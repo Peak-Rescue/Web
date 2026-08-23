@@ -4,7 +4,7 @@ import { useState } from 'react'
 import InfoHint from '@/components/InfoHint'
 import { linkLabel } from '@/lib/course-links'
 import { createUpdateUploadTargets, type UpdateLink, type UpdateAttachment, type UpdateAudience } from './update-actions'
-import type { NotifyCounts } from './CourseUpdates'
+import type { NotifyCounts } from '@/lib/course-notify'
 
 const AUDIENCE_LABEL: Record<UpdateAudience, string> = {
   students: 'the students',
@@ -233,9 +233,9 @@ export default function Composer({
             {!toStudents && !toInstructors
               ? 'Tick who this is for.'
               : reach === 0
-                ? `Nobody in ${AUDIENCE_LABEL[audience]} to email yet — posts to this page only.`
-                : `Emails ${reach === 1 ? '1 person' : `${reach} people`} a link to this page.`}
-            <InfoHint text="The email only points here, so editing this later corrects what everyone sees. If it has to reach them tonight even without logging in, send an email instead." />
+                ? `Nobody in ${AUDIENCE_LABEL[audience]} to email yet — posts to the course page only.`
+                : `Emails ${reach === 1 ? '1 person' : `${reach} people`} a link to the course page.`}
+            <InfoHint text="The email only points at the course page, so editing this later corrects what everyone sees. If it has to reach them tonight even without logging in, send an email instead." />
           </span>
         )}
       </div>

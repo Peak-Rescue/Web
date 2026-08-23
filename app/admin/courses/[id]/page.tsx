@@ -48,6 +48,8 @@ import CourseMapsSection, { type CourseMap } from '../CourseMapsSection'
 import CourseResourcesSection, { type CourseResource } from '../CourseResourcesSection'
 import CourseLocationFields from '@/components/CourseLocationFields'
 import { regionLabel } from '@/lib/regions'
+import MeetingDetails from '@/app/portal/[id]/MeetingDetails'
+import { courseNotifyCounts } from '@/lib/course-notify'
 
 const STATUS_STYLES: Record<string, string> = {
   tentative: 'bg-yellow-900/40 text-yellow-300 border-yellow-700',
@@ -259,6 +261,11 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
   ].sort((a, b) => b.created_at.localeCompare(a.created_at))
 
   const enrollments = enrollmentRows ?? []
+
+  // What "Tell the course" would reach from here — the same count the course
+  // page shows, so the promise made before an irreversible send is the same
+  // number on both screens.
+  const notifyCounts = await courseNotifyCounts(admin, id, user.email ?? null)
 
   // The waiver picture for this course. Signatures are read for the whole
   // course rather than per student, so one query answers the roster; the
@@ -849,36 +856,30 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
           <p className="text-xs text-zinc-500 mb-3">
             Shown to everyone on the course.
           </p>
-          <AutoSaveForm action={updateLogisticsWithId} className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-6 bg-zinc-900 border border-zinc-800 rounded-lg">
-            <div className="sm:col-span-2">
-              <label className="block text-xs text-zinc-400 mb-1">Welcome / what to expect</label>
-              <textarea
-                name="intro"
-                rows={3}
-                defaultValue={inst.intro ?? ''}
-                placeholder="Short intro to the course — what they'll cover, how it runs, anything to know before arriving."
-                className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm resize-y focus:outline-none focus:border-zinc-500"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-zinc-400 mb-1">Meeting point</label>
-              <input
-                name="meeting_point"
-                defaultValue={inst.meeting_point ?? ''}
-                placeholder="e.g. lower lot, by the big cedar"
-                className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-zinc-400 mb-1">Day one meeting time</label>
-              <input
-                name="meeting_time"
-                defaultValue={inst.meeting_time ?? ''}
-                placeholder="e.g. 0700, ready to walk"
-                className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500"
-              />
-            </div>
+          <AutoSaveForm action={updateLogisticsWithId} className="p-6 bg-zinc-900 border border-zinc-800 rounded-lg">
+            <label className="block text-xs text-zinc-400 mb-1">Welcome / what to expect</label>
+            <textarea
+              name="intro"
+              rows={3}
+              defaultValue={inst.intro ?? ''}
+              placeholder="Short intro to the course — what they'll cover, how it runs, anything to know before arriving."
+              className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm resize-y focus:outline-none focus:border-zinc-500"
+            />
           </AutoSaveForm>
+
+          {/* Not part of the autosaving form above. Where and when to meet is
+              news, and news is sent deliberately — the same control the course
+              page carries, so setting it here or from the trailhead is the
+              same gesture with the same audience ticks, links and photos. */}
+          <div className="mt-4 p-6 bg-zinc-900 border border-zinc-800 rounded-lg">
+            <MeetingDetails
+              instanceId={id}
+              meetingPoint={inst.meeting_point}
+              meetingTime={inst.meeting_time}
+              canEdit
+              notifyCounts={notifyCounts}
+            />
+          </div>
 
           {/* On an internal course the attendees are the crew, enrolled through
               Staffing — there is no roster to invite and nobody outside to

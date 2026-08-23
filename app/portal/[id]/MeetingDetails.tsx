@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Composer, { type Draft } from './UpdateComposer'
-import type { NotifyCounts } from './CourseUpdates'
+import type { NotifyCounts } from '@/lib/course-notify'
 import { postCourseUpdate } from './update-actions'
 import { saveMeetingDetails } from './logistics-actions'
 
