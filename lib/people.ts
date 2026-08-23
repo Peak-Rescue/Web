@@ -43,8 +43,13 @@ export type CoursePerson = {
   emergencyPhone: string | null
   emergencyRelationship: string | null
 
-  /** Their waiver for the course you came from. */
+  /** Their current waiver for the course you came from. */
   waiver: PersonWaiver | null
+  /** Earlier ones for the same course, newest first. Signing again supersedes
+      rather than replaces — a second waiver usually means somebody re-signed,
+      or a walk-up was attached to a person who had already signed, and the
+      record of what they agreed to the first time is not ours to hide. */
+  supersededWaivers: PersonWaiver[]
   /** What the waiver recorded that a profile has nowhere to keep. */
   waiverDetails: {
     dateOfBirth: string
@@ -120,11 +125,14 @@ export async function loadCoursePerson(
     templateName: templateOfVersion.get(s.version_id) ?? 'Liability waiver',
   })
 
-  // Latest per course: re-signing supersedes rather than replaces.
+  // Latest per course decides what counts; the rest are kept to be shown.
   const latestByInstance = new Map<string, NonNullable<typeof signatures>[number]>()
   for (const s of signatures ?? []) {
     if (!latestByInstance.has(s.instance_id)) latestByInstance.set(s.instance_id, s)
   }
+  const supersededHere = (signatures ?? []).filter(
+    (s) => s.instance_id === instanceId && s.id !== latestByInstance.get(instanceId)?.id
+  )
 
   const thisSignature = latestByInstance.get(instanceId) ?? null
   // Falls back to their most recent waiver anywhere: a date of birth doesn't
@@ -166,6 +174,7 @@ export async function loadCoursePerson(
     emergencyPhone: profile?.emergency_phone ?? null,
     emergencyRelationship: profile?.emergency_relationship ?? null,
     waiver: thisSignature ? toWaiver(thisSignature) : null,
+    supersededWaivers: supersededHere.map(toWaiver),
     waiverDetails: detailSource
       ? {
           dateOfBirth: detailSource.date_of_birth,

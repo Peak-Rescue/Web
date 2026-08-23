@@ -148,6 +148,35 @@ export default async function CoursePersonPage({
           </div>
         )}
 
+        {person.supersededWaivers.length > 0 && (
+          <div className="mt-2 rounded-lg border border-zinc-800 bg-zinc-900 divide-y divide-zinc-800">
+            <p className="px-4 pt-3 pb-1 text-[11px] uppercase tracking-wide text-zinc-500">
+              Also signed for this course
+            </p>
+            {person.supersededWaivers.map((s) => (
+              <div key={s.id} className="flex items-baseline gap-3 px-4 py-2.5">
+                <div className="min-w-0">
+                  <p className="text-sm text-zinc-300">{s.templateName}</p>
+                  <p className="text-[11px] text-zinc-500">
+                    {longDate(s.signedAt)}
+                    {s.signerRole === 'guardian' && s.guardianName && ` · signed by ${s.guardianName}`}
+                    {s.identity === 'unverified' ? ' · self-entered via QR' : ' · signed in to the portal'}
+                    {' · superseded'}
+                  </p>
+                </div>
+                <a
+                  href={`/api/waivers/${s.id}/pdf`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="ml-auto shrink-0 text-xs text-zinc-400 hover:text-zinc-200 underline transition-colors"
+                >
+                  PDF
+                </a>
+              </div>
+            ))}
+          </div>
+        )}
+
         {person.waiverDetails && person.waiverDetails.address.length > 0 && (
           <div className="mt-3 rounded-lg border border-zinc-800 bg-zinc-900 px-4 py-3">
             <p className="text-[11px] uppercase tracking-wide text-zinc-500">Address given on the waiver</p>
