@@ -46,6 +46,12 @@ const STATUS_LABEL: Record<string, string> = {
 // the editor. Only the held-back state changes colour; the ordinary chip keeps
 // whatever its section already looked like, which is why maps stay teal and
 // links stay zinc rather than every chip on the page turning into a status.
+//
+// Both states name their audience, and only the team is shown either. One tag
+// and one silence was read as a discrepancy rather than a pair, and it left
+// the other half of the answer resting on whoever had typed "Student Map"
+// into a title — a second source of truth that agrees with the column
+// controlling visibility right up until someone changes one of them.
 const CHIP = {
   instructors: {
     chip: 'border-amber-900 bg-amber-950/40 text-amber-400',
@@ -62,6 +68,7 @@ const CHIP = {
   links: {
     chip: 'border-zinc-700 bg-zinc-900 text-zinc-300',
     hover: 'hover:text-white hover:border-zinc-500',
+    tail: 'text-teal-500/70',
   },
 } as const
 
@@ -663,7 +670,7 @@ export default async function CourseView({
                   {/* The word stays: amber and teal are one colour apart, and
                       this is the distinction that decides whether a student is
                       handed the instructors' link. */}
-                  {held && <span className={c.tail}>· instructors</span>}
+                  {showTasks && <span className={c.tail}>· {held ? 'instructors' : 'students'}</span>}
                 </span>
                 )
               })}
@@ -698,8 +705,10 @@ export default async function CourseView({
                         }`}
                       >
                         {linkLabel(l)}
-                        {showTasks && l.audience === 'internal' && (
-                          <span className={CHIP.instructors.tail}>· instructors</span>
+                        {showTasks && (
+                          <span className={l.audience === 'internal' ? CHIP.instructors.tail : CHIP.links.tail}>
+                            · {l.audience === 'internal' ? 'instructors' : 'students'}
+                          </span>
                         )}
                       </a>
                     ))}
