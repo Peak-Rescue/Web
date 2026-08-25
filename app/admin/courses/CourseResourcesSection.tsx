@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { errorFrom, type ActionResult } from '@/lib/action-result'
 import AddLinkDialog from '@/components/AddLinkDialog'
 import { KIND_META, type LibraryAudience, type LibraryKind } from '@/lib/library'
 import { AudiencePills } from '@/components/AudiencePills'
@@ -50,14 +51,23 @@ export default function CourseResourcesSection({
   const [pickerOpen, setPickerOpen] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
 
-  async function run(fn: () => Promise<void>) {
+  // An expected refusal comes back as a value and is shown as it was written;
+  // anything thrown is a fault, and errorFrom keeps its digest so the log entry
+  // can be found.
+  //
+  // The refresh happens on a refusal too. Half of them are partial — the link
+  // was added and only the promotion to the library was declined — and a
+  // refusal that leaves the screen out of date is a worse lie than the wasted
+  // fetch when nothing changed.
+  async function run(fn: () => Promise<ActionResult>) {
     setBusy(true)
     setError(null)
     try {
-      await fn()
+      const result = await fn()
       router.refresh()
+      if (result?.error) setError(result.error)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Something went wrong — please try again.')
+      setError(errorFrom(e))
     } finally {
       setBusy(false)
     }
@@ -69,8 +79,8 @@ export default function CourseResourcesSection({
       setBusy(true)
       try {
         setPicker(await loadResourceLibrary(instanceId))
-      } catch {
-        setError('Could not load the resource library.')
+      } catch (e) {
+        setError(errorFrom(e, 'Could not load the resource library.'))
       } finally {
         setBusy(false)
       }
@@ -274,7 +284,8 @@ export default function CourseResourcesSection({
             // reported under the section, and a dialog left open would sit
             // on top of the sentence explaining what to do instead.
             try {
-              await addCourseResourceLink(instanceId, url, name, audience, toLibrary)
+              const result = await addCourseResourceLink(instanceId, url, name, audience, toLibrary)
+              if (result?.error) return result
               if (toLibrary) setPicker(null) // the shelf just changed
             } finally {
               setLinkOpen(false)

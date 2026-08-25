@@ -6,6 +6,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { normalizeDocLink } from '@/lib/doc-links'
 import { type LibraryAudience } from '@/lib/library'
 import { regionLabel } from '@/lib/regions'
+import { refuse, type ActionResult } from '@/lib/action-result'
 
 // Maps attached to a course, set alongside its location. Two ways in: pick a
 // map from the library's Maps bucket (the reusable venue map, with its
@@ -138,7 +139,7 @@ export async function addCourseMapLink(
   label: string,
   audience: LibraryAudience = 'internal',
   toLibrary = false
-) {
+): Promise<ActionResult> {
   const { user, admin } = await requireAdmin()
   const link = normalizeDocLink(url, label)
 
@@ -155,7 +156,7 @@ export async function addCourseMapLink(
     .limit(1)
     .maybeSingle()
   if (onShelf) {
-    throw new Error(
+    return refuse(
       `“${onShelf.title}” is already in the map library — add it with “Choose from map library” so this course points at that copy.`
     )
   }
@@ -168,7 +169,7 @@ export async function addCourseMapLink(
     .eq('url', link.url)
     .limit(1)
     .maybeSingle()
-  if (onCourse) throw new Error('That map is already on this course.')
+  if (onCourse) return refuse('That map is already on this course.')
 
   const sort = await nextSort(admin, instanceId)
   const { data: row, error } = await admin
@@ -189,14 +190,21 @@ export async function addCourseMapLink(
   if (error) throw new Error(error.message)
 
   // The map is on the course either way — a library failure must not lose it,
-  // so the promotion reports itself rather than unwinding the add.
-  if (toLibrary) await promoteToLibrary(admin, instanceId, row.id)
+  // so the promotion reports itself rather than unwinding the add. The page
+  // still has to be told about the map that did land, which is why the
+  // refusal goes back after the revalidation rather than instead of it.
+  const failed = toLibrary ? await promoteToLibrary(admin, instanceId, row.id) : null
 
   revalidate(instanceId)
   if (toLibrary) revalidatePath('/admin/library')
+  if (failed) return failed
 }
 
-export async function setCourseMapAudience(instanceId: string, mapId: string, audience: LibraryAudience) {
+export async function setCourseMapAudience(
+  instanceId: string,
+  mapId: string,
+  audience: LibraryAudience
+): Promise<ActionResult> {
   const { admin } = await requireAdmin()
 
   // Honour the library item's ceiling here too — the toggle is per course,
@@ -210,7 +218,7 @@ export async function setCourseMapAudience(instanceId: string, mapId: string, au
       .single()
     const itemAudience = (row?.library_items as unknown as { audience: string } | null)?.audience
     if (itemAudience === 'internal') {
-      throw new Error('This map is marked instructors-only in the library — change it there first.')
+      return refuse('This map is marked instructors-only in the library — change it there first.')
     }
   }
 
@@ -227,25 +235,27 @@ export async function setCourseMapAudience(instanceId: string, mapId: string, au
 // place finds it. The course keeps the same row — it just stops owning the
 // link and starts pointing at the library item, so fixing the map later fixes
 // it everywhere.
-export async function saveCourseMapToLibrary(instanceId: string, mapId: string) {
+export async function saveCourseMapToLibrary(instanceId: string, mapId: string): Promise<ActionResult> {
   const { admin } = await requireAdmin()
-  await promoteToLibrary(admin, instanceId, mapId)
+  const failed = await promoteToLibrary(admin, instanceId, mapId)
+  if (failed) return failed
   revalidate(instanceId)
   revalidatePath('/admin/library')
 }
 
+// Returns a refusal rather than throwing one, so its callers can pass it on.
 async function promoteToLibrary(
   admin: ReturnType<typeof createAdminClient>,
   instanceId: string,
   mapId: string
-) {
+): Promise<{ error: string } | null> {
   const [{ data: row }, { data: inst }] = await Promise.all([
     admin.from('course_maps').select('id, url, label, audience, library_item_id').eq('id', mapId).eq('instance_id', instanceId).single(),
     admin.from('course_instances').select('region, venue_id').eq('id', instanceId).single(),
   ])
-  if (!row) throw new Error('That map is no longer on this course')
-  if (row.library_item_id) throw new Error('That map is already in the library')
-  if (!row.url) throw new Error('That map has no link to save')
+  if (!row) return refuse('That map is no longer on this course')
+  if (row.library_item_id) return refuse('That map is already in the library')
+  if (!row.url) return refuse('That map has no link to save')
 
   // Same link already in the map library? Point at it instead of making a
   // second copy that would then drift from the first.
@@ -295,6 +305,7 @@ async function promoteToLibrary(
     .eq('id', mapId)
     .eq('instance_id', instanceId)
   if (error) throw new Error(error.message)
+  return null
 }
 
 export async function renameCourseMap(instanceId: string, mapId: string, label: string) {

@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { normalizeDocLink } from '@/lib/doc-links'
+import { refuse, type ActionResult } from '@/lib/action-result'
 
 // General course documents (contracts, site maps, client paperwork) — files
 // attached to the course itself rather than a task. Same private bucket and
@@ -22,23 +23,26 @@ async function requireAdmin() {
   return { user, admin }
 }
 
+// A file that is too big is the commonest thing to hit here, and the person
+// hitting it needs to be told which file — so the whole batch comes back as
+// either targets or one refusal, never a half-uploaded set.
 export async function createCourseDocUploadTargets(
   instanceId: string,
   files: { name: string; size: number }[]
-): Promise<{ path: string; token: string }[]> {
+): Promise<{ targets: { path: string; token: string }[] } | { error: string }> {
   const { admin } = await requireAdmin()
   const { randomUUID } = await import('crypto')
 
   const targets: { path: string; token: string }[] = []
   for (const file of files) {
-    if (file.size > MAX_DOC_BYTES) throw new Error(`"${file.name}" is over the 20 MB limit`)
+    if (file.size > MAX_DOC_BYTES) return refuse(`“${file.name}” is over the 20 MB limit`)
     const ext = (file.name.split('.').pop() ?? 'pdf').toLowerCase().replace(/[^a-z0-9]/g, '') || 'pdf'
     const path = `courses/${instanceId}/${randomUUID()}.${ext}`
     const { data, error } = await admin.storage.from(DOC_BUCKET).createSignedUploadUrl(path)
     if (error || !data) throw new Error(error?.message ?? 'Could not create upload URL')
     targets.push({ path: data.path, token: data.token })
   }
-  return targets
+  return { targets }
 }
 
 export async function finalizeCourseDocs(
@@ -74,10 +78,14 @@ export async function addCourseDocLink(instanceId: string, url: string, title: s
   revalidatePath(`/admin/courses/${instanceId}`)
 }
 
-export async function renameCourseDoc(instanceId: string, docId: string, filename: string) {
+export async function renameCourseDoc(
+  instanceId: string,
+  docId: string,
+  filename: string
+): Promise<ActionResult> {
   const { admin } = await requireAdmin()
   const name = filename.trim().slice(0, 200)
-  if (!name) throw new Error('File name cannot be empty')
+  if (!name) return refuse('File name cannot be empty')
   const { error } = await admin
     .from('course_documents')
     .update({ filename: name })
@@ -87,7 +95,7 @@ export async function renameCourseDoc(instanceId: string, docId: string, filenam
   revalidatePath(`/admin/courses/${instanceId}`)
 }
 
-export async function deleteCourseDoc(instanceId: string, docId: string) {
+export async function deleteCourseDoc(instanceId: string, docId: string): Promise<ActionResult> {
   const { admin } = await requireAdmin()
   const { data: doc } = await admin
     .from('course_documents')
@@ -95,7 +103,7 @@ export async function deleteCourseDoc(instanceId: string, docId: string) {
     .eq('id', docId)
     .eq('instance_id', instanceId)
     .single()
-  if (!doc) throw new Error('Document not found')
+  if (!doc) return refuse('That file is no longer on this course')
   if (doc.path) await admin.storage.from(DOC_BUCKET).remove([doc.path])
   const { error } = await admin.from('course_documents').delete().eq('id', docId)
   if (error) throw new Error(error.message)

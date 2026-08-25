@@ -3,6 +3,7 @@
 import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { errorFrom } from '@/lib/action-result'
 import {
   createCourseDocUploadTargets,
   finalizeCourseDocs,
@@ -66,10 +67,15 @@ export default function CourseFilesSection({
     setUploading(true)
     setError(null)
     try {
-      const targets = await createCourseDocUploadTargets(
+      const prepared = await createCourseDocUploadTargets(
         instanceId,
         picked.map((f) => ({ name: f.name, size: f.size }))
       )
+      if ('error' in prepared) {
+        setError(prepared.error)
+        return
+      }
+      const { targets } = prepared
       const supabase = createClient()
       const uploads: { path: string; filename: string }[] = []
       for (let i = 0; i < picked.length; i++) {
@@ -83,7 +89,7 @@ export default function CourseFilesSection({
       setPending([])
       router.refresh()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Upload failed')
+      setError(errorFrom(err, 'Upload failed'))
     } finally {
       setUploading(false)
     }
@@ -97,7 +103,7 @@ export default function CourseFilesSection({
       setLinkOpen(false)
       router.refresh()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not add link')
+      setError(errorFrom(err, 'Could not add link'))
     } finally {
       setLinkBusy(false)
     }
@@ -112,10 +118,14 @@ export default function CourseFilesSection({
     setBusyId(f.id)
     setError(null)
     try {
-      await renameCourseDoc(instanceId, f.id, name)
+      const result = await renameCourseDoc(instanceId, f.id, name)
+      if (result?.error) {
+        setError(result.error)
+        return
+      }
       router.refresh()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Rename failed')
+      setError(errorFrom(err, 'Rename failed'))
     } finally {
       setBusyId(null)
     }
@@ -126,10 +136,14 @@ export default function CourseFilesSection({
     setBusyId(f.id)
     setError(null)
     try {
-      await deleteCourseDoc(instanceId, f.id)
+      const result = await deleteCourseDoc(instanceId, f.id)
+      if (result?.error) {
+        setError(result.error)
+        return
+      }
       router.refresh()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Delete failed')
+      setError(errorFrom(err, 'Delete failed'))
     } finally {
       setBusyId(null)
     }

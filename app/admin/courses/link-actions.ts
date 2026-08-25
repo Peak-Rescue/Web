@@ -6,6 +6,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { normalizeDocLink } from '@/lib/doc-links'
 import { type LibraryAudience } from '@/lib/library'
 import { LINK_PURPOSES, type LinkPurpose } from '@/lib/course-links'
+import { refuse, type ActionResult } from '@/lib/action-result'
 
 // One-off links attached to a course — the shared photo album, the client's
 // own paperwork, a permit portal. Reusable material belongs in the library and
@@ -40,9 +41,9 @@ function revalidate(instanceId: string) {
 export async function addCourseLink(
   instanceId: string,
   input: { url: string; label: string; purpose: LinkPurpose; audience?: LibraryAudience }
-) {
+): Promise<ActionResult> {
   const { user, admin } = await requireTeam(instanceId)
-  if (!LINK_PURPOSES.includes(input.purpose)) throw new Error('Unknown kind of link')
+  if (!LINK_PURPOSES.includes(input.purpose)) return refuse('Unknown kind of link')
 
   const { url, filename } = normalizeDocLink(input.url, input.label)
 
@@ -67,7 +68,7 @@ export async function addCourseLink(
     added_by: user.id,
   })
   if (error) {
-    if (error.code === '23505') throw new Error('That link is already on this course')
+    if (error.code === '23505') return refuse('That link is already on this course')
     throw new Error(error.message)
   }
   revalidate(instanceId)
