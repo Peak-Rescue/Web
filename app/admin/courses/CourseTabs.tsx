@@ -39,7 +39,11 @@ export function CourseTabs({
 
   return (
     <TabContext.Provider value={active}>
-      <div className="sticky top-16 md:top-20 z-30 -mx-4 px-4 py-2 sm:py-0 bg-zinc-950/95 backdrop-blur border-b border-zinc-800 mb-8">
+      {/* Amber, where the course page's own bar is red. Amber already means
+          "internal, not for students" everywhere else in here, and the editor
+          is exactly that — so glancing at the bar tells you which of the two
+          screens you are on without reading a word of it. */}
+      <div className="sticky top-16 md:top-20 z-30 -mx-4 px-4 py-2 sm:py-0 bg-zinc-950/95 backdrop-blur border-b border-amber-900/50 mb-8">
         {/* On a phone the tabs scroll rather than hide behind a picker. The
             native select showed them all in a tap, but it also meant a tap to
             find out what the page even contains — and the course page carries
@@ -51,7 +55,7 @@ export function CourseTabs({
               onClick={() => pick(t.id)}
               className={`shrink-0 inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full border transition-colors ${
                 active === t.id
-                  ? 'border-pr-red bg-pr-red/15 text-white'
+                  ? 'border-amber-600 bg-amber-500/15 text-amber-100'
                   : 'border-transparent text-zinc-500 hover:text-zinc-200 hover:bg-zinc-900'
               }`}
             >
@@ -70,7 +74,7 @@ export function CourseTabs({
               onClick={() => pick(t.id)}
               className={`px-3 py-2.5 text-sm whitespace-nowrap border-b-2 -mb-px transition-colors ${
                 active === t.id
-                  ? 'border-pr-red text-white font-medium'
+                  ? 'border-amber-500 text-amber-100 font-medium'
                   : 'border-transparent text-zinc-500 hover:text-zinc-300'
               }`}
             >

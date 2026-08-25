@@ -50,7 +50,7 @@ import CourseLocationFields from '@/components/CourseLocationFields'
 import { regionLabel } from '@/lib/regions'
 import MeetingDetails from '@/app/portal/[id]/MeetingDetails'
 import { courseNotifyCounts } from '@/lib/course-notify'
-import { meetingDetails } from '@/lib/meeting-details'
+import { meetingDetails, courseHasStarted } from '@/lib/meeting-details'
 
 const STATUS_STYLES: Record<string, string> = {
   tentative: 'bg-yellow-900/40 text-yellow-300 border-yellow-700',
@@ -828,6 +828,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
               files={meeting.files}
               canEdit
               notifyCounts={notifyCounts}
+              started={courseHasStarted(inst.starts_at as string | null)}
             />
           </div>
           </div>

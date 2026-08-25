@@ -23,7 +23,7 @@ import UnmatchedWaivers from '@/components/UnmatchedWaivers'
 import { loadUnmatchedWaivers } from '@/lib/waiver-data'
 import { loadStudentWaiver } from '@/lib/waiver-data'
 import { notifyCountsFrom } from '@/lib/course-notify'
-import { meetingDetails } from '@/lib/meeting-details'
+import { meetingDetails, courseHasStarted } from '@/lib/meeting-details'
 import { Section, SubHead, InstructorCard, StudentCard, SECTION_LABEL, type SectionKey } from './sections'
 import { PURPOSE_META, PURPOSE_ORDER, linkLabel, type CourseLink } from '@/lib/course-links'
 
@@ -490,7 +490,10 @@ export default async function CourseView({
   // course*, which the enrollment already says.
   const waiver = userId ? await loadStudentWaiver(id, userId) : null
 
-  const hasUpdates = canPostUpdates || courseUpdates.length > 0
+  // The meeting block lives in here, so a course with no posts yet still has
+  // an Updates section for a student to find the meeting point in.
+  const hasUpdates = canPostUpdates || courseUpdates.length > 0 ||
+    Boolean(meeting.meetingPoint || meeting.meetingTime || meeting.links.length || meeting.files.length)
   const hasDocuments = showTasks && courseDocs.length > 0
   // Shown to staff even when empty: "nobody has enrolled yet" is the answer an
   // instructor came for, and a missing section reads as a missing feature. The
@@ -500,12 +503,12 @@ export default async function CourseView({
   const hasRoster = showTasks && (!inst.internal || roster.length > 0)
   const hasTasks = showTasks && (tasks.length > 0 || canManageTasks || hasNotes)
 
-  // Where to meet, who's teaching, who's coming — one block, because they are
-  // one question. Staff get it regardless: an empty one is where they fill it in.
-  const hasDetails = Boolean(
-    inst.intro || meeting.meetingPoint || meeting.meetingTime ||
-    meeting.links.length || meeting.files.length || (instructors ?? []).length
-  ) || showTasks
+  // Who is on this course, and what it is. Staff get it regardless: an empty
+  // one is where they fill it in.
+  const hasDetails = Boolean(inst.intro || (instructors ?? []).length) || showTasks
+  // Day one decides whether the meeting block leads the updates or folds to a
+  // line under them.
+  const started = courseHasStarted(inst.starts_at as string | null)
 
   const navSections = ([
     'details',
@@ -665,26 +668,16 @@ export default async function CourseView({
         )}
         <PortalSectionNav sections={navSections} />
 
-        {/* Everything about this delivery and everyone on it. The welcome and
-            the meeting point used to be "Course info", the crew sat above the
-            nav and the roster was a block of its own — three places to answer
-            one question, which is where you meet, who with, and who else is
-            coming. */}
+        {/* Who is on this course — the welcome, the crew, the roster. Where
+            to meet used to be here too, but it is news rather than reference:
+            it belongs with the updates, and it belongs out of the way once
+            everyone has met. */}
         {hasDetails && (
           <Section id="details" blurb="Where to meet, who you're with, and what this course covers">
             <div className="space-y-6">
               {inst.intro && (
                 <p className="text-sm text-zinc-300 whitespace-pre-line">{inst.intro}</p>
               )}
-              <MeetingDetails
-                instanceId={id}
-                meetingPoint={meeting.meetingPoint}
-                meetingTime={meeting.meetingTime}
-                links={meeting.links}
-                files={meeting.files}
-                canEdit={showTasks}
-                notifyCounts={notifyCounts}
-              />
               {(instructors ?? []).length > 0 && (
                 <div>
                   <SubHead title={(instructors ?? []).length > 1 ? 'Your instructors' : 'Your instructor'} />
@@ -790,6 +783,22 @@ export default async function CourseView({
             blurb={showTasks ? 'Posted here and emailed' : 'Posted by your instructors, and emailed to you'}
             unread={unreadUpdates > 0}
           >
+            {/* Above the feed until day one, a single line after it. Where to
+                meet is the most important thing on the page right up to the
+                moment everyone has met, and dead weight from then on. */}
+            <div className="mb-4">
+              <MeetingDetails
+                instanceId={id}
+                meetingPoint={meeting.meetingPoint}
+                meetingTime={meeting.meetingTime}
+                links={meeting.links}
+                files={meeting.files}
+                canEdit={showTasks}
+                notifyCounts={notifyCounts}
+                started={started}
+              />
+            </div>
+
             <CourseUpdates
               instanceId={id}
               updates={courseUpdates.map((u) => ({ ...u, isNew: isNew(u) }))}

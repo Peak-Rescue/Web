@@ -26,6 +26,7 @@ export default function MeetingDetails({
   files,
   canEdit,
   notifyCounts,
+  started,
 }: {
   instanceId: string
   meetingPoint: string | null
@@ -38,9 +39,13 @@ export default function MeetingDetails({
   files: MeetingFile[]
   canEdit: boolean
   notifyCounts: NotifyCounts
+  /** Day one has been and gone: everyone has met, and the block folds away to
+      a single line rather than heading the page for the rest of the week. */
+  started: boolean
 }) {
   const router = useRouter()
   const [editing, setEditing] = useState(false)
+  const [open, setOpen] = useState(!started)
   const [point, setPoint] = useState(meetingPoint ?? '')
   const [time, setTime] = useState(meetingTime ?? '')
   const [draftLinks, setDraftLinks] = useState<UpdateLink[]>(links)
@@ -228,6 +233,27 @@ export default function MeetingDetails({
     )
   )
 
+  // Once everyone has met, one line — the plan is still here to check, it just
+  // stops being the first thing on the page for the rest of the week.
+  if (!open && !editing && !telling) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-zinc-800 bg-zinc-900/60 text-left text-xs text-zinc-500 hover:text-zinc-200 hover:border-zinc-700 transition-colors"
+      >
+        <span aria-hidden className="text-zinc-600">▸</span>
+        <span className="font-medium text-zinc-400">Meeting point</span>
+        {isSet ? (
+          <span className="truncate">
+            {[meetingTime, meetingPoint].filter(Boolean).join(' · ')}
+          </span>
+        ) : (
+          <span>not set</span>
+        )}
+      </button>
+    )
+  }
+
   return (
     <div className="space-y-2">
       {editing ? fields : readout}
@@ -265,6 +291,14 @@ export default function MeetingDetails({
               className="text-[11px] text-zinc-500 hover:text-white transition-colors"
             >
               Tell the course
+            </button>
+          )}
+          {started && (
+            <button
+              onClick={() => setOpen(false)}
+              className="text-[11px] text-zinc-600 hover:text-zinc-300 transition-colors"
+            >
+              Fold away
             </button>
           )}
           {result && <span className="text-[11px] text-zinc-500">{result}</span>}
