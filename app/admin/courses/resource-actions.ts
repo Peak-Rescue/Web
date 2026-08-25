@@ -165,9 +165,19 @@ export async function addCourseResourceLink(
       .eq('library_item_id', onShelf.id)
       .limit(1)
       .maybeSingle()
-    if (fromShelf) return refuse(`“${onShelf.title}” is already on this course, from the resource library.`)
+    // The item itself, not the shelf: the reason to go there is to change
+    // that one row — give it a second link, correct its audience — and a
+    // library filtered to three hundred documents is not that.
+    const shelfLink = {
+      href: `/admin/library?status=all&bucket=resource&q=${encodeURIComponent(onShelf.title)}`,
+      label: 'Open it in the library',
+    }
+    if (fromShelf) {
+      return refuse(`“${onShelf.title}” is already on this course, from the resource library.`, shelfLink)
+    }
     return refuse(
-      `“${onShelf.title}” is already in the resource library — add it with “Choose from resource library” so this course points at that copy.`
+      `“${onShelf.title}” is already in the resource library — add it with “Choose from resource library” so this course points at that copy.`,
+      shelfLink
     )
   }
 

@@ -13,11 +13,17 @@
 // failed insert is not expected — that one still throws, and the digest below
 // is how it gets traced.
 
-export type ActionResult = void | { error: string }
+// Some refusals are really a redirection: the thing you wanted exists, it is
+// just somewhere else. Naming that place in prose and leaving the reader to go
+// find it is how a duplicate gets made instead — so a refusal can carry the
+// door with it.
+export type ActionRefusal = { error: string; link?: { href: string; label: string } }
+
+export type ActionResult = void | ActionRefusal
 
 /** An expected refusal, worded for the person who clicked. */
-export function refuse(message: string): { error: string } {
-  return { error: message }
+export function refuse(message: string, link?: { href: string; label: string }): ActionRefusal {
+  return link ? { error: message, link } : { error: message }
 }
 
 // A tab loaded before the last deploy posts an action id the running build has

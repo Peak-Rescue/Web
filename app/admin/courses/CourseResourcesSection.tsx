@@ -46,6 +46,8 @@ export default function CourseResourcesSection({
   const router = useRouter()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Where to go about it, when the refusal knows.
+  const [errorLink, setErrorLink] = useState<{ href: string; label: string } | null>(null)
   const [linkOpen, setLinkOpen] = useState(false)
   const [picker, setPicker] = useState<ResourcePickerItem[] | null>(null)
   const [pickerOpen, setPickerOpen] = useState(false)
@@ -62,10 +64,14 @@ export default function CourseResourcesSection({
   async function run(fn: () => Promise<ActionResult>) {
     setBusy(true)
     setError(null)
+    setErrorLink(null)
     try {
       const result = await fn()
       router.refresh()
-      if (result?.error) setError(result.error)
+      if (result?.error) {
+        setError(result.error)
+        setErrorLink(result.link ?? null)
+      }
     } catch (e) {
       setError(errorFrom(e))
     } finally {
@@ -179,11 +185,34 @@ export default function CourseResourcesSection({
         ))}
       </div>
 
-      {error && <p className="text-xs text-pr-red mt-2">{error}</p>}
+      {error && (
+        <p className="text-xs text-pr-red mt-2">
+          {error}
+          {errorLink && (
+            <>
+              {' '}
+              <Link href={errorLink.href} target="_blank" className="underline hover:text-pr-red-light">
+                {errorLink.label}
+              </Link>
+            </>
+          )}
+        </p>
+      )}
 
       <div className="flex items-center gap-2 mt-3">
         <button onClick={openPicker} disabled={busy} className={btn}>+ Choose from resource library</button>
         <button onClick={() => setLinkOpen(true)} disabled={busy} className={btn}>+ Add a link</button>
+        {/* Adding a second link for a resource already on the shelf is usually
+            meant as an edit to that entry, and until there was a way through
+            to it the only door out of this section made a duplicate. Opens in
+            its own tab: it is an errand beside this page, not away from it. */}
+        <Link
+          href="/admin/library?status=all&bucket=resource"
+          target="_blank"
+          className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors ml-auto"
+        >
+          Resource library ↗
+        </Link>
       </div>
 
       {pickerOpen && (

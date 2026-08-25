@@ -166,9 +166,19 @@ export async function addCourseMapLink(
       .eq('library_item_id', onShelf.id)
       .limit(1)
       .maybeSingle()
-    if (fromShelf) return refuse(`“${onShelf.title}” is already on this course, from the map library.`)
+    // The item itself, not the shelf: the reason to go there is to change
+    // that one row — give it a second link, correct its audience — and a
+    // library filtered to three hundred documents is not that.
+    const shelfLink = {
+      href: `/admin/library?status=all&bucket=map&q=${encodeURIComponent(onShelf.title)}`,
+      label: 'Open it in the library',
+    }
+    if (fromShelf) {
+      return refuse(`“${onShelf.title}” is already on this course, from the map library.`, shelfLink)
+    }
     return refuse(
-      `“${onShelf.title}” is already in the map library — add it with “Choose from map library” so this course points at that copy.`
+      `“${onShelf.title}” is already in the map library — add it with “Choose from map library” so this course points at that copy.`,
+      shelfLink
     )
   }
 
