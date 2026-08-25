@@ -149,19 +149,32 @@ export async function addCourseMapLink(
   // is where you use it.
   const { data: onShelf } = await admin
     .from('library_items')
-    .select('title')
+    .select('id, title')
     .eq('bucket', 'map')
     .eq('url', link.url)
     .neq('status', 'archived')
     .limit(1)
     .maybeSingle()
   if (onShelf) {
+    // Already here through the shelf? Then the picker is no help — it hides
+    // what the course already has, so being sent there would be a search for
+    // something deliberately not listed. The row is on the screen already.
+    const { data: fromShelf } = await admin
+      .from('course_maps')
+      .select('id')
+      .eq('instance_id', instanceId)
+      .eq('library_item_id', onShelf.id)
+      .limit(1)
+      .maybeSingle()
+    if (fromShelf) return refuse(`“${onShelf.title}” is already on this course, from the map library.`)
     return refuse(
       `“${onShelf.title}” is already in the map library — add it with “Choose from map library” so this course points at that copy.`
     )
   }
 
   // The same link twice on one course is a mistake, not a use case.
+  // Only pasted rows carry a url; one that came from the shelf is caught
+  // above by its library item, which is where its link lives.
   const { data: onCourse } = await admin
     .from('course_maps')
     .select('id')
