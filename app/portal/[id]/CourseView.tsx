@@ -38,6 +38,33 @@ const STATUS_LABEL: Record<string, string> = {
   cancelled:  'Cancelled',
 }
 
+// Chips, coloured by who a thing reaches.
+//
+// Amber is instructors and teal is students — the same two colours the
+// audience pills have used since they replaced three vocabularies with one, so
+// a map held back here reads as the same state as an unlit Students pill in
+// the editor. Only the held-back state changes colour; the ordinary chip keeps
+// whatever its section already looked like, which is why maps stay teal and
+// links stay zinc rather than every chip on the page turning into a status.
+const CHIP = {
+  instructors: {
+    chip: 'border-amber-900 bg-amber-950/40 text-amber-400',
+    hover: 'hover:text-amber-200 hover:border-amber-700',
+    rule: 'text-amber-500/80 hover:text-amber-100 border-amber-900',
+    tail: 'text-amber-500/70',
+  },
+  maps: {
+    chip: 'border-teal-800 bg-teal-950/40 text-teal-300',
+    hover: 'hover:text-teal-100',
+    rule: 'text-teal-500/80 hover:text-teal-200 border-teal-800',
+    tail: 'text-teal-600/80',
+  },
+  links: {
+    chip: 'border-zinc-700 bg-zinc-900 text-zinc-300',
+    hover: 'hover:text-white hover:border-zinc-500',
+  },
+} as const
+
 const ITEM_ICON: Record<string, React.ReactElement> = {
   video: (
     <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-zinc-400 mt-0.5">
@@ -610,24 +637,36 @@ export default async function CourseView({
               the place name and the map together. */}
           {maps.length > 0 && (
             <div className="flex flex-wrap items-center gap-2 mt-3">
-              {maps.map((m) => (
-                <span key={m.id} className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border border-teal-800 bg-teal-950/40 text-teal-300">
+              {maps.map((m) => {
+                // Which of two maps is safe to put in front of a student is
+                // the question being asked here, and it was answered by
+                // reading the title: both chips were teal, and the one word
+                // that said otherwise was teal on teal. Amber carries it now,
+                // the same amber the audience pills use in the editor.
+                const held = showTasks && m.internal
+                const c = held ? CHIP.instructors : CHIP.maps
+                return (
+                <span key={m.id} className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border ${c.chip}`}>
                   <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
                     <path d="M9 20l-5.447-2.724A1 1 0 0 1 3 16.382V5.618a1 1 0 0 1 1.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0 0 21 18.382V7.618a1 1 0 0 0-.553-.894L15 4m0 13V4m0 0L9 7" />
                   </svg>
                   {m.url ? (
-                    <a href={m.url} target="_blank" rel="noreferrer" className="hover:text-teal-100 transition-colors">{m.label}</a>
+                    <a href={m.url} target="_blank" rel="noreferrer" className={`${c.hover} transition-colors`}>{m.label}</a>
                   ) : (
                     <span>{m.label}</span>
                   )}
                   {m.editUrl && (
-                    <a href={m.editUrl} target="_blank" rel="noreferrer" title="Edit map — internal" className="text-teal-500/80 hover:text-teal-200 transition-colors border-l border-teal-800 pl-1.5">
+                    <a href={m.editUrl} target="_blank" rel="noreferrer" title="Edit map — internal" className={`${c.rule} transition-colors border-l pl-1.5`}>
                       edit
                     </a>
                   )}
-                  {showTasks && m.internal && <span className="text-teal-600/80">· instructors</span>}
+                  {/* The word stays: amber and teal are one colour apart, and
+                      this is the distinction that decides whether a student is
+                      handed the instructors' link. */}
+                  {held && <span className={c.tail}>· instructors</span>}
                 </span>
-              ))}
+                )
+              })}
             </div>
           )}
         </div>
@@ -652,11 +691,15 @@ export default async function CourseView({
                         href={l.url}
                         target="_blank"
                         rel="noreferrer"
-                        className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border border-zinc-700 bg-zinc-900 text-zinc-300 hover:text-white hover:border-zinc-500 transition-colors"
+                        className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                          showTasks && l.audience === 'internal'
+                            ? `${CHIP.instructors.chip} ${CHIP.instructors.hover}`
+                            : `${CHIP.links.chip} ${CHIP.links.hover}`
+                        }`}
                       >
                         {linkLabel(l)}
                         {showTasks && l.audience === 'internal' && (
-                          <span className="text-zinc-600">· instructors</span>
+                          <span className={CHIP.instructors.tail}>· instructors</span>
                         )}
                       </a>
                     ))}
