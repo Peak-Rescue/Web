@@ -663,8 +663,18 @@ export default async function CourseView({
                     <span>{m.label}</span>
                   )}
                   {m.editUrl && (
-                    <a href={m.editUrl} target="_blank" rel="noreferrer" title="Edit map — internal" className={`${c.rule} transition-colors border-l pl-1.5`}>
-                      edit
+                    <a
+                      href={m.editUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      /* Not always an editable twin: often it is simply the
+                         fuller map behind a login, the same map the student
+                         link shows a slice of. What the two have in common is
+                         who may open them, which is what the word should say. */
+                      title="The team's copy of this map — never shown to students"
+                      className={`${c.rule} transition-colors border-l pl-1.5`}
+                    >
+                      instructors
                     </a>
                   )}
                   {/* The word stays: amber and teal are one colour apart, and

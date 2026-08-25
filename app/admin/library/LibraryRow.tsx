@@ -101,7 +101,7 @@ export default function LibraryRow({ item, venues, hideProvenance = false }: { i
             <input className={input} value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} />
           </div>
           <div className="sm:col-span-2">
-            <label className={label}>Edit link — internal only, never shown to participants (CalTopo/SARTopo)</label>
+            <label className={label}>Instructors&rsquo; link — never shown to participants (the CalTopo/SARTopo copy behind a login)</label>
             <input className={input} value={form.edit_url} onChange={(e) => setForm({ ...form, edit_url: e.target.value })} />
           </div>
           <div>

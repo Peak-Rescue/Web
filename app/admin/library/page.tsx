@@ -249,7 +249,7 @@ export default async function LibraryPage({
               <input name="url" className={input} placeholder="https://…" />
             </div>
             <div className="sm:col-span-2">
-              <label className={label}>Edit link — internal only (CalTopo/SARTopo)</label>
+              <label className={label}>Instructors&rsquo; link — never shown to participants (CalTopo/SARTopo)</label>
               <input name="edit_url" className={input} placeholder="https://caltopo.com/m/…" />
             </div>
             <div>

@@ -163,10 +163,10 @@ export default async function ReferencePage({
                         href={i.edit_url}
                         target="_blank"
                         rel="noreferrer"
-                        title="Editable version — instructors only"
+                        title="The team's copy — never shown to participants"
                         className="shrink-0 text-[10px] px-1.5 py-0.5 rounded border border-zinc-700 text-zinc-500 hover:text-zinc-300 transition-colors"
                       >
-                        edit
+                        instructors
                       </a>
                     )}
                   </div>
