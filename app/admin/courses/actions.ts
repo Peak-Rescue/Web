@@ -199,6 +199,22 @@ export async function createInstance(formData: FormData) {
   redirect(`/admin/courses/${data.id}`)
 }
 
+// The internal note on its own action, because it is no longer in the details
+// form. Dates belong above it and a form can't nest, so the note left the form
+// rather than updateInstanceDetails learning to write half a course — that one
+// also sends the cancellation email off `status`, and a partial save with no
+// status in it is not a thing it should ever have to reason about.
+export async function updateInstanceNotes(id: string, formData: FormData) {
+  await requireAdmin()
+  const { error } = await createAdminClient()
+    .from('course_instances')
+    .update({ notes: ((formData.get('notes') as string) || '').trim() || null })
+    .eq('id', id)
+  if (error) throw new Error(error.message)
+  revalidatePath(`/admin/courses/${id}`)
+  revalidatePath(`/portal/${id}`)
+}
+
 export async function updateInstanceDetails(id: string, formData: FormData) {
   await requireAdmin()
   const admin = createAdminClient()

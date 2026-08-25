@@ -2,7 +2,7 @@ import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { updateInstanceDetails, updateInstanceDates, addOffDay, removeOffDay, addModule, deleteModule, addItem, deleteItem, removeInstructor, removeEnrollment, updateCourseLogistics, setModuleAudience, setItemAudience } from '../actions'
+import { updateInstanceDetails, updateInstanceNotes, updateInstanceDates, addOffDay, removeOffDay, addModule, deleteModule, addItem, deleteItem, removeInstructor, removeEnrollment, updateCourseLogistics, setModuleAudience, setItemAudience } from '../actions'
 import { CourseTypeSelect } from '../CourseTypeSelect'
 import InstructorAssign from '../InstructorAssign'
 import StaffingInterest from '../StaffingInterest'
@@ -571,6 +571,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
 
   const updateDetailsWithId = updateInstanceDetails.bind(null, id)
   const updateDatesWithId = updateInstanceDates.bind(null, id)
+  const updateNotesWithId = updateInstanceNotes.bind(null, id)
   const addModuleWithId = addModule.bind(null, id)
   const addOffDayWithId = addOffDay.bind(null, id)
 
@@ -657,41 +658,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
               <label className="block text-xs text-zinc-400 mb-1">Instructor slots</label>
               <input name="instructor_slots" type="number" min="1" defaultValue={inst.instructor_slots ?? ''} className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
             </div>
-            <div className="sm:col-span-2">
-              <label className="flex items-center gap-1.5 text-xs text-zinc-400 mb-1">
-                Notes
-                <AudiencePills audience="internal" />
-              </label>
-              {/* field-sizing auto-grows with content; rows is the fallback for
-                  browsers without it (sized to the saved note), drag always works. */}
-              <textarea
-                name="notes"
-                rows={Math.min(Math.max((inst.notes ?? '').split('\n').length, 2), 12)}
-                defaultValue={inst.notes ?? ''}
-                className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500 resize-y [field-sizing:content] min-h-14 max-h-80"
-              />
-            </div>
           </AutoSaveForm>
-
-          <CourseFilesSection instanceId={id} files={courseFiles} />
-
-          <CourseMapsSection instanceId={id} maps={courseMaps} placeLabel={coursePlace} />
-
-          <CourseResourcesSection instanceId={id} resources={courseResources} placeLabel={coursePlace} />
-
-          <CoursePhotosSection
-            instanceId={id}
-            links={((courseLinkRows ?? []) as CourseLink[]).filter(l => l.purpose === 'photos')}
-          />
-
-          <CourseWaiverSection
-            instanceId={id}
-            templates={waiverTemplates}
-            selectedId={(inst.waiver_template_id as string | null) ?? null}
-            roster={waiverRoster}
-            qr={waiverQr}
-            unmatched={unmatchedWaivers}
-          />
 
           <div className="p-6 pt-5 border-t border-zinc-800">
           <h3 className="text-sm font-semibold text-zinc-300 mb-3">Dates</h3>
@@ -781,6 +748,44 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
             </div>
           )}
           </div>
+
+          {/* The note sits under the dates rather than inside the form above:
+              a form can't nest another, and the dates are what you come to this
+              tab to check. Its own action for the same reason. */}
+          <AutoSaveForm action={updateNotesWithId} className="p-6 pt-5 border-t border-zinc-800">
+            <label className="flex items-center gap-1.5 text-xs text-zinc-400 mb-1">
+              Notes
+              <AudiencePills audience="internal" />
+            </label>
+            {/* field-sizing auto-grows with content; rows is the fallback for
+                browsers without it (sized to the saved note), drag always works. */}
+            <textarea
+              name="notes"
+              rows={Math.min(Math.max((inst.notes ?? '').split('\n').length, 2), 12)}
+              defaultValue={inst.notes ?? ''}
+              className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500 resize-y [field-sizing:content] min-h-14 max-h-80"
+            />
+          </AutoSaveForm>
+
+          <CourseFilesSection instanceId={id} files={courseFiles} />
+
+          <CourseMapsSection instanceId={id} maps={courseMaps} placeLabel={coursePlace} />
+
+          <CourseResourcesSection instanceId={id} resources={courseResources} placeLabel={coursePlace} />
+
+          <CoursePhotosSection
+            instanceId={id}
+            links={((courseLinkRows ?? []) as CourseLink[]).filter(l => l.purpose === 'photos')}
+          />
+
+          <CourseWaiverSection
+            instanceId={id}
+            templates={waiverTemplates}
+            selectedId={(inst.waiver_template_id as string | null) ?? null}
+            roster={waiverRoster}
+            qr={waiverQr}
+            unmatched={unmatchedWaivers}
+          />
 
           </div>
 
