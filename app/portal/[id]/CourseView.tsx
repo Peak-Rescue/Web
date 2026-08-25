@@ -312,17 +312,14 @@ export default async function CourseView({
 
   // Which named sections this course actually has — drives both the jump bar
   // and the order things render in, so the two can never disagree.
-  // Staff get this section whether or not anything is in it. An unset meeting
-  // point is the thing they most need to notice, and hiding the block hides
-  // the only place they can fix it.
+  // Staff get this block whether or not anything is in it. An unset meeting
+  // point is the thing they most need to notice, and hiding it hides the only
+  // place they can fix it.
   const meeting = await meetingDetails(admin, inst)
-  const hasAbout = Boolean(
-    inst.intro || meeting.meetingPoint || meeting.meetingTime || meeting.links.length || meeting.files.length
-  ) || showTasks
   const hasSchedule = Boolean(sched && schedDays.length > 0)
   const hasCurriculum = orderedModules.length > 0
   const hasGear = Boolean(gearList && gearList.gear_list_entries.length > 0)
-  const hasResources = resources.length > 0
+  const hasResources = resources.length > 0 || (showTasks && courseDocs.length > 0)
   // Staff get the notes section whether or not there is anything in it — it is
   // where the first note gets written, and an empty section that says so beats
   // sending someone to the admin editor to type one line.
@@ -501,21 +498,22 @@ export default async function CourseView({
   // named at the top of the page — unless somebody did enroll, in which case
   // hiding them would be hiding the truth.
   const hasRoster = showTasks && (!inst.internal || roster.length > 0)
-  const hasTasks = showTasks && (tasks.length > 0 || canManageTasks)
+  const hasTasks = showTasks && (tasks.length > 0 || canManageTasks || hasNotes)
+
+  // Where to meet, who's teaching, who's coming — one block, because they are
+  // one question. Staff get it regardless: an empty one is where they fill it in.
+  const hasDetails = Boolean(
+    inst.intro || meeting.meetingPoint || meeting.meetingTime ||
+    meeting.links.length || meeting.files.length || (instructors ?? []).length
+  ) || showTasks
 
   const navSections = ([
-    // The header block — dates, place, maps, who's teaching — is a tab like any
-    // other, so the bar can always take you back to the overview.
     'details',
-    // Team blocks lead for staff; students only ever get the four below them.
     hasUpdates && 'updates',
     waiver && 'waiver',
-    showTasks && 'message',
-    hasRoster && 'roster',
-    hasNotes && 'notes',
+    // The only block left that is team-only end to end. The rest of what staff
+    // see is a block inside a section students also read.
     hasTasks && 'tasks',
-    hasDocuments && 'documents',
-    hasAbout && 'about',
     hasSchedule && 'schedule',
     hasResources && 'resources',
     hasCurriculum && 'curriculum',
@@ -523,7 +521,7 @@ export default async function CourseView({
   ].filter(Boolean) as SectionKey[]).map((id) => ({
     id,
     label: SECTION_LABEL[id],
-    team: id === 'notes' || id === 'tasks' || id === 'documents' || id === 'message' || id === 'roster',
+    team: id === 'tasks',
     unread: id === 'updates' && unreadUpdates > 0,
   }))
 
@@ -564,8 +562,10 @@ export default async function CourseView({
           </div>
         )}
 
-        {/* Header — the overview the "Details" tab points back to */}
-        <div id="details" className="scroll-mt-30 md:scroll-mt-36 mb-6">
+        {/* Title, dates, status. Not the "Details" anchor any more — that now
+            names the block below the nav holding where to meet and who's on
+            the course, and an id can only belong to one of them. */}
+        <div className="mb-6">
           <div className="flex items-center gap-2 mb-2 text-sm text-zinc-500">
             <span className="font-mono text-xs">PR-{String(inst.ref_number).padStart(4, '0')}</span>
             {(showTasks || inst.status === 'cancelled') && (
@@ -663,38 +663,123 @@ export default async function CourseView({
             })}
           </div>
         )}
-
-        {/* Instructor roster — named as such, with the role written out. */}
-        {(instructors ?? []).length > 0 && (
-          <div className="mb-8">
-            <p className="text-[11px] uppercase tracking-wide text-zinc-500 mb-2">
-              {(instructors ?? []).length > 1 ? 'Your instructors' : 'Your instructor'}
-            </p>
-            <div className="grid sm:grid-cols-2 gap-2">
-              {(instructors ?? []).map((a, i) => {
-                const p = a.instructors as unknown as {
-                  name: string; slug: string | null; active: boolean | null
-                  avatar: string | null; avatar_position: string | null; avatar_scale: number | null
-                } | null
-                return (
-                  <InstructorCard
-                    key={i}
-                    name={p?.name ?? 'Instructor'}
-                    role={a.role}
-                    // /team/[slug] only serves active instructors — anyone else
-                    // would land on a 404, so they stay unlinked.
-                    slug={p?.active ? p.slug : null}
-                    avatar={p?.avatar}
-                    avatarPosition={p?.avatar_position}
-                    avatarScale={p?.avatar_scale}
-                  />
-                )
-              })}
-            </div>
-          </div>
-        )}
-
         <PortalSectionNav sections={navSections} />
+
+        {/* Everything about this delivery and everyone on it. The welcome and
+            the meeting point used to be "Course info", the crew sat above the
+            nav and the roster was a block of its own — three places to answer
+            one question, which is where you meet, who with, and who else is
+            coming. */}
+        {hasDetails && (
+          <Section id="details" blurb="Where to meet, who you're with, and what this course covers">
+            <div className="space-y-6">
+              {inst.intro && (
+                <p className="text-sm text-zinc-300 whitespace-pre-line">{inst.intro}</p>
+              )}
+              <MeetingDetails
+                instanceId={id}
+                meetingPoint={meeting.meetingPoint}
+                meetingTime={meeting.meetingTime}
+                links={meeting.links}
+                files={meeting.files}
+                canEdit={showTasks}
+                notifyCounts={notifyCounts}
+              />
+              {(instructors ?? []).length > 0 && (
+                <div>
+                  <SubHead title={(instructors ?? []).length > 1 ? 'Your instructors' : 'Your instructor'} />
+                  <div className="grid sm:grid-cols-2 gap-2">
+                    {(instructors ?? []).map((a, i) => {
+                      const p = a.instructors as unknown as {
+                        name: string; slug: string | null; active: boolean | null
+                        avatar: string | null; avatar_position: string | null; avatar_scale: number | null
+                      } | null
+                      return (
+                        <InstructorCard
+                          key={i}
+                          name={p?.name ?? 'Instructor'}
+                          role={a.role}
+                          // /team/[slug] only serves active instructors — anyone else
+                          // would land on a 404, so they stay unlinked.
+                          slug={p?.active ? p.slug : null}
+                          avatar={p?.avatar}
+                          avatarPosition={p?.avatar_position}
+                          avatarScale={p?.avatar_scale}
+                        />
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+              {hasRoster && (
+                <div>
+                  <SubHead
+                    title="Students"
+                    note={
+                      inst.max_students
+                        ? `${enrolledCount} of ${inst.max_students} places taken`
+                        : `${enrolledCount} enrolled`
+                    }
+                    badge={<AudiencePills audience="internal" />}
+                  />
+                  {roster.length > 0 ? (
+                    <div className="grid sm:grid-cols-2 gap-2">
+                      {roster.map((student) => (
+                        <StudentCard
+                          key={student.id}
+                          name={student.name}
+                          email={student.email}
+                          phone={student.phone}
+                          enrolledAt={student.enrolledAt}
+                          href={`/portal/${id}/people/${student.id}`}
+                          waiver={
+                            waiverOnCourse
+                              ? {
+                                  signed: signedByEnrollment.has(student.id),
+                                  unverified: signedByEnrollment.get(student.id)?.unverified ?? false,
+                                }
+                              : undefined
+                          }
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-zinc-500">
+                      Nobody has enrolled yet. Students join through the invite link
+                      {isAdmin ? (
+                        <>
+                          {' '}on the{' '}
+                          <Link href={`/admin/courses/${id}`} className="text-zinc-300 hover:text-white underline underline-offset-2">
+                            course editor
+                          </Link>
+                          .
+                        </>
+                      ) : (
+                        ', which the office sends to the client contact.'
+                      )}
+                    </p>
+                  )}
+
+                  {showTasks && unmatchedWaivers.length > 0 && (
+                    <div className="mt-4 pt-4 border-t border-zinc-800">
+                      <UnmatchedWaivers instanceId={id} unmatched={unmatchedWaivers} />
+                    </div>
+                  )}
+
+                  {showTasks && (
+                    <div className="mt-4 pt-4 border-t border-zinc-800">
+                      <WaiverQrPanel
+                        instanceId={id}
+                        qr={waiverQr}
+                        hasWaiver={Boolean(inst.waiver_template_id)}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </Section>
+        )}
 
         {/* Updates — posted by the team, emailed to everyone on the course,
             and kept here so the course page stays the record of what was
@@ -711,6 +796,21 @@ export default async function CourseView({
               canPost={canPostUpdates}
               notifyCounts={notifyCounts}
             />
+            {showTasks && (
+              <div className="mt-6 pt-6 border-t border-zinc-800">
+                <SubHead
+                  title="Send an email"
+                  note="Goes to inboxes only — nothing is posted here"
+                  badge={<AudiencePills audience="internal" />}
+                />
+                <CourseMessages
+                  instanceId={id}
+                  messages={courseMessages}
+                  studentCount={enrolledCount}
+                  instructorCount={crewCount}
+                />
+              </div>
+            )}
           </Section>
         )}
 
@@ -737,129 +837,16 @@ export default async function CourseView({
           </Section>
         )}
 
-        {/* Group email — the counterpart to Updates, and staff-only both
-            ways: this is the outbox, not something recipients browse. */}
-        {showTasks && (
-          <Section id="message" blurb="Email only — nothing is posted to this page" team>
-            <CourseMessages
-              instanceId={id}
-              messages={courseMessages}
-              studentCount={enrolledCount}
-              instructorCount={crewCount}
-            />
-          </Section>
-        )}
-
-        {/* Roster (team only) — who is actually on the course. The course
-            editor has had this all along, but only admins can open it, so an
-            instructor had no way to see the names of the people they were
-            about to meet. */}
-        {hasRoster && (
-          <Section
-            id="roster"
-            blurb={
-              inst.max_students
-                ? `${enrolledCount} of ${inst.max_students} places taken`
-                : `${enrolledCount} enrolled`
-            }
-            team
-          >
-            {roster.length > 0 ? (
-              <div className="grid sm:grid-cols-2 gap-2">
-                {roster.map((student) => (
-                  <StudentCard
-                    key={student.id}
-                    name={student.name}
-                    email={student.email}
-                    phone={student.phone}
-                    enrolledAt={student.enrolledAt}
-                    href={`/portal/${id}/people/${student.id}`}
-                    waiver={
-                      waiverOnCourse
-                        ? {
-                            signed: signedByEnrollment.has(student.id),
-                            unverified: signedByEnrollment.get(student.id)?.unverified ?? false,
-                          }
-                        : undefined
-                    }
-                  />
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm text-zinc-500">
-                Nobody has enrolled yet. Students join through the invite link
-                {isAdmin ? (
-                  <>
-                    {' '}on the{' '}
-                    <Link href={`/admin/courses/${id}`} className="text-zinc-300 hover:text-white underline underline-offset-2">
-                      course editor
-                    </Link>
-                    .
-                  </>
-                ) : (
-                  ', which the office sends to the client contact.'
-                )}
-              </p>
-            )}
-
-            {showTasks && unmatchedWaivers.length > 0 && (
-              <div className="mt-4 pt-4 border-t border-zinc-800">
-                <UnmatchedWaivers instanceId={id} unmatched={unmatchedWaivers} />
-              </div>
-            )}
-
-            {showTasks && (
-              <div className="mt-4 pt-4 border-t border-zinc-800">
-                <WaiverQrPanel
-                  instanceId={id}
-                  qr={waiverQr}
-                  hasWaiver={Boolean(inst.waiver_template_id)}
-                />
-              </div>
-            )}
-          </Section>
-        )}
-
-        {/* Notes (instructors + admin only) — written here as well as read,
-            so the gate code someone just learned lands on the course while
-            they are still looking at it. */}
-        {hasNotes && (
-          <Section id="notes" blurb="Internal notes on this course" team>
-            <CourseNotes instanceId={id} notes={inst.notes} canEdit={showTasks} />
-          </Section>
-        )}
-
-        {/* Course documents (team only) — every attachment in one place, as
-            the same pills the course editor uses, so a schedule attached to a
-            (possibly completed) task is one click away from the overview */}
-        {hasDocuments && (
-          <Section id="documents" blurb="Every file and link attached to this course" team>
-            <div className="flex flex-wrap gap-2">
-              {courseDocs.map((d) => (
-                <a
-                  key={d.id}
-                  href={d.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  title={d.taskTitle ? `From task: ${d.taskTitle}` : d.external ? 'Opens external link' : 'Course file'}
-                  className={`inline-flex items-center gap-1.5 max-w-full px-3 py-1.5 rounded-full border text-sm transition-colors ${
-                    d.external
-                      ? 'bg-teal-500/10 border-teal-500/30 hover:border-teal-400 text-teal-300 hover:text-teal-100'
-                      : 'bg-zinc-800 border-zinc-700 hover:border-zinc-500 text-zinc-300 hover:text-white'
-                  }`}
-                >
-                  {d.external ? <LinkIcon /> : <span className="shrink-0"><PaperclipIcon /></span>}
-                  <span className="truncate">{d.filename}</span>
-                  {d.external && <span className="text-teal-400/70 shrink-0">↗</span>}
-                </a>
-              ))}
-            </div>
-          </Section>
-        )}
-
-        {/* Course tasks (team only) */}
+        {/* Course tasks, and the team's own notes on the course — the one
+            block on the page that is theirs end to end. */}
         {hasTasks && (
           <Section id="tasks" title="Course tasks" blurb="What still has to happen before this course runs" team>
+            {hasNotes && (
+              <div className="mb-6">
+                <SubHead title="Notes" note="Gate codes, client quirks, what to watch for" />
+                <CourseNotes instanceId={id} notes={inst.notes} canEdit={showTasks} />
+              </div>
+            )}
             <CourseTasksPanel
               instanceId={id}
               tasks={tasks}
@@ -867,27 +854,7 @@ export default async function CourseView({
               suggestions={canManageTasks ? templateRows ?? [] : []}
               canManage={canManageTasks}
               currentUserId={userId ?? ''}
-            />          </Section>
-        )}
-
-        {/* What a student needs before they arrive: the practicalities, then
-            the plan, then the material, then the kit. */}
-        {hasAbout && (
-          <Section id="about" blurb="Where to meet, when to be there, and what this course covers">
-            <div className="space-y-3">
-              {inst.intro && (
-                <p className="text-sm text-zinc-300 whitespace-pre-line">{inst.intro}</p>
-              )}
-              <MeetingDetails
-                instanceId={id}
-                meetingPoint={meeting.meetingPoint}
-                meetingTime={meeting.meetingTime}
-                links={meeting.links}
-                files={meeting.files}
-                canEdit={showTasks}
-                notifyCounts={notifyCounts}
-              />
-            </div>
+            />
           </Section>
         )}
 
@@ -1056,33 +1023,64 @@ export default async function CourseView({
             instructor reading the same page knows which is which. */}
         {hasResources && (
           <Section id="resources" blurb="Reference for this course and this place">
-            <ul className="space-y-1.5">
-              {resources.map((r) => (
-                <li key={r.id}>
-                  <a
-                    href={r.url!}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg border border-zinc-800 bg-zinc-900 hover:border-zinc-600 transition-colors group"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-zinc-400">
-                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M16 13H8M16 17H8" />
-                    </svg>
-                    <span className="text-sm text-zinc-200 group-hover:text-white transition-colors min-w-0 truncate">
-                      {r.label}
-                    </span>
-                    {r.kind && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400 shrink-0">
-                        {r.kind}
+            {resources.length > 0 && (
+              <ul className="space-y-1.5">
+                {resources.map((r) => (
+                  <li key={r.id}>
+                    <a
+                      href={r.url!}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg border border-zinc-800 bg-zinc-900 hover:border-zinc-600 transition-colors group"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-zinc-400">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M16 13H8M16 17H8" />
+                      </svg>
+                      <span className="text-sm text-zinc-200 group-hover:text-white transition-colors min-w-0 truncate">
+                        {r.label}
                       </span>
-                    )}
-                    {showTasks && r.internal && (
-                      <AudiencePills audience="internal" className="ml-auto shrink-0" />
-                    )}
-                  </a>
-                </li>
-              ))}
-            </ul>
+                      {r.kind && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400 shrink-0">
+                          {r.kind}
+                        </span>
+                      )}
+                      {showTasks && r.internal && (
+                        <AudiencePills audience="internal" className="ml-auto shrink-0" />
+                      )}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {hasDocuments && (
+              <div className={resources.length > 0 ? 'mt-6 pt-6 border-t border-zinc-800' : ''}>
+                <SubHead
+                  title="Everything attached to this course"
+                  note="Files and links, including from tasks"
+                  badge={<AudiencePills audience="internal" />}
+                />
+                <div className="flex flex-wrap gap-2">
+                  {courseDocs.map((d) => (
+                    <a
+                      key={d.id}
+                      href={d.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      title={d.taskTitle ? `From task: ${d.taskTitle}` : d.external ? 'Opens external link' : 'Course file'}
+                      className={`inline-flex items-center gap-1.5 max-w-full px-3 py-1.5 rounded-full border text-sm transition-colors ${
+                        d.external
+                          ? 'bg-teal-500/10 border-teal-500/30 hover:border-teal-400 text-teal-300 hover:text-teal-100'
+                          : 'bg-zinc-800 border-zinc-700 hover:border-zinc-500 text-zinc-300 hover:text-white'
+                      }`}
+                    >
+                      {d.external ? <LinkIcon /> : <span className="shrink-0"><PaperclipIcon /></span>}
+                      <span className="truncate">{d.filename}</span>
+                      {d.external && <span className="text-teal-400/70 shrink-0">↗</span>}
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
           </Section>
         )}
 

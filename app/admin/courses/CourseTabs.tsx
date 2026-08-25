@@ -40,30 +40,28 @@ export function CourseTabs({
   return (
     <TabContext.Provider value={active}>
       <div className="sticky top-16 md:top-20 z-30 -mx-4 px-4 py-2 sm:py-0 bg-zinc-950/95 backdrop-blur border-b border-zinc-800 mb-8">
-        {/* On a phone a row of tabs means horizontal scrolling to find
-            one you can't see. The native picker shows them all in a tap. */}
-        <label className="sm:hidden block relative">
-          <span className="sr-only">Section</span>
-          <select
-            value={active}
-            onChange={(e) => pick(e.target.value)}
-            className="w-full appearance-none bg-zinc-900 border border-zinc-700 rounded px-3 py-2.5 pr-9 text-sm font-medium text-white focus:outline-none focus:border-zinc-500"
-          >
-            {tabs.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.label}{t.badge ? ` (${t.badge})` : ''}
-              </option>
-            ))}
-          </select>
-          <svg
-            aria-hidden
-            xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24"
-            fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-            className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500"
-          >
-            <path d="m6 9 6 6 6-6" />
-          </svg>
-        </label>
+        {/* On a phone the tabs scroll rather than hide behind a picker. The
+            native select showed them all in a tap, but it also meant a tap to
+            find out what the page even contains — and the course page carries
+            the same scrolling bar, so the two screens now read alike. */}
+        <nav className="sm:hidden flex gap-1 overflow-x-auto no-scrollbar -mx-1 px-1">
+          {tabs.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => pick(t.id)}
+              className={`shrink-0 inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full border transition-colors ${
+                active === t.id
+                  ? 'border-pr-red bg-pr-red/15 text-white'
+                  : 'border-transparent text-zinc-500 hover:text-zinc-200 hover:bg-zinc-900'
+              }`}
+            >
+              {t.label}
+              {t.badge !== undefined && t.badge > 0 && (
+                <span className="text-[10px] text-zinc-600">{t.badge}</span>
+              )}
+            </button>
+          ))}
+        </nav>
 
         <nav className="hidden sm:flex gap-1 overflow-x-auto">
           {tabs.map((t) => (

@@ -605,7 +605,12 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
             ...(showPricing ? [{ id: 'estimates', label: 'Pricing' }] : []),
             { id: 'content', label: 'Curriculum' },
             { id: 'schedule', label: 'Schedule' },
-            { id: 'participants', label: internal ? 'Logistics' : 'Students' },
+            // Nothing but people now that the welcome and the meeting point
+            // have moved to Details — so an internal course with no roster
+            // has no tab rather than an empty one.
+            ...(!internal || enrollments.length > 0 || viewShares.length > 0
+              ? [{ id: 'participants', label: 'Students' }]
+              : []),
           ]}
         >
 
@@ -778,6 +783,49 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
           </div>
 
           </div>
+
+          {/* Where and when to meet, and the welcome. It sat under Students,
+              on the reading that it was "participant info" — but it is
+              delivery detail, and the course page carries it under Details
+              too. Students is now people and nothing else. */}
+          <div className="mt-10 pt-8 border-t border-zinc-800">
+          <h2 className="text-lg font-semibold mb-4">Participant info
+            {!meeting.meetingPoint && !meeting.meetingTime && (
+              <span className="ml-3 text-[11px] font-normal px-2 py-0.5 rounded bg-yellow-900/40 text-yellow-300 align-middle">
+                not set yet
+              </span>
+            )}
+          </h2>
+          <p className="text-xs text-zinc-500 mb-3">
+            Shown to everyone on the course.
+          </p>
+          <AutoSaveForm action={updateLogisticsWithId} className="p-6 bg-zinc-900 border border-zinc-800 rounded-lg">
+            <label className="block text-xs text-zinc-400 mb-1">Welcome / what to expect</label>
+            <textarea
+              name="intro"
+              rows={3}
+              defaultValue={inst.intro ?? ''}
+              placeholder="Short intro to the course — what they'll cover, how it runs, anything to know before arriving."
+              className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm resize-y focus:outline-none focus:border-zinc-500"
+            />
+          </AutoSaveForm>
+
+          {/* Not part of the autosaving form above. Where and when to meet is
+              news, and news is sent deliberately — the same control the course
+              page carries, so setting it here or from the trailhead is the
+              same gesture with the same audience ticks, links and photos. */}
+          <div className="mt-4 p-6 bg-zinc-900 border border-zinc-800 rounded-lg">
+            <MeetingDetails
+              instanceId={id}
+              meetingPoint={meeting.meetingPoint}
+              meetingTime={meeting.meetingTime}
+              links={meeting.links}
+              files={meeting.files}
+              canEdit
+              notifyCounts={notifyCounts}
+            />
+          </div>
+          </div>
         </TabPanel>
 
 
@@ -848,45 +896,8 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
           </div>
         </TabPanel>
 
-        {/* ── Participants: shared logistics + the student roster ───── */}
+        {/* ── Students: who is coming, and how they got here ──────── */}
         <TabPanel id="participants">
-          <h2 className="text-lg font-semibold mb-4">Participant info
-            {!meeting.meetingPoint && !meeting.meetingTime && (
-              <span className="ml-3 text-[11px] font-normal px-2 py-0.5 rounded bg-yellow-900/40 text-yellow-300 align-middle">
-                not set yet
-              </span>
-            )}
-          </h2>
-          <p className="text-xs text-zinc-500 mb-3">
-            Shown to everyone on the course.
-          </p>
-          <AutoSaveForm action={updateLogisticsWithId} className="p-6 bg-zinc-900 border border-zinc-800 rounded-lg">
-            <label className="block text-xs text-zinc-400 mb-1">Welcome / what to expect</label>
-            <textarea
-              name="intro"
-              rows={3}
-              defaultValue={inst.intro ?? ''}
-              placeholder="Short intro to the course — what they'll cover, how it runs, anything to know before arriving."
-              className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm resize-y focus:outline-none focus:border-zinc-500"
-            />
-          </AutoSaveForm>
-
-          {/* Not part of the autosaving form above. Where and when to meet is
-              news, and news is sent deliberately — the same control the course
-              page carries, so setting it here or from the trailhead is the
-              same gesture with the same audience ticks, links and photos. */}
-          <div className="mt-4 p-6 bg-zinc-900 border border-zinc-800 rounded-lg">
-            <MeetingDetails
-              instanceId={id}
-              meetingPoint={meeting.meetingPoint}
-              meetingTime={meeting.meetingTime}
-              links={meeting.links}
-              files={meeting.files}
-              canEdit
-              notifyCounts={notifyCounts}
-            />
-          </div>
-
           {/* On an internal course the attendees are the crew, enrolled through
               Staffing — there is no roster to invite and nobody outside to
               share the course with. Both come back if either has anything in

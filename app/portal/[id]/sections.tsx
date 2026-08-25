@@ -8,29 +8,25 @@ import { AudiencePills } from '@/components/AudiencePills'
 // point is that a student scrolling past can always name what they're looking
 // at without reading the contents.
 
+// Fewer, bigger blocks, named the same as the course editor's tabs wherever
+// the two screens mean the same thing. What used to be About, Roster, Notes,
+// Documents and Email are now parts of the block they always belonged to:
+// nobody was looking for "the roster" as distinct from "who's on this course".
 export type SectionKey =
   | 'details'
-  | 'about'
+  | 'updates'
+  | 'waiver'
+  | 'tasks'
   | 'schedule'
   | 'curriculum'
-  | 'resources'
-  | 'waiver'
   | 'gear'
-  | 'documents'
-  | 'roster'
-  | 'tasks'
-  | 'notes'
-  | 'updates'
-  | 'message'
+  | 'resources'
 
 export const SECTION_ICON: Record<SectionKey, React.ReactElement> = {
-  // 'details' is the page header rather than a Section, so its icon is only
-  // ever used if that block later grows a header of its own.
+  // Everything about this delivery and everyone on it: the welcome, where to
+  // meet, the crew, the roster.
   details: (
     <path d="M4 6h16M4 12h16M4 18h10" />
-  ),
-  about: (
-    <path d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20ZM12 16v-4M12 8h.01" />
   ),
   schedule: (
     <path d="M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z" />
@@ -65,46 +61,23 @@ export const SECTION_ICON: Record<SectionKey, React.ReactElement> = {
       <path d="M8 17c1.2-2.5 2.2-2.5 3 0s1.8 2.5 3 0" />
     </>
   ),
-  documents: (
-    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M16 13H8M16 17H8" />
-  ),
-  // Two figures, not one: the roster is the group on the course, and the
-  // single-person glyph is already what an avatar slot means elsewhere.
-  roster: (
-    <>
-      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-      <path d="M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" />
-      <path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
-    </>
-  ),
   tasks: (
     <path d="M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
   ),
-  notes: (
-    <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
-  ),
   updates: (
     <path d="M3 11l18-8-8 18-2-8-8-2Z" />
-  ),
-  message: (
-    <path d="M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2ZM22 7l-10 6L2 7" />
   ),
 }
 
 export const SECTION_LABEL: Record<SectionKey, string> = {
   details: 'Details',
-  about: 'Course info',
+  updates: 'Updates',
+  waiver: 'Waiver',
+  tasks: 'Tasks',
   schedule: 'Schedule',
   curriculum: 'Curriculum',
-  resources: 'Resources',
-  waiver: 'Waiver',
   gear: 'Gear',
-  documents: 'Documents',
-  roster: 'Roster',
-  tasks: 'Tasks',
-  notes: 'Notes',
-  updates: 'Updates',
-  message: 'Email',
+  resources: 'Resources',
 }
 
 export function Section({
