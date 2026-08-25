@@ -212,13 +212,13 @@ export default function MeetingDetails({
     <dl className="grid sm:grid-cols-2 gap-3">
       {meetingPoint && (
         <div className="px-3 py-2 rounded-lg border border-zinc-800 bg-zinc-900">
-          <dt className="text-[11px] uppercase tracking-wide text-zinc-500">Meeting point</dt>
+          <dt className="text-[11px] uppercase tracking-wide text-zinc-500">Where</dt>
           <dd className="text-sm text-zinc-200 mt-0.5">{meetingPoint}</dd>
         </div>
       )}
       {meetingTime && (
         <div className="px-3 py-2 rounded-lg border border-zinc-800 bg-zinc-900">
-          <dt className="text-[11px] uppercase tracking-wide text-zinc-500">Meeting time</dt>
+          <dt className="text-[11px] uppercase tracking-wide text-zinc-500">When</dt>
           <dd className="text-sm text-zinc-200 mt-0.5">{meetingTime}</dd>
         </div>
       )}
@@ -241,8 +241,8 @@ export default function MeetingDetails({
         onClick={() => setOpen(true)}
         className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-zinc-800 bg-zinc-900/60 text-left text-xs text-zinc-500 hover:text-zinc-200 hover:border-zinc-700 transition-colors"
       >
-        <span aria-hidden className="text-zinc-600">▸</span>
-        <span className="font-medium text-zinc-400">Meeting point</span>
+        <span aria-hidden className="text-zinc-600 shrink-0">▸</span>
+        <span className="font-medium text-zinc-400 shrink-0 whitespace-nowrap">Meeting point</span>
         {isSet ? (
           <span className="truncate">
             {[meetingTime, meetingPoint].filter(Boolean).join(' · ')}
@@ -256,6 +256,16 @@ export default function MeetingDetails({
 
   return (
     <div className="space-y-2">
+      {!editing && !telling && (
+        <button
+          onClick={() => setOpen(false)}
+          aria-expanded
+          className="flex items-center gap-2 text-xs text-zinc-500 hover:text-zinc-200 transition-colors"
+        >
+          <span aria-hidden className="text-zinc-600 rotate-90">▸</span>
+          <span className="font-medium text-zinc-400">Meeting point</span>
+        </button>
+      )}
       {editing ? fields : readout}
 
       {canEdit && telling && (
@@ -291,14 +301,6 @@ export default function MeetingDetails({
               className="text-[11px] text-zinc-500 hover:text-white transition-colors"
             >
               Tell the course
-            </button>
-          )}
-          {started && (
-            <button
-              onClick={() => setOpen(false)}
-              className="text-[11px] text-zinc-600 hover:text-zinc-300 transition-colors"
-            >
-              Fold away
             </button>
           )}
           {result && <span className="text-[11px] text-zinc-500">{result}</span>}
