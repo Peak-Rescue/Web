@@ -10,7 +10,7 @@ import type { MeetingLink, MeetingFile } from '@/lib/meeting-details'
 import type { UpdateLink, UpdateAttachment } from './update-actions'
 import type { NotifyCounts } from '@/lib/course-notify'
 import { postCourseUpdate } from './update-actions'
-import { saveMeetingDetails } from './logistics-actions'
+import { saveMeetingDetails, noteMeetingAnnounced } from './logistics-actions'
 import { meetingDayLabel } from '@/lib/meeting-details'
 
 // Meeting point and time: read as two facts, edited in place, and announced
@@ -76,11 +76,16 @@ export default function MeetingDetails({
   // the same page — one in the field, one in the feed — and when the lot
   // changes again it's the copy in the feed nobody thinks to edit. It's a
   // starting draft, though: it's yours to rewrite before it goes.
+  // `moved` means this day has been announced before, so anyone reading has an
+  // earlier version of it — not that the fields differ from whatever they last
+  // held. Setting tomorrow's plan every evening is a run of first
+  // announcements about different days, and none of them is a correction.
+  //
+  // Naming the day is the detail worth repeating out here: it tells someone
+  // enrolled on two courses which one this is about, and it is the difference
+  // between "the plan is set" and a plan they can act on without opening
+  // anything.
   const draftBody = (moved: boolean) => {
-    // Naming the day is the one detail worth repeating out here: it is what
-    // tells someone enrolled on two courses which of them this is about, and
-    // it is the difference between "the plan is set" and a plan they can act
-    // on without opening anything.
     const when = day ? ` for ${day}` : ''
     return moved
       ? `The meeting point or time${when} has changed — the current plan is under Course info on this page. Please check it before you set off.`
@@ -98,7 +103,7 @@ export default function MeetingDetails({
         attachments: draftFiles,
       })
       setEditing(false)
-      if (thenTell) setTelling({ moved: r.had && r.changed })
+      if (thenTell) setTelling({ moved: r.announced })
       else setResult('Saved. Nobody was emailed.')
       router.refresh()
     } catch (e) {
@@ -113,7 +118,7 @@ export default function MeetingDetails({
     if (!confirm(`Post this and email ${n === 1 ? '1 person' : `${n} people`} a link to it?`)) return
     setBusy(true); setError(null)
     try {
-      const r = await postCourseUpdate(instanceId, {
+      const posted = await postCourseUpdate(instanceId, {
         ...draft,
         // Says what kind of news it is without saying what the news is.
         subjectNote: (() => {
@@ -122,8 +127,12 @@ export default function MeetingDetails({
           return moved ? `${what} changed` : what
         })(),
       })
+      // Only now is this day one the course has been told about, which is
+      // what makes the next announcement for it a correction rather than the
+      // plan arriving.
+      await noteMeetingAnnounced(instanceId, date)
       setTelling(null)
-      setResult(r.emailProblem ?? `Posted to Updates. ${r.sent} ${r.sent === 1 ? 'person' : 'people'} emailed a link.`)
+      setResult(posted.emailProblem ?? `Posted to Updates. ${posted.sent} ${posted.sent === 1 ? 'person' : 'people'} emailed a link.`)
       router.refresh()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'That didn’t send')
