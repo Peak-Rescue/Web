@@ -168,7 +168,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
     admin.from('course_task_documents').select('id, path, filename, url, created_at, course_tasks!inner(title, instance_id)').eq('course_tasks.instance_id', id),
     admin.from('gallery_images').select('url, caption, categories').order('created_at', { ascending: false }),
     admin.from('estimate_reviews').select('id, created_at, requested_by, reviewer_id, note, responded_at, approved, response_note').eq('instance_id', id).order('created_at', { ascending: false }).limit(8),
-    admin.from('course_maps').select('id, url, label, audience, library_item_id, library_items(title, url, audience)').eq('instance_id', id).order('sort_order'),
+    admin.from('course_maps').select('id, url, label, audience, audience_overridden, library_item_id, library_items(title, url, audience, library_item_links(access, audience))').eq('instance_id', id).order('sort_order'),
     admin.from('course_resources').select('id, url, label, audience, library_item_id, library_items(title, url, audience)').eq('instance_id', id).order('sort_order'),
     admin.from('course_links').select('id, url, label, audience, purpose').eq('instance_id', id).order('purpose').order('sort_order'),
     admin.from('venues').select('id, name, region_code').eq('active', true).order('name'),
@@ -193,16 +193,29 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
   // A course map is either a library item (title and link come from there, so
   // fixing the library fixes every course using it) or a link pasted here.
   const courseMaps: CourseMap[] = (courseMapRows ?? []).map((r) => {
-    const item = r.library_items as unknown as { title: string; url: string | null; audience: string } | null
+    const item = r.library_items as unknown as {
+      title: string; url: string | null; audience: string
+      library_item_links?: { access: string; audience: string }[]
+    } | null
     return {
       id: r.id,
       label: item?.title ?? r.label ?? 'Map',
       url: item?.url ?? r.url,
-      // Shown through the same ceiling the portal reads through, so the pills
-      // can never claim students while the line under them says instructors.
-      audience: (item?.audience === 'internal' ? 'internal' : r.audience) as LibraryAudience,
+      // The library's answer unless this course deliberately overruled it —
+      // the same order the portal resolves them in, so the pill here can never
+      // claim something the course page won't do.
+      audience: (r.audience_overridden
+        ? r.audience
+        : item?.audience ?? r.audience) as LibraryAudience,
       fromLibrary: Boolean(r.library_item_id),
-      libraryLocked: item?.audience === 'internal',
+      libraryAudience: (item?.audience as 'internal' | 'shared' | undefined) ?? null,
+      overridden: Boolean(r.audience_overridden),
+      // Sharing the map with students only shows them something if one of its
+      // links is theirs. Without this the two gates look like one, and turning
+      // the first appears to do nothing.
+      hasStudentLink: item?.library_item_links?.length
+        ? item.library_item_links.some((l) => l.audience === 'students')
+        : true,
     }
   })
 

@@ -230,24 +230,55 @@ export async function setCourseMapAudience(
 ): Promise<ActionResult> {
   const { admin } = await requireAdmin()
 
-  // Honour the library item's ceiling here too — the toggle is per course,
-  // but an internal library map stays internal wherever it is used.
-  if (audience === 'shared') {
-    const { data: row } = await admin
-      .from('course_maps')
-      .select('library_items(audience)')
-      .eq('id', mapId)
-      .eq('instance_id', instanceId)
-      .single()
-    const itemAudience = (row?.library_items as unknown as { audience: string } | null)?.audience
-    if (itemAudience === 'internal') {
-      return refuse('This map is marked instructors-only in the library — change it there first.')
-    }
+  // The library's answer is the default, and a course may overrule it for one
+  // delivery. What used to happen instead was a refusal — "change it in the
+  // library first" — which is the wrong place to change it when the reason is
+  // this course: doing so would have shared the map with every other course
+  // using it, to fix one.
+  //
+  // So the ceiling is gone and the disagreement is recorded instead. Setting
+  // an audience that matches the library goes back to following it, rather
+  // than freezing today's answer as an override that stops tracking.
+  const { data: row } = await admin
+    .from('course_maps')
+    .select('library_items(audience)')
+    .eq('id', mapId)
+    .eq('instance_id', instanceId)
+    .single()
+  const libraryAudience = (row?.library_items as unknown as { audience: string } | null)?.audience
+
+  const { error } = await admin
+    .from('course_maps')
+    .update({
+      audience,
+      audience_overridden: libraryAudience !== undefined && libraryAudience !== audience,
+    })
+    .eq('id', mapId)
+    .eq('instance_id', instanceId)
+  if (error) throw new Error(error.message)
+  revalidate(instanceId)
+}
+
+/** Stop overruling the library for this course and follow it again. */
+export async function followLibraryMapAudience(
+  instanceId: string,
+  mapId: string
+): Promise<ActionResult> {
+  const { admin } = await requireAdmin()
+  const { data: row } = await admin
+    .from('course_maps')
+    .select('library_items(audience)')
+    .eq('id', mapId)
+    .eq('instance_id', instanceId)
+    .single()
+  const libraryAudience = (row?.library_items as unknown as { audience: string } | null)?.audience
+  if (!libraryAudience) {
+    return refuse('This map has no library entry to follow — its audience is set here.')
   }
 
   const { error } = await admin
     .from('course_maps')
-    .update({ audience })
+    .update({ audience: libraryAudience, audience_overridden: false })
     .eq('id', mapId)
     .eq('instance_id', instanceId)
   if (error) throw new Error(error.message)

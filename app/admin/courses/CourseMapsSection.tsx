@@ -15,6 +15,7 @@ import {
   removeCourseMap,
   saveCourseMapToLibrary,
   setCourseMapAudience,
+  followLibraryMapAudience,
   type MapPickerItem,
 } from './map-actions'
 
@@ -24,7 +25,14 @@ export type CourseMap = {
   url: string | null
   audience: LibraryAudience
   fromLibrary: boolean
-  libraryLocked: boolean // library item is instructors-only — can't be shared here
+  /** What the library says, when this map came from there. The default this
+      course follows unless somebody deliberately overruled it. */
+  libraryAudience: LibraryAudience | null
+  /** True when this course was deliberately set against the library's answer. */
+  overridden: boolean
+  /** Whether any of the map's links is a student one. Sharing the map with
+      students shows them nothing unless one is. */
+  hasStudentLink: boolean
 }
 
 // Maps for the course, sat with the location they belong to. Each row carries
@@ -129,15 +137,15 @@ export default function CourseMapsSection({
                 <Link
                   href="/admin/library?status=all&bucket=map"
                   className={`text-[11px] transition-colors ${
-                    m.libraryLocked
+                    (m.libraryAudience === 'internal')
                       ? 'text-amber-600/80 hover:text-amber-400'
                       : 'text-zinc-600 hover:text-zinc-300'
                   }`}
                 >
                   {/* A greyed-out toggle with only a tooltip is a dead end. Say
                       what is blocking it, on a link to where it is changed. */}
-                  {m.libraryLocked
-                    ? 'Instructors-only in the library — change it there to share it'
+                  {(m.libraryAudience === 'internal')
+                    ? 'Instructors-only in the library'
                     : 'From the map library'}
                 </Link>
               ) : (
@@ -145,13 +153,47 @@ export default function CourseMapsSection({
               )}
             </div>
 
-            <span title={m.libraryLocked ? 'Marked instructors-only in the library — change it there first.' : undefined}>
+            {/* Disagreeing with the library is allowed, and is the point:
+                the reason is usually this course, and changing it in the
+                library to fix one delivery would change it for every other
+                course using the same map. So it asks, and then records that
+                somebody chose. */}
+            <span className="shrink-0 flex items-center gap-1.5">
               <AudienceToggle
                 audience={m.audience}
-                disabled={busy || m.libraryLocked}
+                disabled={busy}
                 noun="this map"
-                onChange={(next) => run(() => setCourseMapAudience(instanceId, m.id, next))}
+                onChange={(next) => {
+                  if (
+                    m.libraryAudience &&
+                    next !== m.libraryAudience &&
+                    !confirm(
+                      next === 'shared'
+                        ? 'The library keeps this map for instructors only. Show it to students on this course?'
+                        : 'The library shares this map with students. Hold it back from students on this course?'
+                    )
+                  ) return
+                  run(() => setCourseMapAudience(instanceId, m.id, next))
+                }}
               />
+              {m.audience === 'shared' && !m.hasStudentLink && (
+                <span
+                  title="None of this map's links is marked for students, so they would see nothing. Add a students link in the library."
+                  className="text-[10px] px-1.5 py-0.5 rounded bg-amber-950/60 text-amber-400"
+                >
+                  no student link
+                </span>
+              )}
+              {m.overridden && (
+                <button
+                  onClick={() => run(() => followLibraryMapAudience(instanceId, m.id))}
+                  disabled={busy}
+                  title="This course was set against the library. Follow the library again."
+                  className="text-[10px] px-1.5 py-0.5 rounded bg-amber-950/60 text-amber-400 hover:text-amber-200 disabled:opacity-40 transition-colors"
+                >
+                  overridden
+                </button>
+              )}
             </span>
 
             {!m.fromLibrary && (
