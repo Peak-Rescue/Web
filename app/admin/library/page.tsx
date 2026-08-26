@@ -50,7 +50,7 @@ export default async function LibraryPage({
 
   let query = admin
     .from('library_items')
-    .select('id, title, description, source_type, url, edit_url, drive_file_id, kind, audience, disciplines, topics, venue_id, expires_at, status, bucket, region, source_class, source_topic, source_item')
+    .select('id, title, description, source_type, url, edit_url, drive_file_id, kind, audience, disciplines, topics, venue_id, expires_at, status, bucket, region, source_class, source_topic, source_item, library_item_links(id, url, access, audience)')
     .order('created_at', { ascending: false })
     .limit(500)
 
@@ -101,7 +101,10 @@ export default async function LibraryPage({
     admin.from('library_items').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
   ])
 
-  const items = (itemRows ?? []) as LibraryItem[]
+  // The embed comes back under the table's name; the item calls them links.
+  const items = ((itemRows ?? []) as unknown as (LibraryItem & {
+    library_item_links?: LibraryItem['links']
+  })[]).map((r) => ({ ...r, links: r.library_item_links ?? [] })) as LibraryItem[]
   const venues = (venueRows ?? []) as Venue[]
 
   type GearTemplate = GearList & {

@@ -203,3 +203,45 @@ export async function deleteVenue(id: string) {
   if (error) throw new Error(error.message)
   revalidate()
 }
+
+// ─── A map's links ──────────────────────────────────────────────────────────
+//
+// Each one is a URL plus the two facts about it: what you can do with it, and
+// who may be handed it. They are independent — an editable map can go to
+// students on an exercise, a read-only one can be a staff reference — which is
+// why they are two questions and not one.
+//
+// Only one link per combination. A second editable instructors' link to the
+// same map is a mistake; a genuinely different map is a different entry.
+
+export type MapLinkInput = {
+  url: string
+  access: 'read' | 'edit'
+  audience: 'students' | 'instructors'
+}
+
+export async function setMapLink(itemId: string, link: MapLinkInput): Promise<void> {
+  const admin = await requireAdmin()
+
+  const url = link.url.trim()
+  if (!url) throw new Error('A link needs a URL.')
+  if (!/^https?:\/\//i.test(url)) throw new Error('That doesn’t look like a link — it should start with https://')
+  if (!['read', 'edit'].includes(link.access)) throw new Error('Unknown access')
+  if (!['students', 'instructors'].includes(link.audience)) throw new Error('Unknown audience')
+
+  const { error } = await admin
+    .from('library_item_links')
+    .upsert(
+      { item_id: itemId, url, access: link.access, audience: link.audience },
+      { onConflict: 'item_id,access,audience' }
+    )
+  if (error) throw new Error(error.message)
+  revalidate()
+}
+
+export async function removeMapLink(linkId: string): Promise<void> {
+  const admin = await requireAdmin()
+  const { error } = await admin.from('library_item_links').delete().eq('id', linkId)
+  if (error) throw new Error(error.message)
+  revalidate()
+}

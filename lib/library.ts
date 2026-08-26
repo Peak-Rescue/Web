@@ -117,6 +117,24 @@ export const KIND_META: Record<LibraryKind, string> = {
   reference: 'Reference',
 }
 
+/** One way into a map: a URL, what you can do with it, and who may have it. */
+export type MapLink = {
+  id: string
+  url: string
+  access: 'read' | 'edit'
+  audience: 'students' | 'instructors'
+}
+
+export const ACCESS_META: Record<MapLink['access'], string> = {
+  read: 'Read-only',
+  edit: 'Editable',
+}
+
+export const LINK_AUDIENCE_META: Record<MapLink['audience'], string> = {
+  students: 'Students',
+  instructors: 'Instructors',
+}
+
 export type LibraryItem = {
   id: string
   title: string
@@ -134,6 +152,8 @@ export type LibraryItem = {
   expires_at: string | null
   status: LibraryStatus
   bucket: LibraryBucket
+  /** Maps only; every other kind has one link in `url`. */
+  links?: MapLink[]
   source_class: string | null
   source_topic: string | null
   source_item: string | null

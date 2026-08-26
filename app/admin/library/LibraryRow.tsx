@@ -7,6 +7,7 @@ import { KIND_META, LIBRARY_KINDS, AUDIENCE_META, BUCKET_META, BUCKET_ORDER, typ
 import { AudiencePills } from '@/components/AudiencePills'
 import { CAPABILITY_META, CAPABILITY_ORDER } from '@/lib/capabilities'
 import RegionSelect from '@/components/RegionSelect'
+import MapLinks from './MapLinks'
 
 const input =
   'w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-zinc-500'
@@ -39,7 +40,16 @@ export default function LibraryRow({ item, venues, hideProvenance = false }: { i
   }
 
   const save = () => run(async () => {
-    await updateLibraryItem(item.id, { ...form, venue_id: form.venue_id || null, region: form.region || null, expires_at: form.expires_at || null })
+    const { url, edit_url, ...rest } = form
+    await updateLibraryItem(item.id, {
+      ...rest,
+      // A map's links live in their own table and are saved as they're edited;
+      // sending these too would let a stale box overwrite them.
+      ...(form.kind === 'map' ? {} : { url, edit_url }),
+      venue_id: form.venue_id || null,
+      region: form.region || null,
+      expires_at: form.expires_at || null,
+    })
     setOpen(false)
   })
 
@@ -96,14 +106,19 @@ export default function LibraryRow({ item, venues, hideProvenance = false }: { i
             <label className={label}>Title</label>
             <input className={input} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
           </div>
-          <div className="sm:col-span-2">
-            <label className={label}>Link</label>
-            <input className={input} value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} />
-          </div>
-          <div className="sm:col-span-2">
-            <label className={label}>Instructors&rsquo; link — never shown to participants (the CalTopo/SARTopo copy behind a login)</label>
-            <input className={input} value={form.edit_url} onChange={(e) => setForm({ ...form, edit_url: e.target.value })} />
-          </div>
+          {/* A map's links are rows of their own, each with its own access
+              and audience, so they are managed here rather than typed into two
+              boxes that decided both at once. Everything else has one link. */}
+          {form.kind === 'map' ? (
+            <div className="sm:col-span-2">
+              <MapLinks itemId={item.id} links={item.links ?? []} />
+            </div>
+          ) : (
+            <div className="sm:col-span-2">
+              <label className={label}>Link</label>
+              <input className={input} value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} />
+            </div>
+          )}
           <div>
             <label className={label}>State / country</label>
             <RegionSelect
