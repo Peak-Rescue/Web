@@ -679,8 +679,18 @@ export default async function CourseView({
                   )}
                   {/* The word stays: amber and teal are one colour apart, and
                       this is the distinction that decides whether a student is
-                      handed the instructors' link. */}
-                  {showTasks && <span className={c.tail}>· {held ? 'instructors' : 'students'}</span>}
+                      handed the instructors' link.
+
+                      Except when the chip is already the instructors' one and
+                      carries their link: the rule beside the title says
+                      "instructors" for the link, the tail says it for the
+                      chip, and two of the same word next to each other read as
+                      a fault rather than as two facts. On a student chip the
+                      pair is worth having — the map is theirs, the second link
+                      inside it is not. */}
+                  {showTasks && !(held && m.editUrl) && (
+                    <span className={c.tail}>· {held ? 'instructors' : 'students'}</span>
+                  )}
                 </span>
                 )
               })}
