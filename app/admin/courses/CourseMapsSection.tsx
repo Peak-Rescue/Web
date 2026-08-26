@@ -169,14 +169,14 @@ export default function CourseMapsSection({
                     next !== m.libraryAudience &&
                     !confirm(
                       next === 'shared'
-                        ? 'This map is instructors-only in the library. Share with students on this course?'
+                        ? 'This map is instructors-only in the library. Give students every link on this course, editable ones included?'
                         : 'This map is shared with students in the library. Hide from students on this course?'
                     )
                   ) return
                   run(() => setCourseMapAudience(instanceId, m.id, next))
                 }}
               />
-              {m.audience === 'shared' && !m.hasStudentLink && (
+              {m.audience === 'shared' && !m.overridden && !m.hasStudentLink && (
                 <span
                   title="None of this map's links is marked for students, so they would see nothing. Add a students link in the library."
                   className="text-[10px] px-1.5 py-0.5 rounded bg-amber-950/60 text-amber-400"

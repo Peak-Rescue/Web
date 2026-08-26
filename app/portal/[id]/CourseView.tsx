@@ -283,11 +283,21 @@ export default async function CourseView({
       id: r.id,
       label: item?.title ?? r.label ?? 'Map',
       sharedWithStudents,
+      // A course overruling the library hands over the whole map, editable
+      // links included — that is what overriding is for. Students being given
+      // edit access on one exercise, or staff sitting as students on an
+      // internal course, are the cases, and filtering by each link's own
+      // audience afterwards would leave the toggle doing nothing at all.
+      //
+      // Left alone, the library decides twice over: whether students get the
+      // map, and then which of its links are theirs.
       links: showTasks
         ? links
-        : sharedWithStudents
-          ? links.filter((l) => l.audience === 'students')
-          : [],
+        : !sharedWithStudents
+          ? []
+          : r.audience_overridden
+            ? links
+            : links.filter((l) => l.audience === 'students'),
     }
   }).filter((m) => m.links.length > 0)
 
