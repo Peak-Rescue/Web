@@ -3,8 +3,9 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 export type MeetingLink = { label: string; url: string }
 export type MeetingFile = { path: string; filename: string; url: string }
 
-/** What a student navigates by: the prose, the hour, and the pin. */
+/** What a student navigates by: the day, the prose, the hour, and the pin. */
 export type MeetingDetailsData = {
+  meetingDate: string | null
   meetingPoint: string | null
   meetingTime: string | null
   links: MeetingLink[]
@@ -19,6 +20,7 @@ const DOC_BUCKET = 'task-documents'
 export async function meetingDetails(
   admin: SupabaseClient,
   row: {
+    meeting_date?: string | null
     meeting_point: string | null
     meeting_time: string | null
     meeting_links: MeetingLink[] | null
@@ -32,6 +34,7 @@ export async function meetingDetails(
   const byPath = new Map((signed ?? []).map((s) => [s.path, s.signedUrl]))
 
   return {
+    meetingDate: row.meeting_date ?? null,
     meetingPoint: row.meeting_point,
     meetingTime: row.meeting_time,
     links: row.meeting_links ?? [],
@@ -39,7 +42,28 @@ export async function meetingDetails(
   }
 }
 
-export const MEETING_COLUMNS = 'meeting_point, meeting_time, meeting_links, meeting_attachments'
+export const MEETING_COLUMNS =
+  'meeting_date, meeting_point, meeting_time, meeting_links, meeting_attachments'
+
+// The day the plan is for, in words. Null meeting_date means day one — the
+// fallback lives here rather than in the column so that a course whose dates
+// move takes its meeting day along with it, which is what "day one" meant when
+// nobody set a date.
+//
+// Long form heads the block and the announcement; short form goes in an email
+// subject, where it sits beside the course name and has to earn its width.
+export function meetingDayLabel(
+  meetingDate: string | null,
+  startsAt: string | null,
+  form: 'long' | 'short' = 'long'
+): string | null {
+  const iso = meetingDate ?? startsAt
+  if (!iso) return null
+  return new Date(`${iso}T00:00:00`).toLocaleDateString('en-US',
+    form === 'long'
+      ? { weekday: 'long', month: 'long', day: 'numeric' }
+      : { weekday: 'short', month: 'short', day: 'numeric' })
+}
 
 // Whether day one has been and gone.
 //

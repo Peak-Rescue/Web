@@ -25,6 +25,10 @@ export type MeetingSaveResult = { had: boolean; changed: boolean }
 export async function saveMeetingDetails(
   instanceId: string,
   input: {
+    // Empty means day one: the course start already says which day that is,
+    // and storing a copy of it would be a second answer to go stale when the
+    // course moves.
+    meetingDate: string
     meetingPoint: string
     meetingTime: string
     // The dropped pin, the photo of the gate. They belong to the meeting
@@ -39,18 +43,25 @@ export async function saveMeetingDetails(
 
   const point = input.meetingPoint.trim().slice(0, MAX_FIELD)
   const time = input.meetingTime.trim().slice(0, MAX_FIELD)
+  // The field is a date input, so anything else is a fault rather than
+  // something a person did.
+  const date = input.meetingDate.trim()
+  if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error('That meeting date is not a date')
 
   // Read before write so the announcement can say whether this is the plan
   // arriving or the plan moving.
   const { data: before } = await admin
     .from('course_instances')
-    .select('meeting_point, meeting_time')
+    .select('meeting_date, meeting_point, meeting_time')
     .eq('id', instanceId)
     .single()
   const had = Boolean(before?.meeting_point || before?.meeting_time)
+  // A day that moves is the same news as a lot that moves — more so, since
+  // someone may already have booked the drive around it.
   const changed =
     (before?.meeting_point ?? null) !== (point || null) ||
-    (before?.meeting_time ?? null) !== (time || null)
+    (before?.meeting_time ?? null) !== (time || null) ||
+    (before?.meeting_date ?? null) !== (date || null)
 
   const links = (input.links ?? []).slice(0, 20).map((l) => {
     const { url, filename } = normalizeDocLink(l.url, l.label ?? '')
@@ -61,6 +72,7 @@ export async function saveMeetingDetails(
   const { error } = await admin
     .from('course_instances')
     .update({
+      meeting_date: date || null,
       meeting_point: point || null,
       meeting_time: time || null,
       meeting_links: links,

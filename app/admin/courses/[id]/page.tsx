@@ -822,6 +822,8 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
           <div className="mt-4 p-6 bg-zinc-900 border border-zinc-800 rounded-lg">
             <MeetingDetails
               instanceId={id}
+              meetingDate={meeting.meetingDate}
+              courseStart={inst.starts_at as string | null}
               meetingPoint={meeting.meetingPoint}
               meetingTime={meeting.meetingTime}
               links={meeting.links}

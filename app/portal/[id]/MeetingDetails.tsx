@@ -11,6 +11,7 @@ import type { UpdateLink, UpdateAttachment } from './update-actions'
 import type { NotifyCounts } from '@/lib/course-notify'
 import { postCourseUpdate } from './update-actions'
 import { saveMeetingDetails } from './logistics-actions'
+import { meetingDayLabel } from '@/lib/meeting-details'
 
 // Meeting point and time: read as two facts, edited in place, and announced
 // with the same composer the Updates section uses.
@@ -20,6 +21,8 @@ import { saveMeetingDetails } from './logistics-actions'
 // morning of, which is why it is editable here rather than only from admin.
 export default function MeetingDetails({
   instanceId,
+  meetingDate,
+  courseStart,
   meetingPoint,
   meetingTime,
   links,
@@ -29,6 +32,9 @@ export default function MeetingDetails({
   started,
 }: {
   instanceId: string
+  /** Null means day one, which courseStart answers. */
+  meetingDate: string | null
+  courseStart: string | null
   meetingPoint: string | null
   meetingTime: string | null
   /** The pin, the gate-code page. Kept with the meeting point rather than on
@@ -46,6 +52,10 @@ export default function MeetingDetails({
   const router = useRouter()
   const [editing, setEditing] = useState(false)
   const [open, setOpen] = useState(!started)
+  // The field opens on day one rather than empty: it is the answer nearly
+  // every time, and an empty date box invites the question of whether leaving
+  // it blank means today.
+  const [date, setDate] = useState(meetingDate ?? courseStart ?? '')
   const [point, setPoint] = useState(meetingPoint ?? '')
   const [time, setTime] = useState(meetingTime ?? '')
   const [draftLinks, setDraftLinks] = useState<UpdateLink[]>(links)
@@ -60,20 +70,28 @@ export default function MeetingDetails({
   const [result, setResult] = useState<string | null>(null)
 
   const isSet = Boolean(meetingPoint || meetingTime || links.length || files.length)
+  const day = meetingDayLabel(meetingDate, courseStart)
 
   // Never quotes the point or the time. Quoting it would put a second copy on
   // the same page — one in the field, one in the feed — and when the lot
   // changes again it's the copy in the feed nobody thinks to edit. It's a
   // starting draft, though: it's yours to rewrite before it goes.
-  const draftBody = (moved: boolean) =>
-    moved
-      ? 'The meeting point or time for this course has changed — the current plan is under Course info on this page. Please check it before you set off.'
-      : 'Where and when to meet is now set — it’s under Course info on this page.'
+  const draftBody = (moved: boolean) => {
+    // Naming the day is the one detail worth repeating out here: it is what
+    // tells someone enrolled on two courses which of them this is about, and
+    // it is the difference between "the plan is set" and a plan they can act
+    // on without opening anything.
+    const when = day ? ` for ${day}` : ''
+    return moved
+      ? `The meeting point or time${when} has changed — the current plan is under Course info on this page. Please check it before you set off.`
+      : `Where and when to meet${when} is now set — it’s under Course info on this page.`
+  }
 
   async function save(thenTell: boolean) {
     setBusy(true); setError(null); setResult(null)
     try {
       const r = await saveMeetingDetails(instanceId, {
+        meetingDate: date,
         meetingPoint: point,
         meetingTime: time,
         links: draftLinks,
@@ -98,7 +116,11 @@ export default function MeetingDetails({
       const r = await postCourseUpdate(instanceId, {
         ...draft,
         // Says what kind of news it is without saying what the news is.
-        subjectNote: moved ? 'meeting details changed' : 'meeting details',
+        subjectNote: (() => {
+          const short = meetingDayLabel(meetingDate, courseStart, 'short')
+          const what = short ? `meeting details for ${short}` : 'meeting details'
+          return moved ? `${what} changed` : what
+        })(),
       })
       setTelling(null)
       setResult(r.emailProblem ?? `Posted to Updates. ${r.sent} ${r.sent === 1 ? 'person' : 'people'} emailed a link.`)
@@ -113,6 +135,15 @@ export default function MeetingDetails({
   const fields = (
     <div className="p-3 bg-zinc-900 border border-zinc-700 rounded-lg space-y-3">
       <div className="grid sm:grid-cols-2 gap-3">
+        <label className="block sm:col-span-2">
+          <span className="block text-[11px] uppercase tracking-wide text-zinc-500 mb-1">Day</span>
+          <input
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-zinc-200 focus:outline-none focus:border-zinc-500"
+          />
+        </label>
         <label className="block">
           <span className="block text-[11px] uppercase tracking-wide text-zinc-500 mb-1">Meeting point</span>
           <input
@@ -160,6 +191,7 @@ export default function MeetingDetails({
         </button>
         <button
           onClick={() => {
+            setDate(meetingDate ?? courseStart ?? '')
             setPoint(meetingPoint ?? ''); setTime(meetingTime ?? '')
             setDraftLinks(links)
             setDraftFiles(files.map(({ path, filename }) => ({ path, filename })))
@@ -216,10 +248,15 @@ export default function MeetingDetails({
           <dd className="text-sm text-zinc-200 mt-0.5">{meetingPoint}</dd>
         </div>
       )}
-      {meetingTime && (
+      {(meetingTime || day) && (
         <div className="px-3 py-2 rounded-lg border border-zinc-800 bg-zinc-900">
           <dt className="text-[11px] uppercase tracking-wide text-zinc-500">When</dt>
-          <dd className="text-sm text-zinc-200 mt-0.5">{meetingTime}</dd>
+          {/* Day above hour: on a course that runs five days, which morning
+              this is about is the part that cannot be guessed from the hour. */}
+          <dd className="text-sm text-zinc-200 mt-0.5">
+            {day && <span className="block">{day}</span>}
+            {meetingTime}
+          </dd>
         </div>
       )}
     </dl>
