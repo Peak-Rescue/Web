@@ -198,7 +198,7 @@ export default async function CourseView({
       // here for the same reason — this reads with the service role, so RLS
       // isn't the thing standing between a crew-only note and a student.
       admin.from('course_updates')
-        .select('id, body, audience, created_at, updated_at, created_by, sent_count, recipient_count, notify_count, emailed_at, links, attachments, meeting_for, profiles(first_name, last_name)')
+        .select('id, body, audience, created_at, updated_at, created_by, sent_count, recipient_count, notify_count, emailed_at, links, attachments, profiles(first_name, last_name)')
         .eq('instance_id', id)
         .order('created_at', { ascending: false }),
       // The roster. Staff-only, and the same read answers both questions the
@@ -366,18 +366,10 @@ export default async function CourseView({
     sent_count: number; recipient_count: number; notify_count: number; emailed_at: string | null
     links: { label: string; url: string }[] | null
     attachments: { path: string; filename: string }[] | null
-    meeting_for: string | null
     profiles: { first_name: string | null; last_name: string | null } | null
   }
-  // Only the newest meeting notice. They are pointers at a block that holds
-  // one plan — a week of "where and when to meet is now set" is a week of
-  // messages saying to go and look, all but one of them at something that
-  // isn't there any more. The rest keep their email record in the table.
-  const visibleUpdates = ((updateRows ?? []) as unknown as UpdateRow[])
+  const updateRowsTyped = ((updateRows ?? []) as unknown as UpdateRow[])
     .filter((u) => showTasks || u.audience !== 'instructors')
-  // Newest first, so the first notice found is the one still worth reading.
-  const currentNotice = visibleUpdates.findIndex((u) => u.meeting_for)
-  const updateRowsTyped = visibleUpdates.filter((u, i) => !u.meeting_for || i === currentNotice)
 
   // Attachments sit in the private bucket, so they're signed here — one call
   // for every update on the page rather than one per file.

@@ -9,8 +9,8 @@ import { LinkIcon, PaperclipIcon } from '@/components/TaskIcons'
 import type { MeetingLink, MeetingFile } from '@/lib/meeting-details'
 import type { UpdateLink, UpdateAttachment, UpdateAudience } from './update-actions'
 import type { NotifyCounts } from '@/lib/course-notify'
-import { postCourseUpdate } from './update-actions'
-import { saveMeetingDetails, noteMeetingAnnounced } from './logistics-actions'
+import { announceMeetingDetails } from './update-actions'
+import { saveMeetingDetails } from './logistics-actions'
 import { meetingDayLabel } from '@/lib/meeting-details'
 
 // Meeting point and time: read as two facts, edited in place, and announced
@@ -80,10 +80,6 @@ export default function MeetingDetails({
   // default: a meeting point nobody has been told about is the failure this
   // block exists to prevent, so the quiet save is the one you have to ask for.
   const [tell, setTell] = useState(true)
-  // Null means "whatever the day and the history say" — so the sentence keeps
-  // up with the date field until someone types over it, and stops the moment
-  // they do.
-  const [body, setBody] = useState<string | null>(null)
   const [toStudents, setToStudents] = useState(true)
   const [toInstructors, setToInstructors] = useState(true)
   const [busy, setBusy] = useState(false)
@@ -92,42 +88,16 @@ export default function MeetingDetails({
 
   const isSet = Boolean(meetingPoint || meetingTime || links.length || files.length)
   const day = meetingDayLabel(meetingDate, courseStart)
-  // The announcement is written the instant the save returns, before the page
-  // has been round to the server for the new props — so it reads the field,
-  // not the prop, or it names the day this plan was for before it was edited.
-  const draftDay = (form: 'long' | 'short' = 'long') =>
-    meetingDayLabel(date || null, courseStart, form)
-
-  // Never quotes the point or the time. Quoting it would put a second copy on
-  // the same page — one in the field, one in the feed — and when the lot
-  // changes again it's the copy in the feed nobody thinks to edit. It's a
-  // starting draft, though: it's yours to rewrite before it goes.
-  // `moved` means this day has been announced before, so anyone reading has an
-  // earlier version of it — not that the fields differ from whatever they last
-  // held. Setting tomorrow's plan every evening is a run of first
-  // announcements about different days, and none of them is a correction.
-  //
-  // Naming the day is the detail worth repeating out here: it tells someone
-  // enrolled on two courses which one this is about, and it is the difference
-  // between "the plan is set" and a plan they can act on without opening
-  // anything.
-  const draftBody = (moved: boolean) => {
-    const named = draftDay()
-    const when = named ? ` for ${named}` : ''
-    return moved
-      ? `The meeting point or time${when} has changed — the current plan is under Course info on this page. Please check it before you set off.`
-      : `Where and when to meet${when} is now set — it’s under Course info on this page.`
-  }
-
-  // Which day the announcement is about, and whether these people have heard
-  // about that day already — both answered from the field being edited, so the
-  // sentence keeps up as the date is picked.
+  // Which day the announcement will be about, and whether these people have
+  // heard about that day already — read from the field being edited, so the
+  // line under the button keeps up as the date is picked. The email is written
+  // from the same two facts, server-side, where they cannot be stale.
   const announceDay = date || courseStart || ''
+  const draftDay = meetingDayLabel(date || null, courseStart)
   const moved = Boolean(announceDay) && announcedDates.includes(announceDay)
   const audience: UpdateAudience =
     toStudents && toInstructors ? 'everyone' : toInstructors ? 'instructors' : 'students'
   const reach = toStudents || toInstructors ? notifyCounts[audience] : 0
-  const message = body ?? draftBody(moved)
 
   // Saving and saying so are one press. They were two, with the second box
   // arriving after the first had closed and looked like a receipt — so the
@@ -151,28 +121,11 @@ export default function MeetingDetails({
         return
       }
 
-      const posted = await postCourseUpdate(instanceId, {
-        body: message,
-        links: [],
-        attachments: [],
-        audience,
-        meetingFor: announceDay,
-        // Says what kind of news it is without saying what the news is.
-        subjectNote: (() => {
-          const short = draftDay('short')
-          const what = short ? `meeting details for ${short}` : 'meeting details'
-          return moved ? `${what} changed` : what
-        })(),
-      })
-      // Only now is this a day the course has been told about, which is what
-      // makes the next announcement for it a correction rather than the plan
-      // arriving.
-      await noteMeetingAnnounced(instanceId, date)
+      const sent = await announceMeetingDetails(instanceId, { audience, meetingDate: date })
       setEditing(false)
-      setBody(null)
       setResult(
-        posted.emailProblem ??
-          `Posted to Updates. ${posted.sent} ${posted.sent === 1 ? 'person' : 'people'} emailed a link.`
+        sent.emailProblem ??
+          `Emailed ${sent.sent === 1 ? '1 person' : `${sent.sent} people`} a link to this page.`
       )
       router.refresh()
     } catch (e) {
@@ -223,9 +176,10 @@ export default function MeetingDetails({
         disabled={busy}
       />
 
-      {/* The announcement, written here rather than in a box that arrives
-          afterwards. It is a draft: the wording follows the day until it is
-          typed over, and the ticks address it. */}
+      {/* Telling them is a tick and a button, not a message to write. The
+          email says the plan for that day is set and links here; it never
+          quoted the plan even when there was a box to type it in, because the
+          block above is meant to be the only copy of it. */}
       <div className="pt-1 border-t border-zinc-800 space-y-2">
         <label className="inline-flex items-center gap-1.5 text-[11px] text-zinc-400 cursor-pointer">
           <input
@@ -238,27 +192,17 @@ export default function MeetingDetails({
         </label>
 
         {tell && (
-          <div className="space-y-2">
-            <textarea
-              value={message}
-              onChange={(e) => setBody(e.target.value)}
-              rows={3}
-              className="w-full resize-y bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-zinc-200 focus:outline-none focus:border-zinc-500"
-            />
-            <div className="flex items-center gap-3 flex-wrap text-[11px] text-zinc-500">
-              <span className="text-zinc-600">Who sees it</span>
-              <Tick label="Students" on={toStudents} set={setToStudents} />
-              <Tick label="Instructors" on={toInstructors} set={setToInstructors} />
-              {/* The pins stay on the block rather than being copied onto the
-                  post: a day later the post is somewhere down the feed, and the
-                  block is still the first thing on the page. */}
-              <span className="ml-auto">
-                {links.length + files.length > 0 && 'Links and photos stay on the meeting point. '}
-                {reach === 0
-                  ? 'Nobody to email — posts to the course page only.'
-                  : `Emails ${reach === 1 ? '1 person' : `${reach} people`} a link.`}
-              </span>
-            </div>
+          <div className="flex items-center gap-3 flex-wrap text-[11px] text-zinc-500">
+            <span className="text-zinc-600">Who gets it</span>
+            <Tick label="Students" on={toStudents} set={setToStudents} />
+            <Tick label="Instructors" on={toInstructors} set={setToInstructors} />
+            <span className="ml-auto">
+              {reach === 0
+                ? 'Nobody to email yet.'
+                : `Emails ${reach === 1 ? '1 person' : `${reach} people`}: ${
+                    moved ? 'the plan' : 'where and when'
+                  }${draftDay ? ` for ${draftDay}` : ''} ${moved ? 'has changed' : 'is set'}.`}
+            </span>
           </div>
         )}
       </div>
@@ -267,16 +211,14 @@ export default function MeetingDetails({
       <div className="flex items-center gap-3 flex-wrap">
         <button
           onClick={() => submit(tell)}
-          disabled={busy || (tell && !message.trim()) || (tell && !toStudents && !toInstructors)}
+          disabled={busy || (tell && (reach === 0 || (!toStudents && !toInstructors)))}
           className="px-3 py-1.5 rounded bg-pr-red hover:bg-pr-red-dark text-white text-sm font-medium transition-colors disabled:opacity-40"
         >
           {busy
             ? 'Working…'
             : !tell
               ? 'Save'
-              : reach === 0
-                ? 'Save and post'
-                : `Save and notify ${reach === 1 ? '1 person' : `${reach} people`}`}
+              : `Save and notify ${reach === 1 ? '1 person' : `${reach} people`}`}
         </button>
         <button
           onClick={() => {
@@ -284,7 +226,6 @@ export default function MeetingDetails({
             setPoint(meetingPoint ?? ''); setTime(meetingTime ?? '')
             setDraftLinks(links)
             setDraftFiles(files.map(({ path, filename }) => ({ path, filename })))
-            setBody(null)
             setError(null); setEditing(false)
           }}
           disabled={busy}
@@ -409,7 +350,7 @@ export default function MeetingDetails({
               about it, whichever of the two you came for. */}
           {isSet && (
             <button
-              onClick={() => { setResult(null); setBody(null); setTell(true); setEditing(true) }}
+              onClick={() => { setResult(null); setTell(true); setEditing(true) }}
               className="text-[11px] text-zinc-500 hover:text-white transition-colors"
             >
               Tell the course

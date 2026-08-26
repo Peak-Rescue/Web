@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { requireCourseStaff } from '@/lib/course-access'
 import { normalizeDocLink } from '@/lib/doc-links'
 import { courseDisplayName } from '@/lib/courses'
+import { meetingDayLabel } from '@/lib/meeting-details'
 
 // Updates posted to a course, with an email telling people to come and read
 // them.
@@ -85,7 +86,12 @@ async function notify(
   authorEmail: string | null,
   audience: UpdateAudience,
   isReminder: boolean,
-  subjectNote: string | null
+  subjectNote: string | null,
+  /** Replaces the opening line for a notice that isn't about a post — the
+      meeting details, which live in their own block and were never quoted
+      here anyway. Still says only that something is set or has moved, never
+      what it says, so nothing freezes in an inbox. */
+  lead?: string | null
 ): Promise<NotifyOutcome> {
   const wantStudents = audience === 'students' || audience === 'everyone'
   const wantCrew = audience === 'instructors' || audience === 'everyone'
@@ -136,13 +142,14 @@ async function notify(
       ? `${courseName} — updated information`
       : `${courseName} — new update from ${authorName}`
   const text = [
-    isReminder
+    lead ??
+    (isReminder
       // Wording that fits an instructor as well as a student — the same
       // notice goes to both.
       ? `${authorName} has updated the information for the ${courseName} course.`
-      : `${authorName} posted an update on the ${courseName} course.`,
+      : `${authorName} posted an update on the ${courseName} course.`),
     '',
-    `Read it on the course page: ${link}`,
+    `${lead ? 'The details are on the course page' : 'Read it on the course page'}: ${link}`,
     '',
     'The course page always has the current version, including any links or files attached.',
     '',
@@ -188,10 +195,6 @@ export async function postCourseUpdate(
     /** Replaces "new update from X" in the email subject — the meeting details
         moving deserves a line that says so. Never carries a value. */
     subjectNote?: string
-    /** Set when this is the meeting-point notice, to the day it is about. The
-        feed shows only the newest of these: they are pointers at a block that
-        holds one plan, so an older one points at something no longer there. */
-    meetingFor?: string
   }
 ): Promise<PostResult> {
   const { user, admin, authorName } = await requireCourseStaff(instanceId)
@@ -215,7 +218,6 @@ export async function postCourseUpdate(
       attachments,
       audience,
       created_by: user.id,
-      meeting_for: /^\d{4}-\d{2}-\d{2}$/.test(input.meetingFor ?? '') ? input.meetingFor : null,
     })
     .select('id')
     .single()
@@ -319,4 +321,64 @@ export async function deleteCourseUpdate(instanceId: string, updateId: string) {
     .eq('instance_id', instanceId)
   if (error) throw new Error(error.message)
   revalidatePath(`/portal/${instanceId}`)
+}
+
+// The meeting point, announced.
+//
+// No post goes with it. The notice never quoted the plan — the block is meant
+// to be the only copy — so a post could say nothing but "there is something to
+// go and look at", which is exactly what the email says, and a course that
+// sets tomorrow's plan every evening ended the week with a stack of them. The
+// block itself is what the email points at, and it is the current answer by
+// construction.
+export async function announceMeetingDetails(
+  instanceId: string,
+  input: { audience?: UpdateAudience; meetingDate: string }
+): Promise<PostResult> {
+  const { user, admin, authorName } = await requireCourseStaff(instanceId)
+  const audience = cleanAudience(input.audience)
+
+  const { data: row } = await admin
+    .from('course_instances')
+    .select('starts_at, meeting_announced_dates')
+    .eq('id', instanceId)
+    .single()
+
+  const day = input.meetingDate.trim() || (row?.starts_at as string | null) || null
+  const announced: string[] = row?.meeting_announced_dates ?? []
+  // Told about this day before, so anyone reading has an earlier version of
+  // it. Not a comparison of the fields: a different day is a different plan,
+  // not a correction of the last one.
+  const moved = Boolean(day && announced.includes(day))
+
+  const named = meetingDayLabel(day, null)
+  const when = named ? ` for ${named}` : ''
+  const short = meetingDayLabel(day, null, 'short')
+  const what = short ? `meeting details for ${short}` : 'meeting details'
+
+  const outcome = await notify(
+    admin,
+    instanceId,
+    authorName,
+    user.email ?? null,
+    audience,
+    false,
+    moved ? `${what} changed` : what,
+    moved
+      ? `The meeting point or time${when} has changed — please check it before you set off.`
+      : `Where and when to meet${when} is now set.`
+  )
+
+  // Written once it has actually gone out, which is what makes the next
+  // announcement for this day a correction rather than the plan arriving.
+  if (day && !announced.includes(day)) {
+    await admin
+      .from('course_instances')
+      .update({ meeting_announced_dates: [...announced, day].sort() })
+      .eq('id', instanceId)
+  }
+
+  revalidatePath(`/portal/${instanceId}`)
+  revalidatePath(`/admin/courses/${instanceId}`)
+  return { recipients: outcome.recipients, sent: outcome.sent, emailProblem: outcome.problem }
 }
