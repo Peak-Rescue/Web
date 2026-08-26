@@ -119,6 +119,9 @@ export default function LibraryRow({ item, venues, hideProvenance = false }: { i
               <input className={input} value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} />
             </div>
           )}
+          {/* Only maps are filed by place — it's how a course finds the ones
+              that belong where it's running. */}
+          {form.kind === 'map' && (
           <div>
             <label className={label}>State / country</label>
             <RegionSelect
@@ -127,12 +130,16 @@ export default function LibraryRow({ item, venues, hideProvenance = false }: { i
               onChange={(code) => setForm({ ...form, region: code })}
             />
           </div>
-          <div>
-            <label className={label}>Library</label>
-            <select className={input} value={form.bucket} onChange={(e) => setForm({ ...form, bucket: e.target.value as LibraryBucket })}>
-              {BUCKET_ORDER.map((b) => <option key={b} value={b}>{BUCKET_META[b].label}</option>)}
-            </select>
-          </div>
+          )}
+          {/* A map has one shelf and the type already named it. */}
+          {form.kind !== 'map' && (
+            <div>
+              <label className={label}>Library</label>
+              <select className={input} value={form.bucket} onChange={(e) => setForm({ ...form, bucket: e.target.value as LibraryBucket })}>
+                {BUCKET_ORDER.map((b) => <option key={b} value={b}>{BUCKET_META[b].label}</option>)}
+              </select>
+            </div>
+          )}
           <div>
             <label className={label}>Type</label>
             <select className={input} value={form.kind} onChange={(e) => setForm({ ...form, kind: e.target.value })}>
@@ -153,10 +160,15 @@ export default function LibraryRow({ item, venues, hideProvenance = false }: { i
               {venues.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
             </select>
           </div>
+          {/* In 820 items this has never once been filled in, including on
+              every permit in there. It stays for the kind it was built for and
+              is out of the way of everything else. */}
+          {form.kind === 'permit' && (
           <div>
-            <label className={label}>Expires (permits, dated docs)</label>
-            <input type="date" className={input} value={form.expires_at} onChange={(e) => setForm({ ...form, expires_at: e.target.value })} />
-          </div>
+              <label className={label}>Expires (permits, dated docs)</label>
+              <input type="date" className={input} value={form.expires_at} onChange={(e) => setForm({ ...form, expires_at: e.target.value })} />
+            </div>
+          )}
           <div className="sm:col-span-2">
             <label className={label}>Disciplines</label>
             <div className="flex flex-wrap gap-x-4 gap-y-1.5 p-2 bg-zinc-800/50 border border-zinc-700 rounded">

@@ -94,7 +94,11 @@ export async function createLibraryItem(formData: FormData) {
   const driveMatch = url.match(/drive\.google\.com\/file\/d\/([^/]+)/)
   const youtube = /youtube\.com|youtu\.be/.test(url)
 
-  const { error } = await admin.from('library_items').insert({
+  // A map has one shelf and the type already named it, so the form doesn't ask
+  // and this doesn't trust an answer it didn't get.
+  const isMap = kind === 'map'
+
+  const { data: created, error } = await admin.from('library_items').insert({
     title: ((formData.get('title') as string) || '').trim().slice(0, 200) || 'Untitled',
     description: ((formData.get('description') as string) || '').trim() || null,
     url: url || null,
@@ -102,7 +106,7 @@ export async function createLibraryItem(formData: FormData) {
     drive_file_id: driveMatch?.[1] ?? null,
     source_type: driveMatch ? 'drive' : youtube ? 'youtube' : 'link',
     kind: VALID_KINDS.has(kind) ? kind : 'reference',
-    bucket: VALID_BUCKETS.has(bucket) ? bucket : 'resource',
+    bucket: isMap ? 'map' : VALID_BUCKETS.has(bucket) ? bucket : 'resource',
     region: isValidRegion(formData.get('region') as string) ? (formData.get('region') as string) : null,
     audience: (formData.get('audience') as string) === 'shared' ? 'shared' : 'internal',
     disciplines: (formData.getAll('disciplines') as string[]).filter((d) => VALID_DISCIPLINES.has(d)),
@@ -110,8 +114,20 @@ export async function createLibraryItem(formData: FormData) {
     venue_id: ((formData.get('venue_id') as string) || '') || null,
     expires_at: ((formData.get('expires_at') as string) || '') || null,
     status: 'published',
-  })
+  }).select('id').single()
   if (error) throw new Error(error.message)
+
+  // The map's first link, with the two facts the form asked for. Any others
+  // are added on the item itself, where they can be seen beside each other.
+  if (isMap && url && created) {
+    const access = (formData.get('link_access') as string) === 'edit' ? 'edit' : 'read'
+    const audience = (formData.get('link_audience') as string) === 'instructors' ? 'instructors' : 'students'
+    const { error: linkError } = await admin
+      .from('library_item_links')
+      .insert({ item_id: created.id, url, access, audience })
+    if (linkError) throw new Error(linkError.message)
+  }
+
   revalidate()
 }
 
