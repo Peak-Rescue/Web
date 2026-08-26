@@ -178,8 +178,8 @@ export default async function CourseView({
       // This reads with the service role, so the audience filter is applied
       // here rather than by RLS.
       (showTasks
-        ? admin.from('course_maps').select('id, url, label, audience, library_items(title, url, edit_url, audience)').eq('instance_id', id).order('sort_order')
-        : admin.from('course_maps').select('id, url, label, audience, library_items(title, url, audience)').eq('instance_id', id).eq('audience', 'shared').order('sort_order')),
+        ? admin.from('course_maps').select('id, url, label, audience, audience_overridden, library_items(title, url, audience, library_item_links(url, access, audience))').eq('instance_id', id).order('sort_order')
+        : admin.from('course_maps').select('id, url, label, audience, audience_overridden, library_items(title, url, audience, library_item_links(url, access, audience))').eq('instance_id', id).order('sort_order')),
       // The resources shelf — med plan, permits, tech notes for this place.
       // Same audience rule as maps, and read the same way: a student sees
       // only the rows shared with them.
@@ -247,16 +247,49 @@ export default async function CourseView({
   // than trusted from the row: the row can be stale — the item was marked
   // instructors-only after a course shared it — and a stale row must not be
   // what decides a student sees an evac plan.
+  // A map's links each carry their own access and audience, so what a viewer
+  // gets is decided per link rather than by which column the URL sat in.
+  //
+  // Two questions, asked in order. Whether this course shows the map to
+  // students at all — the library's answer unless somebody deliberately
+  // overrode it for this delivery — and then which of its links they may have.
+  // Staff see every link; that is what staff means here.
+  type MapLink = { url: string; access: 'read' | 'edit'; audience: 'students' | 'instructors' }
   const maps = (mapRows ?? []).map((r) => {
-    const item = r.library_items as unknown as { title: string; url: string | null; edit_url?: string | null; audience?: string } | null
+    const item = r.library_items as unknown as {
+      title: string; url: string | null; audience?: string
+      library_item_links?: MapLink[]
+    } | null
+
+    const sharedWithStudents = r.audience_overridden
+      ? r.audience === 'shared'
+      : item
+        ? item.audience === 'shared'
+        : r.audience === 'shared'
+
+    // A one-off map typed onto the course has no library entry and so no
+    // links of its own: it is a single read link, for whoever the course says.
+    const links: MapLink[] = item?.library_item_links?.length
+      ? item.library_item_links
+      : (item?.url ?? r.url)
+        ? [{
+            url: (item?.url ?? r.url)!,
+            access: 'read',
+            audience: sharedWithStudents ? 'students' : 'instructors',
+          }]
+        : []
+
     return {
       id: r.id,
       label: item?.title ?? r.label ?? 'Map',
-      url: item?.url ?? r.url,
-      editUrl: showTasks ? item?.edit_url ?? null : null,
-      internal: r.audience !== 'shared' || item?.audience === 'internal',
+      sharedWithStudents,
+      links: showTasks
+        ? links
+        : sharedWithStudents
+          ? links.filter((l) => l.audience === 'students')
+          : [],
     }
-  }).filter((m) => (m.url || m.editUrl) && (showTasks || !m.internal))
+  }).filter((m) => m.links.length > 0)
 
   // The resources shelf. A Drive document goes through the portal's own proxy
   // rather than out to Google — the same rule the curriculum follows, and the
@@ -642,53 +675,44 @@ export default async function CourseView({
               the place name and the map together. */}
           {maps.length > 0 && (
             <div className="flex flex-wrap items-center gap-x-3 gap-y-2 mt-3">
-              {maps.map((m) => {
-                // Which of two maps is safe to put in front of a student is
-                // the question being asked here, and it was answered by
-                // reading the title: both chips were teal, and the one word
-                // that said otherwise was teal on teal. Amber carries it now,
-                // the same amber the audience pills use in the editor.
-                const held = showTasks && m.internal
-                const c = held ? CHIP.instructors : CHIP.maps
-                const pill = 'inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border no-underline transition-colors'
-                return (
-                // Two doors into one map, so two things to point at rather
-                // than one pill cut in half — a split chip reads as a single
-                // link that has been broken, and you can't tell by looking
-                // that the halves go to different places. They sit closer to
-                // each other than to the next map, which is what says they
-                // belong together.
+              {maps.map((m) => (
+                // One chip per link, kept closer to each other than to the next
+                // map — a single pill cut in half read as one link that had
+                // been broken, and nothing about it said the halves went
+                // different places. The first carries the name; the rest say
+                // only how they differ, which is all there is to say.
                 <span key={m.id} className="inline-flex items-center gap-1.5">
-                  <span className={`${pill} ${c.chip} ${m.url ? c.hover : ''}`}>
-                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
-                      <path d="M9 20l-5.447-2.724A1 1 0 0 1 3 16.382V5.618a1 1 0 0 1 1.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0 0 21 18.382V7.618a1 1 0 0 0-.553-.894L15 4m0 13V4m0 0L9 7" />
-                    </svg>
-                    {m.url ? (
-                      <a href={m.url} target="_blank" rel="noreferrer" className="no-underline">{m.label}</a>
-                    ) : (
-                      m.label
-                    )}
-                    {showTasks && <span className={c.tail}>· {held ? 'instructors' : 'students'}</span>}
-                  </span>
-
-                  {m.editUrl && (
-                    <a
-                      href={m.editUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      /* Named for what it opens, not for who may open it. The
-                         chip's colour already says that, and on a map that is
-                         instructors-only to begin with, "instructors" beside
-                         it distinguished nothing. */
-                      title={`${m.label} — the full map behind the login, never shown to students`}
-                      className={`${pill} ${CHIP.instructors.chip} ${CHIP.instructors.hover}`}
-                    >
-                      Full map
-                    </a>
-                  )}
+                  {m.links.map((l, i) => {
+                    const c = l.audience === 'students' ? CHIP.maps : CHIP.instructors
+                    return (
+                      <a
+                        key={`${l.access}-${l.audience}`}
+                        href={l.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        title={`${m.label} — ${l.access === 'edit' ? 'editable' : 'read-only'}, for ${l.audience}`}
+                        className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border no-underline transition-colors ${c.chip} ${c.hover}`}
+                      >
+                        {i === 0 && (
+                          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+                            <path d="M9 20l-5.447-2.724A1 1 0 0 1 3 16.382V5.618a1 1 0 0 1 1.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0 0 21 18.382V7.618a1 1 0 0 0-.553-.894L15 4m0 13V4m0 0L9 7" />
+                          </svg>
+                        )}
+                        {i === 0 ? m.label : l.access === 'edit' ? 'Editable' : 'Read-only'}
+                        {/* Students are only ever handed their own links, so
+                            saying whose it is would be telling them something
+                            they can't act on. Staff see several at once and
+                            need to know which is which. */}
+                        {showTasks && (
+                          <span className={c.tail}>
+                            · {l.audience}{i === 0 && l.access === 'edit' ? ' · editable' : ''}
+                          </span>
+                        )}
+                      </a>
+                    )
+                  })}
                 </span>
-                )
-              })}
+              ))}
             </div>
           )}
         </div>
