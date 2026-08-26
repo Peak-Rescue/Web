@@ -56,13 +56,11 @@ const CHIP = {
   instructors: {
     chip: 'border-amber-900 bg-amber-950/40 text-amber-400',
     hover: 'hover:text-amber-200 hover:border-amber-700',
-    rule: 'text-amber-500/80 hover:text-amber-100 border-amber-900',
     tail: 'text-amber-500/70',
   },
   maps: {
     chip: 'border-teal-800 bg-teal-950/40 text-teal-300',
     hover: 'hover:text-teal-100',
-    rule: 'text-teal-500/80 hover:text-teal-200 border-teal-800',
     tail: 'text-teal-600/80',
   },
   links: {
@@ -643,7 +641,7 @@ export default async function CourseView({
           {/* Maps sit with the location — the answer to "where is this?" is
               the place name and the map together. */}
           {maps.length > 0 && (
-            <div className="flex flex-wrap items-center gap-2 mt-3">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2 mt-3">
               {maps.map((m) => {
                 // Which of two maps is safe to put in front of a student is
                 // the question being asked here, and it was answered by
@@ -652,50 +650,40 @@ export default async function CourseView({
                 // the same amber the audience pills use in the editor.
                 const held = showTasks && m.internal
                 const c = held ? CHIP.instructors : CHIP.maps
-                // A pill with two destinations in it: the map, and the
-                // team's copy of it. Each is one target you can point at —
-                // icon, words and tail moving together — because hovering a
-                // word and watching only that word light up reads as though
-                // the words were separately linked.
-                const tail = showTasks && !(held && m.editUrl)
-                  ? <span className={c.tail}>· {held ? 'instructors' : 'students'}</span>
-                  : null
-                const face = (
-                  <>
+                const pill = 'inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border no-underline transition-colors'
+                return (
+                // Two doors into one map, so two things to point at rather
+                // than one pill cut in half — a split chip reads as a single
+                // link that has been broken, and you can't tell by looking
+                // that the halves go to different places. They sit closer to
+                // each other than to the next map, which is what says they
+                // belong together.
+                <span key={m.id} className="inline-flex items-center gap-1.5">
+                  <span className={`${pill} ${c.chip} ${m.url ? c.hover : ''}`}>
                     <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
                       <path d="M9 20l-5.447-2.724A1 1 0 0 1 3 16.382V5.618a1 1 0 0 1 1.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0 0 21 18.382V7.618a1 1 0 0 0-.553-.894L15 4m0 13V4m0 0L9 7" />
                     </svg>
-                    {m.label}
-                    {tail}
-                  </>
-                )
-                return (
-                <span key={m.id} className={`inline-flex items-center text-xs rounded-full border overflow-hidden ${c.chip}`}>
-                  {m.url ? (
-                    <a
-                      href={m.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 no-underline hover:bg-white/5 ${c.hover} transition-colors`}
-                    >
-                      {face}
-                    </a>
-                  ) : (
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1">{face}</span>
-                  )}
+                    {m.url ? (
+                      <a href={m.url} target="_blank" rel="noreferrer" className="no-underline">{m.label}</a>
+                    ) : (
+                      m.label
+                    )}
+                    {showTasks && <span className={c.tail}>· {held ? 'instructors' : 'students'}</span>}
+                  </span>
+
                   {m.editUrl && (
                     <a
                       href={m.editUrl}
                       target="_blank"
                       rel="noreferrer"
-                      /* Not always an editable twin: often it is simply the
-                         fuller map behind a login, the same map the student
-                         link shows a slice of. What the two have in common is
-                         who may open them, which is what the word should say. */
-                      title="The team's copy of this map — never shown to students"
-                      className={`px-2.5 py-1 border-l no-underline hover:bg-white/5 ${c.rule} transition-colors`}
+                      /* Named for what it opens, not for who may open it. The
+                         chip's colour already says that, and on a map that is
+                         instructors-only to begin with, "instructors" beside
+                         it distinguished nothing. */
+                      title={`${m.label} — the full map behind the login, never shown to students`}
+                      className={`${pill} ${CHIP.instructors.chip} ${CHIP.instructors.hover}`}
                     >
-                      instructors
+                      Full map
                     </a>
                   )}
                 </span>
