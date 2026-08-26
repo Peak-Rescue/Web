@@ -169,8 +169,8 @@ export default function CourseMapsSection({
                     next !== m.libraryAudience &&
                     !confirm(
                       next === 'shared'
-                        ? 'Show to students on this course only?'
-                        : 'Hide from students on this course only?'
+                        ? 'This map is instructors-only in the library. Share with students on this course?'
+                        : 'This map is shared with students in the library. Hide from students on this course?'
                     )
                   ) return
                   run(() => setCourseMapAudience(instanceId, m.id, next))
