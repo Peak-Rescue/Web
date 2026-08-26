@@ -652,15 +652,36 @@ export default async function CourseView({
                 // the same amber the audience pills use in the editor.
                 const held = showTasks && m.internal
                 const c = held ? CHIP.instructors : CHIP.maps
+                // A pill with two destinations in it: the map, and the
+                // team's copy of it. Each is one target you can point at —
+                // icon, words and tail moving together — because hovering a
+                // word and watching only that word light up reads as though
+                // the words were separately linked.
+                const tail = showTasks && !(held && m.editUrl)
+                  ? <span className={c.tail}>· {held ? 'instructors' : 'students'}</span>
+                  : null
+                const face = (
+                  <>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+                      <path d="M9 20l-5.447-2.724A1 1 0 0 1 3 16.382V5.618a1 1 0 0 1 1.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0 0 21 18.382V7.618a1 1 0 0 0-.553-.894L15 4m0 13V4m0 0L9 7" />
+                    </svg>
+                    {m.label}
+                    {tail}
+                  </>
+                )
                 return (
-                <span key={m.id} className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border ${c.chip}`}>
-                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
-                    <path d="M9 20l-5.447-2.724A1 1 0 0 1 3 16.382V5.618a1 1 0 0 1 1.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0 0 21 18.382V7.618a1 1 0 0 0-.553-.894L15 4m0 13V4m0 0L9 7" />
-                  </svg>
+                <span key={m.id} className={`inline-flex items-center text-xs rounded-full border overflow-hidden ${c.chip}`}>
                   {m.url ? (
-                    <a href={m.url} target="_blank" rel="noreferrer" className={`${c.hover} transition-colors`}>{m.label}</a>
+                    <a
+                      href={m.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 no-underline hover:bg-white/5 ${c.hover} transition-colors`}
+                    >
+                      {face}
+                    </a>
                   ) : (
-                    <span>{m.label}</span>
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1">{face}</span>
                   )}
                   {m.editUrl && (
                     <a
@@ -672,24 +693,10 @@ export default async function CourseView({
                          link shows a slice of. What the two have in common is
                          who may open them, which is what the word should say. */
                       title="The team's copy of this map — never shown to students"
-                      className={`${c.rule} transition-colors border-l pl-1.5`}
+                      className={`px-2.5 py-1 border-l no-underline hover:bg-white/5 ${c.rule} transition-colors`}
                     >
                       instructors
                     </a>
-                  )}
-                  {/* The word stays: amber and teal are one colour apart, and
-                      this is the distinction that decides whether a student is
-                      handed the instructors' link.
-
-                      Except when the chip is already the instructors' one and
-                      carries their link: the rule beside the title says
-                      "instructors" for the link, the tail says it for the
-                      chip, and two of the same word next to each other read as
-                      a fault rather than as two facts. On a student chip the
-                      pair is worth having — the map is theirs, the second link
-                      inside it is not. */}
-                  {showTasks && !(held && m.editUrl) && (
-                    <span className={c.tail}>· {held ? 'instructors' : 'students'}</span>
                   )}
                 </span>
                 )
