@@ -156,6 +156,7 @@ export default function MeetingDetails({
         links: [],
         attachments: [],
         audience,
+        meetingFor: announceDay,
         // Says what kind of news it is without saying what the news is.
         subjectNote: (() => {
           const short = draftDay('short')

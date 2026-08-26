@@ -188,6 +188,10 @@ export async function postCourseUpdate(
     /** Replaces "new update from X" in the email subject — the meeting details
         moving deserves a line that says so. Never carries a value. */
     subjectNote?: string
+    /** Set when this is the meeting-point notice, to the day it is about. The
+        feed shows only the newest of these: they are pointers at a block that
+        holds one plan, so an older one points at something no longer there. */
+    meetingFor?: string
   }
 ): Promise<PostResult> {
   const { user, admin, authorName } = await requireCourseStaff(instanceId)
@@ -211,6 +215,7 @@ export async function postCourseUpdate(
       attachments,
       audience,
       created_by: user.id,
+      meeting_for: /^\d{4}-\d{2}-\d{2}$/.test(input.meetingFor ?? '') ? input.meetingFor : null,
     })
     .select('id')
     .single()
