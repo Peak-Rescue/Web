@@ -373,15 +373,11 @@ export default async function CourseView({
   // one plan — a week of "where and when to meet is now set" is a week of
   // messages saying to go and look, all but one of them at something that
   // isn't there any more. The rest keep their email record in the table.
-  let meetingNoticeSeen = false
-  const updateRowsTyped = ((updateRows ?? []) as unknown as UpdateRow[])
+  const visibleUpdates = ((updateRows ?? []) as unknown as UpdateRow[])
     .filter((u) => showTasks || u.audience !== 'instructors')
-    .filter((u) => {
-      if (!u.meeting_for) return true
-      if (meetingNoticeSeen) return false
-      meetingNoticeSeen = true
-      return true
-    })
+  // Newest first, so the first notice found is the one still worth reading.
+  const currentNotice = visibleUpdates.findIndex((u) => u.meeting_for)
+  const updateRowsTyped = visibleUpdates.filter((u, i) => !u.meeting_for || i === currentNotice)
 
   // Attachments sit in the private bucket, so they're signed here — one call
   // for every update on the page rather than one per file.
