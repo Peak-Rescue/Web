@@ -152,7 +152,7 @@ export default async function CourseView({
   const [{ data: inst }, { data: offDays }, { data: modules }, { data: instructors }, taskRows, { data: peopleRows }, { data: templateRows }, { data: courseDocRows }, { data: taskDocRows }, { data: mapRows }, { data: resourceRows }, { data: linkRows }, { data: updateRows }, { data: enrollmentRows }, { data: messageRows }] =
     await Promise.all([
       admin.from('course_instances')
-        .select('course_type, custom_title, status, location, client_name, notes, ref_number, starts_at, ends_at, meeting_date, meeting_point, meeting_time, meeting_links, meeting_attachments, intro, max_students, internal, waiver_template_id, waiver_token, waiver_token_expires_at')
+        .select('course_type, custom_title, status, location, client_name, notes, ref_number, starts_at, ends_at, meeting_date, meeting_announced_dates, meeting_point, meeting_time, meeting_links, meeting_attachments, intro, max_students, internal, waiver_template_id, waiver_token, waiver_token_expires_at')
         .eq('id', id)
         .single(),
       admin.from('instance_off_days')
@@ -870,6 +870,8 @@ export default async function CourseView({
                 files={meeting.files}
                 canEdit={showTasks}
                 notifyCounts={notifyCounts}
+                // Only staff post, so only staff need the history.
+                announcedDates={showTasks ? ((inst.meeting_announced_dates as string[] | null) ?? []) : []}
                 passed={meetingOver}
               />
             </div>

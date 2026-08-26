@@ -2,12 +2,12 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import Composer, { type Draft } from './UpdateComposer'
+import { Tick } from './UpdateComposer'
 import AttachmentFields from './AttachmentFields'
 import { linkLabel } from '@/lib/course-links'
 import { LinkIcon, PaperclipIcon } from '@/components/TaskIcons'
 import type { MeetingLink, MeetingFile } from '@/lib/meeting-details'
-import type { UpdateLink, UpdateAttachment } from './update-actions'
+import type { UpdateLink, UpdateAttachment, UpdateAudience } from './update-actions'
 import type { NotifyCounts } from '@/lib/course-notify'
 import { postCourseUpdate } from './update-actions'
 import { saveMeetingDetails, noteMeetingAnnounced } from './logistics-actions'
@@ -29,6 +29,7 @@ export default function MeetingDetails({
   files,
   canEdit,
   notifyCounts,
+  announcedDates,
   passed,
 }: {
   instanceId: string
@@ -45,6 +46,10 @@ export default function MeetingDetails({
   files: MeetingFile[]
   canEdit: boolean
   notifyCounts: NotifyCounts
+  /** Days this course has already been told about — what makes a further
+      announcement for one of them a correction rather than the plan arriving.
+      Empty for anyone who can't post. */
+  announcedDates: string[]
   /** The meeting day is behind us: everyone has met, and the block folds away
       to a single line rather than heading the page for the rest of the week. */
   passed: boolean
@@ -71,9 +76,16 @@ export default function MeetingDetails({
   const [draftFiles, setDraftFiles] = useState<UpdateAttachment[]>(
     files.map(({ path, filename }) => ({ path, filename }))
   )
-  // Set once the fields are saved and it's time to say so — holds the wording
-  // the announcement starts from, which differs for a plan that moved.
-  const [telling, setTelling] = useState<{ moved: boolean } | null>(null)
+  // Telling the course is part of saving, not a screen that follows it. On by
+  // default: a meeting point nobody has been told about is the failure this
+  // block exists to prevent, so the quiet save is the one you have to ask for.
+  const [tell, setTell] = useState(true)
+  // Null means "whatever the day and the history say" — so the sentence keeps
+  // up with the date field until someone types over it, and stops the moment
+  // they do.
+  const [body, setBody] = useState<string | null>(null)
+  const [toStudents, setToStudents] = useState(true)
+  const [toInstructors, setToInstructors] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<string | null>(null)
@@ -107,34 +119,43 @@ export default function MeetingDetails({
       : `Where and when to meet${when} is now set — it’s under Course info on this page.`
   }
 
-  async function save(thenTell: boolean) {
+  // Which day the announcement is about, and whether these people have heard
+  // about that day already — both answered from the field being edited, so the
+  // sentence keeps up as the date is picked.
+  const announceDay = date || courseStart || ''
+  const moved = Boolean(announceDay) && announcedDates.includes(announceDay)
+  const audience: UpdateAudience =
+    toStudents && toInstructors ? 'everyone' : toInstructors ? 'instructors' : 'students'
+  const reach = toStudents || toInstructors ? notifyCounts[audience] : 0
+  const message = body ?? draftBody(moved)
+
+  // Saving and saying so are one press. They were two, with the second box
+  // arriving after the first had closed and looked like a receipt — so the
+  // question "did that send?" had to be asked of a screen that had already
+  // said "Saved".
+  async function submit(thenTell: boolean) {
     setBusy(true); setError(null); setResult(null)
     try {
-      const r = await saveMeetingDetails(instanceId, {
+      await saveMeetingDetails(instanceId, {
         meetingDate: date,
         meetingPoint: point,
         meetingTime: time,
         links: draftLinks,
         attachments: draftFiles,
       })
-      setEditing(false)
-      if (thenTell) setTelling({ moved: r.announced })
-      else setResult('Saved. Nobody was emailed.')
-      router.refresh()
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'That didn’t save')
-    } finally {
-      setBusy(false)
-    }
-  }
 
-  async function send(draft: Draft, moved: boolean) {
-    const n = notifyCounts[draft.audience]
-    if (!confirm(`Post this and email ${n === 1 ? '1 person' : `${n} people`} a link to it?`)) return
-    setBusy(true); setError(null)
-    try {
+      if (!thenTell) {
+        setEditing(false)
+        setResult('Saved. Nobody was emailed.')
+        router.refresh()
+        return
+      }
+
       const posted = await postCourseUpdate(instanceId, {
-        ...draft,
+        body: message,
+        links: [],
+        attachments: [],
+        audience,
         // Says what kind of news it is without saying what the news is.
         subjectNote: (() => {
           const short = draftDay('short')
@@ -142,15 +163,19 @@ export default function MeetingDetails({
           return moved ? `${what} changed` : what
         })(),
       })
-      // Only now is this day one the course has been told about, which is
-      // what makes the next announcement for it a correction rather than the
-      // plan arriving.
+      // Only now is this a day the course has been told about, which is what
+      // makes the next announcement for it a correction rather than the plan
+      // arriving.
       await noteMeetingAnnounced(instanceId, date)
-      setTelling(null)
-      setResult(posted.emailProblem ?? `Posted to Updates. ${posted.sent} ${posted.sent === 1 ? 'person' : 'people'} emailed a link.`)
+      setEditing(false)
+      setBody(null)
+      setResult(
+        posted.emailProblem ??
+          `Posted to Updates. ${posted.sent} ${posted.sent === 1 ? 'person' : 'people'} emailed a link.`
+      )
       router.refresh()
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'That didn’t send')
+      setError(e instanceof Error ? e.message : 'That didn’t save')
     } finally {
       setBusy(false)
     }
@@ -197,21 +222,60 @@ export default function MeetingDetails({
         disabled={busy}
       />
 
+      {/* The announcement, written here rather than in a box that arrives
+          afterwards. It is a draft: the wording follows the day until it is
+          typed over, and the ticks address it. */}
+      <div className="pt-1 border-t border-zinc-800 space-y-2">
+        <label className="inline-flex items-center gap-1.5 text-[11px] text-zinc-400 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={tell}
+            onChange={(e) => setTell(e.target.checked)}
+            className="accent-pr-red w-3 h-3"
+          />
+          Tell the course
+        </label>
+
+        {tell && (
+          <div className="space-y-2">
+            <textarea
+              value={message}
+              onChange={(e) => setBody(e.target.value)}
+              rows={3}
+              className="w-full resize-y bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-zinc-200 focus:outline-none focus:border-zinc-500"
+            />
+            <div className="flex items-center gap-3 flex-wrap text-[11px] text-zinc-500">
+              <span className="text-zinc-600">Who sees it</span>
+              <Tick label="Students" on={toStudents} set={setToStudents} />
+              <Tick label="Instructors" on={toInstructors} set={setToInstructors} />
+              {/* The pins stay on the block rather than being copied onto the
+                  post: a day later the post is somewhere down the feed, and the
+                  block is still the first thing on the page. */}
+              <span className="ml-auto">
+                {links.length + files.length > 0 && 'Links and photos stay on the meeting point. '}
+                {reach === 0
+                  ? 'Nobody to email — posts to the course page only.'
+                  : `Emails ${reach === 1 ? '1 person' : `${reach} people`} a link.`}
+              </span>
+            </div>
+          </div>
+        )}
+      </div>
+
       {error && <p className="text-xs text-pr-red">{error}</p>}
       <div className="flex items-center gap-3 flex-wrap">
         <button
-          onClick={() => save(true)}
-          disabled={busy}
+          onClick={() => submit(tell)}
+          disabled={busy || (tell && !message.trim()) || (tell && !toStudents && !toInstructors)}
           className="px-3 py-1.5 rounded bg-pr-red hover:bg-pr-red-dark text-white text-sm font-medium transition-colors disabled:opacity-40"
         >
-          {busy ? 'Saving…' : 'Save and tell the course…'}
-        </button>
-        <button
-          onClick={() => save(false)}
-          disabled={busy}
-          className="text-xs text-zinc-400 hover:text-zinc-200"
-        >
-          Save without telling anyone
+          {busy
+            ? 'Working…'
+            : !tell
+              ? 'Save'
+              : reach === 0
+                ? 'Save and post'
+                : `Save and notify ${reach === 1 ? '1 person' : `${reach} people`}`}
         </button>
         <button
           onClick={() => {
@@ -219,6 +283,7 @@ export default function MeetingDetails({
             setPoint(meetingPoint ?? ''); setTime(meetingTime ?? '')
             setDraftLinks(links)
             setDraftFiles(files.map(({ path, filename }) => ({ path, filename })))
+            setBody(null)
             setError(null); setEditing(false)
           }}
           disabled={busy}
@@ -296,7 +361,7 @@ export default function MeetingDetails({
 
   // Once everyone has met, one line — the plan is still here to check, it just
   // stops being the first thing on the page for the rest of the week.
-  if (!open && !editing && !telling) {
+  if (!open && !editing) {
     return (
       <button
         onClick={() => setOpen(true)}
@@ -317,7 +382,7 @@ export default function MeetingDetails({
 
   return (
     <div className="space-y-2">
-      {!editing && !telling && (
+      {!editing && (
         <button
           onClick={() => setOpen(false)}
           aria-expanded
@@ -329,24 +394,7 @@ export default function MeetingDetails({
       )}
       {editing ? fields : readout}
 
-      {canEdit && telling && (
-        <div className="p-3 bg-zinc-900 border border-zinc-700 rounded-lg space-y-2">
-          <p className="text-[11px] text-zinc-500">
-            Saved — and nobody has been told yet. This is the message that tells them.
-          </p>
-          <Composer
-            instanceId={instanceId}
-            busy={busy}
-            notifyCounts={notifyCounts}
-            submitLabel="Post and notify"
-            initial={{ body: draftBody(telling.moved), links: [], attachments: [], audience: 'everyone' }}
-            onCancel={() => setTelling(null)}
-            onSubmit={(draft) => { void send(draft, telling.moved) }}
-          />
-        </div>
-      )}
-
-      {canEdit && !editing && !telling && (
+      {canEdit && !editing && (
         <div className="flex items-center gap-3 flex-wrap">
           <button
             onClick={() => { setResult(null); setEditing(true) }}
@@ -354,11 +402,13 @@ export default function MeetingDetails({
           >
             {isSet ? 'Edit meeting details' : 'Add meeting details'}
           </button>
-          {/* For details set some other time and never announced — filled in on
-              the admin screen, or saved here without telling anyone. */}
+          {/* For details set some other time and never announced — filled in
+              on the admin screen, or saved here without telling anyone. Opens
+              the same box: there is one screen for the plan and the message
+              about it, whichever of the two you came for. */}
           {isSet && (
             <button
-              onClick={() => { setResult(null); setTelling({ moved: false }) }}
+              onClick={() => { setResult(null); setBody(null); setTell(true); setEditing(true) }}
               className="text-[11px] text-zinc-500 hover:text-white transition-colors"
             >
               Tell the course

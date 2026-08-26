@@ -108,12 +108,13 @@ export default function Composer({
   )
 }
 
-// One audience checkbox. No number beside it: the only count worth showing is
+// One audience checkbox, exported because the meeting block addresses its
+// announcement with the same two ticks. No number beside it: the only count worth showing is
 // how many inboxes the post reaches, and that already sits under the button as
 // a sentence. A number here read as "how many people see it", which it wasn't —
 // your own address is excluded, so it never matched the list of instructors
 // further up the page.
-function Tick({
+export function Tick({
   label, on, set,
 }: {
   label: string

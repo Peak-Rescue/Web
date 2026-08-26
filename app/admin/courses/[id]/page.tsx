@@ -830,6 +830,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
               files={meeting.files}
               canEdit
               notifyCounts={notifyCounts}
+              announcedDates={(inst.meeting_announced_dates as string[] | null) ?? []}
               passed={meetingDayPassed(meeting.meetingDate, inst.starts_at as string | null)}
             />
           </div>
