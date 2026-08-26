@@ -23,7 +23,7 @@ import UnmatchedWaivers from '@/components/UnmatchedWaivers'
 import { loadUnmatchedWaivers } from '@/lib/waiver-data'
 import { loadStudentWaiver } from '@/lib/waiver-data'
 import { notifyCountsFrom } from '@/lib/course-notify'
-import { meetingDetails, courseHasStarted } from '@/lib/meeting-details'
+import { meetingDetails, meetingDayPassed } from '@/lib/meeting-details'
 import { Section, SubHead, InstructorCard, StudentCard, SECTION_LABEL, type SectionKey } from './sections'
 import { PURPOSE_META, PURPOSE_ORDER, linkLabel, type CourseLink } from '@/lib/course-links'
 
@@ -542,7 +542,7 @@ export default async function CourseView({
   const hasDetails = Boolean(inst.intro || (instructors ?? []).length) || showTasks
   // Day one decides whether the meeting block leads the updates or folds to a
   // line under them.
-  const started = courseHasStarted(inst.starts_at as string | null)
+  const meetingOver = meetingDayPassed(meeting.meetingDate, inst.starts_at as string | null)
 
   const navSections = ([
     'details',
@@ -855,9 +855,10 @@ export default async function CourseView({
             blurb={showTasks ? 'Posted here and emailed' : 'Posted by your instructors, and emailed to you'}
             unread={unreadUpdates > 0}
           >
-            {/* Above the feed until day one, a single line after it. Where to
-                meet is the most important thing on the page right up to the
-                moment everyone has met, and dead weight from then on. */}
+            {/* Above the feed until the meeting day is behind us, a single
+                line after that. Where to meet is the most important thing on
+                the page right up to the moment everyone has met, and dead
+                weight from then on. */}
             <div className="mb-4">
               <MeetingDetails
                 instanceId={id}
@@ -869,7 +870,7 @@ export default async function CourseView({
                 files={meeting.files}
                 canEdit={showTasks}
                 notifyCounts={notifyCounts}
-                started={started}
+                passed={meetingOver}
               />
             </div>
 

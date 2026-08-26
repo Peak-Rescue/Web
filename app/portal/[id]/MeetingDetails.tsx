@@ -29,7 +29,7 @@ export default function MeetingDetails({
   files,
   canEdit,
   notifyCounts,
-  started,
+  passed,
 }: {
   instanceId: string
   /** Null means day one, which courseStart answers. */
@@ -45,13 +45,22 @@ export default function MeetingDetails({
   files: MeetingFile[]
   canEdit: boolean
   notifyCounts: NotifyCounts
-  /** Day one has been and gone: everyone has met, and the block folds away to
-      a single line rather than heading the page for the rest of the week. */
-  started: boolean
+  /** The meeting day is behind us: everyone has met, and the block folds away
+      to a single line rather than heading the page for the rest of the week. */
+  passed: boolean
 }) {
   const router = useRouter()
   const [editing, setEditing] = useState(false)
-  const [open, setOpen] = useState(!started)
+  const [open, setOpen] = useState(!passed)
+  // Folding is a fact about the date, not a preference, so it is re-decided
+  // whenever the date crosses that line: set the plan for a day still ahead
+  // and the block opens itself back up rather than staying shut on the answer
+  // that was just written. Between crossings the toggle is the reader's.
+  const [foldedFor, setFoldedFor] = useState(passed)
+  if (passed !== foldedFor) {
+    setFoldedFor(passed)
+    setOpen(!passed)
+  }
   // The field opens on day one rather than empty: it is the answer nearly
   // every time, and an empty date box invites the question of whether leaving
   // it blank means today.

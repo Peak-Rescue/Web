@@ -65,16 +65,23 @@ export function meetingDayLabel(
       : { weekday: 'short', month: 'short', day: 'numeric' })
 }
 
-// Whether day one has been and gone.
+// Whether the meeting day is behind us.
 //
 // Where to meet is the most important thing on the page right up until the
 // moment everyone has met, and dead weight from then on — so the block that
-// carries it folds itself away once the course has started. Compared as plain
-// YYYY-MM-DD strings against the local day, because "has the course started"
-// is a question about the calendar and not about the hour.
-export function courseHasStarted(startsAt: string | null): boolean {
-  if (!startsAt) return false
+// carries it folds itself away once that day is over.
+//
+// Over, not started: the old test folded the block at midnight *on* the
+// morning of, which is the hour it exists for. And it read the course start
+// rather than the meeting day, so a plan set for Wednesday on a course that
+// began Monday arrived already folded.
+//
+// Compared as plain YYYY-MM-DD strings against the local day, because "is that
+// day behind us" is a question about the calendar and not about the hour.
+export function meetingDayPassed(meetingDate: string | null, startsAt: string | null): boolean {
+  const day = meetingDate ?? startsAt
+  if (!day) return false
   const now = new Date()
   const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
-  return startsAt <= today
+  return day < today
 }
