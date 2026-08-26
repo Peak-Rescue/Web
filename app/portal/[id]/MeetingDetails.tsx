@@ -80,6 +80,11 @@ export default function MeetingDetails({
 
   const isSet = Boolean(meetingPoint || meetingTime || links.length || files.length)
   const day = meetingDayLabel(meetingDate, courseStart)
+  // The announcement is written the instant the save returns, before the page
+  // has been round to the server for the new props — so it reads the field,
+  // not the prop, or it names the day this plan was for before it was edited.
+  const draftDay = (form: 'long' | 'short' = 'long') =>
+    meetingDayLabel(date || null, courseStart, form)
 
   // Never quotes the point or the time. Quoting it would put a second copy on
   // the same page — one in the field, one in the feed — and when the lot
@@ -95,7 +100,8 @@ export default function MeetingDetails({
   // between "the plan is set" and a plan they can act on without opening
   // anything.
   const draftBody = (moved: boolean) => {
-    const when = day ? ` for ${day}` : ''
+    const named = draftDay()
+    const when = named ? ` for ${named}` : ''
     return moved
       ? `The meeting point or time${when} has changed — the current plan is under Course info on this page. Please check it before you set off.`
       : `Where and when to meet${when} is now set — it’s under Course info on this page.`
@@ -131,7 +137,7 @@ export default function MeetingDetails({
         ...draft,
         // Says what kind of news it is without saying what the news is.
         subjectNote: (() => {
-          const short = meetingDayLabel(meetingDate, courseStart, 'short')
+          const short = draftDay('short')
           const what = short ? `meeting details for ${short}` : 'meeting details'
           return moved ? `${what} changed` : what
         })(),
@@ -326,7 +332,7 @@ export default function MeetingDetails({
       {canEdit && telling && (
         <div className="p-3 bg-zinc-900 border border-zinc-700 rounded-lg space-y-2">
           <p className="text-[11px] text-zinc-500">
-            Saved. Say so — add a map pin or a photo of the spot if it helps, and pick who needs it.
+            Saved — and nobody has been told yet. This is the message that tells them.
           </p>
           <Composer
             instanceId={instanceId}
