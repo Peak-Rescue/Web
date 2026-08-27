@@ -137,6 +137,18 @@ function OrderCard({
         </div>
         <form action={sendGearOrder.bind(null, instanceId, order.id)} className="flex items-center gap-2.5">
           <AdminCcPicker admins={adminCcOptions} />
+          {/* Only while there is nothing to send. Once the number exists the
+              question is moot, and a standing checkbox for a decision you
+              already made is one more thing to read past. */}
+          {!es.trim() && (
+            <label
+              className="flex items-center gap-1.5 text-xs text-amber-300/80 cursor-pointer"
+              title="The client gets the list with no number to quote back. You can add one later — it shows when they reopen the link."
+            >
+              <input type="checkbox" name="send_without_es" className="accent-pr-red size-3.5" />
+              send without one
+            </label>
+          )}
           <button
             disabled={busy}
             className="px-3 py-1.5 rounded bg-pr-red hover:bg-pr-red-dark text-white text-sm font-medium transition-colors disabled:opacity-40"
@@ -153,6 +165,13 @@ function OrderCard({
           </button>
         )}
       </div>
+
+      {order.sent_at && !order.es_quote_number && (
+        <p className="text-[11px] text-amber-300/80 mb-3">
+          Sent without a quote number. Adding one above shows it on their page next time they open the link —
+          use Send again if they should get it by email too.
+        </p>
+      )}
 
       {order.client_note && (
         <p className="text-xs text-zinc-300 bg-zinc-950/60 border border-zinc-800 rounded px-2.5 py-2 mb-3">

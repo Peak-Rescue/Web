@@ -38,30 +38,34 @@ export default async function QuotePage({
     .single()
   if (!inst) notFound()
 
-  // First open of a sent quote → record viewed.
-  if (quote.status === 'sent' && !quote.viewed_at) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  let isAdmin = false
+  if (user) {
+    const { data: profile } = await admin.from('profiles').select('role').eq('id', user.id).single()
+    isAdmin = profile?.role === 'admin'
+  }
+
+  // First open of a sent quote → record viewed. An admin previewing the
+  // client's page doesn't count: viewed_at means the client opened it.
+  if (!isAdmin && quote.status === 'sent' && !quote.viewed_at) {
     await admin.from('course_quotes').update({ viewed_at: new Date().toISOString() }).eq('id', quote.id)
   }
 
   // Admin viewing the client's page: offer the hero-photo picker in place —
   // this is where a wrong photo gets noticed. Clients see nothing extra.
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
   let heroChoices: { value: string; label: string; categories: string[] }[] | null = null
-  if (user) {
-    const { data: profile } = await admin.from('profiles').select('role').eq('id', user.id).single()
-    if (profile?.role === 'admin') {
-      const { data: galleryImages } = await admin
-        .from('gallery_images')
-        .select('url, caption, categories')
-        .order('created_at', { ascending: false })
-      heroChoices = [
-        ...HERO_CHOICES,
-        ...(galleryImages ?? [])
-          .filter((g) => !HERO_CHOICES.some((c) => c.value === g.url))
-          .map((g) => ({ value: g.url, label: g.caption || 'Gallery photo', categories: g.categories ?? [] })),
-      ]
-    }
+  if (isAdmin) {
+    const { data: galleryImages } = await admin
+      .from('gallery_images')
+      .select('url, caption, categories')
+      .order('created_at', { ascending: false })
+    heroChoices = [
+      ...HERO_CHOICES,
+      ...(galleryImages ?? [])
+        .filter((g) => !HERO_CHOICES.some((c) => c.value === g.url))
+        .map((g) => ({ value: g.url, label: g.caption || 'Gallery photo', categories: g.categories ?? [] })),
+    ]
   }
 
   const service = services.find((s) => s.slug === inst.course_type)

@@ -183,7 +183,16 @@ export async function sendGearOrder(instanceId: string, orderId: string, formDat
     admin.from('course_instances').select('ref_number, course_type, custom_title, client_name, contacts, starts_at, ends_at').eq('id', instanceId).single(),
   ])
   if (!order || !inst) throw new Error('Order not found')
-  if (!order.es_quote_number) throw new Error('Add the ES quote number before sending — the client quotes it back')
+  // The number is what lets the client match this against their own paperwork,
+  // so its absence is worth stopping on — once. Sometimes it genuinely isn't
+  // issued yet and the list still has to go, so the block is a speed bump with
+  // a way past it rather than a rule. Added later, it shows on the client's
+  // page the next time they open the link, and "Send again" puts it in an
+  // email too.
+  const withoutEs = formData?.get('send_without_es') === 'on'
+  if (!order.es_quote_number && !withoutEs) {
+    throw new Error('No ES quote number yet — tick “send without one” if you mean to send it anyway.')
+  }
   if (!process.env.RESEND_API_KEY) throw new Error('Email is not configured in this environment')
 
   const contacts = parseContacts(inst.contacts)
@@ -215,17 +224,21 @@ export async function sendGearOrder(instanceId: string, orderId: string, formDat
     from: 'Peak Rescue Mountain Guides <noreply@peak-rescue.com>',
     to: [toEmail],
     cc: cc.length > 0 ? cc : undefined,
-    subject: `Gear list ${order.es_quote_number} — ${courseName}`,
+    subject: order.es_quote_number
+      ? `Gear list ${order.es_quote_number} — ${courseName}`
+      : `Gear list — ${courseName}`,
     text: [
       `${contacts[0]?.name || 'Hello'},`,
       '',
-      `Here is the gear list for ${courseName}${inst.client_name ? ` (${inst.client_name})` : ''}, quote ${order.es_quote_number}:`,
+      `Here is the gear list for ${courseName}${inst.client_name ? ` (${inst.client_name})` : ''}${order.es_quote_number ? `, quote ${order.es_quote_number}` : ''}:`,
       '',
       link,
       '',
       'You can change the quantities, take off anything you already have, and leave us notes — then submit it back. Whatever you send back is what we pass to purchasing.',
       '',
-      `Please quote ${order.es_quote_number} on any correspondence.`,
+      order.es_quote_number
+        ? `Please quote ${order.es_quote_number} on any correspondence.`
+        : 'A quote number will follow — it will appear on the page above once we have it.',
       '',
       'Questions? Just reply to this email.',
     ].join('\n'),
