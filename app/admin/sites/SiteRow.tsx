@@ -78,7 +78,7 @@ export default function SiteRow({ site, venues, dayCount }: { site: Site; venues
             <label className={label}>Beta — approach, raps, exit, hazards. One blank-free line per fact; the breaks are kept.</label>
             <textarea
               rows={10}
-              className={`${input} resize-y font-[13px] leading-relaxed`}
+              className={`${input} resize-y leading-relaxed`}
               value={form.beta}
               onChange={(e) => setForm({ ...form, beta: e.target.value })}
             />
@@ -86,22 +86,38 @@ export default function SiteRow({ site, venues, dayCount }: { site: Site; venues
 
           <div className="sm:col-span-2">
             <label className={label}>Links — route page, gauge, driving pin</label>
-            <div className="space-y-2">
+            {/* A grid, not a flex row: the shared input class carries w-full,
+                so a width utility next to it is a coin toss on stylesheet
+                order — which is how the URL field ended up a sliver and the
+                label hogged the row. Columns decide the widths here, and the
+                inputs are free to stay w-full inside them. */}
+            <div className="space-y-1.5">
+              {links.length > 0 && (
+                <div className="grid grid-cols-[7.5rem_1fr_1.25rem] gap-2 px-0.5">
+                  <span className="text-[10px] uppercase tracking-wide text-zinc-600">Shown as</span>
+                  <span className="text-[10px] uppercase tracking-wide text-zinc-600">Address</span>
+                </div>
+              )}
               {links.map((l, i) => (
-                <div key={i} className="flex gap-2">
+                <div key={i} className="grid grid-cols-[7.5rem_1fr_1.25rem] gap-2 items-center">
                   <input
-                    className={`${input} flex-1`}
-                    value={l.url}
-                    placeholder="https://…"
-                    onChange={(e) => setLinks(links.map((x, j) => j === i ? { ...x, url: e.target.value } : x))}
-                  />
-                  <input
-                    className={`${input} w-32 shrink-0`}
+                    className={input}
                     value={l.label}
-                    placeholder="label"
+                    placeholder="water gauge"
                     onChange={(e) => setLinks(links.map((x, j) => j === i ? { ...x, label: e.target.value } : x))}
                   />
-                  <button onClick={() => setLinks(links.filter((_, j) => j !== i))} className="text-xs text-zinc-600 hover:text-red-400 transition-colors shrink-0 px-1">
+                  <input
+                    className={`${input} font-mono text-[12px]`}
+                    value={l.url}
+                    placeholder="https://…"
+                    spellCheck={false}
+                    onChange={(e) => setLinks(links.map((x, j) => j === i ? { ...x, url: e.target.value } : x))}
+                  />
+                  <button
+                    onClick={() => setLinks(links.filter((_, j) => j !== i))}
+                    aria-label={`Remove ${l.label || 'link'}`}
+                    className="text-xs text-zinc-600 hover:text-red-400 transition-colors"
+                  >
                     ✕
                   </button>
                 </div>
