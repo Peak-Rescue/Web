@@ -6,6 +6,7 @@
 // whether the instructor-audience documents are theirs to have.
 
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { createClient } from '@/lib/supabase/server'
 
 export type CourseAccess = { allowed: boolean; isStaff: boolean }
 
@@ -32,6 +33,15 @@ export async function courseAccess(
 export async function isAdmin(admin: SupabaseClient, userId: string): Promise<boolean> {
   const { data } = await admin.from('profiles').select('role').eq('id', userId).single()
   return data?.role === 'admin'
+}
+
+// Asked by the tokenized pages before they stamp viewed_at: the link's
+// audience is the client, so one of us opening it is not the client opening
+// it, and a forwarded quote shouldn't read as read.
+export async function viewerIsAdmin(admin: SupabaseClient): Promise<boolean> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  return user ? isAdmin(admin, user.id) : false
 }
 
 // The line under the title on a printed handout: dates, then where, then who

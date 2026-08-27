@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation'
 import { after } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { viewerIsAdmin } from '@/lib/course-access'
 import CourseView, { GUEST } from '@/app/portal/[id]/CourseView'
 
 // A course page for someone with no account — the client's point of contact,
@@ -38,10 +39,17 @@ export default async function SharePage({
   if (share.revoked_at) notFound()
   if (share.expires_at && new Date(share.expires_at) < new Date()) notFound()
 
+  // One of us opening the link to check what the guest sees is not a view:
+  // the counts answer "did the client look at this", and an admin preview
+  // would answer it wrongly. Resolved here rather than inside after(), where
+  // the request's cookies are no longer ours to read.
+  const previewing = await viewerIsAdmin(admin)
+
   // After the response, so the count never delays the page. First open is kept
   // apart from the running total — "did they ever look at it" and "how often"
   // are different questions, and the first is the one you usually want.
   after(async () => {
+    if (previewing) return
     await createAdminClient()
       .from('course_view_shares')
       .update({

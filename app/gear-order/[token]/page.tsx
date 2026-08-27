@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { viewerIsAdmin } from '@/lib/course-access'
 import { courseShortName } from '@/lib/courses'
 import { type GearOrderLine } from '@/lib/gear-orders'
 import GearOrderForm from './GearOrderForm'
@@ -29,7 +30,8 @@ export default async function GearOrderPage({ params }: { params: Promise<{ toke
     .single()
   if (!inst) notFound()
 
-  if (!order.viewed_at) {
+  // Our own preview of the client's page doesn't count as the client's open.
+  if (!order.viewed_at && !(await viewerIsAdmin(admin))) {
     await admin.from('gear_orders').update({ viewed_at: new Date().toISOString() }).eq('id', order.id)
   }
 

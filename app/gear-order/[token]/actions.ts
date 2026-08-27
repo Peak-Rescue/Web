@@ -97,11 +97,3 @@ export async function submitGearOrder(
   revalidatePath(`/admin/courses/${order.instance_id}`)
   return { ok: true }
 }
-
-export async function markGearOrderViewed(token: string) {
-  const admin = createAdminClient()
-  await admin.from('gear_orders')
-    .update({ viewed_at: new Date().toISOString() })
-    .eq('accept_token', token)
-    .is('viewed_at', null)
-}

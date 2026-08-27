@@ -1,7 +1,7 @@
 import Image from 'next/image'
 import { notFound } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { viewerIsAdmin } from '@/lib/course-access'
 import QuoteHeroPicker from '@/app/admin/courses/QuoteHeroPicker'
 import { HERO_CHOICES, clientSafeHero } from '@/lib/quote-heroes'
 import { courseDisplayName, courseShortName } from '@/lib/courses'
@@ -38,13 +38,7 @@ export default async function QuotePage({
     .single()
   if (!inst) notFound()
 
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  let isAdmin = false
-  if (user) {
-    const { data: profile } = await admin.from('profiles').select('role').eq('id', user.id).single()
-    isAdmin = profile?.role === 'admin'
-  }
+  const isAdmin = await viewerIsAdmin(admin)
 
   // First open of a sent quote → record viewed. An admin previewing the
   // client's page doesn't count: viewed_at means the client opened it.
