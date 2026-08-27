@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Tick } from './UpdateComposer'
 import AttachmentFields from './AttachmentFields'
@@ -71,6 +71,17 @@ export default function MeetingDetails({
   // it blank means today.
   const [date, setDate] = useState(meetingDate ?? courseStart ?? '')
   const [point, setPoint] = useState(meetingPoint ?? '')
+  const pointRef = useRef<HTMLTextAreaElement>(null)
+
+  // Height follows the content rather than the other way round. Reset first:
+  // scrollHeight only ever reports growth, so without it the box can grow and
+  // never shrink back when text is deleted.
+  useEffect(() => {
+    const el = pointRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${el.scrollHeight}px`
+  }, [point, editing])
   const [time, setTime] = useState(meetingTime ?? '')
   const [draftLinks, setDraftLinks] = useState<UpdateLink[]>(links)
   const [draftFiles, setDraftFiles] = useState<UpdateAttachment[]>(
@@ -147,14 +158,20 @@ export default function MeetingDetails({
             className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-zinc-200 focus:outline-none focus:border-zinc-500"
           />
         </label>
-        <label className="block">
+        {/* Wide, and it grows with what you type. A meeting point is usually
+            four words and sometimes a paragraph — where to park, which gate,
+            what the water is doing — and a one-line box that scrolls what you
+            wrote out of sight is no way to write the second kind. */}
+        <label className="block sm:col-span-2">
           <span className="block text-[11px] uppercase tracking-wide text-zinc-500 mb-1">Meeting point</span>
-          <input
+          <textarea
             autoFocus
+            ref={pointRef}
+            rows={2}
             value={point}
             onChange={(e) => setPoint(e.target.value)}
             placeholder="lower lot, by the big cedar"
-            className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-zinc-200 focus:outline-none focus:border-zinc-500"
+            className="w-full min-h-[4.5rem] resize-y bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-zinc-200 leading-relaxed focus:outline-none focus:border-zinc-500"
           />
         </label>
         <label className="block">
@@ -274,9 +291,14 @@ export default function MeetingDetails({
     <div className="space-y-3">
     <dl className="grid sm:grid-cols-2 gap-3">
       {meetingPoint && (
-        <div className="px-3 py-2 rounded-lg border border-zinc-800 bg-zinc-900">
+        // Spans the row when it runs past a line: a paragraph set in a half
+        // width column beside a single time is a column of two-word lines.
+        <div className={`px-3 py-2 rounded-lg border border-zinc-800 bg-zinc-900 ${
+          meetingPoint.length > 80 || meetingPoint.includes('\n') ? 'sm:col-span-2' : ''
+        }`}>
           <dt className="text-[11px] uppercase tracking-wide text-zinc-500">Where</dt>
-          <dd className="text-sm text-zinc-200 mt-0.5">{meetingPoint}</dd>
+          {/* Typed over several lines, read back over several lines. */}
+          <dd className="text-sm text-zinc-200 mt-0.5 whitespace-pre-line">{meetingPoint}</dd>
         </div>
       )}
       {(meetingTime || day) && (
