@@ -93,6 +93,8 @@ export default function MeetingDetails({
   const [tell, setTell] = useState(true)
   const [toStudents, setToStudents] = useState(true)
   const [toInstructors, setToInstructors] = useState(true)
+  // Same default as the update composer: the copy is the receipt that it went.
+  const [copyMe, setCopyMe] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<string | null>(null)
@@ -132,7 +134,7 @@ export default function MeetingDetails({
         return
       }
 
-      const sent = await announceMeetingDetails(instanceId, { audience, meetingDate: date })
+      const sent = await announceMeetingDetails(instanceId, { audience, meetingDate: date, copyMe })
       setEditing(false)
       setResult(
         sent.emailProblem ??
@@ -213,10 +215,12 @@ export default function MeetingDetails({
             <span className="text-zinc-600">Who gets it</span>
             <Tick label="Students" on={toStudents} set={setToStudents} />
             <Tick label="Instructors" on={toInstructors} set={setToInstructors} />
+            <span className="text-zinc-700">·</span>
+            <Tick label="Copy me" on={copyMe} set={setCopyMe} />
             <span className="ml-auto">
               {reach === 0
-                ? 'Nobody to email yet.'
-                : `Emails ${reach === 1 ? '1 person' : `${reach} people`}: ${
+                ? copyMe ? 'Nobody else to email — goes to you only.' : 'Nobody to email yet.'
+                : `Emails ${reach === 1 ? '1 person' : `${reach} people`}${copyMe ? ' and you' : ''}: ${
                     moved ? 'the plan' : 'where and when'
                   }${draftDay ? ` for ${draftDay}` : ''} ${moved ? 'has changed' : 'is set'}.`}
             </span>
@@ -228,14 +232,18 @@ export default function MeetingDetails({
       <div className="flex items-center gap-3 flex-wrap">
         <button
           onClick={() => submit(tell)}
-          disabled={busy || (tell && (reach === 0 || (!toStudents && !toInstructors)))}
+          disabled={busy || (tell && ((reach === 0 && !copyMe) || (!toStudents && !toInstructors)))}
           className="px-3 py-1.5 rounded bg-pr-red hover:bg-pr-red-dark text-white text-sm font-medium transition-colors disabled:opacity-40"
         >
           {busy
             ? 'Working…'
             : !tell
               ? 'Save'
-              : `Save and notify ${reach === 1 ? '1 person' : `${reach} people`}`}
+              : reach === 0
+                // Copying yourself into an empty roster is a real send, and
+                // "notify 0 people" reads like nothing happens.
+                ? 'Save and copy me'
+                : `Save and notify ${reach === 1 ? '1 person' : `${reach} people`}`}
         </button>
         <button
           onClick={() => {
