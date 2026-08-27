@@ -521,16 +521,24 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
     }))
 
   // Schedule: this course's running order and any templates for this offering.
-  const [{ data: scheduleRows }, { data: scheduleTemplateRows }] = await Promise.all([
+  const [{ data: scheduleRows }, { data: scheduleTemplateRows }, { data: siteRows }] = await Promise.all([
     gearAdmin.from('course_schedules')
-      .select('id, name, overview, objectives, instance_id, is_template, schedule_days(id, title, location, notes, objectives, sort_order, schedule_blocks(id, parent_id, title, time_label, location, sort_order))')
+      .select('id, name, overview, objectives, instance_id, is_template, schedule_days(id, title, location, site_id, notes, objectives, sort_order, schedule_blocks(id, parent_id, title, time_label, location, sort_order))')
       .eq('instance_id', id)
       .limit(1),
     gearAdmin.from('course_schedules')
       .select('id, name, description, course_type, schedule_days(id)')
       .eq('is_template', true),
+    // Sites a day can point at instead of retyping the canyon's beta.
+    gearAdmin.from('sites')
+      .select('id, name, kind, beta, venue_id, venues(name)')
+      .eq('active', true)
+      .order('name'),
   ])
   const schedule = ((scheduleRows ?? []) as unknown as Schedule[])[0] ?? null
+  const siteOptions = ((siteRows ?? []) as unknown as {
+    id: string; name: string; kind: string | null; beta: string | null; venue_id: string | null; venues: { name: string } | null
+  }[]).map((s) => ({ id: s.id, name: s.name, kind: s.kind, beta: s.beta, venue_id: s.venue_id, venue_name: s.venues?.name ?? null }))
   const scheduleTemplates = ((scheduleTemplateRows ?? []) as unknown as {
     id: string; name: string; description: string | null; course_type: string | null; schedule_days: unknown[]
   }[])
@@ -979,6 +987,8 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
             courseDays={Math.min(courseDays ?? 0, 30)}
             schedule={schedule}
             templates={scheduleTemplates}
+            sites={siteOptions}
+            venueId={inst.venue_id}
           />
         </TabPanel>
 

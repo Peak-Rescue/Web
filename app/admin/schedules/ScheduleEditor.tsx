@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState, type ReactNode } from 'react'
+import { useMemo, useState, type ComponentProps, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   updateSchedule, addScheduleDay, updateScheduleDay, removeScheduleDay,
@@ -20,10 +20,20 @@ export type ScheduleBlock = {
   sort_order: number
 }
 
+export type SiteOption = {
+  id: string
+  name: string
+  kind: string | null
+  beta: string | null
+  venue_id?: string | null
+  venue_name?: string | null
+}
+
 export type ScheduleDay = {
   id: string
   title: string
   location: string | null
+  site_id: string | null
   notes: string | null
   objectives: string[]
   sort_order: number
@@ -48,12 +58,21 @@ export default function ScheduleEditor({
   schedule,
   courseType,
   templates,
+  sites = [],
+  venueId = null,
 }: {
   schedule: Schedule
   courseType?: string | null
   // The schedule shelf's templates, so a running order refined on a course can
   // be saved back over the one it started from.
   templates?: ScheduleTemplateOption[]
+  // Canyons and crags with beta already written. A day picks one instead of
+  // retyping what the place is like.
+  sites?: SiteOption[]
+  // The course's venue. A Maui course shouldn't have to scroll past every crag
+  // in Washington to find Emerald, so the venue's own sites come first and the
+  // rest sit under a heading you have to mean to reach.
+  venueId?: string | null
 }) {
   const router = useRouter()
   const [busy, setBusy] = useState(false)
@@ -69,6 +88,23 @@ export default function ScheduleEditor({
       .sort((a, b) => a.sort_order - b.sort_order),
     [schedule.schedule_days, removed]
   )
+
+  // The course's own venue first, then everywhere else — the list is one
+  // dropdown, so the ordering is the only thing making a Maui course feel like
+  // it knows it's on Maui.
+  const siteGroups = useMemo(() => {
+    const here = sites.filter((s) => venueId && s.venue_id === venueId)
+    const rest = sites.filter((s) => !here.includes(s))
+    const restBy = new Map<string, SiteOption[]>()
+    for (const s of rest) {
+      const k = s.venue_name ?? 'Elsewhere'
+      restBy.set(k, [...(restBy.get(k) ?? []), s])
+    }
+    return [
+      ...(here.length ? [{ name: here[0].venue_name ?? 'This venue', sites: here }] : []),
+      ...[...restBy.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([name, sites]) => ({ name, sites })),
+    ]
+  }, [sites, venueId])
 
   // Reports whether it landed, so a caller that already took the change on
   // screen can put it back if the server disagreed.
@@ -146,15 +182,58 @@ export default function ScheduleEditor({
                   className={`w-full pl-7 ${input}`}
                 />
               </Marked>
-              <Marked icon={<NoteIcon />}>
-                <input
-                  defaultValue={day.notes ?? ''}
-                  onBlur={(e) => e.target.value !== (day.notes ?? '') && run(() => updateScheduleDay(day.id, { notes: e.target.value }))}
-                  placeholder="Notes — e.g. bring tactical gear"
-                  className={`w-full pl-7 ${input}`}
-                />
-              </Marked>
+              {/* Picking the canyon is what stops its beta being retyped per
+                  course. Left unset, the day behaves exactly as it always
+                  has — a free-text location and its own notes. */}
+              {sites.length > 0 && (
+                <Marked icon={<RouteIcon />}>
+                  <select
+                    value={day.site_id ?? ''}
+                    onChange={(e) => run(() => updateScheduleDay(day.id, { site_id: e.target.value || null }))}
+                    className={`w-full pl-7 ${input} ${day.site_id ? 'text-zinc-200' : 'text-zinc-500'}`}
+                  >
+                    <option value="">No site — notes only</option>
+                    {siteGroups.map((g) => (
+                      <optgroup key={g.name} label={g.name}>
+                        {g.sites.map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {s.name}{s.kind ? ` · ${s.kind}` : ''}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ))}
+                  </select>
+                </Marked>
+              )}
             </div>
+            {/* The beta as the day will show it, read-only here: this is the
+                site's, and editing it belongs on the site, where the fix
+                reaches every other course too. */}
+            {(() => {
+              const site = sites.find((s) => s.id === day.site_id)
+              if (!site?.beta) return null
+              return (
+                <div className="rounded border border-zinc-800 bg-zinc-950/60 px-2.5 py-2">
+                  <p className="text-[10px] uppercase tracking-wide text-zinc-600 mb-1">
+                    Beta from {site.name} ·{' '}
+                    <a href="/admin/sites" className="underline hover:text-zinc-400 transition-colors">edit on the site</a>
+                  </p>
+                  <p className="text-[11px] text-zinc-500 whitespace-pre-line leading-relaxed line-clamp-6">{site.beta}</p>
+                </div>
+              )
+            })()}
+            {/* A day at a canyon carries its beta here — approach, rap count,
+                exit — so this one starts a line tall and grows to whatever got
+                pasted in. Sitting half-width beside the location, a paragraph
+                of it was a keyhole. */}
+            <Marked icon={<NoteIcon />} top>
+              <Grows
+                defaultValue={day.notes ?? ''}
+                onBlur={(e) => e.target.value !== (day.notes ?? '') && run(() => updateScheduleDay(day.id, { notes: e.target.value }))}
+                placeholder="Notes — what’s true of this day only: what to bring, who’s running it, what you’re skipping"
+                className={`w-full pl-7 ${input}`}
+              />
+            </Marked>
             {/* What the day is for, as opposed to what happens on it — the
                 course objectives are too coarse to teach a Tuesday from. */}
             <Marked icon={<TargetIcon />} top>
@@ -260,6 +339,25 @@ function SaveToShelf({
 // two grey lines under a day title are just two grey lines. These are the same
 // marks the course page reads with, so the field you type into is the one the
 // students see.
+// An uncontrolled textarea sized to its content, on mount and on every
+// keystroke, so nothing it holds is hidden behind a scrollbar.
+function Grows(props: ComponentProps<'textarea'>) {
+  function fit(el: HTMLTextAreaElement | null) {
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${el.scrollHeight}px`
+  }
+  return (
+    <textarea
+      {...props}
+      ref={fit}
+      rows={1}
+      onInput={(e) => { fit(e.currentTarget); props.onInput?.(e) }}
+      className={`resize-none overflow-hidden ${props.className ?? ''}`}
+    />
+  )
+}
+
 function Marked({ icon, top, children }: { icon: ReactNode; top?: boolean; children: ReactNode }) {
   return (
     <div className="relative">
@@ -278,6 +376,17 @@ const glyph = {
   xmlns: 'http://www.w3.org/2000/svg', width: 12, height: 12, viewBox: '0 0 24 24',
   fill: 'none', stroke: 'currentColor', strokeWidth: 1.75,
   strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const,
+}
+
+// A line with waypoints on it — a route, as opposed to the pin's single spot.
+function RouteIcon() {
+  return (
+    <svg {...glyph} aria-hidden>
+      <circle cx="6" cy="19" r="3" />
+      <circle cx="18" cy="5" r="3" />
+      <path d="M9 19h4a4 4 0 0 0 0-8h-2a4 4 0 0 1 0-8h4" />
+    </svg>
+  )
 }
 
 function PinIcon() {

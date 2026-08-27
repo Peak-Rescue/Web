@@ -40,7 +40,16 @@ export default async function VenuesPage() {
           Venues
           <InfoHint text="Maps, permits, lodging and rescue plans attach here once — setting a course's venue pulls them in automatically." />
         </h1>
-        <p className="text-zinc-400 mt-1 mb-8">Places you run courses, and standing client sites.</p>
+        <p className="text-zinc-400 mt-1 mb-2">Places you run courses, and standing client sites.</p>
+        {/* A venue is the region a course is sold against; the canyon it
+            actually runs in lives a level down. Naming the other screen
+            without a way to reach it is how the same beta gets typed twice. */}
+        <p className="mb-8">
+          <Link href="/admin/sites" className="text-sm text-zinc-500 hover:text-zinc-300 underline transition-colors">
+            Sites →
+          </Link>
+          <span className="text-sm text-zinc-600"> the canyons and crags inside them, with their beta.</span>
+        </p>
 
         <div className="space-y-2 mb-10">
           {venues.map((v) => <VenueRow key={v.id} venue={v} itemCount={itemCount.get(v.id) ?? 0} />)}

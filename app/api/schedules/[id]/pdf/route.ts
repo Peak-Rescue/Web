@@ -32,7 +32,8 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
     .from('course_schedules')
     .select(
       'id, name, overview, objectives, instance_id, ' +
-      'schedule_days(id, title, location, notes, objectives, sort_order, ' +
+      'schedule_days(id, title, location, site_id, notes, objectives, sort_order, ' +
+      'sites(name, beta), ' +
       'schedule_blocks(id, parent_id, title, time_label, location, sort_order))'
     )
     .eq('id', id)

@@ -367,11 +367,12 @@ export default async function CourseView({
   // The running order, same for everyone on the course.
   const { data: schedRows } = await admin
     .from('course_schedules')
-    .select('id, name, overview, objectives, schedule_days(id, title, location, notes, objectives, sort_order, schedule_blocks(id, parent_id, title, time_label, location, sort_order))')
+    .select('id, name, overview, objectives, schedule_days(id, title, location, site_id, notes, objectives, sort_order, sites(id, name, beta, coords, links), schedule_blocks(id, parent_id, title, time_label, location, sort_order))')
     .eq('instance_id', id)
     .limit(1)
   type SchedBlock = { id: string; parent_id: string | null; title: string; time_label: string | null; location: string | null; sort_order: number }
-  type SchedDay = { id: string; title: string; location: string | null; notes: string | null; objectives: string[] | null; sort_order: number; schedule_blocks: SchedBlock[] }
+  type SchedSite = { id: string; name: string; beta: string | null; coords: string | null; links: { url: string; label: string }[] | null }
+  type SchedDay = { id: string; title: string; location: string | null; site_id: string | null; sites: SchedSite | null; notes: string | null; objectives: string[] | null; sort_order: number; schedule_blocks: SchedBlock[] }
   const sched = ((schedRows ?? []) as unknown as {
     id: string; name: string; overview: string | null; objectives: string[]; schedule_days: SchedDay[]
   }[])[0]
@@ -1022,23 +1023,71 @@ export default async function CourseView({
                         {d.location}
                       </p>
                     )}
-                    {/* Under a pinned location, an unmarked grey line read as
-                        more of the address. The page corner says this one is
-                        someone's note about the day — usually something to
-                        bring, and worth not skimming past. */}
-                    {d.notes && (
-                      <p className="flex gap-1.5 text-xs text-zinc-500 mt-0.5">
+                    {/* The canyon, not the day. It's written once on the site
+                        and shown live here, so a corrected rap count reaches
+                        every course at once — which is also why it sits above
+                        the day's own note rather than merged into it: one of
+                        these is a standing fact about the place, the other is
+                        what's true this morning. */}
+                    {d.sites?.beta && (
+                      <div className="flex gap-1.5 mt-2">
                         <svg
                           aria-hidden
                           xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24"
                           fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"
-                          className="shrink-0 mt-[3px] text-zinc-600"
+                          className="shrink-0 mt-[5px] text-zinc-600"
+                        >
+                          <circle cx="6" cy="19" r="3" />
+                          <circle cx="18" cy="5" r="3" />
+                          <path d="M9 19h4a4 4 0 0 0 0-8h-2a4 4 0 0 1 0-8h4" />
+                        </svg>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs text-zinc-400 whitespace-pre-line leading-relaxed">{d.sites.beta}</p>
+                          {(d.sites.links ?? []).length > 0 && (
+                            <p className="flex flex-wrap gap-x-3 gap-y-1 mt-1.5">
+                              {(d.sites.links ?? []).map((l, i) => (
+                                <a
+                                  key={i}
+                                  href={l.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-[11px] text-zinc-500 underline hover:text-zinc-300 transition-colors"
+                                >
+                                  {l.label}
+                                </a>
+                              ))}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    {/* Under a pinned location, an unmarked grey line read as
+                        more of the address. The page corner says this one is
+                        someone's note about the day — usually something to
+                        bring, and worth not skimming past.
+
+                        On a canyon day it's route beta instead — approach,
+                        raps, exit — and caption-sized grey type is the wrong
+                        size to read that at a trailhead. So it takes the same
+                        size and weight as the objectives, and keeps the line
+                        breaks it was typed with: pressing Enter is the only
+                        structure this field needs, and the paragraphs it makes
+                        are what stop it reading as a wall. */}
+                    {d.notes && (
+                      <div className="flex gap-1.5 mt-2">
+                        <svg
+                          aria-hidden
+                          xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24"
+                          fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"
+                          className="shrink-0 mt-[5px] text-zinc-600"
                         >
                           <path d="M15 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h9l5-5V5a2 2 0 0 0-2-2Z" />
                           <path d="M14 21v-3a2 2 0 0 1 2-2h3" />
                         </svg>
-                        <span className="flex-1 min-w-0">{d.notes}</span>
-                      </p>
+                        <p className="flex-1 min-w-0 text-xs text-zinc-400 whitespace-pre-line leading-relaxed">
+                          {d.notes}
+                        </p>
+                      </div>
                     )}
                     {/* What the day is for, before what it consists of — the
                         target sits in the same gutter as the pin and the book,

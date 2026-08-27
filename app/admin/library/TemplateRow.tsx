@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import GearListEditor, { type GearItem, type GearList } from '@/app/admin/gear/GearListEditor'
-import ScheduleEditor, { type Schedule } from '@/app/admin/schedules/ScheduleEditor'
+import ScheduleEditor, { type Schedule, type SiteOption } from '@/app/admin/schedules/ScheduleEditor'
 import { updateGearList, deleteGearList } from '@/app/admin/gear/actions'
 import { updateSchedule, deleteSchedule } from '@/app/admin/schedules/actions'
 import { TEMPLATE_SHELF_META, type TemplateShelf, type TemplateSummary } from '@/lib/library'
@@ -17,7 +17,7 @@ const label = 'block text-[11px] text-zinc-500 mb-1'
 
 type Props = { summary: TemplateSummary } & (
   | { shelf: 'gear'; list: GearList; catalog: GearItem[] }
-  | { shelf: 'schedule'; schedule: Schedule }
+  | { shelf: 'schedule'; schedule: Schedule; sites: SiteOption[] }
 )
 
 // A template on its shelf. Collapsed it reads like any other library row; open
@@ -123,7 +123,7 @@ export default function TemplateRow(props: Props) {
         <div className="px-3 pb-3 pt-3 border-t border-zinc-800">
           {props.shelf === 'gear'
             ? <GearListEditor list={props.list} catalog={props.catalog} courseType={summary.course_type} />
-            : <ScheduleEditor schedule={props.schedule} courseType={summary.course_type} />}
+            : <ScheduleEditor schedule={props.schedule} courseType={summary.course_type} sites={props.sites} />}
         </div>
       )}
 

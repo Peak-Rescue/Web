@@ -18,10 +18,16 @@ export type SchedulePdfBlock = {
   sort_order: number
 }
 
+export type SchedulePdfSite = {
+  name: string
+  beta: string | null
+}
+
 export type SchedulePdfDay = {
   id: string
   title: string
   location: string | null
+  sites: SchedulePdfSite | null
   notes: string | null
   objectives: string[] | null
   sort_order: number
@@ -97,6 +103,14 @@ export async function generateSchedulePdf(data: SchedulePdf): Promise<Uint8Array
     if (day.location) {
       b.text('Where', { x: MARGIN, size: 7.5, color: FAINT })
       b.paragraph(day.location, { x: BODY_X, width: CONTENT_W - TIME_W, size: 9, leading: 12, color: MUTED })
+      b.y -= 2
+    }
+    // The place's own beta, before the day's note about it — the sheet that
+    // goes in the van pocket is the one people read at the trailhead, so the
+    // approach and the rap count have to be on it, not just on the screen.
+    if (day.sites?.beta) {
+      b.text('Beta', { x: MARGIN, size: 7.5, color: FAINT })
+      b.paragraph(day.sites.beta, { x: BODY_X, width: CONTENT_W - TIME_W, size: 9, leading: 12, color: MUTED, paragraphs: true })
       b.y -= 2
     }
     if (day.notes) {

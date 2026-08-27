@@ -63,9 +63,12 @@ export default async function LibraryPage({
   // Templates take the same search box and discipline tags the documents use.
   // They have no review status, so the status tabs pass them by — there's
   // nothing to approve about a kit list you wrote yourself.
-  const [{ data: itemRows }, { data: venueRows }, gearRes, scheduleRes, catalogRes, { count: pendingCount }] = await Promise.all([
+  const [{ data: itemRows }, { data: venueRows }, { data: siteRows }, gearRes, scheduleRes, catalogRes, { count: pendingCount }] = await Promise.all([
     showDocs ? query : Promise.resolve({ data: [] }),
     admin.from('venues').select('id, name, region, region_code, client_name, notes, active').order('name'),
+    // A per-region template pins its canyons here, so the courses started from
+    // it arrive with the beta already attached.
+    admin.from('sites').select('id, name, kind, beta, venue_id, venues(name)').eq('active', true).order('name'),
     showTemplates && shelves.includes('gear')
       ? (() => {
           let g = admin.from('gear_lists')
@@ -80,7 +83,7 @@ export default async function LibraryPage({
     showTemplates && shelves.includes('schedule')
       ? (() => {
           let s = admin.from('course_schedules')
-            .select('id, name, description, overview, objectives, course_type, disciplines, topics, instance_id, is_template, schedule_days(id, title, location, notes, objectives, sort_order, schedule_blocks(id, parent_id, title, time_label, location, sort_order))')
+            .select('id, name, description, overview, objectives, course_type, disciplines, topics, instance_id, is_template, schedule_days(id, title, location, site_id, notes, objectives, sort_order, schedule_blocks(id, parent_id, title, time_label, location, sort_order))')
             .eq('is_template', true)
             .order('name')
           if (q) s = s.ilike('name', `%${q}%`)
@@ -104,6 +107,9 @@ export default async function LibraryPage({
     library_item_links?: LibraryItem['links']
   })[]).map((r) => ({ ...r, links: r.library_item_links ?? [] })) as LibraryItem[]
   const venues = (venueRows ?? []) as Venue[]
+  const siteOptions = ((siteRows ?? []) as unknown as {
+    id: string; name: string; kind: string | null; beta: string | null; venue_id: string | null; venues: { name: string } | null
+  }[]).map((s) => ({ id: s.id, name: s.name, kind: s.kind, beta: s.beta, venue_id: s.venue_id, venue_name: s.venues?.name ?? null }))
 
   type GearTemplate = GearList & {
     description: string | null; course_type: string | null; disciplines: string[]; topics: string[]
@@ -178,6 +184,11 @@ export default async function LibraryPage({
             </Link>
             <Link href="/admin/venues" className="text-xs px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded transition-colors">
               Venues
+            </Link>
+            {/* Routes are shelved next to the maps and permits they go with —
+                a canyon's beta is library material, it just isn't a link. */}
+            <Link href="/admin/sites" className="text-xs px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded transition-colors">
+              Sites
             </Link>
           </div>
         </div>
@@ -294,6 +305,7 @@ export default async function LibraryPage({
                     key={t.id}
                     shelf="schedule"
                     schedule={t}
+                    sites={siteOptions}
                     summary={summarize(t, t.schedule_days?.length ?? 0)}
                   />
                 ))}
