@@ -21,6 +21,8 @@ import { HERO_CHOICES } from '@/lib/quote-heroes'
 import NewCoaMenu, { type CopySource } from '../NewCoaMenu'
 import { guessSeedQty, coaPrice } from '@/lib/estimates'
 import { EstimateReviewBanner, EstimateReviewRequest, type EstimateReviewRow } from '../EstimateReviewBar'
+import GearOrderPanel from '../GearOrderPanel'
+import { type GearOrder } from '@/lib/gear-orders'
 import QuotesSection, { type QuoteRow } from '../QuotesSection'
 import CourseContactsEditor from '@/components/CourseContactsEditor'
 import { parseContacts, primaryContactEmail, ccEmailOptions } from '@/lib/contacts'
@@ -134,6 +136,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
     { data: courseLinkRows },
     { data: venueRows },
     { data: viewShareRows },
+    { data: gearOrderRows },
   ] = await Promise.all([
     admin.from('enrollments').select('id, enrolled_at, profiles(first_name, last_name, email)').eq('instance_id', id).order('enrolled_at'),
     admin.from('expense_items').select('id', { count: 'exact', head: true }).eq('instance_id', id),
@@ -167,7 +170,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
     admin.from('course_documents').select('id, path, filename, url, created_at').eq('instance_id', id),
     admin.from('course_task_documents').select('id, path, filename, url, created_at, course_tasks!inner(title, instance_id)').eq('course_tasks.instance_id', id),
     admin.from('gallery_images').select('url, caption, categories').order('created_at', { ascending: false }),
-    admin.from('estimate_reviews').select('id, created_at, requested_by, reviewer_id, note, responded_at, approved, response_note').eq('instance_id', id).order('created_at', { ascending: false }).limit(8),
+    admin.from('estimate_reviews').select('id, created_at, requested_by, reviewer_id, note, responded_at, approved, response_note, subject').eq('instance_id', id).order('created_at', { ascending: false }).limit(16),
     admin.from('course_maps').select('id, url, label, audience, audience_overridden, library_item_id, library_items(title, url, audience, library_item_links(access, audience))').eq('instance_id', id).order('sort_order'),
     admin.from('course_resources').select('id, url, label, audience, library_item_id, library_items(title, url, audience)').eq('instance_id', id).order('sort_order'),
     admin.from('course_links').select('id, url, label, audience, purpose').eq('instance_id', id).order('purpose').order('sort_order'),
@@ -178,6 +181,10 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
       .select('id, token, label, expires_at, viewed_at, view_count')
       .eq('instance_id', id)
       .is('revoked_at', null)
+      .order('created_at', { ascending: false }),
+    admin.from('gear_orders')
+      .select('id, instance_id, list_id, es_quote_number, status, accept_token, intro, sent_at, viewed_at, responded_at, responded_name, responded_title, client_note, gear_order_lines(id, entry_id, name, detail, category, qty_offered, qty_wanted, removed, client_note, admin_note, sort_order)')
+      .eq('instance_id', id)
       .order('created_at', { ascending: false }),
   ])
 
@@ -511,6 +518,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
       .eq('is_template', true),
   ])
   const gearLists = (gearListRows ?? []) as unknown as GearList[]
+  const gearOrders = (gearOrderRows ?? []) as unknown as GearOrder[]
   const gearTemplates = ((gearTemplateRows ?? []) as unknown as {
     id: string; name: string; description: string | null; audience: string; course_type: string | null; gear_list_entries: unknown[]
   }[])
@@ -1018,6 +1026,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
               </svg>
             </a>
           </div>
+          <EstimateReviewBanner reviews={estimateReviews} admins={reviewAdmins} currentUserId={user.id} subject="gear" />
           <CourseGear
             instanceId={id}
             courseType={courseType}
@@ -1025,6 +1034,12 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
             lists={gearLists}
             templates={gearTemplates}
             catalog={(gearCatalog ?? []) as GearItem[]}
+          />
+          <EstimateReviewRequest instanceId={id} reviews={estimateReviews} admins={reviewAdmins} currentUserId={user.id} subject="gear" />
+          <GearOrderPanel
+            instanceId={id}
+            orders={gearOrders}
+            lists={gearLists.map((l) => ({ id: l.id, name: l.name, audience: l.audience }))}
           />
         </TabPanel>
 
@@ -1175,7 +1190,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
           <p className="text-xs text-zinc-500 mb-4">
             Internal — never shown to instructors or clients.
           </p>
-          <EstimateReviewBanner reviews={estimateReviews} admins={reviewAdmins} currentUserId={user.id} />
+          <EstimateReviewBanner reviews={estimateReviews} admins={reviewAdmins} currentUserId={user.id} subject="estimate" />
           <div className="space-y-8">
             {estimatePanels.map((e) => (
               <EstimatePanel
@@ -1201,7 +1216,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
               sources={copySources}
             />
           </div>
-          <EstimateReviewRequest instanceId={id} reviews={estimateReviews} admins={reviewAdmins} currentUserId={user.id} />
+          <EstimateReviewRequest instanceId={id} reviews={estimateReviews} admins={reviewAdmins} currentUserId={user.id} subject="estimate" />
 
           <div className="mt-10 pt-8 border-t border-zinc-800">
           <h2 className="text-lg font-semibold mb-4">Quotes</h2>

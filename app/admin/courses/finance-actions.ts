@@ -294,6 +294,15 @@ export async function setPricingRateDefault(rateId: string, defaultLine: boolean
 
 // Pings another admin by email with a link to this course's estimate; the
 // review row drives the "please take a look" banner they see on the page.
+// What each subject is called, where it lives on the course page, and how the
+// email refers to it. Adding a third is a row here, not another action.
+const REVIEW_SUBJECTS = {
+  estimate: { label: 'price estimate', anchor: 'estimates', where: 'The Estimates section has a banner where you can approve it or send notes back — or just edit the numbers directly.' },
+  gear: { label: 'gear list', anchor: 'gear', where: 'The Gear section has a banner where you can approve it or send notes back — or just edit the list directly.' },
+} as const
+
+export type ReviewSubject = keyof typeof REVIEW_SUBJECTS
+
 export async function requestEstimateReview(instanceId: string, formData: FormData) {
   const admin = await requireAdmin()
   const supabase = await createClient()
@@ -302,6 +311,9 @@ export async function requestEstimateReview(instanceId: string, formData: FormDa
 
   const reviewerId = String(formData.get('reviewer_id') ?? '')
   const note = String(formData.get('note') ?? '').trim().slice(0, 1000) || null
+  const rawSubject = String(formData.get('subject') ?? 'estimate')
+  const subject: ReviewSubject = rawSubject === 'gear' ? 'gear' : 'estimate'
+  const meta = REVIEW_SUBJECTS[subject]
   if (!reviewerId) throw new Error('Pick who should review')
   if (reviewerId === user.id) throw new Error('Pick someone other than yourself')
   if (!process.env.RESEND_API_KEY) throw new Error('Email is not configured in this environment')
@@ -319,6 +331,7 @@ export async function requestEstimateReview(instanceId: string, formData: FormDa
     requested_by: user.id,
     reviewer_id: reviewerId,
     note,
+    subject,
   })
   if (error) throw new Error(error.message)
 
@@ -326,7 +339,7 @@ export async function requestEstimateReview(instanceId: string, formData: FormDa
   const courseName = courseShortName(inst.course_type, inst.custom_title)
   const requesterName = [requester?.first_name, requester?.last_name].filter(Boolean).join(' ') || 'An admin'
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://peak-rescue.com'
-  const link = `${siteUrl}/admin/courses/${instanceId}#estimates`
+  const link = `${siteUrl}/admin/courses/${instanceId}#${meta.anchor}`
 
   const { Resend } = await import('resend')
   const resend = new Resend(process.env.RESEND_API_KEY)
@@ -334,15 +347,15 @@ export async function requestEstimateReview(instanceId: string, formData: FormDa
     from: 'Peak Rescue Portal <noreply@peak-rescue.com>',
     to: [reviewer.email],
     replyTo: requester?.email ?? undefined,
-    subject: `Estimate review — ${courseName}${inst.client_name ? ` (${inst.client_name})` : ''}`,
+    subject: `${subject === 'gear' ? 'Gear list' : 'Estimate'} review — ${courseName}${inst.client_name ? ` (${inst.client_name})` : ''}`,
     text: [
-      `${requesterName} asked you to look over the price estimate for ${courseName}${inst.client_name ? ` (${inst.client_name})` : ''}${inst.starts_at ? `, starting ${inst.starts_at}` : ''}.`,
+      `${requesterName} asked you to look over the ${meta.label} for ${courseName}${inst.client_name ? ` (${inst.client_name})` : ''}${inst.starts_at ? `, starting ${inst.starts_at}` : ''}.`,
       '',
       note ? `"${note}"` : null,
       note ? '' : null,
       link,
       '',
-      'The Estimates section has a banner where you can approve it or send notes back — or just edit the numbers directly.',
+      meta.where,
     ].filter((l): l is string => l !== null).join('\n'),
   })
   if (sendError) throw new Error(`Email failed: ${sendError.message}`)
@@ -359,7 +372,7 @@ export async function respondEstimateReview(reviewId: string, formData: FormData
 
   const { data: review } = await admin
     .from('estimate_reviews')
-    .select('id, instance_id, requested_by, reviewer_id, responded_at')
+    .select('id, instance_id, requested_by, reviewer_id, responded_at, subject')
     .eq('id', reviewId)
     .single()
   if (!review || review.reviewer_id !== user.id) throw new Error('Review not found')
@@ -385,6 +398,7 @@ export async function respondEstimateReview(reviewId: string, formData: FormData
       const { courseShortName } = await import('@/lib/courses')
       const courseName = courseShortName(inst.course_type, inst.custom_title)
       const reviewerName = [reviewer?.first_name, reviewer?.last_name].filter(Boolean).join(' ') || 'The reviewer'
+      const subjMeta = REVIEW_SUBJECTS[(review.subject as ReviewSubject) ?? 'estimate'] ?? REVIEW_SUBJECTS.estimate
       const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://peak-rescue.com'
       const { Resend } = await import('resend')
       const resend = new Resend(process.env.RESEND_API_KEY)
@@ -392,13 +406,13 @@ export async function respondEstimateReview(reviewId: string, formData: FormData
         from: 'Peak Rescue Portal <noreply@peak-rescue.com>',
         to: [requester.email],
         replyTo: reviewer?.email ?? undefined,
-        subject: `${reviewerName} ${approved ? 'approved' : 'left notes on'} the estimate — ${courseName}${inst.client_name ? ` (${inst.client_name})` : ''}`,
+        subject: `${reviewerName} ${approved ? 'approved' : 'left notes on'} the ${subjMeta.label} — ${courseName}${inst.client_name ? ` (${inst.client_name})` : ''}`,
         text: [
-          approved ? `${reviewerName} looked over the estimate and it's good to go.` : `${reviewerName} looked over the estimate and left notes:`,
+          approved ? `${reviewerName} looked over the ${subjMeta.label} and it's good to go.` : `${reviewerName} looked over the ${subjMeta.label} and left notes:`,
           '',
           responseNote ? `"${responseNote}"` : null,
           responseNote ? '' : null,
-          `${siteUrl}/admin/courses/${review.instance_id}#estimates`,
+          `${siteUrl}/admin/courses/${review.instance_id}#${subjMeta.anchor}`,
         ].filter((l): l is string => l !== null).join('\n'),
       })
     }
