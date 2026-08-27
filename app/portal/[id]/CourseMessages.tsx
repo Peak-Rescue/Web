@@ -42,6 +42,9 @@ export default function CourseMessages({
   const [subject, setSubject] = useState('')
   const [body, setBody] = useState('')
   const [audience, setAudience] = useState<MessageAudience>('students')
+  // On by default: the copy is how you know it left, rather than wondering
+  // whether you pressed the button.
+  const [copyMe, setCopyMe] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<string | null>(null)
@@ -62,7 +65,7 @@ export default function CourseMessages({
 
     setBusy(true); setError(null); setResult(null)
     try {
-      const r = await sendCourseMessage(instanceId, { subject, body, audience })
+      const r = await sendCourseMessage(instanceId, { subject, body, audience, copyMe })
       setSubject(''); setBody(''); setOpen(false)
       setResult(r.problem ?? `Sent to ${r.sent} ${r.sent === 1 ? 'person' : 'people'}.`)
       router.refresh()
@@ -103,6 +106,15 @@ export default function CourseMessages({
                 </option>
               ))}
             </select>
+            <label className="flex items-center gap-1.5 text-[11px] text-zinc-400 cursor-pointer ml-auto">
+              <input
+                type="checkbox"
+                checked={copyMe}
+                onChange={(e) => setCopyMe(e.target.checked)}
+                className="accent-pr-red size-3.5"
+              />
+              Copy me
+            </label>
           </div>
 
           <input
@@ -122,6 +134,7 @@ export default function CourseMessages({
           <p className="text-[11px] text-zinc-600">
             Your name and a link to the course page are added at the bottom. Replies come to you. Everyone is sent
             their own copy, so nobody sees anyone else’s address.
+            {copyMe ? ' You get the same email, so you can see exactly what landed.' : ''}
           </p>
 
           <div className="flex items-center gap-3 flex-wrap">

@@ -79,7 +79,7 @@ export type SendResult = { recipients: number; sent: number; problem: string | n
 
 export async function sendCourseMessage(
   instanceId: string,
-  input: { subject: string; body: string; audience: MessageAudience }
+  input: { subject: string; body: string; audience: MessageAudience; copyMe?: boolean }
 ): Promise<SendResult> {
   const { user, admin, authorName, authorEmail } = await requireCourseStaff(instanceId)
 
@@ -110,19 +110,31 @@ export async function sendCourseMessage(
 
   // One send per address. A course roster is not a mailing list, and a reply
   // should reach the person who wrote it rather than everyone at once.
+  const send = (to: string) => resend.emails.send({
+    from: FROM,
+    to: [to],
+    replyTo: authorEmail ?? 'info@peak-rescue.com',
+    subject: `${courseName} — ${subject}`,
+    text,
+  })
+
+  // The sender's own copy: the same words the course got, as the receipt that
+  // it went. Only when they aren't already a recipient, and never counted in
+  // the delivered figure — that number is a promise about the course.
+  const mine = authorEmail?.trim().toLowerCase() ?? null
+  const wantsCopy = input.copyMe !== false && mine !== null && !recipients.includes(mine)
+  const copySent: Promise<boolean> = wantsCopy
+    ? send(mine!).then(({ error }) => { if (error) console.error('Author copy failed:', error); return !error })
+    : Promise.resolve(true)
+
   const results = await Promise.all(
     recipients.map(async (to) => {
-      const { error } = await resend.emails.send({
-        from: FROM,
-        to: [to],
-        replyTo: authorEmail ?? 'info@peak-rescue.com',
-        subject: `${courseName} — ${subject}`,
-        text,
-      })
+      const { error } = await send(to)
       if (error) console.error(`Course message to ${to} failed:`, error)
       return { to, ok: !error }
     })
   )
+  const copyOk = await copySent
   const delivered = results.filter((r) => r.ok)
 
   await admin.from('course_messages').insert({
@@ -140,11 +152,14 @@ export async function sendCourseMessage(
   return {
     recipients: recipients.length,
     sent: delivered.length,
-    problem:
+    problem: [
       delivered.length === 0 ? 'Nothing went out — nobody received this.'
       : delivered.length < recipients.length
         ? `${recipients.length - delivered.length} of ${recipients.length} didn’t go through.`
         : null,
+      // Its whole job is to be the proof it sent, so it can't fail in silence.
+      copyOk ? null : 'Your own copy didn’t send — the course’s did.',
+    ].filter(Boolean).join(' ') || null,
   }
 }
 
