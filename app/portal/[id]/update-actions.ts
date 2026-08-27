@@ -180,9 +180,12 @@ async function notify(
   // one of them, and folding it in would quietly make the promise wrong.
   const send = (to: string) =>
     resend.emails.send({ from: FROM, to: [to], replyTo: 'info@peak-rescue.com', subject, text })
-  const copySent = authorCopy.length > 0
-    ? send(authorCopy[0]).then(({ error }) => { if (error) console.error('Author copy failed:', error) })
-    : Promise.resolve()
+  const copySent: Promise<boolean> = authorCopy.length > 0
+    ? send(authorCopy[0]).then(({ error }) => {
+        if (error) console.error('Author copy failed:', error)
+        return !error
+      })
+    : Promise.resolve(true)
 
   const results = await Promise.all(
     recipients.map(async (to) => {
@@ -191,16 +194,22 @@ async function notify(
       return !error
     })
   )
-  await copySent
+  // A copy that quietly fails is worse than none: its whole job is to be the
+  // proof you pressed the button, so its absence would read as "it didn't
+  // send" when in fact everyone else got it. Say so rather than log it.
+  const copyOk = await copySent
   const sent = results.filter(Boolean).length
+
+  const copyProblem = copyOk ? null : 'Your own copy didn’t send — everyone else’s did.'
+  const sendProblem =
+    sent === 0 && recipients.length > 0 ? 'The email couldn’t be sent — the update is on the course page.'
+    : sent < recipients.length ? `${recipients.length - sent} of ${recipients.length} emails didn’t go through.`
+    : null
 
   return {
     recipients: recipients.length,
     sent,
-    problem:
-      sent === 0 ? 'The email couldn’t be sent — the update is on the course page.'
-      : sent < recipients.length ? `${recipients.length - sent} of ${recipients.length} emails didn’t go through.`
-      : null,
+    problem: [sendProblem, copyProblem].filter(Boolean).join(' ') || null,
   }
 }
 
