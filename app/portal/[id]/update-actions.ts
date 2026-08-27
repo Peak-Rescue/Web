@@ -79,6 +79,11 @@ type NotifyOutcome = { recipients: number; sent: number; problem: string | null 
 //
 // The author is dropped from whichever groups are chosen — nobody needs an
 // email telling them to go and read what they just wrote.
+//
+// Except when they do. A copy in your own inbox is the receipt that the thing
+// went out, and it is what tells the other admins CC'd on nothing that the job
+// is done. So `copyMe` puts the author back in, and defaults on at the caller:
+// an unwanted copy is a delete, a missing one is a doubt.
 async function notify(
   admin: ReturnType<typeof createAdminClient>,
   instanceId: string,
@@ -87,6 +92,7 @@ async function notify(
   audience: UpdateAudience,
   isReminder: boolean,
   subjectNote: string | null,
+  copyMe: boolean,
   /** Replaces the opening line for a notice that isn't about a post — the
       meeting details, which live in their own block and were never quoted
       here anyway. Still says only that something is set or has moved, never
@@ -118,7 +124,12 @@ async function notify(
       .filter((e): e is string => Boolean(e))
   )].filter((e) => e.toLowerCase() !== mine)
 
-  if (recipients.length === 0) {
+  // Added back after the filter rather than left in it: the author is usually
+  // an admin who is neither enrolled nor rostered, so they are not in the list
+  // to begin with, and dropping the filter alone would not reach them.
+  const authorCopy = copyMe && authorEmail?.trim() ? [authorEmail.trim()] : []
+
+  if (recipients.length === 0 && authorCopy.length === 0) {
     const who = audience === 'instructors' ? 'nobody else instructing' : audience === 'students' ? 'nobody enrolled' : 'nobody else on the course'
     return { recipients: 0, sent: 0, problem: `There is ${who} to email yet, so this is on the course page only.` }
   }
@@ -163,15 +174,24 @@ async function notify(
   // One send per address rather than one with everyone in `to` — a course
   // roster is not a mailing list, and students shouldn't see each other's
   // addresses.
+  // The author's copy goes out with the rest but is not counted in `sent`.
+  // That number is a promise about how many other people this reached, made
+  // before something that can't be taken back — a receipt to yourself is not
+  // one of them, and folding it in would quietly make the promise wrong.
+  const send = (to: string) =>
+    resend.emails.send({ from: FROM, to: [to], replyTo: 'info@peak-rescue.com', subject, text })
+  const copySent = authorCopy.length > 0
+    ? send(authorCopy[0]).then(({ error }) => { if (error) console.error('Author copy failed:', error) })
+    : Promise.resolve()
+
   const results = await Promise.all(
     recipients.map(async (to) => {
-      const { error } = await resend.emails.send({
-        from: FROM, to: [to], replyTo: 'info@peak-rescue.com', subject, text,
-      })
+      const { error } = await send(to)
       if (error) console.error(`Course update email to ${to} failed:`, error)
       return !error
     })
   )
+  await copySent
   const sent = results.filter(Boolean).length
 
   return {
@@ -192,6 +212,9 @@ export async function postCourseUpdate(
   instanceId: string,
   input: {
     body: string; links?: UpdateLink[]; attachments?: UpdateAttachment[]; audience?: UpdateAudience
+    /** A copy to the author's own inbox — the receipt that it went out, and
+        what tells a CC'd colleague the job is done. On unless turned off. */
+    copyMe?: boolean
     /** Replaces "new update from X" in the email subject — the meeting details
         moving deserves a line that says so. Never carries a value. */
     subjectNote?: string
@@ -223,7 +246,7 @@ export async function postCourseUpdate(
     .single()
   if (error) throw new Error(error.message)
 
-  const outcome = await notify(admin, instanceId, authorName, user.email ?? null, audience, false, (input.subjectNote ?? '').trim().slice(0, 120) || null)
+  const outcome = await notify(admin, instanceId, authorName, user.email ?? null, audience, false, (input.subjectNote ?? '').trim().slice(0, 120) || null, input.copyMe !== false)
 
   await admin
     .from('course_updates')
@@ -269,7 +292,8 @@ export async function editCourseUpdate(
 // editing so it's always a decision, never a side effect of fixing a typo.
 export async function renotifyCourseUpdate(
   instanceId: string,
-  updateId: string
+  updateId: string,
+  copyMe = true
 ): Promise<PostResult> {
   const { user, admin, authorName } = await requireCourseStaff(instanceId)
 
@@ -283,7 +307,7 @@ export async function renotifyCourseUpdate(
 
   // The group it was addressed to, not whoever is on the course now — a second
   // notice goes to the same people as the first.
-  const outcome = await notify(admin, instanceId, authorName, user.email ?? null, cleanAudience(existing.audience), true, null)
+  const outcome = await notify(admin, instanceId, authorName, user.email ?? null, cleanAudience(existing.audience), true, null, copyMe !== false)
 
   await admin
     .from('course_updates')
@@ -333,7 +357,7 @@ export async function deleteCourseUpdate(instanceId: string, updateId: string) {
 // construction.
 export async function announceMeetingDetails(
   instanceId: string,
-  input: { audience?: UpdateAudience; meetingDate: string }
+  input: { audience?: UpdateAudience; meetingDate: string; copyMe?: boolean }
 ): Promise<PostResult> {
   const { user, admin, authorName } = await requireCourseStaff(instanceId)
   const audience = cleanAudience(input.audience)
@@ -364,6 +388,7 @@ export async function announceMeetingDetails(
     audience,
     false,
     moved ? `${what} changed` : what,
+    input.copyMe !== false,
     moved
       ? `The meeting point or time${when} has changed — please check it before you set off.`
       : `Where and when to meet${when} is now set.`

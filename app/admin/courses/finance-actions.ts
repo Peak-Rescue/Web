@@ -645,6 +645,20 @@ export async function deleteQuote(instanceId: string, quoteId: string) {
 
 // Emails the quote link to the course's primary POC and marks it sent. The
 // form's "cc" checkboxes add any of the course's other contact emails.
+// Anything ticked has to match a real admin's address on the way through —
+// a form value is a claim, not a permission, and this one addresses an email
+// that leaves the building.
+async function allowedAdminCc(
+  admin: Awaited<ReturnType<typeof requireAdmin>>,
+  requested: FormDataEntryValue[]
+): Promise<string[]> {
+  const asked = requested.map(String).map((e) => e.trim().toLowerCase()).filter(Boolean)
+  if (asked.length === 0) return []
+  const { data } = await admin.from('profiles').select('email').eq('role', 'admin')
+  const real = new Set((data ?? []).map((a) => (a.email ?? '').trim().toLowerCase()).filter(Boolean))
+  return [...new Set(asked.filter((e) => real.has(e)))]
+}
+
 export async function sendQuote(instanceId: string, quoteId: string, formData?: FormData) {
   const admin = await requireAdmin()
 
@@ -672,7 +686,11 @@ export async function sendQuote(instanceId: string, quoteId: string, formData?: 
   // Only emails actually on the course's contacts can be CC'd.
   const allowedCc = new Set(ccEmailOptions(contacts))
   const requestedCc = (formData?.getAll('cc_extra') ?? []).map(String).filter((e) => allowedCc.has(e))
-  const cc = [...new Set([...(quote.prepared_by_email ? [quote.prepared_by_email] : []), ...requestedCc])]
+  // Colleagues, on the client-facing mail itself. The portal already records
+  // that a quote went out, but a copy landing in someone's inbox is what tells
+  // them without their going to look — which is the point of CC'ing at all.
+  const adminCc = await allowedAdminCc(admin, formData?.getAll('cc_admin') ?? [])
+  const cc = [...new Set([...(quote.prepared_by_email ? [quote.prepared_by_email] : []), ...requestedCc, ...adminCc])]
 
   const { Resend } = await import('resend')
   const resend = new Resend(process.env.RESEND_API_KEY)

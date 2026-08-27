@@ -8,6 +8,7 @@ import {
 } from './gear-order-actions'
 import { GEAR_ORDER_STATUS_LABEL, type GearOrder } from '@/lib/gear-orders'
 import PdfLink from '@/components/PdfLink'
+import AdminCcPicker from '@/components/AdminCcPicker'
 
 const input = 'bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-zinc-500'
 
@@ -25,10 +26,12 @@ export default function GearOrderPanel({
   instanceId,
   orders,
   lists,
+  adminCcOptions,
 }: {
   instanceId: string
   orders: GearOrder[]
   lists: { id: string; name: string; audience: string }[]
+  adminCcOptions: { id: string; name: string; email: string }[]
 }) {
   const router = useRouter()
   const [busy, setBusy] = useState(false)
@@ -58,7 +61,7 @@ export default function GearOrderPanel({
         {error && <p className="text-sm text-pr-red mb-3">{error}</p>}
 
         {orders.map((o) => (
-          <OrderCard key={o.id} instanceId={instanceId} order={o} run={run} busy={busy} />
+          <OrderCard key={o.id} instanceId={instanceId} order={o} run={run} busy={busy} adminCcOptions={adminCcOptions} />
         ))}
 
         {lists.length > 0 ? (
@@ -84,12 +87,13 @@ export default function GearOrderPanel({
 }
 
 function OrderCard({
-  instanceId, order, run, busy,
+  instanceId, order, run, busy, adminCcOptions,
 }: {
   instanceId: string
   order: GearOrder
   run: (fn: () => Promise<unknown>) => Promise<void>
   busy: boolean
+  adminCcOptions: { id: string; name: string; email: string }[]
 }) {
   const [es, setEs] = useState(order.es_quote_number ?? '')
   const lines = [...order.gear_order_lines].sort((a, b) => a.sort_order - b.sort_order)
@@ -131,7 +135,8 @@ function OrderCard({
             className={`${input} font-mono w-48`}
           />
         </div>
-        <form action={sendGearOrder.bind(null, instanceId, order.id)}>
+        <form action={sendGearOrder.bind(null, instanceId, order.id)} className="flex items-center gap-2.5">
+          <AdminCcPicker admins={adminCcOptions} />
           <button
             disabled={busy}
             className="px-3 py-1.5 rounded bg-pr-red hover:bg-pr-red-dark text-white text-sm font-medium transition-colors disabled:opacity-40"

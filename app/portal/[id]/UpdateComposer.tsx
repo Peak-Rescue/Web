@@ -12,7 +12,7 @@ const AUDIENCE_LABEL: Record<UpdateAudience, string> = {
   everyone: 'the course',
 }
 
-export type Draft = { body: string; links: UpdateLink[]; attachments: UpdateAttachment[]; audience: UpdateAudience }
+export type Draft = { body: string; links: UpdateLink[]; attachments: UpdateAttachment[]; audience: UpdateAudience; copyMe: boolean }
 
 // Writing an update: the message, plus links and files. Uploads go straight to
 // the private bucket from the browser and only their paths reach the action.
@@ -41,6 +41,10 @@ export default function Composer({
   // not offered — the Post button goes dead instead.
   const [toStudents, setToStudents] = useState(initial ? initial.audience !== 'instructors' : true)
   const [toInstructors, setToInstructors] = useState(initial ? initial.audience !== 'students' : true)
+  // On by default. A copy in your own inbox is the receipt that it went out —
+  // and the thing a colleague CC'd on nothing can't get from the portal without
+  // going looking. An unwanted copy is a delete; a missing one is a doubt.
+  const [copyMe, setCopyMe] = useState(true)
   const audience: UpdateAudience =
     toStudents && toInstructors ? 'everyone' : toInstructors ? 'instructors' : 'students'
   const reach = toStudents || toInstructors ? notifyCounts[audience] : 0
@@ -73,6 +77,14 @@ export default function Composer({
             <span className="text-zinc-600">Who sees it</span>
             <Tick label="Students" on={toStudents} set={setToStudents} />
             <Tick label="Instructors" on={toInstructors} set={setToInstructors} />
+            {/* Editing sends nothing — the mail that went out only ever
+                pointed here — so there is no copy to offer. */}
+            {!onCancel && (
+              <>
+                <span className="text-zinc-700">·</span>
+                <Tick label="Copy me" on={copyMe} set={setCopyMe} />
+              </>
+            )}
           </span>
         }
       />
@@ -80,7 +92,7 @@ export default function Composer({
 
       <div className="flex items-center gap-3 flex-wrap">
         <button
-          onClick={() => onSubmit({ body, links, attachments, audience })}
+          onClick={() => onSubmit({ body, links, attachments, audience, copyMe })}
           disabled={busy || empty || (!toStudents && !toInstructors)}
           className="px-3 py-1.5 rounded bg-pr-red hover:bg-pr-red-dark text-white text-sm font-medium transition-colors disabled:opacity-40"
         >
@@ -99,7 +111,7 @@ export default function Composer({
               ? 'Tick who this is for.'
               : reach === 0
                 ? `Nobody in ${AUDIENCE_LABEL[audience]} to email yet — posts to the course page only.`
-                : `Emails ${reach === 1 ? '1 person' : `${reach} people`} a link to the course page.`}
+                : `Emails ${reach === 1 ? '1 person' : `${reach} people`} a link to the course page${copyMe ? ', and you' : ''}.`}
             <InfoHint text="The email only points at the course page, so editing this later corrects what everyone sees. If it has to reach them tonight even without logging in, send an email instead." />
           </span>
         )}

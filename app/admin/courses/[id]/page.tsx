@@ -432,6 +432,14 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
   }))
 
   const estimateReviews = (estimateReviewRows ?? []) as EstimateReviewRow[]
+  // Same people as the reviewers, minus anyone without an address to copy.
+  const adminCcOptions = (adminRows ?? [])
+    .filter((a) => Boolean(a.email))
+    .map((a) => ({
+      id: a.id,
+      name: [a.first_name, a.last_name].filter(Boolean).join(' ') || (a.email as string),
+      email: a.email as string,
+    }))
   const reviewAdmins = (adminRows ?? []).map((a) => ({
     id: a.id,
     name: [a.first_name, a.last_name].filter(Boolean).join(' ') || a.email || 'Admin',
@@ -1039,6 +1047,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
           <GearOrderPanel
             instanceId={id}
             orders={gearOrders}
+            adminCcOptions={adminCcOptions}
             lists={gearLists.map((l) => ({ id: l.id, name: l.name, audience: l.audience }))}
           />
         </TabPanel>
@@ -1238,6 +1247,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
             quotes={quotes}
             contactEmail={primaryContactEmail(contacts)}
             ccOptions={ccEmailOptions(contacts)}
+            adminCcOptions={adminCcOptions}
             people={quotePeople}
             estimates={estimatePanels
               .filter((e) => e.id)

@@ -196,7 +196,18 @@ export async function sendGearOrder(instanceId: string, orderId: string, formDat
   const link = `${siteUrl}/gear-order/${order.accept_token}`
 
   const allowedCc = new Set(ccEmailOptions(contacts))
-  const cc = (formData?.getAll('cc_extra') ?? []).map(String).filter((e) => allowedCc.has(e))
+  const contactCc = (formData?.getAll('cc_extra') ?? []).map(String).filter((e) => allowedCc.has(e))
+
+  // Colleagues copied on the client-facing mail — the receipt that says the
+  // job is done, without anyone having to open the portal to find out.
+  const askedAdmins = (formData?.getAll('cc_admin') ?? []).map(String).map((e) => e.trim().toLowerCase()).filter(Boolean)
+  let adminCc: string[] = []
+  if (askedAdmins.length > 0) {
+    const { data: adminRows } = await admin.from('profiles').select('email').eq('role', 'admin')
+    const real = new Set((adminRows ?? []).map((a) => (a.email ?? '').trim().toLowerCase()).filter(Boolean))
+    adminCc = [...new Set(askedAdmins.filter((e) => real.has(e)))]
+  }
+  const cc = [...new Set([...contactCc, ...adminCc])]
 
   const { Resend } = await import('resend')
   const resend = new Resend(process.env.RESEND_API_KEY)

@@ -108,7 +108,7 @@ export default function CourseUpdates({
                     busy={busy}
                     notifyCounts={notifyCounts}
                     submitLabel="Save changes"
-                    initial={{ body: u.body, links: u.links, attachments: u.attachments, audience: u.audience }}
+                    initial={{ body: u.body, links: u.links, attachments: u.attachments, audience: u.audience, copyMe: false }}
                     onCancel={() => setEditing(null)}
                     onSubmit={(draft) =>
                       run(async () => {

@@ -1,4 +1,5 @@
 import SaveButton from '@/components/SaveButton'
+import AdminCcPicker from '@/components/AdminCcPicker'
 import { createQuote, updateQuote, setQuoteStatus, deleteQuote, sendQuote } from './finance-actions'
 import QuoteTotalFields from './QuoteTotalFields'
 import { quoteNumber } from '@/lib/quotes'
@@ -52,6 +53,7 @@ export default function QuotesSection({
   quotes,
   contactEmail,
   ccOptions,
+  adminCcOptions,
   people,
   estimates,
 }: {
@@ -60,6 +62,9 @@ export default function QuotesSection({
   quotes: QuoteRow[]
   contactEmail: string | null
   ccOptions: string[]
+  /** Admins who can be copied on the client's email — the receipt that says
+      the quote went out, without their having to check the portal. */
+  adminCcOptions: { id: string; name: string; email: string }[]
   people: QuotePerson[]
   estimates: { id: string; title: string; price: number }[]
 }) {
@@ -135,6 +140,7 @@ export default function QuotesSection({
                             cc {email}
                           </label>
                         ))}
+                        <AdminCcPicker admins={adminCcOptions} />
                         <button className="text-xs px-2.5 py-1 bg-pr-red hover:bg-pr-red-dark text-white rounded transition-colors">
                           Send to {contactEmail}
                         </button>
