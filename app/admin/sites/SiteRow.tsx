@@ -1,26 +1,59 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState, useSyncExternalStore } from 'react'
 import { useRouter } from 'next/navigation'
 import { updateSite, deleteSite } from './actions'
-import { SITE_KINDS, type Site, type SiteLink } from '@/lib/sites'
+import { SITE_KINDS, type Site, type SiteLink, type MeetingPointRecord } from '@/lib/sites'
 import { type Venue } from '@/lib/library'
+import CloseButton from '@/components/CloseButton'
 
 const input = 'w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-zinc-500'
 const label = 'block text-[11px] text-zinc-500 mb-1'
 
-export default function SiteRow({ site, venues, dayCount }: { site: Site; venues: Venue[]; dayCount: number }) {
+export default function SiteRow({
+  site, venues, points, dayCount,
+}: {
+  site: Site
+  venues: Venue[]
+  /** The meetups to choose from — shared rows, because a trailhead often
+      serves several canyons and we as often meet where there is parking. */
+  points: MeetingPointRecord[]
+  dayCount: number
+}) {
   const router = useRouter()
-  const [open, setOpen] = useState(false)
+  // Arriving from a schedule day's "Edit beta" opens this row. The hash is the
+  // browser's state rather than React's — and it never reaches the server, so
+  // it is subscribed to rather than seeded into state, which is what keeps the
+  // first client render agreeing with the one the server sent.
+  const targeted = useSyncExternalStore(
+    (onChange) => {
+      window.addEventListener('hashchange', onChange)
+      return () => window.removeEventListener('hashchange', onChange)
+    },
+    () => window.location.hash === `#site-${site.id}`,
+    () => false
+  )
+  // Null until someone actually clicks: the link decides whether this row is
+  // open, right up until the reader disagrees, and then they decide.
+  const [toggled, setToggled] = useState<boolean | null>(null)
+  const open = toggled ?? targeted
   const [busy, setBusy] = useState(false)
   const [form, setForm] = useState({
     name: site.name,
     venue_id: site.venue_id ?? '',
     kind: site.kind ?? '',
     beta: site.beta ?? '',
+    meeting_point_id: site.meeting_point_id ?? '',
+    usual_meeting_time: site.usual_meeting_time ?? '',
     coords: site.coords ?? '',
   })
   const [links, setLinks] = useState<SiteLink[]>(site.links ?? [])
+
+  // A row that opens offscreen looks exactly like a link that did nothing.
+  useEffect(() => {
+    if (!targeted) return
+    document.getElementById(`site-${site.id}`)?.scrollIntoView({ block: 'center' })
+  }, [targeted, site.id])
 
   async function run(fn: () => Promise<void>) {
     setBusy(true)
@@ -33,7 +66,7 @@ export default function SiteRow({ site, venues, dayCount }: { site: Site; venues
   const gist = (site.beta ?? '').split('\n').find((l) => l.trim()) ?? ''
 
   return (
-    <div className="rounded-lg border border-zinc-800 bg-zinc-900">
+    <div id={`site-${site.id}`} className="rounded-lg border border-zinc-800 bg-zinc-900 scroll-mt-6">
       <div className="flex items-center gap-3 px-3 py-2.5">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
@@ -48,9 +81,11 @@ export default function SiteRow({ site, venues, dayCount }: { site: Site; venues
             {gist && <span className="text-zinc-700"> · {gist}</span>}
           </p>
         </div>
-        <button onClick={() => setOpen((v) => !v)} className="text-xs text-zinc-400 hover:text-white transition-colors shrink-0">
-          {open ? 'Close' : 'Edit'}
-        </button>
+        {open ? (
+          <CloseButton onClick={() => setToggled(!open)} />
+        ) : (
+          <button onClick={() => setToggled(!open)} className="text-xs text-zinc-400 hover:text-white transition-colors shrink-0">Edit</button>
+        )}
       </div>
 
       {open && (
@@ -71,7 +106,25 @@ export default function SiteRow({ site, venues, dayCount }: { site: Site; venues
             <input list="site-kinds" className={input} value={form.kind} onChange={(e) => setForm({ ...form, kind: e.target.value })} placeholder="canyon" />
           </div>
           <div>
-            <label className={label}>Coordinates</label>
+            <label className={label}>Usual meeting time</label>
+            <input className={input} value={form.usual_meeting_time} onChange={(e) => setForm({ ...form, usual_meeting_time: e.target.value })} placeholder="0530" />
+          </div>
+          {/* Picked, not typed: the same lot serves Emerald Upper and Lower,
+              and two copies of one sentence is two places to correct a gate
+              code. Edit the meetup itself in the section above. */}
+          <div>
+            <label className={label}>Usual meeting point</label>
+            <select
+              className={input}
+              value={form.meeting_point_id}
+              onChange={(e) => setForm({ ...form, meeting_point_id: e.target.value })}
+            >
+              <option value="">— none —</option>
+              {points.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className={label}>Coordinates — of the canyon itself</label>
             <input className={input} value={form.coords} onChange={(e) => setForm({ ...form, coords: e.target.value })} placeholder="20.7988, -156.1193" />
           </div>
           <div className="sm:col-span-2">
@@ -130,7 +183,7 @@ export default function SiteRow({ site, venues, dayCount }: { site: Site; venues
 
           <div className="sm:col-span-2 flex items-center gap-3">
             <button
-              onClick={() => run(async () => { await updateSite(site.id, { ...form, links }); setOpen(false) })}
+              onClick={() => run(async () => { await updateSite(site.id, { ...form, links }); setToggled(false) })}
               disabled={busy}
               className="px-3 py-1.5 rounded bg-pr-red hover:bg-pr-red-dark text-white text-sm font-medium transition-colors disabled:opacity-40"
             >

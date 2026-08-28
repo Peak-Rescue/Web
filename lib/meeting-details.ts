@@ -85,3 +85,97 @@ export function meetingDayPassed(meetingDate: string | null, startsAt: string | 
   const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
   return day < today
 }
+
+// ─── The day's meeting plan ─────────────────────────────────────────────────
+
+/** A meetup: a place with parking and a name, which is not always a place we
+    are going. One trailhead serves several canyons, and often we gather
+    somewhere with room to leave cars and carpool in from there. */
+export type MeetingPoint = {
+  id: string
+  name: string
+  directions: string | null
+  coords: string | null
+  links: MeetingLink[] | null
+}
+
+export type MeetingSource = 'day' | 'day-meetup' | 'site-meetup' | 'course'
+
+export type DayMeeting = {
+  /** What the meetup is called, when the answer came from one. The directions
+      alone are a paragraph; the name is what fits in a sentence. */
+  placeName: string | null
+  /** The words someone reads at 0500 — the meetup's directions, or the day's
+      own if it overrode them. */
+  point: string | null
+  pointFrom: MeetingSource | null
+  /** The hour announced for this day, and only ever the day's own. */
+  time: string | null
+  /** What we usually do at this site. Offered when setting a day, never
+      resolved into `time` — an approach length is a fact about the place, but
+      daylight, tides and the group move the hour, and a default that
+      announces itself is a default nobody checked.
+
+      On the site rather than the meetup on purpose: when three canyons meet at
+      one lot, the hour follows the canyon you are facing. */
+  usualTime: string | null
+  note: string | null
+  coords: string | null
+  /** Getting there first, then the descent: the meetup's driving pin and gate
+      code, then the canyon's Ropewiki, Mountain Project and gauge. */
+  links: MeetingLink[]
+  siteName: string | null
+}
+
+type DayRow = {
+  meeting_point?: string | null
+  meeting_time?: string | null
+  meeting_note?: string | null
+  meeting_points?: MeetingPoint | null
+}
+type SiteRow = {
+  name?: string | null
+  usual_meeting_time?: string | null
+  links?: MeetingLink[] | null
+  meeting_points?: MeetingPoint | null
+}
+
+const trim = (v: string | null | undefined) => {
+  const t = v?.trim()
+  return t ? t : null
+}
+
+/** The day's own words, then the meetup it picked, then the site's usual
+    meetup, then the course. The course row is the floor for a course with no
+    schedule at all, which is why it is still read here rather than retired. */
+export function resolveDayMeeting(
+  day: DayRow | null,
+  site: SiteRow | null,
+  course?: { meeting_point?: string | null; meeting_time?: string | null } | null
+): DayMeeting {
+  const dayWords = trim(day?.meeting_point)
+  const dayMeetup = day?.meeting_points ?? null
+  const siteMeetup = site?.meeting_points ?? null
+  const courseWords = trim(course?.meeting_point)
+
+  // One decision, made once, so that the words, the name, the pin and the
+  // links can never come from different answers.
+  const chosen: { from: MeetingSource; meetup: MeetingPoint | null; words: string | null } | null =
+    dayWords ? { from: 'day', meetup: dayMeetup, words: dayWords }
+    : dayMeetup ? { from: 'day-meetup', meetup: dayMeetup, words: trim(dayMeetup.directions) }
+    : siteMeetup ? { from: 'site-meetup', meetup: siteMeetup, words: trim(siteMeetup.directions) }
+    : courseWords ? { from: 'course', meetup: null, words: courseWords }
+    : null
+
+  return {
+    placeName: chosen?.meetup ? trim(chosen.meetup.name) : null,
+    point: chosen?.words ?? null,
+    pointFrom: chosen?.from ?? null,
+    time: trim(day?.meeting_time),
+    usualTime: trim(site?.usual_meeting_time),
+    note: trim(day?.meeting_note),
+    coords: chosen?.meetup ? trim(chosen.meetup.coords) : null,
+    links: [...(chosen?.meetup?.links ?? []), ...(site?.links ?? [])],
+    siteName: trim(site?.name),
+  }
+}
