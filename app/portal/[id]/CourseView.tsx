@@ -916,122 +916,8 @@ export default async function CourseView({
             )}
           </dl>
 
-          {/* Maps sit with the location — the answer to "where is this?" is
-              the place name and the map together — and are edited there too.
-              Promoting one into the library stays admin-only inside the
-              component's own actions. */}
-          <EditInPlace
-            label="Edit maps"
-            editor={
-              showTasks ? (
-                <CourseMapsSection instanceId={id} maps={editableMaps} placeLabel={coursePlace} />
-              ) : null
-            }
-          >
-          {maps.length === 0 && showTasks && (
-            <p className="text-xs text-zinc-600 mt-3">No maps on this course yet.</p>
-          )}
-          {maps.length > 0 && (
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-2 mt-3">
-              {maps.map((m) => (
-                // One chip per link, kept closer to each other than to the next
-                // map — a single pill cut in half read as one link that had
-                // been broken, and nothing about it said the halves went
-                // different places. The first carries the name; the rest say
-                // only how they differ, which is all there is to say.
-                <span key={m.id} className="inline-flex items-center gap-1.5">
-                  {m.links.map((l, i) => {
-                    const c = l.audience === 'students' ? CHIP.maps : CHIP.instructors
-                    return (
-                      <a
-                        key={`${l.access}-${l.audience}`}
-                        href={l.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        title={`${m.label} — ${l.access === 'edit' ? 'editable' : 'read-only'}, for ${l.audience}`}
-                        className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border no-underline transition-colors ${c.chip} ${c.hover}`}
-                      >
-                        {i === 0 && (
-                          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
-                            <path d="M9 20l-5.447-2.724A1 1 0 0 1 3 16.382V5.618a1 1 0 0 1 1.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0 0 21 18.382V7.618a1 1 0 0 0-.553-.894L15 4m0 13V4m0 0L9 7" />
-                          </svg>
-                        )}
-                        {i === 0 ? m.label : l.access === 'edit' ? 'Editable' : 'Read-only'}
-                        {/* Students are only ever handed their own links, so
-                            saying whose it is would be telling them something
-                            they can't act on. Staff see several at once and
-                            need to know which is which. */}
-                        {showTasks && (
-                          <span className={c.tail}>
-                            · {l.audience}{i === 0 && l.access === 'edit' ? ' · editable' : ''}
-                          </span>
-                        )}
-                      </a>
-                    )
-                  })}
-                </span>
-              ))}
-            </div>
-          )}
-          </EditInPlace>
         </div>
 
-        {/* Links for this delivery. Grouped, because "the album" and "the
-            waiver" are different errands and a single list of URLs makes you
-            read all of them to find either.
-
-            Only the album is editable here: it is the one link the people
-            running the course have in hand, and the one students come back for
-            afterwards. The rest arrive from elsewhere. */}
-        <EditInPlace
-          label="Edit album"
-          editor={
-            showTasks ? (
-              <CoursePhotosSection
-                instanceId={id}
-                links={((linkRows ?? []) as CourseLink[]).filter((l) => l.purpose === 'photos')}
-              />
-            ) : null
-          }
-        >
-        {(linkRows ?? []).length > 0 && (
-          <div className="mb-8 space-y-3">
-            {PURPOSE_ORDER.map((purpose) => {
-              const rows = ((linkRows ?? []) as CourseLink[]).filter((l) => l.purpose === purpose)
-              if (rows.length === 0) return null
-              return (
-                <div key={purpose}>
-                  <p className="text-[11px] uppercase tracking-wide text-zinc-500 mb-1.5">
-                    {PURPOSE_META[purpose].label}
-                  </p>
-                  <div className="flex flex-wrap items-center gap-2">
-                    {rows.map((l) => (
-                      <a
-                        key={l.id}
-                        href={l.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border transition-colors ${
-                          showTasks && l.audience === 'internal'
-                            ? `${CHIP.instructors.chip} ${CHIP.instructors.hover}`
-                            : `${CHIP.links.chip} ${CHIP.links.hover}`
-                        }`}
-                      >
-                        {linkLabel(l)}
-                        {showTasks && (
-                          <span className={l.audience === 'internal' ? CHIP.instructors.tail : CHIP.links.tail}>
-                            · {l.audience === 'internal' ? 'instructors' : 'students'}
-                          </span>
-                        )}
-                      </a>
-                    ))}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        )}
-        </EditInPlace>
         <PortalSectionNav
           sections={navSections}
           trailing={isAdmin ? (
@@ -1074,6 +960,7 @@ export default async function CourseView({
             <div className="space-y-6">
               <EditInPlace
                 label="Edit welcome"
+                title="Welcome"
                 editor={showTasks ? <CourseIntroFields instanceId={id} intro={inst.intro as string | null} /> : null}
               >
               {!inst.intro && showTasks && (
@@ -1290,6 +1177,7 @@ export default async function CourseView({
                 is a way in nobody finds. */}
             <EditInPlace
               label="Edit overview"
+              title="Overview"
               editor={
                 canEditSchedule ? (
                   <ScheduleOverviewFields
@@ -1642,11 +1530,134 @@ export default async function CourseView({
             instructor reading the same page knows which is which. */}
         {hasResources && (
           <Section id="resources">
+            {/* Maps are reference for the place, which is what this whole
+                section is — the same question the med plan answers. They sat
+                beside the location, which read better but left their edit
+                control floating under the WHERE card attached to nothing.
+
+                Promoting one into the library stays admin-only inside the
+                component's own actions. */}
+            <EditInPlace
+              label="Edit maps"
+              title="Maps"
+              editor={
+                showTasks ? (
+                  <CourseMapsSection instanceId={id} maps={editableMaps} placeLabel={coursePlace} />
+                ) : null
+              }
+            >
+            {maps.length === 0 && showTasks && (
+              <p className="text-xs text-zinc-600">No maps on this course yet.</p>
+            )}
+            {maps.length > 0 && (
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-2 mt-3">
+                {maps.map((m) => (
+                  // One chip per link, kept closer to each other than to the next
+                  // map — a single pill cut in half read as one link that had
+                  // been broken, and nothing about it said the halves went
+                  // different places. The first carries the name; the rest say
+                  // only how they differ, which is all there is to say.
+                  <span key={m.id} className="inline-flex items-center gap-1.5">
+                    {m.links.map((l, i) => {
+                      const c = l.audience === 'students' ? CHIP.maps : CHIP.instructors
+                      return (
+                        <a
+                          key={`${l.access}-${l.audience}`}
+                          href={l.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          title={`${m.label} — ${l.access === 'edit' ? 'editable' : 'read-only'}, for ${l.audience}`}
+                          className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border no-underline transition-colors ${c.chip} ${c.hover}`}
+                        >
+                          {i === 0 && (
+                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+                              <path d="M9 20l-5.447-2.724A1 1 0 0 1 3 16.382V5.618a1 1 0 0 1 1.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0 0 21 18.382V7.618a1 1 0 0 0-.553-.894L15 4m0 13V4m0 0L9 7" />
+                            </svg>
+                          )}
+                          {i === 0 ? m.label : l.access === 'edit' ? 'Editable' : 'Read-only'}
+                          {/* Students are only ever handed their own links, so
+                              saying whose it is would be telling them something
+                              they can't act on. Staff see several at once and
+                              need to know which is which. */}
+                          {showTasks && (
+                            <span className={c.tail}>
+                              · {l.audience}{i === 0 && l.access === 'edit' ? ' · editable' : ''}
+                            </span>
+                          )}
+                        </a>
+                      )
+                    })}
+                  </span>
+                ))}
+              </div>
+            )}
+            </EditInPlace>
+
+            {/* Links for this delivery, grouped — "the album" and "the waiver" are
+                different errands, and one list of URLs makes you read all of them
+                to find either. They sat above the section nav, in no section at
+                all, which is why the album's edit control had nothing to sit on.
+
+                Only the album is editable here: it is the one link the people
+                running the course have in hand, and the one students come back for
+                afterwards. The rest arrive from elsewhere. */}
+            <EditInPlace
+              label="Edit album"
+                title="Links"
+              editor={
+                showTasks ? (
+                  <CoursePhotosSection
+                    instanceId={id}
+                    links={((linkRows ?? []) as CourseLink[]).filter((l) => l.purpose === 'photos')}
+                  />
+                ) : null
+              }
+            >
+            {(linkRows ?? []).length > 0 && (
+              <div className="space-y-3">
+                {PURPOSE_ORDER.map((purpose) => {
+                  const rows = ((linkRows ?? []) as CourseLink[]).filter((l) => l.purpose === purpose)
+                  if (rows.length === 0) return null
+                  return (
+                    <div key={purpose}>
+                      <p className="text-[11px] uppercase tracking-wide text-zinc-500 mb-1.5">
+                        {PURPOSE_META[purpose].label}
+                      </p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        {rows.map((l) => (
+                          <a
+                            key={l.id}
+                            href={l.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                              showTasks && l.audience === 'internal'
+                                ? `${CHIP.instructors.chip} ${CHIP.instructors.hover}`
+                                : `${CHIP.links.chip} ${CHIP.links.hover}`
+                            }`}
+                          >
+                            {linkLabel(l)}
+                            {showTasks && (
+                              <span className={l.audience === 'internal' ? CHIP.instructors.tail : CHIP.links.tail}>
+                                · {l.audience === 'internal' ? 'instructors' : 'students'}
+                              </span>
+                            )}
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+            </EditInPlace>
+
             {/* Reference for this place, edited where it is read. Save-to-
                 library stays admin-only inside the component's own actions —
                 promoting a med plan reaches every course that pulls it. */}
             <EditInPlace
               label="Edit resources"
+              title="Reference"
               editor={
                 showTasks ? (
                   <CourseResourcesSection
@@ -1694,17 +1705,13 @@ export default async function CourseView({
             </EditInPlace>
             {hasDocuments && (
               <div className={resources.length > 0 ? 'mt-6 pt-6 border-t border-zinc-800' : ''}>
-                <SubHead
-                  title="Everything attached to this course"
-                  note="Files and links, including from tasks"
-                  badge={<AudiencePills audience="internal" />}
-                />
                 {/* Every attachment on the course in one place — uploads,
                     pasted links, and documents that arrived on a task. Adding
                     one here is what makes "put the client's PDF somewhere" a
                     thing you do on the course rather than on another screen. */}
                 <EditInPlace
                   label="Edit files"
+                  title="Everything attached to this course"
                   editor={showTasks ? <CourseFilesSection instanceId={id} files={editableFiles} /> : null}
                 >
                 {courseDocs.length === 0 && (
@@ -1746,6 +1753,7 @@ export default async function CourseView({
                 rather than imported into the client. */}
             <EditInPlace
               label="Edit curriculum"
+              title="Sections"
               editor={
                 showTasks ? (
                   <CourseCurriculumEditor
@@ -1827,6 +1835,7 @@ export default async function CourseView({
                 deal with, and the toggle should show that by taking it away. */}
             <EditInPlace
               label="Edit gear list"
+              title="The list"
               editor={
                 showAsAdmin ? (
                   <CourseGear

@@ -17,11 +17,17 @@ import CloseButton from '@/components/CloseButton'
 // start time.
 export default function EditInPlace({
   label,
+  title,
   editor,
   children,
 }: {
   /** What pressing it does, said plainly — "Edit day". */
   label: string
+  /** Names the block, and gives the button something to sit on. Without it the
+      button is a right-aligned row of its own floating above the content,
+      which is how "Edit maps" ended up hanging under the WHERE card attached
+      to nothing. */
+  title?: string
   /** Built on the server, so its code only reaches the people who can open it
       and a student gets no button either. */
   editor: ReactNode
@@ -34,7 +40,8 @@ export default function EditInPlace({
 
   return (
     <>
-      <div className="flex justify-end mb-2">
+      <div className={`flex items-center gap-2 mb-2 ${title ? '' : 'justify-end'}`}>
+        {title && <h3 className="text-sm font-semibold text-zinc-200 mr-auto">{title}</h3>}
         {editing ? (
           <CloseButton
             label="Done editing"
