@@ -8,6 +8,7 @@ import { AudiencePills } from '@/components/AudiencePills'
 import { CAPABILITY_META, CAPABILITY_ORDER } from '@/lib/capabilities'
 import RegionSelect from '@/components/RegionSelect'
 import MapLinks from './MapLinks'
+import CloseButton from '@/components/CloseButton'
 
 const input =
   'w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-zinc-500'
@@ -94,9 +95,11 @@ export default function LibraryRow({ item, venues, hideProvenance = false }: { i
               Approve
             </button>
           )}
-          <button onClick={() => setOpen((v) => !v)} className="text-xs text-zinc-400 hover:text-white transition-colors">
-            {open ? 'Close' : 'Edit'}
-          </button>
+          {open ? (
+          <CloseButton onClick={() => setOpen((v) => !v)} />
+        ) : (
+          <button onClick={() => setOpen((v) => !v)} className="text-xs text-zinc-400 hover:text-white transition-colors">Edit</button>
+        )}
         </div>
       </div>
 

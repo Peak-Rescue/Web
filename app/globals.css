@@ -23,6 +23,14 @@
 html {
   scroll-behavior: smooth;
   scrollbar-width: none;
+  /* Nothing may widen the page sideways. An absolutely-positioned hover bubble
+     near the right edge did, invisibly, which centred every layout against a
+     document wider than the screen and left a gap down one side on phones.
+
+     `clip` rather than `hidden`: hidden would turn the root into a scroll
+     container and break every sticky header on the site — the section nav, the
+     course tabs, the instructor tables. Clip only clips. */
+  overflow-x: clip;
 }
 
 /* Buttons should use the hand cursor like links do (Tailwind v4 preflight

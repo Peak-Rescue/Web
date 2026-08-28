@@ -5,6 +5,7 @@ import InfoHint from '@/components/InfoHint'
 import AttachmentFields from './AttachmentFields'
 import type { UpdateLink, UpdateAttachment, UpdateAudience } from './update-actions'
 import type { NotifyCounts } from '@/lib/course-notify'
+import CloseButton from '@/components/CloseButton'
 
 const AUDIENCE_LABEL: Record<UpdateAudience, string> = {
   students: 'the students',
@@ -54,6 +55,13 @@ export default function Composer({
 
   return (
     <div className="p-3 bg-zinc-900 border border-zinc-800 rounded-lg space-y-2">
+      {/* Only when this composer is an editor you opened. The standing one at
+          the top of the feed has nothing to close back to. */}
+      {onCancel && (
+        <div className="flex justify-end">
+          <CloseButton label="Cancel" disabled={busy} onClick={onCancel} />
+        </div>
+      )}
       <textarea
         value={body}
         onChange={(e) => setBody(e.target.value)}
@@ -98,11 +106,7 @@ export default function Composer({
         >
           {busy ? 'Working…' : submitLabel}
         </button>
-        {onCancel && (
-          <button onClick={onCancel} disabled={busy} className="text-xs text-zinc-500 hover:text-zinc-300">
-            Cancel
-          </button>
-        )}
+
         {/* The line says what happens; the icon holds why you'd want it. The
             count is live state, not explanation, so it stays on screen. */}
         {!onCancel && (

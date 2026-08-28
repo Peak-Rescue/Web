@@ -3,6 +3,8 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { saveCourseNotes } from './notes-actions'
+import CloseButton from '@/components/CloseButton'
+import ComposerTrigger, { NoteIcon } from '@/components/ComposerTrigger'
 
 // Internal notes: read as a block, edited in place. Nothing here is emailed
 // and nobody outside the team can see it, so there's no confirmation step —
@@ -38,6 +40,13 @@ export default function CourseNotes({
   if (editing) {
     return (
       <div className="p-3 bg-zinc-900 border border-zinc-700 rounded-lg space-y-2">
+        <div className="flex justify-end">
+          <CloseButton
+            label="Cancel"
+            disabled={busy}
+            onClick={() => { setDraft(notes ?? ''); setError(null); setEditing(false) }}
+          />
+        </div>
         <textarea
           autoFocus
           value={draft}
@@ -55,13 +64,7 @@ export default function CourseNotes({
           >
             {busy ? 'Saving…' : 'Save notes'}
           </button>
-          <button
-            onClick={() => { setDraft(notes ?? ''); setError(null); setEditing(false) }}
-            disabled={busy}
-            className="text-xs text-zinc-500 hover:text-zinc-300"
-          >
-            Cancel
-          </button>
+
         </div>
       </div>
     )
@@ -69,19 +72,28 @@ export default function CourseNotes({
 
   return (
     <div className="space-y-2">
-      {notes ? (
+      {notes && (
         <div className="p-4 bg-zinc-900 border border-zinc-800 rounded-lg text-sm text-zinc-300 whitespace-pre-wrap">
           {notes}
         </div>
-      ) : (
-        canEdit && <p className="text-xs text-zinc-600">No notes on this course yet.</p>
       )}
-      {canEdit && (
+      {/* Nothing written yet reads as the same invitation the composers give:
+          one row that looks like the field it opens. With a note already here
+          the row would be a second box under the first, so it steps down to
+          the pencil every other edit on this page uses. */}
+      {canEdit && !notes && (
+        <ComposerTrigger label="Add notes" icon={<NoteIcon />} onClick={() => setEditing(true)} />
+      )}
+      {canEdit && notes && (
         <button
           onClick={() => setEditing(true)}
-          className="text-[11px] text-zinc-500 hover:text-white transition-colors"
+          className="inline-flex items-center gap-1.5 rounded border border-zinc-700 px-2 py-1 text-[11px] text-zinc-300 hover:text-white hover:border-zinc-500 transition-colors"
         >
-          {notes ? 'Edit notes' : 'Add notes'}
+          <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M12 20h9" />
+            <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+          </svg>
+          Edit notes
         </button>
       )}
     </div>

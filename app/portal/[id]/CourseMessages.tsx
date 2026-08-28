@@ -3,6 +3,8 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { sendCourseMessage, deleteCourseMessage, type MessageAudience } from './message-actions'
+import CloseButton from '@/components/CloseButton'
+import ComposerTrigger, { MailIcon } from '@/components/ComposerTrigger'
 
 export type CourseMessage = {
   id: string
@@ -93,6 +95,13 @@ export default function CourseMessages({
     <div className="space-y-4">
       {open ? (
         <div className="p-3 bg-zinc-900 border border-zinc-700 rounded-lg space-y-2">
+          <div className="flex justify-end">
+            <CloseButton
+              label="Cancel"
+              disabled={busy}
+              onClick={() => { setOpen(false); setError(null) }}
+            />
+          </div>
           <div className="flex flex-wrap items-center gap-2">
             <label className="text-[11px] text-zinc-500">To</label>
             <select
@@ -145,28 +154,11 @@ export default function CourseMessages({
             >
               {busy ? 'Sending…' : `Send to ${count}`}
             </button>
-            <button
-              onClick={() => { setOpen(false); setError(null) }}
-              disabled={busy}
-              className="text-xs text-zinc-500 hover:text-zinc-300"
-            >
-              Cancel
-            </button>
             {count === 0 && <span className="text-xs text-zinc-500">Nobody in that group yet.</span>}
           </div>
         </div>
       ) : (
-        <div className="flex items-center gap-3 flex-wrap">
-          <button
-            onClick={() => { setOpen(true); setResult(null) }}
-            className="text-xs px-3 py-1.5 rounded border border-zinc-700 text-zinc-300 hover:text-white hover:border-zinc-500 transition-colors"
-          >
-            Write a message
-          </button>
-          <span className="text-xs text-zinc-500">
-            Can’t be corrected once sent — post an update instead.
-          </span>
-        </div>
+        <ComposerTrigger label="Send an email" icon={<MailIcon />} onClick={() => { setOpen(true); setResult(null) }} />
       )}
 
       {result && <p className="text-xs text-teal-300">{result}</p>}

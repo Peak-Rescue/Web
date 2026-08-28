@@ -7,6 +7,7 @@ import { updateVenue, deleteVenue } from '../library/actions'
 import { type Venue } from '@/lib/library'
 import RegionSelect from '@/components/RegionSelect'
 import { regionLabel } from '@/lib/regions'
+import CloseButton from '@/components/CloseButton'
 
 const input = 'w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-zinc-500'
 const label = 'block text-[11px] text-zinc-500 mb-1'
@@ -46,9 +47,11 @@ export default function VenueRow({ venue, itemCount }: { venue: Venue; itemCount
             </Link>
           </p>
         </div>
-        <button onClick={() => setOpen((v) => !v)} className="text-xs text-zinc-400 hover:text-white transition-colors shrink-0">
-          {open ? 'Close' : 'Edit'}
-        </button>
+        {open ? (
+          <CloseButton onClick={() => setOpen((v) => !v)} />
+        ) : (
+          <button onClick={() => setOpen((v) => !v)} className="text-xs text-zinc-400 hover:text-white transition-colors shrink-0">Edit</button>
+        )}
       </div>
 
       {open && (

@@ -29,6 +29,7 @@ export type CourseUpdate = {
 }
 
 import type { NotifyCounts } from '@/lib/course-notify'
+import ComposerTrigger, { SendIcon } from '@/components/ComposerTrigger'
 export type { NotifyCounts }
 
 // Updates for the people on the course. The email only points here, so this
@@ -52,6 +53,9 @@ export default function CourseUpdates({
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<string | null>(null)
   const [editing, setEditing] = useState<string | null>(null)
+  // Closed until asked for, like the email composer beside it. A box standing
+  // permanently open is a box the feed has to be read around.
+  const [composing, setComposing] = useState(false)
 
   const when = (iso: string) =>
     new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
@@ -71,19 +75,25 @@ export default function CourseUpdates({
 
   return (
     <div className="space-y-4">
-      {canPost && (
+      {canPost && !composing && (
+        <ComposerTrigger label="Post an update" icon={<SendIcon />} onClick={() => { setResult(null); setComposing(true) }} />
+      )}
+
+      {canPost && composing && (
         <Composer
           key={updates.length}
           instanceId={instanceId}
           busy={busy}
           notifyCounts={notifyCounts}
           submitLabel="Post and notify"
+          onCancel={() => setComposing(false)}
           onSubmit={(draft) =>
             run(async () => {
               const n = notifyCounts[draft.audience]
               const who = n === 1 ? '1 person' : `${n} people`
               if (!confirm(`Post this and email ${who} a link to it?`)) return
               const r = await postCourseUpdate(instanceId, draft)
+              setComposing(false)
               return r.emailProblem ?? `Posted. ${r.sent} ${r.sent === 1 ? 'person' : 'people'} emailed a link to it.`
             })
           }
