@@ -1,0 +1,11 @@
+-- The contract step for 149's third column.
+--
+-- schedule_days.meeting_note was added for "this morning only — the shuttle,
+-- the gate code, who's driving". Nobody ever wrote in it, including the one
+-- real morning that went out while it existed: that day's shuttle note went
+-- into the meeting point itself, which is where the sentence naturally goes.
+-- Two prose boxes beside each other is a choice nobody wants to make at 0500.
+--
+-- The reads came out with 7497ea8 and that has deployed, so the column is
+-- unreferenced. It never held a row, so nothing is lost with it.
+alter table public.schedule_days drop column if exists meeting_note;
