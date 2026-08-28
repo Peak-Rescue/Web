@@ -54,6 +54,7 @@ import MeetingDetails from '@/app/portal/[id]/MeetingDetails'
 import { courseNotifyCounts } from '@/lib/course-notify'
 import { meetingDetails, meetingDayPassed } from '@/lib/meeting-details'
 import CourseCurriculumEditor from '../CourseCurriculumEditor'
+import TrashIcon from '@/components/TrashIcon'
 
 const STATUS_STYLES: Record<string, string> = {
   tentative: 'bg-yellow-900/40 text-yellow-300 border-yellow-700',
@@ -759,7 +760,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
                           aria-label="Remove this date"
                           className="text-sm leading-none text-zinc-600 hover:text-pr-red-light transition-colors"
                         >
-                          ×
+                          <TrashIcon />
                         </button>
                       </form>
                     </div>

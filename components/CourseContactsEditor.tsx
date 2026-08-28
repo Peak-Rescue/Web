@@ -2,6 +2,7 @@
 
 import { useRef, useState } from 'react'
 import type { CoursePOC } from '@/lib/contacts'
+import TrashIcon from '@/components/TrashIcon'
 
 const inputCls =
   'w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500'
@@ -39,7 +40,7 @@ function ListField({
             <input type={type} value={v} onChange={(e) => onEdit(j, e.target.value)} className={inputCls} />
             {j > 0 && (
               <button type="button" title={`Remove this ${label.toLowerCase()}`} onClick={() => onRemove(j)} className={removeBtnCls}>
-                ×
+                <TrashIcon />
               </button>
             )}
           </div>
@@ -102,7 +103,7 @@ export default function CourseContactsEditor({ initial }: { initial: CoursePOC[]
                     onClick={() => update((n) => void n.splice(i, 1), { notify: true })}
                     className={removeBtnCls}
                   >
-                    ×
+                    <TrashIcon />
                   </button>
                 )}
                 {i === pocs.length - 1 && (

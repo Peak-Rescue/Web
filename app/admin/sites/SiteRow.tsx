@@ -6,6 +6,7 @@ import { updateSite, deleteSite } from './actions'
 import { SITE_KINDS, type Site, type SiteLink, type MeetingPointRecord } from '@/lib/sites'
 import { type Venue } from '@/lib/library'
 import CloseButton from '@/components/CloseButton'
+import TrashIcon from '@/components/TrashIcon'
 
 const input = 'w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-zinc-500'
 const label = 'block text-[11px] text-zinc-500 mb-1'
@@ -171,7 +172,7 @@ export default function SiteRow({
                     aria-label={`Remove ${l.label || 'link'}`}
                     className="text-xs text-zinc-600 hover:text-red-400 transition-colors"
                   >
-                    ✕
+                    <TrashIcon />
                   </button>
                 </div>
               ))}

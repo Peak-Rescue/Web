@@ -9,6 +9,7 @@ import {
 import { GEAR_ORDER_STATUS_LABEL, type GearOrder } from '@/lib/gear-orders'
 import PdfLink from '@/components/PdfLink'
 import AdminCcPicker from '@/components/AdminCcPicker'
+import TrashIcon from '@/components/TrashIcon'
 
 const input = 'bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-zinc-500'
 
@@ -209,7 +210,7 @@ function OrderCard({
                 title="Delete the line entirely"
                 className="text-xs text-zinc-700 hover:text-red-400 transition-colors px-1"
               >
-                ✕
+                <TrashIcon />
               </button>
             </div>
           </div>

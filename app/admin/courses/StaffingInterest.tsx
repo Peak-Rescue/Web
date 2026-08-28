@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { assignInstructor } from './actions'
 import { sendInterestInvites, deleteInterestInvite } from './staffing-actions'
+import TrashIcon from '@/components/TrashIcon'
 
 export type InterestCandidate = {
   id: string
@@ -246,7 +247,7 @@ export default function StaffingInterest({
                     aria-label={`Remove invite for ${inv.name}`}
                     className="text-zinc-700 hover:text-red-400 transition-colors text-sm leading-none"
                   >
-                    ×
+                    <TrashIcon />
                   </button>
                 </div>
               </div>

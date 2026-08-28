@@ -7,6 +7,7 @@ import AddLinkDialog from '@/components/AddLinkDialog'
 import AudienceToggle from '@/components/AudienceToggle'
 import { linkLabel, type CourseLink } from '@/lib/course-links'
 import { addCourseLink, removeCourseLink, setCourseLinkAudience } from './link-actions'
+import TrashIcon from '@/components/TrashIcon'
 
 const ALBUM_ICON =
   'M3 5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM3 16l5-5 4 4 3-3 6 6M9 9a1 1 0 1 1-2 0 1 1 0 0 1 2 0'
@@ -91,7 +92,7 @@ export default function CoursePhotosSection({
                 aria-label="Remove from this course"
                 className="shrink-0 text-zinc-600 hover:text-pr-red-light transition-colors text-sm leading-none disabled:opacity-40"
               >
-                ×
+                <TrashIcon />
               </button>
             </div>
           ))}

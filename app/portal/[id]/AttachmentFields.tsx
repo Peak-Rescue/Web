@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { linkLabel } from '@/lib/course-links'
 import { createUpdateUploadTargets, type UpdateLink, type UpdateAttachment } from './update-actions'
+import TrashIcon from '@/components/TrashIcon'
 
 // The links-and-files half of writing something onto a course: the chips, the
 // two icons that add to them, and the upload itself.
@@ -100,7 +101,7 @@ export default function AttachmentFields({
                 onClick={() => setLinks((p) => p.filter((_, j) => j !== i))}
                 className="text-zinc-600 hover:text-pr-red transition-colors"
               >
-                ×
+                <TrashIcon />
               </button>
             </span>
           ))}
@@ -111,7 +112,7 @@ export default function AttachmentFields({
                 onClick={() => setAttachments((p) => p.filter((_, j) => j !== i))}
                 className="text-zinc-600 hover:text-pr-red transition-colors"
               >
-                ×
+                <TrashIcon />
               </button>
             </span>
           ))}

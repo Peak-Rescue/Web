@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import SignaturePad, { type SignaturePadHandle } from '@/components/SignaturePad'
+import TrashIcon from '@/components/TrashIcon'
 import {
   type ExpenseCategory,
   type CurrentRates,
@@ -669,7 +670,7 @@ export default function ExpenseReportEditor({
                         <a href={r.url} target="_blank" rel="noreferrer" className="text-zinc-300 hover:text-white max-w-40 truncate">
                           {r.filename}
                         </a>
-                        <button onClick={() => void removeReceipt(r.id)} className="text-zinc-500 hover:text-pr-red-light">×</button>
+                        <button onClick={() => void removeReceipt(r.id)} className="text-zinc-500 hover:text-pr-red-light"><TrashIcon /></button>
                       </span>
                     ))}
                     <button
@@ -821,7 +822,7 @@ export default function ExpenseReportEditor({
                           <a href={r.url} target="_blank" rel="noreferrer" className="text-zinc-300 hover:text-white max-w-40 truncate">
                             {r.filename}
                           </a>
-                          <button onClick={() => void removeReceipt(r.id)} className="text-zinc-500 hover:text-pr-red-light">×</button>
+                          <button onClick={() => void removeReceipt(r.id)} className="text-zinc-500 hover:text-pr-red-light"><TrashIcon /></button>
                         </span>
                       ))}
                     {stagedFiles.map((f, i) => (
@@ -836,7 +837,7 @@ export default function ExpenseReportEditor({
                           }}
                           className="text-zinc-500 hover:text-pr-red-light"
                         >
-                          ×
+                          <TrashIcon />
                         </button>
                       </span>
                     ))}

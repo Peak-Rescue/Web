@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import TrashIcon from '@/components/TrashIcon'
 
 // Wraps a server-rendered row so removing it disappears immediately instead of
 // waiting on the round trip. Deleting a course item revalidates the whole
@@ -8,12 +9,13 @@ import { useState, useTransition } from 'react'
 // watch — the row is gone either way, and a failure puts it back.
 export default function RemovableRow({
   onRemove,
-  label = 'Remove',
+  /** Overrides the bin, for a row where a word reads better. */
+  label,
   className,
   children,
 }: {
   onRemove: () => Promise<void>
-  label?: string
+  label?: React.ReactNode
   className?: string
   children?: React.ReactNode
 }) {
@@ -41,9 +43,10 @@ export default function RemovableRow({
           })
         }}
         className="text-xs text-zinc-600 hover:text-red-400 transition-colors"
-        title={error ? 'That didn’t save — try again' : undefined}
+        title={error ? 'That didn’t save — try again' : 'Remove'}
+        aria-label="Remove"
       >
-        {error ? '× retry' : label}
+        {error ? 'retry' : label ?? <TrashIcon />}
       </button>
     </div>
   )

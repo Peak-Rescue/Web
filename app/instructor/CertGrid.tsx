@@ -2,6 +2,7 @@
 
 import { useRef, useState } from 'react'
 import { CERT_META, CERT_GROUPS, certStatus, type CertType } from '@/lib/certs'
+import TrashIcon from '@/components/TrashIcon'
 
 type CertDoc = {
   id: string
@@ -376,13 +377,13 @@ export default function CertGrid({ initialCerts, actions }: { initialCerts: DbCe
                                 <a href={doc.url} target="_blank" rel="noopener noreferrer" className="flex-1 truncate text-pr-red-light hover:text-pr-red-light">
                                   📄 {doc.file_name ?? 'document'}
                                 </a>
-                                <button type="button" onClick={() => handleDeleteDoc(doc.id, editing)} className="text-zinc-600 hover:text-red-400 text-xs shrink-0" title="Remove">✕</button>
+                                <button type="button" onClick={() => handleDeleteDoc(doc.id, editing)} className="text-zinc-600 hover:text-red-400 text-xs shrink-0" title="Remove"><TrashIcon /></button>
                               </li>
                             ))}
                             {pendingDocs.map((doc, i) => (
                               <li key={`pending-${i}`} className="flex items-center gap-2 text-sm">
                                 <span className="flex-1 truncate text-zinc-400">📄 {doc.fileName} <span className="text-zinc-600">(save to attach)</span></span>
-                                <button type="button" onClick={() => setPendingDocs(prev => prev.filter((_, j) => j !== i))} className="text-zinc-600 hover:text-red-400 text-xs shrink-0" title="Remove">✕</button>
+                                <button type="button" onClick={() => setPendingDocs(prev => prev.filter((_, j) => j !== i))} className="text-zinc-600 hover:text-red-400 text-xs shrink-0" title="Remove"><TrashIcon /></button>
                               </li>
                             ))}
                           </ul>

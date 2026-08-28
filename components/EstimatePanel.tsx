@@ -8,6 +8,7 @@ import { saveEstimate, deleteEstimateCoa, type EstimateItemInput } from '@/app/a
 import { useRouter } from 'next/navigation'
 import { CalculatorIcon, NotesIcon } from '@/components/TaskIcons'
 import { useUnsavedGuard, withSaveTimeout } from '@/components/useUnsavedGuard'
+import TrashIcon from '@/components/TrashIcon'
 
 export type PricingRate = { id: string; label: string; unit: string | null; rate: number }
 
@@ -469,7 +470,7 @@ export default function EstimatePanel({
                   {fmtMoney(round2((Number(r.qty) || 0) * (Number(r.rate) || 0)))}
                 </span>
                 <button onClick={() => removeRow(r.key)} className="text-zinc-600 hover:text-pr-red-light text-sm shrink-0 mt-1.5">
-                  ×
+                  <TrashIcon />
                 </button>
               </div>
             </div>
@@ -504,7 +505,7 @@ export default function EstimatePanel({
                               title="Remove this multiplier"
                               className="text-[10px] text-zinc-600 hover:text-pr-red-light"
                             >
-                              ×
+                              <TrashIcon />
                             </button>
                           )}
                         </span>

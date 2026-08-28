@@ -8,6 +8,7 @@ import AddLinkDialog from '@/components/AddLinkDialog'
 import { type LibraryAudience } from '@/lib/library'
 import { AudiencePills } from '@/components/AudiencePills'
 import AudienceToggle from '@/components/AudienceToggle'
+import TrashIcon from '@/components/TrashIcon'
 import {
   addCourseMapLink,
   addCourseMapsFromLibrary,
@@ -217,7 +218,7 @@ export default function CourseMapsSection({
               aria-label="Remove from this course"
               className="shrink-0 text-zinc-600 hover:text-pr-red-light transition-colors text-sm leading-none disabled:opacity-40"
             >
-              ×
+              <TrashIcon />
             </button>
           </div>
         ))}

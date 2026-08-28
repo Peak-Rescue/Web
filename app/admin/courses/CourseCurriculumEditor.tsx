@@ -130,7 +130,6 @@ export default function CourseCurriculumEditor({
                     </div>
                     <RemovableRow
                       onRemove={async () => { 'use server'; await deleteItem(instanceId, item.id) }}
-                      label="×"
                       className="ml-4 shrink-0"
                     />
                   </div>

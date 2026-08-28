@@ -16,6 +16,7 @@ import UploadNameDialog from '@/components/UploadNameDialog'
 import AddLinkDialog from '@/components/AddLinkDialog'
 import { AudiencePills } from '@/components/AudiencePills'
 import InfoHint from '@/components/InfoHint'
+import TrashIcon from '@/components/TrashIcon'
 
 export type CourseFile = {
   id: string
@@ -268,7 +269,7 @@ export default function CourseFilesSection({
                     disabled={busyId === f.id}
                     className="text-xs text-zinc-600 hover:text-pr-red-light transition-colors shrink-0"
                   >
-                    ×
+                    <TrashIcon />
                   </button>
                 </>
               )}

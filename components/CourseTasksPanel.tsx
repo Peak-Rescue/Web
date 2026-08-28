@@ -22,6 +22,7 @@ import TaskDocChip from '@/components/TaskDocChip'
 import UploadNameDialog from '@/components/UploadNameDialog'
 import AddLinkDialog from '@/components/AddLinkDialog'
 import { useUnsavedGuard, withSaveTimeout } from '@/components/useUnsavedGuard'
+import TrashIcon from '@/components/TrashIcon'
 
 export type CourseTask = {
   id: string
@@ -327,7 +328,7 @@ export default function CourseTasksPanel({
               disabled={busyId === t.id}
               className="text-xs text-zinc-600 hover:text-pr-red-light transition-colors shrink-0"
             >
-              ×
+              <TrashIcon />
             </button>
           </>
         ) : (

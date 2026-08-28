@@ -18,6 +18,7 @@ import {
   type ResourcePickerItem,
 } from './resource-actions'
 import InfoHint from '@/components/InfoHint'
+import TrashIcon from '@/components/TrashIcon'
 
 export type CourseResource = {
   id: string
@@ -179,7 +180,7 @@ export default function CourseResourcesSection({
               aria-label="Remove from this course"
               className="shrink-0 text-zinc-600 hover:text-pr-red-light transition-colors text-sm leading-none disabled:opacity-40"
             >
-              ×
+              <TrashIcon />
             </button>
           </div>
         ))}

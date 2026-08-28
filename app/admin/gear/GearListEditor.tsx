@@ -4,6 +4,8 @@ import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { useSteadyRefresh } from '@/components/useSteadyRefresh'
 import CategorySelect, { NEW_TYPE } from './CategorySelect'
 import PdfLink from '@/components/PdfLink'
+import CloseButton from '@/components/CloseButton'
+import TrashIcon from '@/components/TrashIcon'
 import {
   GEAR_CATEGORIES, gearQuantity, isChoice, matchesGear, placeSets, productName, unwrap,
   type CatalogItem, type Joiner,
@@ -787,7 +789,7 @@ function SectionCard({
             title={isDraft ? 'Discard this section' : 'Delete this section and its gear'}
             className="shrink-0 text-xs text-zinc-600 hover:text-red-400 transition-colors disabled:opacity-40"
           >
-            ×
+            <TrashIcon />
           </button>
         </div>
       )}
@@ -926,7 +928,7 @@ function JoinControls({
           title="Unrelated — both are simply required"
           className={PAIR_BTN}
         >
-          ×
+          <TrashIcon />
         </button>
       )}
     </span>
@@ -1303,7 +1305,7 @@ function Row({
                       title={`Take the ${productName(o)} off this line`}
                       className="text-zinc-500 hover:text-red-400 transition-colors disabled:opacity-40"
                     >
-                      ×
+                      <TrashIcon />
                     </button>
                   </span>
                 </Fragment>
@@ -1350,13 +1352,20 @@ function Row({
           />
         </div>
         <button
-          onClick={() => apply(
-            (es) => es.filter((x) => x.id !== e.id),
-            () => onRow(e.id, (id) => removeGearEntry(id, instanceId))
-          )}
+          onClick={() => {
+            // The same mark closes an editor everywhere else on the site, so
+            // this one asks first — and it takes the row's quantity rule and
+            // any models named on it along with the name.
+            if (!confirm(`Take “${e.r.name}” off this list?`)) return
+            apply(
+              (es) => es.filter((x) => x.id !== e.id),
+              () => onRow(e.id, (id) => removeGearEntry(id, instanceId))
+            )
+          }}
+          title={`Take “${e.r.name}” off this list`}
           className="shrink-0 text-xs text-zinc-600 hover:text-red-400 transition-colors"
         >
-          ×
+          <TrashIcon />
         </button>
       </div>
 
@@ -1764,16 +1773,7 @@ function AddGear({
         {/* The panel stays open across adds, so closing it is a deliberate act
             and needs to look like one — a bare word beside a full-width search
             box read as a label, not a control. Escape closes it too. */}
-        <button
-          onClick={onClose}
-          title="Close (Esc)"
-          className="shrink-0 flex items-center gap-1.5 px-2.5 py-2 rounded border border-zinc-700 text-xs text-zinc-300 hover:text-white hover:border-zinc-500 hover:bg-zinc-800/60 transition-colors"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M18 6 6 18M6 6l12 12" />
-          </svg>
-          Done
-        </button>
+        <CloseButton onClick={onClose} label="Done (Esc)" className="shrink-0" />
       </div>
 
       <div className="flex flex-wrap gap-1.5">

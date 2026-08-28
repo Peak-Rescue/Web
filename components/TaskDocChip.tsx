@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { LinkIcon, PencilIcon } from '@/components/TaskIcons'
+import TrashIcon from '@/components/TrashIcon'
 
 // Attachment chip with inline rename — shared by CourseTasksPanel and
 // MyTasksList. Rename/delete fire the parent's action runner, which owns
@@ -82,7 +83,7 @@ export default function TaskDocChip({
             <PencilIcon />
           </button>
           <button onClick={onDelete} title="Delete" className="text-zinc-500 hover:text-pr-red-light">
-            ×
+            <TrashIcon />
           </button>
         </>
       )}
