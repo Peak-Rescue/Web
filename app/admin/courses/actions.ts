@@ -8,6 +8,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { contactsFromForm } from '@/lib/contacts'
 import { syncCourseCalendar, removeCourseEvent } from '@/lib/google-calendar'
 import { isValidRegion } from '@/lib/regions'
+import { requireCourseStaff } from '@/lib/course-access'
 
 const fmtLong = (d: string) =>
   new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
@@ -428,7 +429,7 @@ export async function removeOffDay(instanceId: string, offDayId: string) {
 }
 
 export async function addModule(instanceId: string, formData: FormData) {
-  await requireAdmin()
+  await requireCourseStaff(instanceId)
   const admin = createAdminClient()
 
   const title    = formData.get('title') as string
@@ -453,7 +454,7 @@ export async function addModule(instanceId: string, formData: FormData) {
 }
 
 export async function deleteModule(instanceId: string, moduleId: string) {
-  await requireAdmin()
+  await requireCourseStaff(instanceId)
 
   const { error } = await createAdminClient()
     .from('course_modules')
@@ -472,7 +473,7 @@ export async function setModuleAudience(
   moduleId: string,
   audience: 'internal' | 'shared'
 ) {
-  await requireAdmin()
+  await requireCourseStaff(instanceId)
 
   // course_modules keeps the older three-value enum, where 'both' is the
   // shared case and 'instructor' the internal one. moduleAudience() folds
@@ -488,7 +489,7 @@ export async function setModuleAudience(
 }
 
 export async function addItem(instanceId: string, moduleId: string, formData: FormData) {
-  await requireAdmin()
+  await requireCourseStaff(instanceId)
   const admin = createAdminClient()
 
   const title       = formData.get('title') as string
@@ -560,7 +561,11 @@ export async function addLibraryItems(instanceId: string, moduleId: string, item
 // have had a save of the welcome text quietly null the meeting point — on the
 // morning of, on a course where that is the one thing nobody can guess.
 export async function updateCourseLogistics(id: string, formData: FormData) {
-  await requireAdmin()
+  // The welcome is delivery content — it is what a student reads first, and it
+  // is written by whoever is running the course. Same gate as the notes and
+  // the schedule beside it.
+  const { requireCourseStaff } = await import('@/lib/course-access')
+  await requireCourseStaff(id)
   const patch: Record<string, string | null> = {}
   for (const field of ['intro', 'meeting_point', 'meeting_time']) {
     if (!formData.has(field)) continue
@@ -581,7 +586,7 @@ export async function updateCourseLogistics(id: string, formData: FormData) {
 // items on every course-page render cost about half a second whether or not
 // anyone opened a picker — and every delete revalidates the page.
 export async function loadPickerItems(instanceId: string) {
-  await requireAdmin()
+  await requireCourseStaff(instanceId)
   const admin = createAdminClient()
 
   const [{ data: inst }, { data: rows }] = await Promise.all([
@@ -839,7 +844,7 @@ export async function removeCourseItems(instanceId: string, itemIds: string[]) {
 
 // Per-course visibility override; null restores the library item's own level.
 export async function setItemAudience(instanceId: string, itemId: string, audience: 'internal' | 'shared' | null) {
-  await requireAdmin()
+  await requireCourseStaff(instanceId)
   const { error } = await createAdminClient()
     .from('course_items')
     .update({ audience })
@@ -850,7 +855,7 @@ export async function setItemAudience(instanceId: string, itemId: string, audien
 }
 
 export async function deleteItem(instanceId: string, itemId: string) {
-  await requireAdmin()
+  await requireCourseStaff(instanceId)
 
   const { error } = await createAdminClient()
     .from('course_items')

@@ -27,7 +27,7 @@ import QuotesSection, { type QuoteRow } from '../QuotesSection'
 import CourseContactsEditor from '@/components/CourseContactsEditor'
 import { parseContacts, primaryContactEmail, ccEmailOptions } from '@/lib/contacts'
 import { loadTasksWithDocs } from '@/lib/course-tasks'
-import { courseDisplayName, courseShortName, computeBlocks } from '@/lib/courses'
+import { courseDisplayName, courseShortName, computeBlocks, courseDates } from '@/lib/courses'
 import { courseCapabilityCategories, courseSector } from '@/lib/capabilities'
 import { moduleAudience, type LibraryAudience } from '@/lib/library'
 import LibraryPicker, { type PickerItem } from '../LibraryPicker'
@@ -53,6 +53,7 @@ import { regionLabel } from '@/lib/regions'
 import MeetingDetails from '@/app/portal/[id]/MeetingDetails'
 import { courseNotifyCounts } from '@/lib/course-notify'
 import { meetingDetails, meetingDayPassed } from '@/lib/meeting-details'
+import CourseCurriculumEditor from '../CourseCurriculumEditor'
 
 const STATUS_STYLES: Record<string, string> = {
   tentative: 'bg-yellow-900/40 text-yellow-300 border-yellow-700',
@@ -539,7 +540,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
   // Schedule: this course's running order and any templates for this offering.
   const [{ data: scheduleRows }, { data: scheduleTemplateRows }, { data: siteRows }] = await Promise.all([
     gearAdmin.from('course_schedules')
-      .select('id, name, overview, objectives, instance_id, is_template, schedule_days(id, title, location, site_id, notes, objectives, sort_order, schedule_blocks(id, parent_id, title, time_label, location, sort_order))')
+      .select('id, name, overview, objectives, instance_id, is_template, schedule_days(id, title, location, site_id, notes, objectives, meeting_point, meeting_point_id, meeting_time, meeting_note, sort_order, schedule_blocks(id, parent_id, title, time_label, location, sort_order))')
       .eq('instance_id', id)
       .limit(1),
     gearAdmin.from('course_schedules')
@@ -547,14 +548,28 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
       .eq('is_template', true),
     // Sites a day can point at instead of retyping the canyon's beta.
     gearAdmin.from('sites')
-      .select('id, name, kind, beta, venue_id, venues(name)')
+      .select('id, name, kind, beta, meeting_point_id, usual_meeting_time, venue_id, venues(name)')
       .eq('active', true)
       .order('name'),
   ])
   const schedule = ((scheduleRows ?? []) as unknown as Schedule[])[0] ?? null
   const siteOptions = ((siteRows ?? []) as unknown as {
-    id: string; name: string; kind: string | null; beta: string | null; venue_id: string | null; venues: { name: string } | null
-  }[]).map((s) => ({ id: s.id, name: s.name, kind: s.kind, beta: s.beta, venue_id: s.venue_id, venue_name: s.venues?.name ?? null }))
+    id: string; name: string; kind: string | null; beta: string | null; meeting_point_id: string | null; usual_meeting_time: string | null; venue_id: string | null; venues: { name: string } | null
+  }[]).map((s) => ({
+    id: s.id, name: s.name, kind: s.kind, beta: s.beta,
+    meeting_point_id: s.meeting_point_id, usual_meeting_time: s.usual_meeting_time,
+    venue_id: s.venue_id, venue_name: s.venues?.name ?? null,
+  }))
+  const { data: meetingPointRows } = await gearAdmin
+    .from('meeting_points').select('id, name, venue_id').eq('active', true).order('name')
+  const meetingPointOptions = (meetingPointRows ?? []) as { id: string; name: string; venue_id: string | null }[]
+  // Same derivation as the portal: a schedule day is the Nth date the course
+  // actually runs, off days removed.
+  const scheduleDayDates = (() => {
+    const running = courseDates(inst.starts_at, inst.ends_at, offDays ?? [])
+    const days = [...(schedule?.schedule_days ?? [])].sort((a, b) => a.sort_order - b.sort_order)
+    return days.map((_, i) => running[i] ?? null)
+  })()
   const scheduleTemplates = ((scheduleTemplateRows ?? []) as unknown as {
     id: string; name: string; description: string | null; course_type: string | null; schedule_days: unknown[]
   }[])
@@ -868,7 +883,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
               canEdit
               notifyCounts={notifyCounts}
               announcedDates={(inst.meeting_announced_dates as string[] | null) ?? []}
-              passed={meetingDayPassed(meeting.meetingDate, inst.starts_at as string | null)}
+              folded={meetingDayPassed(meeting.meetingDate, inst.starts_at as string | null)}
             />
           </div>
           </div>
@@ -1004,6 +1019,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
             schedule={schedule}
             templates={scheduleTemplates}
             sites={siteOptions}
+            meetingPoints={meetingPointOptions}
             venueId={inst.venue_id}
           />
         </TabPanel>
@@ -1054,143 +1070,13 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
 
         <TabPanel id="content">
           <h2 className="text-lg font-semibold mb-4">Curriculum</h2>
-
-          <TemplatePicker instanceId={id} templates={templates} />
-
-          <SuggestedContent
+          <CourseCurriculumEditor
             instanceId={id}
+            modules={orderedModules}
+            templates={templates}
             courseDisciplines={matchingCategories}
-            existingItemIds={(modules ?? []).flatMap(m =>
-              (m.course_items ?? []).map(ci => ci.library_item_id).filter((x): x is string => Boolean(x))
-            )}
+            knownSectionNames={knownSectionNames}
           />
-
-          <div className="space-y-6 mb-6">
-            {orderedModules.map(mod => {
-              const items = (mod.course_items ?? []).slice().sort((a, b) => a.order - b.order)
-              const deleteModWithArgs = deleteModule.bind(null, id, mod.id)
-              const addItemWithArgs = addItem.bind(null, id, mod.id)
-
-              return (
-                <div key={mod.id} className="bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden">
-                  <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium">{mod.title}</span>
-                      <AudienceSetter
-                        audience={moduleAudience(mod.audience)}
-                        noun="this section"
-                        action={async (next) => { 'use server'; await setModuleAudience(id, mod.id, next) }}
-                      />
-                    </div>
-                    <form action={deleteModWithArgs}>
-                      <button type="submit" className="text-xs text-zinc-600 hover:text-red-400 transition-colors">Delete section</button>
-                    </form>
-                  </div>
-
-                  {items.map(item => {
-                    // Library-backed rows take their title/link from the library
-                    // entry, so an edit there reaches every course at once.
-                    // Supabase types the embedded row as an array; it's a
-                    // single FK join, so take the first (or null).
-                    const libRaw = item.library_items as unknown
-                    const lib: LibItem | null = Array.isArray(libRaw) ? (libRaw[0] ?? null) : (libRaw as LibItem | null)
-                    const title = lib?.title ?? item.title
-                    const url = lib?.url ?? item.url
-                    const effective = item.audience ?? lib?.audience ?? 'shared'
-                    return (
-                      <div key={item.id} className="flex items-start justify-between px-4 py-3 border-b border-zinc-800/60 last:border-0">
-                        <div className="flex items-start gap-3 min-w-0">
-                          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="mt-0.5 shrink-0 text-zinc-500">
-                            <path d={ITEM_ICON[(item.type ?? 'link') as keyof typeof ITEM_ICON]} />
-                          </svg>
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              {url
-                                ? <a href={url} target="_blank" rel="noreferrer" className="text-sm font-medium hover:text-pr-red-light transition-colors">{title}</a>
-                                : <span className="text-sm font-medium">{title}</span>}
-                              {lib && <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-500">library</span>}
-                              {/* Inside an instructors-only section there is
-                                  nothing to decide — students see none of it
-                                  either way, so the control would be a lie.
-                                  The instructors pill is dropped because the
-                                  section header two lines up already says it. */}
-                              {moduleAudience(mod.audience) === 'shared' && (
-                                <AudienceSetter
-                                  audience={effective}
-                                  noun="this item"
-                                  showInstructors={false}
-                                  action={async (next) => { 'use server'; await setItemAudience(id, item.id, next) }}
-                                />
-                              )}
-                            </div>
-                            {item.description && <p className="text-xs text-zinc-500 mt-0.5">{item.description}</p>}
-                          </div>
-                        </div>
-                        <RemovableRow
-                          onRemove={async () => { 'use server'; await deleteItem(id, item.id) }}
-                          label="×"
-                          className="ml-4 shrink-0"
-                        />
-                      </div>
-                    )
-                  })}
-
-                  <div className="px-4 py-3 bg-zinc-950/50 border-t border-zinc-800/60">
-                    <LibraryPicker
-                      instanceId={id}
-                      moduleId={mod.id}
-                      moduleAudience={moduleAudience(mod.audience)}
-                      courseDisciplines={matchingCategories}
-                    />
-                  </div>
-
-                  <form action={addItemWithArgs} className="flex flex-col sm:flex-row gap-2 px-4 py-3 bg-zinc-950/50">
-                    <input name="title" required placeholder="Item title" className="flex-1 bg-zinc-800 border border-zinc-700 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-zinc-500" />
-                    <select name="type" className="bg-zinc-800 border border-zinc-700 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-zinc-500">
-                      <option value="doc">Doc</option>
-                      <option value="video">Video</option>
-                      <option value="link">Link</option>
-                    </select>
-                    <input name="url" required placeholder="https://…" className="flex-[2] bg-zinc-800 border border-zinc-700 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-zinc-500" />
-                    <input name="description" placeholder="Description (optional)" className="flex-[2] bg-zinc-800 border border-zinc-700 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-zinc-500" />
-                    <button type="submit" className="px-3 py-1.5 bg-pr-red hover:bg-pr-red-dark text-white rounded text-sm font-medium transition-colors whitespace-nowrap">Add</button>
-                  </form>
-                </div>
-              )
-            })}
-          </div>
-
-          {(modules ?? []).length === 0 && (
-            <p className="text-sm text-zinc-500 mb-3">
-              Add a section below, then pull items into it from the{' '}
-              <Link href={LIBRARY_HREF} className="underline hover:text-zinc-300">content library</Link>.
-            </p>
-          )}
-
-          <form action={addModuleWithId} className="flex gap-2 flex-wrap items-end p-4 bg-zinc-900 border border-dashed border-zinc-700 rounded-lg">
-            <div>
-              <label className="block text-xs text-zinc-500 mb-1">New section title</label>
-              <input
-                name="title"
-                required
-                list="section-name-suggestions"
-                autoComplete="off"
-                placeholder="e.g. Anchor Station Rigging"
-                className="bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500 w-64"
-              />
-              <datalist id="section-name-suggestions">
-                {knownSectionNames.map((n) => <option key={n} value={n} />)}
-              </datalist>
-            </div>
-            <div>
-              <label className="block text-xs text-zinc-500 mb-1">Visible to</label>
-              <select name="audience" className="bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500">
-                <option value="both">Students &amp; instructors</option>
-                <option value="instructor">Instructors only</option>
-              </select>
-            </div>
-            <button type="submit" className="px-4 py-2 bg-pr-red hover:bg-pr-red-dark text-white rounded text-sm font-medium transition-colors">Add section</button>
-          </form>
         </TabPanel>
 
         {showPricing && (
