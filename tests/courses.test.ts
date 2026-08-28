@@ -1,0 +1,52 @@
+import { describe, it, expect } from 'vitest'
+import { courseDates, computeBlocks } from '@/lib/courses'
+
+// A schedule day has no date of its own — it is the Nth date the course runs.
+// Announcing a morning depends on this being right, and a template day must
+// never gain a date, which is why it is derived rather than stored.
+describe('courseDates', () => {
+  it('lists every running day in order', () => {
+    expect(courseDates('2026-08-24', '2026-08-28', [])).toEqual([
+      '2026-08-24', '2026-08-25', '2026-08-26', '2026-08-27', '2026-08-28',
+    ])
+  })
+
+  it('skips a single off day, so day 4 is the 4th day worked', () => {
+    const days = courseDates('2026-08-24', '2026-08-28', [{ off_date: '2026-08-26' }])
+    expect(days).toEqual(['2026-08-24', '2026-08-25', '2026-08-27', '2026-08-28'])
+    expect(days[2]).toBe('2026-08-27')
+  })
+
+  it('skips a range of off days', () => {
+    expect(courseDates('2026-08-24', '2026-08-30', [{ off_date: '2026-08-26', end_date: '2026-08-28' }]))
+      .toEqual(['2026-08-24', '2026-08-25', '2026-08-29', '2026-08-30'])
+  })
+
+  it('handles a one-day course', () => {
+    expect(courseDates('2026-08-24', '2026-08-24', [])).toEqual(['2026-08-24'])
+  })
+
+  it('treats a missing end date as a one-day course', () => {
+    expect(courseDates('2026-08-24', null, [])).toEqual(['2026-08-24'])
+  })
+
+  it('has nothing to say when the course has no dates', () => {
+    expect(courseDates(null, null, [])).toEqual([])
+  })
+
+  // A schedule with more days than the course runs leaves the extras dateless,
+  // and the caller shows that rather than guessing.
+  it('runs out rather than inventing dates', () => {
+    const running = courseDates('2026-08-24', '2026-08-25', [])
+    expect(running[4]).toBeUndefined()
+  })
+})
+
+describe('computeBlocks', () => {
+  it('splits a course either side of its off days', () => {
+    expect(computeBlocks('2026-08-24', '2026-08-28', [{ off_date: '2026-08-26' }])).toEqual([
+      { starts_at: '2026-08-24', ends_at: '2026-08-25' },
+      { starts_at: '2026-08-27', ends_at: '2026-08-28' },
+    ])
+  })
+})
