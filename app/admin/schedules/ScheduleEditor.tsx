@@ -1,54 +1,19 @@
 'use client'
 
-import { useMemo, useState, type ComponentProps, type ReactNode } from 'react'
+import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   updateSchedule, addScheduleDay, updateScheduleDay, removeScheduleDay,
   copySchedule, saveScheduleIntoTemplate,
 } from './actions'
-import DayOutline from './DayOutline'
+import ScheduleDayCard from './ScheduleDayCard'
+export type {
+  Schedule, ScheduleDay, ScheduleBlock, SiteOption, MeetingPointOption, ScheduleTemplateOption,
+} from './types'
+import type {
+  Schedule, SiteOption, MeetingPointOption, ScheduleTemplateOption,
+} from './types'
 import PdfLink from '@/components/PdfLink'
-
-export type ScheduleTemplateOption = { id: string; name: string; days: number }
-
-export type ScheduleBlock = {
-  id: string
-  parent_id: string | null
-  title: string
-  time_label: string | null
-  location: string | null
-  sort_order: number
-}
-
-export type SiteOption = {
-  id: string
-  name: string
-  kind: string | null
-  beta: string | null
-  venue_id?: string | null
-  venue_name?: string | null
-}
-
-export type ScheduleDay = {
-  id: string
-  title: string
-  location: string | null
-  site_id: string | null
-  notes: string | null
-  objectives: string[]
-  sort_order: number
-  schedule_blocks: ScheduleBlock[]
-}
-
-export type Schedule = {
-  id: string
-  name: string
-  overview: string | null
-  objectives: string[]
-  instance_id: string | null
-  is_template: boolean
-  schedule_days: ScheduleDay[]
-}
 
 // Builds the running order the way the real outlines are written: an overview,
 // optional learning objectives, then a day per day — each with its own
@@ -58,7 +23,9 @@ export default function ScheduleEditor({
   schedule,
   courseType,
   templates,
+  canTemplate = true,
   sites = [],
+  meetingPoints = [],
   venueId = null,
 }: {
   schedule: Schedule
@@ -66,9 +33,18 @@ export default function ScheduleEditor({
   // The schedule shelf's templates, so a running order refined on a course can
   // be saved back over the one it started from.
   templates?: ScheduleTemplateOption[]
+  // Whether the shelf is this person's to write to at all. Both ways onto it —
+  // a new template and over an existing one — reach every course built from it
+  // afterwards, which is a blast radius that doesn't come with a course
+  // assignment. Default true: the admin screens are the ones that had this
+  // before it was a question.
+  canTemplate?: boolean
   // Canyons and crags with beta already written. A day picks one instead of
   // retyping what the place is like.
   sites?: SiteOption[]
+  // Where a day can be told to gather instead of the site's usual — the
+  // carpool lot, the gas station, the morning we start at the shop.
+  meetingPoints?: MeetingPointOption[]
   // The course's venue. A Maui course shouldn't have to scroll past every crag
   // in Washington to find Emerald, so the venue's own sites come first and the
   // rest sit under a heading you have to mean to reach.
@@ -89,28 +65,20 @@ export default function ScheduleEditor({
     [schedule.schedule_days, removed]
   )
 
-  // The course's own venue first, then everywhere else — the list is one
-  // dropdown, so the ordering is the only thing making a Maui course feel like
-  // it knows it's on Maui.
-  const siteGroups = useMemo(() => {
-    const here = sites.filter((s) => venueId && s.venue_id === venueId)
-    const rest = sites.filter((s) => !here.includes(s))
-    const restBy = new Map<string, SiteOption[]>()
-    for (const s of rest) {
-      const k = s.venue_name ?? 'Elsewhere'
-      restBy.set(k, [...(restBy.get(k) ?? []), s])
-    }
-    return [
-      ...(here.length ? [{ name: here[0].venue_name ?? 'This venue', sites: here }] : []),
-      ...[...restBy.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([name, sites]) => ({ name, sites })),
-    ]
-  }, [sites, venueId])
-
   // Reports whether it landed, so a caller that already took the change on
   // screen can put it back if the server disagreed.
-  async function run(fn: () => Promise<unknown>) {
+  //
+  // Quiet saves skip the re-render. Every text field here is uncontrolled, so
+  // what you typed is already on screen and the refresh only redraws the page
+  // behind the editor — which on the course portal means re-reading the
+  // roster, the gear catalog, the waivers and a dozen signed URLs, about a
+  // second and a half of server work per blur. Structural changes still
+  // refresh, because a new day or a copied template is only on screen once the
+  // server says so. `touch()` has already told the pages they're stale either
+  // way, so the next navigation is fresh regardless.
+  async function run(fn: () => Promise<unknown>, opts?: { quiet?: boolean }) {
     setBusy(true); setError(null)
-    try { await fn(); router.refresh(); return true }
+    try { await fn(); if (!opts?.quiet) router.refresh(); return true }
     catch (e) { setError(e instanceof Error ? e.message : 'That didn’t save'); return false }
     finally { setBusy(false) }
   }
@@ -129,9 +97,9 @@ export default function ScheduleEditor({
 
       <textarea
         defaultValue={schedule.overview ?? ''}
-        onBlur={(e) => e.target.value !== (schedule.overview ?? '') && run(() => updateSchedule(schedule.id, { overview: e.target.value }))}
+        onBlur={(e) => e.target.value !== (schedule.overview ?? '') && run(() => updateSchedule(schedule.id, { overview: e.target.value }), { quiet: true })}
         rows={3}
-        placeholder="Course overview — who it's for, what they'll walk away able to do"
+        placeholder="Course overview"
         className={`w-full resize-y ${input}`}
       />
 
@@ -142,7 +110,7 @@ export default function ScheduleEditor({
           onBlur={(e) => {
             const next = e.target.value.split('\n').map((s) => s.trim()).filter(Boolean)
             if (next.join('\n') !== schedule.objectives.join('\n')) {
-              run(() => updateSchedule(schedule.id, { objectives: next }))
+              run(() => updateSchedule(schedule.id, { objectives: next }), { quiet: true })
             }
           }}
           rows={3}
@@ -151,109 +119,16 @@ export default function ScheduleEditor({
       </div>
 
       {days.map((day) => (
-        <div key={day.id} className="border border-zinc-800 rounded-lg overflow-hidden">
-          <div className="bg-zinc-900 px-3 py-2 space-y-2">
-            <div className="flex items-center gap-2">
-              <input
-                defaultValue={day.title}
-                onBlur={(e) => e.target.value !== day.title && run(() => updateScheduleDay(day.id, { title: e.target.value }))}
-                placeholder="Day 1: Basic rope skills"
-                className={`flex-1 font-medium ${input}`}
-              />
-              <button
-                onClick={() => {
-                  if (!confirm(`Remove "${day.title}"?`)) return
-                  setRemoved((r) => [...r, day.id])
-                  void run(() => removeScheduleDay(day.id)).then((ok) => {
-                    if (!ok) setRemoved((r) => r.filter((x) => x !== day.id))
-                  })
-                }}
-                className="shrink-0 text-xs text-zinc-600 hover:text-red-400 transition-colors"
-              >
-                Remove day
-              </button>
-            </div>
-            <div className="grid sm:grid-cols-2 gap-2">
-              <Marked icon={<PinIcon />}>
-                <input
-                  defaultValue={day.location ?? ''}
-                  onBlur={(e) => e.target.value !== (day.location ?? '') && run(() => updateScheduleDay(day.id, { location: e.target.value }))}
-                  placeholder="Location"
-                  className={`w-full pl-7 ${input}`}
-                />
-              </Marked>
-              {/* Picking the canyon is what stops its beta being retyped per
-                  course. Left unset, the day behaves exactly as it always
-                  has — a free-text location and its own notes. */}
-              {sites.length > 0 && (
-                <Marked icon={<RouteIcon />}>
-                  <select
-                    value={day.site_id ?? ''}
-                    onChange={(e) => run(() => updateScheduleDay(day.id, { site_id: e.target.value || null }))}
-                    className={`w-full pl-7 ${input} ${day.site_id ? 'text-zinc-200' : 'text-zinc-500'}`}
-                  >
-                    <option value="">No site — notes only</option>
-                    {siteGroups.map((g) => (
-                      <optgroup key={g.name} label={g.name}>
-                        {g.sites.map((s) => (
-                          <option key={s.id} value={s.id}>
-                            {s.name}{s.kind ? ` · ${s.kind}` : ''}
-                          </option>
-                        ))}
-                      </optgroup>
-                    ))}
-                  </select>
-                </Marked>
-              )}
-            </div>
-            {/* The beta as the day will show it, read-only here: this is the
-                site's, and editing it belongs on the site, where the fix
-                reaches every other course too. */}
-            {(() => {
-              const site = sites.find((s) => s.id === day.site_id)
-              if (!site?.beta) return null
-              return (
-                <div className="rounded border border-zinc-800 bg-zinc-950/60 px-2.5 py-2">
-                  <p className="text-[10px] uppercase tracking-wide text-zinc-600 mb-1">
-                    Beta from {site.name} ·{' '}
-                    <a href="/admin/sites" className="underline hover:text-zinc-400 transition-colors">edit on the site</a>
-                  </p>
-                  <p className="text-[11px] text-zinc-500 whitespace-pre-line leading-relaxed line-clamp-6">{site.beta}</p>
-                </div>
-              )
-            })()}
-            {/* A day at a canyon carries its beta here — approach, rap count,
-                exit — so this one starts a line tall and grows to whatever got
-                pasted in. Sitting half-width beside the location, a paragraph
-                of it was a keyhole. */}
-            <Marked icon={<NoteIcon />} top>
-              <Grows
-                defaultValue={day.notes ?? ''}
-                onBlur={(e) => e.target.value !== (day.notes ?? '') && run(() => updateScheduleDay(day.id, { notes: e.target.value }))}
-                placeholder="Notes — what’s true of this day only: what to bring, who’s running it, what you’re skipping"
-                className={`w-full pl-7 ${input}`}
-              />
-            </Marked>
-            {/* What the day is for, as opposed to what happens on it — the
-                course objectives are too coarse to teach a Tuesday from. */}
-            <Marked icon={<TargetIcon />} top>
-              <textarea
-                defaultValue={day.objectives.join('\n')}
-                onBlur={(e) => {
-                  const next = e.target.value.split('\n').map((o) => o.trim()).filter(Boolean)
-                  if (next.join('\n') !== day.objectives.join('\n')) {
-                    run(() => updateScheduleDay(day.id, { objectives: next }))
-                  }
-                }}
-                rows={2}
-                placeholder="Objectives for this day — one per line, optional"
-                className={`w-full resize-y pl-7 ${input}`}
-              />
-            </Marked>
-          </div>
-
-          <DayOutline dayId={day.id} blocks={day.schedule_blocks} onError={setError} />
-        </div>
+        <ScheduleDayCard
+          key={day.id}
+          day={day}
+          sites={sites}
+          meetingPoints={meetingPoints}
+          venueId={venueId}
+          onRemoving={(id) => setRemoved((r) => [...r, id])}
+          onRemoveFailed={(id) => setRemoved((r) => r.filter((x) => x !== id))}
+          onError={setError}
+        />
       ))}
 
       <div className="flex flex-wrap gap-3 items-center">
@@ -264,7 +139,7 @@ export default function ScheduleEditor({
         >
           + Day
         </button>
-        {!schedule.is_template && (
+        {!schedule.is_template && canTemplate && (
           <SaveToShelf
             schedule={schedule} templates={templates ?? []} courseType={courseType}
             busy={busy} run={run} input={input}
@@ -332,87 +207,5 @@ function SaveToShelf({
         </>
       )}
     </div>
-  )
-}
-
-// A placeholder only says what a field is until you fill it in — after that,
-// two grey lines under a day title are just two grey lines. These are the same
-// marks the course page reads with, so the field you type into is the one the
-// students see.
-// An uncontrolled textarea sized to its content, on mount and on every
-// keystroke, so nothing it holds is hidden behind a scrollbar.
-function Grows(props: ComponentProps<'textarea'>) {
-  function fit(el: HTMLTextAreaElement | null) {
-    if (!el) return
-    el.style.height = 'auto'
-    el.style.height = `${el.scrollHeight}px`
-  }
-  return (
-    <textarea
-      {...props}
-      ref={fit}
-      rows={1}
-      onInput={(e) => { fit(e.currentTarget); props.onInput?.(e) }}
-      className={`resize-none overflow-hidden ${props.className ?? ''}`}
-    />
-  )
-}
-
-function Marked({ icon, top, children }: { icon: ReactNode; top?: boolean; children: ReactNode }) {
-  return (
-    <div className="relative">
-      <span
-        aria-hidden
-        className={`absolute left-2 text-zinc-600 ${top ? 'top-2.5' : 'top-1/2 -translate-y-1/2'}`}
-      >
-        {icon}
-      </span>
-      {children}
-    </div>
-  )
-}
-
-const glyph = {
-  xmlns: 'http://www.w3.org/2000/svg', width: 12, height: 12, viewBox: '0 0 24 24',
-  fill: 'none', stroke: 'currentColor', strokeWidth: 1.75,
-  strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const,
-}
-
-// A line with waypoints on it — a route, as opposed to the pin's single spot.
-function RouteIcon() {
-  return (
-    <svg {...glyph} aria-hidden>
-      <circle cx="6" cy="19" r="3" />
-      <circle cx="18" cy="5" r="3" />
-      <path d="M9 19h4a4 4 0 0 0 0-8h-2a4 4 0 0 1 0-8h4" />
-    </svg>
-  )
-}
-
-function PinIcon() {
-  return (
-    <svg {...glyph}>
-      <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
-      <circle cx="12" cy="10" r="3" />
-    </svg>
-  )
-}
-
-function NoteIcon() {
-  return (
-    <svg {...glyph}>
-      <path d="M15 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h9l5-5V5a2 2 0 0 0-2-2Z" />
-      <path d="M14 21v-3a2 2 0 0 1 2-2h3" />
-    </svg>
-  )
-}
-
-function TargetIcon() {
-  return (
-    <svg {...glyph}>
-      <circle cx="12" cy="12" r="9" />
-      <circle cx="12" cy="12" r="4.5" />
-      <circle cx="12" cy="12" r="0.5" fill="currentColor" />
-    </svg>
   )
 }

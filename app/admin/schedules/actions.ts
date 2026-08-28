@@ -4,14 +4,44 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 
-async function requireAdmin() {
+// Who may edit a running order, in two steps: who is asking, then whether
+// this particular schedule is theirs to touch.
+//
+// It is two steps because the answer depends on the course behind the row, and
+// days and blocks only know their parent — so the instance has to be looked up
+// before the question can be asked. Every write resolves it first and then
+// authorizes, rather than authorizing on the way past.
+async function whoIsAsking() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('Not authenticated')
   const admin = createAdminClient()
   const { data: profile } = await admin.from('profiles').select('role').eq('id', user.id).single()
-  if (profile?.role !== 'admin') throw new Error('Not authorized')
-  return admin
+  return { admin, userId: user.id, isSiteAdmin: profile?.role === 'admin' }
+}
+
+type Asker = Awaited<ReturnType<typeof whoIsAsking>>
+
+// A course's running order belongs to the people running that course. An
+// assigned instructor sets tomorrow's plan far more often than an admin does,
+// and making them ask for it is how the plan ends up in a text message instead
+// of on the page everyone is reading.
+//
+// A template belongs to no course, which is exactly why it stays admin-only:
+// editing one reaches every course built from it afterwards, and that is not a
+// blast radius to hand out with a course assignment. Null instance means
+// template — the same test, deliberately, so a new caller that forgets to
+// resolve its course is refused rather than waved through.
+async function mayEdit(asker: Asker, instanceId: string | null) {
+  if (asker.isSiteAdmin) return
+  if (!instanceId) throw new Error('Not authorized')
+  const { data } = await asker.admin
+    .from('instance_instructors')
+    .select('id, instructors!inner(profile_id)')
+    .eq('instance_id', instanceId)
+    .eq('instructors.profile_id', asker.userId)
+    .maybeSingle()
+  if (!data) throw new Error('Not authorized')
 }
 
 function touch(instanceId?: string | null) {
@@ -51,7 +81,10 @@ export async function createSchedule(input: {
   isTemplate?: boolean
   days?: number
 }) {
-  const admin = await requireAdmin()
+  const asker = await whoIsAsking()
+  // A template is nobody's course, so asking for one asks for admin.
+  await mayEdit(asker, input.isTemplate ? null : input.instanceId ?? null)
+  const admin = asker.admin
   const { data, error } = await admin
     .from('course_schedules')
     .insert({
@@ -95,7 +128,10 @@ export async function updateSchedule(
     topics?: string[]
   }
 ) {
-  const admin = await requireAdmin()
+  const asker = await whoIsAsking()
+  const admin = asker.admin
+  const instanceId = await instanceOfSchedule(admin, id)
+  await mayEdit(asker, instanceId)
   const update: Record<string, unknown> = { updated_at: new Date().toISOString() }
   if (patch.name !== undefined) update.name = patch.name.trim().slice(0, 120) || 'Schedule'
   if (patch.overview !== undefined) update.overview = patch.overview?.trim() || null
@@ -108,15 +144,16 @@ export async function updateSchedule(
   if (patch.topics !== undefined) {
     update.topics = [...new Set(patch.topics.map((t) => t.trim()).filter(Boolean))]
   }
-  const { data, error } = await admin
-    .from('course_schedules').update(update).eq('id', id).select('instance_id').single()
+  const { error } = await admin.from('course_schedules').update(update).eq('id', id)
   if (error) throw new Error(error.message)
-  touch(data?.instance_id)
+  touch(instanceId)
 }
 
 export async function deleteSchedule(id: string) {
-  const admin = await requireAdmin()
+  const asker = await whoIsAsking()
+  const admin = asker.admin
   const instanceId = await instanceOfSchedule(admin, id)
+  await mayEdit(asker, instanceId)
   const { error } = await admin.from('course_schedules').delete().eq('id', id)
   if (error) throw new Error(error.message)
   touch(instanceId)
@@ -125,7 +162,10 @@ export async function deleteSchedule(id: string) {
 // ─── Days ───────────────────────────────────────────────────────────────────
 
 export async function addScheduleDay(scheduleId: string, title?: string) {
-  const admin = await requireAdmin()
+  const asker = await whoIsAsking()
+  const admin = asker.admin
+  const instanceId = await instanceOfSchedule(admin, scheduleId)
+  await mayEdit(asker, instanceId)
   const { data: last } = await admin
     .from('schedule_days').select('sort_order')
     .eq('schedule_id', scheduleId)
@@ -138,14 +178,29 @@ export async function addScheduleDay(scheduleId: string, title?: string) {
     sort_order: next,
   })
   if (error) throw new Error(error.message)
-  touch(await instanceOfSchedule(admin, scheduleId))
+  touch(instanceId)
 }
 
 export async function updateScheduleDay(
   id: string,
-  patch: { title?: string; location?: string | null; site_id?: string | null; notes?: string | null; objectives?: string[] }
+  patch: {
+    title?: string
+    location?: string | null
+    site_id?: string | null
+    notes?: string | null
+    objectives?: string[]
+    // The morning: the hour we meet, an override of the site's place for this
+    // day only, and the sentence that is true of this morning and no other.
+    meeting_point?: string | null
+    meeting_point_id?: string | null
+    meeting_time?: string | null
+    meeting_note?: string | null
+  }
 ) {
-  const admin = await requireAdmin()
+  const asker = await whoIsAsking()
+  const admin = asker.admin
+  const instanceId = await instanceOfDay(admin, id)
+  await mayEdit(asker, instanceId)
   const update: Record<string, unknown> = {}
   if (patch.title !== undefined) update.title = patch.title.trim().slice(0, 200) || 'Day'
   if (patch.location !== undefined) update.location = patch.location?.trim() || null
@@ -154,14 +209,20 @@ export async function updateScheduleDay(
   if (patch.objectives !== undefined) {
     update.objectives = patch.objectives.map((o) => o.trim().slice(0, 300)).filter(Boolean)
   }
+  if (patch.meeting_point !== undefined) update.meeting_point = patch.meeting_point?.trim() || null
+  if (patch.meeting_point_id !== undefined) update.meeting_point_id = patch.meeting_point_id || null
+  if (patch.meeting_time !== undefined) update.meeting_time = patch.meeting_time?.trim().slice(0, 40) || null
+  if (patch.meeting_note !== undefined) update.meeting_note = patch.meeting_note?.trim() || null
   const { error } = await admin.from('schedule_days').update(update).eq('id', id)
   if (error) throw new Error(error.message)
-  touch(await instanceOfDay(admin, id))
+  touch(instanceId)
 }
 
 export async function removeScheduleDay(id: string) {
-  const admin = await requireAdmin()
+  const asker = await whoIsAsking()
+  const admin = asker.admin
   const instanceId = await instanceOfDay(admin, id)
+  await mayEdit(asker, instanceId)
   const { error } = await admin.from('schedule_days').delete().eq('id', id)
   if (error) throw new Error(error.message)
   touch(instanceId)
@@ -221,11 +282,21 @@ export async function copySchedule(
   sourceId: string,
   target: { instanceId?: string | null; isTemplate?: boolean; name?: string; courseType?: string | null }
 ) {
-  const admin = await requireAdmin()
+  const asker = await whoIsAsking()
+  const admin = asker.admin
+  // The target is what gets written, so the target is what is authorized —
+  // starting a course from a template is a write to the course, not to the
+  // template. Asking for a new template asks for admin.
+  await mayEdit(asker, target.isTemplate ? null : target.instanceId ?? null)
 
   const { data: src } = await admin
-    .from('course_schedules').select(SOURCE_SELECT).eq('id', sourceId).single()
+    .from('course_schedules').select(`is_template, instance_id, ${SOURCE_SELECT}`).eq('id', sourceId).single()
   if (!src) throw new Error('Schedule not found')
+  // And the source is read, so it has to be a source this person could already
+  // read: the shelf's templates, or a course they are on. Guessing a uuid is
+  // not a realistic attack, but "copy any schedule by id" is not a capability
+  // worth leaving lying around either.
+  if (!src.is_template) await mayEdit(asker, src.instance_id as string | null)
 
   const { data: created, error } = await admin
     .from('course_schedules')
@@ -251,7 +322,10 @@ export async function copySchedule(
 // identity: name, description, tags. Courses already built from it keep their
 // own copy.
 export async function saveScheduleIntoTemplate(sourceId: string, templateId: string) {
-  const admin = await requireAdmin()
+  const asker = await whoIsAsking()
+  const admin = asker.admin
+  // The write lands on a template, which every future course reads.
+  await mayEdit(asker, null)
   if (sourceId === templateId) throw new Error('That schedule is the template')
 
   const { data: target } = await admin
@@ -295,7 +369,12 @@ export async function replaceDayOutline(
   // the page finds out when you're done with it.
   opts?: { quiet?: boolean }
 ) {
-  const admin = await requireAdmin()
+  const asker = await whoIsAsking()
+  const admin = asker.admin
+  // Resolved even on a quiet save: what quiet skips is telling the pages to
+  // re-render, not finding out whose day this is.
+  const instanceId = await instanceOfDay(admin, dayId)
+  await mayEdit(asker, instanceId)
 
   const clean = rows
     .map((r) => ({
@@ -345,12 +424,14 @@ export async function replaceDayOutline(
     }
   }
 
-  if (!opts?.quiet) touch(await instanceOfDay(admin, dayId))
+  if (!opts?.quiet) touch(instanceId)
 }
 
 // The other half of a quiet save: once the typing stops, tell the pages that
 // read this day about it, without writing anything.
 export async function touchDay(dayId: string) {
-  const admin = await requireAdmin()
-  touch(await instanceOfDay(admin, dayId))
+  const asker = await whoIsAsking()
+  const instanceId = await instanceOfDay(asker.admin, dayId)
+  await mayEdit(asker, instanceId)
+  touch(instanceId)
 }

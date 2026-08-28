@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import ScheduleEditor, { type Schedule, type SiteOption } from '@/app/admin/schedules/ScheduleEditor'
+import ScheduleEditor, { type Schedule, type SiteOption, type MeetingPointOption } from '@/app/admin/schedules/ScheduleEditor'
 import { createSchedule, copySchedule, deleteSchedule } from '@/app/admin/schedules/actions'
 
 // A course's running order, built here rather than in a Google Doc that then
@@ -15,6 +15,7 @@ export default function CourseSchedule({
   schedule,
   templates,
   sites,
+  meetingPoints,
   venueId,
 }: {
   instanceId: string
@@ -23,6 +24,7 @@ export default function CourseSchedule({
   schedule: Schedule | null
   templates: { id: string; name: string; description?: string | null; days: number }[]
   sites: SiteOption[]
+  meetingPoints: MeetingPointOption[]
   // The course's venue, so its own canyons head the day's site list.
   venueId: string | null
 }) {
@@ -51,7 +53,7 @@ export default function CourseSchedule({
             Delete schedule
           </button>
         </div>
-        <ScheduleEditor schedule={schedule} courseType={courseType} templates={templates} sites={sites} venueId={venueId} />
+        <ScheduleEditor schedule={schedule} courseType={courseType} templates={templates} sites={sites} meetingPoints={meetingPoints} venueId={venueId} />
       </div>
     )
   }

@@ -83,7 +83,7 @@ export default async function LibraryPage({
     showTemplates && shelves.includes('schedule')
       ? (() => {
           let s = admin.from('course_schedules')
-            .select('id, name, description, overview, objectives, course_type, disciplines, topics, instance_id, is_template, schedule_days(id, title, location, site_id, notes, objectives, sort_order, schedule_blocks(id, parent_id, title, time_label, location, sort_order))')
+            .select('id, name, description, overview, objectives, course_type, disciplines, topics, instance_id, is_template, schedule_days(id, title, location, site_id, notes, objectives, meeting_point, meeting_time, meeting_note, sort_order, schedule_blocks(id, parent_id, title, time_label, location, sort_order))')
             .eq('is_template', true)
             .order('name')
           if (q) s = s.ilike('name', `%${q}%`)

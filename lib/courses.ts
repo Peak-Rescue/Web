@@ -39,6 +39,34 @@ export function computeBlocks(starts_at: string, ends_at: string, offDays: OffDa
   return blocks
 }
 
+/** The calendar dates a course actually runs, in order, off days removed.
+    A schedule day is positional — it has no date of its own, and must not gain
+    one, because schedules are saved to the shelf as templates and a template
+    day belongs to no calendar. So day N is simply the Nth date the course
+    runs, worked out here from the two facts that do know: the course's dates
+    and its off days.
+
+    A schedule with more days than the course runs leaves the extras dateless.
+    That is a real state — someone drafted six days for a five-day course — and
+    the caller shows it rather than guessing. */
+export function courseDates(
+  starts_at: string | null,
+  ends_at: string | null,
+  offDays: OffDayRange[]
+): string[] {
+  if (!starts_at) return []
+  const out: string[] = []
+  for (const b of computeBlocks(starts_at, ends_at ?? starts_at, offDays)) {
+    const d = new Date(b.starts_at + 'T00:00:00')
+    const end = new Date(b.ends_at + 'T00:00:00')
+    while (d <= end) {
+      out.push(d.toISOString().slice(0, 10))
+      d.setDate(d.getDate() + 1)
+    }
+  }
+  return out
+}
+
 export { categoryMeta }
 
 // Six of the tactical offerings are "<terrain> Mobility", so the word is pure
