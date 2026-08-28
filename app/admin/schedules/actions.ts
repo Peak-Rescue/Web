@@ -194,7 +194,6 @@ export async function updateScheduleDay(
     meeting_point?: string | null
     meeting_point_id?: string | null
     meeting_time?: string | null
-    meeting_note?: string | null
   }
 ) {
   const asker = await whoIsAsking()
@@ -212,7 +211,6 @@ export async function updateScheduleDay(
   if (patch.meeting_point !== undefined) update.meeting_point = patch.meeting_point?.trim() || null
   if (patch.meeting_point_id !== undefined) update.meeting_point_id = patch.meeting_point_id || null
   if (patch.meeting_time !== undefined) update.meeting_time = patch.meeting_time?.trim().slice(0, 40) || null
-  if (patch.meeting_note !== undefined) update.meeting_note = patch.meeting_note?.trim() || null
   const { error } = await admin.from('schedule_days').update(update).eq('id', id)
   if (error) throw new Error(error.message)
   touch(instanceId)

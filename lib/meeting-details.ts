@@ -117,9 +117,13 @@ export type DayMeeting = {
       announces itself is a default nobody checked.
 
       On the site rather than the meetup on purpose: when three canyons meet at
-      one lot, the hour follows the canyon you are facing. */
+      one lot, the hour follows the canyon you are facing.
+
+      (A day once had its own note field beside these. Nobody wrote in it: what
+      it was for — the shuttle, the gate code, who is driving — is what people
+      already put in the meeting point itself, and a second prose box beside
+      the first is a choice nobody wants to make at 0500.) */
   usualTime: string | null
-  note: string | null
   coords: string | null
   /** Getting there first, then the descent: the meetup's driving pin and gate
       code, then the canyon's Ropewiki, Mountain Project and gauge. */
@@ -130,7 +134,6 @@ export type DayMeeting = {
 type DayRow = {
   meeting_point?: string | null
   meeting_time?: string | null
-  meeting_note?: string | null
   meeting_points?: MeetingPoint | null
 }
 type SiteRow = {
@@ -173,7 +176,6 @@ export function resolveDayMeeting(
     pointFrom: chosen?.from ?? null,
     time: trim(day?.meeting_time),
     usualTime: trim(site?.usual_meeting_time),
-    note: trim(day?.meeting_note),
     coords: chosen?.meetup ? trim(chosen.meetup.coords) : null,
     links: [...(chosen?.meetup?.links ?? []), ...(site?.links ?? [])],
     siteName: trim(site?.name),

@@ -1,0 +1,14 @@
+-- The contract step for 149.
+--
+-- 149 put a free-text meeting point on the site; 150 replaced it with a row of
+-- its own, because a meetup is shared by every canyon that gathers there and
+-- is frequently no canyon at all. The text column stayed behind so that the
+-- app then in production — which knew only 149's shape — kept working.
+--
+-- That code has shipped. Nothing reads this column now: sites are selected by
+-- name, kind, beta, coords, links and meeting_point_id, and the meeting itself
+-- resolves through the meetup. So it goes.
+--
+-- 150 backfilled every value it held into meeting_points and pointed the site
+-- at the new row, so nothing is lost with it.
+alter table public.sites drop column if exists meeting_point;

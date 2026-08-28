@@ -517,13 +517,13 @@ export default async function CourseView({
   // The running order, same for everyone on the course.
   const { data: schedRows } = await admin
     .from('course_schedules')
-    .select('id, name, overview, objectives, schedule_days(id, title, location, site_id, notes, objectives, meeting_point, meeting_point_id, meeting_time, meeting_note, meeting_links, meeting_attachments, sort_order, meeting_points(id, name, directions, coords, links), sites(id, name, beta, usual_meeting_time, coords, links, meeting_points(id, name, directions, coords, links)), schedule_blocks(id, parent_id, title, time_label, location, sort_order))')
+    .select('id, name, overview, objectives, schedule_days(id, title, location, site_id, notes, objectives, meeting_point, meeting_point_id, meeting_time, meeting_links, meeting_attachments, sort_order, meeting_points(id, name, directions, coords, links), sites(id, name, beta, usual_meeting_time, coords, links, meeting_points(id, name, directions, coords, links)), schedule_blocks(id, parent_id, title, time_label, location, sort_order))')
     .eq('instance_id', id)
     .limit(1)
   type SchedBlock = { id: string; parent_id: string | null; title: string; time_label: string | null; location: string | null; sort_order: number }
   type SchedMeetup = { id: string; name: string; directions: string | null; coords: string | null; links: { url: string; label: string }[] | null }
   type SchedSite = { id: string; name: string; beta: string | null; usual_meeting_time: string | null; coords: string | null; links: { url: string; label: string }[] | null; meeting_points: SchedMeetup | null }
-  type SchedDay = { id: string; title: string; location: string | null; site_id: string | null; sites: SchedSite | null; notes: string | null; objectives: string[] | null; meeting_point: string | null; meeting_point_id: string | null; meeting_points: SchedMeetup | null; meeting_time: string | null; meeting_note: string | null; meeting_links: { url: string; label: string }[] | null; meeting_attachments: { path: string; filename: string }[] | null; sort_order: number; schedule_blocks: SchedBlock[] }
+  type SchedDay = { id: string; title: string; location: string | null; site_id: string | null; sites: SchedSite | null; notes: string | null; objectives: string[] | null; meeting_point: string | null; meeting_point_id: string | null; meeting_points: SchedMeetup | null; meeting_time: string | null; meeting_links: { url: string; label: string }[] | null; meeting_attachments: { path: string; filename: string }[] | null; sort_order: number; schedule_blocks: SchedBlock[] }
   const sched = ((schedRows ?? []) as unknown as {
     id: string; name: string; overview: string | null; objectives: string[]; schedule_days: SchedDay[]
   }[])[0]
@@ -581,7 +581,6 @@ export default async function CourseView({
           meeting_point: d.meeting_point,
           meeting_point_id: d.meeting_point_id,
           meeting_time: d.meeting_time,
-          meeting_note: d.meeting_note,
           sort_order: d.sort_order,
           schedule_blocks: d.schedule_blocks ?? [],
         })])
@@ -837,7 +836,7 @@ export default async function CourseView({
   // aside rather than being deleted — nothing moves, and a course that never
   // sets a day keeps the block it has always had.
   const daysCarryMeeting = schedDays.some(
-    (d) => d.meeting_time || d.meeting_point || d.meeting_point_id || d.meeting_note
+    (d) => d.meeting_time || d.meeting_point || d.meeting_point_id
   )
 
   const navSections = ([

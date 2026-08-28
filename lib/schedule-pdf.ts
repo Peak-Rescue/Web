@@ -8,6 +8,7 @@
 // column of blank space nobody notices.
 
 import { CONTENT_W, FAINT, INK, MARGIN, MUTED, PdfBuilder, RED } from '@/lib/pdf-layout'
+import { resolveDayMeeting } from '@/lib/meeting-details'
 
 export type SchedulePdfBlock = {
   id: string
@@ -18,9 +19,21 @@ export type SchedulePdfBlock = {
   sort_order: number
 }
 
+/** A meetup, as the sheet needs it: what it is called, how to find it, and the
+    pin — coordinates earn their place on paper in a way a URL never does. */
+export type SchedulePdfMeetup = {
+  id: string
+  name: string
+  directions: string | null
+  coords: string | null
+  links: null
+}
+
 export type SchedulePdfSite = {
   name: string
   beta: string | null
+  usual_meeting_time: string | null
+  meeting_points: SchedulePdfMeetup | null
 }
 
 export type SchedulePdfDay = {
@@ -28,6 +41,9 @@ export type SchedulePdfDay = {
   title: string
   location: string | null
   sites: SchedulePdfSite | null
+  meeting_point: string | null
+  meeting_time: string | null
+  meeting_points: SchedulePdfMeetup | null
   notes: string | null
   objectives: string[] | null
   sort_order: number
@@ -100,6 +116,29 @@ export async function generateSchedulePdf(data: SchedulePdf): Promise<Uint8Array
       b.y -= 14
     }
 
+    // The morning, before anywhere else the day goes. This is the sheet in
+    // the van pocket, read at 0500 by someone who has not opened the portal —
+    // so where to gather and when belongs on it, ahead of the canyon.
+    //
+    // Links are deliberately left off. On paper a label with no address is
+    // useless and the address is two hundred characters of query string; the
+    // coordinates are the part you can actually act on with a phone in a
+    // cradio dead spot.
+    const meeting = resolveDayMeeting(day, day.sites)
+    if (meeting.time || meeting.point || meeting.placeName) {
+      b.text('Meet', { x: MARGIN, size: 7.5, color: RED })
+      const headline = [meeting.time, meeting.placeName].filter(Boolean).join('  ·  ')
+      if (headline) {
+        b.paragraph(headline, { x: BODY_X, width: CONTENT_W - TIME_W, size: 9.5, leading: 12, color: MUTED })
+      }
+      if (meeting.point) {
+        b.paragraph(meeting.point, { x: BODY_X, width: CONTENT_W - TIME_W, size: 9, leading: 12, color: MUTED, paragraphs: true })
+      }
+      if (meeting.coords) {
+        b.paragraph(meeting.coords, { x: BODY_X, width: CONTENT_W - TIME_W, size: 8.5, leading: 11, color: FAINT })
+      }
+      b.y -= 2
+    }
     if (day.location) {
       b.text('Where', { x: MARGIN, size: 7.5, color: FAINT })
       b.paragraph(day.location, { x: BODY_X, width: CONTENT_W - TIME_W, size: 9, leading: 12, color: MUTED })

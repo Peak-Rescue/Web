@@ -38,7 +38,6 @@ export type ScheduleDay = {
   meeting_point: string | null
   meeting_point_id: string | null
   meeting_time: string | null
-  meeting_note: string | null
   sort_order: number
   schedule_blocks: ScheduleBlock[]
 }
