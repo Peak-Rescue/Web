@@ -4,13 +4,13 @@ import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Tick } from './UpdateComposer'
 import AttachmentFields from './AttachmentFields'
-import { linkLabel } from '@/lib/course-links'
-import { LinkIcon, PaperclipIcon } from '@/components/TaskIcons'
+import { ChipRow } from '@/components/LinkChip'
+import CloseButton from '@/components/CloseButton'
 import type { MeetingLink, MeetingFile } from '@/lib/meeting-details'
 import type { UpdateLink, UpdateAttachment, UpdateAudience } from './update-actions'
 import type { NotifyCounts } from '@/lib/course-notify'
 import { announceMeetingDetails } from './update-actions'
-import { saveMeetingDetails } from './logistics-actions'
+import { saveMeetingDetails, saveDayMeetingDetails } from './logistics-actions'
 import { meetingDayLabel } from '@/lib/meeting-details'
 
 // Meeting point and time: read as two facts, edited in place, and announced
@@ -21,6 +21,9 @@ import { meetingDayLabel } from '@/lib/meeting-details'
 // morning of, which is why it is editable here rather than only from admin.
 export default function MeetingDetails({
   instanceId,
+  dayId,
+  inheritedPoint = null,
+  inheritedTime = null,
   meetingDate,
   courseStart,
   meetingPoint,
@@ -30,9 +33,21 @@ export default function MeetingDetails({
   canEdit,
   notifyCounts,
   announcedDates,
-  passed,
+  folded,
 }: {
   instanceId: string
+  /** Set when this block belongs to a schedule day rather than to the course.
+      A day has no date of its own — it is the Nth date the course runs — so
+      the date field disappears and the save goes to the day's row. */
+  dayId?: string
+  /** What this morning falls back to when nothing is typed here: the meetup
+      the site usually uses. Shown rather than copied, so correcting the meetup
+      still reaches every day that inherits it. */
+  inheritedPoint?: string | null
+  /** What we usually do at this site. A placeholder only — the hour is never
+      inherited silently, because a default that announces itself is a default
+      nobody checked. */
+  inheritedTime?: string | null
   /** Null means day one, which courseStart answers. */
   meetingDate: string | null
   courseStart: string | null
@@ -50,21 +65,23 @@ export default function MeetingDetails({
       announcement for one of them a correction rather than the plan arriving.
       Empty for anyone who can't post. */
   announcedDates: string[]
-  /** The meeting day is behind us: everyone has met, and the block folds away
-      to a single line rather than heading the page for the rest of the week. */
-  passed: boolean
+  /** Fold to a single line. Two reasons, one behaviour: the day is behind us
+      and everyone has met, or it is a later day on a schedule where only the
+      next morning is worth having open. The line still says what the plan is,
+      so folding costs a click rather than the answer. */
+  folded: boolean
 }) {
   const router = useRouter()
   const [editing, setEditing] = useState(false)
-  const [open, setOpen] = useState(!passed)
+  const [open, setOpen] = useState(!folded)
   // Folding is a fact about the date, not a preference, so it is re-decided
   // whenever the date crosses that line: set the plan for a day still ahead
   // and the block opens itself back up rather than staying shut on the answer
   // that was just written. Between crossings the toggle is the reader's.
-  const [foldedFor, setFoldedFor] = useState(passed)
-  if (passed !== foldedFor) {
-    setFoldedFor(passed)
-    setOpen(!passed)
+  const [foldedFor, setFoldedFor] = useState(folded)
+  if (folded !== foldedFor) {
+    setFoldedFor(folded)
+    setOpen(!folded)
   }
   // The field opens on day one rather than empty: it is the answer nearly
   // every time, and an empty date box invites the question of whether leaving
@@ -99,7 +116,11 @@ export default function MeetingDetails({
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<string | null>(null)
 
-  const isSet = Boolean(meetingPoint || meetingTime || links.length || files.length)
+  // The meetup stands in for a day that hasn't overridden it, so a day
+  // pointing at a known place does not read as "nobody knows where to go".
+  const shownPoint = meetingPoint || inheritedPoint || null
+  const inherited = !meetingPoint && Boolean(inheritedPoint)
+  const isSet = Boolean(shownPoint || meetingTime || links.length || files.length)
   const day = meetingDayLabel(meetingDate, courseStart)
   // Which day the announcement will be about, and whether these people have
   // heard about that day already — read from the field being edited, so the
@@ -119,13 +140,22 @@ export default function MeetingDetails({
   async function submit(thenTell: boolean) {
     setBusy(true); setError(null); setResult(null)
     try {
-      await saveMeetingDetails(instanceId, {
-        meetingDate: date,
-        meetingPoint: point,
-        meetingTime: time,
-        links: draftLinks,
-        attachments: draftFiles,
-      })
+      if (dayId) {
+        await saveDayMeetingDetails(dayId, {
+          meetingPoint: point,
+          meetingTime: time,
+          links: draftLinks,
+          attachments: draftFiles,
+        })
+      } else {
+        await saveMeetingDetails(instanceId, {
+          meetingDate: date,
+          meetingPoint: point,
+          meetingTime: time,
+          links: draftLinks,
+          attachments: draftFiles,
+        })
+      }
 
       if (!thenTell) {
         setEditing(false)
@@ -148,18 +178,38 @@ export default function MeetingDetails({
     }
   }
 
+  function discard() {
+    setDate(meetingDate ?? courseStart ?? '')
+    setPoint(meetingPoint ?? ''); setTime(meetingTime ?? '')
+    setDraftLinks(links)
+    setDraftFiles(files.map(({ path, filename }) => ({ path, filename })))
+    setError(null); setEditing(false)
+  }
+
   const fields = (
     <div className="p-3 bg-zinc-900 border border-zinc-700 rounded-lg space-y-3">
+      <div className="flex justify-end">
+        <CloseButton onClick={discard} disabled={busy} label="Cancel" />
+      </div>
       <div className="grid sm:grid-cols-2 gap-3">
-        <label className="block sm:col-span-2">
-          <span className="block text-[11px] uppercase tracking-wide text-zinc-500 mb-1">Day</span>
-          <input
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-zinc-200 focus:outline-none focus:border-zinc-500"
-          />
-        </label>
+        {dayId ? (
+          // The schedule already decided which day this is — it is the Nth
+          // date the course runs. Offering a date field here would be a second
+          // answer, and the two would disagree the moment a course moved.
+          <p className="sm:col-span-2 text-[11px] uppercase tracking-wide text-zinc-500">
+            {draftDay ?? 'This day'}
+          </p>
+        ) : (
+          <label className="block sm:col-span-2">
+            <span className="block text-[11px] uppercase tracking-wide text-zinc-500 mb-1">Day</span>
+            <input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-zinc-200 focus:outline-none focus:border-zinc-500"
+            />
+          </label>
+        )}
         {/* Wide, and it grows with what you type. A meeting point is usually
             four words and sometimes a paragraph — where to park, which gate,
             what the water is doing — and a one-line box that scrolls what you
@@ -172,7 +222,7 @@ export default function MeetingDetails({
             rows={2}
             value={point}
             onChange={(e) => setPoint(e.target.value)}
-            placeholder="lower lot, by the big cedar"
+            placeholder={inheritedPoint ?? 'lower lot, by the big cedar'}
             className="w-full min-h-[4.5rem] resize-y bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-zinc-200 leading-relaxed focus:outline-none focus:border-zinc-500"
           />
         </label>
@@ -181,7 +231,7 @@ export default function MeetingDetails({
           <input
             value={time}
             onChange={(e) => setTime(e.target.value)}
-            placeholder="0700, ready to walk"
+            placeholder={inheritedTime ?? '0700, ready to walk'}
             className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-zinc-200 focus:outline-none focus:border-zinc-500"
           />
         </label>
@@ -245,19 +295,7 @@ export default function MeetingDetails({
                 ? 'Save and copy me'
                 : `Save and notify ${reach === 1 ? '1 person' : `${reach} people`}`}
         </button>
-        <button
-          onClick={() => {
-            setDate(meetingDate ?? courseStart ?? '')
-            setPoint(meetingPoint ?? ''); setTime(meetingTime ?? '')
-            setDraftLinks(links)
-            setDraftFiles(files.map(({ path, filename }) => ({ path, filename })))
-            setError(null); setEditing(false)
-          }}
-          disabled={busy}
-          className="text-xs text-zinc-500 hover:text-zinc-300"
-        >
-          Cancel
-        </button>
+
       </div>
     </div>
   )
@@ -265,48 +303,25 @@ export default function MeetingDetails({
   // The pin sits under the two boxes, not inside the prose: a URL typed into
   // the meeting point is unclickable text, and on a phone at 0855 what you
   // want is something to tap.
-  const pins = (links.length > 0 || files.length > 0) && (
-    <div className="flex flex-wrap gap-2">
-      {links.map((l, i) => (
-        <a
-          key={`l${i}`}
-          href={l.url}
-          target="_blank"
-          rel="noreferrer"
-          className="inline-flex items-center gap-1.5 max-w-full px-3 py-1.5 rounded-full border border-teal-500/30 bg-teal-500/10 text-teal-300 hover:border-teal-400 hover:text-teal-100 text-sm transition-colors"
-        >
-          <LinkIcon />
-          <span className="truncate">{linkLabel(l)}</span>
-          <span className="text-teal-400/70 shrink-0">↗</span>
-        </a>
-      ))}
-      {files.map((f, i) => (
-        <a
-          key={`f${i}`}
-          href={f.url}
-          target="_blank"
-          rel="noreferrer"
-          className="inline-flex items-center gap-1.5 max-w-full px-3 py-1.5 rounded-full border border-zinc-700 bg-zinc-800 text-zinc-300 hover:border-zinc-500 hover:text-white text-sm transition-colors"
-        >
-          <span className="shrink-0"><PaperclipIcon /></span>
-          <span className="truncate">{f.filename}</span>
-        </a>
-      ))}
-    </div>
-  )
+  const pins = <ChipRow links={links} files={files} />
 
   const readout = isSet ? (
     <div className="space-y-3">
     <dl className="grid sm:grid-cols-2 gap-3">
-      {meetingPoint && (
+      {shownPoint && (
         // Spans the row when it runs past a line: a paragraph set in a half
         // width column beside a single time is a column of two-word lines.
         <div className={`px-3 py-2 rounded-lg border border-zinc-800 bg-zinc-900 ${
-          meetingPoint.length > 80 || meetingPoint.includes('\n') ? 'sm:col-span-2' : ''
+          shownPoint.length > 80 || shownPoint.includes('\n') ? 'sm:col-span-2' : ''
         }`}>
           <dt className="text-[11px] uppercase tracking-wide text-zinc-500">Where</dt>
           {/* Typed over several lines, read back over several lines. */}
-          <dd className="text-sm text-zinc-200 mt-0.5 whitespace-pre-line">{meetingPoint}</dd>
+          <dd className="text-sm text-zinc-200 mt-0.5 whitespace-pre-line">{shownPoint}</dd>
+          {/* Said out loud, because "where did this come from" is the question
+              behind every stale meeting point. */}
+          {inherited && (
+            <dd className="text-[11px] text-zinc-600 mt-0.5">From the site’s usual meeting point</dd>
+          )}
         </div>
       )}
       {(meetingTime || day) && (
@@ -326,7 +341,9 @@ export default function MeetingDetails({
   ) : (
     canEdit && (
       <p className="text-xs text-zinc-600">
-        Where and when to meet isn’t set yet — nobody on this course knows where to go.
+        {dayId
+          ? 'No meeting point set for this day.'
+          : 'Where and when to meet isn’t set yet — nobody on this course knows where to go.'}
       </p>
     )
   )
@@ -343,7 +360,7 @@ export default function MeetingDetails({
         <span className="font-medium text-zinc-400 shrink-0 whitespace-nowrap">Meeting point</span>
         {isSet ? (
           <span className="truncate">
-            {[meetingTime, meetingPoint].filter(Boolean).join(' · ')}
+            {[meetingTime, shownPoint].filter(Boolean).join(' · ')}
           </span>
         ) : (
           <span>not set</span>
@@ -368,10 +385,30 @@ export default function MeetingDetails({
 
       {canEdit && !editing && (
         <div className="flex items-center gap-3 flex-wrap">
+          {/* The way into the only editable thing in this block, so it looks
+              like something you press. As bare grey text it read as a caption
+              and sat at a different spot depending on how much was above it. */}
           <button
             onClick={() => { setResult(null); setEditing(true) }}
-            className="text-[11px] text-zinc-500 hover:text-white transition-colors"
+            className="inline-flex items-center gap-1.5 rounded border border-zinc-700 px-2 py-1 text-[11px] text-zinc-300 hover:text-white hover:border-zinc-500 transition-colors"
           >
+            <svg
+              aria-hidden
+              xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24"
+              fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"
+            >
+              {isSet ? (
+                <>
+                  <path d="M12 20h9" />
+                  <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                </>
+              ) : (
+                <>
+                  <path d="M12 5v14" />
+                  <path d="M5 12h14" />
+                </>
+              )}
+            </svg>
             {isSet ? 'Edit meeting details' : 'Add meeting details'}
           </button>
           {/* For details set some other time and never announced — filled in

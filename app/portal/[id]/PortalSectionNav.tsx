@@ -7,8 +7,14 @@ import { useEffect, useState } from 'react'
 // like a handful of named parts rather than one scroll.
 export default function PortalSectionNav({
   sections,
+  trailing,
 }: {
   sections: { id: string; label: string; team?: boolean; unread?: boolean }[]
+  /** Pinned to the right of the same sticky bar. The viewing-as toggle lives
+      here so that which role you are reading as travels down the page with
+      you — knowing you are in a preview matters most at the moment you find a
+      control missing, which is never at the top. */
+  trailing?: React.ReactNode
 }) {
   const [active, setActive] = useState(sections[0]?.id)
 
@@ -31,11 +37,14 @@ export default function PortalSectionNav({
     return () => obs.disconnect()
   }, [sections])
 
-  if (sections.length < 2) return null
+  // The bar earns its place for the jump links, but the toggle has to stay on
+  // screen even on a course too short to need them.
+  if (sections.length < 2 && !trailing) return null
 
   return (
     <nav className="sticky top-16 md:top-20 z-20 -mx-4 px-4 mb-8 bg-zinc-950/90 backdrop-blur border-b border-zinc-900">
-      <div className="flex gap-1 overflow-x-auto py-2 no-scrollbar">
+      <div className="flex items-center gap-2">
+      <div className="flex gap-1 overflow-x-auto py-2 no-scrollbar flex-1 min-w-0">
         {/* The bar is also the key: where you are is accented rather than
             grey-on-grey, team blocks are amber wherever they appear, and a dot
             marks the one section with something new in it. */}
@@ -57,6 +66,8 @@ export default function PortalSectionNav({
             {s.unread && <span aria-hidden className="w-1.5 h-1.5 rounded-full bg-pr-red-light" />}
           </a>
         ))}
+      </div>
+      {trailing && <div className="shrink-0">{trailing}</div>}
       </div>
     </nav>
   )

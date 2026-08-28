@@ -80,8 +80,15 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
           <p className="text-zinc-400 mt-1">Schedule and manage course instances</p>
         </div>
 
-        {/* Minimal-intent create: pick the course type, everything else on the
-            full page (which auto-saves against the created instance). */}
+        {/* What the next person needs to pick this up: who asked, who to call,
+            what they said, when, where, how many, and how likely it is to
+            happen at all.
+
+            None of it is filler. Every field here answers something that only
+            exists in the head of whoever took the call — including the two
+            that look like setup numbers and the one that looks like workflow
+            state. The headcount drives gear, staffing and the estimate, and
+            the status is how sure we are the thing is real. */}
         <details className="mb-10 group">
           <summary className="cursor-pointer list-none">
             <div className="inline-flex items-center gap-2 px-4 py-2 bg-pr-red hover:bg-pr-red-dark text-white rounded font-medium text-sm transition-colors">
@@ -102,6 +109,7 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
                 <option value="confirmed">Confirmed</option>
               </select>
             </div>
+
             <div>
               <label className="block text-xs text-zinc-400 mb-1">Location</label>
               <input name="location" className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
@@ -131,7 +139,7 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
 
             <div className="sm:col-span-2">
               <label className="block text-xs text-zinc-400 mb-1">Notes</label>
-              <textarea name="notes" rows={2} placeholder="What they asked for, rough timing, budget signals, follow-ups…" className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm resize-y focus:outline-none focus:border-zinc-500" />
+              <textarea name="notes" rows={3} placeholder="What they asked for, rough timing, budget signals, follow-ups…" className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm resize-y focus:outline-none focus:border-zinc-500" />
             </div>
 
             <div className="sm:col-span-2">

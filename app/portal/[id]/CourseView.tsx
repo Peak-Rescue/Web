@@ -4,8 +4,18 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { moduleAudience, KIND_META, type LibraryKind } from '@/lib/library'
+import { regionLabel } from '@/lib/regions'
+import CourseResourcesSection, { type CourseResource } from '@/app/admin/courses/CourseResourcesSection'
+import CourseMapsSection, { type CourseMap } from '@/app/admin/courses/CourseMapsSection'
+import CoursePhotosSection from '@/app/admin/courses/CoursePhotosSection'
+import CourseFilesSection, { type CourseFile } from '@/app/admin/courses/CourseFilesSection'
+import CourseIntroFields from './CourseIntroFields'
+import CourseCurriculumEditor, { type CurriculumModule } from '@/app/admin/courses/CourseCurriculumEditor'
+import CourseGear from '@/app/admin/courses/CourseGear'
+import { GEAR_ENTRIES_SELECT } from '@/lib/gear'
+import { courseCapabilityCategories } from '@/lib/capabilities'
 import { GEAR_ENTRY_COLUMNS, gearLabel, gearQuantity, isChoice, placeSets, productName } from '@/lib/gear'
-import { courseDisplayName, computeBlocks } from '@/lib/courses'
+import { courseDisplayName, computeBlocks, courseDates } from '@/lib/courses'
 import CourseTasksPanel, { type CourseTask, type TaskPerson } from '@/components/CourseTasksPanel'
 import PdfLink from '@/components/PdfLink'
 import { loadTasksWithDocs } from '@/lib/course-tasks'
@@ -17,13 +27,19 @@ import CourseNotes from './CourseNotes'
 import MeetingDetails from './MeetingDetails'
 import type { UpdateAudience } from './update-actions'
 import CourseMessages, { type CourseMessage } from './CourseMessages'
+import EditInPlace from './EditableSchedule'
+import AddScheduleDay from './AddScheduleDay'
+import ScheduleOverviewFields from './ScheduleOverviewFields'
+import ScheduleDayCard from '@/app/admin/schedules/ScheduleDayCard'
+import type { ScheduleDay as EditableDay } from '@/app/admin/schedules/types'
 import WaiverPanel from './WaiverPanel'
 import WaiverQrPanel, { type WaiverQr } from '@/components/WaiverQrPanel'
 import UnmatchedWaivers from '@/components/UnmatchedWaivers'
 import { loadUnmatchedWaivers } from '@/lib/waiver-data'
 import { loadStudentWaiver } from '@/lib/waiver-data'
 import { notifyCountsFrom } from '@/lib/course-notify'
-import { meetingDetails, meetingDayPassed } from '@/lib/meeting-details'
+import { meetingDetails, meetingDayPassed, resolveDayMeeting } from '@/lib/meeting-details'
+import { ChipRow } from '@/components/LinkChip'
 import { Section, SubHead, InstructorCard, StudentCard, SECTION_LABEL, type SectionKey } from './sections'
 import { PURPOSE_META, PURPOSE_ORDER, linkLabel, type CourseLink } from '@/lib/course-links'
 
@@ -150,7 +166,7 @@ export default async function CourseView({
   const [{ data: inst }, { data: offDays }, { data: modules }, { data: instructors }, taskRows, { data: peopleRows }, { data: templateRows }, { data: courseDocRows }, { data: taskDocRows }, { data: mapRows }, { data: resourceRows }, { data: linkRows }, { data: updateRows }, { data: enrollmentRows }, { data: messageRows }] =
     await Promise.all([
       admin.from('course_instances')
-        .select('course_type, custom_title, status, location, client_name, notes, ref_number, starts_at, ends_at, meeting_date, meeting_announced_dates, meeting_point, meeting_time, meeting_links, meeting_attachments, intro, max_students, internal, waiver_template_id, waiver_token, waiver_token_expires_at')
+        .select('course_type, custom_title, status, location, client_name, notes, ref_number, starts_at, ends_at, meeting_date, meeting_announced_dates, meeting_point, meeting_time, meeting_links, meeting_attachments, intro, custom_categories, max_students, internal, venue_id, region, waiver_template_id, waiver_token, waiver_token_expires_at')
         .eq('id', id)
         .single(),
       admin.from('instance_off_days')
@@ -178,14 +194,14 @@ export default async function CourseView({
       // This reads with the service role, so the audience filter is applied
       // here rather than by RLS.
       (showTasks
-        ? admin.from('course_maps').select('id, url, label, audience, audience_overridden, library_items(title, url, audience, library_item_links(url, access, audience))').eq('instance_id', id).order('sort_order')
-        : admin.from('course_maps').select('id, url, label, audience, audience_overridden, library_items(title, url, audience, library_item_links(url, access, audience))').eq('instance_id', id).order('sort_order')),
+        ? admin.from('course_maps').select('id, url, label, audience, audience_overridden, library_item_id, library_items(title, url, audience, library_item_links(url, access, audience))').eq('instance_id', id).order('sort_order')
+        : admin.from('course_maps').select('id, url, label, audience, audience_overridden, library_item_id, library_items(title, url, audience, library_item_links(url, access, audience))').eq('instance_id', id).order('sort_order')),
       // The resources shelf — med plan, permits, tech notes for this place.
       // Same audience rule as maps, and read the same way: a student sees
       // only the rows shared with them.
       (showTasks
-        ? admin.from('course_resources').select('id, url, label, audience, library_items(id, title, url, kind, audience)').eq('instance_id', id).order('sort_order')
-        : admin.from('course_resources').select('id, url, label, audience, library_items(id, title, url, kind, audience)').eq('instance_id', id).eq('audience', 'shared').order('sort_order')),
+        ? admin.from('course_resources').select('id, url, label, audience, library_item_id, library_items(id, title, url, kind, audience)').eq('instance_id', id).order('sort_order')
+        : admin.from('course_resources').select('id, url, label, audience, library_item_id, library_items(id, title, url, kind, audience)').eq('instance_id', id).eq('audience', 'shared').order('sort_order')),
       // Links added for this delivery — the photo album, the client's
       // paperwork. Same audience rule as maps.
       (showTasks
@@ -317,6 +333,140 @@ export default async function CourseView({
     }
   }).filter((r) => r.url && (showTasks || !r.internal))
 
+  // The same rows in the shape the editor wants — unfiltered, and carrying
+  // where each one came from. Built only for staff, who are the only people
+  // the editor is ever handed to.
+  const editableResources: CourseResource[] = !showTasks ? [] : (resourceRows ?? []).map((r) => {
+    const item = r.library_items as unknown as { title: string; url: string | null; audience?: string } | null
+    return {
+      id: r.id as string,
+      label: item?.title ?? (r.label as string | null) ?? 'Document',
+      url: item?.url ?? (r.url as string | null),
+      // Read through the same ceiling the page reads through, so a pill can
+      // never claim students while the row under it says instructors.
+      audience: (item?.audience === 'internal' ? 'internal' : r.audience) as CourseResource['audience'],
+      fromLibrary: Boolean(r.library_item_id),
+      libraryLocked: item?.audience === 'internal',
+    }
+  })
+
+  // The maps in the shape the editor wants: unfiltered, carrying where each
+  // came from and what the library says, so a pill here can never claim
+  // something the page below it won't do.
+  const editableMaps: CourseMap[] = !showTasks ? [] : (mapRows ?? []).map((r) => {
+    const item = r.library_items as unknown as {
+      title: string; url: string | null; audience: string
+      library_item_links?: { access: string; audience: string }[]
+    } | null
+    return {
+      id: r.id as string,
+      label: item?.title ?? (r.label as string | null) ?? 'Map',
+      url: item?.url ?? (r.url as string | null),
+      audience: (r.audience_overridden ? r.audience : item?.audience ?? r.audience) as CourseMap['audience'],
+      fromLibrary: Boolean(r.library_item_id),
+      libraryAudience: (item?.audience as 'internal' | 'shared' | undefined) ?? null,
+      overridden: Boolean(r.audience_overridden),
+      // Sharing a map with students only shows them something if one of its
+      // links is theirs. Without this the two gates look like one, and turning
+      // the first appears to do nothing.
+      hasStudentLink: item?.library_item_links?.length
+        ? item.library_item_links.some((l) => l.audience === 'students')
+        : true,
+    }
+  })
+
+  const editableFiles: CourseFile[] = !showTasks ? [] : [
+    ...(courseDocRows ?? []).map((r) => ({
+      id: r.id as string,
+      filename: (r.filename as string | null) ?? 'document',
+      url: (r.url as string | null) ?? (r.path ? docUrl.get(r.path as string) : undefined) ?? '#',
+      source: 'course' as const,
+      label: null,
+      isLink: Boolean(r.url),
+    })),
+    ...(taskDocRows ?? []).map((r) => ({
+      id: r.id as string,
+      filename: (r.filename as string | null) ?? 'document',
+      url: (r.url as string | null) ?? (r.path ? docUrl.get(r.path as string) : undefined) ?? '#',
+      source: 'task' as const,
+      label: (r.course_tasks as unknown as { title: string } | null)?.title ?? null,
+      isLink: Boolean(r.url),
+    })),
+  ]
+
+  // Assigning curriculum happens on the course now, so the pickers need what
+  // they pick from: the shapes available for this offering, and the section
+  // names already in use so the same one isn't retyped three ways.
+  const [{ data: curriculumTplRows }, { data: sectionNameRows }] = showTasks
+    ? await Promise.all([
+        admin.from('course_templates')
+          .select('id, name, description, course_type, is_default, course_template_sections(id, course_template_items(id))')
+          .eq('active', true)
+          .order('name'),
+        admin.from('course_modules').select('title'),
+      ])
+    : [{ data: null }, { data: null }]
+
+  const curriculumTemplates = ((curriculumTplRows ?? []) as unknown as {
+    id: string; name: string; description: string | null; course_type: string | null
+    course_template_sections: { id: string; course_template_items: { id: string }[] }[]
+  }[])
+    .map((t) => ({
+      id: t.id,
+      name: t.name,
+      description: t.description,
+      sections: t.course_template_sections.length,
+      items: t.course_template_sections.reduce((n, sec) => n + sec.course_template_items.length, 0),
+      isDefault: t.course_type === inst.course_type,
+    }))
+    .sort((a, b) => Number(b.isDefault) - Number(a.isDefault) || a.name.localeCompare(b.name))
+
+  const knownSectionNames = [...new Set(
+    ((sectionNameRows ?? []) as { title: string }[]).map((m) => m.title)
+  )].sort((a, b) => a.localeCompare(b))
+
+  const courseDisciplines = courseCapabilityCategories(
+    inst.course_type as string,
+    inst.custom_categories as string[] | null
+  )
+
+  // Building the gear list is admin work — instructors read it and take it to
+  // the trailhead, they don't assemble it — so this is the one editor gated on
+  // being an admin rather than on being staff. Loaded only then: the catalog
+  // is every item we own, and a student's page has no use for it.
+  const [{ data: gearListRows }, { data: gearCatalogRows }, { data: gearTemplateRows }] = showAsAdmin
+    ? await Promise.all([
+        admin.from('gear_lists')
+          .select(`id, name, audience, intro, instance_id, is_template, ${GEAR_ENTRIES_SELECT}`)
+          .eq('instance_id', id),
+        admin.from('gear_items')
+          .select('id, name, brand, info, url, category, parent_id, aliases, disciplines')
+          .eq('active', true).order('name'),
+        admin.from('gear_lists')
+          .select('id, name, description, audience, course_type, gear_list_entries(id)')
+          .eq('is_template', true),
+      ])
+    : [{ data: null }, { data: null }, { data: null }]
+
+  const gearTemplateOptions = ((gearTemplateRows ?? []) as unknown as {
+    id: string; name: string; description: string | null; audience: string
+    course_type: string | null; gear_list_entries: unknown[]
+  }[])
+    .sort((a, b) => Number(b.course_type === inst.course_type) - Number(a.course_type === inst.course_type))
+    .map((t) => ({
+      id: t.id, name: t.name, description: t.description,
+      audience: t.audience, entries: t.gear_list_entries.length,
+    }))
+
+  // What a promoted resource would be filed under: the venue if this course
+  // has one, the region otherwise. Null when neither is set, and there is
+  // nothing to offer.
+  const { data: venueRow } = showTasks && inst.venue_id
+    ? await admin.from('venues').select('name').eq('id', inst.venue_id).maybeSingle()
+    : { data: null }
+  const coursePlace: string | null =
+    (venueRow?.name as string | undefined) ?? (regionLabel(inst.region as string | null) || null)
+
   const blocks = inst.starts_at && inst.ends_at
     ? computeBlocks(inst.starts_at, inst.ends_at, offDays ?? [])
     : []
@@ -367,16 +517,75 @@ export default async function CourseView({
   // The running order, same for everyone on the course.
   const { data: schedRows } = await admin
     .from('course_schedules')
-    .select('id, name, overview, objectives, schedule_days(id, title, location, site_id, notes, objectives, sort_order, sites(id, name, beta, coords, links), schedule_blocks(id, parent_id, title, time_label, location, sort_order))')
+    .select('id, name, overview, objectives, schedule_days(id, title, location, site_id, notes, objectives, meeting_point, meeting_point_id, meeting_time, meeting_note, meeting_links, meeting_attachments, sort_order, meeting_points(id, name, directions, coords, links), sites(id, name, beta, usual_meeting_time, coords, links, meeting_points(id, name, directions, coords, links)), schedule_blocks(id, parent_id, title, time_label, location, sort_order))')
     .eq('instance_id', id)
     .limit(1)
   type SchedBlock = { id: string; parent_id: string | null; title: string; time_label: string | null; location: string | null; sort_order: number }
-  type SchedSite = { id: string; name: string; beta: string | null; coords: string | null; links: { url: string; label: string }[] | null }
-  type SchedDay = { id: string; title: string; location: string | null; site_id: string | null; sites: SchedSite | null; notes: string | null; objectives: string[] | null; sort_order: number; schedule_blocks: SchedBlock[] }
+  type SchedMeetup = { id: string; name: string; directions: string | null; coords: string | null; links: { url: string; label: string }[] | null }
+  type SchedSite = { id: string; name: string; beta: string | null; usual_meeting_time: string | null; coords: string | null; links: { url: string; label: string }[] | null; meeting_points: SchedMeetup | null }
+  type SchedDay = { id: string; title: string; location: string | null; site_id: string | null; sites: SchedSite | null; notes: string | null; objectives: string[] | null; meeting_point: string | null; meeting_point_id: string | null; meeting_points: SchedMeetup | null; meeting_time: string | null; meeting_note: string | null; meeting_links: { url: string; label: string }[] | null; meeting_attachments: { path: string; filename: string }[] | null; sort_order: number; schedule_blocks: SchedBlock[] }
   const sched = ((schedRows ?? []) as unknown as {
     id: string; name: string; overview: string | null; objectives: string[]; schedule_days: SchedDay[]
   }[])[0]
   const schedDays = [...(sched?.schedule_days ?? [])].sort((a, b) => a.sort_order - b.sort_order)
+
+  // The running order is edited here now, by the people running the course —
+  // the same rule the writes themselves use, so what the page offers and what
+  // the server will accept are the same sentence. A student is never sent any
+  // of this, nor the editor's code.
+  const canEditSchedule = showTasks && Boolean(sched)
+  // Sites a day can point at, and the meetups it can gather at. Loaded only
+  // for the people who can open a day's editor.
+  //
+  // The schedule's own shape — its overview, adding and removing days, saving
+  // back to the shelf — is not here: that went back to the admin course page
+  // when the section-level editor did. What a day *contains* is edited on the
+  // day; what the schedule *is* is set up once, elsewhere.
+  const [{ data: schedSiteRows }, { data: schedPointRows }] = canEditSchedule
+    ? await Promise.all([
+        // Canyons and crags with beta already written, so a day points at one
+        // instead of retyping the place.
+        admin.from('sites')
+          .select('id, name, kind, beta, meeting_point_id, usual_meeting_time, venue_id, venues(name)')
+          .eq('active', true)
+          .order('name'),
+        // Where a day can be told to gather instead of the site's usual.
+        admin.from('meeting_points')
+          .select('id, name, venue_id')
+          .eq('active', true)
+          .order('name'),
+      ])
+    : [{ data: null }, { data: null }]
+
+  const schedSites = ((schedSiteRows ?? []) as unknown as {
+    id: string; name: string; kind: string | null; beta: string | null; meeting_point_id: string | null; usual_meeting_time: string | null; venue_id: string | null; venues: { name: string } | null
+  }[]).map((s) => ({
+    id: s.id, name: s.name, kind: s.kind, beta: s.beta,
+    meeting_point_id: s.meeting_point_id, usual_meeting_time: s.usual_meeting_time,
+    venue_id: s.venue_id, venue_name: s.venues?.name ?? null,
+  }))
+
+  const schedMeetingPoints = ((schedPointRows ?? []) as unknown as
+    { id: string; name: string; venue_id: string | null }[])
+
+  // The editor's shape, not the page's: it wants the days plain, without the
+  // site rows the read view joins in to show beta.
+  const editableDays = new Map<string, EditableDay>(
+    schedDays.map((d) => [d.id, ({
+          id: d.id,
+          title: d.title,
+          location: d.location,
+          site_id: d.site_id,
+          notes: d.notes,
+          objectives: d.objectives ?? [],
+          meeting_point: d.meeting_point,
+          meeting_point_id: d.meeting_point_id,
+          meeting_time: d.meeting_time,
+          meeting_note: d.meeting_note,
+          sort_order: d.sort_order,
+          schedule_blocks: d.schedule_blocks ?? [],
+        })])
+  )
 
   // Staff see instructor-only sections first — the same order they had in
   // Classroom. Students never receive those sections at all.
@@ -393,9 +602,15 @@ export default async function CourseView({
   // place they can fix it.
   const meeting = await meetingDetails(admin, inst)
   const hasSchedule = Boolean(sched && schedDays.length > 0)
-  const hasCurriculum = orderedModules.length > 0
+  // Staff get it whether or not anything is in it: this is where the first
+  // section gets added, and a section that appears only once it has contents
+  // is one nobody can put contents into.
+  const hasCurriculum = orderedModules.length > 0 || showTasks
   const hasGear = Boolean(gearList && gearList.gear_list_entries.length > 0)
-  const hasResources = resources.length > 0 || (showTasks && courseDocs.length > 0)
+  // Staff get the section whether or not anything is in it: it is where the
+  // first resource and the first file get added, and a section that appears
+  // only once it has contents is one nobody can put contents into.
+  const hasResources = resources.length > 0 || showTasks
   // Staff get the notes section whether or not there is anything in it — it is
   // where the first note gets written, and an empty section that says so beats
   // sending someone to the admin editor to type one line.
@@ -570,7 +785,7 @@ export default async function CourseView({
   // an Updates section for a student to find the meeting point in.
   const hasUpdates = canPostUpdates || courseUpdates.length > 0 ||
     Boolean(meeting.meetingPoint || meeting.meetingTime || meeting.links.length || meeting.files.length)
-  const hasDocuments = showTasks && courseDocs.length > 0
+  const hasDocuments = showTasks
   // Shown to staff even when empty: "nobody has enrolled yet" is the answer an
   // instructor came for, and a missing section reads as a missing feature. The
   // exception is an internal course, where the attendees are the crew already
@@ -585,6 +800,45 @@ export default async function CourseView({
   // Day one decides whether the meeting block leads the updates or folds to a
   // line under them.
   const meetingOver = meetingDayPassed(meeting.meetingDate, inst.starts_at as string | null)
+
+  // Which calendar date each schedule day falls on. Derived, never stored: a
+  // schedule can be saved to the shelf as a template, and a template day
+  // belongs to no calendar.
+  const runningDates = courseDates(
+    inst.starts_at as string | null,
+    inst.ends_at as string | null,
+    offDays ?? []
+  )
+  const dayDates = schedDays.map((_, i) => runningDates[i] ?? null)
+
+  // The bucket is private, so every morning's files are signed here — in one
+  // round for the whole schedule rather than one per day.
+  const dayPaths = schedDays.flatMap((d) => (d.meeting_attachments ?? []).map((a) => a.path))
+  const { data: daySignedRows } = dayPaths.length
+    ? await admin.storage.from('task-documents').createSignedUrls(dayPaths, 3600)
+    : { data: [] }
+  const daySignedByPath = new Map((daySignedRows ?? []).map((r) => [r.path, r.signedUrl]))
+
+  // Today's morning and tomorrow's stand open; everything else folds to its
+  // one-line summary. The afternoon before is when people start thinking about
+  // where they are going, so a plan that only opens on the day itself opens
+  // too late — and eight open meeting blocks down one page is how the one that
+  // matters stops being findable.
+  const todayISO = (() => {
+    const n = new Date()
+    return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`
+  })()
+  const tomorrowISO = new Date(Date.parse(`${todayISO}T00:00:00`) + 86_400_000)
+    .toISOString().slice(0, 10)
+  const isOpenDay = (d: string | null) => d === todayISO || d === tomorrowISO
+
+  // Once any day carries its own morning, the day is where the morning lives
+  // and the course-level block is a second answer to one question. It steps
+  // aside rather than being deleted — nothing moves, and a course that never
+  // sets a day keeps the block it has always had.
+  const daysCarryMeeting = schedDays.some(
+    (d) => d.meeting_time || d.meeting_point || d.meeting_point_id || d.meeting_note
+  )
 
   const navSections = ([
     'details',
@@ -619,25 +873,6 @@ export default async function CourseView({
               </svg>
               Edit course
             </Link>
-            <div className="flex items-center gap-1 text-xs">
-              <span className="text-zinc-600 mr-1">Viewing as</span>
-              {([
-                ['', 'Admin', 'Everything, unfiltered'],
-                ['instructor', 'Instructor', 'What an assigned instructor sees (uses your real role on this course)'],
-                ['student', 'Student', 'What an enrolled student sees'],
-              ] as const).map(([key, label, hint]) => (
-                <Link
-                  key={label}
-                  href={key ? `/portal/${id}?as=${key}` : `/portal/${id}`}
-                  title={hint}
-                  className={`px-2 py-1 rounded font-medium transition-colors ${
-                    (viewAs ?? '') === key ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:text-zinc-300'
-                  }`}
-                >
-                  {label}
-                </Link>
-              ))}
-            </div>
           </div>
         )}
 
@@ -683,7 +918,20 @@ export default async function CourseView({
           </dl>
 
           {/* Maps sit with the location — the answer to "where is this?" is
-              the place name and the map together. */}
+              the place name and the map together — and are edited there too.
+              Promoting one into the library stays admin-only inside the
+              component's own actions. */}
+          <EditInPlace
+            label="Edit maps"
+            editor={
+              showTasks ? (
+                <CourseMapsSection instanceId={id} maps={editableMaps} placeLabel={coursePlace} />
+              ) : null
+            }
+          >
+          {maps.length === 0 && showTasks && (
+            <p className="text-xs text-zinc-600 mt-3">No maps on this course yet.</p>
+          )}
           {maps.length > 0 && (
             <div className="flex flex-wrap items-center gap-x-3 gap-y-2 mt-3">
               {maps.map((m) => (
@@ -726,11 +974,27 @@ export default async function CourseView({
               ))}
             </div>
           )}
+          </EditInPlace>
         </div>
 
         {/* Links for this delivery. Grouped, because "the album" and "the
             waiver" are different errands and a single list of URLs makes you
-            read all of them to find either. */}
+            read all of them to find either.
+
+            Only the album is editable here: it is the one link the people
+            running the course have in hand, and the one students come back for
+            afterwards. The rest arrive from elsewhere. */}
+        <EditInPlace
+          label="Edit album"
+          editor={
+            showTasks ? (
+              <CoursePhotosSection
+                instanceId={id}
+                links={((linkRows ?? []) as CourseLink[]).filter((l) => l.purpose === 'photos')}
+              />
+            ) : null
+          }
+        >
         {(linkRows ?? []).length > 0 && (
           <div className="mb-8 space-y-3">
             {PURPOSE_ORDER.map((purpose) => {
@@ -768,18 +1032,58 @@ export default async function CourseView({
             })}
           </div>
         )}
-        <PortalSectionNav sections={navSections} />
+        </EditInPlace>
+        <PortalSectionNav
+          sections={navSections}
+          trailing={isAdmin ? (
+            /* Which role you are reading as, travelling down the page with
+               you. At the top it answered the question only where nobody was
+               asking it — you find out you are in a preview at the moment a
+               control is missing, which is halfway down. */
+            <div className="flex items-center gap-0.5 text-[11px]">
+              {([
+                ['', 'Admin', 'Everything, unfiltered'],
+                ['instructor', 'Instructor', 'What an assigned instructor sees (uses your real role on this course)'],
+                ['student', 'Student', 'What an enrolled student sees'],
+              ] as const).map(([key, label, hint]) => (
+                <Link
+                  key={label}
+                  href={key ? `/portal/${id}?as=${key}` : `/portal/${id}`}
+                  title={hint}
+                  className={`px-1.5 py-1 rounded font-medium transition-colors ${
+                    (viewAs ?? '') === key
+                      ? 'bg-zinc-800 text-white'
+                      : 'text-zinc-500 hover:text-zinc-300'
+                  }`}
+                >
+                  {/* Full words where there is room; initials where there
+                      isn't, because the bar also carries the jump links. */}
+                  <span className="hidden sm:inline">{label}</span>
+                  <span className="sm:hidden">{label[0]}</span>
+                </Link>
+              ))}
+            </div>
+          ) : null}
+        />
 
         {/* Who is on this course — the welcome, the crew, the roster. Where
             to meet used to be here too, but it is news rather than reference:
             it belongs with the updates, and it belongs out of the way once
             everyone has met. */}
         {hasDetails && (
-          <Section id="details" blurb="Where to meet, who you're with, and what this course covers">
+          <Section id="details">
             <div className="space-y-6">
+              <EditInPlace
+                label="Edit welcome"
+                editor={showTasks ? <CourseIntroFields instanceId={id} intro={inst.intro as string | null} /> : null}
+              >
+              {!inst.intro && showTasks && (
+                <p className="text-xs text-zinc-600">No welcome written for this course yet.</p>
+              )}
               {inst.intro && (
                 <p className="text-sm text-zinc-300 whitespace-pre-line">{inst.intro}</p>
               )}
+              </EditInPlace>
               {(instructors ?? []).length > 0 && (
                 <div>
                   <SubHead title={(instructors ?? []).length > 1 ? 'Your instructors' : 'Your instructor'} />
@@ -882,13 +1186,17 @@ export default async function CourseView({
         {hasUpdates && (
           <Section
             id="updates"
-            blurb={showTasks ? 'Posted here and emailed' : 'Posted by your instructors, and emailed to you'}
             unread={unreadUpdates > 0}
           >
             {/* Above the feed until the meeting day is behind us, a single
                 line after that. Where to meet is the most important thing on
                 the page right up to the moment everyone has met, and dead
                 weight from then on. */}
+            {/* Superseded once the schedule days carry their own mornings: two
+                blocks answering "where do we meet" is how one of them ends up
+                stale. It simply goes — the Schedule section is one heading
+                away and carries the answer on the day it belongs to. */}
+            {daysCarryMeeting ? null : (
             <div className="mb-4">
               <MeetingDetails
                 instanceId={id}
@@ -902,9 +1210,10 @@ export default async function CourseView({
                 notifyCounts={notifyCounts}
                 // Only staff post, so only staff need the history.
                 announcedDates={showTasks ? ((inst.meeting_announced_dates as string[] | null) ?? []) : []}
-                passed={meetingOver}
+                folded={meetingOver}
               />
             </div>
+            )}
 
             <CourseUpdates
               instanceId={id}
@@ -914,11 +1223,7 @@ export default async function CourseView({
             />
             {showTasks && (
               <div className="mt-6 pt-6 border-t border-zinc-800">
-                <SubHead
-                  title="Send an email"
-                  note="Goes to inboxes only — nothing is posted here"
-                  badge={<AudiencePills audience="internal" />}
-                />
+                <SubHead title="Emails" badge={<AudiencePills audience="internal" />} />
                 <CourseMessages
                   instanceId={id}
                   messages={courseMessages}
@@ -956,10 +1261,10 @@ export default async function CourseView({
         {/* Course tasks, and the team's own notes on the course — the one
             block on the page that is theirs end to end. */}
         {hasTasks && (
-          <Section id="tasks" title="Course tasks" blurb="What still has to happen before this course runs" team>
+          <Section id="tasks" title="Course tasks" team>
             {hasNotes && (
               <div className="mb-6">
-                <SubHead title="Notes" note="Gate codes, client quirks, what to watch for" />
+                <SubHead title="Notes" />
                 <CourseNotes instanceId={id} notes={inst.notes} canEdit={showTasks} />
               </div>
             )}
@@ -978,33 +1283,98 @@ export default async function CourseView({
         {hasSchedule && (
           <Section
             id="schedule"
-            blurb="Day by day, what we're doing and where"
             action={<PdfLink href={`/api/schedules/${sched.id}/pdf`} />}
           >
-            {sched.overview && <p className="text-sm text-zinc-400 mb-3 whitespace-pre-line">{sched.overview}</p>}
-            {sched.objectives.length > 0 && (
-              <div className="mb-4">
-                <SubHead title="Objectives" />
-                <ol className="space-y-1 text-sm text-zinc-300 list-decimal pl-5">
-                  {sched.objectives.map((o, i) => <li key={i}>{o}</li>)}
-                </ol>
-              </div>
-            )}
+            {/* What the course is, before the days it happens on. Editable
+                here because this is where it is read — and because an empty
+                overview is invisible, so a way in that lives on another screen
+                is a way in nobody finds. */}
+            <EditInPlace
+              label="Edit overview"
+              editor={
+                canEditSchedule ? (
+                  <ScheduleOverviewFields
+                    scheduleId={sched.id}
+                    overview={sched.overview}
+                    objectives={sched.objectives ?? []}
+                  />
+                ) : null
+              }
+            >
+              {sched.overview && <p className="text-sm text-zinc-400 mb-3 whitespace-pre-line">{sched.overview}</p>}
+              {sched.objectives.length > 0 && (
+                <div className="mb-4">
+                  <SubHead title="Objectives" />
+                  <ol className="space-y-1 text-sm text-zinc-300 list-decimal pl-5">
+                    {sched.objectives.map((o, i) => <li key={i}>{o}</li>)}
+                  </ol>
+                </div>
+              )}
+              {/* Staff see that there is nothing here rather than nothing at
+                  all — an empty overview is otherwise indistinguishable from a
+                  feature that went away. */}
+              {!sched.overview && !sched.objectives.length && canEditSchedule && (
+                <p className="text-xs text-zinc-600 mb-3">No overview or objectives set.</p>
+              )}
+            </EditInPlace>
             <div className="space-y-3">
               {schedDays.map((d, di) => {
                 const blocks = [...(d.schedule_blocks ?? [])].sort((a, b) => a.sort_order - b.sort_order)
                 const topics = blocks.filter((b) => !b.parent_id)
+                const editableDay = editableDays.get(d.id) ?? null
+                const dayPassed = meetingDayPassed(dayDates[di], null)
                 return (
-                  <div key={d.id} className="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
-                    <div className="flex items-baseline gap-2">
-                      {/* The counter only earns its place when the title says
-                          something else — most days are called "Day 1", and
-                          printing that twice is just noise. */}
+                  <details
+                    key={d.id}
+                    open={!dayPassed}
+                    className="group/day bg-zinc-900 border border-zinc-800 rounded-lg p-4"
+                  >
+                    {/* Days already behind us fold to a line, so a five-day
+                        course reads as today plus what is still ahead. The cut
+                        is local midnight — "is that day behind us" is a
+                        question about the calendar, not the hour — which is
+                        the same test the meeting block folds on.
+
+                        A day with no date can't be behind anything, so a
+                        schedule longer than its course stays open. */}
+                    <summary className="cursor-pointer list-none flex items-baseline gap-2">
+                      <span
+                        aria-hidden
+                        className="text-zinc-600 shrink-0 text-[10px] transition-transform group-open/day:rotate-90"
+                      >
+                        ▸
+                      </span>
                       {!/^day\s*\d+\b/i.test(d.title.trim()) && (
                         <span className="text-[11px] font-mono text-zinc-600 shrink-0">Day {di + 1}</span>
                       )}
                       <h3 className="font-medium text-sm">{d.title}</h3>
-                    </div>
+                      {/* Folded, the place is the only other thing worth
+                          carrying — it is what tells one past day from
+                          another. */}
+                      {d.location && (
+                        <span className="text-xs text-zinc-600 truncate group-open/day:hidden">
+                          {d.location}
+                        </span>
+                      )}
+                    </summary>
+                    {/* The way into this day, on this day. The element is only
+                        built for staff, so a student is sent neither the button
+                        nor the editor's code — and `canEditSchedule` is the
+                        rule the server actions enforce, so it is never offered
+                        where the write would be refused. */}
+                    <EditInPlace
+                      label="Edit day"
+                      editor={
+                        canEditSchedule && editableDay ? (
+                          <ScheduleDayCard
+                            day={editableDay}
+                            sites={schedSites}
+                            meetingPoints={schedMeetingPoints}
+                            venueId={inst.venue_id}
+                          />
+                        ) : null
+                      }
+                    >
                     {/* Place and notes were joined with a dot, which read as
                         one sentence — and on the canyon days the note is three
                         facts long, so the place vanished into it. The pin says
@@ -1023,6 +1393,69 @@ export default async function CourseView({
                         {d.location}
                       </p>
                     )}
+                    {/* The morning, in the same block the course has always
+                        used — audience, copy-me, links, attachments, and save
+                        and notify as one press. It is attached to this day
+                        rather than to the course, which is the only thing that
+                        differs. Where nothing is typed here it shows the
+                        meetup the site usually uses. */}
+                    {(() => {
+                      const m = resolveDayMeeting(d, d.sites)
+                      const date = dayDates[di]
+                      const own = Boolean(d.meeting_time || d.meeting_point || (d.meeting_links ?? []).length || (d.meeting_attachments ?? []).length)
+                      const empty = !own && !m.point
+                      // Staff get the block on every day, because setting a
+                      // morning is the only way to set one — the editor no
+                      // longer carries those fields, so a day that renders
+                      // nothing is a day whose morning can never be written.
+                      // Folded, it is one quiet line saying "not set", which is
+                      // a way in rather than an announcement. Students see only
+                      // the mornings that exist.
+                      if (empty && (!showTasks || !date)) return null
+                      return (
+                        <div className="flex gap-1.5 mt-2">
+                          {/* The flag sits in the same gutter as the pin, the
+                              rope and the page corner. Without it this block
+                              started at the card's edge while everything under
+                              it started a glyph's width in, so the morning's
+                              own link and the canyon's stood at two different
+                              indents and read as two unrelated things. */}
+                          <svg
+                            aria-hidden
+                            xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24"
+                            fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"
+                            className="shrink-0 mt-[5px] text-zinc-600"
+                          >
+                            <path d="M5 21V4" />
+                            <path d="M5 4h11l-2 3.5L16 11H5" />
+                          </svg>
+                          <div className="flex-1 min-w-0">
+                          <MeetingDetails
+                            instanceId={id}
+                            dayId={d.id}
+                            inheritedPoint={d.meeting_point ? null : m.point}
+                            inheritedTime={m.usualTime}
+                            meetingDate={date}
+                            courseStart={date}
+                            meetingPoint={d.meeting_point}
+                            meetingTime={d.meeting_time}
+                            links={d.meeting_links ?? []}
+                            files={(d.meeting_attachments ?? []).map((a) => ({
+                              ...a,
+                              url: daySignedByPath.get(a.path) ?? '#',
+                            }))}
+                            canEdit={showTasks}
+                            notifyCounts={notifyCounts}
+                            announcedDates={showTasks ? ((inst.meeting_announced_dates as string[] | null) ?? []) : []}
+                            // An empty day never opens itself: it is a way
+                            // in, not an announcement that nobody knows where
+                            // to go.
+                            folded={empty || !isOpenDay(date)}
+                          />
+                          </div>
+                        </div>
+                      )
+                    })()}
                     {/* The canyon, not the day. It's written once on the site
                         and shown live here, so a corrected rap count reaches
                         every course at once — which is also why it sits above
@@ -1041,24 +1474,38 @@ export default async function CourseView({
                           <circle cx="18" cy="5" r="3" />
                           <path d="M9 19h4a4 4 0 0 0 0-8h-2a4 4 0 0 1 0-8h4" />
                         </svg>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs text-zinc-400 whitespace-pre-line leading-relaxed">{d.sites.beta}</p>
+                        {/* Folded on the same rhythm as the morning above it:
+                            open today and tomorrow, a single line the rest of
+                            the week. The two are read together — where we are
+                            meeting and what we are dropping into — so one of
+                            them standing open while the other collapses makes a
+                            day look half-answered.
+
+                            A <details> rather than state: this is a server
+                            component, and the browser already knows how to open
+                            and close a disclosure. */}
+                        <details open={isOpenDay(dayDates[di])} className="group flex-1 min-w-0">
+                          <summary className="cursor-pointer list-none flex items-center gap-2 text-xs text-zinc-500 hover:text-zinc-300 transition-colors">
+                            <span aria-hidden className="text-zinc-600 shrink-0 inline-block transition-transform group-open:rotate-90">▸</span>
+                            <span className="font-medium text-zinc-400 shrink-0">Route</span>
+                            {/* The scope line — "Upper Emerald only, to the
+                                footbridge" — is what tells two canyons at one
+                                place apart, so it is the half worth showing
+                                while the rest is folded away. */}
+                            <span className="truncate group-open:hidden">
+                              {(d.sites.beta ?? '').split('\n').find((l) => l.trim()) ?? ''}
+                            </span>
+                          </summary>
+                          <p className="text-xs text-zinc-400 whitespace-pre-line leading-relaxed mt-1.5">{d.sites.beta}</p>
+                          {/* The canyon's standing links — route page, gauge —
+                              as opposed to anything pinned to one morning,
+                              which sits in the meeting block above. */}
                           {(d.sites.links ?? []).length > 0 && (
-                            <p className="flex flex-wrap gap-x-3 gap-y-1 mt-1.5">
-                              {(d.sites.links ?? []).map((l, i) => (
-                                <a
-                                  key={i}
-                                  href={l.url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-[11px] text-zinc-500 underline hover:text-zinc-300 transition-colors"
-                                >
-                                  {l.label}
-                                </a>
-                              ))}
-                            </p>
+                            <div className="mt-2">
+                              <ChipRow links={d.sites.links ?? []} />
+                            </div>
                           )}
-                        </div>
+                        </details>
                       </div>
                     )}
                     {/* Under a pinned location, an unmarked grey line read as
@@ -1173,10 +1620,19 @@ export default async function CourseView({
                         </ul>
                       </div>
                     )}
-                  </div>
+                    </EditInPlace>
+                  </details>
                 )
               })}
             </div>
+            {/* The one piece of the schedule's shape that stayed: a day the
+                running order doesn't have yet belongs to no day, so there is
+                nowhere else on this page to put it. */}
+            {canEditSchedule && (
+              <div className="mt-3">
+                <AddScheduleDay scheduleId={sched.id} />
+              </div>
+            )}
           </Section>
         )}
 
@@ -1186,7 +1642,22 @@ export default async function CourseView({
             Rows the team can see but students can't are badged, so an
             instructor reading the same page knows which is which. */}
         {hasResources && (
-          <Section id="resources" blurb="Reference for this course and this place">
+          <Section id="resources">
+            {/* Reference for this place, edited where it is read. Save-to-
+                library stays admin-only inside the component's own actions —
+                promoting a med plan reaches every course that pulls it. */}
+            <EditInPlace
+              label="Edit resources"
+              editor={
+                showTasks ? (
+                  <CourseResourcesSection
+                    instanceId={id}
+                    resources={editableResources}
+                    placeLabel={coursePlace}
+                  />
+                ) : null
+              }
+            >
             {resources.length > 0 && (
               <ul className="space-y-1.5">
                 {resources.map((r) => (
@@ -1216,6 +1687,12 @@ export default async function CourseView({
                 ))}
               </ul>
             )}
+            {/* Staff with nothing here still get the way in — an empty section
+                is otherwise indistinguishable from one you cannot add to. */}
+            {resources.length === 0 && showTasks && (
+              <p className="text-xs text-zinc-600">No resources on this course yet.</p>
+            )}
+            </EditInPlace>
             {hasDocuments && (
               <div className={resources.length > 0 ? 'mt-6 pt-6 border-t border-zinc-800' : ''}>
                 <SubHead
@@ -1223,6 +1700,17 @@ export default async function CourseView({
                   note="Files and links, including from tasks"
                   badge={<AudiencePills audience="internal" />}
                 />
+                {/* Every attachment on the course in one place — uploads,
+                    pasted links, and documents that arrived on a task. Adding
+                    one here is what makes "put the client's PDF somewhere" a
+                    thing you do on the course rather than on another screen. */}
+                <EditInPlace
+                  label="Edit files"
+                  editor={showTasks ? <CourseFilesSection instanceId={id} files={editableFiles} /> : null}
+                >
+                {courseDocs.length === 0 && (
+                  <p className="text-xs text-zinc-600">Nothing attached to this course yet.</p>
+                )}
                 <div className="flex flex-wrap gap-2">
                   {courseDocs.map((d) => (
                     <a
@@ -1243,6 +1731,7 @@ export default async function CourseView({
                     </a>
                   ))}
                 </div>
+                </EditInPlace>
               </div>
             )}
           </Section>
@@ -1251,7 +1740,25 @@ export default async function CourseView({
         {/* Curriculum — the modules, each its own named group rather than a
             page-length run of link rows. */}
         {hasCurriculum && (
-          <Section id="curriculum" blurb="Reading, videos and references for each topic">
+          <Section id="curriculum">
+            {/* Sections and the items in them, assigned on the course. The
+                editor is a server component — it is server actions bound to
+                rows all the way down — so it is built here and handed over
+                rather than imported into the client. */}
+            <EditInPlace
+              label="Edit curriculum"
+              editor={
+                showTasks ? (
+                  <CourseCurriculumEditor
+                    instanceId={id}
+                    modules={orderedModules as unknown as CurriculumModule[]}
+                    templates={curriculumTemplates}
+                    courseDisciplines={courseDisciplines}
+                    knownSectionNames={knownSectionNames}
+                  />
+                ) : null
+              }
+            >
             <div className="space-y-6">
               {orderedModules.map(mod => {
                 const items = (mod.course_items ?? []).slice().sort((a, b) => a.order - b.order)
@@ -1309,12 +1816,31 @@ export default async function CourseView({
                 )
               })}
             </div>
+            </EditInPlace>
           </Section>
         )}
 
         {/* Gear */}
         {hasGear && gearList && (
           <Section id="gear" blurb={gearList.name} action={<PdfLink href={`/api/gear-lists/${gearList.id}/pdf`} />}>
+            {/* Admin-only, unlike every other editor on this page: assembling
+                a gear list is not something an instructor was ever meant to
+                deal with, and the toggle should show that by taking it away. */}
+            <EditInPlace
+              label="Edit gear list"
+              editor={
+                showAsAdmin ? (
+                  <CourseGear
+                    instanceId={id}
+                    courseType={inst.course_type as string | null}
+                    students={(inst.max_students as number | null) ?? null}
+                    lists={(gearListRows ?? []) as unknown as React.ComponentProps<typeof CourseGear>['lists']}
+                    templates={gearTemplateOptions}
+                    catalog={(gearCatalogRows ?? []) as unknown as React.ComponentProps<typeof CourseGear>['catalog']}
+                  />
+                ) : null
+              }
+            >
             {gearList.intro && <p className="text-sm text-zinc-400 mb-3 whitespace-pre-line">{gearList.intro}</p>}
             {(['personal', 'group'] as const).map((gt) => {
               const rows = gearList.gear_list_entries
@@ -1409,6 +1935,7 @@ export default async function CourseView({
                 </div>
               )
             })}
+            </EditInPlace>
           </Section>
         )}
 
