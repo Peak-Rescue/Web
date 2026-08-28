@@ -14,7 +14,34 @@ import { refuse, type ActionResult } from '@/lib/action-result'
 // Visibility is per row, so a course can carry a student-facing med plan and
 // an instructors-only annex without them being the same decision.
 
+async function requireTeam(instanceId: string) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Not authenticated')
+  const admin = createAdminClient()
+
+  const { data: profile } = await admin.from('profiles').select('role').eq('id', user.id).single()
+  if (profile?.role === 'admin') return { user, admin }
+
+  // The people running the course keep its material: a map found the night
+  // before, the client's permit, a photo of the gate. Same rule the one-off
+  // links have used since they were added — an instructor assigned to this
+  // course, and nobody else.
+  const { data: assigned } = await admin
+    .from('instance_instructors')
+    .select('id, instructors!inner(profile_id)')
+    .eq('instance_id', instanceId)
+    .eq('instructors.profile_id', user.id)
+    .maybeSingle()
+  if (!assigned) throw new Error('Not authorized')
+  return { user, admin }
+}
+
+// Writing to the shared library is a different act: it reaches every course
+// that pulls from it afterwards, which is not a blast radius that comes with a
+// course assignment.
 async function requireAdmin() {
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('Not authenticated')
@@ -58,7 +85,7 @@ export type ResourcePickerItem = {
 // reason is identical: a document written for this venue outranks one written
 // for the state it sits in.
 export async function loadResourceLibrary(instanceId: string): Promise<ResourcePickerItem[]> {
-  const { admin } = await requireAdmin()
+  const { admin } = await requireTeam(instanceId)
 
   const [{ data: inst }, { data: rows }, { data: existing }] = await Promise.all([
     admin.from('course_instances').select('location, region, venue_id').eq('id', instanceId).single(),
@@ -100,7 +127,7 @@ export async function loadResourceLibrary(instanceId: string): Promise<ResourceP
 }
 
 export async function addCourseResourcesFromLibrary(instanceId: string, itemIds: string[]) {
-  const { user, admin } = await requireAdmin()
+  const { user, admin } = await requireTeam(instanceId)
   if (itemIds.length === 0) return
 
   // A library item marked instructors-only cannot be published to students by
@@ -139,7 +166,7 @@ export async function addCourseResourceLink(
   audience: LibraryAudience = 'internal',
   toLibrary = false
 ): Promise<ActionResult> {
-  const { user, admin } = await requireAdmin()
+  const { user, admin } = await requireTeam(instanceId)
   const link = normalizeDocLink(url, label)
 
   // Pasting a document the shelf already holds used to go through quietly and
@@ -228,7 +255,7 @@ export async function setCourseResourceAudience(
   resourceId: string,
   audience: LibraryAudience
 ): Promise<ActionResult> {
-  const { admin } = await requireAdmin()
+  const { admin } = await requireTeam(instanceId)
 
   if (audience === 'shared') {
     const { data: row } = await admin
@@ -338,7 +365,7 @@ async function promoteToLibrary(
 }
 
 export async function renameCourseResource(instanceId: string, resourceId: string, label: string) {
-  const { admin } = await requireAdmin()
+  const { admin } = await requireTeam(instanceId)
   const { error } = await admin
     .from('course_resources')
     .update({ label: label.trim().slice(0, 200) || null })
@@ -349,7 +376,7 @@ export async function renameCourseResource(instanceId: string, resourceId: strin
 }
 
 export async function removeCourseResource(instanceId: string, resourceId: string) {
-  const { admin } = await requireAdmin()
+  const { admin } = await requireTeam(instanceId)
   const { error } = await admin
     .from('course_resources')
     .delete()

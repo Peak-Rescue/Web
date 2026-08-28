@@ -14,7 +14,34 @@ import { refuse, type ActionResult } from '@/lib/action-result'
 // is per-row so the same course can carry a student-facing overview map and
 // an instructor-only evacuation map.
 
+async function requireTeam(instanceId: string) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Not authenticated')
+  const admin = createAdminClient()
+
+  const { data: profile } = await admin.from('profiles').select('role').eq('id', user.id).single()
+  if (profile?.role === 'admin') return { user, admin }
+
+  // The people running the course keep its material: a map found the night
+  // before, the client's permit, a photo of the gate. Same rule the one-off
+  // links have used since they were added — an instructor assigned to this
+  // course, and nobody else.
+  const { data: assigned } = await admin
+    .from('instance_instructors')
+    .select('id, instructors!inner(profile_id)')
+    .eq('instance_id', instanceId)
+    .eq('instructors.profile_id', user.id)
+    .maybeSingle()
+  if (!assigned) throw new Error('Not authorized')
+  return { user, admin }
+}
+
+// Writing to the shared library is a different act: it reaches every course
+// that pulls from it afterwards, which is not a blast radius that comes with a
+// course assignment.
 async function requireAdmin() {
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('Not authenticated')
@@ -57,7 +84,7 @@ export type MapPickerItem = {
 // location was typed. A venue-name hit still outranks it, since a map for this
 // specific venue beats a state-wide one.
 export async function loadMapLibrary(instanceId: string): Promise<MapPickerItem[]> {
-  const { admin } = await requireAdmin()
+  const { admin } = await requireTeam(instanceId)
 
   const [{ data: inst }, { data: rows }, { data: existing }] = await Promise.all([
     admin.from('course_instances').select('location, region, venue_id').eq('id', instanceId).single(),
@@ -100,7 +127,7 @@ export async function loadMapLibrary(instanceId: string): Promise<MapPickerItem[
 }
 
 export async function addCourseMapsFromLibrary(instanceId: string, itemIds: string[]) {
-  const { user, admin } = await requireAdmin()
+  const { user, admin } = await requireTeam(instanceId)
   if (itemIds.length === 0) return
 
   // A library map marked instructors-only cannot be published to students by
@@ -140,7 +167,7 @@ export async function addCourseMapLink(
   audience: LibraryAudience = 'internal',
   toLibrary = false
 ): Promise<ActionResult> {
-  const { user, admin } = await requireAdmin()
+  const { user, admin } = await requireTeam(instanceId)
   const link = normalizeDocLink(url, label)
 
   // Pasting a map the shelf already holds used to go through quietly and
@@ -228,7 +255,7 @@ export async function setCourseMapAudience(
   mapId: string,
   audience: LibraryAudience
 ): Promise<ActionResult> {
-  const { admin } = await requireAdmin()
+  const { admin } = await requireTeam(instanceId)
 
   // The library's answer is the default, and a course may overrule it for one
   // delivery. What used to happen instead was a refusal — "change it in the
@@ -264,7 +291,7 @@ export async function followLibraryMapAudience(
   instanceId: string,
   mapId: string
 ): Promise<ActionResult> {
-  const { admin } = await requireAdmin()
+  const { admin } = await requireTeam(instanceId)
   const { data: row } = await admin
     .from('course_maps')
     .select('library_items(audience)')
@@ -363,7 +390,7 @@ async function promoteToLibrary(
 }
 
 export async function renameCourseMap(instanceId: string, mapId: string, label: string) {
-  const { admin } = await requireAdmin()
+  const { admin } = await requireTeam(instanceId)
   const { error } = await admin
     .from('course_maps')
     .update({ label: label.trim().slice(0, 200) || null })
@@ -374,7 +401,7 @@ export async function renameCourseMap(instanceId: string, mapId: string, label: 
 }
 
 export async function removeCourseMap(instanceId: string, mapId: string) {
-  const { admin } = await requireAdmin()
+  const { admin } = await requireTeam(instanceId)
   const { error } = await admin.from('course_maps').delete().eq('id', mapId).eq('instance_id', instanceId)
   if (error) throw new Error(error.message)
   revalidate(instanceId)
