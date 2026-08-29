@@ -75,8 +75,8 @@ function LoginInner() {
           <h1 className="text-2xl font-bold text-white">Peak Rescue Portal</h1>
           <p className="mt-2 text-sm text-zinc-400">
             {sent
-              ? 'We sent a code to your email. Enter it below.'
-              : 'Access is by invite. Enter the email your invite was sent to.'}
+              ? `We sent a code to ${email}. Enter it below.`
+              : 'Access is by invite. Enter the email it was sent to, or contact your course organizer.'}
           </p>
         </div>
 
@@ -89,7 +89,7 @@ function LoginInner() {
         {sent ? (
           <form onSubmit={handleVerify} className="space-y-4">
             <div>
-              <label htmlFor="code" className="block text-sm font-medium text-zinc-300 mb-1">
+              <label htmlFor="code" className="sr-only">
                 Sign-in code
               </label>
               <input
@@ -104,9 +104,6 @@ function LoginInner() {
                 placeholder="12345678"
                 className={`${field} text-center text-2xl tracking-[0.3em] font-mono`}
               />
-              <p className="mt-2 text-xs text-zinc-500">
-                Sent to {email}. The email has no link in it — type the code here.
-              </p>
             </div>
 
             {error && <p className="text-red-400 text-sm">{error}</p>}
@@ -126,7 +123,7 @@ function LoginInner() {
         ) : (
           <form onSubmit={handleSend} className="space-y-4">
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-zinc-300 mb-1">
+              <label htmlFor="email" className="sr-only">
                 Email address
               </label>
               <input
@@ -145,10 +142,6 @@ function LoginInner() {
             <button type="submit" disabled={loading} className={button}>
               {loading ? 'Sending…' : 'Email me a sign-in code'}
             </button>
-
-            <p className="text-zinc-500 text-xs text-center">
-              Nothing arrives? Portal access is by invite — contact your course organizer.
-            </p>
           </form>
         )}
       </div>
