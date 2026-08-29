@@ -21,20 +21,46 @@ type Admin = ReturnType<typeof createAdminClient>
 
 const FROM = 'Peak Rescue Portal <noreply@peak-rescue.com>'
 
+// Every leg of this gets a ceiling. Without one, a stalled connection to
+// Supabase or Resend hangs the server action until the platform kills the
+// invocation — the caller watches "Sending…" for minutes and then gets the
+// client's generic catch, which says nothing about what stalled. Failing at
+// eight seconds costs a retry; failing at the function ceiling costs the
+// sign-in. The label is what shows up in the logs.
+const LEG_TIMEOUT_MS = 8_000
+
+class LegTimeout extends Error {}
+
+async function withTimeout<T>(label: string, work: PromiseLike<T>): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([
+      work,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new LegTimeout(`${label} timed out after ${LEG_TIMEOUT_MS}ms`)), LEG_TIMEOUT_MS)
+      }),
+    ])
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 // generateLink CREATES the account when the address is unknown, which would
 // turn the public login form into an open sign-up endpoint. Every caller must
 // confirm the person already exists first.
 export async function findUserIdByEmail(admin: Admin, email: string): Promise<string | null> {
-  const { data: profile } = await admin
-    .from('profiles')
-    .select('id')
-    .ilike('email', ilikeExact(email))
-    .maybeSingle()
+  const { data: profile } = await withTimeout(
+    'profile lookup',
+    admin.from('profiles').select('id').ilike('email', ilikeExact(email)).maybeSingle()
+  )
   if (profile) return profile.id
 
   // profiles.email is only populated from signup onward (migration 068), so
   // fall back to the auth list for anyone who predates it.
-  const { data, error } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 })
+  const { data, error } = await withTimeout(
+    'auth user list',
+    admin.auth.admin.listUsers({ page: 1, perPage: 1000 })
+  )
   if (error) return null
   return data.users.find((u) => u.email?.toLowerCase() === email)?.id ?? null
 }
@@ -44,50 +70,64 @@ export async function findUserIdByEmail(admin: Admin, email: string): Promise<st
 // distinct "no account found" reply would let anyone test which addresses
 // belong to Peak Rescue staff and students.
 export async function sendSignInCode(admin: Admin, email: string): Promise<string | null> {
-  const userId = await findUserIdByEmail(admin, email)
-  if (!userId) return null
+  try {
+    const userId = await findUserIdByEmail(admin, email)
+    if (!userId) return null
 
-  const { data: link, error } = await admin.auth.admin.generateLink({ type: 'magiclink', email })
-  const code = link?.properties?.email_otp
-  if (error || !code) {
-    console.error('sign-in code mint failed:', error?.message)
+    const { data: link, error } = await withTimeout(
+      'code mint',
+      admin.auth.admin.generateLink({ type: 'magiclink', email })
+    )
+    const code = link?.properties?.email_otp
+    if (error || !code) {
+      console.error('sign-in code mint failed:', error?.message)
+      return 'We could not send a code just now. Please try again shortly.'
+    }
+
+    // No mailer in local dev: print the code to the terminal so the flow can be
+    // walked end to end. Guarded on NODE_ENV — if production ever lost its key
+    // this would tell people a code was sent and quietly drop it.
+    if (!process.env.RESEND_API_KEY) {
+      if (process.env.NODE_ENV !== 'production') {
+        console.log(`\n  ✉  sign-in code for ${email}: ${code}\n`)
+        return null
+      }
+      console.error('sign-in code not sent: RESEND_API_KEY missing')
+      return 'Email is not configured on this environment.'
+    }
+
+    const { Resend } = await import('resend')
+    const resend = new Resend(process.env.RESEND_API_KEY)
+    const { error: mailError } = await withTimeout(
+      'resend send',
+      resend.emails.send({
+        from: FROM,
+        to: [email],
+        subject: `${code} is your Peak Rescue sign-in code`,
+        text: [
+          'Your Peak Rescue sign-in code:',
+          '',
+          code,
+          '',
+          'Enter it on the sign-in page. It works once.',
+          '',
+          "If you didn't ask to sign in, ignore this.",
+        ].join('\n'),
+      })
+    )
+    if (mailError) {
+      console.error(`sign-in code to ${email} failed:`, mailError)
+      return "We couldn't send your code. Please try again, or contact your course organizer."
+    }
+
+    return null
+  } catch (err) {
+    // A stalled leg lands here rather than running out the clock. Which one it
+    // was is in the message, and only in the log — the caller is told the same
+    // thing whatever stalled.
+    console.error(`sign-in code for ${email} failed:`, err instanceof Error ? err.message : err)
     return 'We could not send a code just now. Please try again shortly.'
   }
-
-  // No mailer in local dev: print the code to the terminal so the flow can be
-  // walked end to end. Guarded on NODE_ENV — if production ever lost its key
-  // this would tell people a code was sent and quietly drop it.
-  if (!process.env.RESEND_API_KEY) {
-    if (process.env.NODE_ENV !== 'production') {
-      console.log(`\n  ✉  sign-in code for ${email}: ${code}\n`)
-      return null
-    }
-    console.error('sign-in code not sent: RESEND_API_KEY missing')
-    return 'Email is not configured on this environment.'
-  }
-
-  const { Resend } = await import('resend')
-  const resend = new Resend(process.env.RESEND_API_KEY)
-  const { error: mailError } = await resend.emails.send({
-    from: FROM,
-    to: [email],
-    subject: `${code} is your Peak Rescue sign-in code`,
-    text: [
-      'Your Peak Rescue sign-in code:',
-      '',
-      code,
-      '',
-      'Enter it on the sign-in page. It works once.',
-      '',
-      "If you didn't ask to sign in, ignore this.",
-    ].join('\n'),
-  })
-  if (mailError) {
-    console.error(`sign-in code to ${email} failed:`, mailError)
-    return "We couldn't send your code. Please try again, or contact your course organizer."
-  }
-
-  return null
 }
 
 // Redeems the code against the *server* client so the session cookies are set
