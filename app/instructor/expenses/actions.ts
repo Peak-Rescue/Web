@@ -425,3 +425,23 @@ async function doSubmitReport(reportId: string): Promise<{ ok: true } | { ok: fa
   revalidateReport(reportId)
   return { ok: true }
 }
+
+// ─── Reimbursement tracking ──────────────────────────────────────────────────
+
+// Self-reported: the portal has no view into Harken's accounting, so this is a
+// personal marker owned by whoever filed the report — admins don't set it for
+// someone else, because they can't know when that person's money landed.
+// The column is `payment_received_on`; the UI says "reimbursed" because
+// "received" on its own reads as the report reaching Micah, not the money
+// reaching you.
+export async function setReimbursed(reportId: string, reimbursed: boolean) {
+  const { admin, report } = await requireOwnedReport(reportId)
+  if (report.status !== 'submitted') throw new Error('Only submitted reports can be marked reimbursed')
+
+  const { error } = await admin
+    .from('expense_reports')
+    .update({ payment_received_on: reimbursed ? new Date().toISOString().slice(0, 10) : null })
+    .eq('id', reportId)
+  if (error) throw new Error(error.message)
+  revalidateReport(reportId)
+}

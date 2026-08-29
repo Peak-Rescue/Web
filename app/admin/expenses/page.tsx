@@ -17,7 +17,7 @@ export default async function AdminExpensesPage() {
 
   const { data: reportRows } = await admin
     .from('expense_reports')
-    .select('id, created_at, reason, status, submitted_at, profile_id, default_instance_id, profiles(first_name, last_name), expense_items(amount, paid_by, instance_id)')
+    .select('id, created_at, reason, status, submitted_at, payment_received_on, profile_id, default_instance_id, profiles(first_name, last_name), expense_items(amount, paid_by, instance_id)')
     .order('created_at', { ascending: false })
 
   type ItemLite = { amount: number; paid_by: string; instance_id: string | null }
@@ -30,6 +30,7 @@ export default async function AdminExpensesPage() {
       reason: r.reason,
       status: r.status,
       submitted_at: r.submitted_at,
+      payment_received_on: r.payment_received_on,
       default_instance_id: r.default_instance_id,
       name: [p?.first_name, p?.last_name].filter(Boolean).join(' ') || 'Unknown',
       total: round2(items.reduce((s, i) => s + Number(i.amount), 0)),
@@ -67,6 +68,10 @@ export default async function AdminExpensesPage() {
   const fmtDate = (d: string) =>
     new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 
+  // Plain YYYY-MM-DD parses as UTC midnight, which renders a day early locally.
+  const fmtReimbursedDate = (d: string) =>
+    new Date(`${d}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+
   const submitted = reports.filter((r) => r.status === 'submitted')
   const drafts = reports.filter((r) => r.status === 'draft')
 
@@ -101,6 +106,11 @@ export default async function AdminExpensesPage() {
                     </p>
                     <p className="text-xs text-zinc-500 mt-0.5">
                       Submitted {r.submitted_at ? fmtDate(r.submitted_at) : '—'} · reimburse {fmtMoney(r.personal)}
+                      {/* Self-reported by the filer, and only some people track it —
+                          so it shows when set and stays silent otherwise. */}
+                      {r.payment_received_on && (
+                        <span className="text-teal-400"> · reimbursed {fmtReimbursedDate(r.payment_received_on)}</span>
+                      )}
                     </p>
                   </div>
                   <div className="flex items-center gap-4 shrink-0">
