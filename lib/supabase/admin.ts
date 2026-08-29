@@ -1,9 +1,11 @@
 import { createClient } from '@supabase/supabase-js'
+import { supabaseFetch } from './fetch'
 
 // Service role client — bypasses RLS. Only use in server-side code.
 export function createAdminClient() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { global: { fetch: supabaseFetch } }
   )
 }
