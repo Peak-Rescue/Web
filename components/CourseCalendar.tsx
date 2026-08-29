@@ -165,10 +165,21 @@ export default function CourseCalendar({
           const bySlot: (CalendarCourse | undefined)[] = []
           for (const c of active) bySlot[lanes.get(c.id)!] = c
           return (
-            <div key={day} className={`min-h-20 bg-zinc-950 p-1 ${day === todayStr ? 'bg-zinc-900' : ''}`}>
+            <div
+              key={day}
+              className={`min-h-20 p-1 ${
+                day === todayStr
+                  ? 'bg-pr-surface-raised ring-1 ring-inset ring-pr-red-light'
+                  : 'bg-zinc-950'
+              }`}
+            >
               <p
                 className={`text-[10px] mb-1 ${
-                  day === todayStr ? 'text-pr-red-light font-bold' : inMonth ? 'text-zinc-600' : 'text-zinc-700'
+                  day === todayStr
+                    ? 'inline-block rounded-full bg-pr-red px-1.5 font-bold text-white'
+                    : inMonth
+                      ? 'text-zinc-600'
+                      : 'text-zinc-700'
                 }`}
               >
                 {/* Adjacent-month 1sts get a month label so the grid's second
