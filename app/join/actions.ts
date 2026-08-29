@@ -7,6 +7,7 @@ import { ilikeExact, normalizeEmail } from '@/lib/email'
 import { claimWaiversForEmail } from '@/lib/waiver-data'
 import { findUserIdByEmail, sendSignInCode } from '@/lib/sign-in-code'
 import { courseDisplayName } from '@/lib/courses'
+import { sendMail } from '@/lib/mailer'
 
 // `signedIn: true` means the session cookies are already set and the caller
 // should navigate straight into the portal. `signedIn: false` is the one case
@@ -136,9 +137,7 @@ async function sendEnrolledReceipt(email: string, firstName: string, instance: I
   const details = [dates, instance.location].filter(Boolean).join(' · ')
 
   try {
-    const { Resend } = await import('resend')
-    const resend = new Resend(process.env.RESEND_API_KEY)
-    const { error } = await resend.emails.send({
+    const { error } = await sendMail({
       from: 'Peak Rescue Portal <noreply@peak-rescue.com>',
       to: [email],
       subject: `You're enrolled — ${name}`,

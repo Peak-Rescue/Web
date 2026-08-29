@@ -6,6 +6,7 @@ import { requireCourseStaff } from '@/lib/course-access'
 import { normalizeDocLink } from '@/lib/doc-links'
 import { courseDisplayName } from '@/lib/courses'
 import { meetingDayLabel } from '@/lib/meeting-details'
+import { sendMail } from '@/lib/mailer'
 
 // Updates posted to a course, with an email telling people to come and read
 // them.
@@ -168,8 +169,6 @@ async function notify(
     'Peak Rescue',
   ].join('\n')
 
-  const { Resend } = await import('resend')
-  const resend = new Resend(process.env.RESEND_API_KEY)
 
   // One send per address rather than one with everyone in `to` — a course
   // roster is not a mailing list, and students shouldn't see each other's
@@ -179,7 +178,7 @@ async function notify(
   // before something that can't be taken back — a receipt to yourself is not
   // one of them, and folding it in would quietly make the promise wrong.
   const send = (to: string) =>
-    resend.emails.send({ from: FROM, to: [to], replyTo: 'info@peak-rescue.com', subject, text })
+    sendMail({ from: FROM, to: [to], replyTo: 'info@peak-rescue.com', subject, text })
   const copySent: Promise<boolean> = authorCopy.length > 0
     ? send(authorCopy[0]).then(({ error }) => {
         if (error) console.error('Author copy failed:', error)

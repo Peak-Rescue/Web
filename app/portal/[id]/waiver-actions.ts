@@ -10,6 +10,7 @@ import { requireCourseStaff } from '@/lib/course-access'
 import { isMinor, missingFieldsMessage, missingWaiverFields } from '@/lib/waiver'
 import { normalizeEmail } from '@/lib/email'
 import { courseWaiverVersion, loadWaiverPdfData, syncProfileFromWaiver } from '@/lib/waiver-data'
+import { sendMail } from '@/lib/mailer'
 
 // Signing a waiver from inside the portal.
 //
@@ -225,9 +226,7 @@ async function emailSignedCopy(signatureId: string, to: string): Promise<void> {
     const { generateWaiverPdf } = await import('@/lib/waiver-pdf')
     const bytes = await generateWaiverPdf(data)
 
-    const { Resend } = await import('resend')
-    const resend = new Resend(process.env.RESEND_API_KEY)
-    const { error } = await resend.emails.send({
+    const { error } = await sendMail({
       from: FROM,
       to: [to],
       replyTo: 'info@peak-rescue.com',

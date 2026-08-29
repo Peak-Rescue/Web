@@ -16,34 +16,12 @@
 import { type createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { ilikeExact } from '@/lib/email'
+import { sendMail } from '@/lib/mailer'
+import { withTimeout } from '@/lib/timeout'
 
 type Admin = ReturnType<typeof createAdminClient>
 
 const FROM = 'Peak Rescue Portal <noreply@peak-rescue.com>'
-
-// Every leg of this gets a ceiling. Without one, a stalled connection to
-// Supabase or Resend hangs the server action until the platform kills the
-// invocation — the caller watches "Sending…" for minutes and then gets the
-// client's generic catch, which says nothing about what stalled. Failing at
-// eight seconds costs a retry; failing at the function ceiling costs the
-// sign-in. The label is what shows up in the logs.
-const LEG_TIMEOUT_MS = 8_000
-
-class LegTimeout extends Error {}
-
-async function withTimeout<T>(label: string, work: PromiseLike<T>): Promise<T> {
-  let timer: ReturnType<typeof setTimeout> | undefined
-  try {
-    return await Promise.race([
-      work,
-      new Promise<never>((_, reject) => {
-        timer = setTimeout(() => reject(new LegTimeout(`${label} timed out after ${LEG_TIMEOUT_MS}ms`)), LEG_TIMEOUT_MS)
-      }),
-    ])
-  } finally {
-    clearTimeout(timer)
-  }
-}
 
 // generateLink CREATES the account when the address is unknown, which would
 // turn the public login form into an open sign-up endpoint. Every caller must
@@ -96,25 +74,22 @@ export async function sendSignInCode(admin: Admin, email: string): Promise<strin
       return 'Email is not configured on this environment.'
     }
 
-    const { Resend } = await import('resend')
-    const resend = new Resend(process.env.RESEND_API_KEY)
-    const { error: mailError } = await withTimeout(
-      'resend send',
-      resend.emails.send({
-        from: FROM,
-        to: [email],
-        subject: `${code} is your Peak Rescue sign-in code`,
-        text: [
-          'Your Peak Rescue sign-in code:',
-          '',
-          code,
-          '',
-          'Enter it on the sign-in page. It works once.',
-          '',
-          "If you didn't ask to sign in, ignore this.",
-        ].join('\n'),
-      })
-    )
+    // Tighter than the app-wide ceiling: someone is watching this one send,
+    // and a code that arrives after they have given up is worth nothing.
+    const { error: mailError } = await sendMail({
+      from: FROM,
+      to: [email],
+      subject: `${code} is your Peak Rescue sign-in code`,
+      text: [
+        'Your Peak Rescue sign-in code:',
+        '',
+        code,
+        '',
+        'Enter it on the sign-in page. It works once.',
+        '',
+        "If you didn't ask to sign in, ignore this.",
+      ].join('\n'),
+    }, { timeoutMs: 8_000, label: 'sign-in code send' })
     if (mailError) {
       console.error(`sign-in code to ${email} failed:`, mailError)
       return "We couldn't send your code. Please try again, or contact your course organizer."

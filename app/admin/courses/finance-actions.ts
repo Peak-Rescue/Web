@@ -7,6 +7,7 @@ import { after } from 'next/server'
 import { syncCourseCalendar } from '@/lib/google-calendar'
 import { parseContacts, primaryContactEmail, ccEmailOptions } from '@/lib/contacts'
 import { guessSeedQty, coaPrice, type SeedCounts } from '@/lib/estimates'
+import { sendMail } from '@/lib/mailer'
 
 async function requireAdmin() {
   const supabase = await createClient()
@@ -341,9 +342,7 @@ export async function requestEstimateReview(instanceId: string, formData: FormDa
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://peak-rescue.com'
   const link = `${siteUrl}/admin/courses/${instanceId}#${meta.anchor}`
 
-  const { Resend } = await import('resend')
-  const resend = new Resend(process.env.RESEND_API_KEY)
-  const { error: sendError } = await resend.emails.send({
+  const { error: sendError } = await sendMail({
     from: 'Peak Rescue Portal <noreply@peak-rescue.com>',
     to: [reviewer.email],
     replyTo: requester?.email ?? undefined,
@@ -400,9 +399,7 @@ export async function respondEstimateReview(reviewId: string, formData: FormData
       const reviewerName = [reviewer?.first_name, reviewer?.last_name].filter(Boolean).join(' ') || 'The reviewer'
       const subjMeta = REVIEW_SUBJECTS[(review.subject as ReviewSubject) ?? 'estimate'] ?? REVIEW_SUBJECTS.estimate
       const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://peak-rescue.com'
-      const { Resend } = await import('resend')
-      const resend = new Resend(process.env.RESEND_API_KEY)
-      await resend.emails.send({
+      await sendMail({
         from: 'Peak Rescue Portal <noreply@peak-rescue.com>',
         to: [requester.email],
         replyTo: reviewer?.email ?? undefined,
@@ -692,9 +689,7 @@ export async function sendQuote(instanceId: string, quoteId: string, formData?: 
   const adminCc = await allowedAdminCc(admin, formData?.getAll('cc_admin') ?? [])
   const cc = [...new Set([...(quote.prepared_by_email ? [quote.prepared_by_email] : []), ...requestedCc, ...adminCc])]
 
-  const { Resend } = await import('resend')
-  const resend = new Resend(process.env.RESEND_API_KEY)
-  const { error: sendError } = await resend.emails.send({
+  const { error: sendError } = await sendMail({
     from: 'Peak Rescue Mountain Guides <noreply@peak-rescue.com>',
     to: [toEmail],
     cc: cc.length > 0 ? cc : undefined,

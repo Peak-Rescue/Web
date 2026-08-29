@@ -3,6 +3,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { checkRateLimit, clientIp } from '@/lib/rate-limit'
 import { isLikelyContactSpam } from '@/lib/contact-spam'
+import { sendMail } from '@/lib/mailer'
 
 export type ContactInput = {
   firstName: string
@@ -75,9 +76,7 @@ export async function submitContactForm(input: ContactInput): Promise<ContactRes
   // Spam-flagged submissions stay reviewable in the admin but don't notify.
   if (!spam && process.env.RESEND_API_KEY) {
     try {
-      const { Resend } = await import('resend')
-      const resend = new Resend(process.env.RESEND_API_KEY)
-      await resend.emails.send({
+      await sendMail({
         from: 'Peak Rescue Website <noreply@peak-rescue.com>',
         to: ['info@peak-rescue.com'],
         replyTo: email,

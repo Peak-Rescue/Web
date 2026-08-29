@@ -19,6 +19,7 @@ import { type createAdminClient } from '@/lib/supabase/admin'
 import { CERT_GROUPS, CERT_META, type CertType } from '@/lib/certs'
 import { courseShortName } from '@/lib/courses'
 import { listUpcomingEvents } from '@/lib/google-calendar'
+import { sendMail } from '@/lib/mailer'
 
 type Admin = ReturnType<typeof createAdminClient>
 
@@ -49,9 +50,7 @@ function friendlyDate(iso: string): string {
 
 async function sendEmail(to: string, subject: string, text: string): Promise<boolean> {
   if (!process.env.RESEND_API_KEY) return false
-  const { Resend } = await import('resend')
-  const resend = new Resend(process.env.RESEND_API_KEY)
-  const { error } = await resend.emails.send({ from: FROM, to: [to], subject, text })
+  const { error } = await sendMail({ from: FROM, to: [to], subject, text })
   if (error) console.error(`Reminder email to ${to} failed:`, error)
   return !error
 }

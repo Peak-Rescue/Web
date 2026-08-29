@@ -8,6 +8,7 @@ import { normalizeEmail } from '@/lib/email'
 import { isMinor, matchSignature, missingFieldsMessage, missingWaiverFields, type MatchCandidate } from '@/lib/waiver'
 import { loadWaiverPdfData, resolvePublicWaiverToken } from '@/lib/waiver-data'
 import type { WaiverInput } from '@/app/portal/[id]/waiver-actions'
+import { sendMail } from '@/lib/mailer'
 
 // Signing from the QR code, with no account.
 //
@@ -190,9 +191,7 @@ async function emailPublicCopy(signatureId: string, to: string): Promise<void> {
     if (!data) return
     const { generateWaiverPdf } = await import('@/lib/waiver-pdf')
     const bytes = await generateWaiverPdf(data)
-    const { Resend } = await import('resend')
-    const resend = new Resend(process.env.RESEND_API_KEY)
-    const { error } = await resend.emails.send({
+    const { error } = await sendMail({
       from: FROM,
       to: [to],
       replyTo: 'info@peak-rescue.com',

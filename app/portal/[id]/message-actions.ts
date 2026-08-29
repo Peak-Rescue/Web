@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { courseDisplayName } from '@/lib/courses'
+import { sendMail } from '@/lib/mailer'
 
 // Group email to the people on a course.
 //
@@ -105,12 +106,10 @@ export async function sendCourseMessage(
     `Your course page: ${link}`,
   ].join('\n')
 
-  const { Resend } = await import('resend')
-  const resend = new Resend(process.env.RESEND_API_KEY)
 
   // One send per address. A course roster is not a mailing list, and a reply
   // should reach the person who wrote it rather than everyone at once.
-  const send = (to: string) => resend.emails.send({
+  const send = (to: string) => sendMail({
     from: FROM,
     to: [to],
     replyTo: authorEmail ?? 'info@peak-rescue.com',

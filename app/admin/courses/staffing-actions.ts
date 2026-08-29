@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { courseShortName } from '@/lib/courses'
 import { syncCourseCalendar } from '@/lib/google-calendar'
+import { sendMail } from '@/lib/mailer'
 
 async function requireAdmin() {
   const supabase = await createClient()
@@ -78,15 +79,13 @@ export async function sendInterestInvites(
       ? 'This course is confirmed.'
       : `This course is currently ${inst.status} — dates and details may still shift.`
 
-  const { Resend } = await import('resend')
-  const resend = new Resend(process.env.RESEND_API_KEY)
 
   let sent = 0
   for (const instructor of withEmail) {
     const invite = inviteByInstructor.get(instructor.id)
     if (!invite) continue
     try {
-      await resend.emails.send({
+      await sendMail({
         from: 'Peak Rescue Portal <noreply@peak-rescue.com>',
         to: [instructor.email!],
         subject: `Interested in working ${courseName}? (${dates})`,

@@ -7,6 +7,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { syncCourseCalendar } from '@/lib/google-calendar'
 import { quoteNumber } from '@/lib/quotes'
 import { courseShortName } from '@/lib/courses'
+import { sendMail } from '@/lib/mailer'
 
 // Public action — authorization is the unguessable token itself.
 // For multi-option quotes, `selected` holds the indexes of the option or
@@ -86,9 +87,7 @@ export async function acceptQuote(
       if (recipients.length > 0) {
         const qNum = quoteNumber(inst.ref_number, quote.quote_seq)
         const courseName = courseShortName(inst.course_type, inst.custom_title)
-        const { Resend } = await import('resend')
-        const resend = new Resend(process.env.RESEND_API_KEY)
-        await resend.emails.send({
+        await sendMail({
           from: 'Peak Rescue Portal <noreply@peak-rescue.com>',
           to: recipients,
           subject: `✅ Quote ${qNum} accepted — ${courseName}`,

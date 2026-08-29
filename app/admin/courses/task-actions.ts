@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { courseShortName } from '@/lib/courses'
 import { normalizeDocLink } from '@/lib/doc-links'
+import { sendMail } from '@/lib/mailer'
 
 // Admins manage tasks everywhere; a lead instructor manages tasks on their
 // own course. Assignees may toggle their own task's status.
@@ -60,9 +61,7 @@ async function notifyAssignee(
     if (!assignee?.email || !inst) return
     const courseName = courseShortName(inst.course_type, inst.custom_title)
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://peak-rescue.com'
-    const { Resend } = await import('resend')
-    const resend = new Resend(process.env.RESEND_API_KEY)
-    await resend.emails.send({
+    await sendMail({
       from: 'Peak Rescue Portal <noreply@peak-rescue.com>',
       to: [assignee.email],
       subject: `Task assigned — ${courseName}: ${taskTitle}`,

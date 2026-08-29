@@ -5,6 +5,7 @@ import { after } from 'next/server'
 import { revalidatePath } from 'next/cache'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { courseShortName } from '@/lib/courses'
+import { sendMail } from '@/lib/mailer'
 
 export type LineAnswer = { id: string; qty: number | null; removed: boolean; note: string | null }
 
@@ -72,8 +73,7 @@ export async function submitGearOrder(
         const dropped = (lines ?? []).filter((l) => l.removed)
         const courseName = courseShortName(inst.course_type, inst.custom_title)
         const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://peak-rescue.com'
-        const { Resend } = await import('resend')
-        await new Resend(process.env.RESEND_API_KEY).emails.send({
+        await sendMail({
           from: 'Peak Rescue Portal <noreply@peak-rescue.com>',
           to: recipients,
           subject: `📦 Gear order ${order.es_quote_number ?? ''} answered — ${courseName}`.replace('  ', ' '),

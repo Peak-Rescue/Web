@@ -16,6 +16,7 @@ import {
 } from '@/lib/expenses'
 import { generateExpensePdf } from '@/lib/expense-pdf'
 import { loadCurrentRates, loadReport } from '@/lib/expense-report-data'
+import { sendMail } from '@/lib/mailer'
 
 const BUCKET = 'expense-receipts'
 const MAX_RECEIPT_BYTES = 15 * 1024 * 1024
@@ -321,9 +322,7 @@ async function notifySubmitFailure(reportId: string, ref: string, message: strin
       : { data: null }
     const name = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ') || 'Unknown instructor'
 
-    const { Resend } = await import('resend')
-    const resend = new Resend(process.env.RESEND_API_KEY)
-    await resend.emails.send({
+    await sendMail({
       from: 'Peak Rescue Portal <noreply@peak-rescue.com>',
       to: [process.env.EXPENSE_REPORT_TO || 'info@peak-rescue.com'],
       subject: `Expense report submit FAILED — ${name} (code ${ref})`,
@@ -391,9 +390,7 @@ async function doSubmitReport(reportId: string): Promise<{ ok: true } | { ok: fa
       }
 
       const skipped = loaded.receiptPaths.length - attached
-      const { Resend } = await import('resend')
-      const resend = new Resend(process.env.RESEND_API_KEY)
-      const { error: sendError } = await resend.emails.send({
+      const { error: sendError } = await sendMail({
         from: 'Peak Rescue Portal <noreply@peak-rescue.com>',
         to: [to],
         cc: profile?.email ? [profile.email] : undefined,

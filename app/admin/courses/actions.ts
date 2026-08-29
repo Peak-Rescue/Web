@@ -9,6 +9,7 @@ import { contactsFromForm } from '@/lib/contacts'
 import { syncCourseCalendar, removeCourseEvent } from '@/lib/google-calendar'
 import { isValidRegion } from '@/lib/regions'
 import { requireCourseStaff } from '@/lib/course-access'
+import { sendMail } from '@/lib/mailer'
 
 const fmtLong = (d: string) =>
   new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
@@ -48,9 +49,7 @@ async function emailCourseOff(
 ) {
   if (recipients.length === 0 || !process.env.RESEND_API_KEY) return
   try {
-    const { Resend } = await import('resend')
-    const resend = new Resend(process.env.RESEND_API_KEY)
-    await resend.emails.send({
+    await sendMail({
       from: 'Peak Rescue Portal <noreply@peak-rescue.com>',
       to: recipients,
       subject: `Cancelled — ${course.courseName} (${course.when})`,
@@ -351,9 +350,7 @@ export async function updateInstanceDates(id: string, formData: FormData) {
         const when = dateRange(starts_at, ends_at)
         const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://peak-rescue.com'
 
-        const { Resend } = await import('resend')
-        const resend = new Resend(process.env.RESEND_API_KEY)
-        await resend.emails.send({
+        await sendMail({
           from: 'Peak Rescue Portal <noreply@peak-rescue.com>',
           to: recipients,
           subject: `${starts_at ? (wasScheduled ? 'New dates' : 'Dates set') : 'Dates removed'} — ${courseName} (${when})`,
@@ -905,9 +902,7 @@ export async function assignInstructor(instanceId: string, formData: FormData) {
         const dates = inst.starts_at
           ? `${inst.starts_at}${inst.ends_at && inst.ends_at !== inst.starts_at ? ` – ${inst.ends_at}` : ''}`
           : 'dates TBD'
-        const { Resend } = await import('resend')
-        const resend = new Resend(process.env.RESEND_API_KEY)
-        await resend.emails.send({
+        await sendMail({
           from: 'Peak Rescue Portal <noreply@peak-rescue.com>',
           to: [instructor.email],
           subject: `You're assigned to ${courseName} (${role})`,

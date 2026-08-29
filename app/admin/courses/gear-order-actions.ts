@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { parseContacts, primaryContactEmail, ccEmailOptions } from '@/lib/contacts'
 import { GEAR_ENTRIES_SELECT, gearQuantity, gearLabel, productName } from '@/lib/gear'
+import { sendMail } from '@/lib/mailer'
 
 async function requireAdmin() {
   const supabase = await createClient()
@@ -218,9 +219,7 @@ export async function sendGearOrder(instanceId: string, orderId: string, formDat
   }
   const cc = [...new Set([...contactCc, ...adminCc])]
 
-  const { Resend } = await import('resend')
-  const resend = new Resend(process.env.RESEND_API_KEY)
-  const { error: sendError } = await resend.emails.send({
+  const { error: sendError } = await sendMail({
     from: 'Peak Rescue Mountain Guides <noreply@peak-rescue.com>',
     to: [toEmail],
     cc: cc.length > 0 ? cc : undefined,
