@@ -415,14 +415,18 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
           </section>
         )}
 
-        {/* The ones behind you, folded. Same list the student's dashboard has
-            always shown them under "Finished" — the people who taught it had
-            no way back to it at all once the end date passed. */}
+        {/* The ones behind you, folded. The student's dashboard has always
+            shown them the same thing; the people who taught it had no way back
+            to it at all once the end date passed.
+
+            "Past courses" rather than "Finished", to pair with the "Your
+            upcoming courses" directly above — and because a course can end
+            without having finished in any satisfying sense. */}
         {myPast.length > 0 && (
           <details className="mb-10 group">
             <summary className="cursor-pointer list-none flex items-center gap-2 text-sm font-medium text-zinc-500 uppercase tracking-wide hover:text-zinc-300 transition-colors">
               <span aria-hidden className="text-zinc-600 text-xs transition-transform group-open:rotate-90">▶</span>
-              Finished
+              Past courses
               <span className="text-zinc-600 normal-case tracking-normal">{myPast.length}</span>
             </summary>
             <div className="space-y-2 mt-3">

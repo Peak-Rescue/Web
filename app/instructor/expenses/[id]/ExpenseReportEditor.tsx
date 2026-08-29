@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import SignaturePad, { type SignaturePadHandle } from '@/components/SignaturePad'
 import TrashIcon from '@/components/TrashIcon'
+import CoursePicker, { type CourseOption } from '@/components/CoursePicker'
 import {
   type ExpenseCategory,
   type CurrentRates,
@@ -46,30 +47,7 @@ export type EditorItem = {
   receipts: { id: string; filename: string; url: string }[]
 }
 
-export type CourseOption = { id: string; label: string; mine?: boolean }
-
-// "Your courses" (assigned to the caller) first, then the rest of the
-// rolling window — keeps the common pick one glance away as history grows.
-function CourseOptions({ courses }: { courses: CourseOption[] }) {
-  const mine = courses.filter((c) => c.mine)
-  const others = courses.filter((c) => !c.mine)
-  return (
-    <>
-      {mine.length > 0 && (
-        <optgroup label="Your courses">
-          {mine.map((c) => (
-            <option key={c.id} value={c.id}>{c.label}</option>
-          ))}
-        </optgroup>
-      )}
-      <optgroup label={mine.length > 0 ? 'Other courses (last 12 months)' : 'Courses (last 12 months)'}>
-        {others.map((c) => (
-          <option key={c.id} value={c.id}>{c.label}</option>
-        ))}
-      </optgroup>
-    </>
-  )
-}
+export type { CourseOption }
 
 type FormState = {
   category: ExpenseCategory
@@ -614,10 +592,12 @@ export default function ExpenseReportEditor({
             </div>
             <div>
               <label className={labelCls}>Course (default for all expenses)</label>
-              <select value={defaultCourse} onChange={(e) => changeMeta(reason, e.target.value)} className={inputCls}>
-                <option value="">— none / general —</option>
-                <CourseOptions courses={courses} />
-              </select>
+              <CoursePicker
+                courses={courses}
+                value={defaultCourse}
+                onChange={(id) => changeMeta(reason, id)}
+                className={inputCls}
+              />
             </div>
           </div>
           <p className={`mt-3 text-xs h-4 ${metaStatus === 'error' ? 'text-pr-red-light' : 'text-zinc-500'}`}>
@@ -778,10 +758,13 @@ export default function ExpenseReportEditor({
 
                 <div>
                   <label className={labelCls}>Course (overrides default)</label>
-                  <select value={form.instance_id} onChange={(e) => setFormAndSchedule({ ...form, instance_id: e.target.value })} className={inputCls}>
-                    <option value="">— report default —</option>
-                    <CourseOptions courses={courses} />
-                  </select>
+                  <CoursePicker
+                    courses={courses}
+                    value={form.instance_id}
+                    onChange={(id) => setFormAndSchedule({ ...form, instance_id: id })}
+                    noneLabel="— report default —"
+                    className={inputCls}
+                  />
                 </div>
 
                 {showPaidForOthers && (
