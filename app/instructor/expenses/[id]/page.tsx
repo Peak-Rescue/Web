@@ -45,7 +45,7 @@ export default async function ExpenseReportPage({ params }: { params: Promise<{ 
         .neq('status', 'cancelled')
         .or(`starts_at.gte.${cutoff},starts_at.is.null`)
         .order('starts_at', { ascending: false, nullsFirst: false })
-        .limit(100),
+        .limit(300),
       // "Your courses": via instructors.profile_id — instance_instructors
       // points at the instructors table, not profiles.
       admin
@@ -89,23 +89,28 @@ export default async function ExpenseReportPage({ params }: { params: Promise<{ 
     })
   }
 
-  // The dropdown stays small forever: a rolling 12-month window (plus
-  // unscheduled instances), with the caller's own assigned courses grouped
-  // first. Instances already referenced by this report are always included so
-  // old drafts keep their options.
+  // The picker opens on the caller's own courses nearest to today — that's
+  // what almost every expense belongs to — and searches the rest. The rest is
+  // a rolling window that starts 12 months back and runs out as far as the
+  // schedule goes. Two things are pulled in whatever their date: courses this
+  // person is staffed on, and instances this report already references, so an
+  // old draft never loses the course it was filed against.
   const windowRows = instanceRows ?? []
+  const mine = new Set((myAssignments ?? []).map((a) => a.instance_id))
   const referencedIds = [
-    ...new Set([report.default_instance_id, ...items.map((i) => i.instance_id)].filter((v): v is string => Boolean(v))),
+    ...new Set(
+      [report.default_instance_id, ...items.map((i) => i.instance_id), ...mine].filter((v): v is string => Boolean(v))
+    ),
   ].filter((rid) => !windowRows.some((c) => c.id === rid))
   const { data: referencedRows } = referencedIds.length
     ? await admin.from('course_instances').select(instanceCols).in('id', referencedIds)
     : { data: [] }
 
-  const mine = new Set((myAssignments ?? []).map((a) => a.instance_id))
   const courses: CourseOption[] = [...windowRows, ...(referencedRows ?? [])].map((c) => ({
     id: c.id,
     label: instanceLabel(c),
     mine: mine.has(c.id),
+    starts_at: c.starts_at,
   }))
 
   if (report.status === 'draft') {
