@@ -2,7 +2,6 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import SignaturePad from '@/components/SignaturePad'
 import ReimbursedToggle from './ReimbursedToggle'
 import { createReport } from './actions'
 import { fmtMoney, round2 } from '@/lib/expenses'
@@ -15,7 +14,7 @@ export default async function ExpenseReportsPage() {
   const admin = createAdminClient()
   const { data: profile } = await admin
     .from('profiles')
-    .select('role, signature_data_url')
+    .select('role')
     .eq('id', user.id)
     .single()
   if (!['admin', 'instructor'].includes(profile?.role ?? '')) redirect('/dashboard')
@@ -131,11 +130,6 @@ export default async function ExpenseReportsPage() {
             </p>
           )}
         </div>
-
-        <section>
-          <h2 className="text-lg font-semibold mb-4">Signature</h2>
-          <SignaturePad hasSignature={Boolean(profile?.signature_data_url)} />
-        </section>
       </div>
     </main>
   )
