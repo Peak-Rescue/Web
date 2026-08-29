@@ -134,7 +134,7 @@ export default async function DashboardPage() {
 
         {past.length > 0 && (
           <section className="mt-10 pt-8 border-t border-zinc-800">
-            <h2 className="text-xs uppercase tracking-wide text-zinc-500 mb-3">Finished</h2>
+            <h2 className="text-xs uppercase tracking-wide text-zinc-500 mb-3">Your past courses</h2>
             <div className="space-y-2">
               {past.map((c) => <CourseCard key={c.id} c={c} dim />)}
             </div>
