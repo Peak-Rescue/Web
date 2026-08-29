@@ -1,6 +1,14 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // A tab left open across a deploy is asking a build that no longer exists
+  // for its assets and its server actions: the click does nothing and the
+  // save fails, both without saying why. With a deployment id, the client
+  // sees the mismatch in the response header and hard-reloads instead.
+  // Vercel sets VERCEL_DEPLOYMENT_ID at build; the commit sha is the
+  // fallback, and locally there is no id and nothing changes.
+  deploymentId: process.env.VERCEL_DEPLOYMENT_ID || process.env.VERCEL_GIT_COMMIT_SHA || undefined,
+
   async rewrites() {
     return [
       // Same-origin proxy for Supabase: browsers on networks that block
