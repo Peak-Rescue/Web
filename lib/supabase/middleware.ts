@@ -1,6 +1,5 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
-import { supabaseFetch } from './fetch'
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
@@ -9,7 +8,6 @@ export async function updateSession(request: NextRequest) {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
-      global: { fetch: supabaseFetch },
       cookies: {
         getAll() {
           return request.cookies.getAll()
@@ -25,6 +23,11 @@ export async function updateSession(request: NextRequest) {
     }
   )
 
+  // No fetch ceiling here on purpose: middleware runs on the Edge runtime,
+  // where wrapping fetch with an abort signal made every getUser hang until
+  // the ceiling fired — 20s and a bounce to /login for a signed-in user. The
+  // Node-side clients keep theirs. Edge needs a different mechanism.
+  //
   // Never let this throw. A malformed session cookie made getUser throw and
   // returned a 500 for every page that browser asked for, until the user
   // thought to clear cookies; a stalled request now aborts rather than
