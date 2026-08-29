@@ -74,10 +74,23 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   // stays in instructor view.
   const portalHref = (id: string) => (viewAs ? `/portal/${id}?as=${viewAs}` : `/portal/${id}`)
 
-  const myCourses = (assignmentRows ?? [])
+  const myAssignments = (assignmentRows ?? [])
     .map((a) => ({ role: a.role as string, inst: a.course_instances as unknown as InstRow }))
-    .filter((c) => c.inst && c.inst.status !== 'cancelled' && (!c.inst.ends_at || c.inst.ends_at >= today))
+    .filter((c) => c.inst && c.inst.status !== 'cancelled')
+
+  const myCourses = myAssignments
+    .filter((c) => !c.inst.ends_at || c.inst.ends_at >= today)
     .sort((a, b) => (a.inst.starts_at ?? '9999').localeCompare(b.inst.starts_at ?? '9999'))
+
+  // A course you ran on Friday drops off this page on Saturday, and the only
+  // ways back were a scope switch, the calendar, or the courses list — none of
+  // which say "the one you just finished". The student's own dashboard has
+  // shown them a Finished list all along; this is the same list for the people
+  // who taught it, folded because a crew accumulates far more of them than a
+  // student does.
+  const myPast = myAssignments
+    .filter((c) => c.inst.ends_at && c.inst.ends_at < today)
+    .sort((a, b) => (b.inst.starts_at ?? '').localeCompare(a.inst.starts_at ?? ''))
 
   const assignedIds = new Set(
     (assignmentRows ?? []).map((a) => (a.course_instances as unknown as InstRow).id)
@@ -400,6 +413,47 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
               ))}
             </div>
           </section>
+        )}
+
+        {/* The ones behind you, folded. Same list the student's dashboard has
+            always shown them under "Finished" — the people who taught it had
+            no way back to it at all once the end date passed. */}
+        {myPast.length > 0 && (
+          <details className="mb-10 group">
+            <summary className="cursor-pointer list-none flex items-center gap-2 text-sm font-medium text-zinc-500 uppercase tracking-wide hover:text-zinc-300 transition-colors">
+              <span aria-hidden className="text-zinc-600 text-xs transition-transform group-open:rotate-90">▶</span>
+              Finished
+              <span className="text-zinc-600 normal-case tracking-normal">{myPast.length}</span>
+            </summary>
+            <div className="space-y-2 mt-3">
+              {myPast.map((c) => (
+                <div
+                  key={c.inst.id}
+                  className="flex items-center justify-between gap-3 px-4 py-3 bg-zinc-900/60 border border-zinc-800 rounded-lg hover:border-zinc-600 transition-colors"
+                >
+                  <Link href={portalHref(c.inst.id)} className="min-w-0 flex-1">
+                    <p className="text-sm truncate text-zinc-400">
+                      {courseShortName(c.inst.course_type, c.inst.custom_title)}
+                      {c.inst.client_name && <span className="text-zinc-500"> · {c.inst.client_name}</span>}
+                    </p>
+                    <p className="text-xs text-zinc-600 mt-0.5">{fmtRange(c.inst)}</p>
+                  </Link>
+                  {showAsAdmin && (
+                    <Link
+                      href={`/admin/courses/${c.inst.id}`}
+                      title="Edit course"
+                      aria-label="Edit course"
+                      className="shrink-0 p-1.5 -my-1 -mr-1.5 rounded text-zinc-600 hover:text-white hover:bg-zinc-800 transition-colors"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>
+                      </svg>
+                    </Link>
+                  )}
+                </div>
+              ))}
+            </div>
+          </details>
         )}
 
         {liveInvites.length > 0 && (
