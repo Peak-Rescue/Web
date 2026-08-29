@@ -12,6 +12,11 @@ import CourseFilesSection, { type CourseFile } from '@/app/admin/courses/CourseF
 import CourseIntroFields from './CourseIntroFields'
 import CourseCurriculumEditor, { type CurriculumModule } from '@/app/admin/courses/CourseCurriculumEditor'
 import CourseGear from '@/app/admin/courses/CourseGear'
+import CourseDetailsEditor from '@/app/admin/courses/CourseDetailsEditor'
+import CourseStaffingEditor from '@/app/admin/courses/CourseStaffingEditor'
+import CourseStudentsEditor from '@/app/admin/courses/CourseStudentsEditor'
+import { parseContacts } from '@/lib/contacts'
+import { formatPhone } from '@/lib/phone'
 import { GEAR_ENTRIES_SELECT } from '@/lib/gear'
 import { courseCapabilityCategories } from '@/lib/capabilities'
 import { GEAR_ENTRY_COLUMNS, gearLabel, gearQuantity, isChoice, placeSets, productName } from '@/lib/gear'
@@ -166,11 +171,11 @@ export default async function CourseView({
   const [{ data: inst }, { data: offDays }, { data: modules }, { data: instructors }, taskRows, { data: peopleRows }, { data: templateRows }, { data: courseDocRows }, { data: taskDocRows }, { data: mapRows }, { data: resourceRows }, { data: linkRows }, { data: updateRows }, { data: enrollmentRows }, { data: messageRows }] =
     await Promise.all([
       admin.from('course_instances')
-        .select('course_type, custom_title, status, location, client_name, notes, ref_number, starts_at, ends_at, meeting_date, meeting_announced_dates, meeting_point, meeting_time, meeting_links, meeting_attachments, intro, custom_categories, max_students, internal, venue_id, region, waiver_template_id, waiver_token, waiver_token_expires_at')
+        .select('course_type, custom_title, status, location, client_name, notes, ref_number, starts_at, ends_at, meeting_date, meeting_announced_dates, meeting_point, meeting_time, meeting_links, meeting_attachments, intro, custom_categories, contacts, max_students, instructor_slots, course_category, internal, invite_token, invite_expires_at, venue_id, region, waiver_template_id, waiver_token, waiver_token_expires_at')
         .eq('id', id)
         .single(),
       admin.from('instance_off_days')
-        .select('off_date, end_date')
+        .select('id, off_date, end_date')
         .eq('instance_id', id)
         .order('off_date'),
       modulesQuery,
@@ -429,6 +434,14 @@ export default async function CourseView({
     inst.course_type as string,
     inst.custom_categories as string[] | null
   )
+
+  // What a course *is* — the offering, who asked, who to call, how many. Setup
+  // rather than delivery, so it is the admin's to change, and loaded only for
+  // them.
+  const { data: venueRows } = showAsAdmin
+    ? await admin.from('venues').select('id, name, region, region_code, client_name, notes, active').order('name')
+    : { data: null }
+  const coursePocs = parseContacts(inst.contacts)
 
   // Building the gear list is admin work — instructors read it and take it to
   // the trailhead, they don't assemble it — so this is the one editor gated on
@@ -958,6 +971,68 @@ export default async function CourseView({
         {hasDetails && (
           <Section id="details">
             <div className="space-y-6">
+              {/* What the course is, for the people who set it up. A concise
+                  read — the facts you check — with the same edit control
+                  everything else on this page has, opening the same form the
+                  editor uses rather than sending you to it.
+
+                  Admin-tier: an instructor runs the course, they do not decide
+                  what it is or who is paying for it. */}
+              {showAsAdmin && (
+                <EditInPlace
+                  label="Edit details"
+                  title="Course details"
+                  editor={
+                    <CourseDetailsEditor
+                      instanceId={id}
+                      course={inst as unknown as React.ComponentProps<typeof CourseDetailsEditor>['course']}
+                      contacts={coursePocs}
+                      venues={(venueRows ?? []) as unknown as React.ComponentProps<typeof CourseDetailsEditor>['venues']}
+                      offDays={(offDays ?? []) as unknown as React.ComponentProps<typeof CourseDetailsEditor>['offDays']}
+                      internal={Boolean(inst.internal)}
+                    />
+                  }
+                >
+                  <dl className="grid sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
+                    {([
+                      ['Client', inst.client_name as string | null],
+                      ['Students', inst.max_students ? String(inst.max_students) : null],
+                      ['Instructor slots', inst.instructor_slots ? String(inst.instructor_slots) : null],
+                    ] as const).map(([k, v]) => v && (
+                      <div key={k} className="flex gap-2">
+                        <dt className="text-zinc-500 shrink-0">{k}</dt>
+                        <dd className="text-zinc-300 min-w-0">{v}</dd>
+                      </div>
+                    ))}
+                    {/* The POC is the one thing here nobody can look up: a name
+                        and a way to reach them, live rather than as text to
+                        copy out. */}
+                    {coursePocs.map((c, i) => (
+                      <div key={i} className="flex gap-2 sm:col-span-2">
+                        <dt className="text-zinc-500 shrink-0">Contact</dt>
+                        <dd className="text-zinc-300 min-w-0">
+                          {c.name}
+                          {c.phones.map((ph) => (
+                            <span key={ph} className="text-zinc-500">
+                              {' · '}
+                              <a href={`tel:${ph}`} className="hover:text-zinc-300 transition-colors">{formatPhone(ph)}</a>
+                            </span>
+                          ))}
+                          {c.emails.map((em) => (
+                            <span key={em} className="text-zinc-500">
+                              {' · '}
+                              <a href={`mailto:${em}`} className="hover:text-zinc-300 transition-colors">{em}</a>
+                            </span>
+                          ))}
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
+                  {!inst.client_name && coursePocs.length === 0 && (
+                    <p className="text-xs text-zinc-600">No client or contact on this course yet.</p>
+                  )}
+                </EditInPlace>
+              )}
               <EditInPlace
                 label="Edit welcome"
                 title="Welcome"
@@ -970,9 +1045,29 @@ export default async function CourseView({
                 <p className="text-sm text-zinc-300 whitespace-pre-line">{inst.intro}</p>
               )}
               </EditInPlace>
+              {/* Who is running it. Assigning is the admin's call — an
+                  instructor is on the course, they don't decide who else is —
+                  so the crew reads for everyone and edits for one. */}
+              <EditInPlace
+                label="Edit staffing"
+                title={(instructors ?? []).length === 1 ? 'Your instructor' : 'Your instructors'}
+                editor={
+                  showAsAdmin ? (
+                    <CourseStaffingEditor
+                      instanceId={id}
+                      courseType={inst.course_type as string | null}
+                      courseCategory={inst.course_category as string | null}
+                      customCategories={inst.custom_categories as string[] | null}
+                      internal={Boolean(inst.internal)}
+                    />
+                  ) : null
+                }
+              >
+              {(instructors ?? []).length === 0 && showTasks && (
+                <p className="text-xs text-zinc-600">Nobody staffed on this course yet.</p>
+              )}
               {(instructors ?? []).length > 0 && (
                 <div>
-                  <SubHead title={(instructors ?? []).length > 1 ? 'Your instructors' : 'Your instructor'} />
                   <div className="grid sm:grid-cols-2 gap-2">
                     {(instructors ?? []).map((a, i) => {
                       const p = a.instructors as unknown as {
@@ -996,7 +1091,21 @@ export default async function CourseView({
                   </div>
                 </div>
               )}
+              </EditInPlace>
               {hasRoster && (
+                <EditInPlace
+                  label="Edit students"
+                  editor={
+                    showAsAdmin ? (
+                      <CourseStudentsEditor
+                        instanceId={id}
+                        maxStudents={(inst.max_students as number | null) ?? null}
+                        inviteToken={(inst.invite_token as string | null) ?? null}
+                        inviteExpiresAt={(inst.invite_expires_at as string | null) ?? null}
+                      />
+                    ) : null
+                  }
+                >
                 <div>
                   <SubHead
                     title="Students"
@@ -1061,6 +1170,7 @@ export default async function CourseView({
                     </div>
                   )}
                 </div>
+                </EditInPlace>
               )}
             </div>
           </Section>

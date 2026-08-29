@@ -29,7 +29,7 @@ import { parseContacts, primaryContactEmail, ccEmailOptions } from '@/lib/contac
 import { loadTasksWithDocs } from '@/lib/course-tasks'
 import { courseDisplayName, courseShortName, computeBlocks, courseDates } from '@/lib/courses'
 import { courseCapabilityCategories, courseSector } from '@/lib/capabilities'
-import { moduleAudience, type LibraryAudience } from '@/lib/library'
+import { moduleAudience, type LibraryAudience, type Venue } from '@/lib/library'
 import LibraryPicker, { type PickerItem } from '../LibraryPicker'
 import SuggestedContent from '../SuggestedContent'
 import TemplatePicker, { type TemplateOption } from '../TemplatePicker'
@@ -55,6 +55,9 @@ import { courseNotifyCounts } from '@/lib/course-notify'
 import { meetingDetails, meetingDayPassed } from '@/lib/meeting-details'
 import CourseCurriculumEditor from '../CourseCurriculumEditor'
 import TrashIcon from '@/components/TrashIcon'
+import CourseDetailsEditor from '../CourseDetailsEditor'
+import CourseStaffingEditor from '../CourseStaffingEditor'
+import CourseStudentsEditor from '../CourseStudentsEditor'
 
 const STATUS_STYLES: Record<string, string> = {
   tentative: 'bg-yellow-900/40 text-yellow-300 border-yellow-700',
@@ -670,142 +673,19 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
 
         <TabPanel id="details">
           <h2 className="text-lg font-semibold mb-4">Details</h2>
-          <div className="bg-zinc-900 rounded-lg border border-zinc-800">
-          <AutoSaveForm action={updateDetailsWithId} className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-6">
-            <CourseTypeSelect
-              defaultCategory={inst.course_category}
-              defaultType={inst.course_type}
-              defaultCustomTitle={inst.custom_title ?? ''}
-              defaultCustomCategories={inst.custom_categories ?? []}
-              defaultInternal={internal}
-            />
-            <div>
-              <label className="block text-xs text-zinc-400 mb-1">Status</label>
-              <select name="status" defaultValue={inst.status} className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500">
-                <option value="tentative">Tentative</option>
-                <option value="quoted">Quoted</option>
-                <option value="confirmed">Confirmed</option>
-                <option value="completed">Completed</option>
-                <option value="cancelled">Cancelled</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs text-zinc-400 mb-1">Location</label>
-              <input name="location" defaultValue={inst.location ?? ''} className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
-            </div>
-            <CourseLocationFields
-              venues={venueRows ?? []}
-              defaultRegion={inst.region}
-              defaultVenueId={inst.venue_id}
-            />
-            <div>
-              <label className="block text-xs text-zinc-400 mb-1">Client / organization</label>
-              <input name="client_name" defaultValue={inst.client_name ?? ''} className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
-            </div>
-            <CourseContactsEditor initial={contacts} />
-            <div>
-              <label className="block text-xs text-zinc-400 mb-1">Max students</label>
-              <input name="max_students" type="number" min="1" defaultValue={inst.max_students ?? ''} className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
-            </div>
-            <div>
-              <label className="block text-xs text-zinc-400 mb-1">Instructor slots</label>
-              <input name="instructor_slots" type="number" min="1" defaultValue={inst.instructor_slots ?? ''} className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
-            </div>
-          </AutoSaveForm>
+          <CourseDetailsEditor
+            instanceId={id}
+            course={inst}
+            contacts={contacts}
+            venues={(venueRows ?? []) as Venue[]}
+            offDays={offDays ?? []}
+            internal={internal}
+          />
 
-          <div className="p-6 pt-5 border-t border-zinc-800">
-          <h3 className="text-sm font-semibold text-zinc-300 mb-3">Dates</h3>
-
-          {/* Overall window — auto-saved */}
-          <AutoSaveForm action={updateDatesWithId} className="grid grid-cols-2 gap-4 p-4 bg-zinc-950/40 border border-zinc-800 rounded-lg mb-4">
-            <div>
-              <label className="block text-xs text-zinc-400 mb-1">Course start</label>
-              <input name="starts_at" type="date" defaultValue={inst.starts_at ?? ''} className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
-            </div>
-            <div>
-              <label className="block text-xs text-zinc-400 mb-1">Course end</label>
-              <input name="ends_at" type="date" defaultValue={inst.ends_at ?? ''} className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
-            </div>
-          </AutoSaveForm>
-
-          {/* Off days — folded behind a deliberate reveal: most courses run
-              straight through, and an exposed date form here invites people
-              to mistake it for the course dates. */}
-          <details open={(offDays ?? []).length > 0} className="mb-4 group/off">
-            <summary className="cursor-pointer list-none text-sm text-zinc-400 hover:text-zinc-200 transition-colors select-none">
-              <span className="text-zinc-600 text-xs mr-1.5 inline-block transition-transform group-open/off:rotate-90">▶</span>
-              Dates to exclude
-            </summary>
-            <div className="mt-3">
-            <p className="text-xs text-zinc-500 mb-3">
-              Rest days inside the course window — not the start/end.
-            </p>
-            {(offDays ?? []).length > 0 && (
-              <div className="space-y-2 mb-3">
-                {(offDays ?? []).map(o => {
-                  const removeOffDayWithArgs = removeOffDay.bind(null, id, o.id)
-                  const isRange = o.end_date && o.end_date !== o.off_date
-                  return (
-                    <div key={o.id} className="flex items-center justify-between px-4 py-2 bg-zinc-950/40 border border-zinc-800 rounded-lg">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-zinc-500 font-medium">{isRange ? 'Range' : 'Day'}</span>
-                        <span className="text-sm">
-                          {isRange ? `${fmt(o.off_date)} → ${fmt(o.end_date!)}` : fmt(o.off_date)}
-                        </span>
-                      </div>
-                      <form action={removeOffDayWithArgs}>
-                        <button
-                          type="submit"
-                          title="Remove this date"
-                          aria-label="Remove this date"
-                          className="text-sm leading-none text-zinc-600 hover:text-pr-red-light transition-colors"
-                        >
-                          <TrashIcon />
-                        </button>
-                      </form>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-            <form action={addOffDayWithId} className="flex gap-2 flex-wrap items-end p-4 bg-zinc-950/40 border border-dashed border-zinc-700 rounded-lg">
-              <div>
-                <label className="block text-xs text-zinc-500 mb-1">Start date</label>
-                <input name="off_date" type="date" required className="bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
-              </div>
-              <div>
-                <label className="block text-xs text-zinc-500 mb-1">End date <span className="text-zinc-600">(optional)</span></label>
-                <input name="end_date" type="date" className="bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
-              </div>
-              <button type="submit" className="px-4 py-2 bg-pr-red hover:bg-pr-red-dark text-white rounded text-sm font-medium transition-colors">
-                Add
-              </button>
-            </form>
-            </div>
-          </details>
-
-          {/* Computed blocks preview — only when off-days split the course; a
-              single block just repeats the start/end dates above */}
-          {blocks.length > 1 && (
-            <div className="p-4 bg-zinc-950/40 border border-zinc-800 rounded-lg">
-              <p className="text-xs text-zinc-500 mb-2">Calendar blocks ({blocks.length})</p>
-              <div className="space-y-1">
-                {blocks.map((b, i) => (
-                  <div key={i} className="text-sm">
-                    <span className="text-zinc-500 text-xs mr-2">Block {i + 1}</span>
-                    <span className="font-medium">{fmt(b.starts_at)}</span>
-                    {b.starts_at !== b.ends_at && <span className="text-zinc-400"> → {fmt(b.ends_at)}</span>}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-          </div>
-
-          {/* The note sits under the dates rather than inside the form above:
-              a form can't nest another, and the dates are what you come to this
-              tab to check. Its own action for the same reason. */}
-          <AutoSaveForm action={updateNotesWithId} className="p-6 pt-5 border-t border-zinc-800">
+          {/* Its own container now that the details forms live in their own
+              component — a form cannot nest another, and these two never
+              shared anything but a border. */}
+          <AutoSaveForm action={updateNotesWithId} className="bg-zinc-900 rounded-lg border border-zinc-800 p-6">
             <label className="flex items-center gap-1.5 text-xs text-zinc-400 mb-1">
               Notes
               <AudiencePills audience="internal" />
@@ -839,8 +719,6 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
             qr={waiverQr}
             unmatched={unmatchedWaivers}
           />
-
-          </div>
 
           {/* Where and when to meet, and the welcome. It sat under Students,
               on the reading that it was "participant info" — but it is
@@ -894,51 +772,12 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
         {/* ── Instructors ──────────────────────────────────────────── */}
         <TabPanel id="instructors">
           <h2 className="text-lg font-semibold mb-4">Instructors</h2>
-
-          {(assigned ?? []).length > 0 && (
-            <div className="mb-4 space-y-2">
-              {(assigned ?? []).map(a => {
-                const instr = a.instructors as unknown as { name: string } | null
-                const name = instr?.name ?? a.instructor_id
-                const removeWithArgs = removeInstructor.bind(null, id, a.instructor_id)
-                return (
-                  <div key={a.instructor_id} className="flex items-center justify-between px-4 py-2 bg-zinc-900 border border-zinc-800 rounded-lg">
-                    <div>
-                      <span className="font-medium text-sm">{name}</span>
-                      <span className={`ml-3 text-xs font-medium ${a.role === 'lead' ? 'text-teal-400' : 'text-blue-400'}`}>{a.role}</span>
-                    </div>
-                    <form action={removeWithArgs}>
-                      <button type="submit" className="text-xs text-zinc-500 hover:text-red-400 transition-colors">Remove</button>
-                    </form>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-
-          <InstructorAssign
+          <CourseStaffingEditor
             instanceId={id}
-            qualified={qualified}
-            unassigned={unassigned}
-            hasLead={(assigned ?? []).some(a => a.role === 'lead')}
-            anyone={internal}
-          />
-
-          <GuestInstructorButton
-            instanceId={id}
-            hasLead={(assigned ?? []).some(a => a.role === 'lead')}
-          />
-
-          {/* Internal courses can be offered around too — a CE day with places
-              to fill is worth asking about. What changes is that nobody is
-              pre-ticked, so the invite goes to who you choose rather than to
-              everyone qualified by default. */}
-          <StaffingInterest
-            instanceId={id}
-            candidates={interestCandidates}
-            invites={interestInvites}
-            hasLead={(assigned ?? []).some(a => a.role === 'lead')}
-            preselect={!internal}
+            courseType={courseType}
+            courseCategory={inst.course_category}
+            customCategories={inst.custom_categories}
+            internal={internal}
           />
 
           <div className="mt-10 pt-8 border-t border-zinc-800">
@@ -971,39 +810,12 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
                 {enrollments.length}{inst.max_students ? ` / ${inst.max_students}` : ''} enrolled
               </span>
             </h2>
-            <p className="text-xs text-zinc-500 mb-4">
-              Share the invite link below — students enroll themselves.
-            </p>
-
-            {enrollments.length > 0 && (
-              <div className="mb-4 space-y-2">
-                {enrollments.map(e => {
-                  const p = e.profiles as unknown as { first_name: string | null; last_name: string | null; email: string | null } | null
-                  const name = [p?.first_name, p?.last_name].filter(Boolean).join(' ') || 'Unnamed'
-                  const removeWithArgs = removeEnrollment.bind(null, id, e.id)
-                  return (
-                    <div key={e.id} className="flex items-center justify-between px-4 py-2 bg-zinc-900 border border-zinc-800 rounded-lg">
-                      <div>
-                        <span className="font-medium text-sm">{name}</span>
-                        {p?.email && <span className="ml-3 text-xs text-zinc-500">{p.email}</span>}
-                      </div>
-                      <form action={removeWithArgs}>
-                        <button type="submit" className="text-xs text-zinc-500 hover:text-red-400 transition-colors">Remove</button>
-                      </form>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-
-            <StudentInvitePanel
+            <CourseStudentsEditor
               instanceId={id}
-              inviteUrl={inst.invite_token ? `${process.env.NEXT_PUBLIC_SITE_URL}/join/${inst.invite_token}` : null}
-              expiresAt={inst.invite_expires_at ?? null}
-              expired={!!inst.invite_expires_at && new Date(inst.invite_expires_at) < new Date()}
+              maxStudents={inst.max_students}
+              inviteToken={inst.invite_token}
+              inviteExpiresAt={inst.invite_expires_at ?? null}
             />
-
-            <ViewSharePanel instanceId={id} shares={viewShares} />
           </div>
           )}
         </TabPanel>
