@@ -13,6 +13,19 @@ import { withTimeout } from '@/lib/timeout'
 // attachments, and those uploads are legitimately slower than a text body.
 export const MAIL_TIMEOUT_MS = 15_000
 
+// Local dev sends through the same Resend account as production, so without
+// this every expense report, course notice and staffing email tested locally
+// would reach the real recipient. Set MAIL_DEV_REDIRECT_TO and they all land
+// in one inbox instead, subject-tagged with who they were addressed to.
+// Guarded on NODE_ENV: production must never redirect, whatever is set.
+function redirectInDev(payload: CreateEmailOptions): CreateEmailOptions {
+  const inbox = process.env.MAIL_DEV_REDIRECT_TO
+  if (!inbox || process.env.NODE_ENV === 'production') return payload
+
+  const original = [payload.to, payload.cc, payload.bcc].flat().filter(Boolean).join(', ')
+  return { ...payload, to: [inbox], cc: undefined, bcc: undefined, subject: `[dev → ${original}] ${payload.subject}` }
+}
+
 function failed(message: string): CreateEmailResponse {
   return { data: null, error: { name: 'application_error', message, statusCode: null }, headers: null }
 }
@@ -26,7 +39,7 @@ export async function sendMail(
   try {
     const { Resend } = await import('resend')
     const resend = new Resend(process.env.RESEND_API_KEY)
-    return await withTimeout(label, resend.emails.send(payload), timeoutMs)
+    return await withTimeout(label, resend.emails.send(redirectInDev(payload)), timeoutMs)
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     console.error(`${label} failed:`, message)
