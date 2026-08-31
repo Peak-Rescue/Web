@@ -451,6 +451,16 @@ export default async function CourseView({
   const linkedAlbums = pastedLinks.filter((l) => l.purpose === 'photos')
   const otherLinks = pastedLinks.filter((l) => l.purpose !== 'photos')
 
+  // Staff always get the album block, because with no album yet it is the only
+  // way to make one — there is no create button, the first upload is what
+  // creates the folder. Students get it once an album exists and has been
+  // shared, and the audience filter on the query above has already decided
+  // that. It lives inside Resources rather than as a section of its own: it is
+  // material this course produced, filed with the maps and the reference, and
+  // it did not earn a tab.
+  const hasAlbum =
+    (albumsEnabled() && (showTasks || Boolean(albumRow))) || linkedAlbums.length > 0
+
   // Library maps take their title and link from the library item; the edit
   // twin (CalTopo edit URL) is only ever handed to the team.
   // A library item's audience is the ceiling, and it is enforced here rather
@@ -741,7 +751,7 @@ export default async function CourseView({
   // Staff get the section whether or not anything is in it: it is where the
   // first resource and the first file get added, and a section that appears
   // only once it has contents is one nobody can put contents into.
-  const hasResources = resources.length > 0 || showTasks
+  const hasResources = resources.length > 0 || showTasks || hasAlbum
   // Staff get the notes section whether or not there is anything in it — it is
   // where the first note gets written, and an empty section that says so beats
   // sending someone to the admin editor to type one line.
@@ -920,12 +930,6 @@ export default async function CourseView({
     (d) => d.meeting_time || d.meeting_point || d.meeting_point_id
   )
 
-  // Staff always get the block, because with no album yet it is the only way
-  // to make one — there is no create button, the first upload is what creates
-  // the folder. Students get it once an album exists and has been shared, and
-  // the audience filter on the query above has already decided that.
-  const hasPhotos =
-    (albumsEnabled() && (showTasks || Boolean(albumRow))) || linkedAlbums.length > 0
 
   const navSections = ([
     'details',
@@ -938,7 +942,6 @@ export default async function CourseView({
     hasResources && 'resources',
     hasCurriculum && 'curriculum',
     hasGear && 'gear',
-    hasPhotos && 'photos',
   ].filter(Boolean) as SectionKey[]).map((id) => ({
     id,
     label: SECTION_LABEL[id],
@@ -1088,8 +1091,14 @@ export default async function CourseView({
                       them, in the same small-caps used for headings elsewhere
                       on this page. */}
                   <dl className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-4 text-sm">
+                    {/* Location repeats the WHERE card at the top of the page,
+                        deliberately. This block is the read side of the details
+                        editor, and that editor sets the location — a field you
+                        change here and then cannot see here reads as a change
+                        that did not save. */}
                     {([
                       ['Client', inst.client_name as string | null],
+                      ['Location', inst.location as string | null],
                       ['Students', inst.max_students ? String(inst.max_students) : null],
                       ['Instructor slots', inst.instructor_slots ? String(inst.instructor_slots) : null],
                     ] as const).map(([k, v]) => v && (
@@ -1942,6 +1951,32 @@ export default async function CourseView({
                 </EditInPlace>
               </div>
             )}
+
+            {hasAlbum && (
+            <div className="mt-6 pt-6 border-t border-zinc-800">
+              {/* No blurb. Who can do what is already on the screen: the add
+                  button is there for everyone on the course, and the remove
+                  mark only appears for the people who have it. */}
+              <h3 className="text-sm font-semibold text-zinc-200 mb-2">Album</h3>
+              <Suspense fallback={<p className="text-sm text-zinc-500">Loading album…</p>}>
+                <CourseAlbumSection
+                  instanceId={id}
+                  canManage={showTasks}
+                  album={
+                    albumRow?.drive_folder_id
+                      ? {
+                          linkId: albumRow.id,
+                          url: albumRow.url,
+                          audience: albumRow.audience,
+                          folderId: albumRow.drive_folder_id,
+                        }
+                      : null
+                  }
+                  linked={linkedAlbums}
+                />
+              </Suspense>
+            </div>
+            )}
           </Section>
         )}
 
@@ -2146,31 +2181,6 @@ export default async function CourseView({
               )
             })}
             </EditInPlace>
-          </Section>
-        )}
-
-        {/* No blurb on this one. Who can do what is already on the screen:
-            the add button is there for everyone on the course, and the remove
-            mark only appears for the people who have it. */}
-        {hasPhotos && (
-          <Section id="photos">
-            <Suspense fallback={<p className="text-sm text-zinc-500">Loading album…</p>}>
-              <CourseAlbumSection
-                instanceId={id}
-                canManage={showTasks}
-                album={
-                  albumRow?.drive_folder_id
-                    ? {
-                        linkId: albumRow.id,
-                        url: albumRow.url,
-                        audience: albumRow.audience,
-                        folderId: albumRow.drive_folder_id,
-                      }
-                    : null
-                }
-                linked={linkedAlbums}
-              />
-            </Suspense>
           </Section>
         )}
 
