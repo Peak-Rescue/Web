@@ -2142,8 +2142,11 @@ export default async function CourseView({
           </Section>
         )}
 
+        {/* No blurb on this one. Who can do what is already on the screen:
+            the add button is there for everyone on the course, and the remove
+            mark only appears for the people who have it. */}
         {hasPhotos && (
-          <Section id="photos" blurb="Everyone on the course can add. Instructors can remove.">
+          <Section id="photos">
             <Suspense fallback={<p className="text-sm text-zinc-500">Loading album…</p>}>
               <CourseAlbumSection
                 instanceId={id}
