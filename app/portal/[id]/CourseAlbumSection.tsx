@@ -1,5 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { albumsEnabled, listAlbumPhotos } from '@/lib/drive-albums'
+import { type CourseLink } from '@/lib/course-links'
 import CourseAlbum, { type AlbumPhotoView } from './CourseAlbum'
 
 // The album's contents, loaded apart from the rest of the course page.
@@ -17,10 +18,12 @@ export default async function CourseAlbumSection({
   instanceId,
   canManage,
   album,
+  linked,
 }: {
   instanceId: string
   canManage: boolean
   album: { linkId: string; url: string; audience: 'internal' | 'shared'; folderId: string } | null
+  linked: CourseLink[]
 }) {
   let photos: AlbumPhotoView[] = []
 
@@ -62,6 +65,7 @@ export default async function CourseAlbumSection({
       photos={photos}
       canManage={canManage}
       album={album ? { linkId: album.linkId, url: album.url, audience: album.audience } : null}
+      linked={linked}
     />
   )
 }

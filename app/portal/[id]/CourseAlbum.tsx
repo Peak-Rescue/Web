@@ -6,7 +6,9 @@ import Lightbox from '@/components/Lightbox'
 import TrashIcon from '@/components/TrashIcon'
 import AudienceToggle from '@/components/AudienceToggle'
 import { errorFrom } from '@/lib/action-result'
-import { setCourseLinkAudience } from '@/app/admin/courses/link-actions'
+import AddLinkDialog from '@/components/AddLinkDialog'
+import { addCourseLink, setCourseLinkAudience, removeCourseLink } from '@/app/admin/courses/link-actions'
+import { linkLabel, type CourseLink } from '@/lib/course-links'
 import { startPhotoUploads, recordPhotoUpload, removeCoursePhoto } from './photo-actions'
 
 export type AlbumPhotoView = {
@@ -26,6 +28,7 @@ export default function CourseAlbum({
   photos,
   canManage,
   album,
+  linked,
 }: {
   instanceId: string
   photos: AlbumPhotoView[]
@@ -33,12 +36,18 @@ export default function CourseAlbum({
   canManage: boolean
   /** Null until the first upload creates the folder. */
   album: { linkId: string; url: string; audience: 'internal' | 'shared' } | null
+  /** Albums pasted onto this course before the portal made its own — usually
+      in somebody's personal Google Photos. They live here rather than under
+      Links so that "where are the photos" has one answer on every course,
+      however old. */
+  linked: CourseLink[]
 }) {
   const router = useRouter()
   const inputRef = useRef<HTMLInputElement>(null)
   const [open, setOpen] = useState<number | null>(null)
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
   const [error, setError] = useState('')
+  const [linking, setLinking] = useState(false)
 
   const src = (id: string, size: number) => `/api/course-photos/${instanceId}/${id}?s=${size}`
   // No size means the file itself, range-served. Only video asks for that.
@@ -85,6 +94,18 @@ export default function CourseAlbum({
     } finally {
       setProgress(null)
       if (inputRef.current) inputRef.current.value = ''
+    }
+  }
+
+  async function removeLinked(link: CourseLink) {
+    if (!confirm(`Remove the link to “${linkLabel(link)}”? The album itself is untouched.`)) return
+    setError('')
+    try {
+      const result = await removeCourseLink(instanceId, link.id)
+      if (result?.error) setError(result.error)
+      else router.refresh()
+    } catch (e) {
+      setError(errorFrom(e))
     }
   }
 
@@ -135,6 +156,54 @@ export default function CourseAlbum({
       )}
 
       {error && <p className="text-xs text-pr-red mb-3">{error}</p>}
+
+      {linked.length > 0 && (
+        <div className="mb-4">
+          <p className="text-[11px] uppercase tracking-wide text-zinc-500 mb-1.5">Linked elsewhere</p>
+          <div className="bg-zinc-950/40 border border-zinc-800 rounded-lg divide-y divide-zinc-800">
+            {linked.map((l) => (
+              <div key={l.id} className="flex items-center gap-3 px-4 py-2.5">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24"
+                  fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
+                  className="shrink-0 text-zinc-500" aria-hidden
+                >
+                  <path d="M3 5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM3 16l5-5 4 4 3-3 6 6M9 9a1 1 0 1 1-2 0 1 1 0 0 1 2 0" />
+                </svg>
+                <a
+                  href={l.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="min-w-0 flex-1 text-sm text-zinc-200 hover:text-white truncate"
+                >
+                  {linkLabel(l)}
+                </a>
+                {canManage && (
+                  <>
+                    <AudienceToggle
+                      audience={l.audience}
+                      noun="this album"
+                      showInstructors={false}
+                      onChange={(next) =>
+                        setCourseLinkAudience(instanceId, l.id, next).then(() => router.refresh())
+                      }
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeLinked(l)}
+                      title="Remove this link from the course"
+                      aria-label={`Remove the link to ${linkLabel(l)}`}
+                      className="shrink-0 text-zinc-600 hover:text-pr-red-light transition-colors disabled:opacity-40"
+                    >
+                      <TrashIcon />
+                    </button>
+                  </>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {photos.length === 0 ? (
         <p className="text-sm text-zinc-500 mb-4">No photos or videos yet.</p>
@@ -204,6 +273,7 @@ export default function CourseAlbum({
         onChange={(e) => addFiles(Array.from(e.target.files ?? []))}
       />
 
+      <div className="flex flex-wrap items-center gap-2">
       <button
         type="button"
         onClick={() => inputRef.current?.click()}
@@ -214,6 +284,37 @@ export default function CourseAlbum({
             that video is welcome here, and the picker accepts it either way. */}
         {progress ? `Uploading ${progress.done}/${progress.total}…` : '+ Add photos or videos'}
       </button>
+
+      {/* An album someone keeps elsewhere is still this course's album. The
+          portal's own folder is the default, not the only allowed answer. */}
+      {canManage && (
+        <button
+          type="button"
+          onClick={() => setLinking(true)}
+          disabled={progress !== null}
+          className="text-xs px-2.5 py-1.5 rounded border border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-600 transition-colors disabled:opacity-40"
+        >
+          + Link an album elsewhere
+        </button>
+      )}
+      </div>
+
+      <AddLinkDialog
+        open={linking}
+        busy={progress !== null}
+        withAudience
+        onCancel={() => setLinking(false)}
+        onSubmit={(label, url, audience) => {
+          setError('')
+          addCourseLink(instanceId, { url, label, purpose: 'photos', audience })
+            .then((result) => {
+              if (result?.error) setError(result.error)
+              else router.refresh()
+              setLinking(false)
+            })
+            .catch((e) => { setError(errorFrom(e)); setLinking(false) })
+        }}
+      />
 
       <Lightbox
         items={photos.map((p) => ({

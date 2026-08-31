@@ -7,7 +7,6 @@ import { moduleAudience, KIND_META, type LibraryKind } from '@/lib/library'
 import { regionLabel } from '@/lib/regions'
 import CourseResourcesSection, { type CourseResource } from '@/app/admin/courses/CourseResourcesSection'
 import CourseMapsSection, { type CourseMap } from '@/app/admin/courses/CourseMapsSection'
-import CoursePhotosSection from '@/app/admin/courses/CoursePhotosSection'
 import CourseAlbumSection from './CourseAlbumSection'
 import CourseFilesSection, { type CourseFile } from '@/app/admin/courses/CourseFilesSection'
 import CourseIntroFields from './CourseIntroFields'
@@ -442,11 +441,15 @@ export default async function CourseView({
   // filter above, which is the same gate as every other link on the course.
   const albumRow = ((linkRows ?? []) as CourseLink[]).find((l) => l.drive_folder_id)
 
-  // Links somebody pasted, as opposed to the folder the portal manages. The
-  // block that edits them appears only on a course that has some: a course
-  // gets its album from the Album section now, and a second, emptier way to
-  // reach one is how a course ends up with two.
+  // Links somebody pasted, as opposed to the folder the portal manages.
+  //
+  // The albums among them belong to the Album section, alongside the folder —
+  // "where are the photos" should have one answer on every course, whether its
+  // album is ours or somebody's Google Photos from two years ago. What is left
+  // is genuinely other: a permit portal, the client's own paperwork.
   const pastedLinks = ((linkRows ?? []) as CourseLink[]).filter((l) => !l.drive_folder_id)
+  const linkedAlbums = pastedLinks.filter((l) => l.purpose === 'photos')
+  const otherLinks = pastedLinks.filter((l) => l.purpose !== 'photos')
 
   // Library maps take their title and link from the library item; the edit
   // twin (CalTopo edit URL) is only ever handed to the team.
@@ -921,7 +924,8 @@ export default async function CourseView({
   // to make one — there is no create button, the first upload is what creates
   // the folder. Students get it once an album exists and has been shared, and
   // the audience filter on the query above has already decided that.
-  const hasPhotos = albumsEnabled() && (showTasks || Boolean(albumRow))
+  const hasPhotos =
+    (albumsEnabled() && (showTasks || Boolean(albumRow))) || linkedAlbums.length > 0
 
   const navSections = ([
     'details',
@@ -1785,37 +1789,23 @@ export default async function CourseView({
             )}
             </EditInPlace>
 
-            {/* Albums that live somewhere else — the ones pasted onto courses
-                before the portal made its own. Kept so those courses don't lose
-                them, and absent from every course that has none, because the
-                Album section above is where an album comes from now. */}
-            {pastedLinks.length > 0 && (
+            {/* Whatever a course was given that isn't a map, a document or an
+                album: a permit portal, the client's own site. Nothing here is
+                editable — these arrive from elsewhere, and the one link the
+                team actually keeps is the album, which lives in its own
+                section. */}
+            {otherLinks.length > 0 && (
             <div className="mt-6 pt-6 border-t border-zinc-800">
             <EditInPlace
-              label="Edit linked albums"
-              title="Linked albums"
-              editor={
-                showTasks ? (
-                  <CoursePhotosSection
-                    instanceId={id}
-                    links={((linkRows ?? []) as CourseLink[]).filter(
-                      // The album the portal manages has its own section, with
-                      // its own share control. Listing it here too would be two
-                      // widgets for one question.
-                      (l) => l.purpose === 'photos' && !l.drive_folder_id
-                    )}
-                  />
-                ) : null
-              }
+              label="Edit links"
+              title="Links"
+              editor={null}
             >
             {(linkRows ?? []).length > 0 && (
               <div className="space-y-3">
                 {PURPOSE_ORDER.map((purpose) => {
-                  // Same exclusion as the editor above: the managed album is
-                  // shown as photos, not as a URL to follow.
-                  const rows = ((linkRows ?? []) as CourseLink[]).filter(
-                    (l) => l.purpose === purpose && !l.drive_folder_id
-                  )
+                  // Albums of every kind are shown in the Album section.
+                  const rows = otherLinks.filter((l) => l.purpose === purpose)
                   if (rows.length === 0) return null
                   return (
                     <div key={purpose}>
@@ -2169,6 +2159,7 @@ export default async function CourseView({
                       }
                     : null
                 }
+                linked={linkedAlbums}
               />
             </Suspense>
           </Section>
