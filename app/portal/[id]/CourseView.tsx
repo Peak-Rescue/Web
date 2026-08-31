@@ -1892,7 +1892,7 @@ export default async function CourseView({
             {/* Staff with nothing here still get the way in — an empty section
                 is otherwise indistinguishable from one you cannot add to. */}
             {resources.length === 0 && showTasks && (
-              <p className="text-xs text-zinc-600">No resources on this course yet.</p>
+              <p className="text-xs text-zinc-600">No reference material on this course yet.</p>
             )}
             </EditInPlace>
             </div>

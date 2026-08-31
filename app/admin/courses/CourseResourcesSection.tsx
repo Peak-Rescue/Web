@@ -113,7 +113,7 @@ export default function CourseResourcesSection({
 
       <div className="bg-zinc-950/40 border border-zinc-800 rounded-lg divide-y divide-zinc-800">
         {resources.length === 0 && (
-          <p className="text-xs text-zinc-600 px-4 py-4">No resources on this course yet.</p>
+          <p className="text-xs text-zinc-600 px-4 py-4">No reference material on this course yet.</p>
         )}
 
         {resources.map((r) => (
