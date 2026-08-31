@@ -137,7 +137,7 @@ export default function CourseAlbum({
       {error && <p className="text-xs text-pr-red mb-3">{error}</p>}
 
       {photos.length === 0 ? (
-        <p className="text-sm text-zinc-500 mb-4">No photos yet.</p>
+        <p className="text-sm text-zinc-500 mb-4">No photos or videos yet.</p>
       ) : (
         <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2 mb-4">
           {photos.map((p, i) => (
@@ -184,7 +184,7 @@ export default function CourseAlbum({
                   type="button"
                   onClick={() => remove(p.id, p.name)}
                   aria-label={`Remove ${p.name}`}
-                  title="Remove this photo"
+                  title={p.isVideo ? 'Remove this video' : 'Remove this photo'}
                   className="absolute top-1 right-1 rounded bg-black/60 p-1 text-zinc-300 opacity-75 hover:opacity-100 focus-visible:opacity-100 hover:text-pr-red-light transition"
                 >
                   <TrashIcon />
@@ -210,7 +210,9 @@ export default function CourseAlbum({
         disabled={progress !== null}
         className="text-xs px-2.5 py-1.5 rounded border border-zinc-700 text-zinc-300 hover:text-white hover:border-zinc-500 transition-colors disabled:opacity-40"
       >
-        {progress ? `Uploading ${progress.done}/${progress.total}…` : '+ Add photos'}
+        {/* Spelled out rather than "+ Add": the button is where anyone learns
+            that video is welcome here, and the picker accepts it either way. */}
+        {progress ? `Uploading ${progress.done}/${progress.total}…` : '+ Add photos or videos'}
       </button>
 
       <Lightbox

@@ -129,12 +129,12 @@ export async function startPhotoUploads(
   const { admin, user } = await viewer(instanceId)
 
   if (!albumsEnabled()) return refuse('Photo albums aren’t configured on this environment')
-  if (files.length === 0) return refuse('Choose some photos first')
+  if (files.length === 0) return refuse('Choose some photos or videos first')
   if (files.length > MAX_PER_REQUEST) {
     return refuse(`That’s more than ${MAX_PER_REQUEST} at once — add them in a few batches`)
   }
   if (files.some((f) => !/^(image|video)\//.test(f.mimeType))) {
-    return refuse('Photos and video only')
+    return refuse('Photos and videos only')
   }
 
   const folderId = await ensureFolder(admin, instanceId, user.id)

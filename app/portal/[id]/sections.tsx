@@ -88,7 +88,9 @@ export const SECTION_LABEL: Record<SectionKey, string> = {
   curriculum: 'Curriculum',
   gear: 'Gear',
   resources: 'Resources',
-  photos: 'Photos',
+  // "Album", not "Photos": it holds video too, and this app's tab names don't
+  // take an "and". The key stays `photos` — it is the anchor in shared links.
+  photos: 'Album',
 }
 
 export function Section({

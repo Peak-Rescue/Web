@@ -52,7 +52,7 @@ export default function CoursePhotosSection({
 
   return (
     <div className="p-6 pt-5 border-t border-zinc-800">
-      <h3 className="text-sm font-semibold text-zinc-300 mb-1">Photo albums</h3>
+      <h3 className="text-sm font-semibold text-zinc-300 mb-1">Linked albums</h3>
       <p className="text-xs text-zinc-500 mb-3">Instructors-only until you share it.</p>
 
       {error && <p className="text-xs text-pr-red mb-2">{error}</p>}

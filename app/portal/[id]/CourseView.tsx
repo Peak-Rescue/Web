@@ -2144,7 +2144,7 @@ export default async function CourseView({
 
         {hasPhotos && (
           <Section id="photos" blurb="Everyone on the course can add. Instructors can remove.">
-            <Suspense fallback={<p className="text-sm text-zinc-500">Loading photos…</p>}>
+            <Suspense fallback={<p className="text-sm text-zinc-500">Loading album…</p>}>
               <CourseAlbumSection
                 instanceId={id}
                 canManage={showTasks}
