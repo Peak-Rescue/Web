@@ -55,6 +55,10 @@ export type CourseLink = {
   label: string | null
   purpose: LinkPurpose
   audience: 'internal' | 'shared'
+  // Set when the portal created and manages this album as a Drive folder,
+  // rather than someone pasting a link to an album of their own. It is what
+  // separates a row you can only follow from one you can add photos to.
+  drive_folder_id?: string | null
 }
 
 // A link with no label reads as its host — "photos.google.com" tells you more

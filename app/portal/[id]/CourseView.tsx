@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { Suspense } from 'react'
 import { after } from 'next/server'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
@@ -8,6 +8,7 @@ import { regionLabel } from '@/lib/regions'
 import CourseResourcesSection, { type CourseResource } from '@/app/admin/courses/CourseResourcesSection'
 import CourseMapsSection, { type CourseMap } from '@/app/admin/courses/CourseMapsSection'
 import CoursePhotosSection from '@/app/admin/courses/CoursePhotosSection'
+import CourseAlbumSection from './CourseAlbumSection'
 import CourseFilesSection, { type CourseFile } from '@/app/admin/courses/CourseFilesSection'
 import CourseIntroFields from './CourseIntroFields'
 import CourseCurriculumEditor, { type CurriculumModule } from '@/app/admin/courses/CourseCurriculumEditor'
@@ -27,6 +28,7 @@ import { loadTasksWithDocs } from '@/lib/course-tasks'
 import { LinkIcon, PaperclipIcon } from '@/components/TaskIcons'
 import { AudiencePills } from '@/components/AudiencePills'
 import PortalSectionNav from './PortalSectionNav'
+import { albumsEnabled } from '@/lib/drive-albums'
 import CourseUpdates, { type CourseUpdate, type NotifyCounts } from './CourseUpdates'
 import CourseNotes from './CourseNotes'
 import MeetingDetails from './MeetingDetails'
@@ -210,8 +212,8 @@ export default async function CourseView({
       // Links added for this delivery — the photo album, the client's
       // paperwork. Same audience rule as maps.
       (showTasks
-        ? admin.from('course_links').select('id, url, label, audience, purpose').eq('instance_id', id).order('purpose').order('sort_order')
-        : admin.from('course_links').select('id, url, label, audience, purpose').eq('instance_id', id).eq('audience', 'shared').order('purpose').order('sort_order')),
+        ? admin.from('course_links').select('id, url, label, audience, purpose, drive_folder_id').eq('instance_id', id).order('purpose').order('sort_order')
+        : admin.from('course_links').select('id, url, label, audience, purpose, drive_folder_id').eq('instance_id', id).eq('audience', 'shared').order('purpose').order('sort_order')),
       // Read whole, filtered below: staff see every update, a student sees the
       // ones addressed to them. Same rule as maps and resources, and applied
       // here for the same reason — this reads with the service role, so RLS
@@ -261,6 +263,13 @@ export default async function CourseView({
       created_at: r.created_at,
     }))
     .sort((a, b) => b.created_at.localeCompare(a.created_at))
+
+  // Which album this course has, if any. What is *in* it is loaded separately,
+  // behind a Suspense boundary, because that part waits on Google.
+  //
+  // Students reach this at all only if the album row survived the audience
+  // filter above, which is the same gate as every other link on the course.
+  const albumRow = ((linkRows ?? []) as CourseLink[]).find((l) => l.drive_folder_id)
 
   // Library maps take their title and link from the library item; the edit
   // twin (CalTopo edit URL) is only ever handed to the team.
@@ -852,6 +861,12 @@ export default async function CourseView({
     (d) => d.meeting_time || d.meeting_point || d.meeting_point_id
   )
 
+  // Staff always get the block, because with no album yet it is the only way
+  // to make one — there is no create button, the first upload is what creates
+  // the folder. Students get it once an album exists and has been shared, and
+  // the audience filter on the query above has already decided that.
+  const hasPhotos = albumsEnabled() && (showTasks || Boolean(albumRow))
+
   const navSections = ([
     'details',
     hasUpdates && 'updates',
@@ -863,6 +878,7 @@ export default async function CourseView({
     hasResources && 'resources',
     hasCurriculum && 'curriculum',
     hasGear && 'gear',
+    hasPhotos && 'photos',
   ].filter(Boolean) as SectionKey[]).map((id) => ({
     id,
     label: SECTION_LABEL[id],
@@ -1718,7 +1734,12 @@ export default async function CourseView({
                 showTasks ? (
                   <CoursePhotosSection
                     instanceId={id}
-                    links={((linkRows ?? []) as CourseLink[]).filter((l) => l.purpose === 'photos')}
+                    links={((linkRows ?? []) as CourseLink[]).filter(
+                      // The album the portal manages has its own section, with
+                      // its own share control. Listing it here too would be two
+                      // widgets for one question.
+                      (l) => l.purpose === 'photos' && !l.drive_folder_id
+                    )}
                   />
                 ) : null
               }
@@ -1726,7 +1747,11 @@ export default async function CourseView({
             {(linkRows ?? []).length > 0 && (
               <div className="space-y-3">
                 {PURPOSE_ORDER.map((purpose) => {
-                  const rows = ((linkRows ?? []) as CourseLink[]).filter((l) => l.purpose === purpose)
+                  // Same exclusion as the editor above: the managed album is
+                  // shown as photos, not as a URL to follow.
+                  const rows = ((linkRows ?? []) as CourseLink[]).filter(
+                    (l) => l.purpose === purpose && !l.drive_folder_id
+                  )
                   if (rows.length === 0) return null
                   return (
                     <div key={purpose}>
@@ -2054,6 +2079,27 @@ export default async function CourseView({
               )
             })}
             </EditInPlace>
+          </Section>
+        )}
+
+        {hasPhotos && (
+          <Section id="photos" blurb="Everyone on the course can add. Instructors can remove.">
+            <Suspense fallback={<p className="text-sm text-zinc-500">Loading photos…</p>}>
+              <CourseAlbumSection
+                instanceId={id}
+                canManage={showTasks}
+                album={
+                  albumRow?.drive_folder_id
+                    ? {
+                        linkId: albumRow.id,
+                        url: albumRow.url,
+                        audience: albumRow.audience,
+                        folderId: albumRow.drive_folder_id,
+                      }
+                    : null
+                }
+              />
+            </Suspense>
           </Section>
         )}
 

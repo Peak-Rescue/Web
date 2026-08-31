@@ -21,6 +21,7 @@ export type SectionKey =
   | 'curriculum'
   | 'gear'
   | 'resources'
+  | 'photos'
 
 export const SECTION_ICON: Record<SectionKey, React.ReactElement> = {
   // Everything about this delivery and everyone on it: the welcome, where to
@@ -53,6 +54,15 @@ export const SECTION_ICON: Record<SectionKey, React.ReactElement> = {
   gear: (
     <path d="M6 2h12l-1 7H7L6 2ZM7 9h10l1.5 11a2 2 0 0 1-2 2h-9a2 2 0 0 1-2-2L7 9ZM10 13h4" />
   ),
+  // The mountains-in-a-frame every photo app uses. This is the one section
+  // that is looked for by picture rather than by word, mostly weeks later.
+  photos: (
+    <>
+      <path d="M3 5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+      <path d="M3 16l5-5 4 4 3-3 6 6" />
+      <path d="M9 9a1 1 0 1 1-2 0 1 1 0 0 1 2 0" />
+    </>
+  ),
   // A page with a signature across it. Deliberately not the 'documents' page
   // glyph: what marks this one out is that you have to do something to it.
   waiver: (
@@ -78,6 +88,7 @@ export const SECTION_LABEL: Record<SectionKey, string> = {
   curriculum: 'Curriculum',
   gear: 'Gear',
   resources: 'Resources',
+  photos: 'Photos',
 }
 
 export function Section({

@@ -100,8 +100,23 @@ export async function renameCourseLink(instanceId: string, linkId: string, label
   revalidate(instanceId)
 }
 
-export async function removeCourseLink(instanceId: string, linkId: string) {
+export async function removeCourseLink(instanceId: string, linkId: string): Promise<ActionResult> {
   const { admin } = await requireTeam(instanceId)
+
+  // The album the portal manages is a folder full of photos, not a link. This
+  // row is the only record of where that folder is, so deleting it would leave
+  // the photos in Drive with nothing pointing at them — silently, from a trash
+  // icon that everywhere else removes a URL.
+  const { data: link } = await admin
+    .from('course_links')
+    .select('drive_folder_id')
+    .eq('id', linkId)
+    .eq('instance_id', instanceId)
+    .maybeSingle()
+  if (link?.drive_folder_id) {
+    return refuse('That’s the course album — remove its photos from the Photos section instead')
+  }
+
   const { error } = await admin
     .from('course_links')
     .delete()
