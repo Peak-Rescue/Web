@@ -18,7 +18,12 @@ import { type LibraryAudience } from '@/lib/library'
 const STUDENTS_ON = 'bg-teal-900/50 text-teal-300 hover:bg-teal-900'
 const STUDENTS_OFF = 'bg-zinc-800/60 text-zinc-600 line-through decoration-zinc-700 hover:text-zinc-400'
 const INSTRUCTORS = 'bg-amber-950/60 text-amber-400'
-const CONFIRM = 'bg-pr-red/20 text-pr-red-light ring-1 ring-pr-red/60'
+// The confirm previews its outcome rather than warning about it: this is the
+// teal of the on-state, ringed to say "not yet — press to make it so". It was
+// red, which in this app is the brand accent, the error colour and the
+// destructive hover all at once, so a red chip here read as danger. Showing an
+// album to the people on the course is consequential, not dangerous.
+const CONFIRM = 'bg-teal-900/40 text-teal-200 ring-1 ring-teal-500/60'
 
 export default function AudienceToggle({
   audience,
@@ -50,19 +55,27 @@ export default function AudienceToggle({
           {/* Showing something to students is the direction with a
               consequence — instructor manuals, evac plans and client
               paperwork all live behind this. Hiding is reversible and
-              obvious, so it happens on the first click. */}
+              obvious, so it happens on the first click.
+
+              Phrased as an instruction, not a question. This asked "Show
+              students this?" with an ✕ beside it, and a question mark on the
+              only affirmative reads as a prompt still waiting for an answer —
+              people took the ✕ for the yes. Press the thing that says what it
+              will do; ✕ backs out. */}
           <button
             type="button"
             onClick={() => { setConfirming(false); onChange('shared') }}
             disabled={disabled}
+            title={`Show students ${noun}`}
             className={`${pill} ${CONFIRM}`}
           >
-            Show students {noun}?
+            Show students {noun}
           </button>
           <button
             type="button"
             onClick={() => setConfirming(false)}
-            className="text-[10px] leading-none px-1 py-1 text-zinc-600 hover:text-zinc-300 transition-colors"
+            className="text-[10px] leading-none px-1 py-1 text-zinc-500 hover:text-zinc-200 transition-colors"
+            title="Cancel"
             aria-label="Cancel"
           >
             ✕
