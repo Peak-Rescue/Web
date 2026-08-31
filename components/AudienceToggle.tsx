@@ -18,12 +18,16 @@ import { type LibraryAudience } from '@/lib/library'
 const STUDENTS_ON = 'bg-teal-900/50 text-teal-300 hover:bg-teal-900'
 const STUDENTS_OFF = 'bg-zinc-800/60 text-zinc-600 line-through decoration-zinc-700 hover:text-zinc-400'
 const INSTRUCTORS = 'bg-amber-950/60 text-amber-400'
-// The confirm previews its outcome rather than warning about it: this is the
-// teal of the on-state, ringed to say "not yet — press to make it so". It was
-// red, which in this app is the brand accent, the error colour and the
-// destructive hover all at once, so a red chip here read as danger. Showing an
-// album to the people on the course is consequential, not dangerous.
-const CONFIRM = 'bg-teal-900/40 text-teal-200 ring-1 ring-teal-500/60'
+// Deliberately neither resting state's colour.
+//
+// This was red, which read as danger — sharing with the people on the course
+// is consequential, not dangerous. Then it was teal, which was worse: teal is
+// the on-state, so the confirm looked like the thing had already happened.
+//
+// The mistake both times was dressing an action in the palette of a state. A
+// pill here reports what is true; this one asks to make something true, so it
+// borrows from neither and simply looks like a button waiting to be pressed.
+const CONFIRM = 'bg-zinc-700 text-white ring-1 ring-zinc-500 hover:bg-zinc-600 px-2'
 
 export default function AudienceToggle({
   audience,
