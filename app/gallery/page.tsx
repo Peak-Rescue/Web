@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
-import Image from 'next/image'
 import Link from 'next/link'
+import GalleryGrid from './GalleryGrid'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { categoryMeta, type ServiceCategory } from '@/lib/data/services'
 
@@ -69,24 +69,7 @@ export default async function GalleryPage({
               {all.length === 0 ? 'Photos coming soon.' : 'No photos in this category yet.'}
             </p>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 md:gap-4">
-              {images.map(img => (
-                <figure key={img.id} className="group relative aspect-[4/3] overflow-hidden bg-pr-surface">
-                  <Image
-                    src={img.url}
-                    alt={img.caption ?? 'Peak Rescue gallery photo'}
-                    fill
-                    className="object-cover transition-transform duration-500 group-hover:scale-105"
-                    sizes="(max-width: 640px) 50vw, 33vw"
-                  />
-                  {img.caption && (
-                    <figcaption className="absolute inset-x-0 bottom-0 p-3 text-xs text-white bg-gradient-to-t from-black/70 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
-                      {img.caption}
-                    </figcaption>
-                  )}
-                </figure>
-              ))}
-            </div>
+            <GalleryGrid images={images} />
           )}
         </div>
       </div>
