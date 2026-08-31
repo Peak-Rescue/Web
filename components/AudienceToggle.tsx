@@ -18,16 +18,16 @@ import { type LibraryAudience } from '@/lib/library'
 const STUDENTS_ON = 'bg-teal-900/50 text-teal-300 hover:bg-teal-900'
 const STUDENTS_OFF = 'bg-zinc-800/60 text-zinc-600 line-through decoration-zinc-700 hover:text-zinc-400'
 const INSTRUCTORS = 'bg-amber-950/60 text-amber-400'
-// Deliberately neither resting state's colour.
+// The confirm is a question with two answers, so neither answer has to carry
+// the question in its label.
 //
-// This was red, which read as danger — sharing with the people on the course
-// is consequential, not dangerous. Then it was teal, which was worse: teal is
-// the on-state, so the confirm looked like the thing had already happened.
-//
-// The mistake both times was dressing an action in the palette of a state. A
-// pill here reports what is true; this one asks to make something true, so it
-// borrows from neither and simply looks like a button waiting to be pressed.
-const CONFIRM = 'bg-zinc-700 text-white ring-1 ring-zinc-500 hover:bg-zinc-600 px-2'
+// Every attempt at folding the two together failed the same way: as a single
+// pill saying "Show students this?" it read as a prompt still waiting for an
+// answer, and whatever colour it took was borrowed from a state — red said
+// danger, teal said already-done. A question in plain text, answered by a Yes
+// and a No, has nowhere left to be ambiguous.
+const YES = 'bg-teal-800 text-teal-50 hover:bg-teal-700 px-2'
+const NO = 'bg-zinc-800 text-zinc-400 hover:text-zinc-100 px-2'
 
 export default function AudienceToggle({
   audience,
@@ -79,30 +79,26 @@ export default function AudienceToggle({
           {/* Showing something to students is the direction with a
               consequence — instructor manuals, evac plans and client
               paperwork all live behind this. Hiding is reversible and
-              obvious, so it happens on the first click.
-
-              Phrased as an instruction, not a question. This asked "Show
-              students this?" with an ✕ beside it, and a question mark on the
-              only affirmative reads as a prompt still waiting for an answer —
-              people took the ✕ for the yes. Press the thing that says what it
-              will do; ✕ backs out. */}
+              obvious, so it happens on the first click. */}
+          <span className="text-[10px] leading-none text-zinc-300">
+            Show students {noun}?
+          </span>
           <button
             type="button"
             onClick={() => { setConfirming(false); choose('shared') }}
             disabled={disabled}
-            title={`Show students ${noun}`}
-            className={`${pill} ${CONFIRM}`}
+            aria-label={`Yes, show students ${noun}`}
+            className={`${pill} ${YES}`}
           >
-            Show students {noun}
+            Yes
           </button>
           <button
             type="button"
             onClick={() => setConfirming(false)}
-            className="text-[10px] leading-none px-1 py-1 text-zinc-500 hover:text-zinc-200 transition-colors"
-            title="Cancel"
-            aria-label="Cancel"
+            aria-label={`No, keep ${noun} hidden from students`}
+            className={`${pill} ${NO}`}
           >
-            ✕
+            No
           </button>
         </>
       ) : (
