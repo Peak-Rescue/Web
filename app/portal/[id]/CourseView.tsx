@@ -1079,24 +1079,33 @@ export default async function CourseView({
                     />
                   }
                 >
-                  <dl className="grid sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
+                  {/* Label above value, not beside it.
+                      These sat inline — "Client Micah", "Students 5" — so
+                      every value began wherever its label happened to end, and
+                      nothing lined up to be read down. Two columns also left
+                      the third fact alone on a row with a gap beside it. Now
+                      the labels are a heading row and the answers sit under
+                      them, in the same small-caps used for headings elsewhere
+                      on this page. */}
+                  <dl className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-4 text-sm">
                     {([
                       ['Client', inst.client_name as string | null],
                       ['Students', inst.max_students ? String(inst.max_students) : null],
                       ['Instructor slots', inst.instructor_slots ? String(inst.instructor_slots) : null],
                     ] as const).map(([k, v]) => v && (
-                      <div key={k} className="flex gap-2">
-                        <dt className="text-zinc-500 shrink-0">{k}</dt>
-                        <dd className="text-zinc-300 min-w-0">{v}</dd>
+                      <div key={k}>
+                        <dt className="text-[11px] uppercase tracking-wide text-zinc-500 mb-0.5">{k}</dt>
+                        <dd className="text-zinc-200">{v}</dd>
                       </div>
                     ))}
                     {/* The POC is the one thing here nobody can look up: a name
                         and a way to reach them, live rather than as text to
-                        copy out. */}
+                        copy out. Full width because a name and a phone number
+                        do not fit in a third of the row. */}
                     {coursePocs.map((c, i) => (
-                      <div key={i} className="flex gap-2 sm:col-span-2">
-                        <dt className="text-zinc-500 shrink-0">Contact</dt>
-                        <dd className="text-zinc-300 min-w-0">
+                      <div key={i} className="col-span-full">
+                        <dt className="text-[11px] uppercase tracking-wide text-zinc-500 mb-0.5">Contact</dt>
+                        <dd className="text-zinc-200 min-w-0">
                           {c.name}
                           {c.phones.map((ph) => (
                             <span key={ph} className="text-zinc-500">
@@ -1125,7 +1134,7 @@ export default async function CourseView({
                 editor={showTasks ? <CourseIntroFields instanceId={id} intro={inst.intro as string | null} /> : null}
               >
               {!inst.intro && showTasks && (
-                <p className="text-xs text-zinc-600">No welcome written for this course yet.</p>
+                <p className="text-xs text-zinc-600">No welcome note written for this course yet.</p>
               )}
               {inst.intro && (
                 <p className="text-sm text-zinc-300 whitespace-pre-line">{inst.intro}</p>
