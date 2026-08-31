@@ -1082,23 +1082,28 @@ export default async function CourseView({
                     />
                   }
                 >
-                  {/* Label above value, not beside it.
-                      These sat inline — "Client Micah", "Students 5" — so
-                      every value began wherever its label happened to end, and
-                      nothing lined up to be read down. Two columns also left
-                      the third fact alone on a row with a gap beside it. Now
-                      the labels are a heading row and the answers sit under
-                      them, in the same small-caps used for headings elsewhere
-                      on this page. */}
-                  <dl className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-4 text-sm">
-                    {/* Location repeats the WHERE card at the top of the page,
-                        deliberately. This block is the read side of the details
-                        editor, and that editor sets the location — a field you
-                        change here and then cannot see here reads as a change
-                        that did not save. */}
+                  {/* Two kinds of thing, laid out as two.
+                      The client and the two counts are single short values
+                      and belong in a row. A contact is a person with
+                      any number of ways to reach them, which is a card, not a
+                      cell — running "Jon · email · phone · phone" into one
+                      grey line is legible for exactly one contact with exactly
+                      one number.
+
+                      Both rows auto-fit rather than taking a fixed column
+                      count: three facts in a three-column grid filled the row,
+                      four left one stranded on a row of its own with a gap
+                      beside it.
+
+                      When and where are deliberately absent. They live in the
+                      cards above the section nav, which stay on screen while
+                      you read the schedule or the gear list — the two facts
+                      worth that space, and worth it only because nothing else
+                      is competing for it. Repeating them here made two lists
+                      of the same facts at the same weight, one screen apart. */}
+                  <dl className="grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-x-6 gap-y-4 text-sm">
                     {([
                       ['Client', inst.client_name as string | null],
-                      ['Location', inst.location as string | null],
                       ['Students', inst.max_students ? String(inst.max_students) : null],
                       ['Instructor slots', inst.instructor_slots ? String(inst.instructor_slots) : null],
                     ] as const).map(([k, v]) => v && (
@@ -1107,31 +1112,44 @@ export default async function CourseView({
                         <dd className="text-zinc-200">{v}</dd>
                       </div>
                     ))}
-                    {/* The POC is the one thing here nobody can look up: a name
-                        and a way to reach them, live rather than as text to
-                        copy out. Full width because a name and a phone number
-                        do not fit in a third of the row. */}
-                    {coursePocs.map((c, i) => (
-                      <div key={i} className="col-span-full">
-                        <dt className="text-[11px] uppercase tracking-wide text-zinc-500 mb-0.5">Contact</dt>
-                        <dd className="text-zinc-200 min-w-0">
-                          {c.name}
-                          {c.phones.map((ph) => (
-                            <span key={ph} className="text-zinc-500">
-                              {' · '}
-                              <a href={`tel:${ph}`} className="hover:text-zinc-300 transition-colors">{formatPhone(ph)}</a>
-                            </span>
-                          ))}
-                          {c.emails.map((em) => (
-                            <span key={em} className="text-zinc-500">
-                              {' · '}
-                              <a href={`mailto:${em}`} className="hover:text-zinc-300 transition-colors">{em}</a>
-                            </span>
-                          ))}
-                        </dd>
-                      </div>
-                    ))}
                   </dl>
+
+                  {/* The POC is the one thing here nobody can look up: a name
+                      and a way to reach them, live rather than as text to copy
+                      out. Labelled once for the group — repeating "Contact"
+                      over every card is noise once there are three of them. */}
+                  {coursePocs.length > 0 && (
+                    <div className="mt-5 pt-4 border-t border-zinc-800/80">
+                      <p className="text-[11px] uppercase tracking-wide text-zinc-500 mb-2">
+                        {coursePocs.length > 1 ? 'Contacts' : 'Contact'}
+                      </p>
+                      <div className="grid grid-cols-[repeat(auto-fit,minmax(210px,1fr))] gap-x-6 gap-y-4">
+                        {coursePocs.map((c, i) => (
+                          <div key={i} className="text-sm min-w-0">
+                            {c.name && <p className="text-zinc-200 truncate">{c.name}</p>}
+                            {c.emails.map((em) => (
+                              <a
+                                key={em}
+                                href={`mailto:${em}`}
+                                className="block text-zinc-400 hover:text-zinc-100 transition-colors truncate"
+                              >
+                                {em}
+                              </a>
+                            ))}
+                            {c.phones.map((ph) => (
+                              <a
+                                key={ph}
+                                href={`tel:${ph}`}
+                                className="block text-zinc-400 hover:text-zinc-100 transition-colors tabular-nums"
+                              >
+                                {formatPhone(ph)}
+                              </a>
+                            ))}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   {!inst.client_name && coursePocs.length === 0 && (
                     <p className="text-xs text-zinc-600">No client or contact on this course yet.</p>
                   )}
