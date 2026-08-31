@@ -442,6 +442,12 @@ export default async function CourseView({
   // filter above, which is the same gate as every other link on the course.
   const albumRow = ((linkRows ?? []) as CourseLink[]).find((l) => l.drive_folder_id)
 
+  // Links somebody pasted, as opposed to the folder the portal manages. The
+  // block that edits them appears only on a course that has some: a course
+  // gets its album from the Album section now, and a second, emptier way to
+  // reach one is how a course ends up with two.
+  const pastedLinks = ((linkRows ?? []) as CourseLink[]).filter((l) => !l.drive_folder_id)
+
   // Library maps take their title and link from the library item; the edit
   // twin (CalTopo edit URL) is only ever handed to the team.
   // A library item's audience is the ceiling, and it is enforced here rather
@@ -1779,17 +1785,15 @@ export default async function CourseView({
             )}
             </EditInPlace>
 
-            {/* Links for this delivery, grouped — "the album" and "the waiver" are
-                different errands, and one list of URLs makes you read all of them
-                to find either. They sat above the section nav, in no section at
-                all, which is why the album's edit control had nothing to sit on.
-
-                Only the album is editable here: it is the one link the people
-                running the course have in hand, and the one students come back for
-                afterwards. The rest arrive from elsewhere. */}
+            {/* Albums that live somewhere else — the ones pasted onto courses
+                before the portal made its own. Kept so those courses don't lose
+                them, and absent from every course that has none, because the
+                Album section above is where an album comes from now. */}
+            {pastedLinks.length > 0 && (
+            <div className="mt-6 pt-6 border-t border-zinc-800">
             <EditInPlace
-              label="Edit album"
-                title="Links"
+              label="Edit linked albums"
+              title="Linked albums"
               editor={
                 showTasks ? (
                   <CoursePhotosSection
@@ -1846,12 +1850,15 @@ export default async function CourseView({
               </div>
             )}
             </EditInPlace>
+            </div>
+            )}
 
+            <div className="mt-6 pt-6 border-t border-zinc-800">
             {/* Reference for this place, edited where it is read. Save-to-
                 library stays admin-only inside the component's own actions —
                 promoting a med plan reaches every course that pulls it. */}
             <EditInPlace
-              label="Edit resources"
+              label="Edit reference"
               title="Reference"
               editor={
                 showTasks ? (
@@ -1898,15 +1905,16 @@ export default async function CourseView({
               <p className="text-xs text-zinc-600">No resources on this course yet.</p>
             )}
             </EditInPlace>
+            </div>
             {hasDocuments && (
-              <div className={resources.length > 0 ? 'mt-6 pt-6 border-t border-zinc-800' : ''}>
+              <div className="mt-6 pt-6 border-t border-zinc-800">
                 {/* Every attachment on the course in one place — uploads,
                     pasted links, and documents that arrived on a task. Adding
                     one here is what makes "put the client's PDF somewhere" a
                     thing you do on the course rather than on another screen. */}
                 <EditInPlace
                   label="Edit files"
-                  title="Everything attached to this course"
+                  title="Files"
                   editor={showTasks ? <CourseFilesSection instanceId={id} files={editableFiles} /> : null}
                 >
                 {courseDocs.length === 0 && (
