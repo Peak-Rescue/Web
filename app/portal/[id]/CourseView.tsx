@@ -1769,10 +1769,15 @@ export default async function CourseView({
                   // One chip per link, kept closer to each other than to the next
                   // map — a single pill cut in half read as one link that had
                   // been broken, and nothing about it said the halves went
-                  // different places. The first carries the name; the rest say
-                  // only how they differ, which is all there is to say.
+                  // different places.
+                  //
+                  // Every chip says the same four things: it is a map, which
+                  // map, whose it is, and whether it can be edited. Only the
+                  // first used to carry the icon and the name, so the second
+                  // read as "Read-only · students" — a chip that named neither
+                  // the place it went nor what it was.
                   <span key={m.id} className="inline-flex items-center gap-1.5">
-                    {m.links.map((l, i) => {
+                    {m.links.map((l) => {
                       const c = l.audience === 'students' ? CHIP.maps : CHIP.instructors
                       return (
                         <a
@@ -1783,21 +1788,18 @@ export default async function CourseView({
                           title={`${m.label} — ${l.access === 'edit' ? 'editable' : 'read-only'}, for ${l.audience}`}
                           className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border no-underline transition-colors ${c.chip} ${c.hover}`}
                         >
-                          {i === 0 && (
-                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
-                              <path d="M9 20l-5.447-2.724A1 1 0 0 1 3 16.382V5.618a1 1 0 0 1 1.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0 0 21 18.382V7.618a1 1 0 0 0-.553-.894L15 4m0 13V4m0 0L9 7" />
-                            </svg>
-                          )}
-                          {i === 0 ? m.label : l.access === 'edit' ? 'Editable' : 'Read-only'}
-                          {/* Students are only ever handed their own links, so
-                              saying whose it is would be telling them something
-                              they can't act on. Staff see several at once and
-                              need to know which is which. */}
-                          {showTasks && (
-                            <span className={c.tail}>
-                              · {l.audience}{i === 0 && l.access === 'edit' ? ' · editable' : ''}
-                            </span>
-                          )}
+                          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+                            <path d="M9 20l-5.447-2.724A1 1 0 0 1 3 16.382V5.618a1 1 0 0 1 1.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0 0 21 18.382V7.618a1 1 0 0 0-.553-.894L15 4m0 13V4m0 0L9 7" />
+                          </svg>
+                          {m.label}
+                          {/* Whose it is only matters where more than one
+                              audience is on screen. A student is handed their
+                              own links and nobody else's, so naming the
+                              audience would tell them something they cannot
+                              act on — but whether they may edit it, they can. */}
+                          <span className={c.tail}>
+                            {showTasks ? ` · ${l.audience}` : ''} · {l.access === 'edit' ? 'editable' : 'read-only'}
+                          </span>
                         </a>
                       )
                     })}
