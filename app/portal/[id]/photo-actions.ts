@@ -1,6 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { headers } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { courseAccess } from '@/lib/course-access'
@@ -138,9 +139,17 @@ export async function startPhotoUploads(
 
   const folderId = await ensureFolder(admin, instanceId, user.id)
 
+  // The origin of the page that is about to do the uploading. Read from the
+  // request rather than configured, so a preview deployment and a laptop on
+  // localhost each declare themselves and neither needs an entry anywhere.
+  const origin = (await headers()).get('origin')
+
   const sessions: UploadSession[] = []
   for (const f of files) {
-    sessions.push({ name: f.name, uploadUrl: await startResumableUpload(folderId, f.name, f.mimeType) })
+    sessions.push({
+      name: f.name,
+      uploadUrl: await startResumableUpload(folderId, f.name, f.mimeType, origin),
+    })
   }
 
   revalidate(instanceId)

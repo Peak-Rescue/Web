@@ -221,10 +221,18 @@ export async function fetchDriveMedia(
 // phone photos routinely exceed that. Drive's resumable session URI carries
 // its own authorisation and is scoped to this one file in this one folder, so
 // handing it to the client grants nothing else.
+//
+// `origin` is not optional in practice. Google decides whether a session is
+// CORS-enabled when the session is *opened*, not when it is written to — so an
+// origin declared here is what puts Access-Control-Allow-Origin on the
+// browser's upload response. Without it the upload still succeeds and the file
+// still lands, but the browser discards the reply it cannot read and reports a
+// bare "Failed to fetch" over a photo that is already in Drive.
 export async function startResumableUpload(
   folderId: string,
   name: string,
-  mimeType: string
+  mimeType: string,
+  origin: string | null
 ): Promise<string> {
   const res = await fetch(
     'https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&supportsAllDrives=true',
@@ -234,6 +242,7 @@ export async function startResumableUpload(
         Authorization: `Bearer ${await token()}`,
         'Content-Type': 'application/json',
         'X-Upload-Content-Type': mimeType,
+        ...(origin ? { Origin: origin } : {}),
       },
       body: JSON.stringify({ name, parents: [folderId] }),
     }
