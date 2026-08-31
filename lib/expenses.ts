@@ -32,7 +32,7 @@ export const CATEGORY_LABELS: Record<ExpenseCategory, string> = {
   breakfast: 'Breakfast',
   lunch: 'Lunch',
   dinner: 'Dinner',
-  per_diem: 'Meals',
+  per_diem: 'Per diem',
   other: 'Other',
 }
 
@@ -43,7 +43,7 @@ export const MEAL_CATEGORIES: ExpenseCategory[] = ['breakfast', 'lunch', 'dinner
 // Categories whose amount is computed from a quantity × rate, not typed in.
 export const COMPUTED_CATEGORIES: ExpenseCategory[] = ['personal_auto', 'per_diem']
 
-// Flat meal coverage is restricted to FLSA-exempt employees.
+// Per diem is restricted to FLSA-exempt employees.
 export function categoriesFor(isExempt: boolean): ExpenseCategory[] {
   const all = (Object.keys(CATEGORY_LABELS) as ExpenseCategory[]).filter(
     (c) => !MEAL_CATEGORIES.includes(c)

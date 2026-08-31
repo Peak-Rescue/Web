@@ -107,6 +107,7 @@ export async function loadReport(reportId: string): Promise<{
       details: i.details,
       paid_for_others: i.paid_for_others,
       miles: i.miles === null ? null : Number(i.miles),
+      meal_count: i.meal_count === null ? null : Number(i.meal_count),
       amount: Number(i.amount),
       courseTitle: titleMap.get(i.instance_id ?? report.default_instance_id ?? '') ?? null,
     })),

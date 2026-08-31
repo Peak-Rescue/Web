@@ -630,7 +630,9 @@ export default function ExpenseReportEditor({
                       <p className="text-xs text-zinc-500 mt-0.5">
                         {fmtDateRange(item.start_date, item.end_date)}
                         {item.category === 'personal_auto' && item.miles ? ` · ${item.miles} mi` : ''}
-                        {item.category === 'per_diem' && item.meal_count ? ` · ${item.meal_count} meals` : ''}
+                        {item.category === 'per_diem' && item.meal_count
+                          ? ` · ${daysInRange(item.start_date, item.end_date)} day${daysInRange(item.start_date, item.end_date) === 1 ? '' : 's'} · ${item.meal_count} meals`
+                          : ''}
                         {item.paid_by === 'company_card' ? ' · company card' : ''}
                       </p>
                     </div>
@@ -732,7 +734,7 @@ export default function ExpenseReportEditor({
                 )}
                 {form.category === 'per_diem' && (
                   <div>
-                    <label className={labelCls}>Meals</label>
+                    <label className={labelCls}>Meals covered</label>
                     <input
                       type="number" min="0" step="1"
                       value={form.meal_count}
@@ -744,7 +746,7 @@ export default function ExpenseReportEditor({
                       <p className="mt-1 text-xs text-zinc-500">
                         {daysInRange(form.start_date, form.end_date || null)} day
                         {daysInRange(form.start_date, form.end_date || null) === 1 ? '' : 's'} × 3 meals — lower it if
-                        you didn&apos;t take every meal
+                        you didn&apos;t take every meal. The report shows the days and dates the per diem covers.
                       </p>
                     )}
                   </div>
@@ -951,7 +953,9 @@ export default function ExpenseReportEditor({
                         <p className="text-xs text-zinc-500">
                           {fmtDateRange(item.start_date, item.end_date)}
                           {item.category === 'personal_auto' && item.miles ? ` · ${item.miles} mi` : ''}
-                          {item.category === 'per_diem' && item.meal_count ? ` · ${item.meal_count} meals` : ''}
+                          {item.category === 'per_diem' && item.meal_count
+                          ? ` · ${daysInRange(item.start_date, item.end_date)} day${daysInRange(item.start_date, item.end_date) === 1 ? '' : 's'} · ${item.meal_count} meals`
+                          : ''}
                           {item.paid_by === 'company_card' ? ' · company card' : ''}
                           {item.receipts.length > 0 ? ` · ${item.receipts.length} receipt${item.receipts.length === 1 ? '' : 's'}` : ''}
                         </p>

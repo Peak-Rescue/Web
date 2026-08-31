@@ -10,6 +10,7 @@ import {
   type ExpenseCategory,
   computeTotals,
   balanceDueEmployee,
+  daysInRange,
   fmtDateRange,
   round2,
 } from '@/lib/expenses'
@@ -23,6 +24,7 @@ export type PdfItem = {
   details: string | null
   paid_for_others: boolean
   miles: number | null
+  meal_count: number | null
   amount: number
   courseTitle: string | null
 }
@@ -78,6 +80,17 @@ function moneyColumn(category: ExpenseCategory): string {
       return category
     default: return 'other'
   }
+}
+
+// Per diem lands in the undifferentiated "Other" money column, so the row has
+// to name itself: accounting asked for the words "per diem" plus the days it
+// covers. Short form for the grid (the Date column already carries the range),
+// long form for the details page.
+function perDiemLabel(item: PdfItem, opts?: { withDates?: boolean }): string {
+  const days = daysInRange(item.start_date, item.end_date)
+  const meals = item.meal_count ?? 0
+  const dates = opts?.withDates ? ` ${fmtDateRange(item.start_date, item.end_date)}` : ''
+  return `Per diem — ${days} day${days === 1 ? '' : 's'}${dates}${meals ? `, ${meals} meals` : ''}`
 }
 
 function money(n: number): string {
@@ -162,7 +175,11 @@ export async function generateExpensePdf(report: PdfReport): Promise<Uint8Array>
       ;({ page, y } = newGridPage(false))
     }
     drawCell(page, y, 'date', fmtDateRange(item.start_date, item.end_date))
-    const desc = [item.description, item.courseTitle ? `[${item.courseTitle}]` : null].filter(Boolean).join(' ')
+    const desc = [
+      item.category === 'per_diem' ? perDiemLabel(item) : null,
+      item.description,
+      item.courseTitle ? `[${item.courseTitle}]` : null,
+    ].filter(Boolean).join(' ')
     drawCell(page, y, 'desc', desc || '—')
     drawCell(page, y, 'paid', item.paid_by === 'company_card' ? 'Card' : 'Cash', { color: GRAY })
     if (item.category === 'personal_auto') {
@@ -264,6 +281,7 @@ export async function generateExpensePdf(report: PdfReport): Promise<Uint8Array>
 
     for (const item of detailItems) {
       const lines = [
+        item.category === 'per_diem' ? perDiemLabel(item, { withDates: true }) : '',
         item.description ?? '',
         ...(item.details ?? '').split('\n'),
         item.paid_for_others ? '(paid for others)' : '',
