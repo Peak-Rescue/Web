@@ -170,6 +170,69 @@ export default async function CourseView({
     modulesQuery = modulesQuery.in('audience', audienceFilter)
   }
 
+  // Started here, awaited far below where their results are first used.
+  //
+  // Every one of these depends on nothing but the course id and who is
+  // looking, both of which are already known — so there is no reason for them
+  // to wait behind the round below. Left where they were read, each was one
+  // more sequential round trip to Supabase, and an admin opening a course paid
+  // for a dozen of them end to end before the first byte of HTML went out.
+  // Kicking the promise off here and awaiting it at the point of use keeps the
+  // code in the order it is read while collapsing the waiting into one round.
+  //
+  // A course that turns out not to exist abandons these mid-flight, so each
+  // one is marked handled. The await below still rejects — this only stops an
+  // abandoned failure from being reported as an unhandled rejection.
+  // Settling it to a real promise here also pins each query builder to a single
+  // execution: a builder runs its request every time it is awaited, so the one
+  // conversion has to happen once, at the start, rather than at each use.
+  const keep = <T,>(p: T): Promise<Awaited<T>> => {
+    const q = Promise.resolve(p) as Promise<Awaited<T>>
+    q.catch(() => {})
+    return q
+  }
+
+  const curriculumSetupPromise = keep(showTasks
+    ? Promise.all([
+        admin.from('course_templates')
+          .select('id, name, description, course_type, is_default, course_template_sections(id, course_template_items(id))')
+          .eq('active', true)
+          .order('name'),
+        admin.from('course_modules').select('title'),
+      ])
+    : Promise.resolve([{ data: null }, { data: null }] as const))
+
+  const venuesPromise = keep(showAsAdmin
+    ? admin.from('venues').select('id, name, region, region_code, client_name, notes, active').order('name')
+    : Promise.resolve({ data: null }))
+
+  const gearSetupPromise = keep(showAsAdmin
+    ? Promise.all([
+        admin.from('gear_lists')
+          .select(`id, name, audience, intro, instance_id, is_template, ${GEAR_ENTRIES_SELECT}`)
+          .eq('instance_id', id),
+        admin.from('gear_items')
+          .select('id, name, brand, info, url, category, parent_id, aliases, disciplines')
+          .eq('active', true).order('name'),
+        admin.from('gear_lists')
+          .select('id, name, description, audience, course_type, gear_list_entries(id)')
+          .eq('is_template', true),
+      ])
+    : Promise.resolve([{ data: null }, { data: null }, { data: null }] as const))
+
+  const gearRowsPromise = keep(admin
+    .from('gear_lists')
+    .select(`id, name, audience, intro, gear_list_entries(id, ${GEAR_ENTRY_COLUMNS}, gear_items(name, brand, url, category), gear_entry_options(sort_order, gear_items(name, brand)))`)
+    .eq('instance_id', id))
+
+  const schedRowsPromise = keep(admin
+    .from('course_schedules')
+    .select('id, name, overview, objectives, schedule_days(id, title, location, site_id, notes, objectives, meeting_point, meeting_point_id, meeting_time, meeting_links, meeting_attachments, sort_order, meeting_points(id, name, directions, coords, links), sites(id, name, beta, usual_meeting_time, coords, links, meeting_points(id, name, directions, coords, links)), schedule_blocks(id, parent_id, title, time_label, location, sort_order))')
+    .eq('instance_id', id)
+    .limit(1))
+
+  const waiverPromise = keep(userId ? loadStudentWaiver(id, userId) : Promise.resolve(null))
+
   const [{ data: inst }, { data: offDays }, { data: modules }, { data: instructors }, taskRows, { data: peopleRows }, { data: templateRows }, { data: courseDocRows }, { data: taskDocRows }, { data: mapRows }, { data: resourceRows }, { data: linkRows }, { data: updateRows }, { data: enrollmentRows }, { data: messageRows }] =
     await Promise.all([
       admin.from('course_instances')
@@ -249,9 +312,117 @@ export default async function CourseView({
   type PortalDocRow = { id: string; path: string | null; filename: string | null; url: string | null; created_at: string }
   const docRows: (PortalDocRow & { course_tasks?: unknown })[] = [...(courseDocRows ?? []), ...(taskDocRows ?? [])]
   const docPaths = docRows.map((r) => r.path).filter((p): p is string => Boolean(p))
-  const { data: signedDocs } = docPaths.length
-    ? await admin.storage.from('task-documents').createSignedUrls(docPaths, 3600)
-    : { data: [] }
+
+  // The second and last round. Everything below needed something the round
+  // above went and got — the course row, the roster, the schedule — so it
+  // could not have been started any earlier; none of it needs anything from
+  // the others, so none of it waits for them either. The schedule and the
+  // filtered updates are unpacked here rather than where they are read
+  // because the reads they gate (signing a morning's files, signing an
+  // update's attachments) belong in this round with the rest.
+  const { data: schedRows } = await schedRowsPromise
+  type SchedBlock = { id: string; parent_id: string | null; title: string; time_label: string | null; location: string | null; sort_order: number }
+  type SchedMeetup = { id: string; name: string; directions: string | null; coords: string | null; links: { url: string; label: string }[] | null }
+  type SchedSite = { id: string; name: string; beta: string | null; usual_meeting_time: string | null; coords: string | null; links: { url: string; label: string }[] | null; meeting_points: SchedMeetup | null }
+  type SchedDay = { id: string; title: string; location: string | null; site_id: string | null; sites: SchedSite | null; notes: string | null; objectives: string[] | null; meeting_point: string | null; meeting_point_id: string | null; meeting_points: SchedMeetup | null; meeting_time: string | null; meeting_links: { url: string; label: string }[] | null; meeting_attachments: { path: string; filename: string }[] | null; sort_order: number; schedule_blocks: SchedBlock[] }
+  const sched = ((schedRows ?? []) as unknown as {
+    id: string; name: string; overview: string | null; objectives: string[]; schedule_days: SchedDay[]
+  }[])[0]
+  const schedDays = [...(sched?.schedule_days ?? [])].sort((a, b) => a.sort_order - b.sort_order)
+
+  type UpdateRow = {
+    id: string; body: string; audience: UpdateAudience
+    created_at: string; updated_at: string | null; created_by: string | null
+    sent_count: number; recipient_count: number; notify_count: number; emailed_at: string | null
+    links: { label: string; url: string }[] | null
+    attachments: { path: string; filename: string }[] | null
+    profiles: { first_name: string | null; last_name: string | null } | null
+  }
+  const updateRowsTyped = ((updateRows ?? []) as unknown as UpdateRow[])
+    .filter((u) => showTasks || u.audience !== 'instructors')
+
+  // The running order is edited here now, by the people running the course —
+  // the same rule the writes themselves use, so what the page offers and what
+  // the server will accept are the same sentence. A student is never sent any
+  // of this, nor the editor's code.
+  const canEditSchedule = showTasks && Boolean(sched)
+
+  // Attachments sit in the private bucket, so they're signed here — one call
+  // for every update on the page rather than one per file.
+  const updatePaths = updateRowsTyped.flatMap((u) => (u.attachments ?? []).map((a) => a.path))
+  // The bucket is private, so every morning's files are signed too — in one
+  // round for the whole schedule rather than one per day.
+  const dayPaths = schedDays.flatMap((d) => (d.meeting_attachments ?? []).map((a) => a.path))
+  const sign = (paths: string[]) =>
+    paths.length
+      ? admin.storage.from('task-documents').createSignedUrls(paths, 3600)
+      : Promise.resolve({ data: [] as { path: string | null; signedUrl: string }[] })
+
+  const signedDocsPromise = sign(docPaths)
+  const signedUpdateDocsPromise = sign(updatePaths)
+  const daySignedPromise = sign(dayPaths)
+  const meetingPromise = meetingDetails(admin, inst)
+  // What a promoted resource would be filed under: the venue if this course
+  // has one, the region otherwise.
+  const venueRowPromise = keep(showTasks && inst.venue_id
+    ? admin.from('venues').select('name').eq('id', inst.venue_id).maybeSingle()
+    : Promise.resolve({ data: null }))
+  // Sites a day can point at, and the meetups it can gather at. Loaded only
+  // for the people who can open a day's editor.
+  //
+  // The schedule's own shape — its overview, adding and removing days, saving
+  // back to the shelf — is not here: that went back to the admin course page
+  // when the section-level editor did. What a day *contains* is edited on the
+  // day; what the schedule *is* is set up once, elsewhere.
+  const schedSetupPromise = canEditSchedule
+    ? Promise.all([
+        // Canyons and crags with beta already written, so a day points at one
+        // instead of retyping the place.
+        admin.from('sites')
+          .select('id, name, kind, beta, meeting_point_id, usual_meeting_time, venue_id, venues(name)')
+          .eq('active', true)
+          .order('name'),
+        // Where a day can be told to gather instead of the site's usual.
+        admin.from('meeting_points')
+          .select('id, name, venue_id')
+          .eq('active', true)
+          .order('name'),
+      ])
+    : Promise.resolve([{ data: null }, { data: null }] as const)
+  // Who has signed, for the staff roster. Read only when staff are looking and
+  // only when the course actually has a waiver to sign — a column of "not
+  // signed" on a course that never asked for one is a false alarm.
+  const waiverOnCourse = Boolean(inst.waiver_template_id)
+  const rosterSigPromise = keep(showTasks && waiverOnCourse
+    ? admin
+        .from('waiver_signatures')
+        .select('enrollment_id, identity, signed_at')
+        .eq('instance_id', id)
+        .not('enrollment_id', 'is', null)
+        .order('signed_at', { ascending: false })
+    : Promise.resolve({ data: [] }))
+  // Walk-ups the matcher wouldn't decide on. Loaded for staff beside the QR
+  // that creates them, so the person who ran the code is the one who resolves
+  // what it couldn't work out.
+  const unmatchedPromise = showTasks && waiverOnCourse
+    ? loadUnmatchedWaivers(id, admin)
+    : Promise.resolve([])
+  // The code an instructor holds up at the trailhead, rendered here because
+  // that is the page they have open — the admin editor is somewhere they may
+  // not be able to reach and, more to the point, aren't standing in front of.
+  const waiverQrPromise: Promise<WaiverQr | null> = showTasks && inst.waiver_token
+    ? (async () => {
+        const url = `${process.env.NEXT_PUBLIC_SITE_URL || 'https://peak-rescue.com'}/waiver/${inst.waiver_token}`
+        const QRCode = (await import('qrcode')).default
+        return {
+          url,
+          svg: await QRCode.toString(url, { type: 'svg', margin: 1, width: 148 }),
+          expiresAt: (inst.waiver_token_expires_at as string | null) ?? null,
+        }
+      })()
+    : Promise.resolve(null)
+
+  const { data: signedDocs } = await signedDocsPromise
   const docUrl = new Map((signedDocs ?? []).map((s) => [s.path, s.signedUrl]))
   const courseDocs = docRows
     .map((r) => ({
@@ -411,15 +582,7 @@ export default async function CourseView({
   // Assigning curriculum happens on the course now, so the pickers need what
   // they pick from: the shapes available for this offering, and the section
   // names already in use so the same one isn't retyped three ways.
-  const [{ data: curriculumTplRows }, { data: sectionNameRows }] = showTasks
-    ? await Promise.all([
-        admin.from('course_templates')
-          .select('id, name, description, course_type, is_default, course_template_sections(id, course_template_items(id))')
-          .eq('active', true)
-          .order('name'),
-        admin.from('course_modules').select('title'),
-      ])
-    : [{ data: null }, { data: null }]
+  const [{ data: curriculumTplRows }, { data: sectionNameRows }] = await curriculumSetupPromise
 
   const curriculumTemplates = ((curriculumTplRows ?? []) as unknown as {
     id: string; name: string; description: string | null; course_type: string | null
@@ -447,28 +610,14 @@ export default async function CourseView({
   // What a course *is* — the offering, who asked, who to call, how many. Setup
   // rather than delivery, so it is the admin's to change, and loaded only for
   // them.
-  const { data: venueRows } = showAsAdmin
-    ? await admin.from('venues').select('id, name, region, region_code, client_name, notes, active').order('name')
-    : { data: null }
+  const { data: venueRows } = await venuesPromise
   const coursePocs = parseContacts(inst.contacts)
 
   // Building the gear list is admin work — instructors read it and take it to
   // the trailhead, they don't assemble it — so this is the one editor gated on
   // being an admin rather than on being staff. Loaded only then: the catalog
   // is every item we own, and a student's page has no use for it.
-  const [{ data: gearListRows }, { data: gearCatalogRows }, { data: gearTemplateRows }] = showAsAdmin
-    ? await Promise.all([
-        admin.from('gear_lists')
-          .select(`id, name, audience, intro, instance_id, is_template, ${GEAR_ENTRIES_SELECT}`)
-          .eq('instance_id', id),
-        admin.from('gear_items')
-          .select('id, name, brand, info, url, category, parent_id, aliases, disciplines')
-          .eq('active', true).order('name'),
-        admin.from('gear_lists')
-          .select('id, name, description, audience, course_type, gear_list_entries(id)')
-          .eq('is_template', true),
-      ])
-    : [{ data: null }, { data: null }, { data: null }]
+  const [{ data: gearListRows }, { data: gearCatalogRows }, { data: gearTemplateRows }] = await gearSetupPromise
 
   const gearTemplateOptions = ((gearTemplateRows ?? []) as unknown as {
     id: string; name: string; description: string | null; audience: string
@@ -480,12 +629,8 @@ export default async function CourseView({
       audience: t.audience, entries: t.gear_list_entries.length,
     }))
 
-  // What a promoted resource would be filed under: the venue if this course
-  // has one, the region otherwise. Null when neither is set, and there is
-  // nothing to offer.
-  const { data: venueRow } = showTasks && inst.venue_id
-    ? await admin.from('venues').select('name').eq('id', inst.venue_id).maybeSingle()
-    : { data: null }
+  // Null when neither venue nor region is set, and there is nothing to offer.
+  const { data: venueRow } = await venueRowPromise
   const coursePlace: string | null =
     (venueRow?.name as string | undefined) ?? (regionLabel(inst.region as string | null) || null)
 
@@ -512,10 +657,7 @@ export default async function CourseView({
 
   // The gear list participants get. Instructors see theirs too; students only
   // ever see the student one.
-  const { data: gearRows } = await admin
-    .from('gear_lists')
-    .select(`id, name, audience, intro, gear_list_entries(id, ${GEAR_ENTRY_COLUMNS}, gear_items(name, brand, url, category), gear_entry_options(sort_order, gear_items(name, brand)))`)
-    .eq('instance_id', id)
+  const { data: gearRows } = await gearRowsPromise
   type GearRow = {
     id: string; name: string; audience: string; intro: string | null
     gear_list_entries: {
@@ -536,48 +678,7 @@ export default async function CourseView({
     ? gearAll.find((g) => g.audience === 'instructor') ?? gearAll[0]
     : gearAll.find((g) => g.audience === 'student')
 
-  // The running order, same for everyone on the course.
-  const { data: schedRows } = await admin
-    .from('course_schedules')
-    .select('id, name, overview, objectives, schedule_days(id, title, location, site_id, notes, objectives, meeting_point, meeting_point_id, meeting_time, meeting_links, meeting_attachments, sort_order, meeting_points(id, name, directions, coords, links), sites(id, name, beta, usual_meeting_time, coords, links, meeting_points(id, name, directions, coords, links)), schedule_blocks(id, parent_id, title, time_label, location, sort_order))')
-    .eq('instance_id', id)
-    .limit(1)
-  type SchedBlock = { id: string; parent_id: string | null; title: string; time_label: string | null; location: string | null; sort_order: number }
-  type SchedMeetup = { id: string; name: string; directions: string | null; coords: string | null; links: { url: string; label: string }[] | null }
-  type SchedSite = { id: string; name: string; beta: string | null; usual_meeting_time: string | null; coords: string | null; links: { url: string; label: string }[] | null; meeting_points: SchedMeetup | null }
-  type SchedDay = { id: string; title: string; location: string | null; site_id: string | null; sites: SchedSite | null; notes: string | null; objectives: string[] | null; meeting_point: string | null; meeting_point_id: string | null; meeting_points: SchedMeetup | null; meeting_time: string | null; meeting_links: { url: string; label: string }[] | null; meeting_attachments: { path: string; filename: string }[] | null; sort_order: number; schedule_blocks: SchedBlock[] }
-  const sched = ((schedRows ?? []) as unknown as {
-    id: string; name: string; overview: string | null; objectives: string[]; schedule_days: SchedDay[]
-  }[])[0]
-  const schedDays = [...(sched?.schedule_days ?? [])].sort((a, b) => a.sort_order - b.sort_order)
-
-  // The running order is edited here now, by the people running the course —
-  // the same rule the writes themselves use, so what the page offers and what
-  // the server will accept are the same sentence. A student is never sent any
-  // of this, nor the editor's code.
-  const canEditSchedule = showTasks && Boolean(sched)
-  // Sites a day can point at, and the meetups it can gather at. Loaded only
-  // for the people who can open a day's editor.
-  //
-  // The schedule's own shape — its overview, adding and removing days, saving
-  // back to the shelf — is not here: that went back to the admin course page
-  // when the section-level editor did. What a day *contains* is edited on the
-  // day; what the schedule *is* is set up once, elsewhere.
-  const [{ data: schedSiteRows }, { data: schedPointRows }] = canEditSchedule
-    ? await Promise.all([
-        // Canyons and crags with beta already written, so a day points at one
-        // instead of retyping the place.
-        admin.from('sites')
-          .select('id, name, kind, beta, meeting_point_id, usual_meeting_time, venue_id, venues(name)')
-          .eq('active', true)
-          .order('name'),
-        // Where a day can be told to gather instead of the site's usual.
-        admin.from('meeting_points')
-          .select('id, name, venue_id')
-          .eq('active', true)
-          .order('name'),
-      ])
-    : [{ data: null }, { data: null }]
+  const [{ data: schedSiteRows }, { data: schedPointRows }] = await schedSetupPromise
 
   const schedSites = ((schedSiteRows ?? []) as unknown as {
     id: string; name: string; kind: string | null; beta: string | null; meeting_point_id: string | null; usual_meeting_time: string | null; venue_id: string | null; venues: { name: string } | null
@@ -621,7 +722,7 @@ export default async function CourseView({
   // Staff get this block whether or not anything is in it. An unset meeting
   // point is the thing they most need to notice, and hiding it hides the only
   // place they can fix it.
-  const meeting = await meetingDetails(admin, inst)
+  const meeting = await meetingPromise
   const hasSchedule = Boolean(sched && schedDays.length > 0)
   // Staff get it whether or not anything is in it: this is where the first
   // section gets added, and a section that appears only once it has contents
@@ -638,23 +739,7 @@ export default async function CourseView({
   const hasNotes = showTasks
   // Everyone on the course sees updates; staff also get the box to write one,
   // so the section shows for them even when there's nothing posted yet.
-  type UpdateRow = {
-    id: string; body: string; audience: UpdateAudience
-    created_at: string; updated_at: string | null; created_by: string | null
-    sent_count: number; recipient_count: number; notify_count: number; emailed_at: string | null
-    links: { label: string; url: string }[] | null
-    attachments: { path: string; filename: string }[] | null
-    profiles: { first_name: string | null; last_name: string | null } | null
-  }
-  const updateRowsTyped = ((updateRows ?? []) as unknown as UpdateRow[])
-    .filter((u) => showTasks || u.audience !== 'instructors')
-
-  // Attachments sit in the private bucket, so they're signed here — one call
-  // for every update on the page rather than one per file.
-  const updatePaths = updateRowsTyped.flatMap((u) => (u.attachments ?? []).map((a) => a.path))
-  const { data: signedUpdateDocs } = updatePaths.length
-    ? await admin.storage.from('task-documents').createSignedUrls(updatePaths, 3600)
-    : { data: [] }
+  const { data: signedUpdateDocs } = await signedUpdateDocsPromise
   const updateDocUrl = new Map((signedUpdateDocs ?? []).map((s) => [s.path, s.signedUrl]))
 
   const courseUpdates: CourseUpdate[] = updateRowsTyped.map((u) => ({
@@ -743,38 +828,8 @@ export default async function CourseView({
   }))
   const enrolledCount = roster.length
 
-  // Who has signed, for the staff roster. Read only when staff are looking and
-  // only when the course actually has a waiver to sign — a column of "not
-  // signed" on a course that never asked for one is a false alarm.
-  const waiverOnCourse = Boolean(inst.waiver_template_id)
-  const { data: rosterSigRows } = showTasks && waiverOnCourse
-    ? await admin
-        .from('waiver_signatures')
-        .select('enrollment_id, identity, signed_at')
-        .eq('instance_id', id)
-        .not('enrollment_id', 'is', null)
-        .order('signed_at', { ascending: false })
-    : { data: [] }
-  // The code an instructor holds up at the trailhead, rendered here because
-  // that is the page they have open — the admin editor is somewhere they may
-  // not be able to reach and, more to the point, aren't standing in front of.
-  let waiverQr: WaiverQr | null = null
-  if (showTasks && inst.waiver_token) {
-    const url = `${process.env.NEXT_PUBLIC_SITE_URL || 'https://peak-rescue.com'}/waiver/${inst.waiver_token}`
-    const QRCode = (await import('qrcode')).default
-    waiverQr = {
-      url,
-      svg: await QRCode.toString(url, { type: 'svg', margin: 1, width: 148 }),
-      expiresAt: (inst.waiver_token_expires_at as string | null) ?? null,
-    }
-  }
-
-  // Walk-ups the matcher wouldn't decide on. Loaded for staff beside the QR
-  // that creates them, so the person who ran the code is the one who resolves
-  // what it couldn't work out.
-  const unmatchedWaivers = showTasks && inst.waiver_template_id
-    ? await loadUnmatchedWaivers(id, admin)
-    : []
+  const [{ data: rosterSigRows }, waiverQr, unmatchedWaivers] =
+    await Promise.all([rosterSigPromise, waiverQrPromise, unmatchedPromise])
 
   const signedByEnrollment = new Map<string, { unverified: boolean }>()
   for (const r of (rosterSigRows ?? []) as { enrollment_id: string; identity: string }[]) {
@@ -800,7 +855,7 @@ export default async function CourseView({
   // Nothing here reads a job title. A rule about who someone *is* would have to
   // guess at the case this handles by asking what they are *doing on this
   // course*, which the enrollment already says.
-  const waiver = userId ? await loadStudentWaiver(id, userId) : null
+  const waiver = await waiverPromise
 
   // The meeting block lives in here, so a course with no posts yet still has
   // an Updates section for a student to find the meeting point in.
@@ -832,12 +887,7 @@ export default async function CourseView({
   )
   const dayDates = schedDays.map((_, i) => runningDates[i] ?? null)
 
-  // The bucket is private, so every morning's files are signed here — in one
-  // round for the whole schedule rather than one per day.
-  const dayPaths = schedDays.flatMap((d) => (d.meeting_attachments ?? []).map((a) => a.path))
-  const { data: daySignedRows } = dayPaths.length
-    ? await admin.storage.from('task-documents').createSignedUrls(dayPaths, 3600)
-    : { data: [] }
+  const { data: daySignedRows } = await daySignedPromise
   const daySignedByPath = new Map((daySignedRows ?? []).map((r) => [r.path, r.signedUrl]))
 
   // Today's morning and tomorrow's stand open; everything else folds to its

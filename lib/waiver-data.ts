@@ -75,16 +75,21 @@ export async function loadStudentWaiver(
   signed: SignedWaiver | null
   prefill: WaiverPrefill
 } | null> {
-  const version = await courseWaiverVersion(instanceId, admin)
-  if (!version) return null
-
-  const { data: enrollment } = await admin
-    .from('enrollments')
-    .select('id')
-    .eq('instance_id', instanceId)
-    .eq('user_id', userId)
-    .maybeSingle()
-  if (!enrollment) return null
+  // Enrollment first, and asked at the same time as the document. Building the
+  // version is three lookups deep — course, template, current version — and
+  // everyone running the course pays for all three before the enrollment check
+  // throws the answer away. The two questions don't depend on each other, so
+  // whichever says no ends it.
+  const [version, { data: enrollment }] = await Promise.all([
+    courseWaiverVersion(instanceId, admin),
+    admin
+      .from('enrollments')
+      .select('id')
+      .eq('instance_id', instanceId)
+      .eq('user_id', userId)
+      .maybeSingle(),
+  ])
+  if (!version || !enrollment) return null
 
   const [{ data: existing }, { data: profile }, { data: previous }] = await Promise.all([
     // This course, latest first: a re-signed waiver supersedes rather than
