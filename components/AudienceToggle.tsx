@@ -45,8 +45,28 @@ export default function AudienceToggle({
   showInstructors?: boolean
 }) {
   const [confirming, setConfirming] = useState(false)
+
+  // What was just asked for, until the server says it happened.
+  //
+  // The parent saves and then refreshes, so `audience` stays at its old value
+  // for the length of a round trip. Rendering that made a successful "show
+  // students" flash the greyed-out off-state first — indistinguishable from
+  // having cancelled, which is exactly how it was read. The pill now shows the
+  // answer you gave, and the prop catching up clears it.
+  const [pending, setPending] = useState<LibraryAudience | null>(null)
+  const [prevAudience, setPrevAudience] = useState(audience)
+  if (audience !== prevAudience) {
+    setPrevAudience(audience)
+    setPending(null)
+  }
+
   const pill = 'text-[10px] leading-none px-1.5 py-1 rounded transition-colors disabled:opacity-40'
-  const shared = audience === 'shared'
+  const shared = (pending ?? audience) === 'shared'
+
+  function choose(next: LibraryAudience) {
+    setPending(next)
+    onChange(next)
+  }
 
   return (
     <span className="inline-flex items-center gap-1 shrink-0">
@@ -64,7 +84,7 @@ export default function AudienceToggle({
               will do; ✕ backs out. */}
           <button
             type="button"
-            onClick={() => { setConfirming(false); onChange('shared') }}
+            onClick={() => { setConfirming(false); choose('shared') }}
             disabled={disabled}
             title={`Show students ${noun}`}
             className={`${pill} ${CONFIRM}`}
@@ -84,7 +104,7 @@ export default function AudienceToggle({
       ) : (
         <button
           type="button"
-          onClick={() => (shared ? onChange('internal') : setConfirming(true))}
+          onClick={() => (shared ? choose('internal') : setConfirming(true))}
           disabled={disabled}
           title={shared ? 'Students can see this — click to hide it' : 'Hidden from students — click to show it'}
           aria-pressed={shared}

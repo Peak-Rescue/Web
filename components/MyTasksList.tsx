@@ -231,7 +231,7 @@ export default function MyTasksList({ tasks }: { tasks: MyOpenTask[] }) {
                 >
                   + Add link
                 </button>
-                <Link href={`/portal/${t.instance_id}`} className="ml-auto text-xs text-zinc-500 underline hover:text-zinc-300">
+                <Link href={`/portal/${t.instance_id}`} prefetch={false} className="ml-auto text-xs text-zinc-500 underline hover:text-zinc-300">
                   Open course →
                 </Link>
               </div>
@@ -276,6 +276,10 @@ export default function MyTasksList({ tasks }: { tasks: MyOpenTask[] }) {
           <div className="px-4 py-2 bg-zinc-950/50 flex items-baseline gap-x-2 flex-wrap">
             <Link
               href={`/portal/${g.instanceId}`}
+              // One heading per course in the task list, each pointing at a
+              // page that takes seconds to render. Prefetching them all is
+              // work nobody asked for.
+              prefetch={false}
               className="text-xs font-semibold uppercase tracking-wide text-zinc-300 hover:text-white transition-colors"
             >
               {g.first.courseName ?? 'Course'}

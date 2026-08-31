@@ -400,6 +400,9 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
                   {showAsAdmin && (
                     <Link
                       href={`/admin/courses/${c.inst.id}`}
+                      // One per course listed: left to prefetch, showing the
+                      // list server-renders the editor for every course in it.
+                      prefetch={false}
                       title="Edit course"
                       aria-label="Edit course"
                       className="shrink-0 p-1.5 -my-1 -mr-1.5 rounded text-zinc-500 hover:text-white hover:bg-zinc-800 transition-colors"
@@ -447,6 +450,9 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
                   {showAsAdmin && (
                     <Link
                       href={`/admin/courses/${c.inst.id}`}
+                      // One per course listed: left to prefetch, showing the
+                      // list server-renders the editor for every course in it.
+                      prefetch={false}
                       title="Edit course"
                       aria-label="Edit course"
                       className="shrink-0 p-1.5 -my-1 -mr-1.5 rounded text-zinc-600 hover:text-white hover:bg-zinc-800 transition-colors"

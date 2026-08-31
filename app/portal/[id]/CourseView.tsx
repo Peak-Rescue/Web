@@ -944,6 +944,10 @@ export default async function CourseView({
           <div className="mb-6 flex items-center justify-between gap-3 flex-wrap">
             <Link
               href={`/admin/courses/${id}`}
+              // The editor and this page link to each other, and both take
+              // seconds to render: left to prefetch, opening either one
+              // silently renders the other as well.
+              prefetch={false}
               className="flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 rounded-lg border border-zinc-700 bg-zinc-900 text-zinc-300 hover:text-white hover:border-zinc-500 transition-colors"
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -1013,6 +1017,12 @@ export default async function CourseView({
                 <Link
                   key={label}
                   href={key ? `/portal/${id}?as=${key}` : `/portal/${id}`}
+                  // This bar is sticky, so all three links sit in the viewport
+                  // for the whole visit and get prefetched — three more full
+                  // renders of this page, which is the most expensive one we
+                  // have, kicked off by the page itself. Switching preview
+                  // roles is rare enough to pay for its own navigation.
+                  prefetch={false}
                   title={hint}
                   className={`px-1.5 py-1 rounded font-medium transition-colors ${
                     (viewAs ?? '') === key
@@ -1209,7 +1219,7 @@ export default async function CourseView({
                       {isAdmin ? (
                         <>
                           {' '}on the{' '}
-                          <Link href={`/admin/courses/${id}`} className="text-zinc-300 hover:text-white underline underline-offset-2">
+                          <Link href={`/admin/courses/${id}`} prefetch={false} className="text-zinc-300 hover:text-white underline underline-offset-2">
                             course editor
                           </Link>
                           .

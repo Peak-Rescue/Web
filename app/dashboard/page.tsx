@@ -78,6 +78,9 @@ export default async function DashboardPage() {
     return (
       <Link
         href={`/portal/${c.id}`}
+        // One card per course: left to prefetch, listing them server-renders
+        // every course page behind it.
+        prefetch={false}
         className={`block p-4 rounded-lg border transition-colors ${
           dim
             ? 'border-zinc-800/70 bg-zinc-900/40 hover:border-zinc-700'

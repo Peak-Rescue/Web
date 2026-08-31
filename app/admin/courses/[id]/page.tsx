@@ -962,7 +962,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
         </CourseTabs>
 
         <div className="pt-4 border-t border-zinc-800">
-          <Link href={`/portal/${id}`} className="text-sm text-zinc-400 hover:text-white transition-colors">
+          <Link href={`/portal/${id}`} prefetch={false} className="text-sm text-zinc-400 hover:text-white transition-colors">
             View student/instructor portal →
           </Link>
         </div>

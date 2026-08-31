@@ -303,8 +303,10 @@ export function StudentCard({
       </span>
       <div className="min-w-0">
         <div className="text-sm font-medium leading-tight truncate">
+          {/* One card per student, so prefetching would mean a server render
+              of every person on the roster the moment it scrolls into view. */}
           {href ? (
-            <Link href={href} className="hover:text-white hover:underline transition-colors">
+            <Link href={href} prefetch={false} className="hover:text-white hover:underline transition-colors">
               {name}
             </Link>
           ) : name}

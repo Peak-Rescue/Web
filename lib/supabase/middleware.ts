@@ -25,8 +25,11 @@ export async function updateSession(request: NextRequest) {
 
   // No fetch ceiling here on purpose: middleware runs on the Edge runtime,
   // where wrapping fetch with an abort signal made every getUser hang until
-  // the ceiling fired — 20s and a bounce to /login for a signed-in user. The
-  // Node-side clients keep theirs. Edge needs a different mechanism.
+  // the ceiling fired — 20s and a bounce to /login for a signed-in user.
+  //
+  // Nothing is missing here. The Node-side clients bound their REST and
+  // storage calls and exempt the auth path for the same reason, so this call
+  // — which is only ever auth — would be exempt there too.
   //
   // Never let this throw. A malformed session cookie made getUser throw and
   // returned a 500 for every page that browser asked for, until the user

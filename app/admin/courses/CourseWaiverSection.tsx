@@ -120,6 +120,9 @@ export default function CourseWaiverSection({
                     <div className="text-sm text-zinc-200 truncate">
                       <Link
                         href={`/portal/${instanceId}/people/${r.enrollmentId}`}
+                        // One row per signature: prefetching renders a page
+                        // for everyone who signed.
+                        prefetch={false}
                         className="hover:text-white hover:underline transition-colors"
                       >
                         {r.name}

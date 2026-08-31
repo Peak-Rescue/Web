@@ -66,6 +66,9 @@ export default async function CoursePersonPage({
       <div className="max-w-3xl mx-auto px-4 py-10">
         <Link
           href={`/portal/${id}#roster`}
+          // Sits at the top of every person's page, pointing back at the
+          // course page — the expensive one this was opened from.
+          prefetch={false}
           className="inline-flex items-center gap-1.5 text-xs text-zinc-500 hover:text-zinc-300 transition-colors mb-4"
         >
           ← {inst ? courseDisplayName(inst.course_type, inst.custom_title) : 'Back to the course'}
@@ -198,6 +201,8 @@ export default async function CoursePersonPage({
                   <div className="min-w-0">
                     <Link
                       href={`/portal/${c.instanceId}`}
+                      // Their whole course history, one link each.
+                      prefetch={false}
                       className="text-sm text-zinc-200 hover:text-white transition-colors"
                     >
                       {c.title}

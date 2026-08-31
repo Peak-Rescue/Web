@@ -154,29 +154,42 @@ export default async function ExpenseReportPage({ params }: { params: Promise<{ 
 
         <div className="bg-zinc-900 rounded-lg border border-zinc-800 divide-y divide-zinc-800 mb-6">
           {items.map((item) => (
-            <div key={item.id} className="px-4 py-3 flex items-center justify-between gap-4">
-              <div className="min-w-0">
-                <p className="text-sm font-medium truncate">
-                  {CATEGORY_LABELS[item.category as ExpenseCategory]}
-                  {item.description ? ` — ${item.description}` : ''}
-                </p>
-                <p className="text-xs text-zinc-500 mt-0.5">
-                  {fmtDateRange(item.start_date, item.end_date)}
-                  {item.paid_by === 'company_card' ? ' · company card' : ''}
-                  {item.instance_id && courseMap.has(item.instance_id) ? ` · ${courseMap.get(item.instance_id)}` : ''}
-                  {item.receipts.length > 0 && (
-                    <>
-                      {' · '}
-                      {item.receipts.map((r, i) => (
-                        <a key={r.id} href={r.url} target="_blank" rel="noreferrer" className="underline hover:text-zinc-300">
-                          receipt{item.receipts.length > 1 ? ` ${i + 1}` : ''}
-                        </a>
-                      ))}
-                    </>
-                  )}
-                </p>
+            <div key={item.id} className="px-4 py-3">
+              <div className="flex items-center justify-between gap-4">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium truncate">
+                    {CATEGORY_LABELS[item.category as ExpenseCategory]}
+                    {item.description ? ` — ${item.description}` : ''}
+                  </p>
+                  <p className="text-xs text-zinc-500 mt-0.5">
+                    {fmtDateRange(item.start_date, item.end_date)}
+                    {item.paid_by === 'company_card' ? ' · company card' : ''}
+                    {item.instance_id && courseMap.has(item.instance_id) ? ` · ${courseMap.get(item.instance_id)}` : ''}
+                  </p>
+                </div>
+                <span className="text-sm font-medium shrink-0">{fmtMoney(item.amount)}</span>
               </div>
-              <span className="text-sm font-medium shrink-0">{fmtMoney(item.amount)}</span>
+              {/* Receipts read as chips, the same shape the editor shows them in —
+                  checking your own work after submitting is the main reason to
+                  open a filed report at all. */}
+              {item.receipts.length > 0 && (
+                <div className="flex items-center flex-wrap gap-2 mt-2">
+                  {item.receipts.map((r) => (
+                    <a
+                      key={r.id}
+                      href={r.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1.5 px-2 py-1 bg-zinc-800 hover:bg-zinc-700 rounded text-xs text-zinc-300 hover:text-white transition-colors"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+                      </svg>
+                      <span className="max-w-40 truncate">{r.filename}</span>
+                    </a>
+                  ))}
+                </div>
+              )}
             </div>
           ))}
         </div>
