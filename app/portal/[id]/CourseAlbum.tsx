@@ -175,13 +175,17 @@ export default function CourseAlbum({
                 )}
               </button>
 
+              {/* Always visible, only understated. This appeared on hover, which
+                  meant it did not exist on a phone or an iPad — and those are
+                  what the photos are being looked at on. An action nobody can
+                  reach is the same as an action nobody built. */}
               {canManage && (
                 <button
                   type="button"
                   onClick={() => remove(p.id, p.name)}
                   aria-label={`Remove ${p.name}`}
                   title="Remove this photo"
-                  className="absolute top-1 right-1 rounded bg-black/60 p-1 text-zinc-300 opacity-0 group-hover:opacity-100 hover:text-pr-red-light transition"
+                  className="absolute top-1 right-1 rounded bg-black/60 p-1 text-zinc-300 opacity-75 hover:opacity-100 focus-visible:opacity-100 hover:text-pr-red-light transition"
                 >
                   <TrashIcon />
                 </button>
