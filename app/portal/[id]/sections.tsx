@@ -16,7 +16,6 @@ export type SectionKey =
   | 'details'
   | 'updates'
   | 'waiver'
-  | 'tasks'
   | 'schedule'
   | 'curriculum'
   | 'gear'
@@ -67,9 +66,6 @@ export const SECTION_ICON: Record<SectionKey, React.ReactElement> = {
       <path d="M8 17c1.2-2.5 2.2-2.5 3 0s1.8 2.5 3 0" />
     </>
   ),
-  tasks: (
-    <path d="M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
-  ),
   updates: (
     <path d="M3 11l18-8-8 18-2-8-8-2Z" />
   ),
@@ -79,7 +75,6 @@ export const SECTION_LABEL: Record<SectionKey, string> = {
   details: 'Details',
   updates: 'Updates',
   waiver: 'Waiver',
-  tasks: 'Tasks',
   schedule: 'Schedule',
   curriculum: 'Curriculum',
   gear: 'Gear',

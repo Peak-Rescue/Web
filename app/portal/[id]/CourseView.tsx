@@ -1050,13 +1050,12 @@ export default async function CourseView({
   // hits them, then the line, then what you set up once, in the sequence the
   // editor proved. The bar scrolls on a phone, and the left of it is the half
   // you need at a trailhead.
-  const RUNNING: SectionKey[] = ['details', 'updates', 'schedule', 'tasks', 'resources']
+  const RUNNING: SectionKey[] = ['details', 'updates', 'schedule', 'resources']
   const SETUP: SectionKey[] = ['curriculum', 'gear', 'waiver', 'pricing']
   const present: Record<string, boolean> = {
     details: true,
     updates: hasUpdates,
     schedule: showSchedule,
-    tasks: hasTasks,
     resources: hasResources,
     curriculum: hasCurriculum,
     gear: showGear,
@@ -1070,7 +1069,7 @@ export default async function CourseView({
     id,
     setup,
     label: SECTION_LABEL[id],
-    team: id === 'tasks' || id === 'pricing',
+    team: id === 'pricing',
     unread: id === 'updates' && unreadUpdates > 0,
   }))
 
@@ -1266,6 +1265,21 @@ export default async function CourseView({
                 <div>
                   <SubHead title="Notes" badge={<AudiencePills audience="internal" />} />
                   <CourseNotes instanceId={id} notes={inst.notes} canEdit={showTasks} />
+                </div>
+              )}
+              {/* The structured half of the same workspace. Freeform above,
+                  what is left to do below. */}
+              {hasTasks && (
+                <div>
+                  <SubHead title="Tasks" badge={<AudiencePills audience="internal" />} />
+                  <CourseTasksPanel
+                    instanceId={id}
+                    tasks={tasks}
+                    people={taskPeople}
+                    suggestions={canManageTasks ? templateRows ?? [] : []}
+                    canManage={canManageTasks}
+                    currentUserId={userId ?? ''}
+                  />
                 </div>
               )}
               <EditInPlace
@@ -1497,19 +1511,6 @@ export default async function CourseView({
 
         {/* Course tasks, and the team's own notes on the course — the one
             block on the page that is theirs end to end. */}
-        {hasTasks && (
-          <Section id="tasks" title="Course tasks" team>
-            <CourseTasksPanel
-              instanceId={id}
-              tasks={tasks}
-              people={taskPeople}
-              suggestions={canManageTasks ? templateRows ?? [] : []}
-              canManage={canManageTasks}
-              currentUserId={userId ?? ''}
-            />
-          </Section>
-        )}
-
         {/* Running order */}
         {showSchedule && (
           <Section
