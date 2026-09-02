@@ -20,9 +20,19 @@ export type SectionKey =
   | 'curriculum'
   | 'gear'
   | 'resources'
+  | 'staffing'
+  | 'students'
   | 'pricing'
 
 export const SECTION_ICON: Record<SectionKey, React.ReactElement> = {
+  // Two people side by side: who is running it.
+  staffing: (
+    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
+  ),
+  // One person with a tick: who has joined, and who has signed.
+  students: (
+    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8M16 11l2 2 4-4" />
+  ),
   // A price tag. Admins only, and the only section on the page a client's
   // money is discussed in.
   pricing: (
@@ -79,6 +89,8 @@ export const SECTION_LABEL: Record<SectionKey, string> = {
   curriculum: 'Curriculum',
   gear: 'Gear',
   resources: 'Resources',
+  staffing: 'Staffing',
+  students: 'Students',
   pricing: 'Pricing',
 }
 

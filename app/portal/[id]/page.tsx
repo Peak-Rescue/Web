@@ -15,10 +15,10 @@ export default async function PortalPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>
-  searchParams: Promise<{ as?: string }>
+  searchParams: Promise<{ as?: string; mode?: string }>
 }) {
   const { id } = await params
-  const { as } = await searchParams
+  const { as, mode } = await searchParams
 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -55,6 +55,7 @@ export default async function PortalPage({
     isInstructor,
     instructorRole: instructorAssignment?.role ?? null,
     viewAs,
+    mode: mode === 'build' || mode === 'teach' ? mode : null,
     lastSeenAt: lastView?.last_seen_at ?? null,
   }
 

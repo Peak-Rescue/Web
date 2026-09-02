@@ -7,9 +7,12 @@ import { Fragment, useEffect, useState } from 'react'
 // like a handful of named parts rather than one scroll.
 export default function PortalSectionNav({
   sections,
+  leading,
   trailing,
 }: {
-  sections: { id: string; label: string; team?: boolean; unread?: boolean; setup?: boolean }[]
+  sections: { id: string; label: string; team?: boolean; unread?: boolean }[]
+  /** Pinned to the left, before the jump links: which job the bar is showing. */
+  leading?: React.ReactNode
   /** Pinned to the right of the same sticky bar. The viewing-as toggle lives
       here so that which role you are reading as travels down the page with
       you — knowing you are in a preview matters most at the moment you find a
@@ -39,24 +42,18 @@ export default function PortalSectionNav({
 
   // The bar earns its place for the jump links, but the toggle has to stay on
   // screen even on a course too short to need them.
-  if (sections.length < 2 && !trailing) return null
+  if (sections.length < 2 && !trailing && !leading) return null
 
   return (
     <nav className="sticky top-16 md:top-20 z-20 -mx-4 px-4 mb-8 bg-zinc-950/90 backdrop-blur border-b border-zinc-900">
       <div className="flex items-center gap-2">
+      {leading && <div className="shrink-0">{leading}</div>}
       <div className="flex gap-1 overflow-x-auto py-2 no-scrollbar flex-1 min-w-0">
         {/* The bar is also the key: where you are is accented rather than
             grey-on-grey, team blocks are amber wherever they appear, and a dot
             marks the one section with something new in it. */}
         {sections.map((s, i) => (
           <Fragment key={s.id}>
-          {/* Where running the course ends and setting it up begins. The bar
-              scrolls on a phone, so the things you touch on a course day sit
-              left of the line where they need no scrolling, and the things you
-              set once sit right of it. */}
-          {s.setup && !sections[i - 1]?.setup && (
-            <span aria-hidden className="shrink-0 self-center mx-1 h-4 w-px bg-zinc-800" />
-          )}
           <a
             href={`#${s.id}`}
             className={`shrink-0 inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full border transition-colors ${

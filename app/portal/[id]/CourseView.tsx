@@ -10,6 +10,7 @@ import CourseMapsSection, { type CourseMap } from '@/app/admin/courses/CourseMap
 import CourseAlbumSection from './CourseAlbumSection'
 import CourseFilesSection, { type CourseFile } from '@/app/admin/courses/CourseFilesSection'
 import CourseIntroFields from './CourseIntroFields'
+import CourseMode from './CourseMode'
 import CourseCurriculumEditor, { type CurriculumModule } from '@/app/admin/courses/CourseCurriculumEditor'
 import CourseGear from '@/app/admin/courses/CourseGear'
 import CourseDetailsEditor from '@/app/admin/courses/CourseDetailsEditor'
@@ -133,6 +134,9 @@ export type Viewer = {
   instructorRole: string | null
   // Admin previewing as someone else. A guest can't preview anything.
   viewAs: 'student' | 'instructor' | null
+  /** Which half of the job the jump bar shows an admin. Null means work it out
+      from the dates. */
+  mode: 'build' | 'teach' | null
   lastSeenAt: string | null
 }
 
@@ -144,6 +148,7 @@ export const GUEST: Viewer = {
   isInstructor: false,
   instructorRole: null,
   viewAs: null,
+  mode: null,
   lastSeenAt: null,
 }
 
@@ -735,6 +740,17 @@ export default async function CourseView({
     .filter((p) => p.name)
 
   const fmtLong = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'long', day: 'numeric', year: 'numeric' })
+  // "Aug 24 – 28, 2026" — the month and year said once, no weekday.
+  const fmtSpan = (a: string, b: string) => {
+    const d = (x: string) => new Date(x + 'T00:00:00')
+    const mon = (x: string) => d(x).toLocaleDateString('en-US', { month: 'short' })
+    const day = (x: string) => d(x).getDate()
+    const yr = (x: string) => d(x).getFullYear()
+    if (a === b) return `${mon(a)} ${day(a)}, ${yr(a)}`
+    if (yr(a) !== yr(b)) return `${mon(a)} ${day(a)}, ${yr(a)} – ${mon(b)} ${day(b)}, ${yr(b)}`
+    if (mon(a) !== mon(b)) return `${mon(a)} ${day(a)} – ${mon(b)} ${day(b)}, ${yr(a)}`
+    return `${mon(a)} ${day(a)} – ${day(b)}, ${yr(a)}`
+  }
 
   // The gear list participants get. Instructors see theirs too; students only
   // ever see the student one.
@@ -1038,20 +1054,43 @@ export default async function CourseView({
   // is the point, and nobody is asked to sign anything until they do, so an
   // unset waiver is a silent nothing rather than a visible gap.
   const showWaiver = Boolean(waiver) || showAsAdmin
+  // Staff see the crew whether or not anyone is on it yet — an unstaffed
+  // course is the one that needs the section.
+  const showStaffing = (instructors ?? []).length > 0 || showTasks
 
-  // Two runs, in one bar, with a line between them.
+  // Building a course and running one are different jobs, and one strip of
+  // tabs cannot hold both. Ordering them was an attempt at exactly that and it
+  // failed: order is the weakest signal there is when the thing you want is
+  // off the side of a bar that scrolls.
   //
-  // The editor's tabs were ordered by the build sequence — details, staffing,
-  // gear, pricing, curriculum, schedule, students — and that order *was* the
-  // workflow. This page inherited no order at all, which is what makes nine
-  // items hard rather than the nine.
+  // So the bar shows one job at a time. Build is the sequence a course is
+  // actually assembled in — what the client asked for, what it costs, the gear
+  // that changes what it costs, who teaches it, what they teach, where, when,
+  // who comes, what they sign. Teach is the shortlist you need with a phone in
+  // your hand.
   //
-  // So: what you touch while the course is running, in the order a course day
-  // hits them, then the line, then what you set up once, in the sequence the
-  // editor proved. The bar scrolls on a phone, and the left of it is the half
-  // you need at a trailhead.
-  const RUNNING: SectionKey[] = ['details', 'updates', 'schedule', 'resources']
-  const SETUP: SectionKey[] = ['curriculum', 'gear', 'waiver', 'pricing']
+  // Curriculum and resources appear in both: an instructor reads the
+  // curriculum to stay aligned with what the students have, and the med plan
+  // and permits are trailhead reading. It is *editing* them mid-course that is
+  // build work — usually because something was missed and belongs in the
+  // template for next time.
+  //
+  // This filters the jump bar, never the page. Everything still renders and
+  // scrolling still reaches it; the bar just stops offering nine doors when
+  // you need four.
+  const BUILD: SectionKey[] = [
+    'details', 'pricing', 'gear', 'staffing', 'curriculum', 'resources', 'schedule', 'students', 'waiver',
+  ]
+  const TEACH: SectionKey[] = ['details', 'schedule', 'updates', 'curriculum', 'resources', 'waiver']
+
+  // The course's own dates decide which job you are probably here for, so the
+  // switch is usually already right and pressing it is a correction.
+  const runningNow = Boolean(
+    inst.starts_at && (inst.ends_at ?? inst.starts_at) >= todayISO &&
+    (inst.starts_at as string) <= tomorrowISO
+  )
+  const mode: 'build' | 'teach' = viewer.mode ?? (runningNow ? 'teach' : 'build')
+
   const present: Record<string, boolean> = {
     details: true,
     updates: hasUpdates,
@@ -1059,19 +1098,24 @@ export default async function CourseView({
     resources: hasResources,
     curriculum: hasCurriculum,
     gear: showGear,
+    staffing: showStaffing,
+    students: hasRoster,
     waiver: showWaiver,
     pricing: hasPricing,
   }
-  const navSections = [
-    ...RUNNING.filter((k) => present[k]).map((id) => ({ id, setup: false })),
-    ...SETUP.filter((k) => present[k]).map((id) => ({ id, setup: true })),
-  ].map(({ id, setup }) => ({
-    id,
-    setup,
-    label: SECTION_LABEL[id],
-    team: id === 'pricing',
-    unread: id === 'updates' && unreadUpdates > 0,
-  }))
+  // Only an admin gets the two jobs. An instructor has no build half worth
+  // naming, so they get one bar and no switch.
+  const barFor = showAsAdmin ? (mode === 'teach' ? TEACH : BUILD) : null
+  const navSections = (barFor ?? ([
+    'details', 'updates', 'schedule', 'curriculum', 'resources', 'gear', 'staffing', 'students', 'waiver',
+  ] as SectionKey[]))
+    .filter((k) => present[k])
+    .map((id) => ({
+      id,
+      label: SECTION_LABEL[id],
+      team: id === 'pricing',
+      unread: id === 'updates' && unreadUpdates > 0,
+    }))
 
   return (
     <main className="min-h-screen bg-zinc-950 text-white pt-16 md:pt-20">
@@ -1091,37 +1135,46 @@ export default async function CourseView({
                 </span>
               </>
             )}
-            {inst.client_name && <><span>·</span><span>{inst.client_name}</span></>}
           </div>
-          <h1 className="text-3xl font-bold mb-4">{courseDisplayName(inst.course_type, inst.custom_title)}</h1>
+          <h1 className="text-3xl font-bold">{courseDisplayName(inst.course_type, inst.custom_title)}</h1>
 
-          {/* The two facts every student checks first, labelled rather than
-              run together in one grey line. */}
-          <dl className="grid sm:grid-cols-2 gap-3">
-            {blocks.length > 0 && (
-              <div className="px-3 py-2 rounded-lg border border-zinc-800 bg-zinc-900">
-                <dt className="text-[11px] uppercase tracking-wide text-zinc-500">When</dt>
-                <dd className="text-sm text-zinc-200 mt-0.5 space-y-0.5">
-                  {blocks.map((b, i) => (
-                    <div key={i}>
-                      {fmtLong(b.starts_at)}{b.starts_at !== b.ends_at ? ` – ${fmtLong(b.ends_at)}` : ''}
-                    </div>
-                  ))}
-                </dd>
-              </div>
-            )}
-            {inst.location && (
-              <div className="px-3 py-2 rounded-lg border border-zinc-800 bg-zinc-900">
-                <dt className="text-[11px] uppercase tracking-wide text-zinc-500">Where</dt>
-                <dd className="text-sm text-zinc-200 mt-0.5">{inst.location}</dd>
-              </div>
-            )}
-          </dl>
+          {/* The three facts that tell you which course this is, on one line
+              you can take in without reading: who it is for, where, and when.
+              The type is in the title above them.
 
+              They were spread across a grey meta line and two labelled cards,
+              so triangulating a course meant scanning three places for three
+              small greys. The labels went with them — a client, a place and a
+              date range do not need to be told apart. */}
+          {(inst.client_name || inst.location || blocks.length > 0) && (
+            <p className="mt-1.5 flex flex-wrap items-baseline gap-x-2 gap-y-1 text-base text-zinc-300">
+              {inst.client_name && <span>{inst.client_name}</span>}
+              {inst.client_name && (inst.location || blocks.length > 0) && <span className="text-zinc-700">·</span>}
+              {inst.location && <span>{inst.location}</span>}
+              {inst.location && blocks.length > 0 && <span className="text-zinc-700">·</span>}
+              {blocks.length > 0 && (
+                <span>{fmtSpan(blocks[0].starts_at, blocks[blocks.length - 1].ends_at)}</span>
+              )}
+            </p>
+          )}
+
+          {/* Only when the course breaks around off days, where "Aug 24 – 28"
+              would be telling you it runs on days it does not. */}
+          {blocks.length > 1 && (
+            <p className="mt-1 text-xs text-zinc-500">
+              {blocks.map((b) => fmtSpan(b.starts_at, b.ends_at)).join('  ·  ')}
+            </p>
+          )}
         </div>
 
         <PortalSectionNav
           sections={navSections}
+          leading={showAsAdmin ? (
+            <CourseMode
+              mode={mode}
+              href={(m) => `/portal/${id}?mode=${m}${viewAs ? `&as=${viewAs}` : ''}`}
+            />
+          ) : null}
           trailing={isAdmin ? (
             /* Which role you are reading as, travelling down the page with
                you. At the top it answered the question only where nobody was
@@ -1294,124 +1347,140 @@ export default async function CourseView({
                 <p className="text-sm text-zinc-300 whitespace-pre-line">{inst.intro}</p>
               )}
               </EditInPlace>
-              {/* Who is running it. Assigning is the admin's call — an
-                  instructor is on the course, they don't decide who else is —
-                  so the crew reads for everyone and edits for one. */}
-              <EditInPlace
-                label="Edit staffing"
-                title={(instructors ?? []).length === 1 ? 'Your instructor' : 'Your instructors'}
-                editor={
-                  showAsAdmin ? (
-                    <CourseStaffingEditor
-                      instanceId={id}
-                      courseType={inst.course_type as string | null}
-                      courseCategory={inst.course_category as string | null}
-                      customCategories={inst.custom_categories as string[] | null}
-                      internal={Boolean(inst.internal)}
+            </div>
+          </Section>
+        )}
+
+        {/* Who is running it — a step of its own, because staffing a course
+            is a thing you do once at a point in the build rather than a fact
+            about the course like its dates. */}
+        {showStaffing && (
+          <Section id="staffing">
+          {/* Who is running it. Assigning is the admin's call — an
+              instructor is on the course, they don't decide who else is —
+              so the crew reads for everyone and edits for one. */}
+          <EditInPlace
+            label="Edit staffing"
+            title={(instructors ?? []).length === 1 ? 'Your instructor' : 'Your instructors'}
+            editor={
+              showAsAdmin ? (
+                <CourseStaffingEditor
+                  instanceId={id}
+                  courseType={inst.course_type as string | null}
+                  courseCategory={inst.course_category as string | null}
+                  customCategories={inst.custom_categories as string[] | null}
+                  internal={Boolean(inst.internal)}
+                />
+              ) : null
+            }
+          >
+          {(instructors ?? []).length === 0 && showTasks && (
+            <p className="text-xs text-zinc-600">Nobody staffed yet.</p>
+          )}
+          {(instructors ?? []).length > 0 && (
+            <div>
+              <div className="grid sm:grid-cols-2 gap-2">
+                {(instructors ?? []).map((a, i) => {
+                  const p = a.instructors as unknown as {
+                    name: string; slug: string | null; active: boolean | null
+                    avatar: string | null; avatar_position: string | null; avatar_scale: number | null
+                  } | null
+                  return (
+                    <InstructorCard
+                      key={i}
+                      name={p?.name ?? 'Instructor'}
+                      role={a.role}
+                      // /team/[slug] only serves active instructors — anyone else
+                      // would land on a 404, so they stay unlinked.
+                      slug={p?.active ? p.slug : null}
+                      avatar={p?.avatar}
+                      avatarPosition={p?.avatar_position}
+                      avatarScale={p?.avatar_scale}
                     />
-                  ) : null
-                }
-              >
-              {(instructors ?? []).length === 0 && showTasks && (
-                <p className="text-xs text-zinc-600">Nobody staffed yet.</p>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+          </EditInPlace>
+          </Section>
+        )}
+
+        {/* Who is on it. Enrolment comes late in the build — after the course
+            is mostly assembled — which is why it reads better as its own step
+            than as a list inside Details. */}
+        {hasRoster && (
+          <Section id="students">
+          {hasRoster && (
+            <EditInPlace
+              label="Edit students"
+              title="Students"
+              note={
+                inst.max_students
+                  ? `${enrolledCount} of ${inst.max_students} places taken`
+                  : `${enrolledCount} enrolled`
+              }
+              badge={<AudiencePills audience="internal" />}
+              editor={
+                showAsAdmin ? (
+                  <CourseStudentsEditor
+                    instanceId={id}
+                    maxStudents={(inst.max_students as number | null) ?? null}
+                    inviteToken={(inst.invite_token as string | null) ?? null}
+                    inviteExpiresAt={(inst.invite_expires_at as string | null) ?? null}
+                  />
+                ) : null
+              }
+            >
+            <div>
+              {roster.length > 0 ? (
+                <div className="grid sm:grid-cols-2 gap-2">
+                  {roster.map((student) => (
+                    <StudentCard
+                      key={student.id}
+                      name={student.name}
+                      email={student.email}
+                      phone={student.phone}
+                      enrolledAt={student.enrolledAt}
+                      href={`/portal/${id}/people/${student.id}`}
+                      waiver={
+                        waiverOnCourse
+                          ? {
+                              signed: signedByEnrollment.has(student.id),
+                              unverified: signedByEnrollment.get(student.id)?.unverified ?? false,
+                            }
+                          : undefined
+                      }
+                    />
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-zinc-500">
+                  Nobody has enrolled yet. Students join through the invite link
+                  {showAsAdmin
+                    ? ' under Edit students above.'
+                    : ', which the office sends to the client contact.'}
+                </p>
               )}
-              {(instructors ?? []).length > 0 && (
-                <div>
-                  <div className="grid sm:grid-cols-2 gap-2">
-                    {(instructors ?? []).map((a, i) => {
-                      const p = a.instructors as unknown as {
-                        name: string; slug: string | null; active: boolean | null
-                        avatar: string | null; avatar_position: string | null; avatar_scale: number | null
-                      } | null
-                      return (
-                        <InstructorCard
-                          key={i}
-                          name={p?.name ?? 'Instructor'}
-                          role={a.role}
-                          // /team/[slug] only serves active instructors — anyone else
-                          // would land on a 404, so they stay unlinked.
-                          slug={p?.active ? p.slug : null}
-                          avatar={p?.avatar}
-                          avatarPosition={p?.avatar_position}
-                          avatarScale={p?.avatar_scale}
-                        />
-                      )
-                    })}
-                  </div>
+
+              {showTasks && unmatchedWaivers.length > 0 && (
+                <div className="mt-4 pt-4 border-t border-zinc-800">
+                  <UnmatchedWaivers instanceId={id} unmatched={unmatchedWaivers} />
                 </div>
               )}
-              </EditInPlace>
-              {hasRoster && (
-                <EditInPlace
-                  label="Edit students"
-                  title="Students"
-                  note={
-                    inst.max_students
-                      ? `${enrolledCount} of ${inst.max_students} places taken`
-                      : `${enrolledCount} enrolled`
-                  }
-                  badge={<AudiencePills audience="internal" />}
-                  editor={
-                    showAsAdmin ? (
-                      <CourseStudentsEditor
-                        instanceId={id}
-                        maxStudents={(inst.max_students as number | null) ?? null}
-                        inviteToken={(inst.invite_token as string | null) ?? null}
-                        inviteExpiresAt={(inst.invite_expires_at as string | null) ?? null}
-                      />
-                    ) : null
-                  }
-                >
-                <div>
-                  {roster.length > 0 ? (
-                    <div className="grid sm:grid-cols-2 gap-2">
-                      {roster.map((student) => (
-                        <StudentCard
-                          key={student.id}
-                          name={student.name}
-                          email={student.email}
-                          phone={student.phone}
-                          enrolledAt={student.enrolledAt}
-                          href={`/portal/${id}/people/${student.id}`}
-                          waiver={
-                            waiverOnCourse
-                              ? {
-                                  signed: signedByEnrollment.has(student.id),
-                                  unverified: signedByEnrollment.get(student.id)?.unverified ?? false,
-                                }
-                              : undefined
-                          }
-                        />
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-zinc-500">
-                      Nobody has enrolled yet. Students join through the invite link
-                      {showAsAdmin
-                        ? ' under Edit students above.'
-                        : ', which the office sends to the client contact.'}
-                    </p>
-                  )}
 
-                  {showTasks && unmatchedWaivers.length > 0 && (
-                    <div className="mt-4 pt-4 border-t border-zinc-800">
-                      <UnmatchedWaivers instanceId={id} unmatched={unmatchedWaivers} />
-                    </div>
-                  )}
-
-                  {showTasks && (
-                    <div className="mt-4 pt-4 border-t border-zinc-800">
-                      <WaiverQrPanel
-                        instanceId={id}
-                        qr={waiverQr}
-                        hasWaiver={Boolean(inst.waiver_template_id)}
-                      />
-                    </div>
-                  )}
+              {showTasks && (
+                <div className="mt-4 pt-4 border-t border-zinc-800">
+                  <WaiverQrPanel
+                    instanceId={id}
+                    qr={waiverQr}
+                    hasWaiver={Boolean(inst.waiver_template_id)}
+                  />
                 </div>
-                </EditInPlace>
               )}
             </div>
+            </EditInPlace>
+          )}
           </Section>
         )}
 
