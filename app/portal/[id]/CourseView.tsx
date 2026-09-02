@@ -17,6 +17,7 @@ import CourseStaffingEditor from '@/app/admin/courses/CourseStaffingEditor'
 import CourseStudentsEditor from '@/app/admin/courses/CourseStudentsEditor'
 import CoursePricingEditor from '@/app/admin/courses/CoursePricingEditor'
 import CreateSchedule from './CreateSchedule'
+import SaveToShelf from '@/app/admin/schedules/SaveToShelf'
 import GearOrderPanel from '@/app/admin/courses/GearOrderPanel'
 import { type GearOrder } from '@/lib/gear-orders'
 import DeleteInstanceButton from '@/app/admin/courses/DeleteInstanceButton'
@@ -1859,8 +1860,15 @@ export default async function CourseView({
                 running order doesn't have yet belongs to no day, so there is
                 nowhere else on this page to put it. */}
             {canEditSchedule && (
-              <div className="mt-3">
+              <div className="mt-3 flex flex-wrap items-center gap-4">
                 <AddScheduleDay scheduleId={sched.id} />
+                {showAsAdmin && (
+                  <SaveToShelf
+                    schedule={sched}
+                    templates={scheduleShelf.map((t) => ({ id: t.id, name: t.name, days: t.days }))}
+                    courseType={inst.course_type as string | null}
+                  />
+                )}
               </div>
             )}
             </>

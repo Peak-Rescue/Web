@@ -70,7 +70,7 @@ export default function CourseGear({
       ))}
 
       <div className="p-3 bg-zinc-900 border border-dashed border-zinc-700 rounded-lg space-y-2">
-        <p className="text-xs text-zinc-500">Add a list</p>
+        <p className="text-xs text-zinc-500">Add a gear list</p>
         <div className="flex flex-wrap gap-2">
           {(['student', 'instructor'] as const).map((a) => (
             <button
