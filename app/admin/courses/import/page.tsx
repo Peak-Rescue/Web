@@ -140,7 +140,7 @@ export default async function CalendarImportPage({
         {imported && (
           <p className="mb-8 p-4 bg-green-900/30 border border-green-800 rounded-lg text-green-200 text-sm">
             Course created and the manual event retired.{' '}
-            <Link href={`/admin/courses/${imported}`} className="underline hover:text-white">
+            <Link href={`/portal/${imported}`} className="underline hover:text-white">
               Open the course →
             </Link>
           </p>

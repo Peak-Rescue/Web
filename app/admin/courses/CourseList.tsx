@@ -45,9 +45,9 @@ function InstanceCard({ inst }: { inst: Instance }) {
 
   return (
     <Link
-      href={`/admin/courses/${inst.id}`}
+      href={`/portal/${inst.id}`}
       // One per course listed: left to prefetch, showing the list
-      // server-renders the editor for every course in it.
+      // server-renders a whole course page for every course in it.
       prefetch={false}
       className="flex items-start justify-between gap-4 p-4 bg-zinc-900 border border-zinc-800 rounded-lg hover:border-zinc-600 transition-colors"
     >

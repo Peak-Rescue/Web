@@ -397,21 +397,6 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
                   >
                     {c.role}
                   </span>
-                  {showAsAdmin && (
-                    <Link
-                      href={`/admin/courses/${c.inst.id}`}
-                      // One per course listed: left to prefetch, showing the
-                      // list server-renders the editor for every course in it.
-                      prefetch={false}
-                      title="Edit course"
-                      aria-label="Edit course"
-                      className="shrink-0 p-1.5 -my-1 -mr-1.5 rounded text-zinc-500 hover:text-white hover:bg-zinc-800 transition-colors"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>
-                      </svg>
-                    </Link>
-                  )}
                 </div>
               ))}
             </div>
@@ -447,21 +432,6 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
                     </p>
                     <p className="text-xs text-zinc-600 mt-0.5">{fmtRange(c.inst)}</p>
                   </Link>
-                  {showAsAdmin && (
-                    <Link
-                      href={`/admin/courses/${c.inst.id}`}
-                      // One per course listed: left to prefetch, showing the
-                      // list server-renders the editor for every course in it.
-                      prefetch={false}
-                      title="Edit course"
-                      aria-label="Edit course"
-                      className="shrink-0 p-1.5 -my-1 -mr-1.5 rounded text-zinc-600 hover:text-white hover:bg-zinc-800 transition-colors"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>
-                      </svg>
-                    </Link>
-                  )}
                 </div>
               ))}
             </div>

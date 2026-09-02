@@ -175,7 +175,7 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
                     status: i.status,
                     starts_at: i.starts_at!,
                     ends_at: i.ends_at! >= i.starts_at! ? i.ends_at! : i.starts_at!,
-                    href: `/admin/courses/${i.id}`,
+                    href: `/portal/${i.id}`,
                     category: i.course_category ?? null,
                     internal: !!i.internal,
                     name: courseShortName(i.course_type, i.custom_title),

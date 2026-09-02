@@ -20,7 +20,7 @@ import CreateSchedule from './CreateSchedule'
 import GearOrderPanel from '@/app/admin/courses/GearOrderPanel'
 import { type GearOrder } from '@/lib/gear-orders'
 import DeleteInstanceButton from '@/app/admin/courses/DeleteInstanceButton'
-import WaiverTemplatePicker from './WaiverTemplatePicker'
+import CourseWaiverSection, { type WaiverRosterRow } from '@/app/admin/courses/CourseWaiverSection'
 import { listWaiverTemplates } from '@/app/admin/courses/waiver-actions'
 import { plannedInstructorCount } from '@/lib/estimates'
 import { parseContacts } from '@/lib/contacts'
@@ -417,7 +417,7 @@ export default async function CourseView({
   const rosterSigPromise = keep(showTasks && waiverOnCourse
     ? admin
         .from('waiver_signatures')
-        .select('enrollment_id, identity, signed_at')
+        .select('id, enrollment_id, identity, signed_at, source, signer_role, guardian_first_name, guardian_last_name')
         .eq('instance_id', id)
         .not('enrollment_id', 'is', null)
         .order('signed_at', { ascending: false })
@@ -921,6 +921,36 @@ export default async function CourseView({
       signedByEnrollment.set(r.enrollment_id, { unverified: r.identity === 'unverified' })
     }
   }
+  // The roster as the waiver block reads it: who is on the course and what
+  // their latest signature is, since re-signing supersedes rather than
+  // replaces.
+  type SigRow = {
+    id: string; enrollment_id: string; identity: string; signed_at: string
+    source: string; signer_role: string | null
+    guardian_first_name: string | null; guardian_last_name: string | null
+  }
+  const latestSig = new Map<string, SigRow>()
+  for (const r of (rosterSigRows ?? []) as SigRow[]) {
+    if (!latestSig.has(r.enrollment_id)) latestSig.set(r.enrollment_id, r)
+  }
+  const waiverRoster: WaiverRosterRow[] = roster.map((p) => {
+    const sig = latestSig.get(p.id)
+    return {
+      enrollmentId: p.id,
+      name: p.name,
+      email: p.email,
+      signature: sig
+        ? {
+            id: sig.id,
+            signedAt: sig.signed_at,
+            identity: sig.identity as 'authenticated' | 'unverified',
+            source: sig.source as 'portal' | 'qr',
+            signerName: [sig.guardian_first_name, sig.guardian_last_name].filter(Boolean).join(' ') || null,
+          }
+        : null,
+    }
+  })
+
   const notifyCounts: NotifyCounts = notifyCountsFrom(
     roster.map((r) => r.email),
     crewEmails.map((p) => p?.email),
@@ -1023,24 +1053,6 @@ export default async function CourseView({
   return (
     <main className="min-h-screen bg-zinc-950 text-white pt-16 md:pt-20">
       <div className="max-w-3xl mx-auto px-4 py-10">
-
-        {isAdmin && (
-          <div className="mb-6 flex items-center justify-between gap-3 flex-wrap">
-            <Link
-              href={`/admin/courses/${id}`}
-              // The editor and this page link to each other, and both take
-              // seconds to render: left to prefetch, opening either one
-              // silently renders the other as well.
-              prefetch={false}
-              className="flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 rounded-lg border border-zinc-700 bg-zinc-900 text-zinc-300 hover:text-white hover:border-zinc-500 transition-colors"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>
-              </svg>
-              Edit course
-            </Link>
-          </div>
-        )}
 
         {/* Title, dates, status. Not the "Details" anchor any more — that now
             names the block below the nav holding where to meet and who's on
@@ -1333,17 +1345,9 @@ export default async function CourseView({
                   ) : (
                     <p className="text-sm text-zinc-500">
                       Nobody has enrolled yet. Students join through the invite link
-                      {isAdmin ? (
-                        <>
-                          {' '}on the{' '}
-                          <Link href={`/admin/courses/${id}`} prefetch={false} className="text-zinc-300 hover:text-white underline underline-offset-2">
-                            course editor
-                          </Link>
-                          .
-                        </>
-                      ) : (
-                        ', which the office sends to the client contact.'
-                      )}
+                      {showAsAdmin
+                        ? ' under Edit students above.'
+                        : ', which the office sends to the client contact.'}
                     </p>
                   )}
 
@@ -1440,23 +1444,16 @@ export default async function CourseView({
             }
           >
             {showAsAdmin && (
-              <EditInPlace
-                label="Choose waiver"
-                title="Waiver"
-                editor={
-                  <WaiverTemplatePicker
-                    instanceId={id}
-                    templates={waiverTemplates}
-                    selectedId={(inst.waiver_template_id as string | null) ?? null}
-                  />
-                }
-              >
-                {!inst.waiver_template_id && (
-                  <p className="text-xs text-zinc-600">
-                    No waiver on this course — nobody will be asked to sign anything.
-                  </p>
-                )}
-              </EditInPlace>
+              <div className="mb-6">
+                <CourseWaiverSection
+                  instanceId={id}
+                  templates={waiverTemplates}
+                  selectedId={(inst.waiver_template_id as string | null) ?? null}
+                  roster={waiverRoster}
+                  qr={waiverQr}
+                  unmatched={unmatchedWaivers}
+                />
+              </div>
             )}
             {waiver && (
               <WaiverPanel
