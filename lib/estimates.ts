@@ -9,6 +9,11 @@ import { round2 } from '@/lib/expenses'
 // cost + margin, unless a hand-set price_override replaces it. The panel, the
 // COA comparison, the copy picker and quote creation all go through here, so
 // they can't drift into showing different numbers for the same COA.
+/** What we quote at unless somebody says otherwise. Matched by the column
+    default on course_estimates — a row inserted without one gets the same
+    number the seeded first COA shows. */
+export const DEFAULT_MARGIN = 0.3
+
 export function coaPrice(e: {
   margin: number | null
   price_override?: number | string | null
@@ -16,7 +21,7 @@ export function coaPrice(e: {
 }): number {
   if (e.price_override !== null && e.price_override !== undefined) return round2(Number(e.price_override))
   const subtotal = e.items.reduce((s, i) => s + (Number(i.qty) || 0) * (Number(i.rate) || 0), 0)
-  return round2(subtotal * (1 + Number(e.margin ?? 0.25)))
+  return round2(subtotal * (1 + Number(e.margin ?? DEFAULT_MARGIN)))
 }
 
 // The margin an overridden price actually implies, so setting one doesn't

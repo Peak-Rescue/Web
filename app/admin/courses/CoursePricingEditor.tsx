@@ -1,6 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { courseShortName } from '@/lib/courses'
-import { coaPrice, guessSeedQty } from '@/lib/estimates'
+import { coaPrice, guessSeedQty, DEFAULT_MARGIN } from '@/lib/estimates'
 import { HERO_CHOICES } from '@/lib/quote-heroes'
 import { primaryContactEmail, ccEmailOptions, type CoursePOC } from '@/lib/contacts'
 import EstimatePanel, { type PricingRate } from '@/components/EstimatePanel'
@@ -184,7 +184,7 @@ export default async function CoursePricingEditor({
     estimatePanels = [{
       id: null,
       title: 'COA 1',
-      margin: 0.25,
+      margin: DEFAULT_MARGIN,
       priceOverride: null,
       items: (pricingRateRows ?? [])
         .filter((r) => r.default_line)
