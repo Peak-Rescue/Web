@@ -222,11 +222,20 @@ export default function EstimatePanel({
   type Drift = { idx: number; name: string; current: number; expected: number }
   function rowDrifts(r: Row): Drift[] {
     const libLabels = factorLabels(r)
-    if (r.factors === null && libLabels.length !== 1) return []
+    const explicit = r.factors !== null
+    if (!explicit && libLabels.length !== 1) return []
     const factors = rowFactors(r)
     return factors.flatMap((f, i) => {
       const name = (libLabels[i] ?? r.flabels[i] ?? '').trim()
       if (!name) return []
+      // A bare per-day line — vehicle rental, venue, admin — has a quantity
+      // that is a judgment about which days are being paid for, not a copy of
+      // the course's length: five course days can mean six rental days or two
+      // admin ones. A bare headcount is different; nobody types a student
+      // number meaning anything other than the students. So a lone day count
+      // is left alone, while a day inside a breakdown somebody built by hand
+      // still tracks the course.
+      if (!explicit && /^(day|night)/i.test(name)) return []
       const expected = countForFactor(name, r.label)
       const current = f.trim() === '' ? 1 : Number(f) || 0
       return expected !== null && expected !== current ? [{ idx: i, name, current, expected }] : []
