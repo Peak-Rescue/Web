@@ -6,7 +6,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { after } from 'next/server'
 import { syncCourseCalendar } from '@/lib/google-calendar'
 import { parseContacts, primaryContactEmail, ccEmailOptions } from '@/lib/contacts'
-import { guessSeedQty, coaPrice, type SeedCounts } from '@/lib/estimates'
+import { guessSeedQty, coaPrice, type SeedCounts, plannedInstructorCount } from '@/lib/estimates'
 import { sendMail } from '@/lib/mailer'
 
 async function requireAdmin() {
@@ -27,6 +27,9 @@ export type EstimateItemInput = {
   factors: number[] | null
   factor_labels: (string | null)[] | null
   rate_id: string | null // library rate the line came from — survives renames
+  /** Course counts when this quantity was deliberately kept, so the ask can
+      come back if the course changes shape. Null = never kept. */
+  drift_ack: { i: number; s: number | null; d: number | null } | null
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -46,6 +49,16 @@ function cleanFactors(
     return raw ? String(raw).trim().slice(0, 40) || null : null
   })
   return { f: nums, l }
+}
+
+// Only the three counts, only as numbers — this comes back from the client and
+// is compared against the course, never displayed.
+function cleanAck(ack: EstimateItemInput['drift_ack']): { i: number; s: number | null; d: number | null } | null {
+  if (!ack || typeof ack !== 'object') return null
+  const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null)
+  const i = num(ack.i)
+  if (i === null) return null
+  return { i, s: num(ack.s), d: num(ack.d) }
 }
 
 // Replace-style save keeps the action simple and the client authoritative
@@ -100,6 +113,7 @@ export async function saveEstimate(
       notes: i.notes?.trim().slice(0, 500) || null,
       qty_factors: cleanFactors(i.factors, i.factor_labels),
       rate_id: i.rate_id && UUID_RE.test(i.rate_id) ? i.rate_id : null,
+      drift_ack: cleanAck(i.drift_ack),
       sort_order: idx,
     }))
   if (rows.length > 0) {
@@ -116,7 +130,7 @@ export async function saveEstimate(
 // anything is saved). Returns it shaped like createQuote's estimate query.
 async function seedDefaultCoa(admin: Awaited<ReturnType<typeof requireAdmin>>, instanceId: string) {
   const [{ data: inst }, { count }, { data: defaults }, { count: assignedCount }] = await Promise.all([
-    admin.from('course_instances').select('starts_at, ends_at, max_students').eq('id', instanceId).single(),
+    admin.from('course_instances').select('starts_at, ends_at, max_students, instructor_slots').eq('id', instanceId).single(),
     admin.from('course_estimates').select('id', { count: 'exact', head: true }).eq('instance_id', instanceId),
     admin.from('pricing_rates').select('id, label, unit, rate').eq('active', true).eq('default_line', true).order('sort_order'),
     admin.from('instance_instructors').select('id', { count: 'exact', head: true }).eq('instance_id', instanceId),
@@ -124,7 +138,7 @@ async function seedDefaultCoa(admin: Awaited<ReturnType<typeof requireAdmin>>, i
   if (!inst) throw new Error('Course not found')
 
   const counts: SeedCounts = {
-    instructors: Math.max(assignedCount ?? 0, 1),
+    instructors: plannedInstructorCount(inst, assignedCount ?? 0),
     days:
       inst.starts_at && inst.ends_at
         ? Math.max(Math.round((Date.parse(inst.ends_at) - Date.parse(inst.starts_at)) / 86_400_000) + 1, 1)

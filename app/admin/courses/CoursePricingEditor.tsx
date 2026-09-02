@@ -53,7 +53,7 @@ export default async function CoursePricingEditor({
     { data: sourceRows },
   ] = await Promise.all([
     admin.from('course_estimates')
-      .select('id, title, margin, price_override, created_at, estimate_items(label, qty, rate, notes, qty_factors, rate_id, sort_order)')
+      .select('id, title, margin, price_override, created_at, estimate_items(label, qty, rate, notes, qty_factors, rate_id, drift_ack, sort_order)')
       .eq('instance_id', instanceId).order('created_at'),
     admin.from('pricing_rates').select('id, label, unit, rate, default_line').eq('active', true).order('sort_order'),
     admin.from('course_quotes')
@@ -124,7 +124,7 @@ export default async function CoursePricingEditor({
     }))
     .filter((s) => s.coas.length > 0)
 
-  type EstimateItemRow = { label: string; qty: number; rate: number; notes: string | null; qty_factors: unknown; rate_id: string | null; sort_order: number }
+  type EstimateItemRow = { label: string; qty: number; rate: number; notes: string | null; qty_factors: unknown; rate_id: string | null; drift_ack: { i: number; s: number | null; d: number | null } | null; sort_order: number }
   const normalizeFactors = (qf: unknown): { f: number[]; l: (string | null)[] } | null => {
     if (Array.isArray(qf)) return { f: qf.map(Number), l: [] }
     if (qf && typeof qf === 'object' && Array.isArray((qf as { f?: unknown }).f)) {
@@ -148,6 +148,7 @@ export default async function CoursePricingEditor({
         factors: normalizeFactors(i.qty_factors)?.f ?? null,
         factor_labels: normalizeFactors(i.qty_factors)?.l ?? null,
         rate_id: i.rate_id,
+        drift_ack: i.drift_ack,
       })),
   }))
 
@@ -189,7 +190,7 @@ export default async function CoursePricingEditor({
         .filter((r) => r.default_line)
         .map((r) => {
           const guess = guessSeedQty(r, seedCounts)
-          return { label: r.label, qty: guess.qty, rate: Number(r.rate), notes: null, factors: guess.factors, factor_labels: null, rate_id: r.id as string }
+          return { label: r.label, qty: guess.qty, rate: Number(r.rate), notes: null, factors: guess.factors, factor_labels: null, rate_id: r.id as string, drift_ack: null }
         }),
     }]
   }

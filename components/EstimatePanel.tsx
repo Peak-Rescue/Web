@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { fmtMoney, round2 } from '@/lib/expenses'
-import { impliedMargin, nightsForLine } from '@/lib/estimates'
+import { impliedMargin, factorValue, prefillFactor, unitFactorNames } from '@/lib/estimates'
 import { publishCoaPrice, retractCoaPrice } from '@/lib/live-coa-prices'
 import { saveEstimate, deleteEstimateCoa, type EstimateItemInput } from '@/app/admin/courses/finance-actions'
 import { useRouter } from 'next/navigation'
@@ -24,6 +24,7 @@ type Row = {
   factors: Factors | null
   flabels: (string | null)[]
   rateId: string | null // library rate the line came from — survives renames
+  ack: CourseCounts | null // counts when this quantity was deliberately kept
 }
 // Variable-length: as many boxes as the rate's unit has dimensions, plus any
 // explicitly added multipliers (max 4).
@@ -62,7 +63,7 @@ export default function EstimatePanel({
   initialTitle: string
   initialMargin: number
   initialPriceOverride: number | null // hand-set price; null = use the calculated one
-  initialItems: { label: string; qty: number; rate: number; notes: string | null; factors: number[] | null; factor_labels: (string | null)[] | null; rate_id: string | null }[]
+  initialItems: { label: string; qty: number; rate: number; notes: string | null; factors: number[] | null; factor_labels: (string | null)[] | null; rate_id: string | null; drift_ack: { i: number; s: number | null; d: number | null } | null }[]
   rates: PricingRate[]
   canDelete: boolean
   solo: boolean // only COA on the course — the default "COA n" title stays hidden until a second exists
@@ -84,6 +85,7 @@ export default function EstimatePanel({
       factors: i.factors && i.factors.length >= 2 ? i.factors.map(String) : null,
       flabels: i.factor_labels ?? [],
       rateId: i.rate_id,
+      ack: i.drift_ack ? { instructors: i.drift_ack.i, students: i.drift_ack.s, days: i.drift_ack.d } : null,
     }))
   )
   const [notesOpen, setNotesOpen] = useState<Set<number>>(
@@ -162,6 +164,7 @@ export default function EstimatePanel({
             factors: trimmed.length >= 2 ? trimmed : null,
             factor_labels: trimmed.length >= 2 ? trimmedLabels : null,
             rate_id: row.rateId,
+            drift_ack: row.ack ? { i: row.ack.instructors, s: row.ack.students, d: row.ack.days } : null,
           }
         })
       const priceOverride = o.trim() === '' ? null : Number(o)
@@ -187,31 +190,11 @@ export default function EstimatePanel({
     }
   }
 
-  // Whether a rate's day/night dimension tracks the course duration. Travel
-  // days follow their own logic (out and back), so the course's length says
-  // nothing about them — they neither prefill from it nor drift against it.
-  function isDurationDriven(rateLabel: string): boolean {
-    return !/travel/i.test(rateLabel)
-  }
-
-  // The course-derived value for a factor, or null when the course can't
-  // know it. Used for both prefill and drift detection.
+  // The course's own number for a factor, and the number a fresh line starts
+  // at — both from lib/estimates, so what gets prefilled and what counts as
+  // out of date are answered by the same rules.
   function countForFactor(name: string, rateLabel: string): number | null {
-    const n = name.toLowerCase()
-    if (n.startsWith('instructor') || n.startsWith('person')) return counts.instructors || null
-    if (n.startsWith('day') || n.startsWith('night')) {
-      if (!isDurationDriven(rateLabel) || counts.days === null) return null
-      return nightsForLine(rateLabel, counts.days)
-    }
-    if (n.startsWith('student')) return counts.students
-    return null
-  }
-
-  // Creation-time default when the course can't supply the number.
-  function prefillForFactor(name: string, rateLabel: string): number {
-    const n = name.toLowerCase()
-    if ((n.startsWith('day') || n.startsWith('night')) && !isDurationDriven(rateLabel)) return 2 // out + back
-    return countForFactor(name, rateLabel) ?? 1
+    return factorValue(name, rateLabel, counts)
   }
 
   // A factor that was built from a course number and no longer matches it.
@@ -219,8 +202,21 @@ export default function EstimatePanel({
   // rate, where the qty *is* the count) can drift — a hand-typed qty on a
   // multi-factor rate says nothing about how it was arrived at, so it is left
   // alone rather than guessed at.
+  // Keeping a quantity means "this is right for a course of this shape", not
+  // "never ask again" — so the moment the course's length, instructors or
+  // students move, the decision is worth revisiting and the line speaks up.
+  function keptForThisCourse(ack: CourseCounts | null): boolean {
+    return (
+      ack !== null &&
+      ack.instructors === counts.instructors &&
+      ack.students === counts.students &&
+      ack.days === counts.days
+    )
+  }
+
   type Drift = { idx: number; name: string; current: number; expected: number }
   function rowDrifts(r: Row): Drift[] {
+    if (keptForThisCourse(r.ack)) return []
     const libLabels = factorLabels(r)
     const explicit = r.factors !== null
     if (!explicit && libLabels.length !== 1) return []
@@ -251,7 +247,13 @@ export default function EstimatePanel({
     const next = [...rowFactors(r)]
     for (const d of drifts) next[d.idx] = String(d.expected)
     const product = next.reduce((p, f) => p * (f.trim() === '' ? 1 : Number(f) || 0), 1)
-    return { ...r, factors: next.length >= 2 ? next : null, qty: String(round2(product)) }
+    return { ...r, factors: next.length >= 2 ? next : null, qty: String(round2(product)), ack: null }
+  }
+
+  // Keep these quantities as they are, against the course as it stands now.
+  function keepRows(keys: number[]) {
+    const wanted = new Set(keys)
+    schedule(rows.map((r) => (wanted.has(r.key) ? { ...r, ack: counts } : r)), margin)
   }
 
   function syncRows(keys: number[]) {
@@ -263,7 +265,7 @@ export default function EstimatePanel({
     const lib = rates.find((r) => r.id === rateId)
     if (!lib) return
     const labels = unitFactorNames(lib.unit)
-    const values = labels.map((l) => prefillForFactor(l, lib.label))
+    const values = labels.map((l) => prefillFactor(l, lib.label, counts))
     const qty = values.reduce((p, v) => p * v, 1)
     schedule(
       [...rows, {
@@ -275,13 +277,14 @@ export default function EstimatePanel({
         factors: labels.length >= 2 ? values.map(String) : null,
         flabels: [],
         rateId: lib.id,
+        ack: null,
       }],
       margin
     )
   }
 
   function addCustom() {
-    schedule([...rows, { key: nextKey.current++, label: '', qty: '1', rate: '', notes: '', factors: null, flabels: [], rateId: null }], margin)
+    schedule([...rows, { key: nextKey.current++, label: '', qty: '1', rate: '', notes: '', factors: null, flabels: [], rateId: null, ack: null }], margin)
   }
 
   function toggleNotes(key: number) {
@@ -349,7 +352,10 @@ export default function EstimatePanel({
   }
 
   function updateRow(key: number, patch: Partial<Row>) {
-    schedule(rows.map((r) => (r.key === key ? { ...r, ...patch } : r)), margin)
+    // Typing a quantity is a fresh decision about it, so it stops counting as
+    // one already kept.
+    const clearsAck = ('qty' in patch || 'factors' in patch) && !('ack' in patch)
+    schedule(rows.map((r) => (r.key === key ? { ...r, ...patch, ...(clearsAck ? { ack: null } : {}) } : r)), margin)
   }
 
   function removeRow(key: number) {
@@ -371,16 +377,8 @@ export default function EstimatePanel({
     return factors.length > 1 ? factors.join(' × ') : `${factors[0]}s`
   }
 
-  // Labels for the factor boxes, from a rate's unit: "per instructor per
-  // day" → ['instructors', 'days']. Extra boxes beyond the unit are spares.
-  function unitFactorNames(unit: string | null): string[] {
-    if (!unit) return []
-    return unit
-      .replace(/^per\s+/, '')
-      .split(/\s+per\s+/)
-      .map((f) => (f.endsWith('s') ? f : `${f}s`))
-  }
-
+  // Boxes for a line, named by its rate's unit. Extra boxes beyond the unit
+  // are spares the user named themselves.
   function factorLabels(r: Row): string[] {
     return unitFactorNames(rateFor(r)?.unit ?? null)
   }
@@ -471,7 +469,7 @@ export default function EstimatePanel({
       {driftedRows.length > 0 && (
         <div className="mb-1.5 text-[11px]">
           <div className="flex items-center gap-2 flex-wrap text-zinc-500">
-            <InfoHint below caution text="Lines whose quantity was built from the course's instructors, students or days, and no longer matches Details. Updating recomputes the quantity; rates and notes stay put." />
+            <InfoHint below caution text="Lines whose quantity was built from the course's instructors, students or days, and no longer matches Details. Update recomputes the quantity; Keep leaves it, and asks again only if the course changes shape." />
             <button
               onClick={() => setDriftOpen((o) => !o)}
               className="text-amber-500/80 hover:text-amber-300 transition-colors"
@@ -496,12 +494,21 @@ export default function EstimatePanel({
                     {' — '}
                     {drifts.map((d) => `${d.name} ${d.current} → ${d.expected}`).join(', ')}
                   </span>
-                  <button
-                    onClick={() => syncRows([row.key])}
-                    className="shrink-0 underline underline-offset-2 hover:text-white transition-colors"
-                  >
-                    Update
-                  </button>
+                  <span className="shrink-0 flex items-center gap-2">
+                    <button
+                      onClick={() => syncRows([row.key])}
+                      className="underline underline-offset-2 hover:text-white transition-colors"
+                    >
+                      Update
+                    </button>
+                    <button
+                      onClick={() => keepRows([row.key])}
+                      title="Keep this quantity — asked again only if the course's length, instructors or students change"
+                      className="underline underline-offset-2 hover:text-white transition-colors"
+                    >
+                      Keep
+                    </button>
+                  </span>
                 </li>
               ))}
             </ul>

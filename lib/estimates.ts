@@ -43,47 +43,94 @@ export function plannedInstructorCount(
   return Math.max(course.instructor_slots ?? assignedCount, 1)
 }
 
-// Quantity guess for a seeded default estimate line, derived from the rate's
-// unit ("per person", "per student per day") the same way the panel's library
-// picker does, multiplying only when the course can supply every factor.
-// Word tests instead of exact labels keep the rules working when rates are
-// renamed in the library: travel days are out + back regardless of course
-// length, and lodging adds a travel night on each end.
-// Lodging runs a night longer at each end of a course: people arrive the night
-// before the first day and leave the morning after the last. Every place that
-// derives nights from the course length goes through here, so the seeded
-// quantity and the check for lines built from stale numbers cannot disagree
-// about whether those two nights belong.
-export function isLodgingLine(label: string): boolean {
-  return /lodging|hotel/i.test(label)
+// One place that answers "what number does the course itself put on this
+// factor?" — for both the quantity a new line is prefilled with and the check
+// for lines still carrying the numbers the course had when they were written.
+// Two copies of these rules is how the estimator came to seed lodging with a
+// night at each end while insisting those nights were stale.
+//
+// Word tests rather than exact labels, so renaming a rate in the library does
+// not silently change what it means.
+export type FactorCounts = { instructors: number; students: number | null; days: number | null }
+
+// Costs that run a day longer at each end of the course: people arrive the
+// night before the first day and leave the morning after the last, so they
+// sleep, eat, and keep the vehicle for two days the course itself does not
+// have.
+export function spansTravelDays(label: string): boolean {
+  return /lodging|hotel|meal|vehicle|rental|fuel/i.test(label)
 }
 
-export function nightsForLine(label: string, days: number): number {
-  return days + (isLodgingLine(label) ? 2 : 0)
+export function daysForLine(label: string, days: number): number {
+  return days + (spansTravelDays(label) ? 2 : 0)
+}
+
+// Travel days are out and back — two, whatever the course's length.
+function isTravelLine(label: string): boolean {
+  return /travel/i.test(label)
+}
+
+// Filler for the admin burden a complicated course carries, priced by feel.
+// The course length says nothing about it: twelve field days are not twelve
+// days of paperwork. Nothing is derived, so nothing is ever called stale.
+function isJudgmentLine(label: string): boolean {
+  return /admin|miscellan|\bmisc\b/i.test(label)
+}
+
+// The course's own value for a named factor, or null when the course cannot
+// know it — an unknown name, a number nobody can derive, or a count the
+// details never got.
+export function factorValue(name: string, label: string, counts: FactorCounts): number | null {
+  const n = name.trim().toLowerCase()
+  // "per person" is staff — flights, day rates. Anything covering the whole
+  // group says participants, because a rate that means everyone must not be
+  // able to quietly price the instructors alone.
+  if (n.startsWith('instructor') || n.startsWith('person') || n.startsWith('people')) return counts.instructors || null
+  if (n.startsWith('participant') || n.startsWith('attendee')) {
+    return counts.students === null ? null : counts.instructors + counts.students
+  }
+  if (n.startsWith('student')) return counts.students
+  if (n.startsWith('day') || n.startsWith('night')) {
+    if (isTravelLine(label) || isJudgmentLine(label) || counts.days === null) return null
+    return daysForLine(label, counts.days)
+  }
+  return null
+}
+
+// What to put in the box when a line is first added and the course cannot say.
+// Travel is the one number that is always known without the course: out and
+// back. Everything else starts at one and waits to be told.
+export function prefillFactor(name: string, label: string, counts: FactorCounts): number {
+  const known = factorValue(name, label, counts)
+  if (known !== null) return known
+  const n = name.trim().toLowerCase()
+  if ((n.startsWith('day') || n.startsWith('night')) && isTravelLine(label)) return 2
+  return 1
+}
+
+// A rate's unit as factor names: "per instructor per day" → ['instructors',
+// 'days'].
+export function unitFactorNames(unit: string | null): string[] {
+  if (!unit) return []
+  return unit
+    .replace(/^per\s+/, '')
+    .split(/\s+per\s+/)
+    .map((f) => (f.endsWith('s') ? f : `${f}s`))
 }
 
 export type SeedCounts = { instructors: number; days: number; students: number | null }
 
+// Quantity for a seeded default estimate line, from the rate's unit and the
+// same rules the panel prefills with.
 export function guessSeedQty(
   rate: { label: string; unit: string | null },
   counts: SeedCounts
 ): { qty: number; factors: number[] | null } {
-  const { instructors, days, students } = counts
-  if (isLodgingLine(rate.label)) {
-    const nights = nightsForLine(rate.label, days)
-    return { qty: instructors * nights, factors: [instructors, nights] }
-  }
-
-  const parts = (rate.unit ?? '').toLowerCase().replace(/^per\s+/, '').split(/\s+per\s+/).filter(Boolean)
-  const factors = parts.map((name): number | null => {
-    if (name.startsWith('instructor') || name.startsWith('person')) return instructors
-    if (name.startsWith('day') || name.startsWith('night')) return /travel/i.test(rate.label) ? 2 : days
-    if (name.startsWith('student')) return students
-    return null
-  })
-  if (factors.length === 0 || factors.some((f) => f === null || f <= 0)) return { qty: 1, factors: null }
-  const known = factors as number[]
-  return { qty: known.reduce((p, f) => p * f, 1), factors: known.length >= 2 ? known : null }
+  const names = unitFactorNames(rate.unit)
+  if (names.length === 0) return { qty: 1, factors: null }
+  const values = names.map((n) => prefillFactor(n, rate.label, counts))
+  const qty = values.reduce((p, v) => p * v, 1)
+  return { qty: qty || 1, factors: values.length >= 2 ? values : null }
 }
 
 export async function cloneEstimates(
@@ -94,7 +141,7 @@ export async function cloneEstimates(
 ): Promise<number> {
   const { data: sources } = await admin
     .from('course_estimates')
-    .select('title, margin, estimate_items(label, qty, rate, notes, qty_factors, rate_id, sort_order)')
+    .select('title, margin, estimate_items(label, qty, rate, notes, qty_factors, rate_id, drift_ack, sort_order)')
     .eq('instance_id', sourceInstanceId)
     .order('created_at')
 
@@ -111,8 +158,8 @@ export async function cloneEstimates(
       .single()
     if (error || !created) throw new Error(error?.message ?? 'Could not copy estimate')
 
-    const items = ((src.estimate_items ?? []) as { label: string; qty: number; rate: number; notes: string | null; qty_factors: unknown; rate_id: string | null; sort_order: number }[])
-      .map((i) => ({ estimate_id: created.id, label: i.label, qty: i.qty, rate: i.rate, notes: i.notes, qty_factors: i.qty_factors, rate_id: i.rate_id, sort_order: i.sort_order }))
+    const items = ((src.estimate_items ?? []) as { label: string; qty: number; rate: number; notes: string | null; qty_factors: unknown; rate_id: string | null; drift_ack: unknown; sort_order: number }[])
+      .map((i) => ({ estimate_id: created.id, label: i.label, qty: i.qty, rate: i.rate, notes: i.notes, qty_factors: i.qty_factors, rate_id: i.rate_id, drift_ack: i.drift_ack, sort_order: i.sort_order }))
     if (items.length > 0) {
       const { error: itemsError } = await admin.from('estimate_items').insert(items)
       if (itemsError) throw new Error(itemsError.message)
