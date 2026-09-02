@@ -27,6 +27,22 @@ export function impliedMargin(subtotal: number, price: number): number | null {
   return price / subtotal - 1
 }
 
+// How many instructors an estimate is built for. The course details govern,
+// always: instructor_slots is the number the course is planned around, and it
+// is what the client is quoted for. The staffing roster deliberately does not
+// win — quoting happens before anyone is assigned (so the roster is usually
+// empty), partial staffing does not mean the plan shrank, and an instructor
+// added late for auditing or shadowing arrives after the quote went out and
+// must not move its price. The roster is only a fallback for a course whose
+// details never got a slot count, and one is the floor either way, because a
+// course with nobody on it still costs a day of somebody's time to quote.
+export function plannedInstructorCount(
+  course: { instructor_slots: number | null },
+  assignedCount: number
+): number {
+  return Math.max(course.instructor_slots ?? assignedCount, 1)
+}
+
 // Quantity guess for a seeded default estimate line, derived from the rate's
 // unit ("per person", "per student per day") the same way the panel's library
 // picker does, multiplying only when the course can supply every factor.
