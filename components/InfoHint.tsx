@@ -9,7 +9,11 @@
 // and left a gap down one side on phones. `overflow-x: clip` on the root now
 // catches that for good; this cap is what keeps the bubble readable rather
 // than merely clipped.
-export default function InfoHint({ text }: { text: string }) {
+//
+// `below` opens it downward instead. The default upward bubble reaches into
+// whatever sits above — on the course page that is the sticky tab bar, which
+// paints over it — so anything near the top of a screen asks for `below`.
+export default function InfoHint({ text, below }: { text: string; below?: boolean }) {
   return (
     <span className="relative inline-flex group align-middle">
       <button
@@ -21,7 +25,9 @@ export default function InfoHint({ text }: { text: string }) {
       </button>
       <span
         role="tooltip"
-        className="pointer-events-none absolute z-10 left-1/2 -translate-x-1/2 bottom-full mb-2 w-56 max-w-[calc(100vw-2rem)] rounded border border-zinc-700 bg-zinc-800 px-2.5 py-2 text-xs font-normal text-zinc-300 shadow-lg opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+        className={`pointer-events-none absolute z-30 left-1/2 -translate-x-1/2 ${
+          below ? 'top-full mt-2' : 'bottom-full mb-2'
+        } w-56 max-w-[calc(100vw-2rem)] rounded border border-zinc-700 bg-zinc-800 px-2.5 py-2 text-xs font-normal text-zinc-300 shadow-lg opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100`}
       >
         {text}
       </span>

@@ -467,7 +467,7 @@ export default function EstimatePanel({
               {driftedRows.length} line{driftedRows.length === 1 ? '' : 's'} {driftedRows.length === 1 ? 'uses' : 'use'} older numbers
             </button>
             {countSummary && <span className="text-zinc-600">course is now {countSummary}</span>}
-            <InfoHint text="Quantities built from the course's own numbers — instructors, students, days — that no longer match the details. Updating recomputes those quantities and leaves rates and notes alone. Travel days, and quantities typed straight into a multi-step calculation, never count as out of date." />
+            <InfoHint below text="Lines whose quantity was built from the course's instructors, students or days, and no longer matches Details. Updating recomputes the quantity; rates and notes stay put." />
             <button
               onClick={() => syncRows(driftedRows.map((d) => d.row.key))}
               className="text-zinc-500 hover:text-white underline underline-offset-2 transition-colors"
