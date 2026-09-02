@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 
 // Sticky jump bar for the course page. It only lists sections that actually
 // rendered, and highlights the one you're reading so a long course still feels
@@ -9,7 +9,7 @@ export default function PortalSectionNav({
   sections,
   trailing,
 }: {
-  sections: { id: string; label: string; team?: boolean; unread?: boolean }[]
+  sections: { id: string; label: string; team?: boolean; unread?: boolean; setup?: boolean }[]
   /** Pinned to the right of the same sticky bar. The viewing-as toggle lives
       here so that which role you are reading as travels down the page with
       you — knowing you are in a preview matters most at the moment you find a
@@ -48,9 +48,16 @@ export default function PortalSectionNav({
         {/* The bar is also the key: where you are is accented rather than
             grey-on-grey, team blocks are amber wherever they appear, and a dot
             marks the one section with something new in it. */}
-        {sections.map((s) => (
+        {sections.map((s, i) => (
+          <Fragment key={s.id}>
+          {/* Where running the course ends and setting it up begins. The bar
+              scrolls on a phone, so the things you touch on a course day sit
+              left of the line where they need no scrolling, and the things you
+              set once sit right of it. */}
+          {s.setup && !sections[i - 1]?.setup && (
+            <span aria-hidden className="shrink-0 self-center mx-1 h-4 w-px bg-zinc-800" />
+          )}
           <a
-            key={s.id}
             href={`#${s.id}`}
             className={`shrink-0 inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full border transition-colors ${
               active === s.id
@@ -65,6 +72,7 @@ export default function PortalSectionNav({
             {s.label}
             {s.unread && <span aria-hidden className="w-1.5 h-1.5 rounded-full bg-pr-red-light" />}
           </a>
+          </Fragment>
         ))}
       </div>
       {trailing && <div className="shrink-0">{trailing}</div>}

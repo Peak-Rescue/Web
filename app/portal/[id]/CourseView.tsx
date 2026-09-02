@@ -988,7 +988,9 @@ export default async function CourseView({
   // named at the top of the page — unless somebody did enroll, in which case
   // hiding them would be hiding the truth.
   const hasRoster = showTasks && (!inst.internal || roster.length > 0)
-  const hasTasks = showTasks && (tasks.length > 0 || canManageTasks || hasNotes)
+  // Notes moved to Details, so the Tasks section stands or falls on tasks —
+  // it no longer appears because somebody wrote a note.
+  const hasTasks = showTasks && (tasks.length > 0 || canManageTasks)
 
   // Who is on this course, and what it is. Staff get it regardless: an empty
   // one is where they fill it in.
@@ -1037,22 +1039,38 @@ export default async function CourseView({
   // unset waiver is a silent nothing rather than a visible gap.
   const showWaiver = Boolean(waiver) || showAsAdmin
 
-  const navSections = ([
-    'details',
-    hasUpdates && 'updates',
-    showWaiver && 'waiver',
-    // The only block left that is team-only end to end. The rest of what staff
-    // see is a block inside a section students also read.
-    hasTasks && 'tasks',
-    hasSchedule && 'schedule',
-    hasResources && 'resources',
-    hasCurriculum && 'curriculum',
-    hasGear && 'gear',
-    hasPricing && 'pricing',
-  ].filter(Boolean) as SectionKey[]).map((id) => ({
+  // Two runs, in one bar, with a line between them.
+  //
+  // The editor's tabs were ordered by the build sequence — details, staffing,
+  // gear, pricing, curriculum, schedule, students — and that order *was* the
+  // workflow. This page inherited no order at all, which is what makes nine
+  // items hard rather than the nine.
+  //
+  // So: what you touch while the course is running, in the order a course day
+  // hits them, then the line, then what you set up once, in the sequence the
+  // editor proved. The bar scrolls on a phone, and the left of it is the half
+  // you need at a trailhead.
+  const RUNNING: SectionKey[] = ['details', 'updates', 'schedule', 'tasks', 'resources']
+  const SETUP: SectionKey[] = ['curriculum', 'gear', 'waiver', 'pricing']
+  const present: Record<string, boolean> = {
+    details: true,
+    updates: hasUpdates,
+    schedule: showSchedule,
+    tasks: hasTasks,
+    resources: hasResources,
+    curriculum: hasCurriculum,
+    gear: showGear,
+    waiver: showWaiver,
+    pricing: hasPricing,
+  }
+  const navSections = [
+    ...RUNNING.filter((k) => present[k]).map((id) => ({ id, setup: false })),
+    ...SETUP.filter((k) => present[k]).map((id) => ({ id, setup: true })),
+  ].map(({ id, setup }) => ({
     id,
+    setup,
     label: SECTION_LABEL[id],
-    team: id === 'tasks',
+    team: id === 'tasks' || id === 'pricing',
     unread: id === 'updates' && unreadUpdates > 0,
   }))
 
@@ -1243,6 +1261,12 @@ export default async function CourseView({
                     <p className="text-xs text-zinc-600">No client or contact yet.</p>
                   )}
                 </EditInPlace>
+              )}
+              {hasNotes && (
+                <div>
+                  <SubHead title="Notes" badge={<AudiencePills audience="internal" />} />
+                  <CourseNotes instanceId={id} notes={inst.notes} canEdit={showTasks} />
+                </div>
               )}
               <EditInPlace
                 label="Edit welcome"
@@ -1475,12 +1499,6 @@ export default async function CourseView({
             block on the page that is theirs end to end. */}
         {hasTasks && (
           <Section id="tasks" title="Course tasks" team>
-            {hasNotes && (
-              <div className="mb-6">
-                <SubHead title="Notes" />
-                <CourseNotes instanceId={id} notes={inst.notes} canEdit={showTasks} />
-              </div>
-            )}
             <CourseTasksPanel
               instanceId={id}
               tasks={tasks}
