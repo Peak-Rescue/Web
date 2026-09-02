@@ -63,7 +63,7 @@ export default function EstimatePanel({
   initialTitle: string
   initialMargin: number
   initialPriceOverride: number | null // hand-set price; null = use the calculated one
-  initialItems: { label: string; qty: number; rate: number; notes: string | null; factors: number[] | null; factor_labels: (string | null)[] | null; rate_id: string | null; drift_ack: { i: number; s: number | null; d: number | null } | null }[]
+  initialItems: { label: string; qty: number | null; rate: number; notes: string | null; factors: number[] | null; factor_labels: (string | null)[] | null; rate_id: string | null; drift_ack: { i: number; s: number | null; d: number | null } | null }[]
   rates: PricingRate[]
   canDelete: boolean
   solo: boolean // only COA on the course — the default "COA n" title stays hidden until a second exists
@@ -79,7 +79,7 @@ export default function EstimatePanel({
     initialItems.map((i, idx) => ({
       key: idx,
       label: i.label,
-      qty: String(i.qty),
+      qty: i.qty === null ? '' : String(i.qty),
       rate: String(i.rate),
       notes: i.notes ?? '',
       factors: i.factors && i.factors.length >= 2 ? i.factors.map(String) : null,
@@ -158,7 +158,7 @@ export default function EstimatePanel({
           const trimmedLabels = trimmed.map((_, i) => row.flabels[i] ?? null)
           return {
             label: row.label,
-            qty: Number(row.qty) || 0,
+            qty: row.qty.trim() === '' ? null : Number(row.qty) || 0,
             rate: Number(row.rate) || 0,
             notes: row.notes || null,
             factors: trimmed.length >= 2 ? trimmed : null,
@@ -266,15 +266,18 @@ export default function EstimatePanel({
     if (!lib) return
     const labels = unitFactorNames(lib.unit)
     const values = labels.map((l) => prefillFactor(l, lib.label, counts))
-    const qty = values.reduce((p, v) => p * v, 1)
+    // Anything the course cannot supply arrives blank rather than as a 1 that
+    // reads like a real number.
+    const unknown = values.some((v) => v === null)
+    const qty = unknown ? '' : String((values as number[]).reduce((p, v) => p * v, 1))
     schedule(
       [...rows, {
         key: nextKey.current++,
         label: lib.label,
-        qty: String(qty || 1),
+        qty,
         rate: String(lib.rate),
         notes: '',
-        factors: labels.length >= 2 ? values.map(String) : null,
+        factors: !unknown && labels.length >= 2 ? values.map(String) : null,
         flabels: [],
         rateId: lib.id,
         ack: null,
@@ -284,7 +287,7 @@ export default function EstimatePanel({
   }
 
   function addCustom() {
-    schedule([...rows, { key: nextKey.current++, label: '', qty: '1', rate: '', notes: '', factors: null, flabels: [], rateId: null, ack: null }], margin)
+    schedule([...rows, { key: nextKey.current++, label: '', qty: '', rate: '', notes: '', factors: null, flabels: [], rateId: null, ack: null }], margin)
   }
 
   function toggleNotes(key: number) {
@@ -396,6 +399,10 @@ export default function EstimatePanel({
     return qtyFactors(r)
   }
 
+  // Lines nobody has put a number on yet. Kept distinct from a quantity of
+  // zero, which is a real answer — none of this cost.
+  const unsetRows = rows.filter((r) => r.label.trim() && r.qty.trim() === '')
+
   // Lines still carrying the numbers the course had when they were written.
   const driftedRows = rows.map((r) => ({ row: r, drifts: rowDrifts(r) })).filter((d) => d.drifts.length > 0)
   const driftsByKey = new Map(driftedRows.map((d) => [d.row.key, d.drifts]))
@@ -465,6 +472,20 @@ export default function EstimatePanel({
           )}
         </div>
       </div>
+
+      {unsetRows.length > 0 && (
+        <div className="mb-1.5 text-[11px] flex items-center gap-2 flex-wrap text-zinc-500">
+          <InfoHint
+            below
+            caution
+            text="These lines are in the estimate with no quantity — miles, admin days, meals. The course cannot guess them, and the cost total leaves them out until you do."
+          />
+          <span className="text-amber-500/80">
+            {unsetRows.length} line{unsetRows.length === 1 ? '' : 's'} need{unsetRows.length === 1 ? 's' : ''} a number
+          </span>
+          <span className="text-zinc-600 min-w-0 truncate">{unsetRows.map((r) => r.label.trim()).join(', ')}</span>
+        </div>
+      )}
 
       {driftedRows.length > 0 && (
         <div className="mb-1.5 text-[11px]">
@@ -561,11 +582,16 @@ export default function EstimatePanel({
                     min="0"
                     step="0.5"
                     onChange={(e) => updateRow(r.key, { qty: e.target.value, factors: null })}
-                    className={`${inputCls} w-20 text-right`}
+                    placeholder="—"
+                    className={`${inputCls} w-20 text-right ${r.qty.trim() === '' ? 'border-amber-600' : ''}`}
                     title={qtyFactors(r) ? `Quantity = ${qtyFactors(r)}` : 'Quantity'}
                   />
-                  {qtyHint(r) && (
-                    <span className="mt-0.5 text-[10px] text-zinc-600 whitespace-nowrap">{qtyHint(r)}</span>
+                  {r.qty.trim() === '' ? (
+                    <span className="mt-0.5 text-[10px] text-amber-500/80 whitespace-nowrap">needs a number</span>
+                  ) : (
+                    qtyHint(r) && (
+                      <span className="mt-0.5 text-[10px] text-zinc-600 whitespace-nowrap">{qtyHint(r)}</span>
+                    )
                   )}
                 </div>
                 <span className="text-zinc-600 text-xs mt-2.5">×&nbsp;&nbsp;$</span>
@@ -583,8 +609,8 @@ export default function EstimatePanel({
                     {rateUnit(r) ?? 'dollars'}
                   </span>
                 </div>
-                <span className="text-sm w-24 text-right shrink-0 mt-2">
-                  {fmtMoney(round2((Number(r.qty) || 0) * (Number(r.rate) || 0)))}
+                <span className={`text-sm w-24 text-right shrink-0 mt-2 ${r.qty.trim() === '' ? 'text-zinc-600' : ''}`}>
+                  {r.qty.trim() === '' ? '—' : fmtMoney(round2((Number(r.qty) || 0) * (Number(r.rate) || 0)))}
                 </span>
                 <button onClick={() => removeRow(r.key)} className="text-zinc-600 hover:text-pr-red-light text-sm shrink-0 mt-1.5">
                   <TrashIcon />
@@ -727,7 +753,12 @@ export default function EstimatePanel({
             </div>
           </div>
           <div className="text-right text-sm space-y-0.5">
-            <p className="text-zinc-400">Cost: {fmtMoney(subtotal)}</p>
+            <p className="text-zinc-400">
+              Cost: {fmtMoney(subtotal)}
+              {unsetRows.length > 0 && (
+                <span className="text-amber-500/80"> + {unsetRows.length} unpriced</span>
+              )}
+            </p>
             <p className="text-zinc-400">Margin ({Math.round(margin * 100)}%): {fmtMoney(marginAmount)}</p>
             <p className={overridden ? 'text-zinc-500' : 'text-base font-semibold'}>
               Calculated: {fmtMoney(calculated)}

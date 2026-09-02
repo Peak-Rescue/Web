@@ -12,7 +12,7 @@ import { round2 } from '@/lib/expenses'
 export function coaPrice(e: {
   margin: number | null
   price_override?: number | string | null
-  items: { qty: number; rate: number }[]
+  items: { qty: number | null; rate: number }[]
 }): number {
   if (e.price_override !== null && e.price_override !== undefined) return round2(Number(e.price_override))
   const subtotal = e.items.reduce((s, i) => s + (Number(i.qty) || 0) * (Number(i.rate) || 0), 0)
@@ -100,15 +100,20 @@ export function factorValue(name: string, label: string, counts: FactorCounts): 
   return null
 }
 
-// What to put in the box when a line is first added and the course cannot say.
-// Travel is the one number that is always known without the course: out and
-// back. Everything else starts at one and waits to be told.
-export function prefillFactor(name: string, label: string, counts: FactorCounts): number {
+// What to put in the box when a line is first added, or null for a number
+// only a person can supply — miles driven, days of admin burden, meals bought.
+// Those arrive blank and say they need a number, because a plausible-looking
+// 1 is the kind of wrong that survives all the way into a quote: it prices a
+// five-hundred-mile drive at one mile and reads, at a glance, like a figure
+// somebody chose.
+//
+// Travel is the one number known without the course: out and back.
+export function prefillFactor(name: string, label: string, counts: FactorCounts): number | null {
   const known = factorValue(name, label, counts)
   if (known !== null) return known
   const n = name.trim().toLowerCase()
   if ((n.startsWith('day') || n.startsWith('night')) && isTravelLine(label)) return 2
-  return 1
+  return null
 }
 
 // A rate's unit as factor names: "per instructor per day" → ['instructors',
@@ -124,16 +129,18 @@ export function unitFactorNames(unit: string | null): string[] {
 export type SeedCounts = { instructors: number; days: number; students: number | null }
 
 // Quantity for a seeded default estimate line, from the rate's unit and the
-// same rules the panel prefills with.
+// same rules the panel prefills with. Null quantity = nobody can guess this
+// one; the line is seeded blank and asks to be filled in.
 export function guessSeedQty(
   rate: { label: string; unit: string | null },
   counts: SeedCounts
-): { qty: number; factors: number[] | null } {
+): { qty: number | null; factors: number[] | null } {
   const names = unitFactorNames(rate.unit)
-  if (names.length === 0) return { qty: 1, factors: null }
+  if (names.length === 0) return { qty: null, factors: null }
   const values = names.map((n) => prefillFactor(n, rate.label, counts))
-  const qty = values.reduce((p, v) => p * v, 1)
-  return { qty: qty || 1, factors: values.length >= 2 ? values : null }
+  if (values.some((v) => v === null)) return { qty: null, factors: null }
+  const known = values as number[]
+  return { qty: known.reduce((p, v) => p * v, 1), factors: known.length >= 2 ? known : null }
 }
 
 export async function cloneEstimates(
@@ -161,7 +168,7 @@ export async function cloneEstimates(
       .single()
     if (error || !created) throw new Error(error?.message ?? 'Could not copy estimate')
 
-    const items = ((src.estimate_items ?? []) as { label: string; qty: number; rate: number; notes: string | null; qty_factors: unknown; rate_id: string | null; drift_ack: unknown; sort_order: number }[])
+    const items = ((src.estimate_items ?? []) as { label: string; qty: number | null; rate: number; notes: string | null; qty_factors: unknown; rate_id: string | null; drift_ack: unknown; sort_order: number }[])
       .map((i) => ({ estimate_id: created.id, label: i.label, qty: i.qty, rate: i.rate, notes: i.notes, qty_factors: i.qty_factors, rate_id: i.rate_id, drift_ack: i.drift_ack, sort_order: i.sort_order }))
     if (items.length > 0) {
       const { error: itemsError } = await admin.from('estimate_items').insert(items)

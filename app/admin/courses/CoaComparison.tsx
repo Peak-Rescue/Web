@@ -7,7 +7,7 @@ import { coaPrice } from '@/lib/estimates'
 export default function CoaComparison({
   coas,
 }: {
-  coas: { title: string; margin: number; priceOverride?: number | null; items: { qty: number; rate: number }[] }[]
+  coas: { title: string; margin: number; priceOverride?: number | null; items: { qty: number | null; rate: number }[] }[]
 }) {
   const cols = coas.map((c) => {
     const cost = round2(c.items.reduce((s, i) => s + (Number(i.qty) || 0) * (Number(i.rate) || 0), 0))

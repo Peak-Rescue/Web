@@ -21,7 +21,7 @@ async function requireAdmin() {
 
 export type EstimateItemInput = {
   label: string
-  qty: number
+  qty: number | null // null = not set yet; the line says so rather than showing a made-up 1
   rate: number
   notes: string | null
   factors: number[] | null
@@ -108,7 +108,7 @@ export async function saveEstimate(
     .map((i, idx) => ({
       estimate_id: id,
       label: i.label.trim().slice(0, 200),
-      qty: Number.isFinite(i.qty) ? i.qty : 0,
+      qty: i.qty === null || !Number.isFinite(i.qty) ? null : i.qty,
       rate: Number.isFinite(i.rate) ? i.rate : 0,
       notes: i.notes?.trim().slice(0, 500) || null,
       qty_factors: cleanFactors(i.factors, i.factor_labels),
@@ -238,7 +238,7 @@ export async function duplicateEstimateCoa(instanceId: string, estimateId: strin
     .single()
   if (error || !created) throw new Error(error?.message ?? 'Could not duplicate estimate')
 
-  const items = ((src.estimate_items ?? []) as { label: string; qty: number; rate: number; notes: string | null; qty_factors: unknown; rate_id: string | null; sort_order: number }[])
+  const items = ((src.estimate_items ?? []) as { label: string; qty: number | null; rate: number; notes: string | null; qty_factors: unknown; rate_id: string | null; sort_order: number }[])
     .map((i) => ({ estimate_id: created.id, label: i.label, qty: i.qty, rate: i.rate, notes: i.notes, qty_factors: i.qty_factors, rate_id: i.rate_id, sort_order: i.sort_order }))
   if (items.length > 0) {
     const { error: itemsError } = await admin.from('estimate_items').insert(items)
@@ -480,7 +480,7 @@ export async function createQuote(instanceId: string, formData: FormData) {
     coaPrice({
       margin: e?.margin ?? null,
       price_override: (e?.price_override ?? null) as number | null,
-      items: (e?.estimate_items ?? []) as { qty: number; rate: number }[],
+      items: (e?.estimate_items ?? []) as { qty: number | null; rate: number }[],
     })
 
   // Multi-option: snapshot every COA as { title, total }; the quote's own
@@ -759,7 +759,7 @@ export async function copyEstimateCoaFrom(instanceId: string, estimateId: string
     .single()
   if (error || !created) throw new Error(error?.message ?? 'Could not copy estimate')
 
-  const items = ((src.estimate_items ?? []) as { label: string; qty: number; rate: number; notes: string | null; qty_factors: unknown; rate_id: string | null; sort_order: number }[])
+  const items = ((src.estimate_items ?? []) as { label: string; qty: number | null; rate: number; notes: string | null; qty_factors: unknown; rate_id: string | null; sort_order: number }[])
     .map((i) => ({ estimate_id: created.id, label: i.label, qty: i.qty, rate: i.rate, notes: i.notes, qty_factors: i.qty_factors, rate_id: i.rate_id, sort_order: i.sort_order }))
   if (items.length > 0) {
     const { error: itemsError } = await admin.from('estimate_items').insert(items)

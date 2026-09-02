@@ -98,7 +98,7 @@ export default async function CoursePricingEditor({
 
   // Copy-picker sources: each course's COAs with their quote prices, plus the
   // relevance flags the picker groups by (same type first, then same client).
-  type SourceEstimate = { id: string; title: string; margin: number; price_override: number | null; created_at: string; estimate_items: { qty: number; rate: number }[] }
+  type SourceEstimate = { id: string; title: string; margin: number; price_override: number | null; created_at: string; estimate_items: { qty: number | null; rate: number }[] }
   const currentClient = ((course.client_name as string | null) ?? '').trim().toLowerCase()
   const copySources: CopySource[] = (sourceRows ?? [])
     .map((s) => ({
@@ -124,7 +124,7 @@ export default async function CoursePricingEditor({
     }))
     .filter((s) => s.coas.length > 0)
 
-  type EstimateItemRow = { label: string; qty: number; rate: number; notes: string | null; qty_factors: unknown; rate_id: string | null; drift_ack: { i: number; s: number | null; d: number | null } | null; sort_order: number }
+  type EstimateItemRow = { label: string; qty: number | null; rate: number; notes: string | null; qty_factors: unknown; rate_id: string | null; drift_ack: { i: number; s: number | null; d: number | null } | null; sort_order: number }
   const normalizeFactors = (qf: unknown): { f: number[]; l: (string | null)[] } | null => {
     if (Array.isArray(qf)) return { f: qf.map(Number), l: [] }
     if (qf && typeof qf === 'object' && Array.isArray((qf as { f?: unknown }).f)) {
@@ -142,7 +142,7 @@ export default async function CoursePricingEditor({
       .sort((a, b) => a.sort_order - b.sort_order)
       .map((i) => ({
         label: i.label,
-        qty: Number(i.qty),
+        qty: i.qty === null ? null : Number(i.qty),
         rate: Number(i.rate),
         notes: i.notes,
         factors: normalizeFactors(i.qty_factors)?.f ?? null,
