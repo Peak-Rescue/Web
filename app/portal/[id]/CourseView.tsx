@@ -1181,7 +1181,8 @@ export default async function CourseView({
           leading={showAsAdmin ? (
             <CourseMode
               mode={mode}
-              href={(m) => `/portal/${id}?mode=${m}${viewAs ? `&as=${viewAs}` : ''}`}
+              buildHref={`/portal/${id}?mode=build${viewAs ? `&as=${viewAs}` : ''}`}
+              teachHref={`/portal/${id}?mode=teach${viewAs ? `&as=${viewAs}` : ''}`}
             />
           ) : null}
           trailing={isAdmin ? (

@@ -20,19 +20,25 @@ import Link from 'next/link'
 // editing them is.
 export default function CourseMode({
   mode,
-  href,
+  buildHref,
+  teachHref,
 }: {
   mode: 'build' | 'teach'
-  /** Same page, one query away — the mode is in the URL so a link to a course
-      can carry it and a reload cannot lose it. */
-  href: (mode: 'build' | 'teach') => string
+  /** Both links, built on the server and passed as strings.
+      A function cannot cross into a client component — handing one over is how
+      every course page 500'd for admins while rendering fine for everyone
+      else, because this switch is the only thing an admin gets that they
+      don't. */
+  buildHref: string
+  teachHref: string
 }) {
+  const href = { build: buildHref, teach: teachHref }
   return (
     <div className="inline-flex items-center rounded-full border border-zinc-800 bg-zinc-900 p-0.5 text-[11px] font-medium">
       {(['build', 'teach'] as const).map((m) => (
         <Link
           key={m}
-          href={href(m)}
+          href={href[m]}
           scroll={false}
           className={`px-2.5 py-1 rounded-full transition-colors ${
             mode === m ? 'bg-zinc-700 text-white' : 'text-zinc-500 hover:text-zinc-300'
