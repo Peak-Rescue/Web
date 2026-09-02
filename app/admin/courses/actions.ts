@@ -243,7 +243,26 @@ export async function updateInstanceDetails(id: string, formData: FormData) {
 
   const { error } = await admin
     .from('course_instances')
-    .update({ course_category, course_type, custom_title, custom_categories, status, internal, location, region, venue_id, client_name, notes, max_students, instructor_slots, ...(contactsRaw !== null ? { contacts: contactsFromForm(contactsRaw) } : {}) })
+    // Only what this form actually carried. `notes` is written by its own
+    // form and has never been a field here — but it was in this list, so every
+    // save of the details form read it as absent and wrote null over whatever
+    // was there. A course's intake notes are the one thing on the page nobody
+    // can reconstruct, and they were being deleted by editing the client name.
+    //
+    // Guarded field by field rather than just for notes: any field this form
+    // stops carrying should stop being written, not start being erased.
+    .update({
+      ...(formData.has('course_type') ? { course_category, course_type, custom_title, custom_categories } : {}),
+      ...(formData.has('status') ? { status, internal } : {}),
+      ...(formData.has('location') ? { location } : {}),
+      ...(formData.has('region') ? { region } : {}),
+      ...(formData.has('venue_id') ? { venue_id } : {}),
+      ...(formData.has('client_name') ? { client_name } : {}),
+      ...(formData.has('notes') ? { notes } : {}),
+      ...(formData.has('max_students') ? { max_students } : {}),
+      ...(formData.has('instructor_slots') ? { instructor_slots } : {}),
+      ...(contactsRaw !== null ? { contacts: contactsFromForm(contactsRaw) } : {}),
+    })
     .eq('id', id)
 
   if (error) throw new Error(error.message)
