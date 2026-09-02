@@ -59,7 +59,7 @@ export default function ViewSharePanel({
           <InfoHint text="For the client contact, or an instructor you haven't staffed yet." />
         </div>
         <p className="text-xs text-zinc-500 mt-0.5">
-          The student page — schedule, gear, everything — with no account and no enrolment.
+          The student page, with no account or enrolment.
         </p>
       </div>
 

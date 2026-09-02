@@ -691,7 +691,7 @@ export default function EstimatePanel({
             </div>
           ))}
           {rows.length === 0 && (
-            <p className="px-3 py-3 text-sm text-zinc-500">No line items yet — add costs below.</p>
+            <p className="px-3 py-3 text-sm text-zinc-500">No line items yet.</p>
           )}
         </div>
 

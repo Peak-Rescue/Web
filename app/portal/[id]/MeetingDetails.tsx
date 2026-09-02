@@ -342,8 +342,8 @@ export default function MeetingDetails({
     canEdit && (
       <p className="text-xs text-zinc-600">
         {dayId
-          ? 'No meeting point set for this day.'
-          : 'Where and when to meet isn’t set yet — nobody on this course knows where to go.'}
+          ? 'Not set for this day.'
+          : 'Not set yet.'}
       </p>
     )
   )

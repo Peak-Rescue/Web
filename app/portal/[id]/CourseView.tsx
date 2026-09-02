@@ -1240,7 +1240,7 @@ export default async function CourseView({
                     </div>
                   )}
                   {!inst.client_name && coursePocs.length === 0 && (
-                    <p className="text-xs text-zinc-600">No client or contact on this course yet.</p>
+                    <p className="text-xs text-zinc-600">No client or contact yet.</p>
                   )}
                 </EditInPlace>
               )}
@@ -1250,7 +1250,7 @@ export default async function CourseView({
                 editor={showTasks ? <CourseIntroFields instanceId={id} intro={inst.intro as string | null} /> : null}
               >
               {!inst.intro && showTasks && (
-                <p className="text-xs text-zinc-600">No welcome note written for this course yet.</p>
+                <p className="text-xs text-zinc-600">No welcome yet.</p>
               )}
               {inst.intro && (
                 <p className="text-sm text-zinc-300 whitespace-pre-line">{inst.intro}</p>
@@ -1275,7 +1275,7 @@ export default async function CourseView({
                 }
               >
               {(instructors ?? []).length === 0 && showTasks && (
-                <p className="text-xs text-zinc-600">Nobody staffed on this course yet.</p>
+                <p className="text-xs text-zinc-600">Nobody staffed yet.</p>
               )}
               {(instructors ?? []).length > 0 && (
                 <div>
@@ -1442,8 +1442,8 @@ export default async function CourseView({
             blurb={
               waiver
                 ? waiver.signed
-                  ? 'Signed — your copy of the agreement'
-                  : 'Please read and sign before the course starts'
+                  ? 'Signed'
+                  : 'Read and sign before the course starts'
                 : undefined
             }
           >
@@ -1550,7 +1550,7 @@ export default async function CourseView({
                   all — an empty overview is otherwise indistinguishable from a
                   feature that went away. */}
               {!sched.overview && !sched.objectives.length && canEditSchedule && (
-                <p className="text-xs text-zinc-600 mb-3">No overview or objectives set.</p>
+                <p className="text-xs text-zinc-600 mb-3">No overview or objectives yet.</p>
               )}
             </EditInPlace>
             <div className="space-y-3">
@@ -1905,7 +1905,7 @@ export default async function CourseView({
               }
             >
             {maps.length === 0 && showTasks && (
-              <p className="text-xs text-zinc-600">No maps on this course yet.</p>
+              <p className="text-xs text-zinc-600">No maps yet.</p>
             )}
             {maps.length > 0 && (
               <div className="flex flex-wrap items-center gap-x-3 gap-y-2 mt-3">
@@ -2072,7 +2072,7 @@ export default async function CourseView({
                   editor={showTasks ? <CourseFilesSection instanceId={id} files={editableFiles} /> : null}
                 >
                 {courseDocs.length === 0 && (
-                  <p className="text-xs text-zinc-600">Nothing attached to this course yet.</p>
+                  <p className="text-xs text-zinc-600">Nothing attached yet.</p>
                 )}
                 <div className="flex flex-wrap gap-2">
                   {courseDocs.map((d) => (
@@ -2238,7 +2238,7 @@ export default async function CourseView({
             >
             {gearList?.intro && <p className="text-sm text-zinc-400 mb-3 whitespace-pre-line">{gearList.intro}</p>}
             {!gearList && showAsAdmin && (
-              <p className="text-xs text-zinc-600">No gear list on this course yet.</p>
+              <p className="text-xs text-zinc-600">No gear list yet.</p>
             )}
             {gearList && (['personal', 'group'] as const).map((gt) => {
               const rows = gearList.gear_list_entries
@@ -2354,7 +2354,7 @@ export default async function CourseView({
             strongest sense on this page — instructors never see it, and the
             toggle takes it away rather than dimming it. */}
         {hasPricing && (
-          <Section id="pricing" blurb="Admins only — not shown to instructors or clients">
+          <Section id="pricing" blurb="Admins only">
             <CoursePricingEditor
               instanceId={id}
               course={inst as unknown as React.ComponentProps<typeof CoursePricingEditor>['course']}
@@ -2384,7 +2384,7 @@ export default async function CourseView({
         )}
 
         {navSections.length === 1 && (
-          <p className="text-zinc-500 text-sm">Nothing has been added to this course yet — check back soon.</p>
+          <p className="text-zinc-500 text-sm">Nothing has been added to this course yet.</p>
         )}
       </div>
     </main>
