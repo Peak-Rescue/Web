@@ -58,6 +58,7 @@ import TrashIcon from '@/components/TrashIcon'
 import CourseDetailsEditor from '../CourseDetailsEditor'
 import CourseStaffingEditor from '../CourseStaffingEditor'
 import CourseStudentsEditor from '../CourseStudentsEditor'
+import CoursePricingEditor from '../CoursePricingEditor'
 
 const STATUS_STYLES: Record<string, string> = {
   tentative: 'bg-yellow-900/40 text-yellow-300 border-yellow-700',
@@ -126,15 +127,12 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
     tasks,
     { data: peopleRows },
     { data: adminRows },
-    { data: estimateRows },
-    { data: pricingRateRows },
-    { data: quoteRows },
-    { data: estimateSourceRows },
+    { count: estimateCount },
+    { count: quoteCount },
     { data: templateRows },
     { data: interestInviteRows },
     { data: courseDocRows },
     { data: taskDocRows },
-    { data: galleryImageRows },
     { data: estimateReviewRows },
     { data: courseMapRows },
     { data: courseResourceRows },
@@ -148,33 +146,14 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
     loadTasksWithDocs(admin, id),
     admin.from('profiles').select('id, first_name, last_name, email, role').in('role', ['admin', 'instructor']).order('first_name'),
     admin.from('profiles').select('id, first_name, last_name, email').eq('role', 'admin').order('first_name'),
-    admin.from('course_estimates').select('id, title, margin, price_override, created_at, estimate_items(label, qty, rate, notes, qty_factors, rate_id, sort_order)').eq('instance_id', id).order('created_at'),
-    admin.from('pricing_rates').select('id, label, unit, rate, default_line').eq('active', true).order('sort_order'),
-    admin.from('course_quotes').select('id, accept_token, estimate_id, prepared_by, prepared_by_name, quote_seq, status, issue_date, valid_until, total, options, unit_rate_note, scope_bullets, course_blurb, sent_at, accepted_at, accepted_name').eq('instance_id', id).order('quote_seq', { ascending: false }),
-    // Copy-picker sources: the recent pool for browsing, plus same-type and
-    // same-client courses from any age — relevance shouldn't fall off the
-    // recency cap as the course list grows.
-    (async () => {
-      const sel = 'id, ref_number, course_type, custom_title, client_name, starts_at, course_estimates(id, title, margin, price_override, created_at, estimate_items(qty, rate))'
-      const sourceQuery = () =>
-        admin.from('course_instances').select(sel).neq('id', id).order('starts_at', { ascending: false, nullsFirst: false })
-      const client = ((inst.client_name as string | null) ?? '').trim()
-      const [recent, sameType, sameClient] = await Promise.all([
-        sourceQuery().limit(60),
-        inst.course_type !== 'custom' ? sourceQuery().eq('course_type', inst.course_type).limit(40) : { data: [] },
-        client ? sourceQuery().ilike('client_name', `%${client}%`).limit(40) : { data: [] },
-      ])
-      const seen = new Set<string>()
-      const rows = [...(recent.data ?? []), ...(sameType.data ?? []), ...(sameClient.data ?? [])]
-        .filter((r) => !seen.has(r.id) && Boolean(seen.add(r.id)))
-        .sort((a, b) => ((b.starts_at as string | null) ?? '').localeCompare((a.starts_at as string | null) ?? ''))
-      return { data: rows }
-    })(),
+    // Only whether there is anything in it — the pricing editor loads the
+    // estimates, rates, quotes and copy sources it needs for itself.
+    admin.from('course_estimates').select('id', { count: 'exact', head: true }).eq('instance_id', id),
+    admin.from('course_quotes').select('id', { count: 'exact', head: true }).eq('instance_id', id),
     admin.from('course_task_templates').select('id, title, default_line, sort_order').eq('active', true).order('sort_order'),
     admin.from('course_interest_invites').select('id, instructor_id, sent_at, responded_at, interested, note').eq('instance_id', id).order('created_at'),
     admin.from('course_documents').select('id, path, filename, url, created_at').eq('instance_id', id),
     admin.from('course_task_documents').select('id, path, filename, url, created_at, course_tasks!inner(title, instance_id)').eq('course_tasks.instance_id', id),
-    admin.from('gallery_images').select('url, caption, categories').order('created_at', { ascending: false }),
     admin.from('estimate_reviews').select('id, created_at, requested_by, reviewer_id, note, responded_at, approved, response_note, subject').eq('instance_id', id).order('created_at', { ascending: false }).limit(16),
     admin.from('course_maps').select('id, url, label, audience, audience_overridden, library_item_id, library_items(title, url, audience, library_item_links(access, audience))').eq('instance_id', id).order('sort_order'),
     admin.from('course_resources').select('id, url, label, audience, library_item_id, library_items(title, url, audience)').eq('instance_id', id).order('sort_order'),
@@ -192,15 +171,6 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
       .eq('instance_id', id)
       .order('created_at', { ascending: false }),
   ])
-
-  // Quote-hero photo pool: the curated static shots plus every gallery upload,
-  // each carrying the category tags the picker filters by.
-  const heroChoices = [
-    ...HERO_CHOICES,
-    ...(galleryImageRows ?? [])
-      .filter((g) => !HERO_CHOICES.some((c) => c.value === g.url))
-      .map((g) => ({ value: g.url, label: g.caption || 'Gallery photo', categories: g.categories ?? [] })),
-  ]
 
   // A course map is either a library item (title and link come from there, so
   // fixing the library fixes every course using it) or a link pasted here.
@@ -375,67 +345,6 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
       onCourse: p.role === 'admin' || staffedProfileIds.has(p.id),
     }))
     .filter((p) => p.name)
-  // Quotes are only ever issued by admins.
-  const quotePeople = (adminRows ?? [])
-    .map((p) => ({ id: p.id, name: [p.first_name, p.last_name].filter(Boolean).join(' '), email: p.email ?? null }))
-    .filter((p) => p.name)
-  const pricingRates: PricingRate[] = (pricingRateRows ?? []).map((r) => ({ ...r, rate: Number(r.rate) }))
-  const quotes: QuoteRow[] = (quoteRows ?? []).map((q) => ({ ...q, total: Number(q.total) }))
-  // Copy-picker sources: each course's COAs with their quote prices, plus the
-  // relevance flags the picker groups by (same type first, then same client).
-  type SourceEstimate = { id: string; title: string; margin: number; price_override: number | null; created_at: string; estimate_items: { qty: number; rate: number }[] }
-  const currentClient = ((inst.client_name as string | null) ?? '').trim().toLowerCase()
-  const copySources: CopySource[] = (estimateSourceRows ?? [])
-    .map((s) => ({
-      id: s.id,
-      name: courseShortName(s.course_type, s.custom_title),
-      typeKey: s.course_type,
-      typeLabel: s.course_type === 'custom' ? 'Custom' : courseShortName(s.course_type, null),
-      client: s.client_name?.trim() || null,
-      month: s.starts_at
-        ? new Date(s.starts_at + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
-        : null,
-      sameType: s.course_type === inst.course_type && s.course_type !== 'custom',
-      sameClient: Boolean(currentClient) && (s.client_name ?? '').trim().toLowerCase() === currentClient,
-      coas: ((s.course_estimates ?? []) as SourceEstimate[])
-        .sort((a, b) => a.created_at.localeCompare(b.created_at))
-        .map((e) => ({
-          id: e.id,
-          title: e.title,
-          price: Math.round(
-            coaPrice({ margin: e.margin, price_override: e.price_override, items: e.estimate_items ?? [] })
-          ),
-        })),
-    }))
-    .filter((s) => s.coas.length > 0)
-
-  type EstimateItemRow = { label: string; qty: number; rate: number; notes: string | null; qty_factors: unknown; rate_id: string | null; sort_order: number }
-  const normalizeFactors = (qf: unknown): { f: number[]; l: (string | null)[] } | null => {
-    if (Array.isArray(qf)) return { f: qf.map(Number), l: [] }
-    if (qf && typeof qf === 'object' && Array.isArray((qf as { f?: unknown }).f)) {
-      const o = qf as { f: number[]; l?: (string | null)[] }
-      return { f: o.f.map(Number), l: o.l ?? [] }
-    }
-    return null
-  }
-  let estimatePanels = (estimateRows ?? []).map((e) => ({
-    id: e.id as string | null,
-    title: e.title as string,
-    margin: Number(e.margin),
-    priceOverride: e.price_override === null ? null : Number(e.price_override),
-    items: ((e.estimate_items ?? []) as EstimateItemRow[])
-      .sort((a, b) => a.sort_order - b.sort_order)
-      .map((i) => ({
-        label: i.label,
-        qty: Number(i.qty),
-        rate: Number(i.rate),
-        notes: i.notes,
-        factors: normalizeFactors(i.qty_factors)?.f ?? null,
-        factor_labels: normalizeFactors(i.qty_factors)?.l ?? null,
-        rate_id: i.rate_id,
-      })),
-  }))
-
   const estimateReviews = (estimateReviewRows ?? []) as EstimateReviewRow[]
   // Same people as the reviewers, minus anyone without an address to copy.
   const adminCcOptions = (adminRows ?? [])
@@ -455,36 +364,13 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
     inst.starts_at && inst.ends_at
       ? Math.max(Math.round((Date.parse(inst.ends_at) - Date.parse(inst.starts_at)) / 86_400_000) + 1, 1)
       : null
-  const estimateCounts = { instructors: instructorCount, students: (inst.max_students as number | null) ?? null, days: courseDays }
+
 
   // Pricing exists to quote a client. A course with no students can still have
   // one — a consultation is billable work — so it goes only when there's no
   // client either, and stays regardless if anything was put in it.
   const showPricing =
-    !internal || !!inst.client_name || (estimateRows ?? []).length > 0 || (quoteRows ?? []).length > 0
-
-  // No estimates yet: show a virtual first COA pre-populated with the
-  // always-recurring lines, quantities guessed from the course (nothing
-  // saves until touched).
-  if (estimatePanels.length === 0) {
-    const seedCounts = { instructors: instructorCount, days: courseDays ?? 1, students: (inst.max_students as number | null) ?? null }
-    estimatePanels = [{
-      id: null,
-      title: 'COA 1',
-      margin: 0.25,
-      priceOverride: null,
-      items: (pricingRateRows ?? [])
-        .filter((r) => r.default_line)
-        .map((r) => {
-          const guess = guessSeedQty(r, seedCounts)
-          return { label: r.label, qty: guess.qty, rate: Number(r.rate), notes: null, factors: guess.factors, factor_labels: null, rate_id: r.id as string }
-        }),
-    }]
-  }
-
-  // COAs that exist in the DB — the virtual first COA (id null) can't be
-  // duplicated until it's been touched and saved.
-  const persistedCoas = estimatePanels.filter((e) => e.id !== null)
+    !internal || !!inst.client_name || (estimateCount ?? 0) > 0 || (quoteCount ?? 0) > 0
 
   const courseType = inst.course_type
 
@@ -894,69 +780,13 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
 
         {showPricing && (
         <TabPanel id="estimates">
-          <h2 className="text-lg font-semibold mb-4">Estimates</h2>
-          <p className="text-xs text-zinc-500 mb-4">
-            Internal — never shown to instructors or clients.
-          </p>
-          <EstimateReviewBanner reviews={estimateReviews} admins={reviewAdmins} currentUserId={user.id} subject="estimate" />
-          <div className="space-y-8">
-            {estimatePanels.map((e) => (
-              <EstimatePanel
-                key={e.id ?? `${id}-new`}
-                instanceId={id}
-                estimateId={e.id}
-                initialTitle={e.title}
-                initialMargin={e.margin}
-                initialPriceOverride={e.priceOverride}
-                initialItems={e.items}
-                rates={pricingRates}
-                canDelete={estimatePanels.length > 1}
-                solo={estimatePanels.length === 1}
-                counts={estimateCounts}
-              />
-            ))}
-          </div>
-          {estimatePanels.length > 1 && <CoaComparison coas={estimatePanels} />}
-          <div className="mt-4">
-            <NewCoaMenu
-              instanceId={id}
-              coas={persistedCoas.map((e) => ({ id: e.id!, title: e.title }))}
-              sources={copySources}
-            />
-          </div>
-          <EstimateReviewRequest instanceId={id} reviews={estimateReviews} admins={reviewAdmins} currentUserId={user.id} subject="estimate" />
-
-          <div className="mt-10 pt-8 border-t border-zinc-800">
-          <h2 className="text-lg font-semibold mb-4">Quotes</h2>
-          <div className="flex items-start justify-between gap-3 flex-wrap mb-4">
-            <p className="text-xs text-zinc-500">
-              Marking a quote sent or accepted moves the course to Quoted or Confirmed.
-            </p>
-            <QuoteHeroPicker
-              instanceId={id}
-              choices={heroChoices}
-              currentImage={inst.hero_image ?? null}
-              currentPosition={inst.hero_position ?? null}
-              currentScale={inst.hero_scale ?? null}
-            />
-          </div>
-          <QuotesSection
+          <CoursePricingEditor
             instanceId={id}
-            refNumber={inst.ref_number}
-            quotes={quotes}
-            contactEmail={primaryContactEmail(contacts)}
-            ccOptions={ccEmailOptions(contacts)}
-            adminCcOptions={adminCcOptions}
-            people={quotePeople}
-            estimates={estimatePanels
-              .filter((e) => e.id)
-              .map((e) => ({
-                id: e.id!,
-                title: e.title,
-                price: coaPrice({ margin: e.margin, price_override: e.priceOverride, items: e.items }),
-              }))}
+            course={inst}
+            contacts={contacts}
+            instructorCount={instructorCount}
+            currentUserId={user.id}
           />
-          </div>
         </TabPanel>
         )}
         </CourseTabs>

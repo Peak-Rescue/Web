@@ -15,6 +15,7 @@ import CourseGear from '@/app/admin/courses/CourseGear'
 import CourseDetailsEditor from '@/app/admin/courses/CourseDetailsEditor'
 import CourseStaffingEditor from '@/app/admin/courses/CourseStaffingEditor'
 import CourseStudentsEditor from '@/app/admin/courses/CourseStudentsEditor'
+import CoursePricingEditor from '@/app/admin/courses/CoursePricingEditor'
 import { parseContacts } from '@/lib/contacts'
 import { formatPhone } from '@/lib/phone'
 import { GEAR_ENTRIES_SELECT } from '@/lib/gear'
@@ -235,7 +236,7 @@ export default async function CourseView({
   const [{ data: inst }, { data: offDays }, { data: modules }, { data: instructors }, taskRows, { data: peopleRows }, { data: templateRows }, { data: courseDocRows }, { data: taskDocRows }, { data: mapRows }, { data: resourceRows }, { data: linkRows }, { data: updateRows }, { data: enrollmentRows }, { data: messageRows }] =
     await Promise.all([
       admin.from('course_instances')
-        .select('course_type, custom_title, status, location, client_name, notes, ref_number, starts_at, ends_at, meeting_date, meeting_announced_dates, meeting_point, meeting_time, meeting_links, meeting_attachments, intro, custom_categories, contacts, max_students, instructor_slots, course_category, internal, invite_token, invite_expires_at, venue_id, region, waiver_template_id, waiver_token, waiver_token_expires_at')
+        .select('course_type, custom_title, status, location, client_name, notes, ref_number, starts_at, ends_at, meeting_date, meeting_announced_dates, meeting_point, meeting_time, meeting_links, meeting_attachments, intro, custom_categories, contacts, max_students, instructor_slots, course_category, internal, invite_token, invite_expires_at, hero_image, hero_position, hero_scale, venue_id, region, waiver_template_id, waiver_token, waiver_token_expires_at')
         .eq('id', id)
         .single(),
       admin.from('instance_off_days')
@@ -626,6 +627,19 @@ export default async function CourseView({
     inst.custom_categories as string[] | null
   )
 
+  const [{ count: estimateCount }, { count: quoteCount }] = showAsAdmin
+    ? await Promise.all([
+        admin.from('course_estimates').select('id', { count: 'exact', head: true }).eq('instance_id', id),
+        admin.from('course_quotes').select('id', { count: 'exact', head: true }).eq('instance_id', id),
+      ])
+    : [{ count: 0 }, { count: 0 }]
+  // A course with no students can still be quoted — a consultation is billable
+  // work — so this goes only when there is no client either, and stays
+  // regardless once anything has been put in it.
+  const hasPricing =
+    showAsAdmin &&
+    (!inst.internal || !!inst.client_name || (estimateCount ?? 0) > 0 || (quoteCount ?? 0) > 0)
+
   // What a course *is* — the offering, who asked, who to call, how many. Setup
   // rather than delivery, so it is the admin's to change, and loaded only for
   // them.
@@ -942,10 +956,11 @@ export default async function CourseView({
     hasResources && 'resources',
     hasCurriculum && 'curriculum',
     hasGear && 'gear',
+    hasPricing && 'pricing',
   ].filter(Boolean) as SectionKey[]).map((id) => ({
     id,
     label: SECTION_LABEL[id],
-    team: id === 'tasks',
+    team: id === 'tasks' || id === 'pricing',
     unread: id === 'updates' && unreadUpdates > 0,
   }))
 
@@ -2201,6 +2216,21 @@ export default async function CourseView({
               )
             })}
             </EditInPlace>
+          </Section>
+        )}
+
+        {/* What it costs and what we told the client it costs. Internal in the
+            strongest sense on this page — instructors never see it, and the
+            toggle takes it away rather than dimming it. */}
+        {hasPricing && (
+          <Section id="pricing" team>
+            <CoursePricingEditor
+              instanceId={id}
+              course={inst as unknown as React.ComponentProps<typeof CoursePricingEditor>['course']}
+              contacts={coursePocs}
+              instructorCount={Math.max((instructors ?? []).length, 1)}
+              currentUserId={userId ?? ''}
+            />
           </Section>
         )}
 

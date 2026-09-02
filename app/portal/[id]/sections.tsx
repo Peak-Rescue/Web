@@ -21,8 +21,14 @@ export type SectionKey =
   | 'curriculum'
   | 'gear'
   | 'resources'
+  | 'pricing'
 
 export const SECTION_ICON: Record<SectionKey, React.ReactElement> = {
+  // A price tag. Admins only, and the only section on the page a client's
+  // money is discussed in.
+  pricing: (
+    <path d="M3 3h7l11 11-7 7L3 10V3ZM7.5 7.5h.01" />
+  ),
   // Everything about this delivery and everyone on it: the welcome, where to
   // meet, the crew, the roster.
   details: (
@@ -78,6 +84,7 @@ export const SECTION_LABEL: Record<SectionKey, string> = {
   curriculum: 'Curriculum',
   gear: 'Gear',
   resources: 'Resources',
+  pricing: 'Pricing',
 }
 
 export function Section({
