@@ -108,7 +108,7 @@ export default function CourseResourcesSection({
         <InfoHint text="Students meet these in their own section, apart from the curriculum." />
       </div>
       <p className="text-xs text-zinc-500 mb-3">
-        Med plans, permits, tech notes for this place — instructors-only until you share it.
+        Med plans, permits, tech notes for this place.
       </p>
 
       <div className="bg-zinc-950/40 border border-zinc-800 rounded-lg divide-y divide-zinc-800">

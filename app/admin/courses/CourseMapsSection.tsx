@@ -110,7 +110,7 @@ export default function CourseMapsSection({
     <div className="p-6 pt-5 border-t border-zinc-800">
       <h3 className="text-sm font-semibold text-zinc-300 mb-1">Maps</h3>
       <p className="text-xs text-zinc-500 mb-3">
-        CalTopo, SARTopo, anything with a link — instructors-only until you share it.
+        CalTopo, SARTopo, anything with a link.
       </p>
 
       <div className="bg-zinc-950/40 border border-zinc-800 rounded-lg divide-y divide-zinc-800">

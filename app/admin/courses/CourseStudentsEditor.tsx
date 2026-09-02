@@ -36,10 +36,6 @@ export default async function CourseStudentsEditor({
 
   return (
     <div>
-      <p className="text-xs text-zinc-500 mb-4">
-        Share the invite link below — students enroll themselves.
-      </p>
-
       {enrollments.length > 0 && (
         <div className="mb-4 space-y-2">
           {enrollments.map((e) => {

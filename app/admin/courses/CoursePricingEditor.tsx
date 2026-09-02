@@ -201,10 +201,6 @@ export default async function CoursePricingEditor({
 
   return (
     <div>
-      <h2 className="text-lg font-semibold mb-4">Estimates</h2>
-      <p className="text-xs text-zinc-500 mb-4">
-        Internal — never shown to instructors or clients.
-      </p>
       <EstimateReviewBanner reviews={estimateReviews} admins={reviewAdmins} currentUserId={currentUserId} subject="estimate" />
       <div className="space-y-8">
         {estimatePanels.map((e) => (

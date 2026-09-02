@@ -18,6 +18,8 @@ import CloseButton from '@/components/CloseButton'
 export default function EditInPlace({
   label,
   title,
+  note,
+  badge,
   editor,
   children,
 }: {
@@ -26,8 +28,17 @@ export default function EditInPlace({
   /** Names the block, and gives the button something to sit on. Without it the
       button is a right-aligned row of its own floating above the content,
       which is how "Edit maps" ended up hanging under the WHERE card attached
-      to nothing. */
+      to nothing.
+
+      This is the same header a SubHead draws, deliberately: a block that had
+      its own SubHead and an EditInPlace above it showed two headers, an orphan
+      button over a title, with nothing saying they belonged together. One
+      header, and the button lives on it. */
   title?: string
+  /** The live fact beside the name — "0 of 20 places taken". */
+  note?: string
+  /** Who the block is for, in the pills used everywhere else. */
+  badge?: React.ReactNode
   /** Built on the server, so its code only reaches the people who can open it
       and a student gets no button either. */
   editor: ReactNode
@@ -40,8 +51,11 @@ export default function EditInPlace({
 
   return (
     <>
-      <div className={`flex items-center gap-2 mb-2 ${title ? '' : 'justify-end'}`}>
-        {title && <h3 className="text-sm font-semibold text-zinc-200 mr-auto">{title}</h3>}
+      <div className={`flex items-baseline gap-2 mb-2 ${title ? '' : 'justify-end'}`}>
+        {title && <h3 className="text-sm font-semibold text-zinc-200">{title}</h3>}
+        {note && <span className="text-xs text-zinc-500">{note}</span>}
+        {badge}
+        {title && <span className="ml-auto" />}
         {editing ? (
           <CloseButton
             label="Done editing"

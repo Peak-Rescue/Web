@@ -71,9 +71,6 @@ export default function CourseWaiverSection({
   return (
     <div className="p-6 pt-5 border-t border-zinc-800">
       <h3 className="text-sm font-semibold text-zinc-300 mb-1">Waiver</h3>
-      <p className="text-xs text-zinc-500 mb-3">
-        Students sign it on their course page. Nobody is asked until one is chosen here.
-      </p>
 
       {error && <p className="text-xs text-pr-red mb-2">{error}</p>}
 
@@ -104,7 +101,7 @@ export default function CourseWaiverSection({
 
           {roster.length === 0 ? (
             <p className="text-xs text-zinc-500">
-              Nobody is enrolled yet — the waiver appears on each student’s course page as they join.
+              Nobody enrolled yet.
             </p>
           ) : (
             <div className="bg-zinc-950/40 border border-zinc-800 rounded-lg divide-y divide-zinc-800">

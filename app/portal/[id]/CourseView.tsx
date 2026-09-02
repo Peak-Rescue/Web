@@ -1046,7 +1046,7 @@ export default async function CourseView({
   ].filter(Boolean) as SectionKey[]).map((id) => ({
     id,
     label: SECTION_LABEL[id],
-    team: id === 'tasks' || id === 'pricing',
+    team: id === 'tasks',
     unread: id === 'updates' && unreadUpdates > 0,
   }))
 
@@ -1300,6 +1300,13 @@ export default async function CourseView({
               {hasRoster && (
                 <EditInPlace
                   label="Edit students"
+                  title="Students"
+                  note={
+                    inst.max_students
+                      ? `${enrolledCount} of ${inst.max_students} places taken`
+                      : `${enrolledCount} enrolled`
+                  }
+                  badge={<AudiencePills audience="internal" />}
                   editor={
                     showAsAdmin ? (
                       <CourseStudentsEditor
@@ -1312,15 +1319,6 @@ export default async function CourseView({
                   }
                 >
                 <div>
-                  <SubHead
-                    title="Students"
-                    note={
-                      inst.max_students
-                        ? `${enrolledCount} of ${inst.max_students} places taken`
-                        : `${enrolledCount} enrolled`
-                    }
-                    badge={<AudiencePills audience="internal" />}
-                  />
                   {roster.length > 0 ? (
                     <div className="grid sm:grid-cols-2 gap-2">
                       {roster.map((student) => (
@@ -2336,7 +2334,7 @@ export default async function CourseView({
             strongest sense on this page — instructors never see it, and the
             toggle takes it away rather than dimming it. */}
         {hasPricing && (
-          <Section id="pricing" team>
+          <Section id="pricing" blurb="Admins only — not shown to instructors or clients">
             <CoursePricingEditor
               instanceId={id}
               course={inst as unknown as React.ComponentProps<typeof CoursePricingEditor>['course']}
