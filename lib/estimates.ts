@@ -82,10 +82,13 @@ function isJudgmentLine(label: string): boolean {
 // details never got.
 export function factorValue(name: string, label: string, counts: FactorCounts): number | null {
   const n = name.trim().toLowerCase()
-  // "per person" is staff — flights, day rates. Anything covering the whole
-  // group says participants, because a rate that means everyone must not be
-  // able to quietly price the instructors alone.
-  if (n.startsWith('instructor') || n.startsWith('person') || n.startsWith('people')) return counts.instructors || null
+  // The library says instructor, student or participant — never "person",
+  // which read as staff to the code and as everybody to the person adding a
+  // rate. "person" is still understood, for lines written before the rename
+  // and for factor names typed by hand, and still means staff.
+  if (n.startsWith('instructor') || n.startsWith('person') || n.startsWith('people') || n.startsWith('staff')) {
+    return counts.instructors || null
+  }
   if (n.startsWith('participant') || n.startsWith('attendee')) {
     return counts.students === null ? null : counts.instructors + counts.students
   }
