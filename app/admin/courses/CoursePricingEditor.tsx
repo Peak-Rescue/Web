@@ -40,8 +40,9 @@ export default async function CoursePricingEditor({
     hero_scale: string | number | null
   }
   contacts: CoursePOC[]
-  /** At least one, because a course with nobody staffed still costs a day of
-      somebody's time to quote. */
+  /** Instructor slots from the course details — what the course is planned to
+      need, not who is assigned yet. At least one, because a course with nobody
+      on it still costs a day of somebody's time to quote. */
   instructorCount: number
   currentUserId: string
 }) {

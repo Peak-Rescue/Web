@@ -16,6 +16,13 @@ import CourseDetailsEditor from '@/app/admin/courses/CourseDetailsEditor'
 import CourseStaffingEditor from '@/app/admin/courses/CourseStaffingEditor'
 import CourseStudentsEditor from '@/app/admin/courses/CourseStudentsEditor'
 import CoursePricingEditor from '@/app/admin/courses/CoursePricingEditor'
+import CreateSchedule from './CreateSchedule'
+import GearOrderPanel from '@/app/admin/courses/GearOrderPanel'
+import { type GearOrder } from '@/lib/gear-orders'
+import DeleteInstanceButton from '@/app/admin/courses/DeleteInstanceButton'
+import WaiverTemplatePicker from './WaiverTemplatePicker'
+import { listWaiverTemplates } from '@/app/admin/courses/waiver-actions'
+import { plannedInstructorCount } from '@/lib/estimates'
 import { parseContacts } from '@/lib/contacts'
 import { formatPhone } from '@/lib/phone'
 import { GEAR_ENTRIES_SELECT } from '@/lib/gear'
@@ -389,6 +396,20 @@ export default async function CourseView({
           .order('name'),
       ])
     : Promise.resolve([{ data: null }, { data: null }] as const)
+
+  // The shelf's schedules, for starting a course's running order from one.
+  // Loaded whenever staff can see the section, including when it is empty —
+  // which is the only moment they are any use.
+  const { data: schedShelfRows } = showTasks
+    ? await admin.from('course_schedules')
+        .select('id, name, description, course_type, schedule_days(id)')
+        .eq('is_template', true)
+    : { data: null }
+  const scheduleShelf = ((schedShelfRows ?? []) as unknown as {
+    id: string; name: string; description: string | null; course_type: string | null; schedule_days: unknown[]
+  }[])
+    .sort((a, b) => Number(b.course_type === inst.course_type) - Number(a.course_type === inst.course_type))
+    .map((t) => ({ id: t.id, name: t.name, description: t.description, days: t.schedule_days.length }))
   // Who has signed, for the staff roster. Read only when staff are looking and
   // only when the course actually has a waiver to sign — a column of "not
   // signed" on a course that never asked for one is a false alarm.
@@ -627,6 +648,32 @@ export default async function CourseView({
     inst.custom_categories as string[] | null
   )
 
+  const { count: expenseCount } = showAsAdmin
+    ? await admin.from('expense_items').select('id', { count: 'exact', head: true }).eq('instance_id', id)
+    : { count: 0 }
+
+  const [{ data: gearOrderRows }, { data: ccAdminRows }] = showAsAdmin
+    ? await Promise.all([
+        admin.from('gear_orders')
+          .select('id, instance_id, list_id, es_quote_number, status, accept_token, intro, sent_at, viewed_at, responded_at, responded_name, responded_title, client_note, gear_order_lines(id, entry_id, name, detail, category, qty_offered, qty_wanted, removed, client_note, admin_note, sort_order)')
+          .eq('instance_id', id)
+          .order('created_at', { ascending: false }),
+        admin.from('profiles').select('id, first_name, last_name, email').eq('role', 'admin').order('first_name'),
+      ])
+    : [{ data: null }, { data: null }]
+  const gearOrders = (gearOrderRows ?? []) as unknown as GearOrder[]
+  const adminCcOptions = ((ccAdminRows ?? []) as { id: string; first_name: string | null; last_name: string | null; email: string | null }[])
+    .filter((a) => Boolean(a.email))
+    .map((a) => ({
+      id: a.id,
+      name: [a.first_name, a.last_name].filter(Boolean).join(' ') || (a.email as string),
+      email: a.email as string,
+    }))
+
+  // Which waivers exist to choose from. Admins only — it decides what every
+  // student on the course is asked to sign.
+  const waiverTemplates = showAsAdmin ? await listWaiverTemplates() : []
+
   const [{ count: estimateCount }, { count: quoteCount }] = showAsAdmin
     ? await Promise.all([
         admin.from('course_estimates').select('id', { count: 'exact', head: true }).eq('instance_id', id),
@@ -757,6 +804,10 @@ export default async function CourseView({
   // place they can fix it.
   const meeting = await meetingPromise
   const hasSchedule = Boolean(sched && schedDays.length > 0)
+  // Staff see the section whether or not there is a schedule in it: a course
+  // created this morning is exactly the one that needs a running order, and it
+  // was the one course you could not start one for from here.
+  const showSchedule = hasSchedule || showTasks
   // Staff get it whether or not anything is in it: this is where the first
   // section gets added, and a section that appears only once it has contents
   // is one nobody can put contents into.
@@ -945,10 +996,15 @@ export default async function CourseView({
   )
 
 
+  // An admin sees the section whether or not a waiver is set — choosing one
+  // is the point, and nobody is asked to sign anything until they do, so an
+  // unset waiver is a silent nothing rather than a visible gap.
+  const showWaiver = Boolean(waiver) || showAsAdmin
+
   const navSections = ([
     'details',
     hasUpdates && 'updates',
-    waiver && 'waiver',
+    showWaiver && 'waiver',
     // The only block left that is team-only end to end. The rest of what staff
     // see is a block inside a section students also read.
     hasTasks && 'tasks',
@@ -1372,22 +1428,45 @@ export default async function CourseView({
             rather than down with the reference material because it is the only
             thing on this page a student is asked to *do*, and an unsigned one
             found on the morning of day one is everybody's problem. */}
-        {waiver && (
+        {showWaiver && (
           <Section
             id="waiver"
             blurb={
-              waiver.signed
-                ? 'Signed — your copy of the agreement'
-                : 'Please read and sign before the course starts'
+              waiver
+                ? waiver.signed
+                  ? 'Signed — your copy of the agreement'
+                  : 'Please read and sign before the course starts'
+                : undefined
             }
           >
-            <WaiverPanel
-              instanceId={id}
-              body={waiver.version.body}
-              templateName={waiver.version.templateName}
-              prefill={waiver.prefill}
-              signed={waiver.signed}
-            />
+            {showAsAdmin && (
+              <EditInPlace
+                label="Choose waiver"
+                title="Waiver"
+                editor={
+                  <WaiverTemplatePicker
+                    instanceId={id}
+                    templates={waiverTemplates}
+                    selectedId={(inst.waiver_template_id as string | null) ?? null}
+                  />
+                }
+              >
+                {!inst.waiver_template_id && (
+                  <p className="text-xs text-zinc-600">
+                    No waiver on this course — nobody will be asked to sign anything.
+                  </p>
+                )}
+              </EditInPlace>
+            )}
+            {waiver && (
+              <WaiverPanel
+                instanceId={id}
+                body={waiver.version.body}
+                templateName={waiver.version.templateName}
+                prefill={waiver.prefill}
+                signed={waiver.signed}
+              />
+            )}
           </Section>
         )}
 
@@ -1413,11 +1492,33 @@ export default async function CourseView({
         )}
 
         {/* Running order */}
-        {hasSchedule && (
+        {showSchedule && (
           <Section
             id="schedule"
-            action={<PdfLink href={`/api/schedules/${sched.id}/pdf`} />}
+            action={sched ? <PdfLink href={`/api/schedules/${sched.id}/pdf`} /> : undefined}
           >
+            {hasSchedule && canEditSchedule && (
+              <div className="flex justify-end -mt-2 mb-2">
+                <CreateSchedule
+                  instanceId={id}
+                  courseType={inst.course_type as string | null}
+                  courseDays={0}
+                  templates={[]}
+                  existingScheduleId={sched.id}
+                />
+              </div>
+            )}
+            {!hasSchedule ? (
+              <CreateSchedule
+                instanceId={id}
+                courseType={inst.course_type as string | null}
+                courseDays={blocks.reduce((n, b) => n + Math.round(
+                  (Date.parse(b.ends_at) - Date.parse(b.starts_at)) / 86_400_000
+                ) + 1, 0)}
+                templates={scheduleShelf}
+              />
+            ) : (
+            <>
             {/* What the course is, before the days it happens on. Editable
                 here because this is where it is read — and because an empty
                 overview is invisible, so a way in that lives on another screen
@@ -1766,6 +1867,8 @@ export default async function CourseView({
               <div className="mt-3">
                 <AddScheduleDay scheduleId={sched.id} />
               </div>
+            )}
+            </>
             )}
           </Section>
         )}
@@ -2216,6 +2319,19 @@ export default async function CourseView({
               )
             })}
             </EditInPlace>
+
+            {/* What we ask the client to supply, off the back of that list.
+                Admin-only for the same reason the list is. */}
+            {showAsAdmin && (
+              <div className="mt-8 pt-6 border-t border-zinc-800">
+                <GearOrderPanel
+                  instanceId={id}
+                  orders={gearOrders}
+                  adminCcOptions={adminCcOptions}
+                  lists={gearAll.map((l) => ({ id: l.id, name: l.name, audience: l.audience }))}
+                />
+              </div>
+            )}
           </Section>
         )}
 
@@ -2228,13 +2344,30 @@ export default async function CourseView({
               instanceId={id}
               course={inst as unknown as React.ComponentProps<typeof CoursePricingEditor>['course']}
               contacts={coursePocs}
-              instructorCount={Math.max((instructors ?? []).length, 1)}
+              instructorCount={plannedInstructorCount(inst, (instructors ?? []).length)}
               currentUserId={userId ?? ''}
             />
           </Section>
         )}
 
         {/* Details is always there, so emptiness is about the sections below it. */}
+                {showAsAdmin && (
+          <div className="mt-16 pt-8 border-t border-zinc-800 flex items-center justify-between gap-4">
+            <div>
+              <p className="text-sm font-medium text-zinc-400">Delete course</p>
+              <p className="text-xs text-zinc-600 mt-0.5">
+                Removes this course instance, its schedule, materials, and enrollments. Cannot be undone.
+              </p>
+            </div>
+            <DeleteInstanceButton
+              instanceId={id}
+              displayName={courseDisplayName(inst.course_type, inst.custom_title)}
+              enrollmentCount={enrolledCount}
+              expenseCount={expenseCount ?? 0}
+            />
+          </div>
+        )}
+
         {navSections.length === 1 && (
           <p className="text-zinc-500 text-sm">Nothing has been added to this course yet — check back soon.</p>
         )}

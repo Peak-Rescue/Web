@@ -19,7 +19,7 @@ import CoaComparison from '../CoaComparison'
 import QuoteHeroPicker from '../QuoteHeroPicker'
 import { HERO_CHOICES } from '@/lib/quote-heroes'
 import NewCoaMenu, { type CopySource } from '../NewCoaMenu'
-import { guessSeedQty, coaPrice } from '@/lib/estimates'
+import { guessSeedQty, coaPrice, plannedInstructorCount } from '@/lib/estimates'
 import { EstimateReviewBanner, EstimateReviewRequest, type EstimateReviewRow } from '../EstimateReviewBar'
 import GearOrderPanel from '../GearOrderPanel'
 import { type GearOrder } from '@/lib/gear-orders'
@@ -359,7 +359,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
     name: [a.first_name, a.last_name].filter(Boolean).join(' ') || a.email || 'Admin',
   }))
 
-  const instructorCount = Math.max((assigned ?? []).length, 1)
+  const instructorCount = plannedInstructorCount(inst, (assigned ?? []).length)
   const courseDays =
     inst.starts_at && inst.ends_at
       ? Math.max(Math.round((Date.parse(inst.ends_at) - Date.parse(inst.starts_at)) / 86_400_000) + 1, 1)
