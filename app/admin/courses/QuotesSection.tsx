@@ -56,6 +56,7 @@ export default function QuotesSection({
   adminCcOptions,
   people,
   estimates,
+  heroPicker,
 }: {
   instanceId: string
   refNumber: number
@@ -67,6 +68,10 @@ export default function QuotesSection({
   adminCcOptions: { id: string; name: string; email: string }[]
   people: QuotePerson[]
   estimates: { id: string; title: string; price: number }[]
+  /** The photo the quote page will use. It sits on this row because that is
+      the row that makes a quote — a picture chosen somewhere else is a setting
+      you do not know applies until you have already sent one. */
+  heroPicker?: React.ReactNode
 }) {
   // Current price of every COA on the course, for the "update from estimate"
   // buttons on draft quotes.
@@ -89,6 +94,7 @@ export default function QuotesSection({
         <button className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded text-sm font-medium transition-colors">
           New quote from {estimates.length > 1 ? 'selection' : 'estimate'}
         </button>
+        {heroPicker && <div className="ml-auto">{heroPicker}</div>}
       </form>
 
       <div className="space-y-3">

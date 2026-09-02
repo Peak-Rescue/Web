@@ -814,6 +814,11 @@ export default async function CourseView({
   // is one nobody can put contents into.
   const hasCurriculum = orderedModules.length > 0 || showTasks
   const hasGear = Boolean(gearList && gearList.gear_list_entries.length > 0)
+  // An admin gets the section with no list in it, because that is where the
+  // first one is made. Same trap the schedule and the waiver had: a course
+  // created this morning has none of these, and a section that only appears
+  // once it has contents is one nobody can put contents into.
+  const showGear = hasGear || showAsAdmin
   // Staff get the section whether or not anything is in it: it is where the
   // first resource and the first file get added, and a section that appears
   // only once it has contents is one nobody can put contents into.
@@ -2206,8 +2211,12 @@ export default async function CourseView({
         )}
 
         {/* Gear */}
-        {hasGear && gearList && (
-          <Section id="gear" blurb={gearList.name} action={<PdfLink href={`/api/gear-lists/${gearList.id}/pdf`} />}>
+        {showGear && (
+          <Section
+            id="gear"
+            blurb={gearList?.name}
+            action={gearList ? <PdfLink href={`/api/gear-lists/${gearList.id}/pdf`} /> : undefined}
+          >
             {/* Admin-only, unlike every other editor on this page: assembling
                 a gear list is not something an instructor was ever meant to
                 deal with, and the toggle should show that by taking it away. */}
@@ -2227,8 +2236,11 @@ export default async function CourseView({
                 ) : null
               }
             >
-            {gearList.intro && <p className="text-sm text-zinc-400 mb-3 whitespace-pre-line">{gearList.intro}</p>}
-            {(['personal', 'group'] as const).map((gt) => {
+            {gearList?.intro && <p className="text-sm text-zinc-400 mb-3 whitespace-pre-line">{gearList.intro}</p>}
+            {!gearList && showAsAdmin && (
+              <p className="text-xs text-zinc-600">No gear list on this course yet.</p>
+            )}
+            {gearList && (['personal', 'group'] as const).map((gt) => {
               const rows = gearList.gear_list_entries
                 .filter((e) => e.group_type === gt)
                 .sort((a, b) => a.sort_order - b.sort_order)

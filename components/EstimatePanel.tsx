@@ -575,7 +575,7 @@ export default function EstimatePanel({
                 />
               </div>
               <div className="flex items-start gap-2 ml-auto">
-                <div className="flex flex-col items-center">
+                <div className="flex flex-col items-center w-20 shrink-0">
                   <input
                     type="number"
                     value={r.qty}
@@ -587,15 +587,15 @@ export default function EstimatePanel({
                     title={qtyFactors(r) ? `Quantity = ${qtyFactors(r)}` : 'Quantity'}
                   />
                   {r.qty.trim() === '' ? (
-                    <span className="mt-0.5 text-[10px] text-amber-500/80 whitespace-nowrap">needs a number</span>
+                    <span className="mt-0.5 text-[10px] text-amber-500/80 text-center leading-tight">needs a number</span>
                   ) : (
                     qtyHint(r) && (
-                      <span className="mt-0.5 text-[10px] text-zinc-600 whitespace-nowrap">{qtyHint(r)}</span>
+                      <span className="mt-0.5 text-[10px] text-zinc-600 text-center leading-tight">{qtyHint(r)}</span>
                     )
                   )}
                 </div>
-                <span className="text-zinc-600 text-xs mt-2.5">×&nbsp;&nbsp;$</span>
-                <div className="flex flex-col items-center">
+                <span className="text-zinc-600 text-xs mt-2.5 shrink-0">×&nbsp;&nbsp;$</span>
+                <div className="flex flex-col items-center w-24 shrink-0">
                   <input
                     type="number"
                     value={r.rate}
@@ -605,7 +605,7 @@ export default function EstimatePanel({
                     className={`${inputCls} w-24 text-right`}
                     title={rateUnit(r) ? `Dollars ${rateUnit(r)}` : 'Dollar rate'}
                   />
-                  <span className="mt-0.5 text-[10px] text-zinc-600 whitespace-nowrap">
+                  <span className="mt-0.5 text-[10px] text-zinc-600 text-center leading-tight">
                     {rateUnit(r) ?? 'dollars'}
                   </span>
                 </div>

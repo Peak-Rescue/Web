@@ -231,18 +231,9 @@ export default async function CoursePricingEditor({
 
       <div className="mt-10 pt-8 border-t border-zinc-800">
       <h2 className="text-lg font-semibold mb-4">Quotes</h2>
-      <div className="flex items-start justify-between gap-3 flex-wrap mb-4">
-        <p className="text-xs text-zinc-500">
-          Marking a quote sent or accepted moves the course to Quoted or Confirmed.
-        </p>
-        <QuoteHeroPicker
-          instanceId={instanceId}
-          choices={heroChoices}
-          currentImage={course.hero_image ?? null}
-          currentPosition={course.hero_position ?? null}
-          currentScale={course.hero_scale === null || course.hero_scale === undefined ? null : String(course.hero_scale)}
-        />
-      </div>
+      <p className="text-xs text-zinc-500 mb-4">
+        Marking a quote sent or accepted moves the course to Quoted or Confirmed.
+      </p>
       <QuotesSection
         instanceId={instanceId}
         refNumber={course.ref_number}
