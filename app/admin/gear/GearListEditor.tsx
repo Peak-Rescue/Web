@@ -1601,9 +1601,9 @@ function SaveToShelf({
           if (name) run(() => copyGearList(list.id, { isTemplate: true, name, courseType }))
         }}
         disabled={busy}
-        className="text-zinc-400 hover:text-white transition-colors disabled:opacity-40"
+        className="px-3 py-1.5 rounded border border-zinc-700 text-zinc-300 hover:text-white hover:border-zinc-500 transition-colors disabled:opacity-40"
       >
-        Save as a new template
+        + Save as a new template
       </button>
 
       {same.length > 0 && (
