@@ -289,7 +289,17 @@ export async function editCourseUpdate(
 
   const { error } = await admin
     .from('course_updates')
-    .update({ body: text, links, attachments, audience: cleanAudience(input.audience), updated_at: new Date().toISOString() })
+    // Only what the caller actually sent. Every field here is optional in the
+    // signature, and writing them regardless meant an edit that omitted the
+    // audience reset it to everyone — turning a crew-only note into one the
+    // students can read, silently, on a save that was about the wording.
+    .update({
+      body: text,
+      ...(input.links !== undefined ? { links } : {}),
+      ...(input.attachments !== undefined ? { attachments } : {}),
+      ...(input.audience !== undefined ? { audience: cleanAudience(input.audience) } : {}),
+      updated_at: new Date().toISOString(),
+    })
     .eq('id', updateId)
     .eq('instance_id', instanceId)
   if (error) throw new Error(error.message)
