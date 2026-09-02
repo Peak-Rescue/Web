@@ -10,18 +10,27 @@
 // catches that for good; this cap is what keeps the bubble readable rather
 // than merely clipped.
 //
+// `caution` swaps the neutral 'i' for an amber warning triangle, for a hint
+// attached to something that is off rather than merely worth explaining.
+//
 // `below` opens it downward instead. The default upward bubble reaches into
 // whatever sits above — on the course page that is the sticky tab bar, which
 // paints over it — so anything near the top of a screen asks for `below`.
-export default function InfoHint({ text, below }: { text: string; below?: boolean }) {
+import { CautionIcon } from '@/components/TaskIcons'
+
+export default function InfoHint({ text, below, caution }: { text: string; below?: boolean; caution?: boolean }) {
   return (
     <span className="relative inline-flex group align-middle">
       <button
         type="button"
         aria-label={text}
-        className="w-4 h-4 rounded-full border border-zinc-600 text-zinc-500 text-[10px] font-medium leading-none flex items-center justify-center transition-colors hover:text-zinc-200 hover:border-zinc-400 focus:outline-none focus-visible:ring-1 focus-visible:ring-zinc-400"
+        className={
+          caution
+            ? 'text-amber-500/80 flex items-center justify-center transition-colors hover:text-amber-300 focus:outline-none focus-visible:ring-1 focus-visible:ring-amber-400 rounded'
+            : 'w-4 h-4 rounded-full border border-zinc-600 text-zinc-500 text-[10px] font-medium leading-none flex items-center justify-center transition-colors hover:text-zinc-200 hover:border-zinc-400 focus:outline-none focus-visible:ring-1 focus-visible:ring-zinc-400'
+        }
       >
-        i
+        {caution ? <CautionIcon /> : 'i'}
       </button>
       <span
         role="tooltip"

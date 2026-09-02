@@ -459,6 +459,7 @@ export default function EstimatePanel({
       {driftedRows.length > 0 && (
         <div className="mb-1.5 text-[11px]">
           <div className="flex items-center gap-2 flex-wrap text-zinc-500">
+            <InfoHint below caution text="Lines whose quantity was built from the course's instructors, students or days, and no longer matches Details. Updating recomputes the quantity; rates and notes stay put." />
             <button
               onClick={() => setDriftOpen((o) => !o)}
               className="text-amber-500/80 hover:text-amber-300 transition-colors"
@@ -467,7 +468,6 @@ export default function EstimatePanel({
               {driftedRows.length} line{driftedRows.length === 1 ? '' : 's'} {driftedRows.length === 1 ? 'uses' : 'use'} older numbers
             </button>
             {countSummary && <span className="text-zinc-600">course is now {countSummary}</span>}
-            <InfoHint below text="Lines whose quantity was built from the course's instructors, students or days, and no longer matches Details. Updating recomputes the quantity; rates and notes stay put." />
             <button
               onClick={() => syncRows(driftedRows.map((d) => d.row.key))}
               className="text-zinc-500 hover:text-white underline underline-offset-2 transition-colors"
