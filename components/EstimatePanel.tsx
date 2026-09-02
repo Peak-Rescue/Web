@@ -9,6 +9,7 @@ import { useRouter } from 'next/navigation'
 import { CalculatorIcon, NotesIcon } from '@/components/TaskIcons'
 import { useUnsavedGuard, withSaveTimeout } from '@/components/useUnsavedGuard'
 import TrashIcon from '@/components/TrashIcon'
+import InfoHint from '@/components/InfoHint'
 
 export type PricingRate = { id: string; label: string; unit: string | null; rate: number }
 
@@ -89,6 +90,7 @@ export default function EstimatePanel({
     () => new Set(initialItems.map((i, idx) => (i.notes ? idx : -1)).filter((k) => k >= 0))
   )
   const [calcOpen, setCalcOpen] = useState<Set<number>>(new Set())
+  const [driftOpen, setDriftOpen] = useState(false)
   const [margin, setMargin] = useState(initialMargin)
   // Held as a string so the field can be empty — empty means "no override,
   // use the calculated price", which is different from an override of $0.
@@ -207,6 +209,42 @@ export default function EstimatePanel({
     const n = name.toLowerCase()
     if ((n.startsWith('day') || n.startsWith('night')) && !isDurationDriven(rateLabel)) return 2 // out + back
     return countForFactor(name, rateLabel) ?? 1
+  }
+
+  // A factor that was built from a course number and no longer matches it.
+  // Only lines whose quantity is an explicit breakdown (or a single-dimension
+  // rate, where the qty *is* the count) can drift — a hand-typed qty on a
+  // multi-factor rate says nothing about how it was arrived at, so it is left
+  // alone rather than guessed at.
+  type Drift = { idx: number; name: string; current: number; expected: number }
+  function rowDrifts(r: Row): Drift[] {
+    const libLabels = factorLabels(r)
+    if (r.factors === null && libLabels.length !== 1) return []
+    const factors = rowFactors(r)
+    return factors.flatMap((f, i) => {
+      const name = (libLabels[i] ?? r.flabels[i] ?? '').trim()
+      if (!name) return []
+      const expected = countForFactor(name, r.label)
+      const current = f.trim() === '' ? 1 : Number(f) || 0
+      return expected !== null && expected !== current ? [{ idx: i, name, current, expected }] : []
+    })
+  }
+
+  // Pull the named factors up to the course's current numbers and recompute
+  // the quantity from the breakdown. Everything else on the line — the rate,
+  // the notes, factors nobody can derive — is untouched.
+  function syncRow(r: Row): Row {
+    const drifts = rowDrifts(r)
+    if (drifts.length === 0) return r
+    const next = [...rowFactors(r)]
+    for (const d of drifts) next[d.idx] = String(d.expected)
+    const product = next.reduce((p, f) => p * (f.trim() === '' ? 1 : Number(f) || 0), 1)
+    return { ...r, factors: next.length >= 2 ? next : null, qty: String(round2(product)) }
+  }
+
+  function syncRows(keys: number[]) {
+    const wanted = new Set(keys)
+    schedule(rows.map((r) => (wanted.has(r.key) ? syncRow(r) : r)), margin)
   }
 
   function addFromLibrary(rateId: string) {
@@ -348,6 +386,15 @@ export default function EstimatePanel({
     return qtyFactors(r)
   }
 
+  // Lines still carrying the numbers the course had when they were written.
+  const driftedRows = rows.map((r) => ({ row: r, drifts: rowDrifts(r) })).filter((d) => d.drifts.length > 0)
+  const driftsByKey = new Map(driftedRows.map((d) => [d.row.key, d.drifts]))
+  const countSummary = [
+    counts.instructors ? `${counts.instructors} instructor${counts.instructors === 1 ? '' : 's'}` : null,
+    counts.students ? `${counts.students} student${counts.students === 1 ? '' : 's'}` : null,
+    counts.days ? `${counts.days} day${counts.days === 1 ? '' : 's'}` : null,
+  ].filter(Boolean).join(' · ')
+
   const subtotal = round2(rows.reduce((s, r) => s + (Number(r.qty) || 0) * (Number(r.rate) || 0), 0))
   const marginAmount = round2(subtotal * margin)
   const calculated = round2(subtotal + marginAmount)
@@ -409,6 +456,47 @@ export default function EstimatePanel({
         </div>
       </div>
 
+      {driftedRows.length > 0 && (
+        <div className="mb-1.5 text-[11px]">
+          <div className="flex items-center gap-2 flex-wrap text-zinc-500">
+            <button
+              onClick={() => setDriftOpen((o) => !o)}
+              className="text-amber-500/80 hover:text-amber-300 transition-colors"
+              title="Which lines, and what would change"
+            >
+              {driftedRows.length} line{driftedRows.length === 1 ? '' : 's'} {driftedRows.length === 1 ? 'uses' : 'use'} older numbers
+            </button>
+            {countSummary && <span className="text-zinc-600">course is now {countSummary}</span>}
+            <InfoHint text="Quantities built from the course's own numbers — instructors, students, days — that no longer match the details. Updating recomputes those quantities and leaves rates and notes alone. Travel days, and quantities typed straight into a multi-step calculation, never count as out of date." />
+            <button
+              onClick={() => syncRows(driftedRows.map((d) => d.row.key))}
+              className="text-zinc-500 hover:text-white underline underline-offset-2 transition-colors"
+            >
+              Update all
+            </button>
+          </div>
+          {driftOpen && (
+            <ul className="mt-1 ml-0.5 space-y-0.5 border-l border-zinc-800 pl-2">
+              {driftedRows.map(({ row, drifts }) => (
+                <li key={row.key} className="flex items-center justify-between gap-3 text-zinc-500">
+                  <span className="min-w-0 truncate">
+                    <span className="text-zinc-400">{row.label || 'Untitled line'}</span>
+                    {' — '}
+                    {drifts.map((d) => `${d.name} ${d.current} → ${d.expected}`).join(', ')}
+                  </span>
+                  <button
+                    onClick={() => syncRows([row.key])}
+                    className="shrink-0 underline underline-offset-2 hover:text-white transition-colors"
+                  >
+                    Update
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
       <div className="bg-zinc-900 rounded-lg border border-zinc-800">
         <div className="divide-y divide-zinc-800">
           {rows.map((r) => (
@@ -424,8 +512,18 @@ export default function EstimatePanel({
                 </button>
                 <button
                   onClick={() => toggleCalc(r.key)}
-                  title="Quantity calculator — build qty from people × days × units"
-                  className={`shrink-0 transition-colors ${r.factors || calcOpen.has(r.key) ? 'text-zinc-300 hover:text-white' : 'text-zinc-600 hover:text-zinc-400'}`}
+                  title={
+                    driftsByKey.has(r.key)
+                      ? `Built from older course numbers — ${driftsByKey.get(r.key)!.map((d) => `${d.name} ${d.current} → ${d.expected}`).join(', ')}`
+                      : 'Quantity calculator — build qty from people × days × units'
+                  }
+                  className={`shrink-0 transition-colors ${
+                    driftsByKey.has(r.key)
+                      ? 'text-amber-400 hover:text-amber-300'
+                      : r.factors || calcOpen.has(r.key)
+                        ? 'text-zinc-300 hover:text-white'
+                        : 'text-zinc-600 hover:text-zinc-400'
+                  }`}
                 >
                   <CalculatorIcon />
                 </button>
@@ -487,8 +585,20 @@ export default function EstimatePanel({
                         min="0"
                         step="0.5"
                         onChange={(e) => setFactor(r.key, i, e.target.value)}
-                        className={`${inputCls} w-16 text-right`}
+                        className={`${inputCls} w-16 text-right ${
+                          driftsByKey.get(r.key)?.some((d) => d.idx === i) ? 'border-amber-600' : ''
+                        }`}
                       />
+                      {driftsByKey.get(r.key)?.filter((d) => d.idx === i).map((d) => (
+                        <button
+                          key={d.idx}
+                          onClick={() => setFactor(r.key, i, String(d.expected))}
+                          title={`The course now has ${d.expected} ${d.name}`}
+                          className="mt-0.5 text-[10px] text-amber-400 hover:text-amber-200 transition-colors"
+                        >
+                          → {d.expected}
+                        </button>
+                      ))}
                       {factorLabels(r)[i] ? (
                         <span className="mt-0.5 text-[10px] text-zinc-600">{factorLabels(r)[i]}</span>
                       ) : (
