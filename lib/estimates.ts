@@ -49,6 +49,19 @@ export function plannedInstructorCount(
 // Word tests instead of exact labels keep the rules working when rates are
 // renamed in the library: travel days are out + back regardless of course
 // length, and lodging adds a travel night on each end.
+// Lodging runs a night longer at each end of a course: people arrive the night
+// before the first day and leave the morning after the last. Every place that
+// derives nights from the course length goes through here, so the seeded
+// quantity and the check for lines built from stale numbers cannot disagree
+// about whether those two nights belong.
+export function isLodgingLine(label: string): boolean {
+  return /lodging|hotel/i.test(label)
+}
+
+export function nightsForLine(label: string, days: number): number {
+  return days + (isLodgingLine(label) ? 2 : 0)
+}
+
 export type SeedCounts = { instructors: number; days: number; students: number | null }
 
 export function guessSeedQty(
@@ -56,7 +69,10 @@ export function guessSeedQty(
   counts: SeedCounts
 ): { qty: number; factors: number[] | null } {
   const { instructors, days, students } = counts
-  if (/lodging|hotel/i.test(rate.label)) return { qty: instructors * (days + 2), factors: [instructors, days + 2] }
+  if (isLodgingLine(rate.label)) {
+    const nights = nightsForLine(rate.label, days)
+    return { qty: instructors * nights, factors: [instructors, nights] }
+  }
 
   const parts = (rate.unit ?? '').toLowerCase().replace(/^per\s+/, '').split(/\s+per\s+/).filter(Boolean)
   const factors = parts.map((name): number | null => {

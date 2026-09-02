@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { fmtMoney, round2 } from '@/lib/expenses'
-import { impliedMargin } from '@/lib/estimates'
+import { impliedMargin, nightsForLine } from '@/lib/estimates'
 import { publishCoaPrice, retractCoaPrice } from '@/lib/live-coa-prices'
 import { saveEstimate, deleteEstimateCoa, type EstimateItemInput } from '@/app/admin/courses/finance-actions'
 import { useRouter } from 'next/navigation'
@@ -199,7 +199,10 @@ export default function EstimatePanel({
   function countForFactor(name: string, rateLabel: string): number | null {
     const n = name.toLowerCase()
     if (n.startsWith('instructor') || n.startsWith('person')) return counts.instructors || null
-    if (n.startsWith('day') || n.startsWith('night')) return isDurationDriven(rateLabel) ? counts.days : null
+    if (n.startsWith('day') || n.startsWith('night')) {
+      if (!isDurationDriven(rateLabel) || counts.days === null) return null
+      return nightsForLine(rateLabel, counts.days)
+    }
     if (n.startsWith('student')) return counts.students
     return null
   }
