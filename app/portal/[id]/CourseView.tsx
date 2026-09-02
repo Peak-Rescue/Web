@@ -1069,11 +1069,18 @@ export default async function CourseView({
   // who comes, what they sign. Teach is the shortlist you need with a phone in
   // your hand.
   //
-  // Curriculum and resources appear in both: an instructor reads the
-  // curriculum to stay aligned with what the students have, and the med plan
-  // and permits are trailhead reading. It is *editing* them mid-course that is
-  // build work — usually because something was missed and belongs in the
-  // template for next time.
+  // Curriculum, resources and gear appear in both: an instructor reads the
+  // curriculum to stay aligned with what the students have, the med plan and
+  // permits are trailhead reading, and the gear list is what the students were
+  // told to bring — which is the thing you get asked about at the trailhead.
+  // It is *editing* any of them mid-course that is build work, usually because
+  // something was missed and belongs in the template for next time.
+  //
+  // Students rather than Waiver on the teach side. Waiver is a person's own
+  // signing record, so it does not render for an instructor at all — while
+  // Students carries the roster with who has signed, the QR a walk-up signs
+  // from, and the strays to match up. Adding and removing people stays with
+  // the admin.
   //
   // This filters the jump bar, never the page. Everything still renders and
   // scrolling still reaches it; the bar just stops offering nine doors when
@@ -1081,7 +1088,9 @@ export default async function CourseView({
   const BUILD: SectionKey[] = [
     'details', 'pricing', 'gear', 'staffing', 'curriculum', 'resources', 'schedule', 'students', 'waiver',
   ]
-  const TEACH: SectionKey[] = ['details', 'schedule', 'updates', 'curriculum', 'resources', 'waiver']
+  const TEACH: SectionKey[] = [
+    'details', 'schedule', 'updates', 'curriculum', 'resources', 'gear', 'students',
+  ]
 
   // The course's own dates decide which job you are probably here for, so the
   // switch is usually already right and pressing it is a correction.
