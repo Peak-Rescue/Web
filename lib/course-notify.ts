@@ -59,3 +59,17 @@ export async function courseNotifyCounts(
     excludeEmail
   )
 }
+
+/** Whether a course is real enough to email the crew about a change to it.
+    A tentative or quoted course is a proposal: its dates move as the client
+    talks, and mailing every move trains people to ignore the ones that
+    matter. Nothing goes out about a change until the course is confirmed —
+    up to then the portal page is the record, and anyone staffed early can
+    read it there.
+
+    `completed` counts too: a course that already ran was confirmed once, and
+    a correction to it after the fact is still news to the people who worked
+    it. */
+export function announcesChanges(status: string | null | undefined): boolean {
+  return status === 'confirmed' || status === 'completed'
+}

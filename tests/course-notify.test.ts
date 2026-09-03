@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { countAddresses, notifyCountsFrom } from '@/lib/course-notify'
+import { announcesChanges, countAddresses, notifyCountsFrom } from '@/lib/course-notify'
 
 // The number on the button is a promise made before something that cannot be
 // taken back, so it is counted by address and never by head.
@@ -29,5 +29,27 @@ describe('notify counts', () => {
   it('excludes the author from every group at once', () => {
     const counts = notifyCountsFrom(['me@x.com', 'bo@x.com'], ['me@x.com'], 'me@x.com')
     expect(counts).toEqual({ students: 1, instructors: 0, everyone: 1 })
+  })
+})
+
+// A tentative course is a proposal. Its dates move while the client decides,
+// and every automatic notice about it stays unsent until it is confirmed.
+describe('which courses announce their changes', () => {
+  it('stays quiet for a course that is not yet real', () => {
+    expect(announcesChanges('tentative')).toBe(false)
+    expect(announcesChanges('quoted')).toBe(false)
+  })
+
+  it('announces once the course is confirmed, and after it has run', () => {
+    expect(announcesChanges('confirmed')).toBe(true)
+    expect(announcesChanges('completed')).toBe(true)
+  })
+
+  // Cancelling a cancelled course, and a status that never loaded, both mean
+  // nothing new to say.
+  it('says nothing for an already-cancelled or unknown course', () => {
+    expect(announcesChanges('cancelled')).toBe(false)
+    expect(announcesChanges(null)).toBe(false)
+    expect(announcesChanges(undefined)).toBe(false)
   })
 })

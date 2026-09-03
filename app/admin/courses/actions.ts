@@ -10,6 +10,7 @@ import { syncCourseCalendar, removeCourseEvent } from '@/lib/google-calendar'
 import { isValidRegion } from '@/lib/regions'
 import { requireCourseStaff } from '@/lib/course-access'
 import { sendMail } from '@/lib/mailer'
+import { announcesChanges } from '@/lib/course-notify'
 
 const fmtLong = (d: string) =>
   new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
@@ -271,8 +272,10 @@ export async function updateInstanceDetails(id: string, formData: FormData) {
 
   // Course cancelled → tell every assigned instructor (best-effort). It
   // disappears from their portal home, so silence would leave them planning
-  // around a course that no longer exists.
-  if (status === 'cancelled' && before?.status !== 'cancelled') {
+  // around a course that no longer exists. Only if it was confirmed when it
+  // died: a tentative course that falls through was never on anyone's
+  // calendar to take off it.
+  if (status === 'cancelled' && announcesChanges(before?.status)) {
     after(async () => {
       const { courseShortName } = await import('@/lib/courses')
       const { data: dates } = await admin
@@ -352,9 +355,13 @@ export async function updateInstanceDates(id: string, formData: FormData) {
   // Moved dates → tell every assigned instructor. They plan travel and time
   // off around these dates, and the calendar event changes under them
   // silently: the sync never emails, precisely so this can (best-effort).
+  //
+  // Confirmed courses only. A tentative course's dates slide around while
+  // the client makes up their mind, and a mail for each slide is what makes
+  // the one that matters unreadable.
   const moved =
     before !== null &&
-    before.status !== 'cancelled' &&
+    announcesChanges(before.status) &&
     (before.starts_at !== starts_at || before.ends_at !== ends_at)
 
   if (moved && process.env.RESEND_API_KEY) {
@@ -1004,9 +1011,11 @@ export async function deleteInstance(instanceId: string) {
 
   if (error) throw new Error(error.message)
 
-  // A deleted course reads the same as a cancelled one from the crew's side —
-  // unless it was already cancelled, in which case they've heard.
-  if (course && course.status !== 'cancelled') {
+  // A deleted course reads the same as a cancelled one from the crew's side,
+  // and follows the same rule: only a confirmed course is announced going
+  // away. An already-cancelled one they have heard about; a tentative one
+  // they were never promised.
+  if (course && announcesChanges(course.status)) {
     after(async () => {
       const { courseShortName } = await import('@/lib/courses')
       await emailCourseOff(recipients, {
