@@ -105,3 +105,48 @@ describe('course lengths', () => {
     expect(courseDayCounts('2026-09-07', null, noBreaks)).toEqual({ days: null, calendarDays: null })
   })
 })
+
+// These walks used to parse 'yyyy-mm-dd' as local midnight and then read the
+// date back off toISOString, which is UTC — so anywhere east of Greenwich
+// every date came out a day early, and day 1 of a course was yesterday. The
+// walks run on UTC now, and this pins it: the browser painting a course
+// calendar is not always in Colorado.
+describe('dates do not move with the reader', () => {
+  const eastOfGreenwich = 'Europe/Berlin'
+
+  function inTimeZone<T>(tz: string, run: () => T): T {
+    const was = process.env.TZ
+    process.env.TZ = tz
+    try {
+      return run()
+    } finally {
+      process.env.TZ = was
+    }
+  }
+
+  it('gives the same course dates whatever clock is reading them', () => {
+    const here = courseDates('2026-09-07', '2026-09-09', [])
+    const there = inTimeZone(eastOfGreenwich, () => courseDates('2026-09-07', '2026-09-09', []))
+    expect(here).toEqual(['2026-09-07', '2026-09-08', '2026-09-09'])
+    expect(there).toEqual(here)
+  })
+
+  it('puts a break on the same day for both of them', () => {
+    const off = [{ off_date: '2026-09-08' }]
+    const here = computeBlocks('2026-09-07', '2026-09-09', off)
+    const there = inTimeZone(eastOfGreenwich, () => computeBlocks('2026-09-07', '2026-09-09', off))
+    expect(here).toEqual([
+      { starts_at: '2026-09-07', ends_at: '2026-09-07' },
+      { starts_at: '2026-09-09', ends_at: '2026-09-09' },
+    ])
+    expect(there).toEqual(here)
+  })
+
+  it('counts the same days paid and on the calendar from either side', () => {
+    const off = [{ off_date: '2026-09-12', end_date: '2026-09-13' }]
+    const here = courseDayCounts('2026-09-07', '2026-09-18', off)
+    const there = inTimeZone(eastOfGreenwich, () => courseDayCounts('2026-09-07', '2026-09-18', off))
+    expect(here).toEqual({ days: 10, calendarDays: 12 })
+    expect(there).toEqual(here)
+  })
+})

@@ -16,12 +16,8 @@ export type OffDayRange = {
 function offDates(offDays: OffDayRange[]): Set<string> {
   const out = new Set<string>()
   for (const { off_date, end_date } of offDays) {
-    const d = new Date(off_date + 'T00:00:00')
-    const e = new Date((end_date ?? off_date) + 'T00:00:00')
-    while (d <= e) {
-      out.add(d.toISOString().slice(0, 10))
-      d.setDate(d.getDate() + 1)
-    }
+    const last = end_date ?? off_date
+    for (let d = off_date; d <= last; d = dayShift(d, 1)) out.add(d)
   }
   return out
 }
@@ -32,22 +28,18 @@ export function computeBlocks(starts_at: string, ends_at: string, offDays: OffDa
   const offSet = offDates(offDays)
 
   const blocks: DateBlock[] = []
-  const end = new Date(ends_at + 'T00:00:00')
   let blockStart: string | null = null
   let blockEnd: string | null = null
 
-  const d = new Date(starts_at + 'T00:00:00')
-  while (d <= end) {
-    const dateStr = d.toISOString().slice(0, 10)
-    if (!offSet.has(dateStr)) {
-      if (!blockStart) blockStart = dateStr
-      blockEnd = dateStr
+  for (let d = starts_at; d <= ends_at; d = dayShift(d, 1)) {
+    if (!offSet.has(d)) {
+      if (!blockStart) blockStart = d
+      blockEnd = d
     } else if (blockStart && blockEnd) {
       blocks.push({ starts_at: blockStart, ends_at: blockEnd })
       blockStart = null
       blockEnd = null
     }
-    d.setDate(d.getDate() + 1)
   }
 
   if (blockStart && blockEnd) blocks.push({ starts_at: blockStart, ends_at: blockEnd })
@@ -72,12 +64,7 @@ export function courseDates(
   if (!starts_at) return []
   const out: string[] = []
   for (const b of computeBlocks(starts_at, ends_at ?? starts_at, offDays)) {
-    const d = new Date(b.starts_at + 'T00:00:00')
-    const end = new Date(b.ends_at + 'T00:00:00')
-    while (d <= end) {
-      out.push(d.toISOString().slice(0, 10))
-      d.setDate(d.getDate() + 1)
-    }
+    for (let d = b.starts_at; d <= b.ends_at; d = dayShift(d, 1)) out.push(d)
   }
   return out
 }
