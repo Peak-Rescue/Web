@@ -9,6 +9,10 @@ import { strokeOffDays, clampOffDays, courseDayCounts, dayShift, type OffSpan } 
 
 const span = (from: string, to = from, paid = false): OffSpan => ({ from, to, paid })
 
+/** Spans as the table stores them, for handing to courseDayCounts. */
+const rowsOf = (spans: OffSpan[]) =>
+  spans.map((b) => ({ off_date: b.from, end_date: b.to, instructors_paid: b.paid }))
+
 describe('dayShift', () => {
   it('crosses a month end', () => {
     expect(dayShift('2026-08-31', 1)).toBe('2026-09-01')
@@ -65,6 +69,27 @@ describe('strokeOffDays — painting', () => {
         span('2026-08-27', '2026-08-27', false),
         span('2026-08-28', '2026-08-28', true),
       ])
+  })
+
+  // The awkward one: the stroke has something to merge with at one end and
+  // something to draw around in the middle, so the union it computes on the
+  // way to the agreeing span passes straight over the disagreeing one. The
+  // exception has to survive being in the path of a merge, not just in the
+  // path of a stroke.
+  it('draws around a disagreeing break while merging past it with an agreeing one', () => {
+    const before = [span('2026-08-12', '2026-08-12', false), span('2026-08-14', '2026-08-14', true)]
+    const after = strokeOffDays(before, '2026-08-10', '2026-08-14', true, true)
+    expect(after).toEqual([
+      span('2026-08-10', '2026-08-11', true),
+      span('2026-08-12', '2026-08-12', false),
+      span('2026-08-13', '2026-08-14', true),
+    ])
+    // Nothing the stroke covered fell down the gap between the pieces.
+    const covered = new Set(['2026-08-10', '2026-08-11', '2026-08-12', '2026-08-13', '2026-08-14'])
+    for (const b of after) for (let d = b.from; d <= b.to; d = dayShift(d, 1)) covered.delete(d)
+    expect([...covered]).toEqual([])
+    // And the day somebody marked is still off the instructor days.
+    expect(courseDayCounts('2026-08-09', '2026-08-15', rowsOf(after)).days).toBe(6)
   })
 
   it('still merges with a break that agrees about pay', () => {
@@ -129,8 +154,7 @@ describe('clampOffDays', () => {
 // hold for a paid one — so the two are worth reading together, particularly
 // where painting is asymmetric.
 describe('what a stroke costs', () => {
-  const rows = (spans: OffSpan[]) =>
-    spans.map((b) => ({ off_date: b.from, end_date: b.to, instructors_paid: b.paid }))
+  const rows = rowsOf
 
   it('an unpaid stroke takes instructor days off', () => {
     const after = strokeOffDays([], '2026-08-26', '2026-08-27', true, false)
