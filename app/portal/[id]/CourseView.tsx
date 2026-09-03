@@ -742,6 +742,9 @@ export default async function CourseView({
     .filter((p) => p.name)
 
   const fmtLong = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'long', day: 'numeric', year: 'numeric' })
+  // "Wed Sep 3" — what a running order needs beside a day number, and no more.
+  // No year: the course's own span says it once at the top of the page.
+  const fmtDay = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
   // "Aug 24 – 28, 2026" — the month and year said once, no weekday.
   const fmtSpan = (a: string, b: string) => {
     const d = (x: string) => new Date(x + 'T00:00:00')
@@ -1657,7 +1660,8 @@ export default async function CourseView({
                 const blocks = [...(d.schedule_blocks ?? [])].sort((a, b) => a.sort_order - b.sort_order)
                 const topics = blocks.filter((b) => !b.parent_id)
                 const editableDay = editableDays.get(d.id) ?? null
-                const dayPassed = meetingDayPassed(dayDates[di], null)
+                const dayDate = dayDates[di]
+                const dayPassed = meetingDayPassed(dayDate, null)
                 return (
                   <details
                     key={d.id}
@@ -1681,6 +1685,24 @@ export default async function CourseView({
                       </span>
                       {!/^day\s*\d+\b/i.test(d.title.trim()) && (
                         <span className="text-[11px] font-mono text-zinc-600 shrink-0">Day {di + 1}</span>
+                      )}
+                      {/* Which calendar day this one is, worked out from the
+                          course's start and the off days painted on it — so a
+                          rest day in the middle pushes everything after it
+                          along, and nobody counts on their fingers.
+
+                          Read off the position, never stored: the same day row
+                          is what a template is made of, and a template day
+                          belongs to no calendar. That is also why there is
+                          nothing here to keep out of a saved template — there
+                          is no field to copy.
+
+                          A schedule longer than the course it is on runs out
+                          of dates; those days simply show none. */}
+                      {dayDate && (
+                        <span className="text-[11px] font-mono text-zinc-500 shrink-0">
+                          {fmtDay(dayDate)}
+                        </span>
                       )}
                       <h3 className="font-medium text-sm">{d.title}</h3>
                       {/* Folded, the place is the only other thing worth
@@ -1748,7 +1770,7 @@ export default async function CourseView({
                         meetup the site usually uses. */}
                     {(() => {
                       const m = resolveDayMeeting(d, d.sites)
-                      const date = dayDates[di]
+                      const date = dayDate
                       const own = Boolean(d.meeting_time || d.meeting_point || (d.meeting_links ?? []).length || (d.meeting_attachments ?? []).length)
                       const empty = !own && !m.point
                       // Staff get the block on every day, because setting a
