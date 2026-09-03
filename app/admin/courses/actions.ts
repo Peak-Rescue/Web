@@ -11,9 +11,51 @@ import { isValidRegion } from '@/lib/regions'
 import { requireCourseStaff } from '@/lib/course-access'
 import { sendMail } from '@/lib/mailer'
 import { announcesChanges } from '@/lib/course-notify'
+import { clampOffDays, dayShift, strokeOffDays, type OffSpan } from '@/lib/courses'
 
 const fmtLong = (d: string) =>
   new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+
+// Off-day rows as spans, and back: the table stores a nullable end date, the
+// arithmetic wants two dates.
+function toSpans(rows: { off_date: string; end_date: string | null; instructors_paid?: boolean | null }[]): OffSpan[] {
+  return rows.map((o) => ({ from: o.off_date, to: o.end_date ?? o.off_date, paid: Boolean(o.instructors_paid) }))
+}
+
+function toRow(instance_id: string, b: OffSpan) {
+  return { instance_id, off_date: b.from, end_date: b.to === b.from ? null : b.to, instructors_paid: b.paid }
+}
+
+const sameSpan = (a: OffSpan, b: OffSpan) => a.from === b.from && a.to === b.to && a.paid === b.paid
+
+/** Make the stored breaks say what `next` says. Rows that already say one of
+    those spans are left alone — their ids are what the list on the screen
+    deletes and flips, and rewriting a row nobody asked about would churn them
+    for nothing. */
+async function applyOffDays(
+  admin: ReturnType<typeof createAdminClient>,
+  instanceId: string,
+  rows: { id: string; off_date: string; end_date: string | null; instructors_paid?: boolean | null }[],
+  next: OffSpan[]
+) {
+  const wanted = [...next]
+  const stale: string[] = []
+  for (const r of rows) {
+    const i = wanted.findIndex((k) => sameSpan(k, toSpans([r])[0]))
+    if (i === -1) stale.push(r.id)
+    else wanted.splice(i, 1)
+  }
+  if (stale.length > 0) {
+    const { error } = await admin.from('instance_off_days').delete().in('id', stale)
+    if (error) throw new Error(error.message)
+  }
+  if (wanted.length > 0) {
+    const { error } = await admin
+      .from('instance_off_days')
+      .insert(wanted.map((b) => toRow(instanceId, b)))
+    if (error) throw new Error(error.message)
+  }
+}
 
 function dateRange(starts: string | null, ends: string | null): string {
   if (!starts) return 'dates TBD'
@@ -352,6 +394,21 @@ export async function updateInstanceDates(id: string, formData: FormData) {
 
   if (error) throw new Error(error.message)
 
+  // Breaks live strictly inside the window, so moving the window can strand
+  // one: a rest day now outside the course, or overlapping its first or last
+  // day. Trimmed to the part that still falls inside, and dropped when none of
+  // it does — the alternative is an off-day the course no longer contains,
+  // which every reader of the dates then has to explain away.
+  if (starts_at && ends_at) {
+    const { data: offs } = await admin
+      .from('instance_off_days')
+      .select('id, off_date, end_date, instructors_paid')
+      .eq('instance_id', id)
+    if (offs && offs.length > 0) {
+      await applyOffDays(admin, id, offs, clampOffDays(toSpans(offs), starts_at, ends_at))
+    }
+  }
+
   // Moved dates → tell every assigned instructor. They plan travel and time
   // off around these dates, and the calendar event changes under them
   // silently: the sync never emails, precisely so this can (best-effort).
@@ -403,6 +460,7 @@ export async function updateInstanceDates(id: string, formData: FormData) {
 
   after(() => syncCourseCalendar(createAdminClient(), id))
   revalidatePath(`/admin/courses/${id}`)
+  revalidatePath(`/portal/${id}`)
 }
 
 export async function addOffDay(instanceId: string, formData: FormData) {
@@ -442,6 +500,7 @@ export async function addOffDay(instanceId: string, formData: FormData) {
 
   if (error) throw new Error(error.message)
   revalidatePath(`/admin/courses/${instanceId}`)
+  revalidatePath(`/portal/${instanceId}`)
 }
 
 // Answered wrong, or the plan changed — flipped in place rather than by
@@ -470,6 +529,64 @@ export async function removeOffDay(instanceId: string, offDayId: string) {
 
   if (error) throw new Error(error.message)
   revalidatePath(`/admin/courses/${instanceId}`)
+  revalidatePath(`/portal/${instanceId}`)
+}
+
+// Breaks as they are drawn on the calendar: a stroke over a run of days either
+// marks them off or rubs them out, rather than a form describing one range.
+// The gesture is the whole vocabulary, so the arithmetic that a form left to
+// the person filling it in — this range meets that one, this click lands in
+// the middle of a five-day break — happens here.
+//
+// `paint` false erases, and can split a break into the two ends that survive.
+// A painted stroke swallows every break it touches or abuts into one row, and
+// that row is paid if the stroke or anything it swallowed was: two breaks that
+// disagree already read as paid everywhere else (see computeBlocks), and a
+// stroke must not quietly take pay away from days that had it.
+export async function paintOffDays(
+  instanceId: string,
+  a: string,
+  b: string,
+  paint: boolean,
+  instructors_paid: boolean
+) {
+  await requireAdmin()
+  const admin = createAdminClient()
+
+  let from = a < b ? a : b
+  let to = a < b ? b : a
+
+  const { data: inst } = await admin
+    .from('course_instances')
+    .select('starts_at, ends_at')
+    .eq('id', instanceId)
+    .single()
+  if (!inst?.starts_at || !inst?.ends_at) {
+    throw new Error('Set the course start and end dates first — breaks are days inside that window')
+  }
+
+  // A break can only be drawn between the first day and the last: those two
+  // are what the course *is*, so a stroke that overshoots them is clipped
+  // rather than allowed to move them behind your back. Erasing is left
+  // unclipped — a stroke that overshoots still clears everything it covered.
+  if (paint) {
+    const first = dayShift(inst.starts_at, 1)
+    const last = dayShift(inst.ends_at, -1)
+    if (from < first) from = first
+    if (to > last) to = last
+    if (to < from) return
+  }
+
+  const { data: rows } = await admin
+    .from('instance_off_days')
+    .select('id, off_date, end_date, instructors_paid')
+    .eq('instance_id', instanceId)
+
+  const next = strokeOffDays(toSpans(rows ?? []), from, to, paint, instructors_paid)
+  await applyOffDays(admin, instanceId, rows ?? [], next)
+
+  revalidatePath(`/admin/courses/${instanceId}`)
+  revalidatePath(`/portal/${instanceId}`)
 }
 
 export async function addModule(instanceId: string, formData: FormData) {

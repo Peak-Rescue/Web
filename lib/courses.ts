@@ -112,6 +112,81 @@ export function courseDayCounts(
   return { days, calendarDays }
 }
 
+/** A break, normalised to two dates and one question: paid or not. The rows
+    in the table say the same thing with a nullable end date. */
+export type OffSpan = { from: string; to: string; paid: boolean }
+
+/** The day n days either side of a yyyy-mm-dd. UTC, so no break lands a day
+    out west of Greenwich. */
+export function dayShift(d: string, n: number): string {
+  const t = new Date(d + 'T00:00:00Z')
+  t.setUTCDate(t.getUTCDate() + n)
+  return t.toISOString().slice(0, 10)
+}
+
+/** What a stroke drawn across from→to leaves the breaks looking like.
+ *
+ *  Breaks are painted on the course calendar rather than typed as ranges, so
+ *  the arithmetic a form left to the person filling it in has to happen
+ *  somewhere: a stroke can land on top of breaks already there, and a click in
+ *  the middle of a five-day break has to cut it in two.
+ *
+ *  Painting swallows every break the stroke touches or merely abuts — two
+ *  breaks with no working day between them are one break, however they were
+ *  drawn — and the result is paid if the stroke or anything it swallowed was.
+ *  A date covered by a paid and an unpaid break already reads as paid
+ *  (see courseDayCounts), and a stroke must not quietly take pay off days
+ *  that had it.
+ *
+ *  Erasing removes the stroke's days and keeps whatever ends survive.
+ *
+ *  Ordered by start date, so the result is comparable to itself. */
+export function strokeOffDays(
+  spans: OffSpan[],
+  from: string,
+  to: string,
+  paint: boolean,
+  paid: boolean
+): OffSpan[] {
+  if (to < from) [from, to] = [to, from]
+
+  const out = paint
+    ? (() => {
+        const touched = spans.filter((b) => b.to >= dayShift(from, -1) && b.from <= dayShift(to, 1))
+        const rest = spans.filter((b) => !touched.includes(b))
+        return [
+          ...rest,
+          {
+            from: touched.reduce((m, b) => (b.from < m ? b.from : m), from),
+            to: touched.reduce((m, b) => (b.to > m ? b.to : m), to),
+            paid: paid || touched.some((b) => b.paid),
+          },
+        ]
+      })()
+    : spans.flatMap((b) => {
+        if (b.to < from || b.from > to) return [b]
+        const parts: OffSpan[] = []
+        if (b.from < from) parts.push({ ...b, to: dayShift(from, -1) })
+        if (b.to > to) parts.push({ ...b, from: dayShift(to, 1) })
+        return parts
+      })
+
+  return out.sort((a, b) => a.from.localeCompare(b.from))
+}
+
+/** Breaks trimmed to a course window, for when the window moves under them.
+    A break that no longer overlaps the days between the first and last is
+    dropped: an off-day outside the course is a day nothing can be said about,
+    and every reader of the dates would have to explain it away. */
+export function clampOffDays(spans: OffSpan[], starts_at: string, ends_at: string): OffSpan[] {
+  const first = dayShift(starts_at, 1)
+  const last = dayShift(ends_at, -1)
+  if (last < first) return []
+  return spans
+    .map((b) => ({ ...b, from: b.from < first ? first : b.from, to: b.to > last ? last : b.to }))
+    .filter((b) => b.from <= b.to)
+}
+
 export { categoryMeta }
 
 // Six of the tactical offerings are "<terrain> Mobility", so the word is pure

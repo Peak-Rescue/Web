@@ -1,10 +1,11 @@
-import { updateInstanceDetails, updateInstanceDates, addOffDay, removeOffDay, setOffDayPaid } from './actions'
+import { updateInstanceDetails, addOffDay, removeOffDay, setOffDayPaid } from './actions'
 import AutoSaveForm from '@/components/AutoSaveForm'
 import TrashIcon from '@/components/TrashIcon'
 import InfoHint from '@/components/InfoHint'
 import { CourseTypeSelect } from './CourseTypeSelect'
 import CourseLocationFields from '@/components/CourseLocationFields'
 import CourseContactsEditor from '@/components/CourseContactsEditor'
+import CourseDatePainter from '@/components/CourseDatePainter'
 import { computeBlocks } from '@/lib/courses'
 
 /** An off day as this screen needs it: the range for the arithmetic, the id,
@@ -62,7 +63,6 @@ export default function CourseDetailsEditor({
   internal: boolean
 }) {
   const updateDetails = updateInstanceDetails.bind(null, instanceId)
-  const updateDates = updateInstanceDates.bind(null, instanceId)
   const addOffDayHere = addOffDay.bind(null, instanceId)
 
   const blocks = course.starts_at && course.ends_at
@@ -117,17 +117,17 @@ export default function CourseDetailsEditor({
       <div className="p-6 pt-5 border-t border-zinc-800">
       <h3 className="text-sm font-semibold text-zinc-300 mb-3">Dates</h3>
 
-      {/* Overall window — auto-saved */}
-      <AutoSaveForm action={updateDates} className="grid grid-cols-2 gap-4 p-4 bg-zinc-950/40 border border-zinc-800 rounded-lg mb-4">
-        <div>
-          <label className="block text-xs text-zinc-400 mb-1">Course start</label>
-          <input name="starts_at" type="date" defaultValue={course.starts_at ?? ''} className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
-        </div>
-        <div>
-          <label className="block text-xs text-zinc-400 mb-1">Course end</label>
-          <input name="ends_at" type="date" defaultValue={course.ends_at ?? ''} className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
-        </div>
-      </AutoSaveForm>
+      {/* The window and its breaks are one drawing: a course is a run of days
+          with pieces taken out of it, and it was never legible as four date
+          fields. Painted here, saved as you let go. */}
+      <div className="mb-4">
+        <CourseDatePainter
+          instanceId={instanceId}
+          startsAt={course.starts_at}
+          endsAt={course.ends_at}
+          offDays={offDays ?? []}
+        />
+      </div>
 
       {/* Off days — folded behind a deliberate reveal: most courses run
           straight through, and an exposed date form here invites people
@@ -135,11 +135,12 @@ export default function CourseDetailsEditor({
       <details open={(offDays ?? []).length > 0} className="mb-4 group/off">
         <summary className="cursor-pointer list-none text-sm text-zinc-400 hover:text-zinc-200 transition-colors select-none">
           <span className="text-zinc-600 text-xs mr-1.5 inline-block transition-transform group-open/off:rotate-90">▶</span>
-          Dates to exclude
+          Breaks{(offDays ?? []).length > 0 ? ` (${(offDays ?? []).length})` : ''}
         </summary>
         <div className="mt-3">
         <p className="text-xs text-zinc-500 mb-3">
-          Rest days inside the course window — not the start/end.
+          Painted on the calendar above; listed here to say whether the crew is
+          paid through one, and typed in by date when that is easier.
         </p>
         {(offDays ?? []).length > 0 && (
           <div className="space-y-2 mb-3">
