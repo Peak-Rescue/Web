@@ -45,6 +45,7 @@ import type { UpdateAudience } from './update-actions'
 import CourseMessages, { type CourseMessage } from './CourseMessages'
 import EditInPlace from './EditableSchedule'
 import AddScheduleDay from './AddScheduleDay'
+import MoveDayArrows from './MoveDayArrows'
 import ScheduleOverviewFields from './ScheduleOverviewFields'
 import ScheduleDayCard from '@/app/admin/schedules/ScheduleDayCard'
 import type { ScheduleDay as EditableDay } from '@/app/admin/schedules/types'
@@ -1689,6 +1690,18 @@ export default async function CourseView({
                         <span className="text-xs text-zinc-600 truncate group-open/day:hidden">
                           {d.location}
                         </span>
+                      )}
+                      {/* Order is a relationship between days, so it is set on
+                          the header rather than inside one day's editor — and
+                          a past day is folded, which would put an
+                          editor-bound arrow out of reach. Built only for
+                          staff, the same rule the action enforces. */}
+                      {canEditSchedule && (
+                        <MoveDayArrows
+                          dayId={d.id}
+                          isFirst={di === 0}
+                          isLast={di === schedDays.length - 1}
+                        />
                       )}
                     </summary>
                     {/* The way into this day, on this day. The element is only

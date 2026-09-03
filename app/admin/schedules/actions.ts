@@ -216,6 +216,65 @@ export async function updateScheduleDay(
   touch(instanceId)
 }
 
+// Swap a day with the one beside it.
+//
+// Order is the only thing that moves. A day's date is not stored — it is read
+// off its position in the running order — so the dates, the "Day N" gutter
+// labels and the folding of days already behind us all follow the swap on
+// their own. Everything else about a day (its outline, its morning, its site,
+// its attachments) hangs off the row and travels with it.
+//
+// The two rows are written one at a time, which means a reader landing between
+// the writes sees two days sharing a sort_order. Days are read with a sort
+// that has no tie-break, so the worst that page shows is the pair in an
+// arbitrary order for a few milliseconds — not a lost day. Parking one row on
+// a sentinel first would cost a third write to close a window nobody can act
+// inside.
+export async function moveScheduleDay(dayId: string, direction: 'up' | 'down') {
+  const asker = await whoIsAsking()
+  const admin = asker.admin
+  const instanceId = await instanceOfDay(admin, dayId)
+  await mayEdit(asker, instanceId)
+
+  const { data: me } = await admin
+    .from('schedule_days').select('id, schedule_id, sort_order, title').eq('id', dayId).single()
+  if (!me) throw new Error('That day no longer exists')
+
+  // The neighbour is the nearest day on that side, not sort_order ± 1 — gaps
+  // open up every time a day is deleted, and an off-by-one gap would make the
+  // arrow do nothing rather than move the day.
+  const up = direction === 'up'
+  const { data: neighbour } = await admin
+    .from('schedule_days')
+    .select('id, sort_order, title')
+    .eq('schedule_id', me.schedule_id)
+    .filter('sort_order', up ? 'lt' : 'gt', me.sort_order)
+    .order('sort_order', { ascending: !up })
+    .limit(1)
+    .maybeSingle()
+  // Already at the end. The arrows are disabled there, so this is a stale page
+  // or a second click, and neither is worth an error.
+  if (!neighbour) return
+
+  // Days seeded by "add a day" are titled "Day 3", and a card whose title
+  // already begins that way prints no gutter number — so a bare swap would
+  // leave "Day 3" sitting in slot four. A title still on its default follows
+  // its new position; a title someone actually wrote is theirs, and is left
+  // exactly as it is.
+  const renumber = (title: string, order: number) =>
+    /^day\s*\d+$/i.test(title.trim()) ? `Day ${order + 1}` : title
+
+  for (const [row, order] of [[me, neighbour.sort_order], [neighbour, me.sort_order]] as const) {
+    const { error } = await admin
+      .from('schedule_days')
+      .update({ sort_order: order, title: renumber(row.title as string, order as number) })
+      .eq('id', row.id)
+    if (error) throw new Error(error.message)
+  }
+
+  touch(instanceId)
+}
+
 export async function removeScheduleDay(id: string) {
   const asker = await whoIsAsking()
   const admin = asker.admin
