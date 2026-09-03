@@ -253,7 +253,7 @@ export default async function CourseView({
         .eq('id', id)
         .single(),
       admin.from('instance_off_days')
-        .select('id, off_date, end_date')
+        .select('id, off_date, end_date, instructors_paid')
         .eq('instance_id', id)
         .order('off_date'),
       modulesQuery,

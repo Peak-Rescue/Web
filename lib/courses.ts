@@ -1,7 +1,16 @@
 import { services, categoryMeta, type ServiceCategory } from './data/services'
 
 export type DateBlock = { starts_at: string; ends_at: string }
-export type OffDayRange = { off_date: string; end_date?: string | null }
+/** A break in a course. `instructors_paid` is asked when the break is
+    designated: both kinds skip a teaching day, but only an unpaid one comes
+    off the instructor days a client is quoted for. Absent (older rows, and
+    callers that don't select it) reads as unpaid — what a break meant before
+    the question was asked. */
+export type OffDayRange = {
+  off_date: string
+  end_date?: string | null
+  instructors_paid?: boolean | null
+}
 
 /** Every individual date a set of off-day rows covers, ranges expanded. */
 function offDates(offDays: OffDayRange[]): Set<string> {
@@ -18,6 +27,8 @@ function offDates(offDays: OffDayRange[]): Set<string> {
 }
 
 export function computeBlocks(starts_at: string, ends_at: string, offDays: OffDayRange[]): DateBlock[] {
+  // Every break skips a teaching day, paid or not: the blocks are about when
+  // the course runs, not about who is owed for it.
   const offSet = offDates(offDays)
 
   const blocks: DateBlock[] = []
@@ -72,10 +83,11 @@ export function courseDates(
 }
 
 /** A course's two lengths, for anything that has to put a number of days on
-    it. `days` is the days it actually runs — breaks taken out, because a
-    break is in the course to say that day is off and nobody is paid for it.
-    `calendarDays` is first day to last with the breaks left in, which is what
-    a rental vehicle or a hotel room is held for over a weekend in the middle.
+    it. `days` is the days somebody is paid for: the days the course runs,
+    plus any break marked as paid, because the crew that stays in the canyon
+    over a weekend is on the clock whether or not anyone is being taught.
+    `calendarDays` is first day to last with every break left in, which is
+    what a rental vehicle or a hotel room is held for regardless.
 
     Both null until the course has dates: a length nobody knows is not 1. */
 export function courseDayCounts(
@@ -88,8 +100,15 @@ export function courseDayCounts(
     Math.round((Date.parse(ends_at) - Date.parse(starts_at)) / 86_400_000) + 1,
     1
   )
+  // Only an unpaid break comes off the count: a paid one is a day the course
+  // does not teach and still owes somebody a day's wage. A date covered by
+  // both a paid and an unpaid row counts as paid — where two breaks disagree,
+  // quoting the more expensive reading is the safe way to be wrong.
+  const paid = offDates(offDays.filter((o) => o.instructors_paid))
+  const unpaid = offDates(offDays.filter((o) => !o.instructors_paid))
+  const notWorked = [...unpaid].filter((d) => !paid.has(d) && d >= starts_at && d <= ends_at)
   // A course that is break end to end still costs someone a day to run.
-  const days = Math.max(courseDates(starts_at, ends_at, offDays).length, 1)
+  const days = Math.max(calendarDays - notWorked.length, 1)
   return { days, calendarDays }
 }
 

@@ -410,6 +410,11 @@ export async function addOffDay(instanceId: string, formData: FormData) {
   const admin = createAdminClient()
   const off_date = formData.get('off_date') as string
   const end_date = (formData.get('end_date') as string) || null
+  // Asked at the moment the break is designated, because that is when the
+  // answer is known: the crew going home for the weekend and the crew staying
+  // in the canyon look identical a month later, and only one of them is a day
+  // the client is quoted for.
+  const instructors_paid = formData.get('instructors_paid') !== null
   if (!off_date) throw new Error('Date is required')
   if (end_date && end_date < off_date) throw new Error('Off-day end date must be on or after its start date')
 
@@ -433,10 +438,26 @@ export async function addOffDay(instanceId: string, formData: FormData) {
 
   const { error } = await admin
     .from('instance_off_days')
-    .insert({ instance_id: instanceId, off_date, end_date: end_date ?? null })
+    .insert({ instance_id: instanceId, off_date, end_date: end_date ?? null, instructors_paid })
 
   if (error) throw new Error(error.message)
   revalidatePath(`/admin/courses/${instanceId}`)
+}
+
+// Answered wrong, or the plan changed — flipped in place rather than by
+// deleting the break and entering it again, which loses the dates to a retype.
+export async function setOffDayPaid(instanceId: string, offDayId: string, instructors_paid: boolean) {
+  await requireAdmin()
+
+  const { error } = await createAdminClient()
+    .from('instance_off_days')
+    .update({ instructors_paid })
+    .eq('id', offDayId)
+    .eq('instance_id', instanceId)
+
+  if (error) throw new Error(error.message)
+  revalidatePath(`/admin/courses/${instanceId}`)
+  revalidatePath(`/portal/${instanceId}`)
 }
 
 export async function removeOffDay(instanceId: string, offDayId: string) {

@@ -102,7 +102,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
 
   const [{ data: inst }, { data: offDays }, { data: modules }, { data: assigned }, { data: allInstructors }] = await Promise.all([
     admin.from('course_instances').select('*, ref_number, slug').eq('id', id).single(),
-    admin.from('instance_off_days').select('id, off_date, end_date').eq('instance_id', id).order('off_date'),
+    admin.from('instance_off_days').select('id, off_date, end_date, instructors_paid').eq('instance_id', id).order('off_date'),
     admin.from('course_modules').select('id, title, audience, order, course_items(id, title, type, url, description, order, audience, library_item_id, library_items(id, title, url, kind, audience, disciplines, topics, venue_id))').eq('instance_id', id).order('order'),
     admin.from('instance_instructors').select('instructor_id, role, instructors(name, profile_id)').eq('instance_id', id),
     admin.from('instructors').select('id, name, email, instructor_role, sectors, instructor_capabilities(category, role)').eq('active', true).order('name'),

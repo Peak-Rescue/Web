@@ -62,9 +62,40 @@ describe('course lengths', () => {
   })
 
   // Mon–Fri, weekend off, Mon–Fri: ten days worked, twelve on the calendar.
-  it('takes a weekend break out of the days worked and leaves it in the span', () => {
+  it('takes an unpaid weekend out of the days paid and leaves it in the span', () => {
     const weekend = [{ off_date: '2026-09-12', end_date: '2026-09-13' }]
     expect(courseDayCounts('2026-09-07', '2026-09-18', weekend)).toEqual({ days: 10, calendarDays: 12 })
+  })
+
+  // The same weekend, with the crew staying in the canyon on the clock. The
+  // course still doesn't teach those days; payroll still owes them.
+  it('keeps a paid break in the days paid', () => {
+    const weekend = [{ off_date: '2026-09-12', end_date: '2026-09-13', instructors_paid: true }]
+    expect(courseDayCounts('2026-09-07', '2026-09-18', weekend)).toEqual({ days: 12, calendarDays: 12 })
+  })
+
+  // A break entered before the question was asked means what a break has
+  // always meant here.
+  it('reads a break that never answered the question as unpaid', () => {
+    const weekend = [{ off_date: '2026-09-12', end_date: '2026-09-13', instructors_paid: null }]
+    expect(courseDayCounts('2026-09-07', '2026-09-18', weekend).days).toBe(10)
+  })
+
+  // One paid Saturday inside an unpaid weekend: where two breaks disagree
+  // about a date, the day is paid, because that is the safe way to be wrong.
+  it('pays a date that two breaks disagree about', () => {
+    const both = [
+      { off_date: '2026-09-12', end_date: '2026-09-13' },
+      { off_date: '2026-09-12', instructors_paid: true },
+    ]
+    expect(courseDayCounts('2026-09-07', '2026-09-18', both).days).toBe(11)
+  })
+
+  // Off days still skip a teaching day whoever is paying: day N of a schedule
+  // is the Nth date the course actually runs, paid break or not.
+  it('skips a paid break in the dates the course runs', () => {
+    const paidWeekend = [{ off_date: '2026-09-12', end_date: '2026-09-13', instructors_paid: true }]
+    expect(courseDates('2026-09-07', '2026-09-18', paidWeekend)).toHaveLength(10)
   })
 
   // A length nobody knows yet is not 1 — a course with no dates has no

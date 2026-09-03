@@ -136,7 +136,7 @@ async function seedDefaultCoa(admin: Awaited<ReturnType<typeof requireAdmin>>, i
     admin.from('course_estimates').select('id', { count: 'exact', head: true }).eq('instance_id', instanceId),
     admin.from('pricing_rates').select('id, label, unit, rate').eq('active', true).eq('default_line', true).order('sort_order'),
     admin.from('instance_instructors').select('id', { count: 'exact', head: true }).eq('instance_id', instanceId),
-    admin.from('instance_off_days').select('off_date, end_date').eq('instance_id', instanceId),
+    admin.from('instance_off_days').select('off_date, end_date, instructors_paid').eq('instance_id', instanceId),
   ])
   if (!inst) throw new Error('Course not found')
 

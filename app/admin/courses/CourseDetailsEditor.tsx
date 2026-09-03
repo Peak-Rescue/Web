@@ -1,14 +1,21 @@
-import { updateInstanceDetails, updateInstanceDates, addOffDay, removeOffDay } from './actions'
+import { updateInstanceDetails, updateInstanceDates, addOffDay, removeOffDay, setOffDayPaid } from './actions'
 import AutoSaveForm from '@/components/AutoSaveForm'
 import TrashIcon from '@/components/TrashIcon'
+import InfoHint from '@/components/InfoHint'
 import { CourseTypeSelect } from './CourseTypeSelect'
 import CourseLocationFields from '@/components/CourseLocationFields'
 import CourseContactsEditor from '@/components/CourseContactsEditor'
 import { computeBlocks } from '@/lib/courses'
 
-/** An off day as this screen needs it: the range for the arithmetic, and the
-    id, because the list next to it removes them. */
-export type CourseOffDay = { id: string; off_date: string; end_date: string | null }
+/** An off day as this screen needs it: the range for the arithmetic, the id,
+    because the list next to it removes them, and whether the crew is paid
+    through it — a break the instructors are paid for still costs a day. */
+export type CourseOffDay = {
+  id: string
+  off_date: string
+  end_date: string | null
+  instructors_paid?: boolean | null
+}
 import { type CoursePOC } from '@/lib/contacts'
 import { type Venue } from '@/lib/library'
 
@@ -140,12 +147,31 @@ export default function CourseDetailsEditor({
               const removeOffDayWithArgs = removeOffDay.bind(null, instanceId, o.id)
               const isRange = o.end_date && o.end_date !== o.off_date
               return (
-                <div key={o.id} className="flex items-center justify-between px-4 py-2 bg-zinc-950/40 border border-zinc-800 rounded-lg">
-                  <div className="flex items-center gap-2">
+                <div key={o.id} className="flex items-center justify-between gap-2 px-4 py-2 bg-zinc-950/40 border border-zinc-800 rounded-lg">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-xs text-zinc-500 font-medium">{isRange ? 'Range' : 'Day'}</span>
                     <span className="text-sm">
                       {isRange ? `${fmt(o.off_date)} → ${fmt(o.end_date!)}` : fmt(o.off_date)}
                     </span>
+                    {/* Answered when the break was added; flipped here rather
+                        than by deleting and retyping the dates. */}
+                    <form action={setOffDayPaid.bind(null, instanceId, o.id, !o.instructors_paid)}>
+                      <button
+                        type="submit"
+                        title={
+                          o.instructors_paid
+                            ? 'Instructors are paid through this break — click to make it unpaid'
+                            : 'Instructors are not paid through this break — click if they are'
+                        }
+                        className={`px-2 py-0.5 rounded-full border text-[11px] transition-colors ${
+                          o.instructors_paid
+                            ? 'border-amber-700/60 text-amber-300/90 hover:border-amber-600'
+                            : 'border-zinc-700 text-zinc-500 hover:border-zinc-600 hover:text-zinc-400'
+                        }`}
+                      >
+                        {o.instructors_paid ? 'Instructors paid' : 'Unpaid'}
+                      </button>
+                    </form>
                   </div>
                   <form action={removeOffDayWithArgs}>
                     <button
@@ -171,6 +197,18 @@ export default function CourseDetailsEditor({
             <label className="block text-xs text-zinc-500 mb-1">End date <span className="text-zinc-600">(optional)</span></label>
             <input name="end_date" type="date" className="bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
           </div>
+          <label className="flex items-center gap-1.5 text-sm text-zinc-300 pb-2 cursor-pointer">
+            <input
+              name="instructors_paid"
+              type="checkbox"
+              className="w-4 h-4 accent-pr-red bg-zinc-800 border-zinc-700 rounded"
+            />
+            Paying instructors
+            <InfoHint
+              below
+              text="Whether the crew is on the clock through the break. A paid break still counts as an instructor day on the estimate; an unpaid one comes off it. Lodging, the vehicle and meals span the break either way — nobody returns the truck for a weekend."
+            />
+          </label>
           <button type="submit" className="px-4 py-2 bg-pr-red hover:bg-pr-red-dark text-white rounded text-sm font-medium transition-colors">
             Add
           </button>

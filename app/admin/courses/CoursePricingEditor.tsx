@@ -82,7 +82,7 @@ export default async function CoursePricingEditor({
         .sort((a, b) => ((b.starts_at as string | null) ?? '').localeCompare((a.starts_at as string | null) ?? ''))
       return { data: rows }
     })(),
-    admin.from('instance_off_days').select('off_date, end_date').eq('instance_id', instanceId),
+    admin.from('instance_off_days').select('off_date, end_date, instructors_paid').eq('instance_id', instanceId),
   ])
 
   const quotePeople = (adminRows ?? [])
