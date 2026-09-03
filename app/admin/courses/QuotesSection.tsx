@@ -1,5 +1,5 @@
 import SaveButton from '@/components/SaveButton'
-import AdminCcPicker from '@/components/AdminCcPicker'
+import QuoteSendForm from './QuoteSendForm'
 import { createQuote, updateQuote, setQuoteStatus, deleteQuote, sendQuote } from './finance-actions'
 import QuoteTotalFields from './QuoteTotalFields'
 import { quoteNumber } from '@/lib/quotes'
@@ -139,18 +139,12 @@ export default function QuotesSection({
                 {q.status === 'draft' && (
                   <>
                     {contactEmail ? (
-                      <form action={sendQuote.bind(null, instanceId, q.id)} className="flex items-center gap-2.5 flex-wrap">
-                        {ccOptions.map((email) => (
-                          <label key={email} className="flex items-center gap-1.5 text-xs text-zinc-400 cursor-pointer" title={`Also send a copy to ${email}`}>
-                            <input type="checkbox" name="cc_extra" value={email} className="accent-pr-red size-3.5" />
-                            cc {email}
-                          </label>
-                        ))}
-                        <AdminCcPicker admins={adminCcOptions} />
-                        <button className="text-xs px-2.5 py-1 bg-pr-red hover:bg-pr-red-dark text-white rounded transition-colors">
-                          Send to {contactEmail}
-                        </button>
-                      </form>
+                      <QuoteSendForm
+                        action={sendQuote.bind(null, instanceId, q.id)}
+                        contactEmail={contactEmail}
+                        ccOptions={ccOptions}
+                        adminCcOptions={adminCcOptions}
+                      />
                     ) : (
                       <span className="text-xs text-zinc-600" title="Add a point-of-contact email in Details to send from here">
                         no POC email
