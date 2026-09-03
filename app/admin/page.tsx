@@ -8,6 +8,7 @@ import CourseCalendar, { type CalendarCourse } from '@/components/CourseCalendar
 import StaffingInterestList from '@/components/StaffingInterestList'
 import { courseShortName, courseEventTitle, crewFirstNames } from '@/lib/courses'
 import { courseCapabilityCategories } from '@/lib/capabilities'
+import { todayHere } from '@/lib/course-clock'
 
 export default async function AdminPage({ searchParams }: { searchParams: Promise<{ cal?: string; scope?: string; as?: string; cat?: string }> }) {
   const { cal, scope, as, cat } = await searchParams
@@ -18,7 +19,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   if (!user) redirect('/login')
 
   const admin = createAdminClient()
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayHere()
 
   type InstRow = {
     id: string

@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { courseDisplayName } from '@/lib/courses'
+import { todayHere } from '@/lib/course-clock'
 
 // Where a student lands after accepting an invite or signing in.
 //
@@ -26,7 +27,7 @@ function fmtRange(starts: string | null, ends: string | null): string {
 
 function daysUntil(starts: string | null): string | null {
   if (!starts) return null
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayHere()
   if (starts <= today) return null
   const days = Math.round((Date.parse(starts) - Date.parse(today)) / 86_400_000)
   if (days === 1) return 'Tomorrow'
@@ -59,7 +60,7 @@ export default async function DashboardPage() {
     starts_at: string | null; ends_at: string | null; location: string | null; status: string
   }
 
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayHere()
   const courses = (rows ?? [])
     .map((r) => r.course_instances as unknown as Inst)
     .filter(Boolean)

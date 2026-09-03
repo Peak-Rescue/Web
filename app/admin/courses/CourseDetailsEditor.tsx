@@ -6,6 +6,7 @@ import { CourseTypeSelect } from './CourseTypeSelect'
 import CourseLocationFields from '@/components/CourseLocationFields'
 import CourseContactsEditor from '@/components/CourseContactsEditor'
 import CourseDatePainter from '@/components/CourseDatePainter'
+import { courseZone, todayIn } from '@/lib/course-clock'
 import { computeBlocks } from '@/lib/courses'
 
 /** An off day as this screen needs it: the range for the arithmetic, the id,
@@ -126,6 +127,7 @@ export default function CourseDetailsEditor({
           startsAt={course.starts_at}
           endsAt={course.ends_at}
           offDays={offDays ?? []}
+          today={todayIn(courseZone(course.region))}
         />
       </div>
 
@@ -136,16 +138,13 @@ export default function CourseDetailsEditor({
         <summary className="cursor-pointer list-none text-sm text-zinc-400 hover:text-zinc-200 transition-colors select-none">
           <span className="text-zinc-600 text-xs mr-1.5 inline-block transition-transform group-open/off:rotate-90">▶</span>
           Breaks{(offDays ?? []).length > 0 ? ` (${(offDays ?? []).length})` : ''}
-        </summary>
-        <div className="mt-3">
-        <p className="text-xs text-zinc-500 mb-3">
-          Painted on the calendar above. A break is paid unless you say
-          otherwise here.
+          {' '}
           <InfoHint
             below
-            text="A paid break still counts as an instructor day on the estimate; an unpaid one comes off it. Lodging, the vehicle and meals span the break either way — nobody returns the truck for a weekend. Painting never changes an answer given here."
+            text="Paid breaks count as instructor days on the estimate; unpaid ones don't. Lodging and the vehicle span the break either way."
           />
-        </p>
+        </summary>
+        <div className="mt-3">
         {(offDays ?? []).length > 0 && (
           <div className="space-y-2 mb-3">
             {(offDays ?? []).map(o => {
@@ -165,11 +164,7 @@ export default function CourseDetailsEditor({
                     <form action={setOffDayPaid.bind(null, instanceId, o.id, !o.instructors_paid)}>
                       <button
                         type="submit"
-                        title={
-                          o.instructors_paid
-                            ? 'Instructors are paid through this break — click if they are not'
-                            : 'Instructors are not paid through this break — click if they are'
-                        }
+                        title={o.instructors_paid ? 'Click if unpaid' : 'Click if paid'}
                         className={`px-2 py-0.5 rounded-full border text-[11px] transition-colors ${
                           o.instructors_paid
                             ? 'border-amber-700/60 text-amber-300/90 hover:border-amber-600'

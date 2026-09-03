@@ -8,6 +8,7 @@ import { syncCourseCalendar } from '@/lib/google-calendar'
 import { quoteNumber } from '@/lib/quotes'
 import { courseShortName } from '@/lib/courses'
 import { sendMail } from '@/lib/mailer'
+import { todayHere } from '@/lib/course-clock'
 
 // Public action — authorization is the unguessable token itself.
 // For multi-option quotes, `selected` holds the indexes of the option or
@@ -31,7 +32,7 @@ export async function acceptQuote(
   if (quote.status === 'accepted') return { ok: true }
   if (quote.status !== 'sent') return { ok: false, error: 'This quote is not open for acceptance' }
 
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayHere()
   if (quote.valid_until && quote.valid_until < today) {
     return { ok: false, error: 'This quote has expired — please contact us for an updated quote' }
   }

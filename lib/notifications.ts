@@ -20,6 +20,8 @@ import { CERT_GROUPS, CERT_META, type CertType } from '@/lib/certs'
 import { courseShortName } from '@/lib/courses'
 import { listUpcomingEvents } from '@/lib/google-calendar'
 import { sendMail } from '@/lib/mailer'
+import { dayShift } from '@/lib/courses'
+import { todayHere } from '@/lib/course-clock'
 
 type Admin = ReturnType<typeof createAdminClient>
 
@@ -31,12 +33,15 @@ function siteUrl(): string {
   return process.env.NEXT_PUBLIC_SITE_URL || 'https://peak-rescue.com'
 }
 
+// The office clock: these go out from Colorado about work spread across a
+// dozen timezones, and read from UTC a nightly reminder fires on what is still
+// yesterday evening here.
 function todayISO(): string {
-  return new Date().toISOString().slice(0, 10)
+  return todayHere()
 }
 
 function addDaysISO(iso: string, days: number): string {
-  return new Date(Date.parse(iso) + days * 86_400_000).toISOString().slice(0, 10)
+  return dayShift(iso, days)
 }
 
 function friendlyDate(iso: string): string {

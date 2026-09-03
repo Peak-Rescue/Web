@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { todayIn } from '@/lib/course-clock'
 
 // Picking the course an expense belongs to. Nine times in ten it's a course
 // the person is staffed on and either just finished or is about to start, so
@@ -17,8 +18,12 @@ export type CourseOption = {
 
 const NEAR_LIMIT = 6
 
+// The reader's own clock. This runs in the instructor's browser and sorts
+// their courses into upcoming and past, so the day it is where they are
+// standing is the right answer — and toISOString would have said UTC, which
+// is tomorrow for half their evening.
 function today() {
-  return new Date().toISOString().slice(0, 10)
+  return todayIn(Intl.DateTimeFormat().resolvedOptions().timeZone)
 }
 
 // Upcoming soonest-first, then past most-recent-first: closeness to today,

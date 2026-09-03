@@ -30,7 +30,7 @@ import { formatPhone } from '@/lib/phone'
 import { GEAR_ENTRIES_SELECT } from '@/lib/gear'
 import { courseCapabilityCategories } from '@/lib/capabilities'
 import { GEAR_ENTRY_COLUMNS, gearLabel, gearQuantity, isChoice, placeSets, productName } from '@/lib/gear'
-import { courseDisplayName, computeBlocks, courseDates } from '@/lib/courses'
+import { courseDisplayName, computeBlocks, courseDates, dayShift } from '@/lib/courses'
 import CourseTasksPanel, { type CourseTask, type TaskPerson } from '@/components/CourseTasksPanel'
 import PdfLink from '@/components/PdfLink'
 import { loadTasksWithDocs } from '@/lib/course-tasks'
@@ -58,6 +58,7 @@ import { meetingDetails, meetingDayPassed, resolveDayMeeting } from '@/lib/meeti
 import { ChipRow } from '@/components/LinkChip'
 import { Section, SubHead, InstructorCard, StudentCard, SECTION_LABEL, type SectionKey } from './sections'
 import { PURPOSE_META, PURPOSE_ORDER, linkLabel, type CourseLink } from '@/lib/course-links'
+import { courseZone, todayIn } from '@/lib/course-clock'
 
 // Status is a sales/ops state — "quoted", "confirmed" — and means nothing to a
 // student, who by definition only sees courses they're enrolled on. The one
@@ -1033,12 +1034,11 @@ export default async function CourseView({
   // where they are going, so a plan that only opens on the day itself opens
   // too late — and eight open meeting blocks down one page is how the one that
   // matters stops being findable.
-  const todayISO = (() => {
-    const n = new Date()
-    return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`
-  })()
-  const tomorrowISO = new Date(Date.parse(`${todayISO}T00:00:00`) + 86_400_000)
-    .toISOString().slice(0, 10)
+  // On the clock where the course runs, not the server's. Read from the
+  // server's own clock this rolled over at 6pm in the canyon — folding away
+  // the morning of the day people were still teaching — and at 2pm in Hawaii.
+  const todayISO = todayIn(courseZone(inst.region))
+  const tomorrowISO = dayShift(todayISO, 1)
   const isOpenDay = (d: string | null) => d === todayISO || d === tomorrowISO
 
   // Once any day carries its own morning, the day is where the morning lives

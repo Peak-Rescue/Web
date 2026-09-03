@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { courseDisplayName, courseShortName } from '@/lib/courses'
 import ResponseForm from './ResponseForm'
+import { courseZone, todayIn } from '@/lib/course-clock'
 
 // Public, tokenized staffing-interest page — instructors land here from the
 // invite email to say whether they want to work the course.
@@ -34,7 +35,7 @@ export default async function StaffingInvitePage({
 
   const { data: inst } = await admin
     .from('course_instances')
-    .select('course_type, custom_title, client_name, location, starts_at, ends_at, status')
+    .select('course_type, custom_title, client_name, location, region, starts_at, ends_at, status')
     .eq('id', invite.instance_id)
     .single()
   if (!inst) notFound()
@@ -47,7 +48,7 @@ export default async function StaffingInvitePage({
     ? `${fmtLong(inst.starts_at)}${inst.ends_at && inst.ends_at !== inst.starts_at ? ` – ${fmtLong(inst.ends_at)}` : ''}`
     : 'Dates to be confirmed'
   const cancelled = inst.status === 'cancelled'
-  const over = Boolean(inst.ends_at && inst.ends_at < new Date().toISOString().slice(0, 10))
+  const over = Boolean(inst.ends_at && inst.ends_at < todayIn(courseZone(inst.region)))
 
   return (
     <main className="min-h-screen bg-zinc-950 text-white">

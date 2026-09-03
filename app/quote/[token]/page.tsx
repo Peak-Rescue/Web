@@ -9,6 +9,7 @@ import { services, categoryMeta, type ServiceCategory } from '@/lib/data/service
 import { QUOTE_MISSION, QUOTE_COMMITMENT, QUOTE_CONTACT, quoteNumber } from '@/lib/quotes'
 import { fmtMoney } from '@/lib/expenses'
 import AcceptForm from './AcceptForm'
+import { todayHere } from '@/lib/course-clock'
 
 // Public, tokenized quote page — the client-facing deliverable. Styled to
 // match the public site (dark, red accents, course photography).
@@ -87,7 +88,7 @@ export default async function QuotePage({
     ? `${fmtLong(inst.starts_at)}${inst.ends_at && inst.ends_at !== inst.starts_at ? ` – ${fmtLong(inst.ends_at)}` : ''}`
     : 'Dates to be confirmed'
 
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayHere()
   const expired = quote.status === 'sent' && quote.valid_until && quote.valid_until < today
   const accepted = quote.status === 'accepted'
 

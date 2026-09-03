@@ -10,6 +10,7 @@ import CourseCalendar, { type CalendarCourse } from '@/components/CourseCalendar
 import CourseContactsEditor from '@/components/CourseContactsEditor'
 import CourseList, { type Instance } from './CourseList'
 import CourseLocationFields from '@/components/CourseLocationFields'
+import { todayHere } from '@/lib/course-clock'
 
 function firstStartDate(inst: Instance): string | null {
   return inst.starts_at ?? null
@@ -44,7 +45,7 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
 
   const instances = (raw ?? []) as unknown as Instance[]
 
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayHere()
 
   // Upcoming: last end date is today or in the future (or no dates yet)
   // Past: last end date is before today

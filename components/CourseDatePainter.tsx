@@ -65,10 +65,15 @@ export default function CourseDatePainter({
   startsAt,
   endsAt,
   offDays,
+  today,
 }: {
   instanceId: string
   startsAt: string | null
   endsAt: string | null
+  // What day it is where the course runs, worked out on the server. The
+  // browser's own clock would be the admin's, and an admin travelling is the
+  // one person likely to open this on a different continent to the course.
+  today: string
   offDays: { off_date: string; end_date: string | null; instructors_paid?: boolean | null }[]
 }) {
   const fromProps = (): OffSpan[] =>
@@ -78,7 +83,7 @@ export default function CourseDatePainter({
 
   const [win, setWin] = useState<{ start: string | null; end: string | null }>({ start: startsAt, end: endsAt })
   const [breaks, setBreaks] = useState<OffSpan[]>(fromProps)
-  const [month, setMonth] = useState(() => monthOf(startsAt ?? ymd(new Date())))
+  const [month, setMonth] = useState(() => monthOf(startsAt ?? today))
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 

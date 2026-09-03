@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import CalendarChip from './CalendarChip'
+import { todayHere } from '@/lib/course-clock'
 
 export type CalendarCourse = {
   id: string
@@ -122,7 +123,9 @@ export default function CourseCalendar({
     ymd(new Date(Date.UTC(y, m - 1, i + 1 - leadDays)))
   )
 
-  const todayStr = ymd(new Date())
+  // The office clock. This calendar is a page of work read from Colorado, not
+  // one course in one canyon, and from UTC the ring moved a day early at 6pm.
+  const todayStr = todayHere()
 
   // Google-style multi-day bars: every course keeps one lane for its whole
   // span, so its bar sits at the same height in every week row and other

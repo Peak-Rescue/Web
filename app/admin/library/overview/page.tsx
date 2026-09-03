@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { KIND_META, type LibraryKind } from '@/lib/library'
 import { CAPABILITY_META, CAPABILITY_ORDER, type CapabilityCategory } from '@/lib/capabilities'
 import InfoHint from '@/components/InfoHint'
+import { todayHere } from '@/lib/course-clock'
 
 // A shape-of-the-library view: what exists at each level, and — more useful —
 // what doesn't. Counting rows tells you nothing about whether the canyon set
@@ -52,7 +53,7 @@ export default async function LibraryOverviewPage() {
   const venues = (venueRows ?? []) as { id: string; name: string; region: string | null }[]
 
   const cleanTopics = (r: Row) => r.topics.filter((t) => t !== 'needs-link-check')
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayHere()
 
   // ── Expertise → sections ────────────────────────────────────────────────
   const byDiscipline = CAPABILITY_ORDER.map((cat) => {
