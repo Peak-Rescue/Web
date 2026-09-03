@@ -1,5 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin'
-import { courseShortName } from '@/lib/courses'
+import { courseShortName, courseDayCounts } from '@/lib/courses'
 import { coaPrice, guessSeedQty, DEFAULT_MARGIN } from '@/lib/estimates'
 import { HERO_CHOICES } from '@/lib/quote-heroes'
 import { primaryContactEmail, ccEmailOptions, type CoursePOC } from '@/lib/contacts'
@@ -50,7 +50,7 @@ export default async function CoursePricingEditor({
   const [
     { data: estimateRows }, { data: pricingRateRows }, { data: quoteRows },
     { data: adminRows }, { data: galleryImageRows }, { data: estimateReviewRows },
-    { data: sourceRows },
+    { data: sourceRows }, { data: offDayRows },
   ] = await Promise.all([
     admin.from('course_estimates')
       .select('id, title, margin, price_override, created_at, estimate_items(label, qty, rate, notes, qty_factors, rate_id, drift_ack, sort_order)')
@@ -82,6 +82,7 @@ export default async function CoursePricingEditor({
         .sort((a, b) => ((b.starts_at as string | null) ?? '').localeCompare((a.starts_at as string | null) ?? ''))
       return { data: rows }
     })(),
+    admin.from('instance_off_days').select('off_date, end_date').eq('instance_id', instanceId),
   ])
 
   const quotePeople = (adminRows ?? [])
@@ -90,11 +91,17 @@ export default async function CoursePricingEditor({
   const pricingRates: PricingRate[] = (pricingRateRows ?? []).map((r) => ({ ...r, rate: Number(r.rate) }))
   const quotes: QuoteRow[] = (quoteRows ?? []).map((q) => ({ ...q, total: Number(q.total) }))
 
-  const courseDays =
-    course.starts_at && course.ends_at
-      ? Math.max(Math.round((Date.parse(course.ends_at) - Date.parse(course.starts_at)) / 86_400_000) + 1, 1)
-      : null
-  const estimateCounts = { instructors: instructorCount, students: course.max_students, days: courseDays }
+  // Two lengths, because they stop being the same number as soon as a break
+  // is in the middle: people are paid for the days the course runs, while the
+  // vehicle and the lodging are held across the whole span plus a day at each
+  // end.
+  const lengths = courseDayCounts(course.starts_at, course.ends_at, offDayRows ?? [])
+  const estimateCounts = {
+    instructors: instructorCount,
+    students: course.max_students,
+    days: lengths.days,
+    calendarDays: lengths.calendarDays,
+  }
 
   // Copy-picker sources: each course's COAs with their quote prices, plus the
   // relevance flags the picker groups by (same type first, then same client).
@@ -180,7 +187,12 @@ export default async function CoursePricingEditor({
   // always-recurring lines, quantities guessed from the course (nothing
   // saves until touched).
   if (estimatePanels.length === 0) {
-    const seedCounts = { instructors: instructorCount, days: courseDays ?? 1, students: (course.max_students as number | null) ?? null }
+    const seedCounts = {
+      instructors: instructorCount,
+      days: lengths.days ?? 1,
+      calendarDays: lengths.calendarDays ?? 1,
+      students: (course.max_students as number | null) ?? null,
+    }
     estimatePanels = [{
       id: null,
       title: 'COA 1',

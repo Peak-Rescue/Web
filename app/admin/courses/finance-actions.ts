@@ -7,6 +7,7 @@ import { after } from 'next/server'
 import { syncCourseCalendar } from '@/lib/google-calendar'
 import { parseContacts, primaryContactEmail, ccEmailOptions } from '@/lib/contacts'
 import { guessSeedQty, coaPrice, type SeedCounts, plannedInstructorCount } from '@/lib/estimates'
+import { courseDayCounts } from '@/lib/courses'
 import { sendMail } from '@/lib/mailer'
 
 async function requireAdmin() {
@@ -29,7 +30,7 @@ export type EstimateItemInput = {
   rate_id: string | null // library rate the line came from — survives renames
   /** Course counts when this quantity was deliberately kept, so the ask can
       come back if the course changes shape. Null = never kept. */
-  drift_ack: { i: number; s: number | null; d: number | null } | null
+  drift_ack: { i: number; s: number | null; d: number | null; c?: number | null } | null
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -51,14 +52,15 @@ function cleanFactors(
   return { f: nums, l }
 }
 
-// Only the three counts, only as numbers — this comes back from the client and
-// is compared against the course, never displayed.
-function cleanAck(ack: EstimateItemInput['drift_ack']): { i: number; s: number | null; d: number | null } | null {
+// Only the counts, only as numbers — this comes back from the client and is
+// compared against the course, never displayed. `c` is the calendar span, the
+// length the vehicle and the lodging are held for; `d` is the days worked.
+function cleanAck(ack: EstimateItemInput['drift_ack']): { i: number; s: number | null; d: number | null; c: number | null } | null {
   if (!ack || typeof ack !== 'object') return null
   const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null)
   const i = num(ack.i)
   if (i === null) return null
-  return { i, s: num(ack.s), d: num(ack.d) }
+  return { i, s: num(ack.s), d: num(ack.d), c: num(ack.c) }
 }
 
 // Replace-style save keeps the action simple and the client authoritative
@@ -129,20 +131,22 @@ export async function saveEstimate(
 // from the course, same as the virtual estimate the course page shows before
 // anything is saved). Returns it shaped like createQuote's estimate query.
 async function seedDefaultCoa(admin: Awaited<ReturnType<typeof requireAdmin>>, instanceId: string) {
-  const [{ data: inst }, { count }, { data: defaults }, { count: assignedCount }] = await Promise.all([
+  const [{ data: inst }, { count }, { data: defaults }, { count: assignedCount }, { data: offDays }] = await Promise.all([
     admin.from('course_instances').select('starts_at, ends_at, max_students, instructor_slots').eq('id', instanceId).single(),
     admin.from('course_estimates').select('id', { count: 'exact', head: true }).eq('instance_id', instanceId),
     admin.from('pricing_rates').select('id, label, unit, rate').eq('active', true).eq('default_line', true).order('sort_order'),
     admin.from('instance_instructors').select('id', { count: 'exact', head: true }).eq('instance_id', instanceId),
+    admin.from('instance_off_days').select('off_date, end_date').eq('instance_id', instanceId),
   ])
   if (!inst) throw new Error('Course not found')
 
+  // Days worked and days on the calendar are different numbers the moment a
+  // break sits in the middle of the course, and the seeded lines need both.
+  const lengths = courseDayCounts(inst.starts_at, inst.ends_at, offDays ?? [])
   const counts: SeedCounts = {
     instructors: plannedInstructorCount(inst, assignedCount ?? 0),
-    days:
-      inst.starts_at && inst.ends_at
-        ? Math.max(Math.round((Date.parse(inst.ends_at) - Date.parse(inst.starts_at)) / 86_400_000) + 1, 1)
-        : 1,
+    days: lengths.days ?? 1,
+    calendarDays: lengths.calendarDays ?? 1,
     students: inst.max_students,
   }
 

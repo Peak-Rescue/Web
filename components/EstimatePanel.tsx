@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { fmtMoney, round2 } from '@/lib/expenses'
-import { impliedMargin, factorValue, prefillFactor, unitFactorNames } from '@/lib/estimates'
+import { impliedMargin, factorValue, prefillFactor, unitFactorNames, dayCountFollowsCourse } from '@/lib/estimates'
 import { publishCoaPrice, retractCoaPrice } from '@/lib/live-coa-prices'
 import { saveEstimate, deleteEstimateCoa, type EstimateItemInput } from '@/app/admin/courses/finance-actions'
 import { useRouter } from 'next/navigation'
@@ -13,7 +13,16 @@ import InfoHint from '@/components/InfoHint'
 
 export type PricingRate = { id: string; label: string; unit: string | null; rate: number }
 
-export type CourseCounts = { instructors: number; students: number | null; days: number | null }
+// The course as the estimator's numbers see it. Two day counts: `days` is
+// what the course runs with breaks taken out — what a person is paid for —
+// and `calendarDays` is first day to last with the breaks left in, which is
+// what the vehicle and the room are held for.
+export type CourseCounts = {
+  instructors: number
+  students: number | null
+  days: number | null
+  calendarDays: number | null
+}
 
 type Row = {
   key: number
@@ -63,7 +72,7 @@ export default function EstimatePanel({
   initialTitle: string
   initialMargin: number
   initialPriceOverride: number | null // hand-set price; null = use the calculated one
-  initialItems: { label: string; qty: number | null; rate: number; notes: string | null; factors: number[] | null; factor_labels: (string | null)[] | null; rate_id: string | null; drift_ack: { i: number; s: number | null; d: number | null } | null }[]
+  initialItems: { label: string; qty: number | null; rate: number; notes: string | null; factors: number[] | null; factor_labels: (string | null)[] | null; rate_id: string | null; drift_ack: { i: number; s: number | null; d: number | null; c?: number | null } | null }[]
   rates: PricingRate[]
   canDelete: boolean
   solo: boolean // only COA on the course — the default "COA n" title stays hidden until a second exists
@@ -85,7 +94,17 @@ export default function EstimatePanel({
       factors: i.factors && i.factors.length >= 2 ? i.factors.map(String) : null,
       flabels: i.factor_labels ?? [],
       rateId: i.rate_id,
-      ack: i.drift_ack ? { instructors: i.drift_ack.i, students: i.drift_ack.s, days: i.drift_ack.d } : null,
+      // `c` postdates the column: a line kept before the calendar span was a
+      // number of its own is read as having been kept for the span it has
+      // now, so an old decision is not reopened for a course nobody touched.
+      ack: i.drift_ack
+        ? {
+            instructors: i.drift_ack.i,
+            students: i.drift_ack.s,
+            days: i.drift_ack.d,
+            calendarDays: i.drift_ack.c === undefined ? counts.calendarDays : i.drift_ack.c,
+          }
+        : null,
     }))
   )
   const [notesOpen, setNotesOpen] = useState<Set<number>>(
@@ -164,7 +183,7 @@ export default function EstimatePanel({
             factors: trimmed.length >= 2 ? trimmed : null,
             factor_labels: trimmed.length >= 2 ? trimmedLabels : null,
             rate_id: row.rateId,
-            drift_ack: row.ack ? { i: row.ack.instructors, s: row.ack.students, d: row.ack.days } : null,
+            drift_ack: row.ack ? { i: row.ack.instructors, s: row.ack.students, d: row.ack.days, c: row.ack.calendarDays } : null,
           }
         })
       const priceOverride = o.trim() === '' ? null : Number(o)
@@ -210,7 +229,8 @@ export default function EstimatePanel({
       ack !== null &&
       ack.instructors === counts.instructors &&
       ack.students === counts.students &&
-      ack.days === counts.days
+      ack.days === counts.days &&
+      ack.calendarDays === counts.calendarDays
     )
   }
 
@@ -224,14 +244,16 @@ export default function EstimatePanel({
     return factors.flatMap((f, i) => {
       const name = (libLabels[i] ?? r.flabels[i] ?? '').trim()
       if (!name) return []
-      // A bare per-day line — vehicle rental, venue, admin — has a quantity
-      // that is a judgment about which days are being paid for, not a copy of
-      // the course's length: five course days can mean six rental days or two
-      // admin ones. A bare headcount is different; nobody types a student
-      // number meaning anything other than the students. So a lone day count
-      // is left alone, while a day inside a breakdown somebody built by hand
-      // still tracks the course.
-      if (!explicit && /^(day|night)/i.test(name)) return []
+      // A bare per-day line is usually a judgment about which days are being
+      // paid for, not a copy of the course's length: a venue can be held for
+      // eight days on a five-day course. Those are left alone. The rental
+      // vehicle and the lodging are the exception — they run the course's
+      // dates, breaks and all, plus a day at each end, so they are read off
+      // the calendar and have to move with it. A bare headcount always
+      // tracks: nobody types a student number meaning anything other than the
+      // students. And a day inside a breakdown somebody built by hand tracks
+      // the course too.
+      if (!explicit && /^(day|night)/i.test(name) && !dayCountFollowsCourse(r.label)) return []
       const expected = countForFactor(name, r.label)
       const current = f.trim() === '' ? 1 : Number(f) || 0
       return expected !== null && expected !== current ? [{ idx: i, name, current, expected }] : []
@@ -410,6 +432,11 @@ export default function EstimatePanel({
     counts.instructors ? `${counts.instructors} instructor${counts.instructors === 1 ? '' : 's'}` : null,
     counts.students ? `${counts.students} student${counts.students === 1 ? '' : 's'}` : null,
     counts.days ? `${counts.days} day${counts.days === 1 ? '' : 's'}` : null,
+    // Only worth saying when a break has pulled the two apart; otherwise it
+    // is the same number twice.
+    counts.calendarDays && counts.calendarDays !== counts.days
+      ? `${counts.calendarDays} on the calendar`
+      : null,
   ].filter(Boolean).join(' · ')
 
   const subtotal = round2(rows.reduce((s, r) => s + (Number(r.qty) || 0) * (Number(r.rate) || 0), 0))

@@ -3,18 +3,22 @@ import { services, categoryMeta, type ServiceCategory } from './data/services'
 export type DateBlock = { starts_at: string; ends_at: string }
 export type OffDayRange = { off_date: string; end_date?: string | null }
 
-export function computeBlocks(starts_at: string, ends_at: string, offDays: OffDayRange[]): DateBlock[] {
-  // Build a set of all individual off dates, expanding ranges
-  const offSet = new Set<string>()
+/** Every individual date a set of off-day rows covers, ranges expanded. */
+function offDates(offDays: OffDayRange[]): Set<string> {
+  const out = new Set<string>()
   for (const { off_date, end_date } of offDays) {
-    const rangeEnd = end_date ?? off_date
     const d = new Date(off_date + 'T00:00:00')
-    const e = new Date(rangeEnd + 'T00:00:00')
+    const e = new Date((end_date ?? off_date) + 'T00:00:00')
     while (d <= e) {
-      offSet.add(d.toISOString().slice(0, 10))
+      out.add(d.toISOString().slice(0, 10))
       d.setDate(d.getDate() + 1)
     }
   }
+  return out
+}
+
+export function computeBlocks(starts_at: string, ends_at: string, offDays: OffDayRange[]): DateBlock[] {
+  const offSet = offDates(offDays)
 
   const blocks: DateBlock[] = []
   const end = new Date(ends_at + 'T00:00:00')
@@ -65,6 +69,28 @@ export function courseDates(
     }
   }
   return out
+}
+
+/** A course's two lengths, for anything that has to put a number of days on
+    it. `days` is the days it actually runs — breaks taken out, because a
+    break is in the course to say that day is off and nobody is paid for it.
+    `calendarDays` is first day to last with the breaks left in, which is what
+    a rental vehicle or a hotel room is held for over a weekend in the middle.
+
+    Both null until the course has dates: a length nobody knows is not 1. */
+export function courseDayCounts(
+  starts_at: string | null,
+  ends_at: string | null,
+  offDays: OffDayRange[]
+): { days: number | null; calendarDays: number | null } {
+  if (!starts_at || !ends_at) return { days: null, calendarDays: null }
+  const calendarDays = Math.max(
+    Math.round((Date.parse(ends_at) - Date.parse(starts_at)) / 86_400_000) + 1,
+    1
+  )
+  // A course that is break end to end still costs someone a day to run.
+  const days = Math.max(courseDates(starts_at, ends_at, offDays).length, 1)
+  return { days, calendarDays }
 }
 
 export { categoryMeta }

@@ -56,18 +56,48 @@ export function plannedInstructorCount(
 //
 // Word tests rather than exact labels, so renaming a rate in the library does
 // not silently change what it means.
-export type FactorCounts = { instructors: number; students: number | null; days: number | null }
+// Two day counts, because a course has two lengths and they are not the same
+// number the moment a break is in the middle of it.
+//
+//   days         — the days the course actually runs, breaks removed. What a
+//                  person is paid for: a break is in the course precisely to
+//                  say that day is off, and an unpaid day is not billed to
+//                  the client as an instructor day.
+//   calendarDays — first day to last, breaks included. What a thing costs
+//                  while it sits there: nobody returns the truck on Friday
+//                  and rents another one on Monday.
+export type FactorCounts = {
+  instructors: number
+  students: number | null
+  days: number | null
+  calendarDays: number | null
+}
 
 // Costs that run a day longer at each end of the course: people arrive the
 // night before the first day and leave the morning after the last, so they
 // sleep, eat, and keep the vehicle for two days the course itself does not
-// have.
+// have. These are also the costs measured against the calendar rather than
+// against the days worked — which is why the vehicle and the lodging come out
+// at the same number nearly every time.
 export function spansTravelDays(label: string): boolean {
   return /lodging|hotel|meal|vehicle|rental|fuel/i.test(label)
 }
 
-export function daysForLine(label: string, days: number): number {
-  return days + (spansTravelDays(label) ? 2 : 0)
+export function daysForLine(label: string, counts: { days: number; calendarDays: number }): number {
+  return spansTravelDays(label) ? counts.calendarDays + 2 : counts.days
+}
+
+// Whether a lone day count on a line follows the course or is left to the
+// estimator. Most single-dimension day counts are a judgment about which days
+// are being paid for — a venue booked for eight days on a five-day course is
+// a decision, not a stale copy of the course's length — so they are left
+// alone. The travel-spanning costs are not a judgment: the vehicle is picked
+// up the day before the course and dropped off the day after, and lodging
+// covers the same nights, which is why the two are almost always the same
+// number. Both are read straight off the calendar, breaks included, so both
+// have to move when the course's dates do.
+export function dayCountFollowsCourse(label: string): boolean {
+  return spansTravelDays(label)
 }
 
 // Travel days are out and back — two, whatever the course's length.
@@ -99,8 +129,9 @@ export function factorValue(name: string, label: string, counts: FactorCounts): 
   }
   if (n.startsWith('student')) return counts.students
   if (n.startsWith('day') || n.startsWith('night')) {
-    if (isTravelLine(label) || isJudgmentLine(label) || counts.days === null) return null
-    return daysForLine(label, counts.days)
+    if (isTravelLine(label) || isJudgmentLine(label)) return null
+    if (counts.days === null || counts.calendarDays === null) return null
+    return daysForLine(label, { days: counts.days, calendarDays: counts.calendarDays })
   }
   return null
 }
@@ -131,7 +162,7 @@ export function unitFactorNames(unit: string | null): string[] {
     .map((f) => (f.endsWith('s') ? f : `${f}s`))
 }
 
-export type SeedCounts = { instructors: number; days: number; students: number | null }
+export type SeedCounts = { instructors: number; days: number; calendarDays: number; students: number | null }
 
 // Quantity for a seeded default estimate line, from the rate's unit and the
 // same rules the panel prefills with. Null quantity = nobody can guess this

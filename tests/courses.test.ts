@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { courseDates, computeBlocks } from '@/lib/courses'
+import { courseDates, computeBlocks, courseDayCounts } from '@/lib/courses'
 
 // A schedule day has no date of its own — it is the Nth date the course runs.
 // Announcing a morning depends on this being right, and a template day must
@@ -48,5 +48,29 @@ describe('computeBlocks', () => {
       { starts_at: '2026-08-24', ends_at: '2026-08-25' },
       { starts_at: '2026-08-27', ends_at: '2026-08-28' },
     ])
+  })
+})
+
+// A course has two lengths, and a break in the middle is what separates them:
+// the days worked, and the days on the calendar the vehicle and the room are
+// held across.
+describe('course lengths', () => {
+  const noBreaks: { off_date: string; end_date?: string | null }[] = []
+
+  it('reads the same both ways when the course runs straight through', () => {
+    expect(courseDayCounts('2026-09-07', '2026-09-11', noBreaks)).toEqual({ days: 5, calendarDays: 5 })
+  })
+
+  // Mon–Fri, weekend off, Mon–Fri: ten days worked, twelve on the calendar.
+  it('takes a weekend break out of the days worked and leaves it in the span', () => {
+    const weekend = [{ off_date: '2026-09-12', end_date: '2026-09-13' }]
+    expect(courseDayCounts('2026-09-07', '2026-09-18', weekend)).toEqual({ days: 10, calendarDays: 12 })
+  })
+
+  // A length nobody knows yet is not 1 — a course with no dates has no
+  // number, and the lines that need one are left blank to be filled in.
+  it('has no answer for a course with no dates', () => {
+    expect(courseDayCounts(null, null, noBreaks)).toEqual({ days: null, calendarDays: null })
+    expect(courseDayCounts('2026-09-07', null, noBreaks)).toEqual({ days: null, calendarDays: null })
   })
 })
