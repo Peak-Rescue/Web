@@ -43,8 +43,32 @@ describe('strokeOffDays — painting', () => {
       .toEqual([span('2026-08-26'), span('2026-08-28')])
   })
 
-  it('keeps pay on days that had it when an unpaid stroke swallows a paid break', () => {
-    expect(strokeOffDays([span('2026-08-26', '2026-08-26', true)], '2026-08-26', '2026-08-28', true, false))
+  // A break is paid unless somebody marked it otherwise on its row, so an
+  // unpaid one is a deliberate answer and a stroke drawn over or beside it
+  // must not put the pay back. The two stay adjacent and disagree.
+  it('draws around a break that answered pay the other way', () => {
+    expect(strokeOffDays([span('2026-08-26', '2026-08-26', false)], '2026-08-26', '2026-08-28', true, true))
+      .toEqual([span('2026-08-26', '2026-08-26', false), span('2026-08-27', '2026-08-28', true)])
+  })
+
+  it('draws around one it merely abuts, rather than swallowing it', () => {
+    expect(strokeOffDays([span('2026-08-26', '2026-08-26', false)], '2026-08-27', '2026-08-27', true, true))
+      .toEqual([span('2026-08-26', '2026-08-26', false), span('2026-08-27', '2026-08-27', true)])
+  })
+
+  // A stroke straddling a disagreeing break comes out in two pieces, one
+  // either side, and the break in the middle is left as it was.
+  it('splits in two around a break it straddles', () => {
+    expect(strokeOffDays([span('2026-08-27', '2026-08-27', false)], '2026-08-26', '2026-08-28', true, true))
+      .toEqual([
+        span('2026-08-26', '2026-08-26', true),
+        span('2026-08-27', '2026-08-27', false),
+        span('2026-08-28', '2026-08-28', true),
+      ])
+  })
+
+  it('still merges with a break that agrees about pay', () => {
+    expect(strokeOffDays([span('2026-08-26', '2026-08-26', true)], '2026-08-27', '2026-08-28', true, true))
       .toEqual([span('2026-08-26', '2026-08-28', true)])
   })
 
@@ -120,17 +144,20 @@ describe('what a stroke costs', () => {
       .toEqual({ days: 7, calendarDays: 7 })
   })
 
-  it('an unpaid stroke over a paid break leaves the pay on — the chip is what takes it off', () => {
-    // Painting is asymmetric on purpose: a merge that dropped pay would take
-    // it off days that had it, quietly, from a gesture aimed at the days
-    // around them. So the days stay paid and the row's chip is the way to
-    // change the answer.
+  it('a stroke beside an unpaid break leaves that day off the count', () => {
+    // The gesture that costs money is the one aimed at the days around the
+    // exception, not at the exception itself: painting the 27th and 28th must
+    // not put the 26th's pay back. One instructor day stays off, and the chip
+    // is the only thing that puts it back.
     const after = strokeOffDays(
-      [{ from: '2026-08-26', to: '2026-08-26', paid: true }],
-      '2026-08-26', '2026-08-28', true, false
+      [{ from: '2026-08-26', to: '2026-08-26', paid: false }],
+      '2026-08-26', '2026-08-28', true, true
     )
-    expect(after).toEqual([{ from: '2026-08-26', to: '2026-08-28', paid: true }])
-    expect(courseDayCounts('2026-08-24', '2026-08-30', rows(after)).days).toBe(7)
+    expect(after).toEqual([
+      { from: '2026-08-26', to: '2026-08-26', paid: false },
+      { from: '2026-08-27', to: '2026-08-28', paid: true },
+    ])
+    expect(courseDayCounts('2026-08-24', '2026-08-30', rows(after)).days).toBe(6)
   })
 
   it('erasing a break gives the days back', () => {

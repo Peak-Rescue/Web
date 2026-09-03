@@ -81,14 +81,15 @@ describe('course lengths', () => {
     expect(courseDayCounts('2026-09-07', '2026-09-18', weekend).days).toBe(10)
   })
 
-  // One paid Saturday inside an unpaid weekend: where two breaks disagree
-  // about a date, the day is paid, because that is the safe way to be wrong.
-  it('pays a date that two breaks disagree about', () => {
+  // Where two rows disagree about a date, the unpaid one wins: paid is what a
+  // break is unless somebody marked it, so the unpaid row is the answer
+  // somebody actually gave, and a stray overlapping row must not undo it.
+  it('leaves a date unpaid when two breaks disagree about it', () => {
     const both = [
-      { off_date: '2026-09-12', end_date: '2026-09-13' },
+      { off_date: '2026-09-12', end_date: '2026-09-13', instructors_paid: false },
       { off_date: '2026-09-12', instructors_paid: true },
     ]
-    expect(courseDayCounts('2026-09-07', '2026-09-18', both).days).toBe(11)
+    expect(courseDayCounts('2026-09-07', '2026-09-18', both).days).toBe(10)
   })
 
   // Off days still skip a teaching day whoever is paying: day N of a schedule

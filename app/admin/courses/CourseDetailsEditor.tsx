@@ -139,8 +139,12 @@ export default function CourseDetailsEditor({
         </summary>
         <div className="mt-3">
         <p className="text-xs text-zinc-500 mb-3">
-          Painted on the calendar above; listed here to say whether the crew is
-          paid through one, and typed in by date when that is easier.
+          Painted on the calendar above. A break is paid unless you say
+          otherwise here.
+          <InfoHint
+            below
+            text="A paid break still counts as an instructor day on the estimate; an unpaid one comes off it. Lodging, the vehicle and meals span the break either way — nobody returns the truck for a weekend. Painting never changes an answer given here."
+          />
         </p>
         {(offDays ?? []).length > 0 && (
           <div className="space-y-2 mb-3">
@@ -154,14 +158,16 @@ export default function CourseDetailsEditor({
                     <span className="text-sm">
                       {isRange ? `${fmt(o.off_date)} → ${fmt(o.end_date!)}` : fmt(o.off_date)}
                     </span>
-                    {/* Answered when the break was added; flipped here rather
-                        than by deleting and retyping the dates. */}
+                    {/* The only pay control on the screen. A break is created
+                        paid, because that is what a break is here nearly every
+                        time; this is where the exception gets marked, and the
+                        only thing that puts pay back once it is. */}
                     <form action={setOffDayPaid.bind(null, instanceId, o.id, !o.instructors_paid)}>
                       <button
                         type="submit"
                         title={
                           o.instructors_paid
-                            ? 'Instructors are paid through this break — click to make it unpaid'
+                            ? 'Instructors are paid through this break — click if they are not'
                             : 'Instructors are not paid through this break — click if they are'
                         }
                         className={`px-2 py-0.5 rounded-full border text-[11px] transition-colors ${
@@ -189,6 +195,14 @@ export default function CourseDetailsEditor({
             })}
           </div>
         )}
+        {/* The calendar is the way in; this stays for the break months away
+            from what is on screen, and for anyone who cannot drag a pointer
+            across it. */}
+        <details className="group/typed">
+          <summary className="cursor-pointer list-none text-xs text-zinc-500 hover:text-zinc-300 transition-colors select-none mb-2">
+            <span className="text-zinc-600 mr-1.5 inline-block transition-transform group-open/typed:rotate-90">▶</span>
+            Add by date
+          </summary>
         <form action={addOffDayHere} className="flex gap-2 flex-wrap items-end p-4 bg-zinc-950/40 border border-dashed border-zinc-700 rounded-lg">
           <div>
             <label className="block text-xs text-zinc-500 mb-1">Start date</label>
@@ -198,22 +212,11 @@ export default function CourseDetailsEditor({
             <label className="block text-xs text-zinc-500 mb-1">End date <span className="text-zinc-600">(optional)</span></label>
             <input name="end_date" type="date" className="bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
           </div>
-          <label className="flex items-center gap-1.5 text-sm text-zinc-300 pb-2 cursor-pointer">
-            <input
-              name="instructors_paid"
-              type="checkbox"
-              className="w-4 h-4 accent-pr-red bg-zinc-800 border-zinc-700 rounded"
-            />
-            Paying instructors
-            <InfoHint
-              below
-              text="Whether the crew is on the clock through the break. A paid break still counts as an instructor day on the estimate; an unpaid one comes off it. Lodging, the vehicle and meals span the break either way — nobody returns the truck for a weekend."
-            />
-          </label>
           <button type="submit" className="px-4 py-2 bg-pr-red hover:bg-pr-red-dark text-white rounded text-sm font-medium transition-colors">
             Add
           </button>
         </form>
+        </details>
         </div>
       </details>
 

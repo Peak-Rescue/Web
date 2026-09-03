@@ -88,12 +88,12 @@ export function courseDayCounts(
     1
   )
   // Only an unpaid break comes off the count: a paid one is a day the course
-  // does not teach and still owes somebody a day's wage. A date covered by
-  // both a paid and an unpaid row counts as paid — where two breaks disagree,
-  // quoting the more expensive reading is the safe way to be wrong.
-  const paid = offDates(offDays.filter((o) => o.instructors_paid))
+  // does not teach and still owes somebody a day's wage. A date covered by two
+  // rows that disagree counts as unpaid, because paid is what a break is
+  // unless somebody marked it — so the unpaid row is the one that was
+  // deliberately answered, and a stray overlapping row must not undo it.
   const unpaid = offDates(offDays.filter((o) => !o.instructors_paid))
-  const notWorked = [...unpaid].filter((d) => !paid.has(d) && d >= starts_at && d <= ends_at)
+  const notWorked = [...unpaid].filter((d) => d >= starts_at && d <= ends_at)
   // A course that is break end to end still costs someone a day to run.
   const days = Math.max(calendarDays - notWorked.length, 1)
   return { days, calendarDays }
@@ -120,10 +120,14 @@ export function dayShift(d: string, n: number): string {
  *
  *  Painting swallows every break the stroke touches or merely abuts — two
  *  breaks with no working day between them are one break, however they were
- *  drawn — and the result is paid if the stroke or anything it swallowed was.
- *  A date covered by a paid and an unpaid break already reads as paid
- *  (see courseDayCounts), and a stroke must not quietly take pay off days
- *  that had it.
+ *  drawn — but only where the two agree about pay. Days already inside a break
+ *  that answered the pay question differently keep their answer, and the new
+ *  days are drawn around them, leaving two adjacent rows that disagree.
+ *
+ *  That is the whole point of the split: a break is paid unless somebody said
+ *  otherwise on its row, so an unpaid one is a deliberate answer, and a stroke
+ *  drawn next to it must not quietly put the pay back. Painting adds days; the
+ *  chip is what changes pay.
  *
  *  Erasing removes the stroke's days and keeps whatever ends survive.
  *
@@ -139,16 +143,26 @@ export function strokeOffDays(
 
   const out = paint
     ? (() => {
-        const touched = spans.filter((b) => b.to >= dayShift(from, -1) && b.from <= dayShift(to, 1))
-        const rest = spans.filter((b) => !touched.includes(b))
-        return [
-          ...rest,
-          {
-            from: touched.reduce((m, b) => (b.from < m ? b.from : m), from),
-            to: touched.reduce((m, b) => (b.to > m ? b.to : m), to),
-            paid: paid || touched.some((b) => b.paid),
-          },
-        ]
+        const abuts = (b: OffSpan) => b.to >= dayShift(from, -1) && b.from <= dayShift(to, 1)
+        const merging = spans.filter((b) => b.paid === paid && abuts(b))
+        const rest = spans.filter((b) => !merging.includes(b))
+        const start = merging.reduce((m, b) => (b.from < m ? b.from : m), from)
+        const end = merging.reduce((m, b) => (b.to > m ? b.to : m), to)
+
+        // Anything in the way answered the pay question the other way, so the
+        // stroke is drawn around it — in two pieces where it straddles one.
+        const inTheWay = rest
+          .filter((b) => b.to >= start && b.from <= end)
+          .sort((a, b) => a.from.localeCompare(b.from))
+        const pieces: OffSpan[] = []
+        let cursor = start
+        for (const b of inTheWay) {
+          if (b.from > cursor) pieces.push({ from: cursor, to: dayShift(b.from, -1), paid })
+          if (b.to >= cursor) cursor = dayShift(b.to, 1)
+        }
+        if (cursor <= end) pieces.push({ from: cursor, to: end, paid })
+
+        return [...rest, ...pieces]
       })()
     : spans.flatMap((b) => {
         if (b.to < from || b.from > to) return [b]

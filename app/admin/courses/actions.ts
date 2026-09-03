@@ -468,11 +468,11 @@ export async function addOffDay(instanceId: string, formData: FormData) {
   const admin = createAdminClient()
   const off_date = formData.get('off_date') as string
   const end_date = (formData.get('end_date') as string) || null
-  // Asked at the moment the break is designated, because that is when the
-  // answer is known: the crew going home for the weekend and the crew staying
-  // in the canyon look identical a month later, and only one of them is a day
-  // the client is quoted for.
-  const instructors_paid = formData.get('instructors_paid') !== null
+  // Paid unless the form says otherwise, which it no longer does: a break
+  // here nearly always means the crew stays put and stays on the clock, so
+  // the question is not worth asking twice on the way in. The rare unpaid one
+  // is marked on its own row afterwards, where the answer is about a break
+  // that exists rather than about the next one drawn.
   if (!off_date) throw new Error('Date is required')
   if (end_date && end_date < off_date) throw new Error('Off-day end date must be on or after its start date')
 
@@ -496,7 +496,7 @@ export async function addOffDay(instanceId: string, formData: FormData) {
 
   const { error } = await admin
     .from('instance_off_days')
-    .insert({ instance_id: instanceId, off_date, end_date: end_date ?? null, instructors_paid })
+    .insert({ instance_id: instanceId, off_date, end_date: end_date ?? null, instructors_paid: true })
 
   if (error) throw new Error(error.message)
   revalidatePath(`/admin/courses/${instanceId}`)

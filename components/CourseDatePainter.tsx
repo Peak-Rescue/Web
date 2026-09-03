@@ -79,7 +79,6 @@ export default function CourseDatePainter({
   const [win, setWin] = useState<{ start: string | null; end: string | null }>({ start: startsAt, end: endsAt })
   const [breaks, setBreaks] = useState<OffSpan[]>(fromProps)
   const [month, setMonth] = useState(() => monthOf(startsAt ?? ymd(new Date())))
-  const [paidNext, setPaidNext] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
@@ -154,9 +153,13 @@ export default function CourseDatePainter({
 
   function saveStroke(from: string, to: string, paint: boolean) {
     const before = breaks
-    setBreaks(strokeOffDays(breaks, from, to, paint, paidNext))
+    // Paid, because that is what a break is here nearly every time: the crew
+    // stays where they are and stays on the clock. The rare unpaid one is
+    // marked on its own row, where the answer is about a break that exists
+    // rather than about the next one drawn.
+    setBreaks(strokeOffDays(breaks, from, to, paint, true))
     void run(
-      () => paintOffDays(instanceId, from, to, paint, paidNext),
+      () => paintOffDays(instanceId, from, to, paint, true),
       () => setBreaks(before)
     )
   }
@@ -248,7 +251,16 @@ export default function CourseDatePainter({
     if (stroke?.mode === 'window' && !previewing) course = false
 
     const ring = previewing ? ' ring-2 ring-inset ring-pr-red-light' : ''
-    if (course && off) return `${base} bg-zinc-800 text-zinc-500 border border-dashed border-zinc-600${ring}`
+    // An unpaid break is the exception and the expensive one to miss — it is
+    // the only thing here that takes a day off what the client is quoted — so
+    // it is drawn apart from the ordinary paid break rather than left to the
+    // list below to disclose.
+    if (course && off) {
+      const unpaid = breakOn(day) ? !breakOn(day)!.paid : false
+      return unpaid
+        ? `${base} bg-zinc-800 text-amber-300/80 border border-dashed border-amber-700/70${ring}`
+        : `${base} bg-zinc-800 text-zinc-500 border border-dashed border-zinc-600${ring}`
+    }
     if (course) return `${base} bg-pr-red/85 text-white font-medium hover:bg-pr-red${ring}`
     return `${base} text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300${ring}`
   }
@@ -328,7 +340,9 @@ export default function CourseDatePainter({
                       isEdge(day)
                         ? `${day === win.start ? 'First' : 'Last'} day — drag to move it`
                         : breakOn(day)
-                          ? 'Break — click to put the day back'
+                          ? breakOn(day)!.paid
+                            ? 'Break, instructors paid — click to put the day back'
+                            : 'Break, unpaid — click to put the day back'
                           : inWindow(day)
                             ? 'Course day — click to make it a break'
                             : 'Click to set the course dates'
@@ -368,19 +382,6 @@ export default function CourseDatePainter({
             className="bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500"
           />
         </div>
-        <label className="flex items-center gap-1.5 text-sm text-zinc-300 pb-2 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={paidNext}
-            onChange={(e) => setPaidNext(e.target.checked)}
-            className="w-4 h-4 accent-pr-red bg-zinc-800 border-zinc-700 rounded"
-          />
-          Paying instructors through breaks
-          <InfoHint
-            below
-            text="Whether the crew is on the clock through a break you paint next. A paid break still counts as an instructor day on the estimate; an unpaid one comes off it. Lodging, the vehicle and meals span the break either way — nobody returns the truck for a weekend. Already-painted breaks are flipped on their own row below."
-          />
-        </label>
       </div>
 
       {error && <p className="mt-2 text-xs text-pr-red-light">{error}</p>}
