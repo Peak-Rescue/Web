@@ -35,6 +35,7 @@ export default async function CoursePricingEditor({
     max_students: number | null
     starts_at: string | null
     ends_at: string | null
+    breaks_paid?: boolean | null
     hero_image: string | null
     hero_position: string | null
     hero_scale: string | number | null
@@ -82,7 +83,7 @@ export default async function CoursePricingEditor({
         .sort((a, b) => ((b.starts_at as string | null) ?? '').localeCompare((a.starts_at as string | null) ?? ''))
       return { data: rows }
     })(),
-    admin.from('instance_off_days').select('off_date, end_date, instructors_paid').eq('instance_id', instanceId),
+    admin.from('instance_off_days').select('off_date, end_date').eq('instance_id', instanceId),
   ])
 
   const quotePeople = (adminRows ?? [])
@@ -95,7 +96,7 @@ export default async function CoursePricingEditor({
   // is in the middle: people are paid for the days the course runs, while the
   // vehicle and the lodging are held across the whole span plus a day at each
   // end.
-  const lengths = courseDayCounts(course.starts_at, course.ends_at, offDayRows ?? [])
+  const lengths = courseDayCounts(course.starts_at, course.ends_at, offDayRows ?? [], course.breaks_paid ?? true)
   const estimateCounts = {
     instructors: instructorCount,
     students: course.max_students,

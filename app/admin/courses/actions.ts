@@ -18,15 +18,15 @@ const fmtLong = (d: string) =>
 
 // Off-day rows as spans, and back: the table stores a nullable end date, the
 // arithmetic wants two dates.
-function toSpans(rows: { off_date: string; end_date: string | null; instructors_paid?: boolean | null }[]): OffSpan[] {
-  return rows.map((o) => ({ from: o.off_date, to: o.end_date ?? o.off_date, paid: Boolean(o.instructors_paid) }))
+function toSpans(rows: { off_date: string; end_date: string | null }[]): OffSpan[] {
+  return rows.map((o) => ({ from: o.off_date, to: o.end_date ?? o.off_date }))
 }
 
 function toRow(instance_id: string, b: OffSpan) {
-  return { instance_id, off_date: b.from, end_date: b.to === b.from ? null : b.to, instructors_paid: b.paid }
+  return { instance_id, off_date: b.from, end_date: b.to === b.from ? null : b.to }
 }
 
-const sameSpan = (a: OffSpan, b: OffSpan) => a.from === b.from && a.to === b.to && a.paid === b.paid
+const sameSpan = (a: OffSpan, b: OffSpan) => a.from === b.from && a.to === b.to
 
 /** Make the stored breaks say what `next` says. Rows that already say one of
     those spans are left alone — their ids are what the list on the screen
@@ -35,7 +35,7 @@ const sameSpan = (a: OffSpan, b: OffSpan) => a.from === b.from && a.to === b.to 
 async function applyOffDays(
   admin: ReturnType<typeof createAdminClient>,
   instanceId: string,
-  rows: { id: string; off_date: string; end_date: string | null; instructors_paid?: boolean | null }[],
+  rows: { id: string; off_date: string; end_date: string | null }[],
   next: OffSpan[]
 ) {
   const wanted = [...next]
@@ -402,7 +402,7 @@ export async function updateInstanceDates(id: string, formData: FormData) {
   if (starts_at && ends_at) {
     const { data: offs } = await admin
       .from('instance_off_days')
-      .select('id, off_date, end_date, instructors_paid')
+      .select('id, off_date, end_date')
       .eq('instance_id', id)
     if (offs && offs.length > 0) {
       await applyOffDays(admin, id, offs, clampOffDays(toSpans(offs), starts_at, ends_at))
@@ -468,11 +468,6 @@ export async function addOffDay(instanceId: string, formData: FormData) {
   const admin = createAdminClient()
   const off_date = formData.get('off_date') as string
   const end_date = (formData.get('end_date') as string) || null
-  // Paid unless the form says otherwise, which it no longer does: a break
-  // here nearly always means the crew stays put and stays on the clock, so
-  // the question is not worth asking twice on the way in. The rare unpaid one
-  // is marked on its own row afterwards, where the answer is about a break
-  // that exists rather than about the next one drawn.
   if (!off_date) throw new Error('Date is required')
   if (end_date && end_date < off_date) throw new Error('Off-day end date must be on or after its start date')
 
@@ -496,23 +491,23 @@ export async function addOffDay(instanceId: string, formData: FormData) {
 
   const { error } = await admin
     .from('instance_off_days')
-    .insert({ instance_id: instanceId, off_date, end_date: end_date ?? null, instructors_paid: true })
+    .insert({ instance_id: instanceId, off_date, end_date: end_date ?? null })
 
   if (error) throw new Error(error.message)
   revalidatePath(`/admin/courses/${instanceId}`)
   revalidatePath(`/portal/${instanceId}`)
 }
 
-// Answered wrong, or the plan changed — flipped in place rather than by
-// deleting the break and entering it again, which loses the dates to a retype.
-export async function setOffDayPaid(instanceId: string, offDayId: string, instructors_paid: boolean) {
+// One answer for the whole course: the crew stays over the weekend on the
+// clock, or they go home and are off it. Asked per break for a while, which
+// only ever produced the same answer written several times.
+export async function setBreaksPaid(instanceId: string, breaks_paid: boolean) {
   await requireAdmin()
 
   const { error } = await createAdminClient()
-    .from('instance_off_days')
-    .update({ instructors_paid })
-    .eq('id', offDayId)
-    .eq('instance_id', instanceId)
+    .from('course_instances')
+    .update({ breaks_paid })
+    .eq('id', instanceId)
 
   if (error) throw new Error(error.message)
   revalidatePath(`/admin/courses/${instanceId}`)
@@ -543,13 +538,7 @@ export async function removeOffDay(instanceId: string, offDayId: string) {
 // that row is paid if the stroke or anything it swallowed was: two breaks that
 // disagree already read as paid everywhere else (see computeBlocks), and a
 // stroke must not quietly take pay away from days that had it.
-export async function paintOffDays(
-  instanceId: string,
-  a: string,
-  b: string,
-  paint: boolean,
-  instructors_paid: boolean
-) {
+export async function paintOffDays(instanceId: string, a: string, b: string, paint: boolean) {
   await requireAdmin()
   const admin = createAdminClient()
 
@@ -579,10 +568,10 @@ export async function paintOffDays(
 
   const { data: rows } = await admin
     .from('instance_off_days')
-    .select('id, off_date, end_date, instructors_paid')
+    .select('id, off_date, end_date')
     .eq('instance_id', instanceId)
 
-  const next = strokeOffDays(toSpans(rows ?? []), from, to, paint, instructors_paid)
+  const next = strokeOffDays(toSpans(rows ?? []), from, to, paint)
   await applyOffDays(admin, instanceId, rows ?? [], next)
 
   revalidatePath(`/admin/courses/${instanceId}`)

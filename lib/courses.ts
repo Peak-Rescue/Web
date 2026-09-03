@@ -1,16 +1,7 @@
 import { services, categoryMeta, type ServiceCategory } from './data/services'
 
 export type DateBlock = { starts_at: string; ends_at: string }
-/** A break in a course. `instructors_paid` is asked when the break is
-    designated: both kinds skip a teaching day, but only an unpaid one comes
-    off the instructor days a client is quoted for. Absent (older rows, and
-    callers that don't select it) reads as unpaid — what a break meant before
-    the question was asked. */
-export type OffDayRange = {
-  off_date: string
-  end_date?: string | null
-  instructors_paid?: boolean | null
-}
+export type OffDayRange = { off_date: string; end_date?: string | null }
 
 /** Every individual date a set of off-day rows covers, ranges expanded. */
 function offDates(offDays: OffDayRange[]): Set<string> {
@@ -70,38 +61,39 @@ export function courseDates(
 }
 
 /** A course's two lengths, for anything that has to put a number of days on
-    it. `days` is the days somebody is paid for: the days the course runs,
-    plus any break marked as paid, because the crew that stays in the canyon
-    over a weekend is on the clock whether or not anyone is being taught.
-    `calendarDays` is first day to last with every break left in, which is
-    what a rental vehicle or a hotel room is held for regardless.
+    it. `days` is the days somebody is paid for. `calendarDays` is first day to
+    last with every break left in, which is what a rental vehicle or a hotel
+    room is held for regardless — nobody returns the truck for a weekend.
+
+    `breaksPaid` is the course's one answer about its breaks: the crew stays
+    where they are over the weekend and stays on the clock, or they go home and
+    are off it. Paid, the two lengths agree. Unpaid, the breaks come off the
+    days somebody is paid for and off nothing else.
 
     Both null until the course has dates: a length nobody knows is not 1. */
 export function courseDayCounts(
   starts_at: string | null,
   ends_at: string | null,
-  offDays: OffDayRange[]
+  offDays: OffDayRange[],
+  breaksPaid: boolean
 ): { days: number | null; calendarDays: number | null } {
   if (!starts_at || !ends_at) return { days: null, calendarDays: null }
   const calendarDays = Math.max(
     Math.round((Date.parse(ends_at) - Date.parse(starts_at)) / 86_400_000) + 1,
     1
   )
-  // Only an unpaid break comes off the count: a paid one is a day the course
-  // does not teach and still owes somebody a day's wage. A date covered by two
-  // rows that disagree counts as unpaid, because paid is what a break is
-  // unless somebody marked it — so the unpaid row is the one that was
-  // deliberately answered, and a stray overlapping row must not undo it.
-  const unpaid = offDates(offDays.filter((o) => !o.instructors_paid))
-  const notWorked = [...unpaid].filter((d) => d >= starts_at && d <= ends_at)
+  const off = breaksPaid
+    ? 0
+    : [...offDates(offDays)].filter((d) => d >= starts_at && d <= ends_at).length
   // A course that is break end to end still costs someone a day to run.
-  const days = Math.max(calendarDays - notWorked.length, 1)
+  const days = Math.max(calendarDays - off, 1)
   return { days, calendarDays }
 }
 
-/** A break, normalised to two dates and one question: paid or not. The rows
-    in the table say the same thing with a nullable end date. */
-export type OffSpan = { from: string; to: string; paid: boolean }
+/** A break, normalised to two dates. The rows in the table say the same thing
+    with a nullable end date. Whether the crew is paid through breaks is asked
+    once for the whole course, not here — see courseDayCounts. */
+export type OffSpan = { from: string; to: string }
 
 /** The day n days either side of a yyyy-mm-dd. UTC, so no break lands a day
     out west of Greenwich. */
@@ -120,14 +112,7 @@ export function dayShift(d: string, n: number): string {
  *
  *  Painting swallows every break the stroke touches or merely abuts — two
  *  breaks with no working day between them are one break, however they were
- *  drawn — but only where the two agree about pay. Days already inside a break
- *  that answered the pay question differently keep their answer, and the new
- *  days are drawn around them, leaving two adjacent rows that disagree.
- *
- *  That is the whole point of the split: a break is paid unless somebody said
- *  otherwise on its row, so an unpaid one is a deliberate answer, and a stroke
- *  drawn next to it must not quietly put the pay back. Painting adds days; the
- *  chip is what changes pay.
+ *  drawn.
  *
  *  Erasing removes the stroke's days and keeps whatever ends survive.
  *
@@ -136,33 +121,21 @@ export function strokeOffDays(
   spans: OffSpan[],
   from: string,
   to: string,
-  paint: boolean,
-  paid: boolean
+  paint: boolean
 ): OffSpan[] {
   if (to < from) [from, to] = [to, from]
 
   const out = paint
     ? (() => {
-        const abuts = (b: OffSpan) => b.to >= dayShift(from, -1) && b.from <= dayShift(to, 1)
-        const merging = spans.filter((b) => b.paid === paid && abuts(b))
-        const rest = spans.filter((b) => !merging.includes(b))
-        const start = merging.reduce((m, b) => (b.from < m ? b.from : m), from)
-        const end = merging.reduce((m, b) => (b.to > m ? b.to : m), to)
-
-        // Anything in the way answered the pay question the other way, so the
-        // stroke is drawn around it — in two pieces where it straddles one.
-        const inTheWay = rest
-          .filter((b) => b.to >= start && b.from <= end)
-          .sort((a, b) => a.from.localeCompare(b.from))
-        const pieces: OffSpan[] = []
-        let cursor = start
-        for (const b of inTheWay) {
-          if (b.from > cursor) pieces.push({ from: cursor, to: dayShift(b.from, -1), paid })
-          if (b.to >= cursor) cursor = dayShift(b.to, 1)
-        }
-        if (cursor <= end) pieces.push({ from: cursor, to: end, paid })
-
-        return [...rest, ...pieces]
+        const touched = spans.filter((b) => b.to >= dayShift(from, -1) && b.from <= dayShift(to, 1))
+        const rest = spans.filter((b) => !touched.includes(b))
+        return [
+          ...rest,
+          {
+            from: touched.reduce((m, b) => (b.from < m ? b.from : m), from),
+            to: touched.reduce((m, b) => (b.to > m ? b.to : m), to),
+          },
+        ]
       })()
     : spans.flatMap((b) => {
         if (b.to < from || b.from > to) return [b]

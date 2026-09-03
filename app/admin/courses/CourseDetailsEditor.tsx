@@ -1,7 +1,6 @@
-import { updateInstanceDetails, addOffDay, removeOffDay, setOffDayPaid } from './actions'
+import { updateInstanceDetails, addOffDay, removeOffDay } from './actions'
 import AutoSaveForm from '@/components/AutoSaveForm'
 import TrashIcon from '@/components/TrashIcon'
-import InfoHint from '@/components/InfoHint'
 import { CourseTypeSelect } from './CourseTypeSelect'
 import CourseLocationFields from '@/components/CourseLocationFields'
 import CourseContactsEditor from '@/components/CourseContactsEditor'
@@ -9,15 +8,9 @@ import CourseDatePainter from '@/components/CourseDatePainter'
 import { courseZone, todayIn } from '@/lib/course-clock'
 import { computeBlocks } from '@/lib/courses'
 
-/** An off day as this screen needs it: the range for the arithmetic, the id,
-    because the list next to it removes them, and whether the crew is paid
-    through it — a break the instructors are paid for still costs a day. */
-export type CourseOffDay = {
-  id: string
-  off_date: string
-  end_date: string | null
-  instructors_paid?: boolean | null
-}
+/** An off day as this screen needs it: the range for the arithmetic, and the
+    id, because the list next to it removes them. */
+export type CourseOffDay = { id: string; off_date: string; end_date: string | null }
 import { type CoursePOC } from '@/lib/contacts'
 import { type Venue } from '@/lib/library'
 
@@ -39,6 +32,7 @@ export type CourseDetailsRow = {
   instructor_slots: number | null
   starts_at: string | null
   ends_at: string | null
+  breaks_paid?: boolean | null
 }
 
 // What a course *is*, as opposed to how it runs: the offering, who asked, who
@@ -127,6 +121,7 @@ export default function CourseDetailsEditor({
           startsAt={course.starts_at}
           endsAt={course.ends_at}
           offDays={offDays ?? []}
+          breaksPaid={course.breaks_paid ?? true}
           today={todayIn(courseZone(course.region))}
         />
       </div>
@@ -138,11 +133,6 @@ export default function CourseDetailsEditor({
         <summary className="cursor-pointer list-none text-sm text-zinc-400 hover:text-zinc-200 transition-colors select-none">
           <span className="text-zinc-600 text-xs mr-1.5 inline-block transition-transform group-open/off:rotate-90">▶</span>
           Breaks{(offDays ?? []).length > 0 ? ` (${(offDays ?? []).length})` : ''}
-          {' '}
-          <InfoHint
-            below
-            text="Paid breaks count as instructor days on the estimate; unpaid ones don't. Lodging and the vehicle span the break either way."
-          />
         </summary>
         <div className="mt-3">
         {(offDays ?? []).length > 0 && (
@@ -157,23 +147,6 @@ export default function CourseDetailsEditor({
                     <span className="text-sm">
                       {isRange ? `${fmt(o.off_date)} → ${fmt(o.end_date!)}` : fmt(o.off_date)}
                     </span>
-                    {/* The only pay control on the screen. A break is created
-                        paid, because that is what a break is here nearly every
-                        time; this is where the exception gets marked, and the
-                        only thing that puts pay back once it is. */}
-                    <form action={setOffDayPaid.bind(null, instanceId, o.id, !o.instructors_paid)}>
-                      <button
-                        type="submit"
-                        title={o.instructors_paid ? 'Click if unpaid' : 'Click if paid'}
-                        className={`px-2 py-0.5 rounded-full border text-[11px] transition-colors ${
-                          o.instructors_paid
-                            ? 'border-amber-700/60 text-amber-300/90 hover:border-amber-600'
-                            : 'border-zinc-700 text-zinc-500 hover:border-zinc-600 hover:text-zinc-400'
-                        }`}
-                      >
-                        {o.instructors_paid ? 'Instructors paid' : 'Unpaid'}
-                      </button>
-                    </form>
                   </div>
                   <form action={removeOffDayWithArgs}>
                     <button

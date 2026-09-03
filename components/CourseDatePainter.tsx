@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { updateInstanceDates, paintOffDays } from '@/app/admin/courses/actions'
+import { updateInstanceDates, paintOffDays, setBreaksPaid } from '@/app/admin/courses/actions'
 import { clampOffDays, strokeOffDays, type OffSpan } from '@/lib/courses'
 import { useSteadyRefresh } from './useSteadyRefresh'
 import InfoHint from './InfoHint'
@@ -65,25 +65,30 @@ export default function CourseDatePainter({
   startsAt,
   endsAt,
   offDays,
+  breaksPaid,
   today,
 }: {
   instanceId: string
   startsAt: string | null
   endsAt: string | null
+  /** Whether the crew is paid through this course's breaks — one answer for
+      the course, not one per break. */
+  breaksPaid: boolean
   // What day it is where the course runs, worked out on the server. The
   // browser's own clock would be the admin's, and an admin travelling is the
   // one person likely to open this on a different continent to the course.
   today: string
-  offDays: { off_date: string; end_date: string | null; instructors_paid?: boolean | null }[]
+  offDays: { off_date: string; end_date: string | null }[]
 }) {
   const fromProps = (): OffSpan[] =>
     offDays
-      .map((o) => ({ from: o.off_date, to: o.end_date ?? o.off_date, paid: Boolean(o.instructors_paid) }))
+      .map((o) => ({ from: o.off_date, to: o.end_date ?? o.off_date }))
       .sort((a, b) => a.from.localeCompare(b.from))
 
   const [win, setWin] = useState<{ start: string | null; end: string | null }>({ start: startsAt, end: endsAt })
   const [breaks, setBreaks] = useState<OffSpan[]>(fromProps)
   const [month, setMonth] = useState(() => monthOf(startsAt ?? today))
+  const [paid, setPaid] = useState(breaksPaid)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
@@ -98,12 +103,13 @@ export default function CourseDatePainter({
   const typing = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => () => { if (typing.current) clearTimeout(typing.current) }, [])
 
-  const sig = JSON.stringify([startsAt, endsAt, offDays.map((o) => [o.off_date, o.end_date, o.instructors_paid])])
+  const sig = JSON.stringify([startsAt, endsAt, breaksPaid, offDays.map((o) => [o.off_date, o.end_date])])
   useEffect(() => {
     if (inFlight.current > 0) return
     saved.current = { start: startsAt, end: endsAt }
     setWin({ start: startsAt, end: endsAt })
     setBreaks(fromProps())
+    setPaid(breaksPaid)
     // Redrawn from the server's answer, whatever it was — the signature is the
     // whole of what this depends on.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -158,14 +164,21 @@ export default function CourseDatePainter({
 
   function saveStroke(from: string, to: string, paint: boolean) {
     const before = breaks
-    // Paid, because that is what a break is here nearly every time: the crew
-    // stays where they are and stays on the clock. The rare unpaid one is
-    // marked on its own row, where the answer is about a break that exists
-    // rather than about the next one drawn.
-    setBreaks(strokeOffDays(breaks, from, to, paint, true))
+    setBreaks(strokeOffDays(breaks, from, to, paint))
     void run(
-      () => paintOffDays(instanceId, from, to, paint, true),
+      () => paintOffDays(instanceId, from, to, paint),
       () => setBreaks(before)
+    )
+  }
+
+  // Pay is a fact about the course, not about a particular break: the crew
+  // stays over the weekend on the clock, or they go home and are off it.
+  function savePaid(next: boolean) {
+    const before = paid
+    setPaid(next)
+    void run(
+      () => setBreaksPaid(instanceId, next),
+      () => setPaid(before)
     )
   }
 
@@ -256,16 +269,7 @@ export default function CourseDatePainter({
     if (stroke?.mode === 'window' && !previewing) course = false
 
     const ring = previewing ? ' ring-2 ring-inset ring-pr-red-light' : ''
-    // An unpaid break is the exception and the expensive one to miss — it is
-    // the only thing here that takes a day off what the client is quoted — so
-    // it is drawn apart from the ordinary paid break rather than left to the
-    // list below to disclose.
-    if (course && off) {
-      const unpaid = breakOn(day) ? !breakOn(day)!.paid : false
-      return unpaid
-        ? `${base} bg-zinc-800 text-amber-300/80 border border-dashed border-amber-700/70${ring}`
-        : `${base} bg-zinc-800 text-zinc-500 border border-dashed border-zinc-600${ring}`
-    }
+    if (course && off) return `${base} bg-zinc-800 text-zinc-500 border border-dashed border-zinc-600${ring}`
     if (course) return `${base} bg-pr-red/85 text-white font-medium hover:bg-pr-red${ring}`
     return `${base} text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300${ring}`
   }
@@ -345,9 +349,7 @@ export default function CourseDatePainter({
                       isEdge(day)
                         ? `${day === win.start ? 'First' : 'Last'} day — drag to move it`
                         : breakOn(day)
-                          ? breakOn(day)!.paid
-                            ? 'Break, instructors paid — click to put the day back'
-                            : 'Break, unpaid — click to put the day back'
+                          ? 'Break — click to put the day back'
                           : inWindow(day)
                             ? 'Course day — click to make it a break'
                             : 'Click to set the course dates'
@@ -387,6 +389,21 @@ export default function CourseDatePainter({
             className="bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500"
           />
         </div>
+        {breaks.length > 0 && (
+          <label className="flex items-center gap-1.5 text-sm text-zinc-300 pb-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={paid}
+              onChange={(e) => savePaid(e.target.checked)}
+              className="w-4 h-4 accent-pr-red bg-zinc-800 border-zinc-700 rounded"
+            />
+            Paying instructors through breaks
+            <InfoHint
+              below
+              text="Paid breaks count as instructor days on the estimate; unpaid ones don't. Lodging and the vehicle span them either way."
+            />
+          </label>
+        )}
       </div>
 
       {error && <p className="mt-2 text-xs text-pr-red-light">{error}</p>}

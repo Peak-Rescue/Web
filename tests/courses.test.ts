@@ -56,54 +56,38 @@ describe('computeBlocks', () => {
 // held across.
 describe('course lengths', () => {
   const noBreaks: { off_date: string; end_date?: string | null }[] = []
+  const weekendOff = [{ off_date: '2026-09-12', end_date: '2026-09-13' }]
 
   it('reads the same both ways when the course runs straight through', () => {
-    expect(courseDayCounts('2026-09-07', '2026-09-11', noBreaks)).toEqual({ days: 5, calendarDays: 5 })
+    expect(courseDayCounts('2026-09-07', '2026-09-11', noBreaks, true))
+      .toEqual({ days: 5, calendarDays: 5 })
   })
 
-  // Mon–Fri, weekend off, Mon–Fri: ten days worked, twelve on the calendar.
+  // Mon–Fri, weekend off, Mon–Fri. The crew went home for the weekend, so the
+  // days worked are ten; the vehicle was kept for all twelve.
   it('takes an unpaid weekend out of the days paid and leaves it in the span', () => {
-    const weekend = [{ off_date: '2026-09-12', end_date: '2026-09-13' }]
-    expect(courseDayCounts('2026-09-07', '2026-09-18', weekend)).toEqual({ days: 10, calendarDays: 12 })
+    expect(courseDayCounts('2026-09-07', '2026-09-18', weekendOff, false))
+      .toEqual({ days: 10, calendarDays: 12 })
   })
 
   // The same weekend, with the crew staying in the canyon on the clock. The
   // course still doesn't teach those days; payroll still owes them.
-  it('keeps a paid break in the days paid', () => {
-    const weekend = [{ off_date: '2026-09-12', end_date: '2026-09-13', instructors_paid: true }]
-    expect(courseDayCounts('2026-09-07', '2026-09-18', weekend)).toEqual({ days: 12, calendarDays: 12 })
+  it('keeps the break in the days paid when the crew is paid through it', () => {
+    expect(courseDayCounts('2026-09-07', '2026-09-18', weekendOff, true))
+      .toEqual({ days: 12, calendarDays: 12 })
   })
 
-  // A break entered before the question was asked means what a break has
-  // always meant here.
-  it('reads a break that never answered the question as unpaid', () => {
-    const weekend = [{ off_date: '2026-09-12', end_date: '2026-09-13', instructors_paid: null }]
-    expect(courseDayCounts('2026-09-07', '2026-09-18', weekend).days).toBe(10)
-  })
-
-  // Where two rows disagree about a date, the unpaid one wins: paid is what a
-  // break is unless somebody marked it, so the unpaid row is the answer
-  // somebody actually gave, and a stray overlapping row must not undo it.
-  it('leaves a date unpaid when two breaks disagree about it', () => {
-    const both = [
-      { off_date: '2026-09-12', end_date: '2026-09-13', instructors_paid: false },
-      { off_date: '2026-09-12', instructors_paid: true },
-    ]
-    expect(courseDayCounts('2026-09-07', '2026-09-18', both).days).toBe(10)
-  })
-
-  // Off days still skip a teaching day whoever is paying: day N of a schedule
-  // is the Nth date the course actually runs, paid break or not.
-  it('skips a paid break in the dates the course runs', () => {
-    const paidWeekend = [{ off_date: '2026-09-12', end_date: '2026-09-13', instructors_paid: true }]
-    expect(courseDates('2026-09-07', '2026-09-18', paidWeekend)).toHaveLength(10)
+  // Off days skip a teaching day whoever is paying: day N of a schedule is the
+  // Nth date the course actually runs, and pay has nothing to say about it.
+  it('skips a break in the dates the course runs, paid or not', () => {
+    expect(courseDates('2026-09-07', '2026-09-18', weekendOff)).toHaveLength(10)
   })
 
   // A length nobody knows yet is not 1 — a course with no dates has no
   // number, and the lines that need one are left blank to be filled in.
   it('has no answer for a course with no dates', () => {
-    expect(courseDayCounts(null, null, noBreaks)).toEqual({ days: null, calendarDays: null })
-    expect(courseDayCounts('2026-09-07', null, noBreaks)).toEqual({ days: null, calendarDays: null })
+    expect(courseDayCounts(null, null, noBreaks, true)).toEqual({ days: null, calendarDays: null })
+    expect(courseDayCounts('2026-09-07', null, noBreaks, true)).toEqual({ days: null, calendarDays: null })
   })
 })
 
@@ -145,8 +129,8 @@ describe('dates do not move with the reader', () => {
 
   it('counts the same days paid and on the calendar from either side', () => {
     const off = [{ off_date: '2026-09-12', end_date: '2026-09-13' }]
-    const here = courseDayCounts('2026-09-07', '2026-09-18', off)
-    const there = inTimeZone(eastOfGreenwich, () => courseDayCounts('2026-09-07', '2026-09-18', off))
+    const here = courseDayCounts('2026-09-07', '2026-09-18', off, false)
+    const there = inTimeZone(eastOfGreenwich, () => courseDayCounts('2026-09-07', '2026-09-18', off, false))
     expect(here).toEqual({ days: 10, calendarDays: 12 })
     expect(there).toEqual(here)
   })

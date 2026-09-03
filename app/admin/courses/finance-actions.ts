@@ -132,17 +132,17 @@ export async function saveEstimate(
 // anything is saved). Returns it shaped like createQuote's estimate query.
 async function seedDefaultCoa(admin: Awaited<ReturnType<typeof requireAdmin>>, instanceId: string) {
   const [{ data: inst }, { count }, { data: defaults }, { count: assignedCount }, { data: offDays }] = await Promise.all([
-    admin.from('course_instances').select('starts_at, ends_at, max_students, instructor_slots').eq('id', instanceId).single(),
+    admin.from('course_instances').select('starts_at, ends_at, max_students, instructor_slots, breaks_paid').eq('id', instanceId).single(),
     admin.from('course_estimates').select('id', { count: 'exact', head: true }).eq('instance_id', instanceId),
     admin.from('pricing_rates').select('id, label, unit, rate').eq('active', true).eq('default_line', true).order('sort_order'),
     admin.from('instance_instructors').select('id', { count: 'exact', head: true }).eq('instance_id', instanceId),
-    admin.from('instance_off_days').select('off_date, end_date, instructors_paid').eq('instance_id', instanceId),
+    admin.from('instance_off_days').select('off_date, end_date').eq('instance_id', instanceId),
   ])
   if (!inst) throw new Error('Course not found')
 
   // Days worked and days on the calendar are different numbers the moment a
   // break sits in the middle of the course, and the seeded lines need both.
-  const lengths = courseDayCounts(inst.starts_at, inst.ends_at, offDays ?? [])
+  const lengths = courseDayCounts(inst.starts_at, inst.ends_at, offDays ?? [], inst.breaks_paid ?? true)
   const counts: SeedCounts = {
     instructors: plannedInstructorCount(inst, assignedCount ?? 0),
     days: lengths.days ?? 1,
