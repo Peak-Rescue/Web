@@ -1686,10 +1686,18 @@ export default async function CourseView({
                       {!/^day\s*\d+\b/i.test(d.title.trim()) && (
                         <span className="text-[11px] font-mono text-zinc-600 shrink-0">Day {di + 1}</span>
                       )}
+                      <h3 className="font-medium text-sm">{d.title}</h3>
                       {/* Which calendar day this one is, worked out from the
                           course's start and the off days painted on it — so a
                           rest day in the middle pushes everything after it
                           along, and nobody counts on their fingers.
+
+                          It follows the name rather than leading it. Which day
+                          of the course this is, is what someone is looking
+                          for; the date is the context they check it against,
+                          and a row that opened with the date pushed the name
+                          it belongs to out to second place. Same weight as the
+                          day number for the same reason.
 
                           Read off the position, never stored: the same day row
                           is what a template is made of, and a template day
@@ -1700,11 +1708,10 @@ export default async function CourseView({
                           A schedule longer than the course it is on runs out
                           of dates; those days simply show none. */}
                       {dayDate && (
-                        <span className="text-[11px] font-mono text-zinc-500 shrink-0">
+                        <span className="text-[11px] font-mono text-zinc-600 shrink-0">
                           {fmtDay(dayDate)}
                         </span>
                       )}
-                      <h3 className="font-medium text-sm">{d.title}</h3>
                       {/* Folded, the place is the only other thing worth
                           carrying — it is what tells one past day from
                           another. */}
