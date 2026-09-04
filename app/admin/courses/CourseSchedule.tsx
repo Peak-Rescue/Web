@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import ScheduleEditor, { type Schedule, type SiteOption, type MeetingPointOption } from '@/app/admin/schedules/ScheduleEditor'
 import { createSchedule, copySchedule, deleteSchedule } from '@/app/admin/schedules/actions'
+import TemplatePicker, { type TemplateChoice } from '@/components/TemplatePicker'
 
 // A course's running order, built here rather than in a Google Doc that then
 // gets linked. Starts blank — seeded with a day per course day — or from a
@@ -22,7 +23,9 @@ export default function CourseSchedule({
   courseType: string | null
   courseDays: number
   schedule: Schedule | null
-  templates: { id: string; name: string; description?: string | null; days: number }[]
+  // Two shapes for two jobs: the picker below browses them, and the editor's
+  // "save over one" menu only needs a name and a size.
+  templates: (TemplateChoice & { days: number })[]
   sites: SiteOption[]
   meetingPoints: MeetingPointOption[]
   // The course's venue, so its own canyons head the day's site list.
@@ -75,19 +78,16 @@ export default function CourseSchedule({
         >
           + Blank schedule
         </button>
-        {templates.map((t) => (
-          <button
-            key={t.id}
-            onClick={() => run(() => copySchedule(t.id, { instanceId, name: t.name }))}
-            disabled={busy}
-            title={[`${t.days} day(s)`, t.description].filter(Boolean).join(' — ')}
-            className="text-xs px-3 py-1.5 rounded border border-zinc-700 text-zinc-300 hover:text-white hover:border-zinc-500 transition-colors disabled:opacity-40"
-          >
-            {t.name}
-            <span className="text-zinc-600 ml-1.5">{t.days}d</span>
-          </button>
-        ))}
       </div>
+      <TemplatePicker
+        shelf="schedule"
+        title="Start from a saved schedule"
+        countNoun="day"
+        emptyPreview="No days on this template yet."
+        templates={templates}
+        busy={busy}
+        onUse={(t) => run(() => copySchedule(t.id, { instanceId, name: t.name }))}
+      />
     </div>
   )
 }

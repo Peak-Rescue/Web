@@ -1,8 +1,10 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { copySchedule, saveScheduleIntoTemplate } from './actions'
+import { templateHref, templateShelfHref } from '@/lib/library'
 import type { Schedule, ScheduleTemplateOption } from './types'
 
 // Two ways onto the schedule shelf: a new template, or over one already there.
@@ -30,6 +32,10 @@ export default function SaveToShelf({
   }
 
   const [target, setTarget] = useState('')
+  // Where the thing you just saved went. Saving one used to end in silence:
+  // the template existed, on a shelf this page never named, and the first
+  // thing you usually want is to rename or retag it.
+  const [saved, setSaved] = useState<{ id: string; name: string } | null>(null)
 
   return (
     <div className="flex flex-wrap items-center gap-2 text-xs">
@@ -37,13 +43,25 @@ export default function SaveToShelf({
       <button
         onClick={() => {
           const name = prompt('Save this schedule to the library as a new template. Name it:', schedule.name)
-          if (name) run(() => copySchedule(schedule.id, { isTemplate: true, name, courseType }))
+          if (name) run(async () => {
+            const made = await copySchedule(schedule.id, { isTemplate: true, name, courseType })
+            setSaved({ id: made.id, name })
+          })
         }}
         disabled={busy}
         className="px-3 py-1.5 rounded border border-zinc-700 text-zinc-300 hover:text-white hover:border-zinc-500 transition-colors disabled:opacity-40"
       >
         + Save as a new template
       </button>
+
+      {saved && (
+        <span className="text-zinc-500">
+          Saved as &ldquo;{saved.name}&rdquo; —{' '}
+          <Link href={templateHref('schedule', saved.id)} className="text-zinc-300 hover:text-white underline underline-offset-2">
+            open it on the shelf
+          </Link>
+        </span>
+      )}
 
       {templates.length > 0 && (
         <>
@@ -72,6 +90,13 @@ export default function SaveToShelf({
           </button>
         </>
       )}
+
+      <Link
+        href={templateShelfHref('schedule')}
+        className="text-zinc-600 hover:text-zinc-300 transition-colors ml-auto"
+      >
+        Manage templates →
+      </Link>
     </div>
   )
 }

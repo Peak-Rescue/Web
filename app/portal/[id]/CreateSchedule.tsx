@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createSchedule, copySchedule, deleteSchedule } from '@/app/admin/schedules/actions'
+import TemplatePicker, { type TemplateChoice } from '@/components/TemplatePicker'
 
 // Starting a running order from nothing.
 //
@@ -26,7 +27,7 @@ export default function CreateSchedule({
   /** How many days the course runs, so a blank schedule starts with somewhere
       to type rather than an empty box. */
   courseDays: number
-  templates: { id: string; name: string; description?: string | null; days: number }[]
+  templates: TemplateChoice[]
 }) {
   const router = useRouter()
   const [busy, setBusy] = useState(false)
@@ -65,29 +66,25 @@ export default function CreateSchedule({
         No schedule yet. Start blank{courseDays > 0 ? ` — you'll get ${courseDays} day${courseDays === 1 ? '' : 's'} to fill in` : ''}, or
         from a saved template.
       </p>
-      <div className="flex flex-wrap gap-2">
-        <button
-          onClick={() => run(() => createSchedule({
-            name: 'Course schedule', instanceId, courseType, days: courseDays || 1,
-          }))}
-          disabled={busy}
-          className="text-xs px-3 py-1.5 rounded border border-zinc-700 text-zinc-300 hover:text-white hover:border-zinc-500 transition-colors disabled:opacity-40"
-        >
-          + Blank schedule
-        </button>
-        {templates.map((t) => (
-          <button
-            key={t.id}
-            onClick={() => run(() => copySchedule(t.id, { instanceId, name: t.name }))}
-            disabled={busy}
-            title={[`${t.days} day(s)`, t.description].filter(Boolean).join(' — ')}
-            className="text-xs px-3 py-1.5 rounded border border-zinc-700 text-zinc-300 hover:text-white hover:border-zinc-500 transition-colors disabled:opacity-40"
-          >
-            {t.name}
-            <span className="text-zinc-600 ml-1.5">{t.days}d</span>
-          </button>
-        ))}
-      </div>
+      <button
+        onClick={() => run(() => createSchedule({
+          name: 'Course schedule', instanceId, courseType, days: courseDays || 1,
+        }))}
+        disabled={busy}
+        className="text-xs px-3 py-1.5 rounded border border-zinc-700 text-zinc-300 hover:text-white hover:border-zinc-500 transition-colors disabled:opacity-40"
+      >
+        + Blank schedule
+      </button>
+
+      <TemplatePicker
+        shelf="schedule"
+        title="Start from a saved schedule"
+        countNoun="day"
+        emptyPreview="No days on this template yet."
+        templates={templates}
+        busy={busy}
+        onUse={(t) => run(() => copySchedule(t.id, { instanceId, name: t.name }))}
+      />
     </div>
   )
 }

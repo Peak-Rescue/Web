@@ -22,13 +22,13 @@ const input = 'w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-
 export default async function LibraryPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; discipline?: string; kind?: string; audience?: string; venue?: string; bucket?: string; q?: string }>
+  searchParams: Promise<{ status?: string; discipline?: string; kind?: string; audience?: string; venue?: string; bucket?: string; q?: string; template?: string; open?: string }>
 }) {
   // Published is the library. Pending review is a queue that Google Classroom
   // imports drop into, and landing on it meant the shelf you came to look at
   // read as empty — an item added by hand is published the moment it's added,
   // so the queue is usually empty and the answer usually isn't there.
-  const { status = 'published', discipline, kind, audience, venue, bucket, q } = await searchParams
+  const { status = 'published', discipline, kind, audience, venue, bucket, q, template, open } = await searchParams
 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -140,6 +140,10 @@ export default async function LibraryPage({
     const k = r.source_class ?? 'Added in portal'
     pendingByClass.set(k, (pendingByClass.get(k) ?? 0) + 1)
   }
+
+  // Arriving from a course page: which template to open, and on which half —
+  // "edit its name" and "show me what's in it" are different errands.
+  const openPanel: 'contents' | 'details' = open === 'contents' ? 'contents' : 'details'
 
   const href = (patch: Record<string, string | undefined>) => {
     const p = new URLSearchParams()
@@ -298,6 +302,7 @@ export default async function LibraryPage({
                     list={t}
                     catalog={catalog}
                     summary={summarize(t, t.gear_list_entries?.length ?? 0, t.audience)}
+                    initialOpen={template === t.id ? openPanel : undefined}
                   />
                 ))}
                 {shelf === 'schedule' && scheduleTemplates.map((t) => (
@@ -307,6 +312,7 @@ export default async function LibraryPage({
                     schedule={t}
                     sites={siteOptions}
                     summary={summarize(t, t.schedule_days?.length ?? 0)}
+                    initialOpen={template === t.id ? openPanel : undefined}
                   />
                 ))}
                 {rows.length === 0 && (

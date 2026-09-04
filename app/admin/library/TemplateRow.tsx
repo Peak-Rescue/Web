@@ -15,7 +15,12 @@ const input =
   'w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-zinc-500'
 const label = 'block text-[11px] text-zinc-500 mb-1'
 
-type Props = { summary: TemplateSummary } & (
+type Props = {
+  summary: TemplateSummary
+  /** Opened on arrival when a course page linked straight to this template —
+      the row is what you came for, so it shouldn't need a second click. */
+  initialOpen?: 'contents' | 'details'
+} & (
   | { shelf: 'gear'; list: GearList; catalog: GearItem[] }
   | { shelf: 'schedule'; schedule: Schedule; sites: SiteOption[] }
 )
@@ -25,9 +30,9 @@ type Props = { summary: TemplateSummary } & (
 // which is the thing that was missing. Saving a template used to be a one-way
 // door: no way back in to fix a line, rename it, or retire it.
 export default function TemplateRow(props: Props) {
-  const { summary, shelf } = props
+  const { summary, shelf, initialOpen } = props
   const router = useRouter()
-  const [open, setOpen] = useState<'none' | 'contents' | 'details'>('none')
+  const [open, setOpen] = useState<'none' | 'contents' | 'details'>(initialOpen ?? 'none')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [form, setForm] = useState({
@@ -71,13 +76,21 @@ export default function TemplateRow(props: Props) {
     run(() => (props.shelf === 'gear' ? deleteGearList(summary.id) : deleteSchedule(summary.id)))
   }
 
-  // An offering it belongs to isn't a filter, it's an ordering hint: the course
-  // page floats matching templates first. Unset means it's offered everywhere.
+  // An offering it belongs to, plus its disciplines, are what a course page's
+  // picker matches on: templates that fit the course lead, and the rest are a
+  // click away. A custom course has no offering worth matching — every one of
+  // them says 'custom' — so its checked categories are what reach it, which is
+  // why a mixed canyons-and-mountain course wants both tagged here.
   const offering = summary.course_type ? courseShortName(summary.course_type, null) : null
   const knownOffering = COURSE_TYPE_OPTIONS.some((g) => g.options.some((o) => o.value === form.course_type))
 
   return (
-    <div className="rounded-lg border border-zinc-800 bg-zinc-900">
+    <div
+      id={`t-${summary.id}`}
+      className={`rounded-lg border bg-zinc-900 scroll-mt-24 ${
+        initialOpen ? 'border-zinc-600 ring-1 ring-zinc-700' : 'border-zinc-800'
+      }`}
+    >
       <div className="flex items-start gap-3 px-3 py-2.5">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
@@ -159,7 +172,10 @@ export default function TemplateRow(props: Props) {
                 </optgroup>
               ))}
             </select>
-            <p className="text-xs text-zinc-500 mt-1">Its courses are offered this template first.</p>
+            <p className="text-xs text-zinc-500 mt-1">
+              Its courses are offered this template first. Custom courses match on disciplines instead — they all
+              share one slug, so the boxes below are what reaches them.
+            </p>
           </div>
           {props.shelf === 'gear' && (
             <div>
@@ -175,7 +191,7 @@ export default function TemplateRow(props: Props) {
             </div>
           )}
           <div className="sm:col-span-2">
-            <label className={label}>Disciplines</label>
+            <label className={label}>Disciplines — how a custom course finds this</label>
             <div className="flex flex-wrap gap-x-4 gap-y-1.5 p-2 bg-zinc-800/50 border border-zinc-700 rounded">
               {CAPABILITY_ORDER.map((c) => (
                 <label key={c} className="flex items-center gap-1.5 text-xs text-zinc-300 cursor-pointer">

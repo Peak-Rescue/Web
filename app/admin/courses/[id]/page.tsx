@@ -29,7 +29,7 @@ import { parseContacts, primaryContactEmail, ccEmailOptions } from '@/lib/contac
 import { loadTasksWithDocs } from '@/lib/course-tasks'
 import { courseDisplayName, courseShortName, computeBlocks, courseDates } from '@/lib/courses'
 import { courseCapabilityCategories, courseSector } from '@/lib/capabilities'
-import { moduleAudience, type LibraryAudience, type Venue } from '@/lib/library'
+import { moduleAudience, templateRelevance, type LibraryAudience, type Venue } from '@/lib/library'
 import LibraryPicker, { type PickerItem } from '../LibraryPicker'
 import SuggestedContent from '../SuggestedContent'
 import TemplatePicker, { type TemplateOption } from '../TemplatePicker'
@@ -413,19 +413,34 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
       .eq('instance_id', id),
     gearAdmin.from('gear_items').select('id, name, brand, info, url, category, parent_id, aliases, disciplines').eq('active', true).order('name'),
     gearAdmin.from('gear_lists')
-      .select('id, name, description, audience, course_type, gear_list_entries(id)')
+      // Entry names come along for the picker's preview — an entry names its
+      // own row or points at the catalog, so both are read.
+      .select('id, name, description, audience, course_type, disciplines, gear_list_entries(id, name, sort_order, gear_items(name))')
       .eq('is_template', true),
   ])
   const gearLists = (gearListRows ?? []) as unknown as GearList[]
   const gearOrders = (gearOrderRows ?? []) as unknown as GearOrder[]
+  // What this course is, as far as picking a template goes. A custom course
+  // has no offering slug worth matching — they all say 'custom' — but it does
+  // carry the categories checked when it was set up, and a template is tagged
+  // with the same vocabulary.
+  const templateCourse = { course_type: courseType, categories: matchingCategories }
   const gearTemplates = ((gearTemplateRows ?? []) as unknown as {
-    id: string; name: string; description: string | null; audience: string; course_type: string | null; gear_list_entries: unknown[]
+    id: string; name: string; description: string | null; audience: string
+    course_type: string | null; disciplines: string[] | null
+    gear_list_entries: { id: string; name: string | null; sort_order: number; gear_items: { name: string } | null }[]
   }[])
-    .sort((a, b) => Number(b.course_type === courseType) - Number(a.course_type === courseType))
     .map((t) => ({
       id: t.id, name: t.name, description: t.description,
       audience: t.audience, entries: t.gear_list_entries.length,
+      count: t.gear_list_entries.length,
+      badge: t.audience === 'instructor' ? 'instructors' : 'students',
+      preview: [...t.gear_list_entries]
+        .sort((a, b) => a.sort_order - b.sort_order)
+        .map((e) => e.name ?? e.gear_items?.name ?? ''),
+      relevance: templateRelevance(t, templateCourse),
     }))
+    .sort((a, b) => Number(Boolean(b.relevance)) - Number(Boolean(a.relevance)))
 
   // Schedule: this course's running order and any templates for this offering.
   const [{ data: scheduleRows }, { data: scheduleTemplateRows }, { data: siteRows }] = await Promise.all([
@@ -434,7 +449,7 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
       .eq('instance_id', id)
       .limit(1),
     gearAdmin.from('course_schedules')
-      .select('id, name, description, course_type, schedule_days(id)')
+      .select('id, name, description, course_type, disciplines, schedule_days(id, title, sort_order)')
       .eq('is_template', true),
     // Sites a day can point at instead of retyping the canyon's beta.
     gearAdmin.from('sites')
@@ -461,10 +476,18 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
     return days.map((_, i) => running[i] ?? null)
   })()
   const scheduleTemplates = ((scheduleTemplateRows ?? []) as unknown as {
-    id: string; name: string; description: string | null; course_type: string | null; schedule_days: unknown[]
+    id: string; name: string; description: string | null; course_type: string | null
+    disciplines: string[] | null
+    schedule_days: { id: string; title: string | null; sort_order: number }[]
   }[])
-    .sort((a, b) => Number(b.course_type === courseType) - Number(a.course_type === courseType))
-    .map((t) => ({ id: t.id, name: t.name, description: t.description, days: t.schedule_days.length }))
+    .map((t) => ({
+      id: t.id, name: t.name, description: t.description,
+      days: t.schedule_days.length,
+      count: t.schedule_days.length,
+      preview: [...t.schedule_days].sort((a, b) => a.sort_order - b.sort_order).map((d) => d.title ?? ''),
+      relevance: templateRelevance(t, templateCourse),
+    }))
+    .sort((a, b) => Number(Boolean(b.relevance)) - Number(Boolean(a.relevance)))
 
   const updateLogisticsWithId = updateCourseLogistics.bind(null, id)
 

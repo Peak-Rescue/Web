@@ -5,6 +5,7 @@ import { useSteadyRefresh } from '@/components/useSteadyRefresh'
 import GearListEditor, { type GearItem, type GearList } from '@/app/admin/gear/GearListEditor'
 import { createGearList, copyGearList, deleteGearList } from '@/app/admin/gear/actions'
 import { ForPill } from '@/components/AudiencePills'
+import TemplatePicker, { type TemplateChoice } from '@/components/TemplatePicker'
 
 // A course's gear lists, built here rather than in a Google Doc that gets
 // linked. Student and instructor lists are separate because they differ, and
@@ -24,7 +25,9 @@ export default function CourseGear({
   // a roster that changes carries the whole list with it.
   students: number | null
   lists: GearList[]
-  templates: { id: string; name: string; description?: string | null; audience: string; entries: number }[]
+  // Two shapes for two jobs: the picker below browses them, and the editor's
+  // "save over one" menu only needs a name and a size.
+  templates: (TemplateChoice & { audience: string; entries: number })[]
   catalog: GearItem[]
 }) {
   const refresh = useSteadyRefresh()
@@ -85,19 +88,16 @@ export default function CourseGear({
               + Blank {a} list
             </button>
           ))}
-          {templates.map((t) => (
-            <button
-              key={t.id}
-              onClick={() => run(() => copyGearList(t.id, { instanceId, name: t.name }))}
-              disabled={busy}
-              title={[`${t.entries} item(s), ${t.audience}`, t.description].filter(Boolean).join(' — ')}
-              className="text-xs px-3 py-1.5 rounded border border-zinc-700 text-zinc-300 hover:text-white hover:border-zinc-500 transition-colors disabled:opacity-40"
-            >
-              {t.name}
-              <span className="text-zinc-600 ml-1.5">{t.entries}</span>
-            </button>
-          ))}
         </div>
+        <TemplatePicker
+          shelf="gear"
+          title="Start from a saved list"
+          countNoun="item"
+          emptyPreview="Nothing on this template yet."
+          templates={templates}
+          busy={busy}
+          onUse={(t) => run(() => copyGearList(t.id, { instanceId, name: t.name }))}
+        />
       </div>
     </div>
   )

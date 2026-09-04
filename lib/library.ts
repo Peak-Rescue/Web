@@ -3,7 +3,7 @@
 // (audience), what discipline it belongs to (reused capability categories),
 // and free-form topic tags for the skills vocabulary.
 
-import { type CapabilityCategory } from '@/lib/capabilities'
+import { CAPABILITY_META, courseCapabilityCategories, type CapabilityCategory } from '@/lib/capabilities'
 
 export type LibraryAudience = 'internal' | 'shared'
 export type LibrarySourceType = 'drive' | 'link' | 'youtube' | 'file'
@@ -52,6 +52,52 @@ export function shelfLabel(v: LibraryShelf): string {
 
 export function isTemplateShelf(v: string | undefined): v is TemplateShelf {
   return v === 'gear' || v === 'schedule'
+}
+
+// The way back to a template from wherever it is being used. A template saved
+// from a course used to be a one-way door in practice even after the library
+// grew editors for them: nothing on the course page said where it had gone.
+// The hash scrolls to the row, the query opens it.
+export function templateHref(shelf: TemplateShelf, id: string, open: 'contents' | 'details' = 'details') {
+  return `/admin/library?bucket=${shelf}&template=${id}&open=${open}#t-${id}`
+}
+
+export function templateShelfHref(shelf: TemplateShelf) {
+  return `/admin/library?bucket=${shelf}`
+}
+
+/** What a course is, as far as picking a template goes: the offering it is,
+    and the expertise it draws on. A custom course has no offering slug worth
+    matching — every one of them is `custom` — but it does carry the boxes
+    checked when it was set up, and those are the same vocabulary a template is
+    tagged with. Which is why relevance is two tests, not one. */
+export type TemplateAudienceCourse = { course_type: string | null; categories: string[] }
+
+/** Why this template is being offered for this course, or null if it isn't
+    specific to it. The string is shown on the row, so a mixed custom course
+    can see *which* half of it a template answers to. */
+export function templateRelevance(
+  t: { course_type?: string | null; disciplines?: string[] | null },
+  course: TemplateAudienceCourse,
+): string | null {
+  // A typed course matches its own offering. 'custom' is deliberately not a
+  // match with itself: every custom course shares that slug, so it would make
+  // "for this offering" mean "someone once did something bespoke".
+  if (t.course_type && t.course_type !== 'custom' && t.course_type === course.course_type) {
+    return 'this offering'
+  }
+  // A template's own offering implies expertise too — a Class C Canyon Rescue
+  // template is canyon work whether or not anyone ticked the Canyon box — so
+  // the tag it was saved with counts alongside the ones typed on the shelf.
+  // Without this, a template saved off a typed course reaches no custom course
+  // at all until someone goes and tags it by hand.
+  const implied = t.course_type ? courseCapabilityCategories(t.course_type, null) : []
+  const tags = [...new Set([...(t.disciplines ?? []), ...implied])]
+  const shared = tags.filter((d) => course.categories.includes(d))
+  if (shared.length === 0) return null
+  return shared
+    .map((d) => CAPABILITY_META[d as CapabilityCategory]?.label ?? d)
+    .join(', ')
 }
 
 // A template as the shelf lists it. `count` is items for a gear list, days for

@@ -1,9 +1,11 @@
 'use client'
 
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
+import Link from 'next/link'
 import { useSteadyRefresh } from '@/components/useSteadyRefresh'
 import CategorySelect, { NEW_TYPE } from './CategorySelect'
 import PdfLink from '@/components/PdfLink'
+import { templateHref, templateShelfHref } from '@/lib/library'
 import CloseButton from '@/components/CloseButton'
 import TrashIcon from '@/components/TrashIcon'
 import {
@@ -1588,6 +1590,10 @@ function SaveToShelf({
   input: string
 }) {
   const [target, setTarget] = useState('')
+  // Where the thing you just saved went. Saving one used to end in silence:
+  // the template existed, on a shelf this page never named, and the first
+  // thing you usually want is to rename or retag it.
+  const [saved, setSaved] = useState<{ id: string; name: string } | null>(null)
 
   // Overwriting a template built for the other audience is nearly always a
   // mis-click, so those aren't offered.
@@ -1598,13 +1604,25 @@ function SaveToShelf({
       <button
         onClick={() => {
           const name = prompt('Save this list to the library as a new template. Name it:', list.name)
-          if (name) run(() => copyGearList(list.id, { isTemplate: true, name, courseType }))
+          if (name) run(async () => {
+            const made = await copyGearList(list.id, { isTemplate: true, name, courseType })
+            setSaved({ id: made.id, name })
+          })
         }}
         disabled={busy}
         className="px-3 py-1.5 rounded border border-zinc-700 text-zinc-300 hover:text-white hover:border-zinc-500 transition-colors disabled:opacity-40"
       >
         + Save as a new template
       </button>
+
+      {saved && (
+        <span className="text-zinc-500">
+          Saved as &ldquo;{saved.name}&rdquo; —{' '}
+          <Link href={templateHref('gear', saved.id)} className="text-zinc-300 hover:text-white underline underline-offset-2">
+            open it on the shelf
+          </Link>
+        </span>
+      )}
 
       {same.length > 0 && (
         <>
@@ -1633,6 +1651,13 @@ function SaveToShelf({
           </button>
         </>
       )}
+
+      <Link
+        href={templateShelfHref('gear')}
+        className="text-zinc-600 hover:text-zinc-300 transition-colors ml-auto"
+      >
+        Manage templates →
+      </Link>
     </div>
   )
 }

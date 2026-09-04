@@ -3,7 +3,7 @@ import { after } from 'next/server'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { moduleAudience, KIND_META, type LibraryKind } from '@/lib/library'
+import { moduleAudience, templateRelevance, KIND_META, type LibraryKind } from '@/lib/library'
 import { regionLabel } from '@/lib/regions'
 import CourseResourcesSection, { type CourseResource } from '@/app/admin/courses/CourseResourcesSection'
 import CourseMapsSection, { type CourseMap } from '@/app/admin/courses/CourseMapsSection'
@@ -230,7 +230,9 @@ export default async function CourseView({
           .select('id, name, brand, info, url, category, parent_id, aliases, disciplines')
           .eq('active', true).order('name'),
         admin.from('gear_lists')
-          .select('id, name, description, audience, course_type, gear_list_entries(id)')
+          // Entry names come along for the picker's preview — an entry names
+          // its own row or points at the catalog, so both are read.
+          .select('id, name, description, audience, course_type, disciplines, gear_list_entries(id, name, sort_order, gear_items(name))')
           .eq('is_template', true),
       ])
     : Promise.resolve([{ data: null }, { data: null }, { data: null }] as const))
@@ -405,19 +407,49 @@ export default async function CourseView({
       ])
     : Promise.resolve([{ data: null }, { data: null }] as const)
 
+  // What this course is, as far as picking a template goes. A custom course
+  // has no offering slug worth matching — they all say 'custom' — but it does
+  // carry the categories checked when it was set up, and a template is tagged
+  // with the same vocabulary. So a canyons-and-mountain custom course is
+  // offered both shelves' canyon and mountain templates.
+  const courseDisciplines = courseCapabilityCategories(
+    inst.course_type as string,
+    inst.custom_categories as string[] | null
+  )
+  const templateCourse = {
+    course_type: inst.course_type as string | null,
+    categories: courseDisciplines as string[],
+  }
+
   // The shelf's schedules, for starting a course's running order from one.
   // Loaded whenever staff can see the section, including when it is empty —
   // which is the only moment they are any use.
   const { data: schedShelfRows } = showTasks
     ? await admin.from('course_schedules')
-        .select('id, name, description, course_type, schedule_days(id)')
+        // Day titles come along so the picker can show what a template
+        // actually is before it is copied onto the course — reading it after
+        // the fact was the only way to find out, and by then it was applied.
+        .select('id, name, description, course_type, disciplines, schedule_days(id, title, sort_order)')
         .eq('is_template', true)
+        .order('name')
     : { data: null }
   const scheduleShelf = ((schedShelfRows ?? []) as unknown as {
-    id: string; name: string; description: string | null; course_type: string | null; schedule_days: unknown[]
+    id: string; name: string; description: string | null; course_type: string | null
+    disciplines: string[] | null
+    schedule_days: { id: string; title: string | null; sort_order: number }[]
   }[])
-    .sort((a, b) => Number(b.course_type === inst.course_type) - Number(a.course_type === inst.course_type))
-    .map((t) => ({ id: t.id, name: t.name, description: t.description, days: t.schedule_days.length }))
+    .map((t) => ({
+      id: t.id,
+      name: t.name,
+      description: t.description,
+      count: t.schedule_days.length,
+      preview: [...t.schedule_days]
+        .sort((a, b) => a.sort_order - b.sort_order)
+        .map((d) => d.title ?? ''),
+      // What this course is, and therefore what the picker offers first.
+      relevance: templateRelevance(t, templateCourse),
+    }))
+    .sort((a, b) => Number(Boolean(b.relevance)) - Number(Boolean(a.relevance)))
   // Who has signed, for the staff roster. Read only when staff are looking and
   // only when the course actually has a waiver to sign — a column of "not
   // signed" on a course that never asked for one is a false alarm.
@@ -651,11 +683,6 @@ export default async function CourseView({
     ((sectionNameRows ?? []) as { title: string }[]).map((m) => m.title)
   )].sort((a, b) => a.localeCompare(b))
 
-  const courseDisciplines = courseCapabilityCategories(
-    inst.course_type as string,
-    inst.custom_categories as string[] | null
-  )
-
   const { count: expenseCount } = showAsAdmin
     ? await admin.from('expense_items').select('id', { count: 'exact', head: true }).eq('instance_id', id)
     : { count: 0 }
@@ -709,13 +736,20 @@ export default async function CourseView({
 
   const gearTemplateOptions = ((gearTemplateRows ?? []) as unknown as {
     id: string; name: string; description: string | null; audience: string
-    course_type: string | null; gear_list_entries: unknown[]
+    course_type: string | null; disciplines: string[] | null
+    gear_list_entries: { id: string; name: string | null; sort_order: number; gear_items: { name: string } | null }[]
   }[])
-    .sort((a, b) => Number(b.course_type === inst.course_type) - Number(a.course_type === inst.course_type))
     .map((t) => ({
       id: t.id, name: t.name, description: t.description,
       audience: t.audience, entries: t.gear_list_entries.length,
+      count: t.gear_list_entries.length,
+      badge: t.audience === 'instructor' ? 'instructors' : 'students',
+      preview: [...t.gear_list_entries]
+        .sort((a, b) => a.sort_order - b.sort_order)
+        .map((e) => e.name ?? e.gear_items?.name ?? ''),
+      relevance: templateRelevance(t, templateCourse),
     }))
+    .sort((a, b) => Number(Boolean(b.relevance)) - Number(Boolean(a.relevance)))
 
   // Null when neither venue nor region is set, and there is nothing to offer.
   const { data: venueRow } = await venueRowPromise
@@ -2010,7 +2044,7 @@ export default async function CourseView({
                 {showAsAdmin && (
                   <SaveToShelf
                     schedule={sched}
-                    templates={scheduleShelf.map((t) => ({ id: t.id, name: t.name, days: t.days }))}
+                    templates={scheduleShelf.map((t) => ({ id: t.id, name: t.name, days: t.count }))}
                     courseType={inst.course_type as string | null}
                   />
                 )}
