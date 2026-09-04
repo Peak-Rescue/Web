@@ -91,7 +91,26 @@ export default function EditInPlace({
     setEditing(false)
   }
 
-  if (!editor) return <>{children}</>
+  // No editor means no button — it does not mean no heading. This threw the
+  // whole header away for anyone who couldn't edit, which is why a student's
+  // page was a run of unlabelled cards: the crew, the maps and the reference
+  // all arrived with nothing saying which was which. The heading is how you
+  // know what you are looking at, and that is not an admin's question.
+  if (!editor) {
+    return (
+      <>
+        {(title || note || badge) && (
+          <div className="flex items-baseline gap-2 mb-2">
+            {title && <h3 className="text-sm font-semibold text-zinc-200">{title}</h3>}
+            {note && <span className="text-xs text-zinc-500">{note}</span>}
+            {badge}
+          </div>
+        )}
+        {children}
+      </>
+    )
+  }
+
 
   return (
     <>

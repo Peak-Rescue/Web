@@ -2,6 +2,7 @@ import React from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import WaiverDetach from '@/components/WaiverDetach'
+import { formatPhone } from '@/lib/phone'
 
 // Presentational shell for the portal page. Every top-level block on a course
 // is a Section: same icon-and-rule header, same spacing, its own anchor. The
@@ -157,6 +158,8 @@ export function InstructorCard({
   avatar,
   avatarPosition,
   avatarScale,
+  email,
+  phone,
 }: {
   name: string
   role: string
@@ -164,6 +167,11 @@ export function InstructorCard({
   avatar?: string | null
   avatarPosition?: string | null
   avatarScale?: number | null
+  /** How to reach them, the same live links a student card carries. Knowing
+      who is running your course and not being able to reach them is the half
+      of this card that was missing. */
+  email?: string | null
+  phone?: string | null
 }) {
   const lead = role === 'lead'
   const initials = name
@@ -198,36 +206,37 @@ export function InstructorCard({
         )}
       </span>
       <div className="min-w-0">
-        <div className="text-sm font-medium leading-tight truncate">{name}</div>
+        <div className="text-sm font-medium leading-tight truncate">
+          {slug ? (
+            <Link href={`/team/${slug}`} className="hover:text-white hover:underline transition-colors">
+              {name}
+            </Link>
+          ) : name}
+        </div>
         <div className="text-[11px] text-zinc-500 leading-tight">
           {lead ? 'Lead instructor' : 'Assistant instructor'}
         </div>
+        {(email || phone) && (
+          <div className="text-[11px] text-zinc-500 leading-tight truncate">
+            {email && (
+              <a href={`mailto:${email}`} className="hover:text-zinc-300 transition-colors">{email}</a>
+            )}
+            {email && phone && <span className="text-zinc-700"> · </span>}
+            {phone && (
+              <a href={`tel:${phone}`} className="hover:text-zinc-300 transition-colors tabular-nums">
+                {formatPhone(phone)}
+              </a>
+            )}
+          </div>
+        )}
       </div>
-      {slug && (
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="13"
-          height="13"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className="ml-auto shrink-0 text-zinc-600 group-hover:text-zinc-400 transition-colors"
-        >
-          <path d="M9 18l6-6-6-6" />
-        </svg>
-      )}
     </>
   )
 
-  const box = 'flex items-center gap-2.5 px-3 py-2 rounded-lg border border-zinc-800 bg-zinc-900'
-  if (!slug) return <div className={box}>{inner}</div>
   return (
-    <Link href={`/team/${slug}`} className={`${box} group hover:border-zinc-600 transition-colors`}>
+    <div className="flex items-center gap-2.5 px-3 py-2 rounded-lg border border-zinc-800 bg-zinc-900">
       {inner}
-    </Link>
+    </div>
   )
 }
 

@@ -261,7 +261,7 @@ export default async function CourseView({
         .order('off_date'),
       modulesQuery,
       admin.from('instance_instructors')
-        .select('role, instructors(name, email, profile_id, slug, active, title, avatar, avatar_position, avatar_scale)')
+        .select('role, instructors(name, email, profile_id, slug, active, title, avatar, avatar_position, avatar_scale, profiles(phone))')
         .eq('instance_id', id),
       showTasks ? loadTasksWithDocs(admin, id) : Promise.resolve([]),
       showTasks
@@ -1044,7 +1044,22 @@ export default async function CourseView({
   // (see `daysCarryMeeting` above) and this was justifying a section with the
   // thing that had left it. A student on a course with a day-level meeting
   // point and nothing posted got an Updates tab reading "nothing yet".
-  const hasUpdates = canPostUpdates || courseUpdates.length > 0 ||
+  const hasUpdates =
+    // Staff always: it is where the first post goes.
+    canPostUpdates ||
+    // Anybody, once something has actually been said.
+    courseUpdates.length > 0 ||
+    // Anyone on the course, said or not. "Has anything been announced?" is a
+    // question a student has before every course, and with four doors the
+    // absence of this one is the only answer they get — an Updates tab that
+    // comes and goes per course makes the page a different shape each time,
+    // and a student who has never seen it does not know announcements happen.
+    // An empty feed is a real answer here, unlike an empty state reporting
+    // that nothing needs doing.
+    Boolean(userId) ||
+    // A share-link guest has no account and no feed, so for them it is still
+    // worth a door only while it holds the meeting block — and not once the
+    // days have taken that over.
     (!daysCarryMeeting &&
       Boolean(meeting.meetingPoint || meeting.meetingTime || meeting.links.length || meeting.files.length))
   const hasDocuments = showTasks
@@ -1382,7 +1397,7 @@ export default async function CourseView({
               so the crew reads for everyone and edits for one. */}
           <EditInPlace
             label="Edit staffing"
-            title={(instructors ?? []).length === 1 ? 'Your instructor' : 'Your instructors'}
+            title="Instructors"
             editor={
               showAsAdmin ? (
                 <CourseStaffingEditor
@@ -1403,9 +1418,11 @@ export default async function CourseView({
               <div className="grid sm:grid-cols-2 gap-2">
                 {(instructors ?? []).map((a, i) => {
                   const p = a.instructors as unknown as {
-                    name: string; slug: string | null; active: boolean | null
+                    name: string; slug: string | null; active: boolean | null; email: string | null
                     avatar: string | null; avatar_position: string | null; avatar_scale: number | null
+                    profiles: { phone: string | null } | { phone: string | null }[] | null
                   } | null
+                  const pProfile = Array.isArray(p?.profiles) ? p?.profiles[0] : p?.profiles
                   return (
                     <InstructorCard
                       key={i}
@@ -1417,6 +1434,8 @@ export default async function CourseView({
                       avatar={p?.avatar}
                       avatarPosition={p?.avatar_position}
                       avatarScale={p?.avatar_scale}
+                      email={p?.email}
+                      phone={pProfile?.phone}
                     />
                   )
                 })}
