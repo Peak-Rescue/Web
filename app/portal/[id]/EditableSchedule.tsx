@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, type ReactNode } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import CloseButton from '@/components/CloseButton'
+import { usePendingSaves } from '@/components/PendingSaves'
 
 // A read view with an editor behind it, swapped by a button that looks like a
 // button.
@@ -46,6 +47,49 @@ export default function EditInPlace({
 }) {
   const router = useRouter()
   const [editing, setEditing] = useState(false)
+  const [closing, setClosing] = useState(false)
+  const { value: saves, settle, Provider: SavesProvider } = usePendingSaves()
+  const abandoned = useRef(false)
+
+  // The way out waits for the way in to finish.
+  //
+  // The fields behind this button save on a debounce, so the second after the
+  // last keystroke is a second where the screen says one thing and the
+  // database says another. Closing used to unmount the editor in that second:
+  // the timer fired into a form that no longer existed and the edit was gone,
+  // with nothing said about it. The X is pressed *because* someone is done
+  // typing, which puts it right on top of that second.
+  //
+  // So closing sends what is outstanding and waits for it. If it still won't
+  // save — a failing action rather than a slow one — that is the one case
+  // worth a question, because the only alternatives are losing the change or
+  // trapping someone in an editor they are trying to leave.
+  async function close() {
+    // Pressed again while it waits: a save can hang for as long as its timeout
+    // allows, and an X that stops answering is worse than one that asks. The
+    // second press is the way out of a wait that has gone on too long.
+    if (closing) {
+      if (!window.confirm('This is still saving. Close anyway and risk losing the last change?')) return
+      abandoned.current = true
+      setClosing(false)
+      router.refresh()
+      setEditing(false)
+      return
+    }
+    abandoned.current = false
+    setClosing(true)
+    const settled = await settle()
+    // Left without us: the wait was abandoned above and the editor is already
+    // closed, so this is a dialog nobody asked for.
+    if (abandoned.current) return
+    setClosing(false)
+    if (!settled && !window.confirm('Some changes haven’t saved yet. Close anyway and lose them?')) return
+    // Closing re-reads the page. The fields save as you leave them, but the
+    // day outline saves quietly while you type — so without this, finishing an
+    // outline and closing would show the version you started with.
+    router.refresh()
+    setEditing(false)
+  }
 
   if (!editor) return <>{children}</>
 
@@ -57,17 +101,12 @@ export default function EditInPlace({
         {badge}
         {title && <span className="ml-auto" />}
         {editing ? (
-          <CloseButton
-            label="Done editing"
-            onClick={() => {
-              // Closing re-reads the page. The fields save as you leave them,
-              // but the day outline saves quietly while you type — so without
-              // this, finishing an outline and closing would show the version
-              // you started with.
-              router.refresh()
-              setEditing(false)
-            }}
-          />
+          <>
+            {/* Said out loud, so a close that takes a moment reads as the
+                editor finishing rather than as a button that missed. */}
+            {closing && <span className="text-xs text-zinc-500">Saving…</span>}
+            <CloseButton label={closing ? 'Close without waiting' : 'Done editing'} onClick={() => void close()} />
+          </>
         ) : (
           <button
             onClick={() => setEditing(true)}
@@ -81,7 +120,7 @@ export default function EditInPlace({
           </button>
         )}
       </div>
-      {editing ? editor : children}
+      {editing ? <SavesProvider value={saves}>{editor}</SavesProvider> : children}
     </>
   )
 }

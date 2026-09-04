@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { updateCourseLogistics } from '@/app/admin/courses/actions'
+import { useTrackedSaves } from '@/components/PendingSaves'
 
 // The welcome, edited where it is read.
 //
@@ -20,6 +21,9 @@ export default function CourseIntroFields({
   intro: string | null
 }) {
   const [error, setError] = useState<string | null>(null)
+  // Blur fires on the mousedown that closes this editor; tracking the save
+  // keeps the close from re-reading the page before it lands.
+  const track = useTrackedSaves()
 
   return (
     <div className="space-y-2 mb-2">
@@ -31,7 +35,7 @@ export default function CourseIntroFields({
           setError(null)
           const data = new FormData()
           data.set('intro', e.target.value)
-          try { await updateCourseLogistics(instanceId, data) }
+          try { await track(updateCourseLogistics(instanceId, data)) }
           catch (err) { setError(err instanceof Error ? err.message : 'That didn’t save') }
         }}
         placeholder="Welcome"

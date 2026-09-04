@@ -6,6 +6,7 @@ import { updateScheduleDay, removeScheduleDay } from './actions'
 import DayOutline from './DayOutline'
 import { Grows, Marked, PinIcon, RouteIcon, FlagIcon, NoteIcon, TargetIcon, PencilIcon } from './fields'
 import type { ScheduleDay, SiteOption, MeetingPointOption } from './types'
+import { useTrackedSaves } from '@/components/PendingSaves'
 
 // One day of a running order, as a thing you can edit wherever you meet it.
 //
@@ -46,9 +47,13 @@ export default function ScheduleDayCard({
     onError?.(message)
   }
 
+  // Blur fires on the mousedown that closes this card's editor; tracking the
+  // save keeps the close from re-reading the page before it lands.
+  const track = useTrackedSaves()
+
   async function run(fn: () => Promise<unknown>, opts?: { quiet?: boolean }) {
     setBusy(true); fail(null)
-    try { await fn(); if (!opts?.quiet) router.refresh(); return true }
+    try { await track(fn()); if (!opts?.quiet) router.refresh(); return true }
     catch (e) { fail(e instanceof Error ? e.message : 'That didn’t save'); return false }
     finally { setBusy(false) }
   }

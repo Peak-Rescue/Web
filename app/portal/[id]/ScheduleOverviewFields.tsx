@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { updateSchedule } from '@/app/admin/schedules/actions'
+import { useTrackedSaves } from '@/components/PendingSaves'
 
 // What the course is, above the day it happens on.
 //
@@ -23,10 +24,13 @@ export default function ScheduleOverviewFields({
   objectives: string[]
 }) {
   const [error, setError] = useState<string | null>(null)
+  // Blur fires on the mousedown that closes this editor; tracking the save
+  // keeps the close from re-reading the page before it lands.
+  const track = useTrackedSaves()
 
   async function save(fn: () => Promise<unknown>) {
     setError(null)
-    try { await fn() } catch (e) { setError(e instanceof Error ? e.message : 'That didn’t save') }
+    try { await track(fn()) } catch (e) { setError(e instanceof Error ? e.message : 'That didn’t save') }
   }
 
   const input = 'w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-zinc-500'

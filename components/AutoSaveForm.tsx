@@ -1,7 +1,8 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useUnsavedGuard, withSaveTimeout } from '@/components/useUnsavedGuard'
+import { useRegisterSaver } from '@/components/PendingSaves'
 
 // Wraps server-rendered form fields and auto-saves them: any input/change
 // debounces, then the bound server action is called with the form's data.
@@ -21,10 +22,23 @@ export default function AutoSaveForm({
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const saving = useRef(false)
   const rerun = useRef(false)
+  const running = useRef<Promise<void>>(Promise.resolve())
   const [status, setStatus] = useState<'idle' | 'pending' | 'saving' | 'saved' | 'error'>('idle')
   const [highlight, setHighlight] = useState(false)
 
   const dirty = status === 'pending' || status === 'saving' || status === 'error'
+
+  // Leaving the page is guarded below; closing the editor this form sits in is
+  // guarded here. Same unsaved second, two different ways out of it.
+  const dirtyRef = useRef(dirty)
+  useEffect(() => {
+    dirtyRef.current = dirty
+  })
+  useRegisterSaver({
+    isPending: () => dirtyRef.current,
+    flush: () => flush(),
+  })
+
   useUnsavedGuard({
     dirty,
     message:
@@ -47,7 +61,11 @@ export default function AutoSaveForm({
     timer.current = setTimeout(() => void flush(), debounceMs)
   }
 
-  async function flush() {
+  // Resolves when the form is quiet — including the re-run an edit made
+  // mid-save leaves behind. A caller waiting on the save (the editor's close
+  // button) has to be able to wait for *all* of it, not just the request that
+  // happened to be in the air when it asked.
+  async function flush(): Promise<void> {
     if (timer.current) {
       clearTimeout(timer.current)
       timer.current = null
@@ -55,22 +73,27 @@ export default function AutoSaveForm({
     if (!formRef.current) return
     if (saving.current) {
       rerun.current = true
-      return
+      return running.current
     }
     saving.current = true
-    setStatus('saving')
-    try {
-      await withSaveTimeout(action(new FormData(formRef.current)))
-      setStatus('saved')
-    } catch {
-      setStatus('error')
-    } finally {
-      saving.current = false
-      if (rerun.current) {
-        rerun.current = false
-        void flush()
+    running.current = (async () => {
+      try {
+        do {
+          rerun.current = false
+          if (!formRef.current) return
+          setStatus('saving')
+          try {
+            await withSaveTimeout(action(new FormData(formRef.current)))
+            setStatus('saved')
+          } catch {
+            setStatus('error')
+          }
+        } while (rerun.current)
+      } finally {
+        saving.current = false
       }
-    }
+    })()
+    return running.current
   }
 
   return (

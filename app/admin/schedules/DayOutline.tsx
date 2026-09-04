@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { replaceDayOutline, touchDay } from './actions'
+import { useRegisterSaver } from '@/components/PendingSaves'
 import type { ScheduleBlock } from './ScheduleEditor'
 
 // `where` is the part of the day this line happens in — "Classroom" before
@@ -65,8 +66,11 @@ export default function DayOutline({
   // three times mid-sentence still refreshes the page once at the end.
   const owed = useRef(false)
 
-  const push = useCallback(async (first: Job) => {
-    if (inFlight.current) { queued.current = first; return }
+  // What the current save is, so a close can wait on it rather than on the
+  // next tick.
+  const running = useRef<Promise<void>>(Promise.resolve())
+
+  const drain = useCallback(async (first: Job) => {
     inFlight.current = true
     setSaving(true)
     try {
@@ -94,13 +98,29 @@ export default function DayOutline({
     }
   }, [dayId, onError])
 
+  const push = useCallback((first: Job): Promise<void> => {
+    // A save already in the air takes the new rows with it when it drains, so
+    // waiting on that one is waiting on this edit too.
+    if (inFlight.current) { queued.current = first; return running.current }
+    running.current = drain(first)
+    return running.current
+  }, [drain])
+
   const flush = useCallback(() => {
     if (timer.current) { clearTimeout(timer.current); timer.current = null }
     const rows = pending.current
     pending.current = null
-    if (rows) void push({ rows, quiet: false })
-    else if (owed.current) { owed.current = false; void touchDay(dayId).catch(() => {}) }
+    if (rows) return push({ rows, quiet: false })
+    if (owed.current) { owed.current = false; return touchDay(dayId).catch(() => {}) }
+    return running.current
   }, [push, dayId])
+
+  // An outline saves a beat after typing stops, which is the same beat someone
+  // presses the X in. Closing the editor asks for that beat back.
+  useRegisterSaver({
+    isPending: () => timer.current !== null || inFlight.current || pending.current !== null || owed.current,
+    flush: async () => { await flush() },
+  })
 
   const edit = useCallback((next: Row[]) => {
     setRows(next)
@@ -121,7 +141,7 @@ export default function DayOutline({
   // spends whatever the timer was still holding.
   const flushRef = useRef(flush)
   useEffect(() => { flushRef.current = flush })
-  useEffect(() => () => flushRef.current(), [])
+  useEffect(() => () => { void flushRef.current() }, [])
 
   // Dragging down the lines selects them. The mouse can leave the outline
   // mid-drag, so the button coming up is watched on the window.
