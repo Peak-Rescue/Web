@@ -866,6 +866,7 @@ export default async function CourseView({
   // Schedule now holds the maps and the reference shelf as well as the days,
   // so a course with a med plan and no schedule still has somewhere to put it.
   const showSchedule = hasSchedule || showTasks || hasMapsOrReference
+  const hasOverview = Boolean(sched?.overview) || (sched?.objectives?.length ?? 0) > 0
   // Staff get it whether or not anything is in it: this is where the first
   // section gets added, and a section that appears only once it has contents
   // is one nobody can put contents into.
@@ -1571,6 +1572,26 @@ export default async function CourseView({
             )}
                 </div>
               )}
+              {/* Deleting a course is the last thing you would ever do to
+                  one, and it is build work: nobody deletes a course from a
+                  trailhead. So it lives at the bottom of the section that
+                  holds what the course is, and only while you are building. */}
+              {showAsAdmin && mode === 'build' && (
+                <div className="mt-16 pt-8 border-t border-zinc-800 flex items-center justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-medium text-zinc-400">Delete course</p>
+                    <p className="text-xs text-zinc-600 mt-0.5">
+                      Removes this course instance, its schedule, materials, and enrollments. Cannot be undone.
+                    </p>
+                  </div>
+                  <DeleteInstanceButton
+                    instanceId={id}
+                    displayName={courseDisplayName(inst.course_type, inst.custom_title)}
+                    enrollmentCount={enrolledCount}
+                    expenseCount={expenseCount ?? 0}
+                  />
+                </div>
+              )}
             </div>
           </Section>
           </NavPanel>
@@ -1826,7 +1847,7 @@ export default async function CourseView({
                 rather than imported into the client. */}
             <EditInPlace
               label="Edit curriculum"
-              title="Sections"
+              title="Curriculum"
               editor={
                 showTasks ? (
                   <CourseCurriculumEditor
@@ -2010,9 +2031,14 @@ export default async function CourseView({
                 here because this is where it is read — and because an empty
                 overview is invisible, so a way in that lives on another screen
                 is a way in nobody finds. */}
+            {/* An overview most courses never write. With one, it is a
+                headed block; without one, it is the button and nothing else —
+                a heading over an empty space says the same as the empty state
+                it replaced. Not hidden outright, because then there would be
+                no way to write the first one. */}
             <EditInPlace
-              label="Edit overview"
-              title="Overview"
+              label={hasOverview ? 'Edit overview' : 'Add an overview'}
+              title={hasOverview ? 'Overview' : undefined}
               editor={
                 canEditSchedule ? (
                   <ScheduleOverviewFields
@@ -2031,12 +2057,6 @@ export default async function CourseView({
                     {sched.objectives.map((o, i) => <li key={i}>{o}</li>)}
                   </ol>
                 </div>
-              )}
-              {/* Staff see that there is nothing here rather than nothing at
-                  all — an empty overview is otherwise indistinguishable from a
-                  feature that went away. */}
-              {!sched.overview && !sched.objectives.length && canEditSchedule && (
-                <p className="text-xs text-zinc-600 mb-3">No overview or objectives yet.</p>
               )}
             </EditInPlace>
             <div className="space-y-3">
@@ -2555,24 +2575,6 @@ export default async function CourseView({
         )}
 
         </CourseNav>
-
-        {/* Details is always there, so emptiness is about the sections below it. */}
-                {showAsAdmin && (
-          <div className="mt-16 pt-8 border-t border-zinc-800 flex items-center justify-between gap-4">
-            <div>
-              <p className="text-sm font-medium text-zinc-400">Delete course</p>
-              <p className="text-xs text-zinc-600 mt-0.5">
-                Removes this course instance, its schedule, materials, and enrollments. Cannot be undone.
-              </p>
-            </div>
-            <DeleteInstanceButton
-              instanceId={id}
-              displayName={courseDisplayName(inst.course_type, inst.custom_title)}
-              enrollmentCount={enrolledCount}
-              expenseCount={expenseCount ?? 0}
-            />
-          </div>
-        )}
 
         {navSections.length === 1 && (
           <p className="text-zinc-500 text-sm">Nothing has been added to this course yet.</p>
