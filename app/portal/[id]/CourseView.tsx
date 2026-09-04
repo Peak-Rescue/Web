@@ -22,7 +22,7 @@ import SaveToShelf from '@/app/admin/schedules/SaveToShelf'
 import GearOrderPanel from '@/app/admin/courses/GearOrderPanel'
 import { type GearOrder } from '@/lib/gear-orders'
 import DeleteInstanceButton from '@/app/admin/courses/DeleteInstanceButton'
-import CourseWaiverSection, { type WaiverRosterRow } from '@/app/admin/courses/CourseWaiverSection'
+import CourseWaiverSection from '@/app/admin/courses/CourseWaiverSection'
 import { listWaiverTemplates } from '@/app/admin/courses/waiver-actions'
 import { plannedInstructorCount } from '@/lib/estimates'
 import { parseContacts } from '@/lib/contacts'
@@ -976,15 +976,9 @@ export default async function CourseView({
   const [{ data: rosterSigRows }, waiverQr, unmatchedWaivers] =
     await Promise.all([rosterSigPromise, waiverQrPromise, unmatchedPromise])
 
-  const signedByEnrollment = new Map<string, { unverified: boolean }>()
-  for (const r of (rosterSigRows ?? []) as { enrollment_id: string; identity: string }[]) {
-    if (!signedByEnrollment.has(r.enrollment_id)) {
-      signedByEnrollment.set(r.enrollment_id, { unverified: r.identity === 'unverified' })
-    }
-  }
-  // The roster as the waiver block reads it: who is on the course and what
-  // their latest signature is, since re-signing supersedes rather than
-  // replaces.
+  // Who is on the course and what their latest signature is, since re-signing
+  // supersedes rather than replaces. One model, read by the roster cards — the
+  // waiver block keeps the count and nothing else.
   type SigRow = {
     id: string; enrollment_id: string; identity: string; signed_at: string
     source: string; signer_role: string | null
@@ -994,23 +988,24 @@ export default async function CourseView({
   for (const r of (rosterSigRows ?? []) as SigRow[]) {
     if (!latestSig.has(r.enrollment_id)) latestSig.set(r.enrollment_id, r)
   }
-  const waiverRoster: WaiverRosterRow[] = roster.map((p) => {
-    const sig = latestSig.get(p.id)
-    return {
-      enrollmentId: p.id,
-      name: p.name,
-      email: p.email,
-      signature: sig
-        ? {
-            id: sig.id,
-            signedAt: sig.signed_at,
-            identity: sig.identity as 'authenticated' | 'unverified',
-            source: sig.source as 'portal' | 'qr',
-            signerName: [sig.guardian_first_name, sig.guardian_last_name].filter(Boolean).join(' ') || null,
-          }
-        : null,
-    }
-  })
+  const signedCount = roster.filter((p) => latestSig.has(p.id)).length
+
+  // Two people on one course under one name. The system's idea of a person is
+  // an email address, so somebody who opens the invite link on a device with
+  // no session and types their other address takes a second seat as a second
+  // person — and the enrollments table, unique on (instance, account), has no
+  // way to know. Both rows are marked rather than the newer one, because which
+  // is the mistake is a question for whoever knows them; usually it is the one
+  // with no waiver against it.
+  const nameCounts = new Map<string, number>()
+  for (const p of roster) {
+    const key = p.name.trim().toLowerCase()
+    nameCounts.set(key, (nameCounts.get(key) ?? 0) + 1)
+  }
+  // 'Unnamed' is what a half-filled profile renders as, not a name two people
+  // share, so two of them are not evidence of anything.
+  const isDuplicate = (name: string) =>
+    name !== 'Unnamed' && (nameCounts.get(name.trim().toLowerCase()) ?? 0) > 1
 
   const notifyCounts: NotifyCounts = notifyCountsFrom(
     roster.map((r) => r.email),
@@ -1042,7 +1037,7 @@ export default async function CourseView({
   // exception is an internal course, where the attendees are the crew already
   // named at the top of the page — unless somebody did enroll, in which case
   // hiding them would be hiding the truth.
-  const hasRoster = showTasks && (!inst.internal || roster.length > 0)
+  const hasRoster = showTasks && (!inst.internal || roster.length > 0 || waiverOnCourse)
   // Notes moved to Details, so the Tasks section stands or falls on tasks —
   // it no longer appears because somebody wrote a note.
   const hasTasks = showTasks && (tasks.length > 0 || canManageTasks)
@@ -1491,11 +1486,21 @@ export default async function CourseView({
                       phone={student.phone}
                       enrolledAt={student.enrolledAt}
                       href={`/portal/${id}/people/${student.id}`}
+                      duplicate={isDuplicate(student.name)}
                       waiver={
                         waiverOnCourse
                           ? {
-                              signed: signedByEnrollment.has(student.id),
-                              unverified: signedByEnrollment.get(student.id)?.unverified ?? false,
+                              signed: latestSig.has(student.id),
+                              unverified: latestSig.get(student.id)?.identity === 'unverified',
+                              signatureId: latestSig.get(student.id)?.id ?? null,
+                              signedAt: latestSig.get(student.id)?.signed_at ?? null,
+                              signerName: (() => {
+                                const sig = latestSig.get(student.id)
+                                if (!sig || sig.signer_role !== 'guardian') return null
+                                return [sig.guardian_first_name, sig.guardian_last_name]
+                                  .filter(Boolean).join(' ') || 'a guardian'
+                              })(),
+                              instanceId: id,
                             }
                           : undefined
                       }
@@ -1608,9 +1613,8 @@ export default async function CourseView({
                   instanceId={id}
                   templates={waiverTemplates}
                   selectedId={(inst.waiver_template_id as string | null) ?? null}
-                  roster={waiverRoster}
-                  qr={waiverQr}
-                  unmatched={unmatchedWaivers}
+                  signedCount={signedCount}
+                  enrolledCount={enrolledCount}
                 />
               </div>
             )}

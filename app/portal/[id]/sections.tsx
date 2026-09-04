@@ -2,6 +2,7 @@ import React from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { AudiencePills } from '@/components/AudiencePills'
+import WaiverDetach from '@/components/WaiverDetach'
 
 // Presentational shell for the portal page. Every top-level block on a course
 // is a Section: same icon-and-rule header, same spacing, its own anchor. The
@@ -277,6 +278,7 @@ export function StudentCard({
   enrolledAt,
   href,
   waiver,
+  duplicate,
 }: {
   name: string
   email?: string | null
@@ -287,7 +289,18 @@ export function StudentCard({
   /** Whether they've signed, and how much the signature is worth. Undefined
       when the course has no waiver, so the row says nothing rather than
       implying something is outstanding. */
-  waiver?: { signed: boolean; unverified: boolean }
+  waiver?: {
+    signed: boolean
+    unverified: boolean
+    /** The signature itself, for the copy and the way back out of a bad match. */
+    signatureId?: string | null
+    signedAt?: string | null
+    /** Who put their name to it, when that wasn't the student — a guardian. */
+    signerName?: string | null
+    instanceId?: string
+  }
+  /** Somebody else on this course is entered under the same name. */
+  duplicate?: boolean
 }) {
   const initials = name
     .split(/\s+/)
@@ -329,18 +342,50 @@ export function StudentCard({
           {!email && !phone && 'No contact details on file'}
         </div>
       </div>
+      {/* Everything the waiver roster used to say in a list of its own: the
+          state, the day it was signed, the copy, and the way back out of a
+          match somebody guessed at. One roster, because two lists of the same
+          eight people is how one of them ends up believed over the other. */}
       <div className="ml-auto shrink-0 text-right">
         {waiver && (
           <div className={`text-[11px] ${waiver.signed ? 'text-teal-400' : 'text-amber-400'}`}>
             {waiver.signed
               ? waiver.unverified ? 'Waiver · via QR' : 'Waiver signed'
               : 'Waiver not signed'}
+            {waiver.signed && waiver.signatureId && (
+              <>
+                <span className="text-zinc-700"> · </span>
+                <a
+                  href={`/api/waivers/${waiver.signatureId}/pdf`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-zinc-400 hover:text-zinc-200 underline transition-colors"
+                >
+                  PDF
+                </a>
+              </>
+            )}
           </div>
         )}
-        {enrolledAt && (
-          <span className="text-[11px] text-zinc-600">
-            Joined {new Date(enrolledAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-          </span>
+        <div className="text-[11px] text-zinc-600 leading-tight">
+          {waiver?.signed && waiver.signedAt
+            ? `Signed ${new Date(waiver.signedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}${
+                waiver.signerName ? ` by ${waiver.signerName}` : ''
+              }`
+            : enrolledAt
+              ? `Joined ${new Date(enrolledAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
+              : null}
+        </div>
+        {waiver?.signed && waiver.unverified && waiver.signatureId && waiver.instanceId && (
+          <WaiverDetach instanceId={waiver.instanceId} signatureId={waiver.signatureId} />
+        )}
+        {/* Said on both rows rather than on the newer one: which of the two is
+            the mistake is a question for whoever knows the person, and the
+            answer is usually the one with no waiver. */}
+        {duplicate && (
+          <div className="text-[11px] text-amber-400" title="Another student on this course is entered under the same name — they may have joined twice with two addresses">
+            Possible duplicate
+          </div>
         )}
       </div>
     </div>

@@ -37,9 +37,6 @@ import RemovableRow from '../RemovableRow'
 import { CourseTabs, TabPanel } from '../CourseTabs'
 import CourseGear from '../CourseGear'
 import CoursePhotosSection from '../CoursePhotosSection'
-import CourseWaiverSection, { type WaiverRosterRow } from '../CourseWaiverSection'
-import { listWaiverTemplates } from '../waiver-actions'
-import { loadUnmatchedWaivers } from '@/lib/waiver-data'
 import { LIBRARY_HREF, type CourseLink } from '@/lib/course-links'
 import AudienceSetter from '../AudienceSetter'
 import { type GearItem, type GearList } from '@/app/admin/gear/GearListEditor'
@@ -266,62 +263,9 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
   // in is private, and a client component can't sign anything.
   const meeting = await meetingDetails(admin, inst)
 
-  // The waiver picture for this course. Signatures are read for the whole
-  // course rather than per student, so one query answers the roster; the
-  // latest per person wins, since re-signing supersedes rather than replaces.
-  const [waiverTemplates, { data: waiverSigRows }] = await Promise.all([
-    listWaiverTemplates(),
-    admin
-      .from('waiver_signatures')
-      .select('id, enrollment_id, signed_at, identity, source, signer_role, guardian_first_name, guardian_last_name')
-      .eq('instance_id', id)
-      .order('signed_at', { ascending: false }),
-  ])
-  const latestByEnrollment = new Map<string, WaiverRosterRow['signature']>()
-  for (const sig of (waiverSigRows ?? []) as unknown as {
-    id: string; enrollment_id: string | null; signed_at: string
-    identity: 'authenticated' | 'unverified'; source: 'portal' | 'qr'
-    signer_role: 'adult' | 'guardian'
-    guardian_first_name: string | null; guardian_last_name: string | null
-  }[]) {
-    if (!sig.enrollment_id || latestByEnrollment.has(sig.enrollment_id)) continue
-    latestByEnrollment.set(sig.enrollment_id, {
-      id: sig.id,
-      signedAt: sig.signed_at,
-      identity: sig.identity,
-      source: sig.source,
-      signerName: sig.signer_role === 'guardian'
-        ? [sig.guardian_first_name, sig.guardian_last_name].filter(Boolean).join(' ') || 'a guardian'
-        : null,
-    })
-  }
-  // Signed but attached to nobody — the queue the QR path can create.
-  const unmatchedWaivers = await loadUnmatchedWaivers(id, admin)
+  // The waiver lives on the course page now — the picker, the count, the QR,
+  // the unmatched queue and every signature — so none of it is read here.
 
-  // The QR is rendered here rather than in the browser: it is a fixed image of
-  // a token the server already knows, and shipping a generator to the client
-  // to redraw it would be work for nothing.
-  const waiverToken = inst.waiver_token as string | null
-  let waiverQr: { url: string; svg: string; expiresAt: string | null } | null = null
-  if (waiverToken) {
-    const url = `${process.env.NEXT_PUBLIC_SITE_URL || 'https://peak-rescue.com'}/waiver/${waiverToken}`
-    const QRCode = (await import('qrcode')).default
-    waiverQr = {
-      url,
-      svg: await QRCode.toString(url, { type: 'svg', margin: 1, width: 148 }),
-      expiresAt: (inst.waiver_token_expires_at as string | null) ?? null,
-    }
-  }
-
-  const waiverRoster: WaiverRosterRow[] = enrollments.map((e) => {
-    const p = e.profiles as unknown as { first_name: string | null; last_name: string | null; email: string | null } | null
-    return {
-      enrollmentId: e.id,
-      name: [p?.first_name, p?.last_name].filter(Boolean).join(' ').trim() || 'Unnamed',
-      email: p?.email ?? null,
-      signature: latestByEnrollment.get(e.id) ?? null,
-    }
-  })
   const viewShares: ViewShare[] = ((viewShareRows ?? []) as {
     id: string; token: string; label: string | null
     expires_at: string | null; viewed_at: string | null; view_count: number
@@ -618,15 +562,6 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
           <CoursePhotosSection
             instanceId={id}
             links={((courseLinkRows ?? []) as CourseLink[]).filter(l => l.purpose === 'photos')}
-          />
-
-          <CourseWaiverSection
-            instanceId={id}
-            templates={waiverTemplates}
-            selectedId={(inst.waiver_template_id as string | null) ?? null}
-            roster={waiverRoster}
-            qr={waiverQr}
-            unmatched={unmatchedWaivers}
           />
 
           {/* Where and when to meet, and the welcome. It sat under Students,

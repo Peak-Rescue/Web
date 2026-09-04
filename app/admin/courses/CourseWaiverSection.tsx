@@ -1,59 +1,38 @@
 'use client'
 
-import Link from 'next/link'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import InfoHint from '@/components/InfoHint'
-import WaiverQrPanel, { type WaiverQr } from '@/components/WaiverQrPanel'
-import UnmatchedWaivers, { type UnmatchedWaiver } from '@/components/UnmatchedWaivers'
-import { unlinkWaiverSignature } from '@/app/portal/[id]/waiver-actions'
 import { setCourseWaiver, type WaiverTemplateOption } from './waiver-actions'
 
-export type { UnmatchedWaiver }
-
-export type WaiverRosterRow = {
-  enrollmentId: string
-  name: string
-  email: string | null
-  /** Null until they sign. */
-  signature: {
-    id: string
-    signedAt: string
-    identity: 'authenticated' | 'unverified'
-    source: 'portal' | 'qr'
-    signerName: string | null
-  } | null
-}
-
-// Which waiver this course uses, and who has signed it.
+// Which waiver this course uses, and how far the course has got with it.
 //
 // The two belong together: choosing a waiver is the thing that starts asking
 // people to sign, so the answer to "did that work" should be in the same
-// place. A course with no waiver set shows no roster at all, because nobody
-// was ever asked.
+// place. A course with no waiver set says nothing, because nobody was asked.
+//
+// Who has signed is not here. It is on the student's card in the roster, next
+// to the phone number you would call about it — one list of the people on this
+// course, not two that can disagree.
 
 export default function CourseWaiverSection({
   instanceId,
   templates,
   selectedId,
-  roster,
-  qr,
-  unmatched,
+  signedCount,
+  enrolledCount,
 }: {
   instanceId: string
   templates: WaiverTemplateOption[]
   selectedId: string | null
-  roster: WaiverRosterRow[]
-  /** The course code, once one exists: its link, the rendered QR, and when it dies. */
-  qr: WaiverQr | null
-  unmatched: UnmatchedWaiver[]
+  signedCount: number
+  enrolledCount: number
 }) {
   const router = useRouter()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const signed = roster.filter((r) => r.signature)
-  const outstanding = roster.length - signed.length
+  const outstanding = enrolledCount - signedCount
 
   async function run(fn: () => Promise<unknown>) {
     setBusy(true)
@@ -92,95 +71,12 @@ export default function CourseWaiverSection({
         <div className="mt-4">
           <div className="flex items-baseline gap-2 mb-2">
             <p className="text-xs uppercase tracking-wide text-zinc-500">
-              Signed {signed.length} of {roster.length}
+              Signed {signedCount} of {enrolledCount}
             </p>
             {outstanding > 0 && (
               <span className="text-xs text-amber-400">{outstanding} outstanding</span>
             )}
           </div>
-
-          {roster.length === 0 ? (
-            <p className="text-xs text-zinc-500">
-              Nobody enrolled yet.
-            </p>
-          ) : (
-            <div className="bg-zinc-950/40 border border-zinc-800 rounded-lg divide-y divide-zinc-800">
-              {roster.map((r) => (
-                <div key={r.enrollmentId} className="flex items-center gap-3 px-4 py-2.5">
-                  <span
-                    aria-hidden
-                    className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                      r.signature ? 'bg-teal-400' : 'bg-amber-500'
-                    }`}
-                  />
-                  <div className="min-w-0">
-                    <div className="text-sm text-zinc-200 truncate">
-                      <Link
-                        href={`/portal/${instanceId}/people/${r.enrollmentId}`}
-                        // One row per signature: prefetching renders a page
-                        // for everyone who signed.
-                        prefetch={false}
-                        className="hover:text-white hover:underline transition-colors"
-                      >
-                        {r.name}
-                      </Link>
-                    </div>
-                    <div className="text-[11px] text-zinc-500 truncate">
-                      {r.signature ? (
-                        <>
-                          {new Date(r.signature.signedAt).toLocaleDateString('en-US', {
-                            month: 'short', day: 'numeric', year: 'numeric',
-                          })}
-                          {r.signature.signerName && ` · signed by ${r.signature.signerName}`}
-                          {/* Said out loud, not left to a colour. A waiver typed
-                              on a public page is worth less than one signed
-                              from an account, and the roster is where somebody
-                              would notice. */}
-                          {r.signature.identity === 'unverified' && (
-                            <span className="text-amber-400"> · self-entered via QR</span>
-                          )}
-                        </>
-                      ) : (
-                        'Not signed'
-                      )}
-                    </div>
-                  </div>
-                  <div className="ml-auto shrink-0 flex items-center gap-3">
-                  {r.signature && r.signature.identity === 'unverified' && (
-                    <button
-                      disabled={busy}
-                      onClick={() => run(() => unlinkWaiverSignature(instanceId, r.signature!.id))}
-                      title="Detach this waiver — it stays valid, just unattached"
-                      className="text-xs text-zinc-500 hover:text-pr-red-light disabled:opacity-50 transition-colors"
-                    >
-                      Not them
-                    </button>
-                  )}
-                  {r.signature && (
-                    <a
-                      href={`/api/waivers/${r.signature.id}/pdf`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="shrink-0 text-xs text-zinc-400 hover:text-zinc-200 underline transition-colors"
-                    >
-                      PDF
-                    </a>
-                  )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          <div className="mt-4 pt-4 border-t border-zinc-800">
-            <WaiverQrPanel instanceId={instanceId} qr={qr} hasWaiver={Boolean(selectedId)} />
-          </div>
-
-          {unmatched.length > 0 && (
-            <div className="mt-4 pt-4 border-t border-zinc-800">
-              <UnmatchedWaivers instanceId={instanceId} unmatched={unmatched} />
-            </div>
-          )}
 
           <p className="flex items-center gap-1.5 text-[11px] text-zinc-600 mt-2">
             Changing the waiver doesn’t affect anyone who has already signed
