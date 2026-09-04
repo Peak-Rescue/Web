@@ -10,10 +10,18 @@ import { TEMPLATE_SHELF_META, type TemplateShelf, type TemplateSummary } from '@
 import { CAPABILITY_META, CAPABILITY_ORDER, courseCapabilityCategories } from '@/lib/capabilities'
 import { ForPill } from '@/components/AudiencePills'
 import { COURSE_TYPE_OPTIONS, courseShortName } from '@/lib/courses'
+import InfoHint from '@/components/InfoHint'
 
 const input =
   'w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-zinc-500'
-const label = 'block text-[11px] text-zinc-500 mb-1'
+// A field's name, and — behind the icon — the sentence about it that would
+// otherwise sit on screen forever after the one time anyone needed it.
+const Label = ({ children, hint }: { children: string; hint?: string }) => (
+  <span className="flex items-center gap-1.5 mb-1">
+    <span className="text-[11px] text-zinc-500">{children}</span>
+    {hint && <InfoHint text={hint} below />}
+  </span>
+)
 
 type Props = {
   summary: TemplateSummary
@@ -29,19 +37,26 @@ type Props = {
 // it and you get the same editor the course page uses, on the template itself —
 // which is the thing that was missing. Saving a template used to be a one-way
 // door: no way back in to fix a line, rename it, or retire it.
+//
+// Open is one thing, not two. The row used to offer 'Days' beside 'Edit', which
+// is two unlabelled destinations you had to click to tell apart — and the split
+// was ours, not the template's: what a schedule is for and what happens on day
+// three are the same object. So there is a single Edit, and everything it holds
+// is on one page: what it is at the top, what's in it below.
 export default function TemplateRow(props: Props) {
   const { summary, shelf, initialOpen } = props
   const router = useRouter()
-  const [open, setOpen] = useState<'none' | 'contents' | 'details'>(initialOpen ?? 'none')
+  const [open, setOpen] = useState(initialOpen !== undefined)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Only the two fields something else on this page reads back live in state:
+  // the offering drives which disciplines are ticked for you, and the
+  // disciplines are checkboxes. The text fields are uncontrolled and save on
+  // the way out, the way every other editor in the portal does it.
   const [form, setForm] = useState({
-    name: summary.name,
-    description: summary.description ?? '',
     course_type: summary.course_type ?? '',
     audience: summary.audience ?? 'student',
     disciplines: summary.disciplines,
-    topicsRaw: summary.topics.join(', '),
   })
 
   const meta = TEMPLATE_SHELF_META[shelf as TemplateShelf]
@@ -53,21 +68,20 @@ export default function TemplateRow(props: Props) {
     finally { setBusy(false) }
   }
 
-  const save = () => run(async () => {
-    const patch = {
-      name: form.name,
-      description: form.description,
-      courseType: form.course_type || null,
-      disciplines: form.disciplines,
-      topics: form.topicsRaw.split(',').map((t) => t.trim()).filter(Boolean),
-    }
-    if (props.shelf === 'gear') {
-      await updateGearList(summary.id, { ...patch, audience: form.audience as 'student' | 'instructor' })
-    } else {
-      await updateSchedule(summary.id, patch)
-    }
-    setOpen('none')
-  })
+  // One field at a time, on blur or on change — there is no Save button to
+  // press, so there is no half-typed state to lose track of either.
+  type Patch = {
+    name?: string
+    description?: string | null
+    courseType?: string | null
+    disciplines?: string[]
+    topics?: string[]
+    audience?: 'student' | 'instructor'
+  }
+  const patch = ({ audience, ...shared }: Patch) => run(() =>
+    props.shelf === 'gear'
+      ? updateGearList(summary.id, { ...shared, ...(audience ? { audience } : {}) })
+      : updateSchedule(summary.id, shared))
 
   const remove = () => {
     if (!confirm(
@@ -90,7 +104,15 @@ export default function TemplateRow(props: Props) {
   const impliedFrom = form.course_type ? courseShortName(form.course_type, null) : null
 
   const offering = summary.course_type ? courseShortName(summary.course_type, null) : null
-  const knownOffering = COURSE_TYPE_OPTIONS.some((g) => g.options.some((o) => o.value === form.course_type))
+  // An offering the picker no longer lists — a retired slug — is still offered
+  // as the option it was saved with, so changing your mind is not a one-way
+  // door. Keyed off what's on the shelf, not what's in the box: keying it off
+  // the current choice made the old value vanish the moment you left it.
+  const retiredOffering =
+    summary.course_type &&
+    !COURSE_TYPE_OPTIONS.some((g) => g.options.some((o) => o.value === summary.course_type))
+      ? summary.course_type
+      : null
 
   return (
     <div
@@ -127,138 +149,132 @@ export default function TemplateRow(props: Props) {
 
         <div className="flex items-center gap-2 shrink-0">
           <button
-            onClick={() => setOpen(open === 'contents' ? 'none' : 'contents')}
+            onClick={() => setOpen(!open)}
             className="text-xs text-zinc-400 hover:text-white transition-colors"
           >
-            {open === 'contents' ? 'Close' : shelf === 'gear' ? 'Items' : 'Days'}
-          </button>
-          <button
-            onClick={() => setOpen(open === 'details' ? 'none' : 'details')}
-            className="text-xs text-zinc-400 hover:text-white transition-colors"
-          >
-            {open === 'details' ? 'Close' : 'Edit'}
+            {open ? 'Close' : 'Edit'}
           </button>
         </div>
       </div>
 
       {error && <p className="px-3 pb-2 text-xs text-pr-red">{error}</p>}
 
-      {open === 'contents' && (
-        <div className="px-3 pb-3 pt-3 border-t border-zinc-800">
-          {props.shelf === 'gear'
-            ? <GearListEditor list={props.list} catalog={props.catalog} courseType={summary.course_type} />
-            : <ScheduleEditor schedule={props.schedule} courseType={summary.course_type} sites={props.sites} />}
-        </div>
-      )}
-
-      {open === 'details' && (
-        <div className="px-3 pb-3 pt-1 border-t border-zinc-800 grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div className="sm:col-span-2">
-            <label className={label}>Name</label>
-            <input className={input} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-          </div>
-          <div className="sm:col-span-2">
-            <label className={label}>What it&rsquo;s for — internal note, never shown to students</label>
-            <input
-              className={input}
-              value={form.description}
-              onChange={(e) => setForm({ ...form, description: e.target.value })}
-              placeholder={shelf === 'gear' ? 'Cold-water kit; assumes the client supplies helmets' : 'Three-day version, no night ops'}
-            />
-          </div>
-          <div>
-            <label className={label}>Offering it belongs to</label>
-            <select
-              className={input}
-              value={form.course_type}
-              onChange={(e) => setForm({ ...form, course_type: e.target.value })}
-            >
-              <option value="">— any offering —</option>
-              {!knownOffering && form.course_type && (
-                <option value={form.course_type}>{courseShortName(form.course_type, null)}</option>
-              )}
-              {COURSE_TYPE_OPTIONS.map((g) => (
-                <optgroup key={g.category} label={g.label}>
-                  {g.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                </optgroup>
-              ))}
-            </select>
-            <p className="text-xs text-zinc-500 mt-1">
-              Its courses are offered this template first, and its discipline is ticked below for you — which is what
-              reaches a custom course, since those have no offering of their own.
-            </p>
-          </div>
-          {props.shelf === 'gear' && (
+      {open && (
+        <div className="border-t border-zinc-800">
+          <div className="px-3 pt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="sm:col-span-2">
+              <Label>Name</Label>
+              <input
+                className={input}
+                defaultValue={summary.name}
+                onBlur={(e) => e.target.value !== summary.name && patch({ name: e.target.value })}
+              />
+            </div>
+            <div className="sm:col-span-2">
+              <Label hint="Internal — never shown to students.">Note</Label>
+              <input
+                className={input}
+                defaultValue={summary.description ?? ''}
+                onBlur={(e) =>
+                  e.target.value !== (summary.description ?? '') && patch({ description: e.target.value })}
+                placeholder={shelf === 'gear' ? 'Cold-water kit; assumes the client supplies helmets' : 'Three-day version, no night ops'}
+              />
+            </div>
             <div>
-              <label className={label}>Who carries it</label>
+              <Label hint="Its courses see this template first, and its discipline is ticked below. A custom course has no offering, so disciplines are all it matches on.">Offering</Label>
               <select
                 className={input}
-                value={form.audience}
-                onChange={(e) => setForm({ ...form, audience: e.target.value as 'student' | 'instructor' })}
+                value={form.course_type}
+                onChange={(e) => {
+                  setForm({ ...form, course_type: e.target.value })
+                  patch({ courseType: e.target.value || null })
+                }}
               >
-                <option value="student">Students</option>
-                <option value="instructor">Instructors</option>
+                <option value="">— any offering —</option>
+                {retiredOffering && (
+                  <option value={retiredOffering}>{courseShortName(retiredOffering, null)}</option>
+                )}
+                {COURSE_TYPE_OPTIONS.map((g) => (
+                  <optgroup key={g.category} label={g.label}>
+                    {g.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </optgroup>
+                ))}
               </select>
             </div>
-          )}
-          <div className="sm:col-span-2">
-            <label className={label}>Disciplines — how a custom course finds this</label>
-            <div className="flex flex-wrap gap-x-4 gap-y-1.5 p-2 bg-zinc-800/50 border border-zinc-700 rounded">
-              {CAPABILITY_ORDER.map((c) => {
-                const fromOffering = implied.includes(c)
-                return (
-                  <label
-                    key={c}
-                    title={fromOffering ? `Comes with the ${impliedFrom} offering` : undefined}
-                    className={`flex items-center gap-1.5 text-xs ${
-                      fromOffering ? 'text-zinc-500 cursor-default' : 'text-zinc-300 cursor-pointer'
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      className="accent-red-600"
-                      checked={fromOffering || form.disciplines.includes(c)}
-                      disabled={fromOffering}
-                      onChange={() => setForm({
-                        ...form,
-                        disciplines: form.disciplines.includes(c)
-                          ? form.disciplines.filter((x) => x !== c)
-                          : [...form.disciplines, c],
-                      })}
-                    />
-                    {CAPABILITY_META[c].label}
-                  </label>
-                )
-              })}
+            {props.shelf === 'gear' && (
+              <div>
+                <Label>Who carries it</Label>
+                <select
+                  className={input}
+                  value={form.audience}
+                  onChange={(e) => {
+                    const audience = e.target.value as 'student' | 'instructor'
+                    setForm({ ...form, audience })
+                    patch({ audience })
+                  }}
+                >
+                  <option value="student">Students</option>
+                  <option value="instructor">Instructors</option>
+                </select>
+              </div>
+            )}
+            <div className="sm:col-span-2">
+              <Label hint="How a custom course finds this. The offering's own discipline is ticked and locked.">Disciplines</Label>
+              <div className="flex flex-wrap gap-x-4 gap-y-1.5 p-2 bg-zinc-800/50 border border-zinc-700 rounded">
+                {CAPABILITY_ORDER.map((c) => {
+                  const fromOffering = implied.includes(c)
+                  return (
+                    <label
+                      key={c}
+                      title={fromOffering ? `Comes with the ${impliedFrom} offering` : undefined}
+                      className={`flex items-center gap-1.5 text-xs ${
+                        fromOffering ? 'text-zinc-500 cursor-default' : 'text-zinc-300 cursor-pointer'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        className="accent-red-600"
+                        checked={fromOffering || form.disciplines.includes(c)}
+                        disabled={fromOffering}
+                        onChange={() => {
+                          const disciplines = form.disciplines.includes(c)
+                            ? form.disciplines.filter((x) => x !== c)
+                            : [...form.disciplines, c]
+                          setForm({ ...form, disciplines })
+                          patch({ disciplines })
+                        }}
+                      />
+                      {CAPABILITY_META[c].label}
+                    </label>
+                  )
+                })}
+              </div>
             </div>
-            <p className="text-xs text-zinc-500 mt-1">
-              {implied.length > 0
-                ? `${implied.map((c) => CAPABILITY_META[c as keyof typeof CAPABILITY_META].label).join(' and ')} `
-                  + `${implied.length === 1 ? 'comes' : 'come'} with the ${impliedFrom} offering and can't be unticked here. `
-                  + 'Tick another only if this template also suits a course of that kind.'
-                : 'With no offering set, these are the only thing a course matches on.'}
-            </p>
+            <div className="sm:col-span-2">
+              <Label>Topics</Label>
+              <input
+                className={input}
+                placeholder="swiftwater, night ops"
+                defaultValue={summary.topics.join(', ')}
+                onBlur={(e) => {
+                  const topics = e.target.value.split(',').map((t) => t.trim()).filter(Boolean)
+                  if (topics.join(', ') !== summary.topics.join(', ')) patch({ topics })
+                }}
+              />
+            </div>
           </div>
-          <div className="sm:col-span-2">
-            <label className={label}>Topic tags (comma separated)</label>
-            <input
-              className={input}
-              value={form.topicsRaw}
-              onChange={(e) => setForm({ ...form, topicsRaw: e.target.value })}
-            />
+
+          <div className="px-3 pt-4 mt-3 border-t border-zinc-800">
+            {props.shelf === 'gear'
+              ? <GearListEditor list={props.list} catalog={props.catalog} courseType={summary.course_type} />
+              : <ScheduleEditor schedule={props.schedule} courseType={summary.course_type} sites={props.sites} />}
           </div>
-          <div className="sm:col-span-2 flex items-center gap-3">
-            <button
-              onClick={save}
-              disabled={busy}
-              className="px-3 py-1.5 rounded bg-pr-red hover:bg-pr-red-dark text-white text-sm font-medium transition-colors disabled:opacity-40"
-            >
-              {busy ? 'Saving…' : 'Save'}
-            </button>
+
+          <div className="px-3 py-3 mt-3 border-t border-zinc-800 flex justify-end">
             <button
               onClick={remove}
               disabled={busy}
-              className="text-xs text-zinc-600 hover:text-red-400 transition-colors ml-auto"
+              className="text-xs text-zinc-600 hover:text-red-400 transition-colors"
             >
               Delete
             </button>

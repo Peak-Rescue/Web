@@ -16,6 +16,7 @@ import TemplateRow from './TemplateRow'
 import AddTemplate from './AddTemplate'
 import ReviewQueue from './ReviewQueue'
 import AddLibraryItem from './AddLibraryItem'
+import InfoHint from '@/components/InfoHint'
 
 const input = 'w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500'
 
@@ -178,8 +179,7 @@ export default async function LibraryPage({
           <div>
             <h1 className="text-2xl font-bold">Content Library</h1>
             <p className="text-zinc-400 mt-1">
-              Course material, references, maps and permits — plus the gear lists and schedules we build here.
-              Tagged once, reused everywhere.
+              Course material, references, maps and permits, plus the gear lists and schedules we build here.
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -286,14 +286,15 @@ export default async function LibraryPage({
           const rows = shelf === 'gear' ? gearTemplates : scheduleTemplates
           return (
             <section key={shelf} className={showDocs ? 'mt-10 pt-8 border-t border-zinc-800' : ''}>
-              <div className="flex items-end justify-between gap-4 flex-wrap mb-1">
-                <h2 className="text-lg font-semibold">{TEMPLATE_SHELF_META[shelf].label}</h2>
+              <div className="flex items-end justify-between gap-4 flex-wrap mb-3">
+                <h2 className="text-lg font-semibold flex items-center gap-2">
+                  {TEMPLATE_SHELF_META[shelf].label}
+                  <InfoHint
+                    text={`${TEMPLATE_SHELF_META[shelf].hint}. Editing one here changes what the next course starts from — courses already using it keep their own copy.`}
+                  />
+                </h2>
                 <AddTemplate shelf={shelf} />
               </div>
-              <p className="text-xs text-zinc-500 mb-3">
-                {TEMPLATE_SHELF_META[shelf].hint}. Editing one here changes what the next course starts from — courses
-                already using it keep their own copy.
-              </p>
               <div className="space-y-2">
                 {shelf === 'gear' && gearTemplates.map((t) => (
                   <TemplateRow
