@@ -33,3 +33,17 @@ export function ccEmailOptions(contacts: CoursePOC[]): string[] {
   const primary = primaryContactEmail(contacts)
   return [...new Set(contacts.flatMap((c) => c.emails))].filter((e) => e !== primary)
 }
+
+// An instructor's own contact details, filtered for a page students read.
+//
+// A work address is fine to hand out and a personal one is not, and the
+// difference is legible from the address itself — everything at our own domain
+// is a work address, everything else is somebody's Gmail. A phone number has
+// no such tell: every number we hold is a personal mobile, so it is shown only
+// where the person has said it may be (`instructors.show_phone`).
+const WORK_DOMAIN = '@peak-rescue.com'
+
+export function workEmail(email: string | null | undefined): string | null {
+  const e = email?.trim().toLowerCase()
+  return e && e.endsWith(WORK_DOMAIN) ? email!.trim() : null
+}
