@@ -1860,14 +1860,23 @@ export default async function CourseView({
                 ) : null
               }
             >
-            <div className="space-y-6">
+            {/* The modules hang off the curriculum rather than sitting level
+                with it. They were drawn at the same size and weight as the
+                block that holds them, so nine module names and the word above
+                them read as one flat list of ten headings.
+
+                Each folds. Twenty-six cards across nine modules is a scroll
+                either way; open they are what they always were, and closed the
+                nine names are an index you can take in at once. */}
+            <div className="ml-0.5 pl-3 border-l-2 border-zinc-800 space-y-1">
               {orderedModules.map(mod => {
                 const items = (mod.course_items ?? []).slice().sort((a, b) => a.order - b.order)
                 return (
-                  <div key={mod.id}>
-                    <SubHead
-                      title={mod.title}
-                      badge={(showAsAdmin || showAsInstructor) && mod.audience !== 'both' ? (
+                  <details key={mod.id} open className="group/mod">
+                    <summary className="cursor-pointer list-none flex items-baseline gap-2 py-1.5">
+                      <span aria-hidden className="shrink-0 text-[10px] text-zinc-600 transition-transform group-open/mod:rotate-90">▸</span>
+                      <h3 className="text-[13px] font-medium text-zinc-300">{mod.title}</h3>
+                      {(showAsAdmin || showAsInstructor) && mod.audience !== 'both' && (
                         <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${
                           mod.audience === 'instructor'
                             ? 'border-teal-800 text-teal-400'
@@ -1875,9 +1884,9 @@ export default async function CourseView({
                         }`}>
                           {mod.audience}s only
                         </span>
-                      ) : undefined}
-                    />
-                    <div className="space-y-1">
+                      )}
+                    </summary>
+                    <div className="space-y-1 pb-3">
                       {items.map(item => {
                         // Library rows carry their own title/link, and an item can
                         // be held back to instructors inside a shared section.
@@ -1917,7 +1926,7 @@ export default async function CourseView({
                         )
                       })}
                     </div>
-                  </div>
+                  </details>
                 )
               })}
             </div>
@@ -2005,17 +2014,6 @@ export default async function CourseView({
               </div>
             )}
             </EditInPlace>
-            {hasSchedule && canEditSchedule && (
-              <div className="flex justify-end -mt-2 mb-2">
-                <CreateSchedule
-                  instanceId={id}
-                  courseType={inst.course_type as string | null}
-                  courseDays={0}
-                  templates={[]}
-                  existingScheduleId={sched.id}
-                />
-              </div>
-            )}
             {!hasSchedule ? (
               <CreateSchedule
                 instanceId={id}
@@ -2031,14 +2029,31 @@ export default async function CourseView({
                 here because this is where it is read — and because an empty
                 overview is invisible, so a way in that lives on another screen
                 is a way in nobody finds. */}
-            {/* An overview most courses never write. With one, it is a
-                headed block; without one, it is the button and nothing else —
-                a heading over an empty space says the same as the empty state
-                it replaced. Not hidden outright, because then there would be
-                no way to write the first one. */}
+            {/* The days' own heading, and the row the schedule's two controls
+                sit on. It says Schedule rather than Overview because that is
+                what it heads — the days below it — and because the maps above
+                and the reference below are titled, so an untitled block
+                between them reads as part of whichever it is nearer.
+
+                Most courses never write an overview, so the button says which
+                it is and the heading does not change either way: a block that
+                announced "no overview yet" was telling everyone about the one
+                thing nobody had asked for. */}
             <EditInPlace
               label={hasOverview ? 'Edit overview' : 'Add an overview'}
-              title={hasOverview ? 'Overview' : undefined}
+              title="Schedule"
+              // Both of these belong to the schedule rather than to any day of
+              // it, so they share its one row. Deleting sits at the left of it
+              // and editing at the right, which is as far apart as a row gets.
+              badge={hasSchedule && canEditSchedule ? (
+                <CreateSchedule
+                  instanceId={id}
+                  courseType={inst.course_type as string | null}
+                  courseDays={0}
+                  templates={[]}
+                  existingScheduleId={sched.id}
+                />
+              ) : undefined}
               editor={
                 canEditSchedule ? (
                   <ScheduleOverviewFields
