@@ -2023,12 +2023,30 @@ export default async function CourseView({
                               )}
                               {kids.length > 0 && (
                                 <ul className="mt-1 ml-4 space-y-0.5">
-                                  {kids.map((k) => (
-                                    <li key={k.id} className="relative pl-3.5 text-[13px] text-zinc-400">
-                                      <span aria-hidden className="absolute left-0 top-[10px] w-1.5 h-px bg-zinc-700" />
-                                      {k.title}
-                                    </li>
-                                  ))}
+                                  {kids.map((k) => {
+                                    // A third level, for the days where a
+                                    // sub-topic is itself a list — the drills
+                                    // inside a session. It recedes again the
+                                    // same way the second one does, so depth
+                                    // reads off the page without a legend.
+                                    const detail = blocks.filter((g) => g.parent_id === k.id)
+                                    return (
+                                      <li key={k.id} className="relative pl-3.5 text-[13px] text-zinc-400">
+                                        <span aria-hidden className="absolute left-0 top-[10px] w-1.5 h-px bg-zinc-700" />
+                                        {k.title}
+                                        {detail.length > 0 && (
+                                          <ul className="mt-0.5 ml-3.5 space-y-0.5">
+                                            {detail.map((g) => (
+                                              <li key={g.id} className="relative pl-3 text-xs text-zinc-500">
+                                                <span aria-hidden className="absolute left-0 top-[9px] w-1 h-px bg-zinc-800" />
+                                                {g.title}
+                                              </li>
+                                            ))}
+                                          </ul>
+                                        )}
+                                      </li>
+                                    )
+                                  })}
                                 </ul>
                               )}
                             </li>

@@ -196,6 +196,16 @@ export async function generateSchedulePdf(data: SchedulePdf): Promise<Uint8Array
         b.ensure(12)
         b.text('–', { x: BODY_X + 10, size: 9, color: FAINT })
         b.paragraph(kidLine, { x: BODY_X + 20, width: width - 20, size: 8.5, leading: 11.5, color: MUTED })
+
+        // The level under that — the drills inside a session. A middot rather
+        // than a dash, a step further in and a shade lighter, so three levels
+        // are still three levels on a photocopy in a van.
+        for (const detail of blocks.filter((g) => g.parent_id === kid.id)) {
+          const line = `${detail.title}${detail.location ? `  (${detail.location})` : ''}`
+          b.ensure(11)
+          b.text('·', { x: BODY_X + 24, size: 8.5, color: FAINT })
+          b.paragraph(line, { x: BODY_X + 32, width: width - 32, size: 8, leading: 10.5, color: FAINT })
+        }
       }
       b.y -= 5
     }

@@ -311,11 +311,20 @@ async function copyDaysInto(admin: Admin, source: { schedule_days?: unknown }, s
       .select('id').single()
     if (error) throw new Error(error.message)
 
-    // Parents before children, so a copied sub-topic can point at its new
-    // parent rather than the original's.
+    // Parents before children, however deep it goes: a pass copies everything
+    // whose parent already has a new id, and the next pass picks up what that
+    // just made copyable. Two fixed passes were enough when a sub-topic was the
+    // bottom of the outline; a level below that could otherwise be inserted
+    // before its own parent.
     const blocks = (d.schedule_blocks ?? []).sort((a, b) => a.sort_order - b.sort_order)
     const idMap = new Map<string, string>()
-    for (const pass of [blocks.filter((b) => !b.parent_id), blocks.filter((b) => b.parent_id)]) {
+    let waiting = blocks
+    while (waiting.length) {
+      const ready = waiting.filter((b) => !b.parent_id || idMap.has(b.parent_id))
+      // A line whose parent didn't come with it would leave this loop spinning.
+      // It lands as a topic instead — the same thing a stray sub-topic does
+      // everywhere else in the schedule.
+      const pass = ready.length ? ready : waiting.map((b) => ({ ...b, parent_id: null }))
       for (const b of pass) {
         const { data: nb, error: e2 } = await admin
           .from('schedule_blocks')
@@ -328,6 +337,7 @@ async function copyDaysInto(admin: Admin, source: { schedule_days?: unknown }, s
         if (e2) throw new Error(e2.message)
         idMap.set(b.id, nb.id)
       }
+      waiting = waiting.filter((b) => !idMap.has(b.id))
     }
   }
   return days.length
@@ -417,6 +427,10 @@ export async function saveScheduleIntoTemplate(sourceId: string, templateId: str
 // each one either a topic or a sub-topic of the topic above it. Blocks carry
 // no identity anything else points at, so replacing them wholesale is both
 // simpler and safer than diffing rows that were reordered mid-sentence.
+// Topic, sub-topic, and the detail under that — the deepest the outline editor
+// lets a line go, and the deepest a day is stored.
+const MAX_DEPTH = 2
+
 export async function replaceDayOutline(
   dayId: string,
   rows: { title: string; timeLabel?: string | null; location?: string | null; depth: number }[],
@@ -441,50 +455,53 @@ export async function replaceDayOutline(
       // Carried through the rewrite. The day is deleted and re-inserted on
       // every save, so a column the caller doesn't send is a column erased.
       location: r.location?.trim().slice(0, 120) || null,
-      depth: r.depth > 0 ? 1 : 0,
+      depth: Math.min(Math.max(Math.trunc(r.depth) || 0, 0), MAX_DEPTH),
     }))
     .filter((r) => r.title)
 
   const { error: eDel } = await admin.from('schedule_blocks').delete().eq('day_id', dayId)
   if (eDel) throw new Error(eDel.message)
 
-  // A sub-topic before any topic is a typo, not a structure — it lands as a
-  // topic rather than disappearing.
-  const topics: { row: (typeof clean)[number]; order: number }[] = []
-  const kids: { parentOrder: number; row: (typeof clean)[number]; order: number }[] = []
+  // Lines are levelled before they're stored: a line only ever sits one step
+  // deeper than the one above it, so a sub-topic before any topic — or a
+  // sub-sub-topic under nothing — lands a level out rather than disappearing.
+  // The editor clamps the same way, so this is a backstop, not a surprise.
+  const levels: { row: (typeof clean)[number]; parent: number; order: number }[][] =
+    Array.from({ length: MAX_DEPTH + 1 }, () => [])
+  // Where the most recent line at each level sits in its own list, so the line
+  // below it knows which one it hangs off.
+  const last = new Array<number>(MAX_DEPTH + 1).fill(-1)
+  let prevDepth = -1
   for (const r of clean) {
-    if (r.depth === 0 || !topics.length) topics.push({ row: r, order: topics.length })
-    else {
-      const parentOrder = topics[topics.length - 1].order
-      kids.push({ parentOrder, row: r, order: kids.filter((k) => k.parentOrder === parentOrder).length })
-    }
+    const depth = Math.min(r.depth, prevDepth + 1)
+    const parent = depth === 0 ? -1 : last[depth - 1]
+    levels[depth].push({ row: r, parent, order: levels[depth].filter((n) => n.parent === parent).length })
+    last[depth] = levels[depth].length - 1
+    prevDepth = depth
   }
 
-  if (topics.length) {
+  // A level at a time, because a line can't name its parent until that parent
+  // has come back with an id. Ids are matched by parent and sort_order rather
+  // than by insert order, which the database never promised to keep.
+  let parentIds: string[] = []
+  for (const nodes of levels) {
+    if (!nodes.length) break
+    const idOfParent = (n: { parent: number }) => (n.parent === -1 ? null : parentIds[n.parent] ?? null)
     const { data: inserted, error } = await admin
       .from('schedule_blocks')
-      .insert(topics.map((t) => ({
-        day_id: dayId, parent_id: null, title: t.row.title, time_label: t.row.time,
-        location: t.row.location, sort_order: t.order,
+      .insert(nodes.map((n) => ({
+        day_id: dayId,
+        parent_id: idOfParent(n),
+        title: n.row.title,
+        time_label: n.row.time,
+        location: n.row.location,
+        sort_order: n.order,
       })))
-      .select('id, sort_order')
+      .select('id, parent_id, sort_order')
     if (error) throw new Error(error.message)
 
-    // Read the ids back by sort_order rather than trusting insert order.
-    const byOrder = new Map((inserted ?? []).map((b) => [b.sort_order as number, b.id as string]))
-    if (kids.length) {
-      const { error: e2 } = await admin.from('schedule_blocks').insert(
-        kids.map((k) => ({
-          day_id: dayId,
-          parent_id: byOrder.get(k.parentOrder) ?? null,
-          title: k.row.title,
-          time_label: k.row.time,
-          location: k.row.location,
-          sort_order: k.order,
-        }))
-      )
-      if (e2) throw new Error(e2.message)
-    }
+    const byKey = new Map((inserted ?? []).map((b) => [`${b.parent_id ?? ''}:${b.sort_order}`, b.id as string]))
+    parentIds = nodes.map((n) => byKey.get(`${idOfParent(n) ?? ''}:${n.order}`) ?? '')
   }
 
   if (!opts?.quiet) touch(instanceId)

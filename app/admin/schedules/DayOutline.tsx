@@ -10,11 +10,33 @@ import type { ScheduleBlock } from './ScheduleEditor'
 // from the first import, but no editor ever held it, so every save silently
 // dropped it: the outline is written back by deleting the day's lines and
 // re-inserting them, and what the row doesn't carry doesn't come back.
-type Row = { key: string; title: string; time: string; where: string; depth: 0 | 1 }
+type Depth = 0 | 1 | 2
+type Row = { key: string; title: string; time: string; where: string; depth: Depth }
 type Job = { rows: Row[]; quiet: boolean }
+
+// Three levels: a topic, what sits under it, and the detail under that. Deeper
+// than that an outline stops being read as a shape and starts being read as a
+// paragraph, so Tab stops here.
+const MAX_DEPTH = 2
 
 let seq = 0
 const newKey = () => `r${++seq}`
+
+// A line can only ever be one step deeper than the line above it — there is no
+// sub-sub-topic hanging off nothing. Clamping here, on every edit, rather than
+// only at save time, means the outline on screen is the outline that comes
+// back: nothing indents a level further than it can be stored and then snaps
+// out again on the next load. It also does the work the old first-line special
+// cases did, and does it for outdenting too — pulling a topic out drags what
+// sits under it along.
+function normalize(rows: Row[]): Row[] {
+  let prev = -1
+  return rows.map((r) => {
+    const depth = Math.min(r.depth, prev + 1, MAX_DEPTH) as Depth
+    prev = depth
+    return depth === r.depth ? r : { ...r, depth }
+  })
+}
 
 // One line per topic, the way an outline is actually written: type, Enter for
 // the next line, Tab to make it a sub-topic, Shift+Tab to pull it back out.
@@ -122,7 +144,8 @@ export default function DayOutline({
     flush: async () => { await flush() },
   })
 
-  const edit = useCallback((next: Row[]) => {
+  const edit = useCallback((raw: Row[]) => {
+    const next = normalize(raw)
     setRows(next)
     // Indices don't survive a change of shape. An operation that means to keep
     // its run says so again, after this.
@@ -156,7 +179,7 @@ export default function DayOutline({
 
   // Selected lines leave as text, indented the way they'd come back in.
   const asText = (from: number, to: number) =>
-    rows.slice(from, to + 1).map((r) => (r.depth === 1 ? '  ' : '') + r.title).join('\n')
+    rows.slice(from, to + 1).map((r) => '  '.repeat(r.depth) + r.title).join('\n')
 
   // Whatever the run is replaced by, the run itself goes: the rows leave and
   // the caret lands on what takes their place.
@@ -198,11 +221,14 @@ export default function DayOutline({
 
     if (e.key === 'Tab') {
       e.preventDefault()
-      const depth: 0 | 1 = e.shiftKey ? 0 : 1
+      // Every line of the run moves one step the same way, so the shape inside
+      // the run survives the move; the clamp above keeps the run legal against
+      // the line it lands under.
+      const step = e.shiftKey ? -1 : 1
       const next = rows.map((r, n) =>
-        // The first line of a day has nothing to hang off, so it stays a topic
-        // even when the rest of the run indents around it.
-        n >= lo && n <= hi && !(depth === 1 && n === 0) ? { ...r, depth } : r
+        n >= lo && n <= hi
+          ? { ...r, depth: Math.min(Math.max(r.depth + step, 0), MAX_DEPTH) as Depth }
+          : r
       )
       focusNext.current = { key: rows[hi].key, caret: 0 }
       edit(next)
@@ -267,10 +293,11 @@ export default function DayOutline({
 
     if (e.key === 'Enter') {
       e.preventDefault()
-      // An empty sub-topic pops back out to a topic before it starts a new
-      // line — the same escape hatch a word processor gives you.
-      if (!row.title && row.depth === 1) {
-        edit(rows.map((r, n) => (n === i ? { ...r, depth: 0 as const } : r)))
+      // An empty sub-topic pops back out a level before it starts a new
+      // line — the same escape hatch a word processor gives you, one press per
+      // level on the way out.
+      if (!row.title && row.depth > 0) {
+        edit(rows.map((r, n) => (n === i ? { ...r, depth: (r.depth - 1) as Depth } : r)))
         return
       }
       const before = row.title.slice(0, caret)
@@ -286,20 +313,21 @@ export default function DayOutline({
 
     if (e.key === 'Tab') {
       e.preventDefault()
-      const depth: 0 | 1 = e.shiftKey ? 0 : 1
-      // Nothing to hang off: the first line of a day stays a topic.
-      if (depth === 1 && i === 0) return
-      if (row.depth === depth) return
+      // One step per press, and never further in than one below the line
+      // above — the first line of a day has nothing to hang off at all.
+      const ceiling = i === 0 ? 0 : Math.min(rows[i - 1].depth + 1, MAX_DEPTH)
+      const depth = Math.min(Math.max(row.depth + (e.shiftKey ? -1 : 1), 0), ceiling) as Depth
+      if (depth === row.depth) return
       focusNext.current = { key: row.key, caret }
       edit(rows.map((r, n) => (n === i ? { ...r, depth } : r)))
       return
     }
 
     if (e.key === 'Backspace' && caret === 0 && !selected) {
-      if (row.depth === 1) {
+      if (row.depth > 0) {
         e.preventDefault()
         focusNext.current = { key: row.key, caret: 0 }
-        edit(rows.map((r, n) => (n === i ? { ...r, depth: 0 as const } : r)))
+        edit(rows.map((r, n) => (n === i ? { ...r, depth: (r.depth - 1) as Depth } : r)))
         return
       }
       if (i === 0) return
@@ -395,7 +423,7 @@ export default function DayOutline({
       title: line.replace(/^[\s]*[-*•○·]?\s*/, '').trim().slice(0, 300),
       time: '',
       where: '',
-      depth: (/^(\s{2,}|\t|\s*[○·])/.test(line) ? 1 : 0) as 0 | 1,
+      depth: indentOf(line),
     }))
     if (!parsed.length) return
 
@@ -459,10 +487,18 @@ export default function DayOutline({
           ) : (
             <span className="w-16 shrink-0" />
           )}
+          {/* A dot for a topic, a dash for what hangs off it, and a shorter,
+              fainter dash further in for the level below that — the marker gets
+              quieter as it goes down, so the eye reads the column of dots as
+              the spine of the day. */}
           <span
             aria-hidden
             className={`shrink-0 ${
-              row.depth === 1 ? 'w-1.5 h-px bg-zinc-700 ml-5 mr-1' : 'w-1 h-1 rounded-full bg-zinc-600 mx-1'
+              row.depth === 0
+                ? 'w-1 h-1 rounded-full bg-zinc-600 mx-1'
+                : row.depth === 1
+                  ? 'w-1.5 h-px bg-zinc-700 ml-5 mr-1'
+                  : 'w-1 h-px bg-zinc-800 ml-9 mr-1.5'
             }`}
           />
           <input
@@ -476,7 +512,9 @@ export default function DayOutline({
             onPaste={(e) => paste(e, i)}
             onFocus={() => { focused.current = i }}
             placeholder={i === 0 && rows.length === 1 ? 'Type a topic — Tab indents, Enter starts the next line' : ''}
-            className={`flex-1 min-w-0 ${row.depth === 1 ? 'text-[13px] text-zinc-300' : 'text-sm'} ${input}`}
+            className={`flex-1 min-w-0 ${
+              row.depth === 0 ? 'text-sm' : row.depth === 1 ? 'text-[13px] text-zinc-300' : 'text-[12px] text-zinc-400'
+            } ${input}`}
           />
           {/* Where this line happens, when it isn't simply where the day is.
               Kept out of the tab order like the time at the other end — the
@@ -513,16 +551,34 @@ export default function DayOutline({
 
 const blankRow = (): Row => ({ key: newKey(), title: '', time: '', where: '', depth: 0 })
 
+// How far in a pasted line was written: two spaces or a tab per level, and a
+// hollow bullet counts as one level in the way it does in a word processor.
+function indentOf(line: string): Depth {
+  const lead = line.match(/^\s*/)?.[0] ?? ''
+  const levels = Math.floor(lead.replace(/\t/g, '  ').length / 2)
+  const marked = /^\s*[○·]/.test(line) ? 1 : 0
+  return Math.min(Math.max(levels, marked), MAX_DEPTH) as Depth
+}
+
 // Flatten the stored tree back to lines. A day with nothing on it still gets
 // one empty line, so there's always somewhere to start typing.
 function fromBlocks(blocks: ScheduleBlock[]): Row[] {
   const sorted = [...blocks].sort((a, b) => a.sort_order - b.sort_order)
   const rows: Row[] = []
-  for (const t of sorted.filter((b) => !b.parent_id)) {
-    rows.push({ key: newKey(), title: t.title, time: t.time_label ?? '', where: t.location ?? '', depth: 0 })
-    for (const c of sorted.filter((b) => b.parent_id === t.id)) {
-      rows.push({ key: newKey(), title: c.title, time: '', where: c.location ?? '', depth: 1 })
+  const walk = (parent: string | null, depth: Depth) => {
+    for (const b of sorted.filter((x) => x.parent_id === parent)) {
+      // Only a topic carries a time — the levels under it are what happens
+      // inside that slot, and the editor gives them no field to type one in.
+      rows.push({
+        key: newKey(),
+        title: b.title,
+        time: depth === 0 ? b.time_label ?? '' : '',
+        where: b.location ?? '',
+        depth,
+      })
+      if (depth < MAX_DEPTH) walk(b.id, (depth + 1) as Depth)
     }
   }
+  walk(null, 0)
   return rows.length ? rows : [blankRow()]
 }
