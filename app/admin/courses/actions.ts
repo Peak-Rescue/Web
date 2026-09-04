@@ -12,6 +12,7 @@ import { requireCourseStaff } from '@/lib/course-access'
 import { sendMail } from '@/lib/mailer'
 import { announcesChanges } from '@/lib/course-notify'
 import { clampOffDays, dayShift, strokeOffDays, type OffSpan } from '@/lib/courses'
+import { assertCustomCourseTagged } from '@/lib/capabilities'
 
 const fmtLong = (d: string) =>
   new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
@@ -226,6 +227,8 @@ export async function createInstance(formData: FormData) {
   const { data: alreadyMade } = await duplicate.limit(1).maybeSingle()
   if (alreadyMade) redirect(`/admin/courses/${alreadyMade.id}`)
 
+  assertCustomCourseTagged(course_type, custom_categories, internal)
+
   const displayName = course_type === 'custom' ? (custom_title ?? 'custom') : course_type
   const slug = await generateSlug([displayName, client_name, location, starts_at])
 
@@ -283,6 +286,8 @@ export async function updateInstanceDetails(id: string, formData: FormData) {
   const notes            = (formData.get('notes') as string) || null
   const max_students     = formData.get('max_students') ? Number(formData.get('max_students')) : null
   const instructor_slots = formData.get('instructor_slots') ? Number(formData.get('instructor_slots')) : null
+
+  if (formData.has('course_type')) assertCustomCourseTagged(course_type, custom_categories, internal)
 
   const { error } = await admin
     .from('course_instances')

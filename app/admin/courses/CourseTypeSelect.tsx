@@ -20,9 +20,16 @@ export function CourseTypeSelect({
   const [category, setCategory] = useState(defaultCategory)
   const [courseType, setCourseType] = useState(defaultType)
   const [internal, setInternal] = useState(defaultInternal)
+  const [categories, setCategories] = useState<string[]>(defaultCustomCategories)
 
   const selectedGroup = COURSE_TYPE_OPTIONS.find(g => g.category === category)
   const isCustom = courseType === 'custom'
+  // A typed course derives its expertise from the offering; a custom one has
+  // nothing to derive it from, so at least one box is asked for before the
+  // course can be saved. Marking every box required while none is ticked is
+  // what makes the browser say so at the field, instead of the server saying
+  // so after the round trip. An internal day is exempt — see the server guard.
+  const needsDiscipline = isCustom && !internal && categories.length === 0
 
   return (
     <div className="sm:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -99,19 +106,25 @@ export function CourseTypeSelect({
               Internal — no students
             </label>
             {isCustom && (
-              <div className="w-full flex flex-wrap gap-x-4 gap-y-2 pt-2 mt-1 border-t border-zinc-700">
-                {CAPABILITY_ORDER.map(cat => (
-                  <label key={cat} className="flex items-center gap-1.5 text-sm text-zinc-300 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      name="custom_categories"
-                      value={cat}
-                      defaultChecked={defaultCustomCategories.includes(cat)}
-                      className="accent-red-600"
-                    />
-                    {CAPABILITY_META[cat].label}
-                  </label>
-                ))}
+              <div className="w-full pt-2 mt-1 border-t border-zinc-700">
+                <p className="text-xs text-zinc-400 mb-2">Disciplines *</p>
+                <div className="flex flex-wrap gap-x-4 gap-y-2">
+                  {CAPABILITY_ORDER.map(cat => (
+                    <label key={cat} className="flex items-center gap-1.5 text-sm text-zinc-300 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        name="custom_categories"
+                        value={cat}
+                        checked={categories.includes(cat)}
+                        required={needsDiscipline}
+                        onChange={e => setCategories(c =>
+                          e.target.checked ? [...c, cat] : c.filter(x => x !== cat))}
+                        className="accent-red-600"
+                      />
+                      {CAPABILITY_META[cat].label}
+                    </label>
+                  ))}
+                </div>
               </div>
             )}
           </div>

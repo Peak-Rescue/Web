@@ -80,6 +80,23 @@ export function courseCapabilityCategories(
   return CAPABILITY_ORDER.filter((cat) => CATEGORY_COURSE_TYPES[cat].includes(course_type))
 }
 
+// A custom course has no offering to derive its expertise from, so these boxes
+// are the only thing that says what kind of work it is — which templates it is
+// offered, whose "All courses" calendar it turns up on, and who counts as
+// qualified to staff it. Untagged, it is a course nothing can find, so the tag
+// is asked for rather than assumed. An internal day is exempt: a planning day
+// or a consultation draws on no discipline and staffs nobody.
+export function assertCustomCourseTagged(
+  course_type: string,
+  custom_categories: string[] | null | undefined,
+  internal: boolean,
+) {
+  if (course_type !== 'custom' || internal) return
+  if ((custom_categories ?? []).length === 0) {
+    throw new Error('A custom course needs at least one discipline — it is what tells templates, calendars and staffing what kind of work this is.')
+  }
+}
+
 // A course's sector, for the staffing gate. course_category 'tactical' is the
 // military sector; everything else is civilian.
 export function courseSector(course_category: string | null): 'military' | 'civilian' {

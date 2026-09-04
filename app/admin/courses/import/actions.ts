@@ -6,6 +6,7 @@ import { after } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { syncCourseCalendar, deleteImportedEvent } from '@/lib/google-calendar'
+import { assertCustomCourseTagged } from '@/lib/capabilities'
 
 async function requireAdmin() {
   const supabase = await createClient()
@@ -39,6 +40,8 @@ export async function importCourseFromEvent(formData: FormData) {
   const assistInstructorIds = (formData.getAll('assist_instructor_ids') as string[]).filter(
     (iid) => iid && iid !== leadInstructorId
   )
+
+  assertCustomCourseTagged(course_type, custom_categories, false)
 
   const { data, error } = await admin
     .from('course_instances')
