@@ -71,6 +71,15 @@ export function templateShelfHref(shelf: TemplateShelf) {
     matching — every one of them is `custom` — but it does carry the boxes
     checked when it was set up, and those are the same vocabulary a template is
     tagged with. Which is why relevance is two tests, not one. */
+// 'custom' is not an offering. Every bespoke course shares the slug, so a
+// template tagged with it matches nothing that a template tagged with nothing
+// wouldn't — it only wears a "Custom Course" pill it can't live up to, and
+// sits outside the offering picker, which has no such option to pick back.
+// A template saved off a custom course belongs to no offering at all.
+export function templateOffering(courseType: string | null | undefined): string | null {
+  return !courseType || courseType === 'custom' ? null : courseType
+}
+
 export type TemplateAudienceCourse = { course_type: string | null; categories: string[] }
 
 /** Why this template is being offered for this course, or null if it isn't

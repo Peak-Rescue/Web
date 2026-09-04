@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { templateOffering } from '@/lib/library'
 
 // Who may edit a running order, in two steps: who is asking, then whether
 // this particular schedule is theirs to touch.
@@ -90,7 +91,7 @@ export async function createSchedule(input: {
     .insert({
       name: input.name?.trim().slice(0, 120) || 'Schedule',
       instance_id: input.instanceId ?? null,
-      course_type: input.courseType ?? null,
+      course_type: input.isTemplate ? templateOffering(input.courseType) : input.courseType ?? null,
       is_template: input.isTemplate ?? false,
     })
     .select('id')
@@ -363,7 +364,7 @@ export async function copySchedule(
       objectives: src.objectives ?? [],
       instance_id: target.instanceId ?? null,
       is_template: target.isTemplate ?? false,
-      course_type: target.courseType ?? null,
+      course_type: target.isTemplate ? templateOffering(target.courseType) : target.courseType ?? null,
     })
     .select('id').single()
   if (error) throw new Error(error.message)
