@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { COURSE_TYPE_OPTIONS } from '@/lib/courses'
 import { CAPABILITY_META, CAPABILITY_ORDER } from '@/lib/capabilities'
+import InfoHint from '@/components/InfoHint'
 
 export function CourseTypeSelect({
   defaultCategory = '',
@@ -25,10 +26,13 @@ export function CourseTypeSelect({
   const selectedGroup = COURSE_TYPE_OPTIONS.find(g => g.category === category)
   const isCustom = courseType === 'custom'
   // A typed course derives its expertise from the offering; a custom one has
-  // nothing to derive it from, so at least one box is asked for before the
-  // course can be saved. Marking every box required while none is ticked is
-  // what makes the browser say so at the field, instead of the server saying
-  // so after the round trip. An internal day is exempt — see the server guard.
+  // nothing to derive it from, so untagged it reaches nobody at all. Marking
+  // every box required while none is ticked is what makes the browser say so
+  // at the field — but only where there is a submit to block, which is the new
+  // course and import forms. The details form auto-saves, so there it shows as
+  // a caution rather than a refusal: a save that fails for a reason nobody can
+  // read is worse than an untagged course. An internal day is exempt either
+  // way — a planning day draws on no discipline and staffs nobody.
   const needsDiscipline = isCustom && !internal && categories.length === 0
 
   return (
@@ -107,7 +111,16 @@ export function CourseTypeSelect({
             </label>
             {isCustom && (
               <div className="w-full pt-2 mt-1 border-t border-zinc-700">
-                <p className="text-xs text-zinc-400 mb-2">Disciplines *</p>
+                <p className="text-xs text-zinc-400 mb-2 flex items-center gap-1.5">
+                  Disciplines *
+                  {needsDiscipline && (
+                    <InfoHint
+                      caution
+                      below
+                      text="Until one is ticked this course reaches nobody: no template is suggested on it, no instructor sees it in All courses, and nobody counts as qualified to staff it."
+                    />
+                  )}
+                </p>
                 <div className="flex flex-wrap gap-x-4 gap-y-2">
                   {CAPABILITY_ORDER.map(cat => (
                     <label key={cat} className="flex items-center gap-1.5 text-sm text-zinc-300 cursor-pointer">

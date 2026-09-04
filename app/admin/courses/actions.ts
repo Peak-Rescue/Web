@@ -287,8 +287,6 @@ export async function updateInstanceDetails(id: string, formData: FormData) {
   const max_students     = formData.get('max_students') ? Number(formData.get('max_students')) : null
   const instructor_slots = formData.get('instructor_slots') ? Number(formData.get('instructor_slots')) : null
 
-  if (formData.has('course_type')) assertCustomCourseTagged(course_type, custom_categories, internal)
-
   const { error } = await admin
     .from('course_instances')
     // Only what this form actually carried. `notes` is written by its own
