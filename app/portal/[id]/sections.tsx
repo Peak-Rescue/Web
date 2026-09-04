@@ -12,26 +12,27 @@ import WaiverDetach from '@/components/WaiverDetach'
 // the two screens mean the same thing. What used to be About, Roster, Notes,
 // Documents and Email are now parts of the block they always belonged to:
 // nobody was looking for "the roster" as distinct from "who's on this course".
+// Four doors and the money. What used to be nine is grouped by when you reach
+// for a thing rather than by what it is: who is on the course and what it is
+// (details), what you deal with away from the canyon (prep), the day and the
+// place you are standing in (schedule), and news (updates). Staffing, the
+// roster, the waiver, the gear list, the curriculum, the maps and the med plan
+// are all still here — as blocks inside the section that owns them.
 export type SectionKey =
   | 'details'
-  | 'updates'
-  | 'waiver'
+  | 'prep'
   | 'schedule'
-  | 'curriculum'
-  | 'gear'
-  | 'resources'
-  | 'staffing'
-  | 'students'
+  | 'updates'
   | 'pricing'
 
 export const SECTION_ICON: Record<SectionKey, React.ReactElement> = {
-  // Two people side by side: who is running it.
-  staffing: (
-    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
-  ),
-  // One person with a tick: who has joined, and who has signed.
-  students: (
-    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8M16 11l2 2 4-4" />
+  // A pack with a page in it: what you bring, and what you read before you
+  // bring it.
+  prep: (
+    <>
+      <path d="M6 8h12a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2Z" />
+      <path d="M9 8V5a3 3 0 0 1 6 0v3M9 13h6M9 17h4" />
+    </>
   ),
   // A price tag. Admins only, and the only section on the page a client's
   // money is discussed in.
@@ -46,36 +47,6 @@ export const SECTION_ICON: Record<SectionKey, React.ReactElement> = {
   schedule: (
     <path d="M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z" />
   ),
-  // The open book, matching the one that heads a schedule day's topics. Two
-  // books differing only in being open or closed doesn't read as a
-  // distinction — it reads as a mistake. Same idea, same glyph; where you
-  // meet it says which one you're looking at.
-  curriculum: (
-    <>
-      <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
-      <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
-    </>
-  ),
-  // Reference for this place — the med plan, the permit. A document with a
-  // bookmark, not the plain page 'documents' uses: what marks these out is
-  // that you come back to them mid-course, not that they are files.
-  resources: (
-    <>
-      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6" />
-      <path d="M15 22v-7l-2.5 1.75L10 15v7" />
-    </>
-  ),
-  gear: (
-    <path d="M6 2h12l-1 7H7L6 2ZM7 9h10l1.5 11a2 2 0 0 1-2 2h-9a2 2 0 0 1-2-2L7 9ZM10 13h4" />
-  ),
-  // A page with a signature across it. Deliberately not the 'documents' page
-  // glyph: what marks this one out is that you have to do something to it.
-  waiver: (
-    <>
-      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6" />
-      <path d="M8 17c1.2-2.5 2.2-2.5 3 0s1.8 2.5 3 0" />
-    </>
-  ),
   updates: (
     <path d="M3 11l18-8-8 18-2-8-8-2Z" />
   ),
@@ -83,14 +54,9 @@ export const SECTION_ICON: Record<SectionKey, React.ReactElement> = {
 
 export const SECTION_LABEL: Record<SectionKey, string> = {
   details: 'Details',
-  updates: 'Updates',
-  waiver: 'Waiver',
+  prep: 'Prep',
   schedule: 'Schedule',
-  curriculum: 'Curriculum',
-  gear: 'Gear',
-  resources: 'Resources',
-  staffing: 'Staffing',
-  students: 'Students',
+  updates: 'Updates',
   pricing: 'Pricing',
 }
 

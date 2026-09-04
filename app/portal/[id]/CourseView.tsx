@@ -862,7 +862,10 @@ export default async function CourseView({
   // Staff see the section whether or not there is a schedule in it: a course
   // created this morning is exactly the one that needs a running order, and it
   // was the one course you could not start one for from here.
-  const showSchedule = hasSchedule || showTasks
+  const hasMapsOrReference = resources.length > 0 || maps.length > 0 || otherLinks.length > 0 || showTasks
+  // Schedule now holds the maps and the reference shelf as well as the days,
+  // so a course with a med plan and no schedule still has somewhere to put it.
+  const showSchedule = hasSchedule || showTasks || hasMapsOrReference
   // Staff get it whether or not anything is in it: this is where the first
   // section gets added, and a section that appears only once it has contents
   // is one nobody can put contents into.
@@ -876,7 +879,6 @@ export default async function CourseView({
   // Staff get the section whether or not anything is in it: it is where the
   // first resource and the first file get added, and a section that appears
   // only once it has contents is one nobody can put contents into.
-  const hasResources = resources.length > 0 || showTasks || hasAlbum
   // Staff get the notes section whether or not there is anything in it — it is
   // where the first note gets written, and an empty section that says so beats
   // sending someone to the admin editor to type one line.
@@ -1096,39 +1098,17 @@ export default async function CourseView({
   // course is the one that needs the section.
   const showStaffing = (instructors ?? []).length > 0 || showTasks
 
-  // Building a course and running one are different jobs, and one strip of
-  // tabs cannot hold both. Ordering them was an attempt at exactly that and it
-  // failed: order is the weakest signal there is when the thing you want is
-  // off the side of a bar that scrolls.
+  // Building a course and running one are different jobs, and the bar shows
+  // one at a time. Build is the sequence a course is assembled in — what the
+  // client asked for, what it costs, what they need before they come, and
+  // when it runs. Teach is the shortlist you need with a phone in your hand.
   //
-  // So the bar shows one job at a time. Build is the sequence a course is
-  // actually assembled in — what the client asked for, what it costs, the gear
-  // that changes what it costs, who teaches it, what they teach, where, when,
-  // who comes, what they sign. Teach is the shortlist you need with a phone in
-  // your hand.
-  //
-  // Curriculum, resources and gear appear in both: an instructor reads the
-  // curriculum to stay aligned with what the students have, the med plan and
-  // permits are trailhead reading, and the gear list is what the students were
-  // told to bring — which is the thing you get asked about at the trailhead.
-  // It is *editing* any of them mid-course that is build work, usually because
-  // something was missed and belongs in the template for next time.
-  //
-  // Students rather than Waiver on the teach side. Waiver is a person's own
-  // signing record, so it does not render for an instructor at all — while
-  // Students carries the roster with who has signed, the QR a walk-up signs
-  // from, and the strays to match up. Adding and removing people stays with
-  // the admin.
-  //
-  // This filters the jump bar, never the page. Everything still renders and
-  // scrolling still reaches it; the bar just stops offering nine doors when
-  // you need four.
-  const BUILD: SectionKey[] = [
-    'details', 'pricing', 'gear', 'staffing', 'curriculum', 'resources', 'schedule', 'students', 'waiver',
-  ]
-  const TEACH: SectionKey[] = [
-    'details', 'schedule', 'updates', 'curriculum', 'resources', 'gear', 'students',
-  ]
+  // Both are now four doors rather than nine, because the sections are grouped
+  // by when you reach for them rather than by what they are. Pricing is the
+  // only one that belongs to a single job: nobody quotes a course from a
+  // canyon, and instructors never see it at all.
+  const BUILD: SectionKey[] = ['details', 'pricing', 'prep', 'schedule']
+  const TEACH: SectionKey[] = ['details', 'schedule', 'prep', 'updates']
 
   // The course's own dates decide which job you are probably here for, so the
   // switch is usually already right and pressing it is a correction.
@@ -1140,22 +1120,15 @@ export default async function CourseView({
 
   const present: Record<string, boolean> = {
     details: true,
-    updates: hasUpdates,
+    prep: showGear || hasCurriculum,
     schedule: showSchedule,
-    resources: hasResources,
-    curriculum: hasCurriculum,
-    gear: showGear,
-    staffing: showStaffing,
-    students: hasRoster,
-    waiver: showWaiver,
+    updates: hasUpdates,
     pricing: hasPricing,
   }
   // Only an admin gets the two jobs. An instructor has no build half worth
   // naming, so they get one bar and no switch.
   const barFor = showAsAdmin ? (mode === 'teach' ? TEACH : BUILD) : null
-  const navSections = (barFor ?? ([
-    'details', 'updates', 'schedule', 'curriculum', 'resources', 'gear', 'staffing', 'students', 'waiver',
-  ] as SectionKey[]))
+  const navSections = (barFor ?? (['details', 'updates', 'schedule', 'prep'] as SectionKey[]))
     .filter((k) => present[k])
     .map((id) => ({
       id,
@@ -1383,15 +1356,49 @@ export default async function CourseView({
                   />
                 </div>
               )}
-            </div>
-          </Section>
-        )}
-
-        {/* Who is running it — a step of its own, because staffing a course
-            is a thing you do once at a point in the build rather than a fact
-            about the course like its dates. */}
-        {showStaffing && (
-          <Section id="staffing">
+            {hasDocuments && (
+              <div className="mt-6 pt-6 border-t border-zinc-800">
+                {/* Every attachment on the course in one place — uploads,
+                    pasted links, and documents that arrived on a task. Adding
+                    one here is what makes "put the client's PDF somewhere" a
+                    thing you do on the course rather than on another screen. */}
+                <EditInPlace
+                  label="Edit files"
+                  title="Files"
+                  editor={showTasks ? <CourseFilesSection instanceId={id} files={editableFiles} /> : null}
+                >
+                {courseDocs.length === 0 && (
+                  <p className="text-xs text-zinc-600">Nothing attached yet.</p>
+                )}
+                <div className="flex flex-wrap gap-2">
+                  {courseDocs.map((d) => (
+                    <a
+                      key={d.id}
+                      href={d.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      title={d.taskTitle ? `From task: ${d.taskTitle}` : d.external ? 'Opens external link' : 'Course file'}
+                      className={`inline-flex items-center gap-1.5 max-w-full px-3 py-1.5 rounded-full border text-sm transition-colors ${
+                        d.external
+                          ? 'bg-teal-500/10 border-teal-500/30 hover:border-teal-400 text-teal-300 hover:text-teal-100'
+                          : 'bg-zinc-800 border-zinc-700 hover:border-zinc-500 text-zinc-300 hover:text-white'
+                      }`}
+                    >
+                      {d.external ? <LinkIcon /> : <span className="shrink-0"><PaperclipIcon /></span>}
+                      <span className="truncate">{d.filename}</span>
+                      {d.external && <span className="text-teal-400/70 shrink-0">↗</span>}
+                    </a>
+                  ))}
+                </div>
+                </EditInPlace>
+              </div>
+            )}
+              {/* The crew. Not a step of its own any more: staffing a course
+                  is something you do at a point in the build, but reading it
+                  is part of knowing who is on the course, which is what this
+                  section is for. */}
+              {showStaffing && (
+                <div>
           {/* Who is running it. Assigning is the admin's call — an
               instructor is on the course, they don't decide who else is —
               so the crew reads for everyone and edits for one. */}
@@ -1439,14 +1446,13 @@ export default async function CourseView({
             </div>
           )}
           </EditInPlace>
-          </Section>
-        )}
-
-        {/* Who is on it. Enrolment comes late in the build — after the course
-            is mostly assembled — which is why it reads better as its own step
-            than as a list inside Details. */}
-        {hasRoster && (
-          <Section id="students">
+                </div>
+              )}
+              {/* Who is on it. Enrolment does come late in the build, but a
+                  roster is not a place you go — it is one of the facts this
+                  section exists to hold. */}
+              {hasRoster && (
+                <div>
           {hasRoster && (
             <EditInPlace
               label="Edit students"
@@ -1526,8 +1532,46 @@ export default async function CourseView({
             </div>
             </EditInPlace>
           )}
+                </div>
+              )}
+              {/* The waiver, for the person who has to sign it. Not a section
+                  of its own: a waiver is a fact about a person, and every
+                  student card in the roster above already carries theirs. What
+                  is left is the reader's own copy and the admin's choice of
+                  template, which belong beside the people they are about. */}
+              {showWaiver && (
+                <div>
+                  <SubHead
+                    title="Waiver"
+                    note={waiver ? (waiver.signed ? 'Signed' : 'Read and sign before the course starts') : undefined}
+                  />
+            {showAsAdmin && (
+              <div className="mb-6">
+                <CourseWaiverSection
+                  instanceId={id}
+                  templates={waiverTemplates}
+                  selectedId={(inst.waiver_template_id as string | null) ?? null}
+                  signedCount={signedCount}
+                  enrolledCount={enrolledCount}
+                />
+              </div>
+            )}
+            {waiver && (
+              <WaiverPanel
+                instanceId={id}
+                body={waiver.version.body}
+                templateName={waiver.version.templateName}
+                prefill={waiver.prefill}
+                signed={waiver.signed}
+              />
+            )}
+                </div>
+              )}
+            </div>
           </Section>
         )}
+
+
 
         {/* Updates — posted by the team, emailed to everyone on the course,
             and kept here so the course page stays the record of what was
@@ -1570,6 +1614,31 @@ export default async function CourseView({
               canPost={canPostUpdates}
               notifyCounts={notifyCounts}
             />
+            {hasAlbum && (
+            <div className="mt-6 pt-6 border-t border-zinc-800">
+              {/* No blurb. Who can do what is already on the screen: the add
+                  button is there for everyone on the course, and the remove
+                  mark only appears for the people who have it. */}
+              <h3 className="text-sm font-semibold text-zinc-200 mb-2">Album</h3>
+              <Suspense fallback={<p className="text-sm text-zinc-500">Loading album…</p>}>
+                <CourseAlbumSection
+                  instanceId={id}
+                  canManage={showTasks}
+                  album={
+                    albumRow?.drive_folder_id
+                      ? {
+                          linkId: albumRow.id,
+                          url: albumRow.url,
+                          audience: albumRow.audience,
+                          folderId: albumRow.drive_folder_id,
+                        }
+                      : null
+                  }
+                  linked={linkedAlbums}
+                />
+              </Suspense>
+            </div>
+            )}
             {showTasks && (
               <div className="mt-6 pt-6 border-t border-zinc-800">
                 <SubHead title="Emails" />
@@ -1584,40 +1653,247 @@ export default async function CourseView({
           </Section>
         )}
 
-        {/* The waiver, for the person who has to sign it. Sits near the top
-            rather than down with the reference material because it is the only
-            thing on this page a student is asked to *do*, and an unsigned one
-            found on the morning of day one is everybody's problem. */}
-        {showWaiver && (
-          <Section
-            id="waiver"
-            blurb={
-              waiver
-                ? waiver.signed
-                  ? 'Signed'
-                  : 'Read and sign before the course starts'
-                : undefined
-            }
-          >
+
+        {/* Prep — pre-course material: what to bring, and what we cover.
+            Two things you deal with away from the canyon, which is what makes
+            them one section rather than two doors. */}
+        {(showGear || hasCurriculum) && (
+          <Section id="prep">
+            {/* Folded, and first. Nineteen rows you read once while packing
+                and never again: open by default it buries everything under it,
+                gone altogether it is the thing people ask for. A native
+                <details> because the fold needs no state anyone else can see. */}
+            {showGear && (
+              <details className="group/gear rounded-lg border border-zinc-800 bg-zinc-900/50">
+                <summary className="cursor-pointer list-none flex items-baseline gap-2 px-4 py-3">
+                  <span aria-hidden className="text-zinc-600 shrink-0 text-[10px] transition-transform group-open/gear:rotate-90">▸</span>
+                  <h3 className="text-sm font-semibold text-zinc-200">Gear list</h3>
+                  {gearList?.name && <span className="text-xs text-zinc-500 truncate">{gearList.name}</span>}
+                  {gearList && (
+                    <span className="ml-auto shrink-0">
+                      <PdfLink href={`/api/gear-lists/${gearList.id}/pdf`} />
+                    </span>
+                  )}
+                </summary>
+                <div className="px-4 pb-4 pt-1 border-t border-zinc-800">
+            {/* Admin-only, unlike every other editor on this page: assembling
+                a gear list is not something an instructor was ever meant to
+                deal with, and the toggle should show that by taking it away. */}
+            <EditInPlace
+              label="Edit gear list"
+              editor={
+                showAsAdmin ? (
+                  <CourseGear
+                    instanceId={id}
+                    courseType={inst.course_type as string | null}
+                    students={(inst.max_students as number | null) ?? null}
+                    lists={(gearListRows ?? []) as unknown as React.ComponentProps<typeof CourseGear>['lists']}
+                    templates={gearTemplateOptions}
+                    catalog={(gearCatalogRows ?? []) as unknown as React.ComponentProps<typeof CourseGear>['catalog']}
+                  />
+                ) : null
+              }
+            >
+            {gearList?.intro && <p className="text-sm text-zinc-400 mb-3 whitespace-pre-line">{gearList.intro}</p>}
+            {!gearList && showAsAdmin && (
+              <p className="text-xs text-zinc-600">No gear list yet.</p>
+            )}
+            {gearList && (['personal', 'group'] as const).map((gt) => {
+              const rows = gearList.gear_list_entries
+                .filter((e) => e.group_type === gt)
+                .sort((a, b) => a.sort_order - b.sort_order)
+              if (rows.length === 0) return null
+              // The list's own headings, which are editorial and say what this
+              // course wants ("Bring this as well"). Most gear sits under none
+              // of them and prints as a plain list — the catalog's taxonomy is
+              // how staff find an item, and was never a heading for students.
+              const byCat = new Map<string | null, typeof rows>()
+              for (const r of rows) {
+                const c = r.section ?? null
+                byCat.set(c, [...(byCat.get(c) ?? []), r])
+              }
+              return (
+                <div key={gt} className="mb-5">
+                  <SubHead title={gt === 'personal' ? 'Each person brings' : 'Group kit'} />
+                  {/* Categories hang off the group behind a rule, so "each
+                      person brings" visibly owns everything under it rather
+                      than the two levels reading as one flat run of lists. */}
+                  <div className="ml-0.5 pl-3 border-l-2 border-zinc-800">
+                  {[...byCat.entries()].map(([cat, items]) => (
+                    <div key={cat ?? '—'} className="mb-2">
+                      {cat && (
+                        <p className="text-[11px] uppercase tracking-wide text-zinc-500 mb-1">{cat}</p>
+                      )}
+                      <ul className="border border-zinc-800/70 rounded divide-y divide-zinc-800/70">
+                        {placeSets(items).map((p) =>
+                          p.kind === 'item' ? (
+                            <GearLine key={p.row.id} e={p.row} students={inst.max_students ?? null} />
+                          ) : (
+                            /* A set is drawn as a set: boxed off, with the
+                               claim written above it, because "bring one of
+                               these" is the whole point and a student skimming
+                               a list of bullets will read every line as
+                               required. One alternative is a line of things
+                               that go together — "rope and rope bag" — and two
+                               or more is a choice between such lines. */
+                            <li key={p.rows[0].id} className="px-3 py-2">
+                              <div className="rounded border border-pr-red/40 bg-pr-red/[0.04] px-2.5 py-2">
+                                <p className="text-[11px] uppercase tracking-wide text-pr-red mb-1.5">
+                                  {isChoice(p) ? 'Bring one of' : 'Bring both'}
+                                </p>
+                                <div className="space-y-1.5">
+                                  {p.alternatives.map((o, i) => (
+                                    <div key={o.rows[0].id} className="flex items-start gap-2">
+                                      {isChoice(p) && (
+                                        /* Preference is in the order — the one
+                                           written first is what we recommend —
+                                           and a fallback says so outright, in
+                                           dimmer type, so "acceptable if you
+                                           haven't got one" doesn't read as an
+                                           equal choice. */
+                                        <span className={`shrink-0 w-24 pt-2 text-[10px] uppercase tracking-widest ${
+                                          i === 0 ? 'text-zinc-500' : o.ifNeeded ? 'text-zinc-600' : 'text-zinc-500'
+                                        }`}>
+                                          {i === 0 ? 'Either' : o.ifNeeded ? 'Or, if needed' : 'Or'}
+                                        </span>
+                                      )}
+                                      {/* The parts of one alternative go
+                                          together or not at all — the wetsuit
+                                          and the rain jacket, the rope and the
+                                          bag — so they sit beside each other
+                                          with the word that binds them in the
+                                          space they share. */}
+                                      <ul className={`min-w-0 flex-1 flex flex-wrap items-stretch gap-2 ${
+                                        o.ifNeeded ? 'opacity-75' : ''
+                                      }`}>
+                                        {o.rows.map((e, ri) => (
+                                          <React.Fragment key={e.id}>
+                                            {ri > 0 && (
+                                              <span className="self-center shrink-0 text-[10px] uppercase tracking-widest text-zinc-500">
+                                                and
+                                              </span>
+                                            )}
+                                            <GearLine e={e} students={inst.max_students ?? null} card />
+                                          </React.Fragment>
+                                        ))}
+                                      </ul>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            </li>
+                          )
+                        )}
+                      </ul>
+                    </div>
+                  ))}
+                  </div>
+                </div>
+              )
+            })}
+            </EditInPlace>
+
+            {/* What we ask the client to supply, off the back of that list.
+                Admin-only for the same reason the list is. */}
             {showAsAdmin && (
-              <div className="mb-6">
-                <CourseWaiverSection
+              <div className="mt-8 pt-6 border-t border-zinc-800">
+                <GearOrderPanel
                   instanceId={id}
-                  templates={waiverTemplates}
-                  selectedId={(inst.waiver_template_id as string | null) ?? null}
-                  signedCount={signedCount}
-                  enrolledCount={enrolledCount}
+                  orders={gearOrders}
+                  adminCcOptions={adminCcOptions}
+                  lists={gearAll.map((l) => ({ id: l.id, name: l.name, audience: l.audience }))}
                 />
               </div>
             )}
-            {waiver && (
-              <WaiverPanel
-                instanceId={id}
-                body={waiver.version.body}
-                templateName={waiver.version.templateName}
-                prefill={waiver.prefill}
-                signed={waiver.signed}
-              />
+                </div>
+              </details>
+            )}
+            {/* The modules, each its own named group rather than a
+                page-length run of link rows. */}
+            {hasCurriculum && (
+              <div className={showGear ? 'mt-8' : undefined}>
+            {/* Sections and the items in them, assigned on the course. The
+                editor is a server component — it is server actions bound to
+                rows all the way down — so it is built here and handed over
+                rather than imported into the client. */}
+            <EditInPlace
+              label="Edit curriculum"
+              title="Sections"
+              editor={
+                showTasks ? (
+                  <CourseCurriculumEditor
+                    instanceId={id}
+                    modules={orderedModules as unknown as CurriculumModule[]}
+                    templates={curriculumTemplates}
+                    courseDisciplines={courseDisciplines}
+                    knownSectionNames={knownSectionNames}
+                  />
+                ) : null
+              }
+            >
+            <div className="space-y-6">
+              {orderedModules.map(mod => {
+                const items = (mod.course_items ?? []).slice().sort((a, b) => a.order - b.order)
+                return (
+                  <div key={mod.id}>
+                    <SubHead
+                      title={mod.title}
+                      badge={(showAsAdmin || showAsInstructor) && mod.audience !== 'both' ? (
+                        <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${
+                          mod.audience === 'instructor'
+                            ? 'border-teal-800 text-teal-400'
+                            : 'border-blue-800 text-blue-400'
+                        }`}>
+                          {mod.audience}s only
+                        </span>
+                      ) : undefined}
+                    />
+                    <div className="space-y-1">
+                      {items.map(item => {
+                        // Library rows carry their own title/link, and an item can
+                        // be held back to instructors inside a shared section.
+                        const libRaw = item.library_items as unknown
+                        const lib = (Array.isArray(libRaw) ? libRaw[0] : libRaw) as
+                          { id: string; title: string; url: string | null; audience: string; kind?: string | null; drive_file_id?: string | null } | null
+                        const effective = item.audience ?? lib?.audience ?? 'shared'
+                        if (!showTasks && effective === 'internal') return null
+                        const title = lib?.title ?? item.title
+                        // Drive files go through the portal, which streams them
+                        // with the service account — a direct Drive link would
+                        // show participants Google's request-access page.
+                        const isDrive = Boolean(lib?.drive_file_id) || /drive\.google\.com|docs\.google\.com/.test(lib?.url ?? '')
+                        const url = lib && isDrive ? `/api/library/${lib.id}` : (lib?.url ?? item.url)
+                        if (!url) return null
+                        return (
+                          <a
+                            key={item.id}
+                            href={url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="flex items-start gap-3 px-4 py-3 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded-lg transition-colors group"
+                          >
+                            {/* What it is, read off the link. `item.type` was
+                                meant to say, and is null on every row that has
+                                ever existed, so these three icons shipped and
+                                never rendered anything but the last one. */}
+                            {ITEM_ICON[materialKind({ url: lib?.url ?? item.url, drive_file_id: lib?.drive_file_id, kind: lib?.kind })]}
+                            <div className="min-w-0">
+                              <div className="text-sm font-medium group-hover:text-pr-red-light transition-colors">{title}</div>
+                              {item.description && <div className="text-xs text-zinc-500 mt-0.5">{item.description}</div>}
+                            </div>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="ml-auto shrink-0 text-zinc-600 group-hover:text-zinc-400 mt-0.5 transition-colors">
+                              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14 21 3"/>
+                            </svg>
+                          </a>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+            </EditInPlace>
+              </div>
             )}
           </Section>
         )}
@@ -1630,6 +1906,74 @@ export default async function CourseView({
             id="schedule"
             action={sched ? <PdfLink href={`/api/schedules/${sched.id}/pdf`} /> : undefined}
           >
+            {/* The map is the one piece of reference you open standing
+                somewhere, so it sits above the days and costs a chip of
+                height. Everything else you look up rather than scan, and waits
+                at the bottom. */}
+            {/* Maps are reference for the place, which is what this whole
+                section is — the same question the med plan answers. They sat
+                beside the location, which read better but left their edit
+                control floating under the WHERE card attached to nothing.
+
+                Promoting one into the library stays admin-only inside the
+                component's own actions. */}
+            <EditInPlace
+              label="Edit maps"
+              title="Maps"
+              editor={
+                showTasks ? (
+                  <CourseMapsSection instanceId={id} maps={editableMaps} placeLabel={coursePlace} />
+                ) : null
+              }
+            >
+            {maps.length === 0 && showTasks && (
+              <p className="text-xs text-zinc-600">No maps yet.</p>
+            )}
+            {maps.length > 0 && (
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-2 mt-3">
+                {maps.map((m) => (
+                  // One chip per link, kept closer to each other than to the next
+                  // map — a single pill cut in half read as one link that had
+                  // been broken, and nothing about it said the halves went
+                  // different places.
+                  //
+                  // Every chip says the same four things: it is a map, which
+                  // map, whose it is, and whether it can be edited. Only the
+                  // first used to carry the icon and the name, so the second
+                  // read as "Read-only · students" — a chip that named neither
+                  // the place it went nor what it was.
+                  <span key={m.id} className="inline-flex items-center gap-1.5">
+                    {m.links.map((l) => {
+                      const c = l.audience === 'students' ? CHIP.maps : CHIP.instructors
+                      return (
+                        <a
+                          key={`${l.access}-${l.audience}`}
+                          href={l.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          title={`${m.label} — ${l.access === 'edit' ? 'editable' : 'read-only'}, for ${l.audience}`}
+                          className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border no-underline transition-colors ${c.chip} ${c.hover}`}
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+                            <path d="M9 20l-5.447-2.724A1 1 0 0 1 3 16.382V5.618a1 1 0 0 1 1.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0 0 21 18.382V7.618a1 1 0 0 0-.553-.894L15 4m0 13V4m0 0L9 7" />
+                          </svg>
+                          {m.label}
+                          {/* Whose it is only matters where more than one
+                              audience is on screen. A student is handed their
+                              own links and nobody else's, so naming the
+                              audience would tell them something they cannot
+                              act on — but whether they may edit it, they can. */}
+                          <span className={c.tail}>
+                            {showTasks ? ` · ${l.audience}` : ''} · {l.access === 'edit' ? 'editable' : 'read-only'}
+                          </span>
+                        </a>
+                      )
+                    })}
+                  </span>
+                ))}
+              </div>
+            )}
+            </EditInPlace>
             {hasSchedule && canEditSchedule && (
               <div className="flex justify-end -mt-2 mb-2">
                 <CreateSchedule
@@ -2067,136 +2411,6 @@ export default async function CourseView({
                 )}
               </div>
             )}
-            </>
-            )}
-          </Section>
-        )}
-
-        {/* Resources — what's true about this place: the med plan, the permit,
-            the evacuation annex. Above the curriculum and visibly not part of
-            it, because "what do I do if someone gets hurt" is not lesson four.
-            Rows the team can see but students can't are badged, so an
-            instructor reading the same page knows which is which. */}
-        {hasResources && (
-          <Section id="resources">
-            {/* Maps are reference for the place, which is what this whole
-                section is — the same question the med plan answers. They sat
-                beside the location, which read better but left their edit
-                control floating under the WHERE card attached to nothing.
-
-                Promoting one into the library stays admin-only inside the
-                component's own actions. */}
-            <EditInPlace
-              label="Edit maps"
-              title="Maps"
-              editor={
-                showTasks ? (
-                  <CourseMapsSection instanceId={id} maps={editableMaps} placeLabel={coursePlace} />
-                ) : null
-              }
-            >
-            {maps.length === 0 && showTasks && (
-              <p className="text-xs text-zinc-600">No maps yet.</p>
-            )}
-            {maps.length > 0 && (
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-2 mt-3">
-                {maps.map((m) => (
-                  // One chip per link, kept closer to each other than to the next
-                  // map — a single pill cut in half read as one link that had
-                  // been broken, and nothing about it said the halves went
-                  // different places.
-                  //
-                  // Every chip says the same four things: it is a map, which
-                  // map, whose it is, and whether it can be edited. Only the
-                  // first used to carry the icon and the name, so the second
-                  // read as "Read-only · students" — a chip that named neither
-                  // the place it went nor what it was.
-                  <span key={m.id} className="inline-flex items-center gap-1.5">
-                    {m.links.map((l) => {
-                      const c = l.audience === 'students' ? CHIP.maps : CHIP.instructors
-                      return (
-                        <a
-                          key={`${l.access}-${l.audience}`}
-                          href={l.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          title={`${m.label} — ${l.access === 'edit' ? 'editable' : 'read-only'}, for ${l.audience}`}
-                          className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border no-underline transition-colors ${c.chip} ${c.hover}`}
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
-                            <path d="M9 20l-5.447-2.724A1 1 0 0 1 3 16.382V5.618a1 1 0 0 1 1.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0 0 21 18.382V7.618a1 1 0 0 0-.553-.894L15 4m0 13V4m0 0L9 7" />
-                          </svg>
-                          {m.label}
-                          {/* Whose it is only matters where more than one
-                              audience is on screen. A student is handed their
-                              own links and nobody else's, so naming the
-                              audience would tell them something they cannot
-                              act on — but whether they may edit it, they can. */}
-                          <span className={c.tail}>
-                            {showTasks ? ` · ${l.audience}` : ''} · {l.access === 'edit' ? 'editable' : 'read-only'}
-                          </span>
-                        </a>
-                      )
-                    })}
-                  </span>
-                ))}
-              </div>
-            )}
-            </EditInPlace>
-
-            {/* Whatever a course was given that isn't a map, a document or an
-                album: a permit portal, the client's own site. Nothing here is
-                editable — these arrive from elsewhere, and the one link the
-                team actually keeps is the album, which lives in its own
-                section. */}
-            {otherLinks.length > 0 && (
-            <div className="mt-6 pt-6 border-t border-zinc-800">
-            <EditInPlace
-              label="Edit links"
-              title="Links"
-              editor={null}
-            >
-            {(linkRows ?? []).length > 0 && (
-              <div className="space-y-3">
-                {PURPOSE_ORDER.map((purpose) => {
-                  // Albums of every kind are shown in the Album section.
-                  const rows = otherLinks.filter((l) => l.purpose === purpose)
-                  if (rows.length === 0) return null
-                  return (
-                    <div key={purpose}>
-                      <p className="text-[11px] uppercase tracking-wide text-zinc-500 mb-1.5">
-                        {PURPOSE_META[purpose].label}
-                      </p>
-                      <div className="flex flex-wrap items-center gap-2">
-                        {rows.map((l) => (
-                          <a
-                            key={l.id}
-                            href={l.url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border transition-colors ${
-                              showTasks && l.audience === 'internal'
-                                ? `${CHIP.instructors.chip} ${CHIP.instructors.hover}`
-                                : `${CHIP.links.chip} ${CHIP.links.hover}`
-                            }`}
-                          >
-                            {linkLabel(l)}
-                            {showTasks && (
-                              <span className={l.audience === 'internal' ? CHIP.instructors.tail : CHIP.links.tail}>
-                                · {l.audience === 'internal' ? 'instructors' : 'students'}
-                              </span>
-                            )}
-                          </a>
-                        ))}
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-            </EditInPlace>
-            </div>
-            )}
 
             <div className="mt-6 pt-6 border-t border-zinc-800">
             {/* Reference for this place, edited where it is read. Save-to-
@@ -2251,299 +2465,66 @@ export default async function CourseView({
             )}
             </EditInPlace>
             </div>
-            {hasDocuments && (
-              <div className="mt-6 pt-6 border-t border-zinc-800">
-                {/* Every attachment on the course in one place — uploads,
-                    pasted links, and documents that arrived on a task. Adding
-                    one here is what makes "put the client's PDF somewhere" a
-                    thing you do on the course rather than on another screen. */}
-                <EditInPlace
-                  label="Edit files"
-                  title="Files"
-                  editor={showTasks ? <CourseFilesSection instanceId={id} files={editableFiles} /> : null}
-                >
-                {courseDocs.length === 0 && (
-                  <p className="text-xs text-zinc-600">Nothing attached yet.</p>
-                )}
-                <div className="flex flex-wrap gap-2">
-                  {courseDocs.map((d) => (
-                    <a
-                      key={d.id}
-                      href={d.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      title={d.taskTitle ? `From task: ${d.taskTitle}` : d.external ? 'Opens external link' : 'Course file'}
-                      className={`inline-flex items-center gap-1.5 max-w-full px-3 py-1.5 rounded-full border text-sm transition-colors ${
-                        d.external
-                          ? 'bg-teal-500/10 border-teal-500/30 hover:border-teal-400 text-teal-300 hover:text-teal-100'
-                          : 'bg-zinc-800 border-zinc-700 hover:border-zinc-500 text-zinc-300 hover:text-white'
-                      }`}
-                    >
-                      {d.external ? <LinkIcon /> : <span className="shrink-0"><PaperclipIcon /></span>}
-                      <span className="truncate">{d.filename}</span>
-                      {d.external && <span className="text-teal-400/70 shrink-0">↗</span>}
-                    </a>
-                  ))}
-                </div>
-                </EditInPlace>
-              </div>
-            )}
-
-            {hasAlbum && (
+            {/* Whatever a course was given that isn't a map, a document or an
+                album: a permit portal, the client's own site. Nothing here is
+                editable — these arrive from elsewhere, and the one link the
+                team actually keeps is the album, which lives in its own
+                section. */}
+            {otherLinks.length > 0 && (
             <div className="mt-6 pt-6 border-t border-zinc-800">
-              {/* No blurb. Who can do what is already on the screen: the add
-                  button is there for everyone on the course, and the remove
-                  mark only appears for the people who have it. */}
-              <h3 className="text-sm font-semibold text-zinc-200 mb-2">Album</h3>
-              <Suspense fallback={<p className="text-sm text-zinc-500">Loading album…</p>}>
-                <CourseAlbumSection
-                  instanceId={id}
-                  canManage={showTasks}
-                  album={
-                    albumRow?.drive_folder_id
-                      ? {
-                          linkId: albumRow.id,
-                          url: albumRow.url,
-                          audience: albumRow.audience,
-                          folderId: albumRow.drive_folder_id,
-                        }
-                      : null
-                  }
-                  linked={linkedAlbums}
-                />
-              </Suspense>
-            </div>
-            )}
-          </Section>
-        )}
-
-        {/* Curriculum — the modules, each its own named group rather than a
-            page-length run of link rows. */}
-        {hasCurriculum && (
-          <Section id="curriculum">
-            {/* Sections and the items in them, assigned on the course. The
-                editor is a server component — it is server actions bound to
-                rows all the way down — so it is built here and handed over
-                rather than imported into the client. */}
             <EditInPlace
-              label="Edit curriculum"
-              title="Sections"
-              editor={
-                showTasks ? (
-                  <CourseCurriculumEditor
-                    instanceId={id}
-                    modules={orderedModules as unknown as CurriculumModule[]}
-                    templates={curriculumTemplates}
-                    courseDisciplines={courseDisciplines}
-                    knownSectionNames={knownSectionNames}
-                  />
-                ) : null
-              }
+              label="Edit links"
+              title="Links"
+              editor={null}
             >
-            <div className="space-y-6">
-              {orderedModules.map(mod => {
-                const items = (mod.course_items ?? []).slice().sort((a, b) => a.order - b.order)
-                return (
-                  <div key={mod.id}>
-                    <SubHead
-                      title={mod.title}
-                      badge={(showAsAdmin || showAsInstructor) && mod.audience !== 'both' ? (
-                        <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${
-                          mod.audience === 'instructor'
-                            ? 'border-teal-800 text-teal-400'
-                            : 'border-blue-800 text-blue-400'
-                        }`}>
-                          {mod.audience}s only
-                        </span>
-                      ) : undefined}
-                    />
-                    <div className="space-y-1">
-                      {items.map(item => {
-                        // Library rows carry their own title/link, and an item can
-                        // be held back to instructors inside a shared section.
-                        const libRaw = item.library_items as unknown
-                        const lib = (Array.isArray(libRaw) ? libRaw[0] : libRaw) as
-                          { id: string; title: string; url: string | null; audience: string; kind?: string | null; drive_file_id?: string | null } | null
-                        const effective = item.audience ?? lib?.audience ?? 'shared'
-                        if (!showTasks && effective === 'internal') return null
-                        const title = lib?.title ?? item.title
-                        // Drive files go through the portal, which streams them
-                        // with the service account — a direct Drive link would
-                        // show participants Google's request-access page.
-                        const isDrive = Boolean(lib?.drive_file_id) || /drive\.google\.com|docs\.google\.com/.test(lib?.url ?? '')
-                        const url = lib && isDrive ? `/api/library/${lib.id}` : (lib?.url ?? item.url)
-                        if (!url) return null
-                        return (
+            {(linkRows ?? []).length > 0 && (
+              <div className="space-y-3">
+                {PURPOSE_ORDER.map((purpose) => {
+                  // Albums of every kind are shown in the Album section.
+                  const rows = otherLinks.filter((l) => l.purpose === purpose)
+                  if (rows.length === 0) return null
+                  return (
+                    <div key={purpose}>
+                      <p className="text-[11px] uppercase tracking-wide text-zinc-500 mb-1.5">
+                        {PURPOSE_META[purpose].label}
+                      </p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        {rows.map((l) => (
                           <a
-                            key={item.id}
-                            href={url}
+                            key={l.id}
+                            href={l.url}
                             target="_blank"
                             rel="noreferrer"
-                            className="flex items-start gap-3 px-4 py-3 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded-lg transition-colors group"
+                            className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                              showTasks && l.audience === 'internal'
+                                ? `${CHIP.instructors.chip} ${CHIP.instructors.hover}`
+                                : `${CHIP.links.chip} ${CHIP.links.hover}`
+                            }`}
                           >
-                            {/* What it is, read off the link. `item.type` was
-                                meant to say, and is null on every row that has
-                                ever existed, so these three icons shipped and
-                                never rendered anything but the last one. */}
-                            {ITEM_ICON[materialKind({ url: lib?.url ?? item.url, drive_file_id: lib?.drive_file_id, kind: lib?.kind })]}
-                            <div className="min-w-0">
-                              <div className="text-sm font-medium group-hover:text-pr-red-light transition-colors">{title}</div>
-                              {item.description && <div className="text-xs text-zinc-500 mt-0.5">{item.description}</div>}
-                            </div>
-                            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="ml-auto shrink-0 text-zinc-600 group-hover:text-zinc-400 mt-0.5 transition-colors">
-                              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14 21 3"/>
-                            </svg>
+                            {linkLabel(l)}
+                            {showTasks && (
+                              <span className={l.audience === 'internal' ? CHIP.instructors.tail : CHIP.links.tail}>
+                                · {l.audience === 'internal' ? 'instructors' : 'students'}
+                              </span>
+                            )}
                           </a>
-                        )
-                      })}
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                )
-              })}
-            </div>
-            </EditInPlace>
-          </Section>
-        )}
-
-        {/* Gear */}
-        {showGear && (
-          <Section
-            id="gear"
-            blurb={gearList?.name}
-            action={gearList ? <PdfLink href={`/api/gear-lists/${gearList.id}/pdf`} /> : undefined}
-          >
-            {/* Admin-only, unlike every other editor on this page: assembling
-                a gear list is not something an instructor was ever meant to
-                deal with, and the toggle should show that by taking it away. */}
-            <EditInPlace
-              label="Edit gear list"
-              title="The list"
-              editor={
-                showAsAdmin ? (
-                  <CourseGear
-                    instanceId={id}
-                    courseType={inst.course_type as string | null}
-                    students={(inst.max_students as number | null) ?? null}
-                    lists={(gearListRows ?? []) as unknown as React.ComponentProps<typeof CourseGear>['lists']}
-                    templates={gearTemplateOptions}
-                    catalog={(gearCatalogRows ?? []) as unknown as React.ComponentProps<typeof CourseGear>['catalog']}
-                  />
-                ) : null
-              }
-            >
-            {gearList?.intro && <p className="text-sm text-zinc-400 mb-3 whitespace-pre-line">{gearList.intro}</p>}
-            {!gearList && showAsAdmin && (
-              <p className="text-xs text-zinc-600">No gear list yet.</p>
-            )}
-            {gearList && (['personal', 'group'] as const).map((gt) => {
-              const rows = gearList.gear_list_entries
-                .filter((e) => e.group_type === gt)
-                .sort((a, b) => a.sort_order - b.sort_order)
-              if (rows.length === 0) return null
-              // The list's own headings, which are editorial and say what this
-              // course wants ("Bring this as well"). Most gear sits under none
-              // of them and prints as a plain list — the catalog's taxonomy is
-              // how staff find an item, and was never a heading for students.
-              const byCat = new Map<string | null, typeof rows>()
-              for (const r of rows) {
-                const c = r.section ?? null
-                byCat.set(c, [...(byCat.get(c) ?? []), r])
-              }
-              return (
-                <div key={gt} className="mb-5">
-                  <SubHead title={gt === 'personal' ? 'Each person brings' : 'Group kit'} />
-                  {/* Categories hang off the group behind a rule, so "each
-                      person brings" visibly owns everything under it rather
-                      than the two levels reading as one flat run of lists. */}
-                  <div className="ml-0.5 pl-3 border-l-2 border-zinc-800">
-                  {[...byCat.entries()].map(([cat, items]) => (
-                    <div key={cat ?? '—'} className="mb-2">
-                      {cat && (
-                        <p className="text-[11px] uppercase tracking-wide text-zinc-500 mb-1">{cat}</p>
-                      )}
-                      <ul className="border border-zinc-800/70 rounded divide-y divide-zinc-800/70">
-                        {placeSets(items).map((p) =>
-                          p.kind === 'item' ? (
-                            <GearLine key={p.row.id} e={p.row} students={inst.max_students ?? null} />
-                          ) : (
-                            /* A set is drawn as a set: boxed off, with the
-                               claim written above it, because "bring one of
-                               these" is the whole point and a student skimming
-                               a list of bullets will read every line as
-                               required. One alternative is a line of things
-                               that go together — "rope and rope bag" — and two
-                               or more is a choice between such lines. */
-                            <li key={p.rows[0].id} className="px-3 py-2">
-                              <div className="rounded border border-pr-red/40 bg-pr-red/[0.04] px-2.5 py-2">
-                                <p className="text-[11px] uppercase tracking-wide text-pr-red mb-1.5">
-                                  {isChoice(p) ? 'Bring one of' : 'Bring both'}
-                                </p>
-                                <div className="space-y-1.5">
-                                  {p.alternatives.map((o, i) => (
-                                    <div key={o.rows[0].id} className="flex items-start gap-2">
-                                      {isChoice(p) && (
-                                        /* Preference is in the order — the one
-                                           written first is what we recommend —
-                                           and a fallback says so outright, in
-                                           dimmer type, so "acceptable if you
-                                           haven't got one" doesn't read as an
-                                           equal choice. */
-                                        <span className={`shrink-0 w-24 pt-2 text-[10px] uppercase tracking-widest ${
-                                          i === 0 ? 'text-zinc-500' : o.ifNeeded ? 'text-zinc-600' : 'text-zinc-500'
-                                        }`}>
-                                          {i === 0 ? 'Either' : o.ifNeeded ? 'Or, if needed' : 'Or'}
-                                        </span>
-                                      )}
-                                      {/* The parts of one alternative go
-                                          together or not at all — the wetsuit
-                                          and the rain jacket, the rope and the
-                                          bag — so they sit beside each other
-                                          with the word that binds them in the
-                                          space they share. */}
-                                      <ul className={`min-w-0 flex-1 flex flex-wrap items-stretch gap-2 ${
-                                        o.ifNeeded ? 'opacity-75' : ''
-                                      }`}>
-                                        {o.rows.map((e, ri) => (
-                                          <React.Fragment key={e.id}>
-                                            {ri > 0 && (
-                                              <span className="self-center shrink-0 text-[10px] uppercase tracking-widest text-zinc-500">
-                                                and
-                                              </span>
-                                            )}
-                                            <GearLine e={e} students={inst.max_students ?? null} card />
-                                          </React.Fragment>
-                                        ))}
-                                      </ul>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            </li>
-                          )
-                        )}
-                      </ul>
-                    </div>
-                  ))}
-                  </div>
-                </div>
-              )
-            })}
-            </EditInPlace>
-
-            {/* What we ask the client to supply, off the back of that list.
-                Admin-only for the same reason the list is. */}
-            {showAsAdmin && (
-              <div className="mt-8 pt-6 border-t border-zinc-800">
-                <GearOrderPanel
-                  instanceId={id}
-                  orders={gearOrders}
-                  adminCcOptions={adminCcOptions}
-                  lists={gearAll.map((l) => ({ id: l.id, name: l.name, audience: l.audience }))}
-                />
+                  )
+                })}
               </div>
             )}
+            </EditInPlace>
+            </div>
+            )}
+            </>
+            )}
           </Section>
         )}
+
+
+
 
         {/* What it costs and what we told the client it costs. Internal in the
             strongest sense on this page — instructors never see it, and the
