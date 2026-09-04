@@ -35,7 +35,7 @@ import PdfLink from '@/components/PdfLink'
 import { loadTasksWithDocs } from '@/lib/course-tasks'
 import { LinkIcon, PaperclipIcon } from '@/components/TaskIcons'
 import { AudiencePills } from '@/components/AudiencePills'
-import PortalSectionNav from './PortalSectionNav'
+import CourseNav, { NavPanel } from './CourseNav'
 import { albumsEnabled } from '@/lib/drive-albums'
 import CourseUpdates, { type CourseUpdate, type NotifyCounts } from './CourseUpdates'
 import CourseNotes from './CourseNotes'
@@ -1187,57 +1187,61 @@ export default async function CourseView({
           )}
         </div>
 
-        <PortalSectionNav
+        <CourseNav
           sections={navSections}
-          leading={showAsAdmin ? (
-            <CourseMode
-              mode={mode}
-              buildHref={`/portal/${id}?mode=build${viewAs ? `&as=${viewAs}` : ''}`}
-              teachHref={`/portal/${id}?mode=teach${viewAs ? `&as=${viewAs}` : ''}`}
-            />
+          storageKey={`course-door:${id}`}
+          controls={showAsAdmin || isAdmin ? (
+            <>
+              {showAsAdmin && (
+                <CourseMode
+                  mode={mode}
+                  buildHref={`/portal/${id}?mode=build${viewAs ? `&as=${viewAs}` : ''}`}
+                  teachHref={`/portal/${id}?mode=teach${viewAs ? `&as=${viewAs}` : ''}`}
+                />
+              )}
+              {isAdmin && (
+                /* Which role you are reading as, in the bar rather than up by
+                   the title: the title scrolls away, and you find out you are
+                   in a preview at the moment a control is missing, which is
+                   halfway down. */
+                <div className="flex items-center gap-0.5 text-[11px]">
+                  {([
+                    ['', 'Admin', 'Everything, unfiltered'],
+                    ['instructor', 'Instructor', 'What an assigned instructor sees (uses your real role on this course)'],
+                    ['student', 'Student', 'What an enrolled student sees'],
+                  ] as const).map(([key, label, hint]) => (
+                    <Link
+                      key={label}
+                      href={key ? `/portal/${id}?as=${key}` : `/portal/${id}`}
+                      // This bar is sticky, so all three links sit in the
+                      // viewport for the whole visit and get prefetched —
+                      // three more full renders of the most expensive page we
+                      // have, kicked off by the page itself. Switching preview
+                      // roles is rare enough to pay for its own navigation.
+                      prefetch={false}
+                      title={hint}
+                      className={`px-1.5 py-1 rounded font-medium transition-colors ${
+                        (viewAs ?? '') === key
+                          ? 'bg-zinc-800 text-white'
+                          : 'text-zinc-500 hover:text-zinc-300'
+                      }`}
+                    >
+                      <span className="hidden sm:inline">{label}</span>
+                      <span className="sm:hidden">{label[0]}</span>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </>
           ) : null}
-          trailing={isAdmin ? (
-            /* Which role you are reading as, travelling down the page with
-               you. At the top it answered the question only where nobody was
-               asking it — you find out you are in a preview at the moment a
-               control is missing, which is halfway down. */
-            <div className="flex items-center gap-0.5 text-[11px]">
-              {([
-                ['', 'Admin', 'Everything, unfiltered'],
-                ['instructor', 'Instructor', 'What an assigned instructor sees (uses your real role on this course)'],
-                ['student', 'Student', 'What an enrolled student sees'],
-              ] as const).map(([key, label, hint]) => (
-                <Link
-                  key={label}
-                  href={key ? `/portal/${id}?as=${key}` : `/portal/${id}`}
-                  // This bar is sticky, so all three links sit in the viewport
-                  // for the whole visit and get prefetched — three more full
-                  // renders of this page, which is the most expensive one we
-                  // have, kicked off by the page itself. Switching preview
-                  // roles is rare enough to pay for its own navigation.
-                  prefetch={false}
-                  title={hint}
-                  className={`px-1.5 py-1 rounded font-medium transition-colors ${
-                    (viewAs ?? '') === key
-                      ? 'bg-zinc-800 text-white'
-                      : 'text-zinc-500 hover:text-zinc-300'
-                  }`}
-                >
-                  {/* Full words where there is room; initials where there
-                      isn't, because the bar also carries the jump links. */}
-                  <span className="hidden sm:inline">{label}</span>
-                  <span className="sm:hidden">{label[0]}</span>
-                </Link>
-              ))}
-            </div>
-          ) : null}
-        />
+        >
 
         {/* Who is on this course — the welcome, the crew, the roster. Where
             to meet used to be here too, but it is news rather than reference:
             it belongs with the updates, and it belongs out of the way once
             everyone has met. */}
         {hasDetails && (
+          <NavPanel id="details">
           <Section id="details">
             <div className="space-y-6">
               {/* What the course is, for the people who set it up. A concise
@@ -1569,6 +1573,7 @@ export default async function CourseView({
               )}
             </div>
           </Section>
+          </NavPanel>
         )}
 
 
@@ -1577,6 +1582,7 @@ export default async function CourseView({
             and kept here so the course page stays the record of what was
             said. */}
         {hasUpdates && (
+          <NavPanel id="updates">
           <Section
             id="updates"
             unread={unreadUpdates > 0}
@@ -1651,6 +1657,7 @@ export default async function CourseView({
               </div>
             )}
           </Section>
+          </NavPanel>
         )}
 
 
@@ -1658,6 +1665,7 @@ export default async function CourseView({
             Two things you deal with away from the canyon, which is what makes
             them one section rather than two doors. */}
         {(showGear || hasCurriculum) && (
+          <NavPanel id="prep">
           <Section id="prep">
             {/* Folded, and first. Nineteen rows you read once while packing
                 and never again: open by default it buries everything under it,
@@ -1896,12 +1904,14 @@ export default async function CourseView({
               </div>
             )}
           </Section>
+          </NavPanel>
         )}
 
         {/* Course tasks, and the team's own notes on the course — the one
             block on the page that is theirs end to end. */}
         {/* Running order */}
         {showSchedule && (
+          <NavPanel id="schedule">
           <Section
             id="schedule"
             action={sched ? <PdfLink href={`/api/schedules/${sched.id}/pdf`} /> : undefined}
@@ -2521,6 +2531,7 @@ export default async function CourseView({
             </>
             )}
           </Section>
+          </NavPanel>
         )}
 
 
@@ -2530,6 +2541,7 @@ export default async function CourseView({
             strongest sense on this page — instructors never see it, and the
             toggle takes it away rather than dimming it. */}
         {hasPricing && (
+          <NavPanel id="pricing">
           <Section id="pricing" blurb="Admins only">
             <CoursePricingEditor
               instanceId={id}
@@ -2539,7 +2551,10 @@ export default async function CourseView({
               currentUserId={userId ?? ''}
             />
           </Section>
+          </NavPanel>
         )}
+
+        </CourseNav>
 
         {/* Details is always there, so emptiness is about the sections below it. */}
                 {showAsAdmin && (
