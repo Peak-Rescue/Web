@@ -7,7 +7,7 @@ import ScheduleEditor, { type Schedule, type SiteOption } from '@/app/admin/sche
 import { updateGearList, deleteGearList } from '@/app/admin/gear/actions'
 import { updateSchedule, deleteSchedule } from '@/app/admin/schedules/actions'
 import { TEMPLATE_SHELF_META, type TemplateShelf, type TemplateSummary } from '@/lib/library'
-import { CAPABILITY_META, CAPABILITY_ORDER } from '@/lib/capabilities'
+import { CAPABILITY_META, CAPABILITY_ORDER, courseCapabilityCategories } from '@/lib/capabilities'
 import { ForPill } from '@/components/AudiencePills'
 import { COURSE_TYPE_OPTIONS, courseShortName } from '@/lib/courses'
 
@@ -81,6 +81,14 @@ export default function TemplateRow(props: Props) {
   // click away. A custom course has no offering worth matching — every one of
   // them says 'custom' — so its checked categories are what reach it, which is
   // why a mixed canyons-and-mountain course wants both tagged here.
+  // The offering already says which expertise this is — Urban Mobility is
+  // urban work whether or not anyone ticks the box — so the box is shown
+  // checked and held there rather than left for a human to keep in sync. The
+  // matching that reads these does the same derivation, so an unticked box was
+  // never actually wrong; it just looked it, which is its own bug.
+  const implied = courseCapabilityCategories(form.course_type || '', null) as string[]
+  const impliedFrom = form.course_type ? courseShortName(form.course_type, null) : null
+
   const offering = summary.course_type ? courseShortName(summary.course_type, null) : null
   const knownOffering = COURSE_TYPE_OPTIONS.some((g) => g.options.some((o) => o.value === form.course_type))
 
@@ -109,7 +117,10 @@ export default function TemplateRow(props: Props) {
           <p className="text-[11px] text-zinc-600 mt-1 truncate">
             {summary.description || `no note — say what this ${meta.noun} is for`}
             {' · '}
-            {summary.disciplines.map((d) => CAPABILITY_META[d as keyof typeof CAPABILITY_META]?.label ?? d).join(', ')
+            {[...new Set([
+              ...courseCapabilityCategories(summary.course_type ?? '', null) as string[],
+              ...summary.disciplines,
+            ])].map((d) => CAPABILITY_META[d as keyof typeof CAPABILITY_META]?.label ?? d).join(', ')
               || 'no expertise tag'}
           </p>
         </div>
@@ -173,8 +184,8 @@ export default function TemplateRow(props: Props) {
               ))}
             </select>
             <p className="text-xs text-zinc-500 mt-1">
-              Its courses are offered this template first. Custom courses match on disciplines instead — they all
-              share one slug, so the boxes below are what reaches them.
+              Its courses are offered this template first, and its discipline is ticked below for you — which is what
+              reaches a custom course, since those have no offering of their own.
             </p>
           </div>
           {props.shelf === 'gear' && (
@@ -193,23 +204,40 @@ export default function TemplateRow(props: Props) {
           <div className="sm:col-span-2">
             <label className={label}>Disciplines — how a custom course finds this</label>
             <div className="flex flex-wrap gap-x-4 gap-y-1.5 p-2 bg-zinc-800/50 border border-zinc-700 rounded">
-              {CAPABILITY_ORDER.map((c) => (
-                <label key={c} className="flex items-center gap-1.5 text-xs text-zinc-300 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    className="accent-red-600"
-                    checked={form.disciplines.includes(c)}
-                    onChange={() => setForm({
-                      ...form,
-                      disciplines: form.disciplines.includes(c)
-                        ? form.disciplines.filter((x) => x !== c)
-                        : [...form.disciplines, c],
-                    })}
-                  />
-                  {CAPABILITY_META[c].label}
-                </label>
-              ))}
+              {CAPABILITY_ORDER.map((c) => {
+                const fromOffering = implied.includes(c)
+                return (
+                  <label
+                    key={c}
+                    title={fromOffering ? `Comes with the ${impliedFrom} offering` : undefined}
+                    className={`flex items-center gap-1.5 text-xs ${
+                      fromOffering ? 'text-zinc-500 cursor-default' : 'text-zinc-300 cursor-pointer'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      className="accent-red-600"
+                      checked={fromOffering || form.disciplines.includes(c)}
+                      disabled={fromOffering}
+                      onChange={() => setForm({
+                        ...form,
+                        disciplines: form.disciplines.includes(c)
+                          ? form.disciplines.filter((x) => x !== c)
+                          : [...form.disciplines, c],
+                      })}
+                    />
+                    {CAPABILITY_META[c].label}
+                  </label>
+                )
+              })}
             </div>
+            <p className="text-xs text-zinc-500 mt-1">
+              {implied.length > 0
+                ? `${implied.map((c) => CAPABILITY_META[c as keyof typeof CAPABILITY_META].label).join(' and ')} `
+                  + `${implied.length === 1 ? 'comes' : 'come'} with the ${impliedFrom} offering and can't be unticked here. `
+                  + 'Tick another only if this template also suits a course of that kind.'
+                : 'With no offering set, these are the only thing a course matches on.'}
+            </p>
           </div>
           <div className="sm:col-span-2">
             <label className={label}>Topic tags (comma separated)</label>

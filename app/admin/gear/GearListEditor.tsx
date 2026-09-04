@@ -6,6 +6,7 @@ import { useSteadyRefresh } from '@/components/useSteadyRefresh'
 import CategorySelect, { NEW_TYPE } from './CategorySelect'
 import PdfLink from '@/components/PdfLink'
 import { templateHref, templateShelfHref } from '@/lib/library'
+import NewTabIcon from '@/components/NewTabIcon'
 import CloseButton from '@/components/CloseButton'
 import TrashIcon from '@/components/TrashIcon'
 import {
@@ -1618,8 +1619,12 @@ function SaveToShelf({
       {saved && (
         <span className="text-zinc-500">
           Saved as &ldquo;{saved.name}&rdquo; —{' '}
-          <Link href={templateHref('gear', saved.id)} className="text-zinc-300 hover:text-white underline underline-offset-2">
-            open it on the shelf
+          <Link
+            href={templateHref('gear', saved.id)}
+            target="_blank"
+            className="text-zinc-300 hover:text-white underline underline-offset-2 inline-flex items-center gap-1"
+          >
+            open it on the shelf<NewTabIcon />
           </Link>
         </span>
       )}
@@ -1654,9 +1659,10 @@ function SaveToShelf({
 
       <Link
         href={templateShelfHref('gear')}
-        className="text-zinc-600 hover:text-zinc-300 transition-colors ml-auto"
+        target="_blank"
+        className="text-zinc-600 hover:text-zinc-300 transition-colors ml-auto inline-flex items-center gap-1"
       >
-        Manage templates →
+        Manage templates<NewTabIcon />
       </Link>
     </div>
   )

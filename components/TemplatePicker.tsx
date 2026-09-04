@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { templateHref, templateShelfHref, type TemplateShelf } from '@/lib/library'
+import NewTabIcon from '@/components/NewTabIcon'
 
 /** A template as a picker needs it: enough to tell two apart without opening
     either — what it's for, how big it is, and what is actually in it. */
@@ -64,8 +65,12 @@ export default function TemplatePicker({
     return (
       <p className={`text-xs text-zinc-600 ${className ?? ''}`}>
         Nothing saved to the shelf yet.{' '}
-        <Link href={templateShelfHref(shelf)} className="text-zinc-400 hover:text-white underline underline-offset-2">
-          The library
+        <Link
+          href={templateShelfHref(shelf)}
+          target="_blank"
+          className="text-zinc-400 hover:text-white underline underline-offset-2 inline-flex items-center gap-1"
+        >
+          The library<NewTabIcon />
         </Link>{' '}
         is where they live once you save one.
       </p>
@@ -82,8 +87,14 @@ export default function TemplatePicker({
           placeholder="Search templates…"
           className="ml-auto w-40 bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-xs focus:outline-none focus:border-zinc-500"
         />
-        <Link href={templateShelfHref(shelf)} className="text-xs text-zinc-500 hover:text-zinc-200 transition-colors">
-          Manage templates →
+        {/* A new tab, because you are usually mid-build on this course and a
+            trip to the shelf shouldn't cost you the page. */}
+        <Link
+          href={templateShelfHref(shelf)}
+          target="_blank"
+          className="text-xs text-zinc-500 hover:text-zinc-200 transition-colors inline-flex items-center gap-1"
+        >
+          Manage templates<NewTabIcon />
         </Link>
       </div>
 
@@ -113,9 +124,10 @@ export default function TemplatePicker({
               </button>
               <Link
                 href={templateHref(shelf, t.id)}
-                className="text-[11px] text-zinc-500 hover:text-zinc-200 transition-colors shrink-0"
+                target="_blank"
+                className="text-[11px] text-zinc-500 hover:text-zinc-200 transition-colors shrink-0 inline-flex items-center gap-1"
               >
-                Edit
+                Edit<NewTabIcon />
               </Link>
               <button
                 onClick={() => onUse(t)}
