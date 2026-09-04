@@ -34,6 +34,10 @@ export const categoryMeta: Record<ServiceCategory, { label: string; description:
   },
 }
 
+// Adding, renaming or retiring an offering here is half the change: every slug
+// must also sit under a discipline in CATEGORY_COURSE_TYPES (lib/capabilities),
+// which is what decides who can staff the course and which shelf templates it
+// is offered. tests/offering-discipline-map.test.ts fails if the two drift.
 export const services: Service[] = [
 
   // Military & Tactical
