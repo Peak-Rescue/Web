@@ -1,7 +1,6 @@
 import React, { Suspense } from 'react'
 import { after } from 'next/server'
 import { notFound } from 'next/navigation'
-import Link from 'next/link'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { moduleAudience, templateRelevance, materialKind, KIND_META, type LibraryKind } from '@/lib/library'
 import { regionLabel } from '@/lib/regions'
@@ -36,6 +35,7 @@ import { loadTasksWithDocs } from '@/lib/course-tasks'
 import { LinkIcon, PaperclipIcon } from '@/components/TaskIcons'
 import { AudiencePills } from '@/components/AudiencePills'
 import CourseNav, { NavPanel } from './CourseNav'
+import ViewAsMenu from './ViewAsMenu'
 import { albumsEnabled } from '@/lib/drive-albums'
 import CourseUpdates, { type CourseUpdate, type NotifyCounts } from './CourseUpdates'
 import CourseNotes from './CourseNotes'
@@ -1201,37 +1201,7 @@ export default async function CourseView({
                 />
               )}
               {isAdmin && (
-                /* Which role you are reading as, in the bar rather than up by
-                   the title: the title scrolls away, and you find out you are
-                   in a preview at the moment a control is missing, which is
-                   halfway down. */
-                <div className="flex items-center gap-0.5 text-[11px]">
-                  {([
-                    ['', 'Admin', 'Everything, unfiltered'],
-                    ['instructor', 'Instructor', 'What an assigned instructor sees (uses your real role on this course)'],
-                    ['student', 'Student', 'What an enrolled student sees'],
-                  ] as const).map(([key, label, hint]) => (
-                    <Link
-                      key={label}
-                      href={key ? `/portal/${id}?as=${key}` : `/portal/${id}`}
-                      // This bar is sticky, so all three links sit in the
-                      // viewport for the whole visit and get prefetched —
-                      // three more full renders of the most expensive page we
-                      // have, kicked off by the page itself. Switching preview
-                      // roles is rare enough to pay for its own navigation.
-                      prefetch={false}
-                      title={hint}
-                      className={`px-1.5 py-1 rounded font-medium transition-colors ${
-                        (viewAs ?? '') === key
-                          ? 'bg-zinc-800 text-white'
-                          : 'text-zinc-500 hover:text-zinc-300'
-                      }`}
-                    >
-                      <span className="hidden sm:inline">{label}</span>
-                      <span className="sm:hidden">{label[0]}</span>
-                    </Link>
-                  ))}
-                </div>
+                <ViewAsMenu instanceId={id} viewAs={viewAs ?? ''} mode={showAsAdmin ? mode : undefined} />
               )}
             </>
           ) : null}
