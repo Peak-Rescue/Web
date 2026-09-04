@@ -1,7 +1,6 @@
 import React from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
-import { AudiencePills } from '@/components/AudiencePills'
 import WaiverDetach from '@/components/WaiverDetach'
 
 // Presentational shell for the portal page. Every top-level block on a course
@@ -158,10 +157,11 @@ export function Section({
           <h2 className="text-lg font-semibold leading-tight">{title ?? SECTION_LABEL[id]}</h2>
           {blurb && <p className="text-xs text-zinc-500 mt-0.5">{blurb}</p>}
         </div>
-        {/* The same pills the library and the course editor use, so who can
-            see a block reads identically wherever you meet it. */}
-        {team && <AudiencePills audience="internal" className="ml-auto shrink-0" />}
-        {action && <div className={team ? 'shrink-0' : 'ml-auto shrink-0'}>{action}</div>}
+        {/* No pill: a team block is already amber-ticked and amber-iconed, and
+            the section only renders for people who can see it. The pill is
+            kept for the rows *inside* a block, where one item held back among
+            shared ones is genuinely worth marking. */}
+        {action && <div className="ml-auto shrink-0">{action}</div>}
       </div>
       {children}
     </section>

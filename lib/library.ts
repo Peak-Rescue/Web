@@ -16,7 +16,7 @@ export type LibraryBucket = 'teaching' | 'resource' | 'map' | 'instructor'
 // course itself. Mixing them is how one course's travel plans reached another.
 export const BUCKET_META: Record<LibraryBucket, { label: string; hint: string }> = {
   teaching:   { label: 'Teaching material', hint: 'How-tos: technique videos, walkthroughs, skill sheets' },
-  resource:   { label: 'Resources',         hint: 'External reference: manuals, tech notes, standards' },
+  resource:   { label: 'Reference',         hint: 'Manuals, tech notes, standards, med plans' },
   map:        { label: 'Maps',              hint: 'CalTopo, SARTopo and other maps' },
   instructor: { label: 'Instructor material', hint: 'Guides, outlines and teaching notes — never shown to students' },
 }
@@ -170,6 +170,32 @@ export const KIND_META: Record<LibraryKind, string> = {
   form: 'Form / template',
   media: 'Photos / media',
   reference: 'Reference',
+}
+
+/**
+ * What a piece of material *is*, for the icon in front of it: something you
+ * watch, something you read, or a page you open.
+ *
+ * Worked out from the link rather than from a stored type. `course_items.type`
+ * was the field for this and is null on every row there has ever been, so the
+ * video and document icons have never once rendered — everything has drawn the
+ * link icon since the day they were written.
+ *
+ * The kind on a library item isn't enough on its own either: a good half of
+ * what's filed as `reference` is a YouTube short, and another chunk is a Drive
+ * PDF. The link is the one thing that can't be wrong about itself.
+ */
+export function materialKind(item: {
+  url?: string | null
+  drive_file_id?: string | null
+  kind?: string | null
+}): 'video' | 'doc' | 'link' {
+  const url = item.url ?? ''
+  if (/youtube\.com|youtu\.be|vimeo\.com/i.test(url)) return 'video'
+  if (item.drive_file_id || /\.pdf($|\?)/i.test(url) || /drive\.google\.com|docs\.google\.com/i.test(url)) return 'doc'
+  // Nothing in the link says what it is, so fall back to what it was filed as.
+  if (item.kind === 'video') return 'video'
+  return 'link'
 }
 
 /** One way into a map: a URL, what you can do with it, and who may have it. */

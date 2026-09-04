@@ -2,7 +2,7 @@ import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { updateInstanceDetails, updateInstanceNotes, updateInstanceDates, addOffDay, removeOffDay, addModule, deleteModule, addItem, deleteItem, removeInstructor, removeEnrollment, updateCourseLogistics, setModuleAudience, setItemAudience } from '../actions'
+import { updateInstanceDetails, updateInstanceNotes, updateInstanceDates, addOffDay, removeOffDay, addModule, deleteModule, addItem, deleteItem, removeInstructor, removeEnrollment, setModuleAudience, setItemAudience } from '../actions'
 import { CourseTypeSelect } from '../CourseTypeSelect'
 import InstructorAssign from '../InstructorAssign'
 import StaffingInterest from '../StaffingInterest'
@@ -433,7 +433,6 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
     }))
     .sort((a, b) => Number(Boolean(b.relevance)) - Number(Boolean(a.relevance)))
 
-  const updateLogisticsWithId = updateCourseLogistics.bind(null, id)
 
   // Instructor-only sections sit at the top for staff — that's where they were
   // in Classroom, and it's what you want to see first when you open a course
@@ -541,7 +540,6 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
           <AutoSaveForm action={updateNotesWithId} className="bg-zinc-900 rounded-lg border border-zinc-800 p-6">
             <label className="flex items-center gap-1.5 text-xs text-zinc-400 mb-1">
               Notes
-              <AudiencePills audience="internal" />
             </label>
             {/* field-sizing auto-grows with content; rows is the fallback for
                 browsers without it (sized to the saved note), drag always works. */}
@@ -579,17 +577,6 @@ export default async function CourseInstancePage({ params }: { params: Promise<{
           <p className="text-xs text-zinc-500 mb-3">
             Shown to everyone on the course.
           </p>
-          <AutoSaveForm action={updateLogisticsWithId} className="p-6 bg-zinc-900 border border-zinc-800 rounded-lg">
-            <label className="block text-xs text-zinc-400 mb-1">Welcome / what to expect</label>
-            <textarea
-              name="intro"
-              rows={3}
-              defaultValue={inst.intro ?? ''}
-              placeholder="Short intro to the course — what they'll cover, how it runs, anything to know before arriving."
-              className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm resize-y focus:outline-none focus:border-zinc-500"
-            />
-          </AutoSaveForm>
-
           {/* Not part of the autosaving form above. Where and when to meet is
               news, and news is sent deliberately — the same control the course
               page carries, so setting it here or from the trailhead is the

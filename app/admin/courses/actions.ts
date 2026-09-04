@@ -705,35 +705,6 @@ export async function addLibraryItems(instanceId: string, moduleId: string, item
   revalidatePath(`/portal/${instanceId}`)
 }
 
-// Per-delivery logistics — the welcome, and once the meeting point and time.
-// Participant facing by definition, and the one part of course content that
-// must be rewritten every delivery rather than pulled from the library.
-//
-// Only the fields the form actually submitted are written. Meeting point and
-// time moved out to their own control, and blanket-writing every column would
-// have had a save of the welcome text quietly null the meeting point — on the
-// morning of, on a course where that is the one thing nobody can guess.
-export async function updateCourseLogistics(id: string, formData: FormData) {
-  // The welcome is delivery content — it is what a student reads first, and it
-  // is written by whoever is running the course. Same gate as the notes and
-  // the schedule beside it.
-  const { requireCourseStaff } = await import('@/lib/course-access')
-  await requireCourseStaff(id)
-  const patch: Record<string, string | null> = {}
-  for (const field of ['intro', 'meeting_point', 'meeting_time']) {
-    if (!formData.has(field)) continue
-    patch[field] = ((formData.get(field) as string) || '').trim() || null
-  }
-  if (Object.keys(patch).length === 0) return
-
-  const { error } = await createAdminClient()
-    .from('course_instances')
-    .update(patch)
-    .eq('id', id)
-  if (error) throw new Error(error.message)
-  revalidatePath(`/admin/courses/${id}`)
-  revalidatePath(`/portal/${id}`)
-}
 
 // Library material for a course's pickers, fetched on demand. Loading ~700
 // items on every course-page render cost about half a second whether or not

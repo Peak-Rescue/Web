@@ -3,13 +3,12 @@ import { after } from 'next/server'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { moduleAudience, templateRelevance, KIND_META, type LibraryKind } from '@/lib/library'
+import { moduleAudience, templateRelevance, materialKind, KIND_META, type LibraryKind } from '@/lib/library'
 import { regionLabel } from '@/lib/regions'
 import CourseResourcesSection, { type CourseResource } from '@/app/admin/courses/CourseResourcesSection'
 import CourseMapsSection, { type CourseMap } from '@/app/admin/courses/CourseMapsSection'
 import CourseAlbumSection from './CourseAlbumSection'
 import CourseFilesSection, { type CourseFile } from '@/app/admin/courses/CourseFilesSection'
-import CourseIntroFields from './CourseIntroFields'
 import CourseMode from './CourseMode'
 import CourseCurriculumEditor, { type CurriculumModule } from '@/app/admin/courses/CourseCurriculumEditor'
 import CourseGear from '@/app/admin/courses/CourseGear'
@@ -1027,10 +1026,24 @@ export default async function CourseView({
   // course*, which the enrollment already says.
   const waiver = await waiverPromise
 
+  // Once any day carries its own morning, the day is where the morning lives
+  // and the course-level block is a second answer to one question. It steps
+  // aside rather than being deleted — nothing moves, and a course that never
+  // sets a day keeps the block it has always had.
+  const daysCarryMeeting = schedDays.some(
+    (d) => d.meeting_time || d.meeting_point || d.meeting_point_id
+  )
+
   // The meeting block lives in here, so a course with no posts yet still has
   // an Updates section for a student to find the meeting point in.
+  //
+  // Unless the days have taken the morning over — then that block steps aside
+  // (see `daysCarryMeeting` above) and this was justifying a section with the
+  // thing that had left it. A student on a course with a day-level meeting
+  // point and nothing posted got an Updates tab reading "nothing yet".
   const hasUpdates = canPostUpdates || courseUpdates.length > 0 ||
-    Boolean(meeting.meetingPoint || meeting.meetingTime || meeting.links.length || meeting.files.length)
+    (!daysCarryMeeting &&
+      Boolean(meeting.meetingPoint || meeting.meetingTime || meeting.links.length || meeting.files.length))
   const hasDocuments = showTasks
   // Shown to staff even when empty: "nobody has enrolled yet" is the answer an
   // instructor came for, and a missing section reads as a missing feature. The
@@ -1044,7 +1057,7 @@ export default async function CourseView({
 
   // Who is on this course, and what it is. Staff get it regardless: an empty
   // one is where they fill it in.
-  const hasDetails = Boolean(inst.intro || (instructors ?? []).length) || showTasks
+  const hasDetails = (instructors ?? []).length > 0 || showTasks
   // Day one decides whether the meeting block leads the updates or folds to a
   // line under them.
   const meetingOver = meetingDayPassed(meeting.meetingDate, inst.starts_at as string | null)
@@ -1073,14 +1086,6 @@ export default async function CourseView({
   const todayISO = todayIn(courseZone(inst.region))
   const tomorrowISO = dayShift(todayISO, 1)
   const isOpenDay = (d: string | null) => d === todayISO || d === tomorrowISO
-
-  // Once any day carries its own morning, the day is where the morning lives
-  // and the course-level block is a second answer to one question. It steps
-  // aside rather than being deleted — nothing moves, and a course that never
-  // sets a day keeps the block it has always had.
-  const daysCarryMeeting = schedDays.some(
-    (d) => d.meeting_time || d.meeting_point || d.meeting_point_id
-  )
 
 
   // An admin sees the section whether or not a waiver is set — choosing one
@@ -1359,7 +1364,7 @@ export default async function CourseView({
               )}
               {hasNotes && (
                 <div>
-                  <SubHead title="Notes" badge={<AudiencePills audience="internal" />} />
+                  <SubHead title="Notes" />
                   <CourseNotes instanceId={id} notes={inst.notes} canEdit={showTasks} />
                 </div>
               )}
@@ -1367,7 +1372,7 @@ export default async function CourseView({
                   what is left to do below. */}
               {hasTasks && (
                 <div>
-                  <SubHead title="Tasks" badge={<AudiencePills audience="internal" />} />
+                  <SubHead title="Tasks" />
                   <CourseTasksPanel
                     instanceId={id}
                     tasks={tasks}
@@ -1378,18 +1383,6 @@ export default async function CourseView({
                   />
                 </div>
               )}
-              <EditInPlace
-                label="Edit welcome"
-                title="Welcome"
-                editor={showTasks ? <CourseIntroFields instanceId={id} intro={inst.intro as string | null} /> : null}
-              >
-              {!inst.intro && showTasks && (
-                <p className="text-xs text-zinc-600">No welcome yet.</p>
-              )}
-              {inst.intro && (
-                <p className="text-sm text-zinc-300 whitespace-pre-line">{inst.intro}</p>
-              )}
-              </EditInPlace>
             </div>
           </Section>
         )}
@@ -1463,7 +1456,6 @@ export default async function CourseView({
                   ? `${enrolledCount} of ${inst.max_students} places taken`
                   : `${enrolledCount} enrolled`
               }
-              badge={<AudiencePills audience="internal" />}
               editor={
                 showAsAdmin ? (
                   <CourseStudentsEditor
@@ -1580,7 +1572,7 @@ export default async function CourseView({
             />
             {showTasks && (
               <div className="mt-6 pt-6 border-t border-zinc-800">
-                <SubHead title="Emails" badge={<AudiencePills audience="internal" />} />
+                <SubHead title="Emails" />
                 <CourseMessages
                   instanceId={id}
                   messages={courseMessages}
@@ -2371,7 +2363,7 @@ export default async function CourseView({
                         // be held back to instructors inside a shared section.
                         const libRaw = item.library_items as unknown
                         const lib = (Array.isArray(libRaw) ? libRaw[0] : libRaw) as
-                          { id: string; title: string; url: string | null; audience: string; drive_file_id?: string | null } | null
+                          { id: string; title: string; url: string | null; audience: string; kind?: string | null; drive_file_id?: string | null } | null
                         const effective = item.audience ?? lib?.audience ?? 'shared'
                         if (!showTasks && effective === 'internal') return null
                         const title = lib?.title ?? item.title
@@ -2389,7 +2381,11 @@ export default async function CourseView({
                             rel="noreferrer"
                             className="flex items-start gap-3 px-4 py-3 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded-lg transition-colors group"
                           >
-                            {ITEM_ICON[(item.type ?? 'link') as keyof typeof ITEM_ICON]}
+                            {/* What it is, read off the link. `item.type` was
+                                meant to say, and is null on every row that has
+                                ever existed, so these three icons shipped and
+                                never rendered anything but the last one. */}
+                            {ITEM_ICON[materialKind({ url: lib?.url ?? item.url, drive_file_id: lib?.drive_file_id, kind: lib?.kind })]}
                             <div className="min-w-0">
                               <div className="text-sm font-medium group-hover:text-pr-red-light transition-colors">{title}</div>
                               {item.description && <div className="text-xs text-zinc-500 mt-0.5">{item.description}</div>}

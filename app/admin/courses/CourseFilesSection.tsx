@@ -14,7 +14,6 @@ import {
 import { LinkIcon, PencilIcon } from '@/components/TaskIcons'
 import UploadNameDialog from '@/components/UploadNameDialog'
 import AddLinkDialog from '@/components/AddLinkDialog'
-import { AudiencePills } from '@/components/AudiencePills'
 import InfoHint from '@/components/InfoHint'
 import TrashIcon from '@/components/TrashIcon'
 
@@ -165,12 +164,6 @@ export default function CourseFilesSection({
           <div className="flex items-center gap-2 mb-1">
             <h3 className="text-sm font-semibold text-zinc-300">Files</h3>
             <InfoHint text="A document students need goes on the Resources shelf below." />
-            {/* The pill rather than prose, because every other block on this
-                tab carries one: a lone Instructors pill with no Students pill
-                beside it reads as a fact about this block, where the same
-                thing said in words reads as a note someone left. It isn't a
-                toggle here — there's no shared state to reach. */}
-            <AudiencePills audience="internal" />
           </div>
           <p className="text-xs text-zinc-500">Documents and task attachments.</p>
         </div>
