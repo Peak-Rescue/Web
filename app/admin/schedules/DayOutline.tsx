@@ -4,7 +4,12 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { replaceDayOutline, touchDay } from './actions'
 import type { ScheduleBlock } from './ScheduleEditor'
 
-type Row = { key: string; title: string; time: string; depth: 0 | 1 }
+// `where` is the part of the day this line happens in — "Classroom" before
+// lunch, "In canyon" after. It was on the blocks and shown on the course page
+// from the first import, but no editor ever held it, so every save silently
+// dropped it: the outline is written back by deleting the day's lines and
+// re-inserting them, and what the row doesn't carry doesn't come back.
+type Row = { key: string; title: string; time: string; where: string; depth: 0 | 1 }
 type Job = { rows: Row[]; quiet: boolean }
 
 let seq = 0
@@ -72,7 +77,7 @@ export default function DayOutline({
         try {
           await replaceDayOutline(
             dayId,
-            job.rows.map((r) => ({ title: r.title, timeLabel: r.time, depth: r.depth })),
+            job.rows.map((r) => ({ title: r.title, timeLabel: r.time, location: r.where, depth: r.depth })),
             { quiet: job.quiet }
           )
           owed.current = job.quiet
@@ -250,7 +255,7 @@ export default function DayOutline({
       }
       const before = row.title.slice(0, caret)
       const after = row.title.slice(el.selectionEnd ?? caret)
-      const created: Row = { key: newKey(), title: after, time: '', depth: row.depth }
+      const created: Row = { key: newKey(), title: after, time: '', where: '', depth: row.depth }
       const next = [...rows]
       next[i] = { ...row, title: before }
       next.splice(i + 1, 0, created)
@@ -369,6 +374,7 @@ export default function DayOutline({
       key: newKey(),
       title: line.replace(/^[\s]*[-*•○·]?\s*/, '').trim().slice(0, 300),
       time: '',
+      where: '',
       depth: (/^(\s{2,}|\t|\s*[○·])/.test(line) ? 1 : 0) as 0 | 1,
     }))
     if (!parsed.length) return
@@ -417,7 +423,7 @@ export default function DayOutline({
             focusNext.current = { key: row.key, caret: 0 }
             setSel({ a: from, b: i })
           }}
-          className={`flex items-center gap-1 rounded ${
+          className={`group/row flex items-center gap-1 rounded ${
             sel && i >= lo && i <= hi ? 'bg-zinc-700/50' : ''
           }`}
         >
@@ -452,6 +458,23 @@ export default function DayOutline({
             placeholder={i === 0 && rows.length === 1 ? 'Type a topic — Tab indents, Enter starts the next line' : ''}
             className={`flex-1 min-w-0 ${row.depth === 1 ? 'text-[13px] text-zinc-300' : 'text-sm'} ${input}`}
           />
+          {/* Where this line happens, when it isn't simply where the day is.
+              Kept out of the tab order like the time at the other end — the
+              outline is typed, not tabbed through — and out of sight until it
+              holds something or the row is hovered, because most lines have
+              nothing to say here. */}
+          <input
+            value={row.where}
+            onChange={(e) => edit(rows.map((r, n) => (n === i ? { ...r, where: e.target.value } : r)))}
+            tabIndex={-1}
+            placeholder="where"
+            title="Optional — where this part of the day happens, if it differs from the day"
+            className={`w-24 shrink-0 text-[11px] text-right ${input} ${
+              row.where
+                ? 'text-zinc-500'
+                : 'text-zinc-500 placeholder:text-zinc-800 opacity-0 focus:opacity-100 group-hover/row:opacity-100'
+            }`}
+          />
         </div>
       ))}
       <div className="flex items-center justify-between pl-[4.5rem] pt-1">
@@ -468,7 +491,7 @@ export default function DayOutline({
   )
 }
 
-const blankRow = (): Row => ({ key: newKey(), title: '', time: '', depth: 0 })
+const blankRow = (): Row => ({ key: newKey(), title: '', time: '', where: '', depth: 0 })
 
 // Flatten the stored tree back to lines. A day with nothing on it still gets
 // one empty line, so there's always somewhere to start typing.
@@ -476,9 +499,9 @@ function fromBlocks(blocks: ScheduleBlock[]): Row[] {
   const sorted = [...blocks].sort((a, b) => a.sort_order - b.sort_order)
   const rows: Row[] = []
   for (const t of sorted.filter((b) => !b.parent_id)) {
-    rows.push({ key: newKey(), title: t.title, time: t.time_label ?? '', depth: 0 })
+    rows.push({ key: newKey(), title: t.title, time: t.time_label ?? '', where: t.location ?? '', depth: 0 })
     for (const c of sorted.filter((b) => b.parent_id === t.id)) {
-      rows.push({ key: newKey(), title: c.title, time: '', depth: 1 })
+      rows.push({ key: newKey(), title: c.title, time: '', where: c.location ?? '', depth: 1 })
     }
   }
   return rows.length ? rows : [blankRow()]

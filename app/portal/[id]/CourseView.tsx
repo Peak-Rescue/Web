@@ -1720,7 +1720,7 @@ export default async function CourseView({
                       {!/^day\s*\d+\b/i.test(d.title.trim()) && (
                         <span className="text-[11px] font-mono text-zinc-600 shrink-0">Day {di + 1}</span>
                       )}
-                      <h3 className="font-medium text-sm">{d.title}</h3>
+                      <h3 className="font-semibold text-[15px] text-zinc-100 shrink-0">{d.title}</h3>
                       {/* Which calendar day this one is, worked out from the
                           course's start and the off days painted on it — so a
                           rest day in the middle pushes everything after it
@@ -1730,8 +1730,11 @@ export default async function CourseView({
                           of the course this is, is what someone is looking
                           for; the date is the context they check it against,
                           and a row that opened with the date pushed the name
-                          it belongs to out to second place. Same weight as the
-                          day number for the same reason.
+                          it belongs to out to second place. And it is the
+                          quietest thing in the row — smaller, dimmer, and in
+                          caps — so the eye lands on the day and the place it
+                          sits between, and reads the date only when it goes
+                          looking for it.
 
                           Read off the position, never stored: the same day row
                           is what a template is made of, and a template day
@@ -1742,7 +1745,7 @@ export default async function CourseView({
                           A schedule longer than the course it is on runs out
                           of dates; those days simply show none. */}
                       {dayDate && (
-                        <span className="text-[11px] font-mono text-zinc-600 shrink-0">
+                        <span className="text-[10px] font-mono tabular-nums uppercase tracking-wide text-zinc-500 shrink-0">
                           {fmtDay(dayDate)}
                         </span>
                       )}
@@ -1750,7 +1753,7 @@ export default async function CourseView({
                           carrying — it is what tells one past day from
                           another. */}
                       {d.location && (
-                        <span className="text-xs text-zinc-600 truncate group-open/day:hidden">
+                        <span className="text-sm text-zinc-300 truncate group-open/day:hidden">
                           {d.location}
                         </span>
                       )}

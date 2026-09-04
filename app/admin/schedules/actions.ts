@@ -418,7 +418,7 @@ export async function saveScheduleIntoTemplate(sourceId: string, templateId: str
 // simpler and safer than diffing rows that were reordered mid-sentence.
 export async function replaceDayOutline(
   dayId: string,
-  rows: { title: string; timeLabel?: string | null; depth: number }[],
+  rows: { title: string; timeLabel?: string | null; location?: string | null; depth: number }[],
   // Mid-sentence saves stay quiet. Revalidating tells the router the course
   // page is stale, and re-rendering that page means re-reading its gear
   // catalog, roster and staffing — a second of work nobody asked for while
@@ -437,6 +437,9 @@ export async function replaceDayOutline(
     .map((r) => ({
       title: r.title.trim().slice(0, 300),
       time: r.timeLabel?.trim().slice(0, 60) || null,
+      // Carried through the rewrite. The day is deleted and re-inserted on
+      // every save, so a column the caller doesn't send is a column erased.
+      location: r.location?.trim().slice(0, 120) || null,
       depth: r.depth > 0 ? 1 : 0,
     }))
     .filter((r) => r.title)
@@ -460,7 +463,8 @@ export async function replaceDayOutline(
     const { data: inserted, error } = await admin
       .from('schedule_blocks')
       .insert(topics.map((t) => ({
-        day_id: dayId, parent_id: null, title: t.row.title, time_label: t.row.time, sort_order: t.order,
+        day_id: dayId, parent_id: null, title: t.row.title, time_label: t.row.time,
+        location: t.row.location, sort_order: t.order,
       })))
       .select('id, sort_order')
     if (error) throw new Error(error.message)
@@ -474,6 +478,7 @@ export async function replaceDayOutline(
           parent_id: byOrder.get(k.parentOrder) ?? null,
           title: k.row.title,
           time_label: k.row.time,
+          location: k.row.location,
           sort_order: k.order,
         }))
       )
