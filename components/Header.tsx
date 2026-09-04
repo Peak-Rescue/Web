@@ -83,6 +83,14 @@ export default function Header() {
             </div>
           </Link>
 
+          {/* Where a page can put its own controls on a phone. The row is a
+              logo and a hamburger with a third of the width empty between
+              them, and it is already stuck to the top — so the course page
+              puts Build/Teach and the preview chip here rather than spending a
+              row of its own on them. Empty on every other page, and on every
+              screen wide enough for the nav below. */}
+          <div id="page-header-slot" className="md:hidden flex items-center gap-2 min-w-0" />
+
           {/* Desktop nav */}
           <nav className="hidden md:flex items-center gap-1">
             {navLinks.map((link) => {

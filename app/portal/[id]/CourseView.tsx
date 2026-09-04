@@ -1119,8 +1119,11 @@ export default async function CourseView({
   )
   const mode: 'build' | 'teach' = viewer.mode ?? (runningNow ? 'teach' : 'build')
 
+  // A door has to lead somewhere. While these were jump links a mismatch here
+  // was a link to an anchor that wasn't on the page — bad, but survivable.
+  // As tabs it is a blank panel, and Details is the one you land on first.
   const present: Record<string, boolean> = {
-    details: true,
+    details: hasDetails,
     prep: showGear || hasCurriculum,
     schedule: showSchedule,
     updates: hasUpdates,
@@ -1657,7 +1660,7 @@ export default async function CourseView({
             them one section rather than two doors. */}
         {(showGear || hasCurriculum) && (
           <NavPanel id="prep">
-          <Section id="prep">
+          <Section id="prep" blurb="Pre-course material">
             {/* Folded, and first. Nineteen rows you read once while packing
                 and never again: open by default it buries everything under it,
                 gone altogether it is the thing people ask for. A native
@@ -1667,7 +1670,6 @@ export default async function CourseView({
                 <summary className="cursor-pointer list-none flex items-baseline gap-2 px-4 py-3">
                   <span aria-hidden className="text-zinc-600 shrink-0 text-[10px] transition-transform group-open/gear:rotate-90">▸</span>
                   <h3 className="text-sm font-semibold text-zinc-200">Gear list</h3>
-                  {gearList?.name && <span className="text-xs text-zinc-500 truncate">{gearList.name}</span>}
                   {gearList && (
                     <span className="ml-auto shrink-0">
                       <PdfLink href={`/api/gear-lists/${gearList.id}/pdf`} />

@@ -1,5 +1,6 @@
 'use client'
 
+import { createPortal } from 'react-dom'
 import { createContext, useContext, useSyncExternalStore } from 'react'
 
 // The course page's four doors.
@@ -32,6 +33,23 @@ function subscribeToDoor(onChange: () => void) {
 function doorChanged() { for (const l of doorListeners) l() }
 function readDoor(key: string) {
   try { return localStorage.getItem(key) ?? '' } catch { return '' }
+}
+
+// Whether the bar has room for the controls beside the tabs. It does at a
+// desk, where four tabs use less than half of it; it does not on a phone,
+// where four tabs and their dots are most of 324px and the two controls would
+// squeeze them down to two-and-a-scroll — which is the crowding this whole
+// exercise was about.
+//
+// Read as a store rather than in an effect, and answered "wide" on the server:
+// the server has no viewport, so a guess either way would be a hydration
+// mismatch if it guessed wrong, and this way the phone moves them once on
+// first paint instead of re-rendering the page.
+const NARROW = '(max-width: 767px)'
+function subscribeToWidth(onChange: () => void) {
+  const mq = window.matchMedia(NARROW)
+  mq.addEventListener('change', onChange)
+  return () => mq.removeEventListener('change', onChange)
 }
 
 export type NavSection = {
@@ -75,6 +93,17 @@ export default function CourseNav({
   // so a remembered door can stop existing between one visit and the next.
   const active = sections.some((s) => s.id === stored) ? stored : sections[0]?.id ?? ''
 
+  const narrow = useSyncExternalStore(
+    subscribeToWidth,
+    () => window.matchMedia(NARROW).matches,
+    () => false,
+  )
+  // On a phone they go up into the header's empty middle, which is stuck to
+  // the top already — so they stay reachable without costing this bar a row.
+  const slot = narrow && typeof document !== 'undefined'
+    ? document.getElementById('page-header-slot')
+    : null
+
   function pick(id: string) {
     try { localStorage.setItem(storageKey, id) } catch { /* private window */ }
     doorChanged()
@@ -114,9 +143,10 @@ export default function CourseNav({
               )
             })}
           </div>
-          {controls && <div className="shrink-0 flex items-center gap-2 pb-1">{controls}</div>}
+          {controls && !slot && <div className="shrink-0 flex items-center gap-2 pb-1">{controls}</div>}
         </div>
       </nav>
+      {controls && slot && createPortal(controls, slot)}
       {children}
     </ActiveSection.Provider>
   )
