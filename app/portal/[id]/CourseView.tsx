@@ -2006,6 +2006,8 @@ export default async function CourseView({
               </div>
             )}
             </EditInPlace>
+
+            <div className="mt-6 pt-6 border-t border-zinc-800">
             {!hasSchedule ? (
               <CreateSchedule
                 instanceId={id}
@@ -2449,6 +2451,10 @@ export default async function CourseView({
               </div>
             )}
 
+            </>
+            )}
+            </div>
+
             <div className="mt-6 pt-6 border-t border-zinc-800">
             {/* Reference for this place, edited where it is read. Save-to-
                 library stays admin-only inside the component's own actions —
@@ -2554,8 +2560,6 @@ export default async function CourseView({
             )}
             </EditInPlace>
             </div>
-            )}
-            </>
             )}
           </Section>
           </NavPanel>
