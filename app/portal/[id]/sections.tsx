@@ -61,6 +61,22 @@ export const SECTION_LABEL: Record<SectionKey, string> = {
   pricing: 'Pricing',
 }
 
+/**
+ * The space between one block and the next inside a section.
+ *
+ * A rule separates blocks and nothing else. The things *within* a block are
+ * separated by space, because a rule inside one says the same as a rule
+ * between two and the eye cannot tell which it is looking at — which is how
+ * "Course details" came to be cut in half while merging with the block below
+ * it.
+ *
+ * Three levels, and only three: a section is an icon, a title and a rule under
+ * it; a block is `text-sm font-semibold text-zinc-200` under one of these
+ * rules; a group inside a block is `text-[13px] font-medium text-zinc-300` on
+ * an indent rail. Anything that wants a fourth level wants to be a block.
+ */
+export const BETWEEN_BLOCKS = 'mt-6 pt-6 border-t border-zinc-800'
+
 export function Section({
   id,
   title,

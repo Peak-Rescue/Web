@@ -215,6 +215,7 @@ export default async function CoursePricingEditor({
   return (
     <div>
       <EstimateReviewBanner reviews={estimateReviews} admins={reviewAdmins} currentUserId={currentUserId} subject="estimate" />
+      <h3 className="text-sm font-semibold text-zinc-200 mb-2">Cost</h3>
       <div className="space-y-8">
         {estimatePanels.map((e) => (
           <EstimatePanel
@@ -242,8 +243,8 @@ export default async function CoursePricingEditor({
       </div>
       <EstimateReviewRequest instanceId={instanceId} reviews={estimateReviews} admins={reviewAdmins} currentUserId={currentUserId} subject="estimate" />
 
-      <div className="mt-10 pt-8 border-t border-zinc-800">
-      <h2 className="text-lg font-semibold mb-4">Quotes</h2>
+      <div className="mt-6 pt-6 border-t border-zinc-800">
+      <h3 className="text-sm font-semibold text-zinc-200 mb-2">Quotes</h3>
       <p className="text-xs text-zinc-500 mb-4">
         Marking a quote sent or accepted moves the course to Quoted or Confirmed.
       </p>

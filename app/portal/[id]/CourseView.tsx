@@ -57,7 +57,7 @@ import { loadStudentWaiver } from '@/lib/waiver-data'
 import { notifyCountsFrom } from '@/lib/course-notify'
 import { meetingDetails, meetingDayPassed, resolveDayMeeting } from '@/lib/meeting-details'
 import { ChipRow } from '@/components/LinkChip'
-import { Section, SubHead, InstructorCard, StudentCard, SECTION_LABEL, type SectionKey } from './sections'
+import { Section, SubHead, InstructorCard, StudentCard, BETWEEN_BLOCKS, SECTION_LABEL, type SectionKey } from './sections'
 import { PURPOSE_META, PURPOSE_ORDER, linkLabel, type CourseLink } from '@/lib/course-links'
 import { courseZone, todayIn } from '@/lib/course-clock'
 
@@ -1334,7 +1334,7 @@ export default async function CourseView({
                       out. Labelled once for the group — repeating "Contact"
                       over every card is noise once there are three of them. */}
                   {coursePocs.length > 0 && (
-                    <div className="mt-5 pt-4 border-t border-zinc-800/80">
+                    <div className="mt-5">
                       <p className="text-[11px] uppercase tracking-wide text-zinc-500 mb-2">
                         {coursePocs.length > 1 ? 'Contacts' : 'Contact'}
                       </p>
@@ -1371,7 +1371,7 @@ export default async function CourseView({
                 </EditInPlace>
               )}
               {hasNotes && (
-                <div>
+                <div className={BETWEEN_BLOCKS}>
                   <SubHead title="Notes" />
                   <CourseNotes instanceId={id} notes={inst.notes} canEdit={showTasks} />
                 </div>
@@ -1379,7 +1379,7 @@ export default async function CourseView({
               {/* The structured half of the same workspace. Freeform above,
                   what is left to do below. */}
               {hasTasks && (
-                <div>
+                <div className={BETWEEN_BLOCKS}>
                   <SubHead title="Tasks" />
                   <CourseTasksPanel
                     instanceId={id}
@@ -1392,7 +1392,7 @@ export default async function CourseView({
                 </div>
               )}
             {hasDocuments && (
-              <div className="mt-6 pt-6 border-t border-zinc-800">
+              <div className={BETWEEN_BLOCKS}>
                 {/* Every attachment on the course in one place — uploads,
                     pasted links, and documents that arrived on a task. Adding
                     one here is what makes "put the client's PDF somewhere" a
@@ -1433,7 +1433,7 @@ export default async function CourseView({
                   is part of knowing who is on the course, which is what this
                   section is for. */}
               {showStaffing && (
-                <div>
+                <div className={BETWEEN_BLOCKS}>
           {/* Who is running it. Assigning is the admin's call — an
               instructor is on the course, they don't decide who else is —
               so the crew reads for everyone and edits for one. */}
@@ -1492,7 +1492,7 @@ export default async function CourseView({
                   roster is not a place you go — it is one of the facts this
                   section exists to hold. */}
               {hasRoster && (
-                <div>
+                <div className={BETWEEN_BLOCKS}>
           {hasRoster && (
             <EditInPlace
               label="Edit students"
@@ -1556,13 +1556,13 @@ export default async function CourseView({
               )}
 
               {showTasks && unmatchedWaivers.length > 0 && (
-                <div className="mt-4 pt-4 border-t border-zinc-800">
+                <div className="mt-5">
                   <UnmatchedWaivers instanceId={id} unmatched={unmatchedWaivers} />
                 </div>
               )}
 
               {showTasks && (
-                <div className="mt-4 pt-4 border-t border-zinc-800">
+                <div className="mt-5">
                   <WaiverQrPanel
                     instanceId={id}
                     qr={waiverQr}
@@ -1581,7 +1581,7 @@ export default async function CourseView({
                   is left is the reader's own copy and the admin's choice of
                   template, which belong beside the people they are about. */}
               {showWaiver && (
-                <div>
+                <div className={BETWEEN_BLOCKS}>
                   <SubHead
                     title="Waiver"
                     note={waiver ? (waiver.signed ? 'Signed' : 'Read and sign before the course starts') : undefined}
@@ -1678,7 +1678,7 @@ export default async function CourseView({
               notifyCounts={notifyCounts}
             />
             {hasAlbum && (
-            <div className="mt-6 pt-6 border-t border-zinc-800">
+            <div className={BETWEEN_BLOCKS}>
               {/* No blurb. Who can do what is already on the screen: the add
                   button is there for everyone on the course, and the remove
                   mark only appears for the people who have it. */}
@@ -1703,7 +1703,7 @@ export default async function CourseView({
             </div>
             )}
             {showTasks && (
-              <div className="mt-6 pt-6 border-t border-zinc-800">
+              <div className={BETWEEN_BLOCKS}>
                 <SubHead title="Emails" />
                 <CourseMessages
                   instanceId={id}
@@ -1729,8 +1729,13 @@ export default async function CourseView({
                 gone altogether it is the thing people ask for. A native
                 <details> because the fold needs no state anyone else can see. */}
             {showGear && (
-              <details className="group/gear rounded-lg border border-zinc-800 bg-zinc-900/50">
-                <summary className="cursor-pointer list-none flex items-baseline gap-2 px-4 py-3">
+              // Its name sat inside a bordered card while the curriculum's sat
+              // above one as a heading, so the two halves of this section read
+              // as different kinds of thing. Same heading row for both now,
+              // with the caret the only difference — which is the one real
+              // difference between them.
+              <details className="group/gear">
+                <summary className="cursor-pointer list-none flex items-baseline gap-2 mb-2">
                   <span aria-hidden className="text-zinc-600 shrink-0 text-[10px] transition-transform group-open/gear:rotate-90">▸</span>
                   <h3 className="text-sm font-semibold text-zinc-200">Gear list</h3>
                   {gearList && (
@@ -1739,7 +1744,7 @@ export default async function CourseView({
                     </span>
                   )}
                 </summary>
-                <div className="px-4 pb-4 pt-1 border-t border-zinc-800">
+                <div className="ml-0.5 pl-3 border-l-2 border-zinc-800">
             {/* Admin-only, unlike every other editor on this page: assembling
                 a gear list is not something an instructor was ever meant to
                 deal with, and the toggle should show that by taking it away. */}
@@ -1778,7 +1783,9 @@ export default async function CourseView({
               }
               return (
                 <div key={gt} className="mb-5">
-                  <SubHead title={gt === 'personal' ? 'Each person brings' : 'Group kit'} />
+                  <h4 className="text-[13px] font-medium text-zinc-300 mb-2">
+                    {gt === 'personal' ? 'Each person brings' : 'Group kit'}
+                  </h4>
                   {/* Categories hang off the group behind a rule, so "each
                       person brings" visibly owns everything under it rather
                       than the two levels reading as one flat run of lists. */}
@@ -1860,7 +1867,7 @@ export default async function CourseView({
             {/* What we ask the client to supply, off the back of that list.
                 Admin-only for the same reason the list is. */}
             {showAsAdmin && (
-              <div className="mt-8 pt-6 border-t border-zinc-800">
+              <div className={BETWEEN_BLOCKS}>
                 <GearOrderPanel
                   instanceId={id}
                   orders={gearOrders}
@@ -2050,7 +2057,7 @@ export default async function CourseView({
             )}
             </EditInPlace>
 
-            <div className="mt-6 pt-6 border-t border-zinc-800">
+            <div className={BETWEEN_BLOCKS}>
             {!hasSchedule ? (
               <CreateSchedule
                 instanceId={id}
@@ -2498,7 +2505,7 @@ export default async function CourseView({
             )}
             </div>
 
-            <div className="mt-6 pt-6 border-t border-zinc-800">
+            <div className={BETWEEN_BLOCKS}>
             {/* Reference for this place, edited where it is read. Save-to-
                 library stays admin-only inside the component's own actions —
                 promoting a med plan reaches every course that pulls it. */}
@@ -2557,7 +2564,7 @@ export default async function CourseView({
                 team actually keeps is the album, which lives in its own
                 section. */}
             {otherLinks.length > 0 && (
-            <div className="mt-6 pt-6 border-t border-zinc-800">
+            <div className={BETWEEN_BLOCKS}>
             <EditInPlace
               label="Edit links"
               title="Links"
