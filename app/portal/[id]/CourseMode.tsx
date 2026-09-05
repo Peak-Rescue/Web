@@ -40,7 +40,7 @@ export default function CourseMode({
           key={m}
           href={href[m]}
           scroll={false}
-          className={`px-2.5 py-1 rounded-full transition-colors ${
+          className={`px-2 sm:px-2.5 py-1 rounded-full transition-colors ${
             mode === m ? 'bg-zinc-700 text-white' : 'text-zinc-500 hover:text-zinc-300'
           }`}
         >

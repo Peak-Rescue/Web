@@ -70,7 +70,7 @@ export default function Header() {
         <div className="site-container flex items-center justify-between h-16 md:h-20">
           {/* Logo mark only — clip the text rows below the triangles */}
           <Link href="/" aria-label="Peak Rescue home" className="flex items-center">
-            <div className="relative overflow-hidden" style={{ width: 140, height: 63 }}>
+            <div className="relative overflow-hidden w-28 h-[50px] md:w-[140px] md:h-[63px]">
               <Image
                 src="/logo.png"
                 alt="Peak Rescue"
@@ -89,7 +89,7 @@ export default function Header() {
               puts Build/Teach and the preview chip here rather than spending a
               row of its own on them. Empty on every other page, and on every
               screen wide enough for the nav below. */}
-          <div id="page-header-slot" className="md:hidden flex items-center gap-2 min-w-0" />
+          <div id="page-header-slot" className="md:hidden flex items-center gap-1.5 min-w-0 shrink-0" />
 
           {/* Desktop nav */}
           <nav className="hidden md:flex items-center gap-1">

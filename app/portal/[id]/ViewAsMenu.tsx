@@ -94,10 +94,16 @@ export default function ViewAsMenu({
           title={previewing ? `Previewing as ${current.label.toLowerCase()} — some controls are hidden` : 'Read this page as an instructor or a student'}
           className="py-1 whitespace-nowrap"
         >
-          {/* Full words where the row has them; on a phone the glyph carries
-              the verb and the word carries the state. */}
+          {/* The header row on a phone is 342px with a 140px wordmark and a
+              hamburger already in it, which leaves about 160 for the two
+              course controls — and Build/Teach wants a hundred of that. So
+              here the eye carries the whole thing when there is nothing to
+              report, and grows words only when there is: previewing is the
+              state worth spending the room on, and it is also the state where
+              Build/Teach steps aside, so the room is there. */}
           <span className="hidden sm:inline">{previewing ? '' : 'View as '}</span>
-          {current.label} ▾
+          <span className={previewing ? undefined : 'hidden sm:inline'}>{current.label} </span>
+          ▾
         </button>
         {previewing && (
           <Link
