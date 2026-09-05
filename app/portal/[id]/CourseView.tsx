@@ -1571,8 +1571,13 @@ export default async function CourseView({
                     title="Waiver"
                     note={waiver ? (waiver.signed ? 'Signed' : 'Read and sign before the course starts') : undefined}
                   />
+                  {/* Spaced by the parent rather than by each child. A margin
+                      on every one of them is also a margin under the last one,
+                      which lands on top of the gap the next block already
+                      brings and reads as a hole. */}
+                  <div className="space-y-5">
             {showAsAdmin && (
-              <div className="mb-5">
+              <div>
                 <CourseWaiverSection
                   instanceId={id}
                   templates={waiverTemplates}
@@ -1589,12 +1594,12 @@ export default async function CourseView({
                 read — with the waiver itself one block below, that made three
                 separated things about one topic. */}
             {showTasks && unmatchedWaivers.length > 0 && (
-              <div className="mb-5">
+              <div>
                 <UnmatchedWaivers instanceId={id} unmatched={unmatchedWaivers} />
               </div>
             )}
             {showTasks && (
-              <div className="mb-5">
+              <div>
                 <WaiverQrPanel
                   instanceId={id}
                   qr={waiverQr}
@@ -1611,6 +1616,7 @@ export default async function CourseView({
                 signed={waiver.signed}
               />
             )}
+                  </div>
                 </div>
               )}
               {/* Deleting a course is the last thing you would ever do to
@@ -1792,7 +1798,7 @@ export default async function CourseView({
                 byCat.set(c, [...(byCat.get(c) ?? []), r])
               }
               return (
-                <div key={gt} className="mb-5">
+                <div key={gt} className="mb-5 last:mb-0">
                   <h4 className="text-[13px] font-medium text-zinc-300 mb-2">
                     {gt === 'personal' ? 'Each person brings' : 'Group kit'}
                   </h4>
@@ -1801,7 +1807,7 @@ export default async function CourseView({
                       than the two levels reading as one flat run of lists. */}
                   <div className="ml-0.5 pl-3 border-l-2 border-zinc-800">
                   {[...byCat.entries()].map(([cat, items]) => (
-                    <div key={cat ?? '—'} className="mb-2">
+                    <div key={cat ?? '—'} className="mb-2 last:mb-0">
                       {cat && (
                         <p className="text-[11px] uppercase tracking-wide text-zinc-500 mb-1">{cat}</p>
                       )}
