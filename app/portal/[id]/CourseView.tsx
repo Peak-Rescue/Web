@@ -1555,21 +1555,6 @@ export default async function CourseView({
                 </p>
               )}
 
-              {showTasks && unmatchedWaivers.length > 0 && (
-                <div className="mt-5">
-                  <UnmatchedWaivers instanceId={id} unmatched={unmatchedWaivers} />
-                </div>
-              )}
-
-              {showTasks && (
-                <div className="mt-5">
-                  <WaiverQrPanel
-                    instanceId={id}
-                    qr={waiverQr}
-                    hasWaiver={Boolean(inst.waiver_template_id)}
-                  />
-                </div>
-              )}
             </div>
             </EditInPlace>
           )}
@@ -1587,13 +1572,33 @@ export default async function CourseView({
                     note={waiver ? (waiver.signed ? 'Signed' : 'Read and sign before the course starts') : undefined}
                   />
             {showAsAdmin && (
-              <div className="mb-6">
+              <div className="mb-5">
                 <CourseWaiverSection
                   instanceId={id}
                   templates={waiverTemplates}
                   selectedId={(inst.waiver_template_id as string | null) ?? null}
                   signedCount={signedCount}
                   enrolledCount={enrolledCount}
+                />
+              </div>
+            )}
+            {/* Both of these are the waiver seen from the other end: the code
+                somebody signs from without an account, and the signatures it
+                produced that no name could be matched to. They were at the
+                foot of the roster, which is where the waiver state used to be
+                read — with the waiver itself one block below, that made three
+                separated things about one topic. */}
+            {showTasks && unmatchedWaivers.length > 0 && (
+              <div className="mb-5">
+                <UnmatchedWaivers instanceId={id} unmatched={unmatchedWaivers} />
+              </div>
+            )}
+            {showTasks && (
+              <div className="mb-5">
+                <WaiverQrPanel
+                  instanceId={id}
+                  qr={waiverQr}
+                  hasWaiver={Boolean(inst.waiver_template_id)}
                 />
               </div>
             )}
@@ -1735,16 +1740,21 @@ export default async function CourseView({
               // with the caret the only difference — which is the one real
               // difference between them.
               <details className="group/gear">
+                {/* Nothing but the caret and the name. A link or a button in
+                    here is pressed *and* folds the thing it is in, because a
+                    summary swallows the click on its way past — so the PDF and
+                    the edit control wait inside, where the list they act on
+                    is. */}
                 <summary className="cursor-pointer list-none flex items-baseline gap-2 mb-2">
                   <span aria-hidden className="text-zinc-600 shrink-0 text-[10px] transition-transform group-open/gear:rotate-90">▸</span>
                   <h3 className="text-sm font-semibold text-zinc-200">Gear list</h3>
-                  {gearList && (
-                    <span className="ml-auto shrink-0">
-                      <PdfLink href={`/api/gear-lists/${gearList.id}/pdf`} />
-                    </span>
-                  )}
                 </summary>
                 <div className="ml-0.5 pl-3 border-l-2 border-zinc-800">
+                {gearList && (
+                  <div className="flex justify-end mb-2">
+                    <PdfLink href={`/api/gear-lists/${gearList.id}/pdf`} />
+                  </div>
+                )}
             {/* Admin-only, unlike every other editor on this page: assembling
                 a gear list is not something an instructor was ever meant to
                 deal with, and the toggle should show that by taking it away. */}
@@ -1881,15 +1891,24 @@ export default async function CourseView({
             )}
             {/* The modules, each its own named group rather than a
                 page-length run of link rows. */}
+            {/* The same fold as the gear list, defaulting the other way. Which
+                way each opens is a fact about the thing rather than a
+                preference: a gear list is read once while packing and then
+                answered from memory, and the curriculum is what people come
+                back for. So the section opens as a named gear list you can
+                pull down and the material already in front of you. */}
             {hasCurriculum && (
-              <div className={showGear ? 'mt-8' : undefined}>
+              <details open className={showGear ? `group/curric ${BETWEEN_BLOCKS}` : 'group/curric'}>
+                <summary className="cursor-pointer list-none flex items-baseline gap-2 mb-2">
+                  <span aria-hidden className="text-zinc-600 shrink-0 text-[10px] transition-transform group-open/curric:rotate-90">▸</span>
+                  <h3 className="text-sm font-semibold text-zinc-200">Curriculum</h3>
+                </summary>
             {/* Sections and the items in them, assigned on the course. The
                 editor is a server component — it is server actions bound to
                 rows all the way down — so it is built here and handed over
                 rather than imported into the client. */}
             <EditInPlace
               label="Edit curriculum"
-              title="Curriculum"
               editor={
                 showTasks ? (
                   <CourseCurriculumEditor
@@ -1973,7 +1992,7 @@ export default async function CourseView({
               })}
             </div>
             </EditInPlace>
-              </div>
+              </details>
             )}
           </Section>
           </NavPanel>

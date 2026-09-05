@@ -49,7 +49,6 @@ export default function CourseWaiverSection({
 
   return (
     <div className="p-6 pt-5 border-t border-zinc-800">
-      <h3 className="text-sm font-semibold text-zinc-300 mb-1">Waiver</h3>
 
       {error && <p className="text-xs text-pr-red mb-2">{error}</p>}
 
