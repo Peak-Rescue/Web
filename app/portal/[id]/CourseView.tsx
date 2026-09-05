@@ -1057,6 +1057,9 @@ export default async function CourseView({
     // An empty feed is a real answer here, unlike an empty state reporting
     // that nothing needs doing.
     Boolean(userId) ||
+    // The album lives in here now, and a course can have one before anybody
+    // has posted a word.
+    hasAlbum ||
     // A share-link guest has no account and no feed, so for them it is still
     // worth a door only while it holds the meeting block — and not once the
     // days have taken that over.
@@ -1073,9 +1076,6 @@ export default async function CourseView({
   // it no longer appears because somebody wrote a note.
   const hasTasks = showTasks && (tasks.length > 0 || canManageTasks)
 
-  // Who is on this course, and what it is. Staff get it regardless: an empty
-  // one is where they fill it in.
-  const hasDetails = (instructors ?? []).length > 0 || showTasks
   // Day one decides whether the meeting block leads the updates or folds to a
   // line under them.
   const meetingOver = meetingDayPassed(meeting.meetingDate, inst.starts_at as string | null)
@@ -1113,6 +1113,14 @@ export default async function CourseView({
   // Staff see the crew whether or not anyone is on it yet — an unstaffed
   // course is the one that needs the section.
   const showStaffing = (instructors ?? []).length > 0 || showTasks
+
+  // Who is on this course, and what it is. Staff get it regardless: an empty
+  // one is where they fill it in.
+  // Details holds the crew, the roster, the waiver, the notes, the tasks and
+  // the files now, so it exists if any of those do. It used to ask only about
+  // instructors, which was true when instructors were all it had — and would
+  // now hide a student's own waiver on a course nobody has been staffed to.
+  const hasDetails = (instructors ?? []).length > 0 || showTasks || showWaiver || hasRoster || showStaffing
 
   // Building a course and running one are different jobs, and the bar shows
   // one at a time. Build is the sequence a course is assembled in — what the
@@ -1152,7 +1160,6 @@ export default async function CourseView({
     .map((id) => ({
       id,
       label: SECTION_LABEL[id],
-      team: id === 'pricing',
       unread: id === 'updates' && unreadUpdates > 0,
     }))
 
@@ -1628,6 +1635,7 @@ export default async function CourseView({
             </div>
             )}
 
+            <SubHead title="Updates" />
             <CourseUpdates
               instanceId={id}
               updates={courseUpdates.map((u) => ({ ...u, isNew: isNew(u) }))}
@@ -2573,7 +2581,7 @@ export default async function CourseView({
             toggle takes it away rather than dimming it. */}
         {hasPricing && (
           <NavPanel id="pricing">
-          <Section id="pricing" blurb="Admins only">
+          <Section id="pricing">
             <CoursePricingEditor
               instanceId={id}
               course={inst as unknown as React.ComponentProps<typeof CoursePricingEditor>['course']}

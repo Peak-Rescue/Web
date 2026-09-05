@@ -55,8 +55,6 @@ function subscribeToWidth(onChange: () => void) {
 export type NavSection = {
   id: string
   label: string
-  /** Amber rather than red: internal, not for students. */
-  team?: boolean
   /** Something in here is newer than this reader's last visit. */
   unread?: boolean
 }
@@ -123,12 +121,8 @@ export default function CourseNav({
                   aria-current={on ? 'page' : undefined}
                   className={`shrink-0 -mb-px border-b-2 px-3 py-2.5 text-sm whitespace-nowrap transition-colors ${
                     on
-                      ? s.team
-                        ? 'border-amber-500 text-amber-100 font-medium'
-                        : 'border-pr-red text-white font-medium'
-                      : s.team
-                        ? 'border-transparent text-amber-600/90 hover:text-amber-300'
-                        : 'border-transparent text-zinc-500 hover:text-zinc-300'
+                      ? 'border-pr-red text-white font-medium'
+                      : 'border-transparent text-zinc-500 hover:text-zinc-300'
                   }`}
                 >
                   {s.label}

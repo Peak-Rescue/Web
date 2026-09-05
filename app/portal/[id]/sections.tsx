@@ -65,7 +65,6 @@ export function Section({
   id,
   title,
   blurb,
-  team,
   unread,
   action,
   children,
@@ -73,8 +72,6 @@ export function Section({
   id: SectionKey
   title?: string
   blurb?: string
-  /** Team-only block: tinted and badged so it reads as not-for-students. */
-  team?: boolean
   /** Something in here is newer than this reader's last visit. */
   unread?: boolean
   /** A control for the block as a whole — the PDF of a gear list, say. Sits at
@@ -91,14 +88,10 @@ export function Section({
       <div className="relative flex items-center gap-3 mb-4 pb-3 border-b border-zinc-800">
         <span
           aria-hidden
-          className={`absolute -left-3 top-1 w-[3px] h-5 rounded-full ${team ? 'bg-amber-500' : 'bg-pr-red'}`}
+          className="absolute -left-3 top-1 w-[3px] h-5 rounded-full bg-pr-red"
         />
         <span
-          className={`relative grid place-items-center w-8 h-8 rounded-lg border shrink-0 ${
-            team
-              ? 'border-amber-900/70 bg-amber-950/30 text-amber-400'
-              : 'border-zinc-800 bg-zinc-900 text-zinc-400'
-          }`}
+          className="relative grid place-items-center w-8 h-8 rounded-lg border border-zinc-800 bg-zinc-900 text-zinc-400 shrink-0"
         >
           {unread && (
             <span
@@ -124,10 +117,10 @@ export function Section({
           <h2 className="text-lg font-semibold leading-tight">{title ?? SECTION_LABEL[id]}</h2>
           {blurb && <p className="text-xs text-zinc-500 mt-0.5">{blurb}</p>}
         </div>
-        {/* No pill: a team block is already amber-ticked and amber-iconed, and
-            the section only renders for people who can see it. The pill is
-            kept for the rows *inside* a block, where one item held back among
-            shared ones is genuinely worth marking. */}
+        {/* No pill and no tint. A section only renders for people who can
+            see it, so its own colour was saying what its presence already
+            says. The pill is kept for the rows *inside* a block, where one
+            item held back among shared ones is genuinely worth marking. */}
         {action && <div className="ml-auto shrink-0">{action}</div>}
       </div>
       {children}
