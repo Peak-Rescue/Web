@@ -59,10 +59,22 @@ export type NavSection = {
   unread?: boolean
 }
 
+// One glyph per door, for the bar you reach with a thumb. Words alone at that
+// size are a row of grey; a shape you recognise without reading is the whole
+// point of putting it down there.
+const DOOR_ICON: Record<string, string> = {
+  details: 'M4 6h16M4 12h16M4 18h10',
+  prep: 'M6 8h12a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2Z|M9 8V5a3 3 0 0 1 6 0v3|M9 13h6',
+  schedule: 'M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z',
+  updates: 'M3 11l18-8-8 18-2-8-8-2Z',
+  pricing: 'M3 3h7l11 11-7 7L3 10V3ZM7.5 7.5h.01',
+}
+
 export default function CourseNav({
   sections,
   storageKey,
   controls,
+  thumbReach,
   children,
 }: {
   sections: NavSection[]
@@ -73,6 +85,11 @@ export default function CourseNav({
       edge where the title and every card below it start. Four doors leave the
       room for this that nine never did. */
   controls?: React.ReactNode
+  /** Whether this reader is running the course rather than building it. On a
+      phone that job happens with one hand and the screen at arm's length, so
+      the doors move to the bottom where a thumb reaches; at a desk, and while
+      building, they stay a tab strip. */
+  thumbReach?: boolean
   children: React.ReactNode
 }) {
   // Come back to the door you were last on — you usually return to a course
@@ -107,8 +124,11 @@ export default function CourseNav({
     doorChanged()
   }
 
+  const thumb = narrow && Boolean(thumbReach)
+
   return (
     <ActiveSection.Provider value={active}>
+      {!thumb && (
       <nav className="sticky top-16 md:top-20 z-20 -mx-4 px-4 pb-2.5 mb-8 bg-zinc-950/90 backdrop-blur">
         <div className="flex items-stretch gap-4">
           <div className="flex-1 min-w-0 flex gap-1 overflow-x-auto no-scrollbar border-b border-zinc-900">
@@ -140,8 +160,49 @@ export default function CourseNav({
           {controls && !slot && <div className="shrink-0 flex items-center gap-2 pb-1">{controls}</div>}
         </div>
       </nav>
+      )}
       {controls && slot && createPortal(controls, slot)}
-      {children}
+      {/* Room for the bar to sit over, plus whatever the phone reserves at the
+          bottom of its own screen. */}
+      <div className={thumb ? 'pb-24' : undefined}>{children}</div>
+      {thumb && (
+        <nav
+          className="fixed inset-x-0 bottom-0 z-30 flex border-t border-zinc-800 bg-zinc-950/95 px-1 pt-1.5 backdrop-blur"
+          style={{ paddingBottom: 'calc(0.5rem + env(safe-area-inset-bottom))' }}
+        >
+          {sections.map((s) => {
+            const on = s.id === active
+            return (
+              <button
+                key={s.id}
+                onClick={() => pick(s.id)}
+                aria-current={on ? 'page' : undefined}
+                className={`flex flex-1 flex-col items-center gap-1 py-1 text-[10.5px] transition-colors ${
+                  on ? 'text-white' : 'text-zinc-500'
+                }`}
+              >
+                <span className="relative">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"
+                    fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"
+                    className={on ? 'text-pr-red-light' : undefined}
+                    aria-hidden
+                  >
+                    {(DOOR_ICON[s.id] ?? DOOR_ICON.details).split('|').map((d, i) => <path key={i} d={d} />)}
+                  </svg>
+                  {s.unread && (
+                    <span
+                      aria-hidden
+                      className="absolute -top-0.5 -right-1 w-1.5 h-1.5 rounded-full bg-pr-red-light ring-2 ring-zinc-950"
+                    />
+                  )}
+                </span>
+                {s.label}
+              </button>
+            )
+          })}
+        </nav>
+      )}
     </ActiveSection.Provider>
   )
 }

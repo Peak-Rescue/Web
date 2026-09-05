@@ -1247,6 +1247,10 @@ export default async function CourseView({
         <CourseNav
           sections={navSections}
           storageKey={`course-door:${id}`}
+          // Running the course rather than building it. An instructor or a
+          // student has no other job, so it is only an admin who can be doing
+          // the other one.
+          thumbReach={!showAsAdmin || mode === 'teach'}
           controls={showAsAdmin || isAdmin ? (
             <>
               {showAsAdmin && (
