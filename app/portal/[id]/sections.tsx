@@ -238,6 +238,7 @@ export function StudentCard({
   href,
   waiver,
   duplicate,
+  behind,
 }: {
   name: string
   email?: string | null
@@ -260,6 +261,12 @@ export function StudentCard({
   }
   /** Somebody else on this course is entered under the same name. */
   duplicate?: boolean
+  /** They have not opened the course since the last thing that went out to
+      them. Drawn as the dot they would land on if they did — not a new symbol,
+      the same one, so the card answers the question by showing you the answer.
+      Only the people who are behind are marked: everyone else says nothing, so
+      what you see is the list to chase. */
+  behind?: boolean
 }) {
   const initials = name
     .split(/\s+/)
@@ -344,6 +351,15 @@ export function StudentCard({
         {duplicate && (
           <div className="text-[11px] text-amber-400" title="Another student on this course is entered under the same name — they may have joined twice with two addresses">
             Possible duplicate
+          </div>
+        )}
+        {behind && (
+          <div
+            className="flex justify-end pt-1"
+            title="Hasn't opened the course since the last thing we sent — they would land on a dot"
+          >
+            <span aria-hidden className="w-1.5 h-1.5 rounded-full bg-pr-red-light" />
+            <span className="sr-only">Has not opened the course since the last notice</span>
           </div>
         )}
       </div>

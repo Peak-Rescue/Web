@@ -85,6 +85,32 @@ type NotifyOutcome = { recipients: number; sent: number; problem: string | null 
 // went out, and it is what tells the other admins CC'd on nothing that the job
 // is done. So `copyMe` puts the author back in, and defaults on at the caller:
 // an unwanted copy is a delete, a missing one is a doubt.
+
+/**
+ * A record that something was sent to the course, for the dot on the door it
+ * is behind.
+ *
+ * Written where the mail goes out and nowhere else: a push is a deliberate act
+ * with a recipient list, and an edit is not. Fixing a typo in a gear list at
+ * eleven at night lights nothing up and accuses nobody of not having read it.
+ *
+ * Failing to write it must never fail the send — the mail has already gone,
+ * and a missing dot is a smaller wrong than an action that reports an error
+ * after doing its job.
+ */
+async function recordPush(
+  admin: ReturnType<typeof createAdminClient>,
+  instanceId: string,
+  section: 'schedule' | 'updates',
+  audience: UpdateAudience,
+  pushedBy: string | null,
+) {
+  const { error } = await admin
+    .from('course_pushes')
+    .insert({ instance_id: instanceId, section, audience, pushed_by: pushedBy })
+  if (error) console.error('course_pushes insert failed', error.message)
+}
+
 async function notify(
   admin: ReturnType<typeof createAdminClient>,
   instanceId: string,
@@ -266,6 +292,8 @@ export async function postCourseUpdate(
     })
     .eq('id', row.id)
 
+  await recordPush(admin, instanceId, 'updates', audience, user.id)
+
   revalidatePath(`/portal/${instanceId}`)
   return { recipients: outcome.recipients, sent: outcome.sent, emailProblem: outcome.problem }
 }
@@ -336,6 +364,8 @@ export async function renotifyCourseUpdate(
       notify_count: (existing.notify_count ?? 0) + 1,
     })
     .eq('id', updateId)
+
+  await recordPush(admin, instanceId, 'updates', cleanAudience(existing.audience), user.id)
 
   revalidatePath(`/portal/${instanceId}`)
   return { recipients: outcome.recipients, sent: outcome.sent, emailProblem: outcome.problem }
@@ -420,6 +450,10 @@ export async function announceMeetingDetails(
       .update({ meeting_announced_dates: [...announced, day].sort() })
       .eq('id', instanceId)
   }
+
+  // Behind Schedule, because that is where a morning is read now that the days
+  // carry their own.
+  await recordPush(admin, instanceId, 'schedule', audience, user.id)
 
   revalidatePath(`/portal/${instanceId}`)
   revalidatePath(`/admin/courses/${instanceId}`)

@@ -25,6 +25,7 @@ import { listWaiverTemplates } from '@/app/admin/courses/waiver-actions'
 import { plannedInstructorCount } from '@/lib/estimates'
 import { parseContacts, workEmail } from '@/lib/contacts'
 import { formatPhone } from '@/lib/phone'
+import { unseenSections, lastPushToStudents, behindOnPush, type Push } from '@/lib/course-pushes'
 import { GEAR_ENTRIES_SELECT } from '@/lib/gear'
 import { courseCapabilityCategories } from '@/lib/capabilities'
 import { GEAR_ENTRY_COLUMNS, gearLabel, gearQuantity, isChoice, placeSets, productName } from '@/lib/gear'
@@ -246,6 +247,21 @@ export default async function CourseView({
     .select('id, name, overview, objectives, schedule_days(id, title, location, site_id, notes, objectives, meeting_point, meeting_point_id, meeting_time, meeting_links, meeting_attachments, sort_order, meeting_points(id, name, directions, coords, links), sites(id, name, beta, usual_meeting_time, coords, links, meeting_points(id, name, directions, coords, links)), schedule_blocks(id, parent_id, title, time_label, location, sort_order))')
     .eq('instance_id', id)
     .limit(1))
+
+  // What has been sent to this course, for the dot on the door it is behind.
+  const pushesPromise = keep(admin
+    .from('course_pushes')
+    .select('section, audience, pushed_by, pushed_at')
+    .eq('instance_id', id)
+    .order('pushed_at', { ascending: false })
+    .limit(200))
+
+  // When everyone else last opened the course, so the roster can say who has
+  // not been back since. Staff only — this says when a person read something,
+  // which is not a thing their classmates need to know.
+  const viewsPromise = keep(showTasks
+    ? admin.from('course_views').select('user_id, last_seen_at').eq('instance_id', id)
+    : Promise.resolve({ data: [] }))
 
   const waiverPromise = keep(userId ? loadStudentWaiver(id, userId) : Promise.resolve(null))
 
@@ -926,6 +942,19 @@ export default async function CourseView({
     Boolean(lastSeen) && u.created_at > lastSeen! && u.created_by !== userId
   const unreadUpdates = courseUpdates.filter(isNew).length
 
+  const { data: pushRows } = await pushesPromise
+  const { data: viewRows } = await viewsPromise
+
+  const pushes = (pushRows ?? []) as Push[]
+  const unseen = unseenSections(pushes, { lastSeenAt: lastSeen, userId, isStudent: !showTasks })
+
+  // The same question asked of everybody else: if they opened the course right
+  // now, would they land on a dot?
+  const lastStudentPush = lastPushToStudents(pushes)
+  const seenAt = new Map(((viewRows ?? []) as { user_id: string; last_seen_at: string }[])
+    .map((v) => [v.user_id, v.last_seen_at]))
+  const isBehind = (profileId: string) => behindOnPush(seenAt.get(profileId), lastStudentPush)
+
   // Any instructor on the course can post, not just the lead — a meeting point
   // moves and the person who needs to say so is the one standing there.
   const canPostUpdates = showTasks
@@ -1160,7 +1189,9 @@ export default async function CourseView({
     .map((id) => ({
       id,
       label: SECTION_LABEL[id],
-      unread: id === 'updates' && unreadUpdates > 0,
+      // The whole notification: something was sent behind this door and you
+      // have not been back since. Opening it is how you find out what.
+      unread: unseen.has(id) || (id === 'updates' && unreadUpdates > 0),
     }))
 
   return (
@@ -1490,6 +1521,7 @@ export default async function CourseView({
                       enrolledAt={student.enrolledAt}
                       href={`/portal/${id}/people/${student.id}`}
                       duplicate={isDuplicate(student.name)}
+                      behind={isBehind(student.id)}
                       waiver={
                         waiverOnCourse
                           ? {
