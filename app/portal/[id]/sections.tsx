@@ -65,22 +65,19 @@ export function Section({
   id,
   title,
   blurb,
-  unread,
   action,
   children,
 }: {
   id: SectionKey
   title?: string
   blurb?: string
-  /** Something in here is newer than this reader's last visit. */
-  unread?: boolean
   /** A control for the block as a whole — the PDF of a gear list, say. Sits at
       the far end of the heading row, where the audience pill sits. */
   action?: React.ReactNode
   children: React.ReactNode
 }) {
   return (
-    <section id={id} className="scroll-mt-30 md:scroll-mt-36 mb-12">
+    <section id={id} className="mb-12">
       {/* The heading carries a colour tick, the same device the gear catalog
           uses on its category headings: it gives the eye something to land on
           in a long scroll, and says whose block this is before the badge at
@@ -93,12 +90,6 @@ export function Section({
         <span
           className="relative grid place-items-center w-8 h-8 rounded-lg border border-zinc-800 bg-zinc-900 text-zinc-400 shrink-0"
         >
-          {unread && (
-            <span
-              aria-hidden
-              className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-pr-red-light ring-2 ring-zinc-950"
-            />
-          )}
           <svg
             xmlns="http://www.w3.org/2000/svg"
             width="16"

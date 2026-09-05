@@ -1606,7 +1606,6 @@ export default async function CourseView({
           <NavPanel id="updates">
           <Section
             id="updates"
-            unread={unreadUpdates > 0}
           >
             {/* Above the feed until the meeting day is behind us, a single
                 line after that. Where to meet is the most important thing on
@@ -2595,7 +2594,7 @@ export default async function CourseView({
 
         </CourseNav>
 
-        {navSections.length === 1 && (
+        {navSections.length === 0 && (
           <p className="text-zinc-500 text-sm">Nothing has been added to this course yet.</p>
         )}
       </div>
