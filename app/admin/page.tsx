@@ -370,6 +370,82 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
             </div>
           )}
         </div>
+
+
+        {liveInvites.length > 0 && (
+          <section className="mb-10">
+            <h2 className="text-sm font-medium text-zinc-500 uppercase tracking-wide mb-3">Courses looking for staff</h2>
+            <StaffingInterestList
+              items={liveInvites.map((r) => ({
+                token: r.token,
+                title: courseShortName(r.inst.course_type, r.inst.custom_title),
+                client: r.inst.client_name,
+                meta: `${fmtRange(r.inst)}${r.inst.location ? ` · ${r.inst.location}` : ''}`,
+                interested: r.interested,
+                note: r.note,
+              }))}
+            />
+          </section>
+        )}
+
+        {myTasks.length > 0 && (
+          <section className="mb-10">
+            <h2 className="text-sm font-medium text-zinc-500 uppercase tracking-wide mb-3">Your open tasks</h2>
+            <MyTasksList tasks={myTasks} />
+          </section>
+        )}
+
+        {/* Open on arrival. The month is the thing most often being checked
+            against, and a fold that has to be opened every visit is a fold
+            everyone opens every visit. It still closes if you want it gone. */}
+        <details open className="mb-10 group">
+          <summary className="cursor-pointer list-none flex items-center gap-2 text-sm font-medium text-zinc-500 uppercase tracking-wide select-none">
+            <span className="text-zinc-600 text-xs transition-transform group-open:rotate-90">▶</span>
+            {/* Not "Your calendar" — the toggle underneath switches between
+                your courses and everyone's, so the heading would contradict
+                itself half the time. The toggle says whose it is. */}
+            Calendar
+          </summary>
+          <div className="mt-3">
+            <div className="flex gap-1 mb-3 text-xs">
+              {/* Toggles carry the shown month so switching whose courses
+                  these are keeps you on the month you were looking at. */}
+              <Link
+                href={homeHref({ all: false, month: calMonth })}
+                scroll={false}
+                className={`px-2.5 py-1 rounded-full border transition-colors ${
+                  !showAllCourses
+                    ? 'bg-zinc-800 border-zinc-600 text-white'
+                    : 'border-zinc-800 text-zinc-500 hover:text-zinc-300'
+                }`}
+              >
+                My courses
+              </Link>
+              <Link
+                href={homeHref({ all: true, month: calMonth })}
+                scroll={false}
+                className={`px-2.5 py-1 rounded-full border transition-colors ${
+                  showAllCourses
+                    ? 'bg-zinc-800 border-zinc-600 text-white'
+                    : 'border-zinc-800 text-zinc-500 hover:text-zinc-300'
+                }`}
+              >
+                All courses
+              </Link>
+            </div>
+            <CourseCalendar
+              month={calMonth}
+              basePath="/admin"
+              courses={calendarCourses}
+              category={cat}
+              params={{
+                ...(showAllCourses ? { scope: 'all' } : {}),
+                ...(viewAs ? { as: viewAs } : {}),
+              }}
+            />
+          </div>
+        </details>
+
         {myCourses.length > 0 && (
           <section className="mb-10">
             <h2 className="text-sm font-medium text-zinc-500 uppercase tracking-wide mb-3">Your upcoming courses</h2>
@@ -438,78 +514,6 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
             </div>
           </details>
         )}
-
-        {liveInvites.length > 0 && (
-          <section className="mb-10">
-            <h2 className="text-sm font-medium text-zinc-500 uppercase tracking-wide mb-3">Courses looking for staff</h2>
-            <StaffingInterestList
-              items={liveInvites.map((r) => ({
-                token: r.token,
-                title: courseShortName(r.inst.course_type, r.inst.custom_title),
-                client: r.inst.client_name,
-                meta: `${fmtRange(r.inst)}${r.inst.location ? ` · ${r.inst.location}` : ''}`,
-                interested: r.interested,
-                note: r.note,
-              }))}
-            />
-          </section>
-        )}
-
-        {myTasks.length > 0 && (
-          <section className="mb-10">
-            <h2 className="text-sm font-medium text-zinc-500 uppercase tracking-wide mb-3">Your open tasks</h2>
-            <MyTasksList tasks={myTasks} />
-          </section>
-        )}
-
-        <details open={Boolean(cal) || showAllCourses} className="mb-10 group">
-          <summary className="cursor-pointer list-none flex items-center gap-2 text-sm font-medium text-zinc-500 uppercase tracking-wide select-none">
-            <span className="text-zinc-600 text-xs transition-transform group-open:rotate-90">▶</span>
-            {/* Not "Your calendar" — the toggle underneath switches between
-                your courses and everyone's, so the heading would contradict
-                itself half the time. The toggle says whose it is. */}
-            Calendar
-          </summary>
-          <div className="mt-3">
-            <div className="flex gap-1 mb-3 text-xs">
-              {/* Toggles carry the shown month so the destination page renders
-                  the details open — otherwise switching back to "My courses"
-                  drops every param and the panel collapses. */}
-              <Link
-                href={homeHref({ all: false, month: calMonth })}
-                scroll={false}
-                className={`px-2.5 py-1 rounded-full border transition-colors ${
-                  !showAllCourses
-                    ? 'bg-zinc-800 border-zinc-600 text-white'
-                    : 'border-zinc-800 text-zinc-500 hover:text-zinc-300'
-                }`}
-              >
-                My courses
-              </Link>
-              <Link
-                href={homeHref({ all: true, month: calMonth })}
-                scroll={false}
-                className={`px-2.5 py-1 rounded-full border transition-colors ${
-                  showAllCourses
-                    ? 'bg-zinc-800 border-zinc-600 text-white'
-                    : 'border-zinc-800 text-zinc-500 hover:text-zinc-300'
-                }`}
-              >
-                All courses
-              </Link>
-            </div>
-            <CourseCalendar
-              month={calMonth}
-              basePath="/admin"
-              courses={calendarCourses}
-              category={cat}
-              params={{
-                ...(showAllCourses ? { scope: 'all' } : {}),
-                ...(viewAs ? { as: viewAs } : {}),
-              }}
-            />
-          </div>
-        </details>
 
 
         <section className="mb-10">

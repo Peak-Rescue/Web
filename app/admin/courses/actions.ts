@@ -10,7 +10,7 @@ import { syncCourseCalendar, removeCourseEvent } from '@/lib/google-calendar'
 import { isValidRegion } from '@/lib/regions'
 import { requireCourseStaff } from '@/lib/course-access'
 import { sendMail } from '@/lib/mailer'
-import { announcesChanges } from '@/lib/course-notify'
+import { announcesChanges, emailAdminsNewCourse } from '@/lib/course-notify'
 import { clampOffDays, dayShift, strokeOffDays, type OffSpan } from '@/lib/courses'
 import { assertCustomCourseTagged } from '@/lib/capabilities'
 
@@ -176,7 +176,7 @@ async function requireAdmin() {
 }
 
 export async function createInstance(formData: FormData) {
-  await requireAdmin()
+  const creator = await requireAdmin()
   const admin = createAdminClient()
 
   const course_category  = (formData.get('course_category') as string) || 'tactical'
@@ -241,6 +241,9 @@ export async function createInstance(formData: FormData) {
   if (error) throw new Error(error.message)
 
   after(() => syncCourseCalendar(admin, data.id))
+  // Every status, tentative included: the crew only hears about a confirmed
+  // course, but a tentative one is precisely what an admin wants early.
+  after(() => emailAdminsNewCourse(admin, data.id, creator.id))
 
   redirect(`/admin/courses/${data.id}`)
 }

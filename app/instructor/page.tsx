@@ -6,8 +6,10 @@ import { signCertDocs } from '@/lib/cert-docs'
 import CertGrid from './CertGrid'
 import ProfileForm from './ProfileForm'
 import AvatarEditor from '@/components/AvatarEditor'
+import InfoHint from '@/components/InfoHint'
 import SaveButton from '@/components/SaveButton'
-import { upsertCert, deleteCert, addCertDocument, deleteCertDocument, updateProfile, updateInstructorProfile, updateCalendarInvites } from './actions'
+import { upsertCert, deleteCert, addCertDocument, deleteCertDocument, updateProfile, updateInstructorProfile, updateCalendarInvites, updateCourseAlerts } from './actions'
+import CourseAlertsForm from './CourseAlertsForm'
 import { signOut } from '@/app/actions'
 import { CAPABILITY_META, CAPABILITY_ORDER } from '@/lib/capabilities'
 
@@ -19,11 +21,13 @@ export default async function InstructorPage() {
   const admin = createAdminClient()
 
   const [{ data: profile }, { data: instructor }] = await Promise.all([
-    admin.from('profiles').select('first_name, last_name, email, phone, emergency_name, emergency_relationship, emergency_phone').eq('id', user.id).single(),
-    admin.from('instructors').select('id, name, bio, avatar, avatar_position, avatar_scale, calendar_invites, instructor_capabilities(category, role)').eq('profile_id', user.id).maybeSingle(),
+    admin.from('profiles').select('role, first_name, last_name, email, phone, emergency_name, emergency_relationship, emergency_phone').eq('id', user.id).single(),
+    admin.from('instructors').select('id, name, bio, avatar, avatar_position, avatar_scale, calendar_invites, course_alert_muted_disciplines, course_alert_muted_sectors, instructor_capabilities(category, role)').eq('profile_id', user.id).maybeSingle(),
   ])
 
   if (!instructor) redirect('/dashboard')
+
+
 
   const { data: certs } = await admin
     .from('instructor_certs')
@@ -103,14 +107,9 @@ export default async function InstructorPage() {
                 defaultChecked={instructor.calendar_invites}
                 className="mt-0.5 w-4 h-4 accent-pr-red shrink-0"
               />
-              <span className="text-sm">
-                Add my courses to my Google Calendar
-                <span className="block text-xs text-zinc-500 mt-1">
-                  You&apos;ll get an invitation for each course you&apos;re staffed on. Turn this off if
-                  you already subscribe to the Peak Rescue course calendars — otherwise your courses
-                  show up twice. Either way, the portal emails you when a course is scheduled, moved,
-                  or cancelled.
-                </span>
+              <span className="text-sm inline-flex items-center gap-1.5">
+                Send me Google Calendar invites for my courses
+                <InfoHint text="One invitation per course you're staffed on. Turn it off if you already subscribe to the Peak Rescue course calendars, or your courses show up twice. The portal emails you when a course is scheduled, moved or cancelled either way." />
               </span>
             </label>
             <div className="mt-4">
@@ -120,6 +119,19 @@ export default async function InstructorPage() {
             </div>
           </form>
         </section>
+
+        {/* New-course alerts — admins only, because nobody else can act on a
+            course that has only just been written down. */}
+        {profile?.role === 'admin' && (
+          <section className="mb-10">
+            <h2 className="text-lg font-semibold mb-4">New Course Alerts</h2>
+            <CourseAlertsForm
+              action={updateCourseAlerts}
+              mutedDisciplines={instructor.course_alert_muted_disciplines ?? []}
+              mutedSectors={instructor.course_alert_muted_sectors ?? []}
+            />
+          </section>
+        )}
 
         {/* Certifications */}
         <section className="mb-10">

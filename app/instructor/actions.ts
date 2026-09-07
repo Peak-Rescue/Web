@@ -6,6 +6,11 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { certDocPath, CERT_BUCKET } from '@/lib/cert-docs'
 import { type CertType } from '@/lib/certs'
 import { normalizePhone } from '@/lib/phone'
+import { CAPABILITY_ORDER } from '@/lib/capabilities'
+
+// The sectors an alert can be filtered by — courseSector() only ever answers
+// one of these two.
+const ALERT_SECTORS = ['civilian', 'military']
 
 export async function upsertCert(formData: FormData) {
   const supabase = await createClient()
@@ -202,6 +207,43 @@ export async function updateCalendarInvites(formData: FormData) {
   const { error } = await createAdminClient()
     .from('instructors')
     .update({ calendar_invites: formData.get('calendar_invites') === 'on' })
+    .eq('profile_id', user.id)
+
+  if (error) throw new Error(error.message)
+  revalidatePath('/instructor')
+}
+
+// Which new courses land in an admin's inbox.
+//
+// The form posts the boxes that are ticked; what gets stored is the ones that
+// aren't. That inversion is the whole point — a saved list of wanted
+// disciplines is a snapshot of the day it was saved, and the next discipline
+// we add would arrive muted for every admin who had ever opened this page.
+// Stored as mutes, a new discipline is on until somebody says otherwise.
+//
+// Clearing a whole row stores every value in it, which is how alerts go off.
+export async function updateCourseAlerts(formData: FormData) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Not authenticated')
+
+  const adminClient = createAdminClient()
+  const { data: profile } = await adminClient
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single()
+  if (profile?.role !== 'admin') throw new Error('Not authorized')
+
+  const wantedDisciplines = formData.getAll('disciplines') as string[]
+  const wantedSectors = formData.getAll('sectors') as string[]
+
+  const { error } = await adminClient
+    .from('instructors')
+    .update({
+      course_alert_muted_disciplines: CAPABILITY_ORDER.filter((c) => !wantedDisciplines.includes(c)),
+      course_alert_muted_sectors: ALERT_SECTORS.filter((s) => !wantedSectors.includes(s)),
+    })
     .eq('profile_id', user.id)
 
   if (error) throw new Error(error.message)

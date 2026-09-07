@@ -1160,6 +1160,12 @@ export default async function CourseView({
   // by when you reach for them rather than by what they are. Pricing is the
   // only one that belongs to a single job: nobody quotes a course from a
   // canyon, and instructors never see it at all.
+  //
+  // One order for running a course, whoever is doing it. An admin in Teach and
+  // an instructor were reading the same four doors in two different orders,
+  // because the instructor's was never ordered at all — it was the old
+  // nine-door list with the middle taken out, and Updates sat second because
+  // that is where it sat among nine. The two jobs differ; the reader does not.
   const BUILD: SectionKey[] = ['details', 'pricing', 'prep', 'schedule']
   const TEACH: SectionKey[] = ['details', 'schedule', 'prep', 'updates']
 
@@ -1181,10 +1187,10 @@ export default async function CourseView({
     updates: hasUpdates,
     pricing: hasPricing,
   }
-  // Only an admin gets the two jobs. An instructor has no build half worth
-  // naming, so they get one bar and no switch.
-  const barFor = showAsAdmin ? (mode === 'teach' ? TEACH : BUILD) : null
-  const navSections = (barFor ?? (['details', 'updates', 'schedule', 'prep'] as SectionKey[]))
+  // Only an admin gets the two jobs, and only they get the switch. Everyone
+  // else is running the course, which is the same list an admin reads while
+  // running it.
+  const navSections = (showAsAdmin && mode === 'build' ? BUILD : TEACH)
     .filter((k) => present[k])
     .map((id) => ({
       id,

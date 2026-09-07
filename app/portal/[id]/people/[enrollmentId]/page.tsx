@@ -2,9 +2,10 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { courseAccess, courseSubtitle } from '@/lib/course-access'
+import { courseAccess, courseSubtitle, isAdmin } from '@/lib/course-access'
 import { courseDisplayName } from '@/lib/courses'
 import { loadCoursePerson } from '@/lib/people'
+import PersonRemoval from './PersonRemoval'
 
 // One student on one course, for the people running it.
 //
@@ -53,11 +54,17 @@ export default async function CoursePersonPage({
   const person = await loadCoursePerson(id, enrollmentId, admin)
   if (!person) notFound()
 
-  const { data: inst } = await admin
-    .from('course_instances')
-    .select('course_type, custom_title, starts_at, ends_at, location, client_name')
-    .eq('id', id)
-    .single()
+  // The removal panel is admin-only: an instructor on the course reads this
+  // page to check a waiver, which is not the same permission as erasing the
+  // person from it.
+  const [{ data: inst }, viewerIsAdmin] = await Promise.all([
+    admin
+      .from('course_instances')
+      .select('course_type, custom_title, starts_at, ends_at, location, client_name')
+      .eq('id', id)
+      .single(),
+    isAdmin(admin, user.id),
+  ])
 
   const w = person.waiver
 
@@ -231,6 +238,15 @@ export default async function CoursePersonPage({
               ))}
             </div>
           </>
+        )}
+
+        {viewerIsAdmin && (
+          <PersonRemoval
+            instanceId={id}
+            enrollmentId={person.enrollmentId}
+            name={person.name}
+            courseName={inst ? courseDisplayName(inst.course_type, inst.custom_title) : 'this course'}
+          />
         )}
       </div>
     </main>

@@ -10,7 +10,8 @@ import SaveButton from '@/components/SaveButton'
 import CapabilityPanel from '@/app/admin/instructors/CapabilityPanel'
 import SectorPanel from '@/app/admin/instructors/SectorPanel'
 import TeamPageToggle from '@/app/admin/instructors/TeamPageToggle'
-import CalendarInviteToggle from '@/app/admin/instructors/CalendarInviteToggle'
+import CalendarInviteStatus from '@/app/admin/instructors/CalendarInviteStatus'
+import CourseAlertsForm from '@/app/instructor/CourseAlertsForm'
 import ExemptToggle from '@/app/admin/instructors/ExemptToggle'
 import DeleteInstructorButton from '@/app/admin/instructors/DeleteInstructorButton'
 import { InviteButton } from '@/app/admin/instructors/InviteButton'
@@ -47,7 +48,7 @@ export default async function AdminInstructorDetailPage({ params }: { params: Pr
   // Look up by instructors.id (the URL param)
   const { data: instructor } = await admin
     .from('instructors')
-    .select('id, name, email, slug, profile_id, invite_sent_at, show_on_team_page, bio, avatar, avatar_position, avatar_scale, sectors, calendar_invites, instructor_capabilities(category, role)')
+    .select('id, name, email, slug, profile_id, invite_sent_at, show_on_team_page, bio, avatar, avatar_position, avatar_scale, sectors, calendar_invites, course_alert_muted_disciplines, course_alert_muted_sectors, instructor_capabilities(category, role)')
     .eq('id', id)
     .single()
 
@@ -177,11 +178,20 @@ export default async function AdminInstructorDetailPage({ params }: { params: Pr
           </form>
         </section>
 
-        {/* Calendar invites — the instructor can set this on their own
-            profile; an admin can set it for them. */}
+        {/* What reaches them, and how. Both rows are theirs to set on their own
+            profile; here they are read only — see CalendarInviteStatus. */}
         <section className="mb-10">
-          <h2 className="text-lg font-semibold mb-4">Calendar</h2>
-          <CalendarInviteToggle instructorId={instructor.id} initialValue={instructor.calendar_invites} />
+          <h2 className="text-lg font-semibold mb-4">Notifications</h2>
+          <div className="space-y-2">
+            <CalendarInviteStatus invited={instructor.calendar_invites} />
+            {profile?.role === 'admin' && (
+              <CourseAlertsForm
+                readOnly
+                mutedDisciplines={instructor.course_alert_muted_disciplines ?? []}
+                mutedSectors={instructor.course_alert_muted_sectors ?? []}
+              />
+            )}
+          </div>
         </section>
 
         {/* Public profile — bio + photo */}
