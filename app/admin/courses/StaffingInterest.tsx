@@ -26,6 +26,16 @@ export type InterestInviteRow = {
   assigned: boolean
 }
 
+// Lead and Assist are disjoint bands mirroring the badge on each row, so the
+// filter and the list use one vocabulary; All leads as the master box over the
+// lot, unqualified included. Ticking All fills the other two, unticking it
+// clears everything, and dropping one band leaves All showing a dash.
+const GROUPS: { label: string; match: (c: InterestCandidate) => boolean }[] = [
+  { label: 'All', match: () => true },
+  { label: 'Lead', match: (c) => c.leadQualified },
+  { label: 'Assist', match: (c) => c.qualified && !c.leadQualified },
+]
+
 const fmtDay = (iso: string) =>
   new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 
@@ -81,15 +91,20 @@ export default function StaffingInterest({
     })
   }
 
-  // All three skip anyone already working these days. They are shortcuts, and
-  // a shortcut that tries to email someone who can't come isn't one — ticking
-  // them by hand is still there for when the clash doesn't matter.
-  const pick = (match: (c: InterestCandidate) => boolean) =>
-    setSelected(new Set(candidates.filter((c) => match(c) && c.hasEmail && busyOn(c.id).length === 0).map((c) => c.id)))
+  // A band means everyone in it, double-booked included — a box labelled Lead
+  // that quietly holds back three leads is lying about what it ticked. The
+  // amber "booked" flag on the row is how you spot them and untick by hand.
+  // Only people with no address are left out, since they cannot be emailed.
+  const group = (match: (c: InterestCandidate) => boolean) =>
+    candidates.filter((c) => match(c) && c.hasEmail).map((c) => c.id)
 
-  const selectLeadsOnly = () => pick((c) => c.leadQualified)
-  const selectQualified = () => pick((c) => c.qualified)
-  const selectAll = () => pick(() => true)
+  // Adds a box's people or takes them back out.
+  const toggleGroup = (ids: string[], on: boolean) =>
+    setSelected((prev) => {
+      const next = new Set(prev)
+      for (const id of ids) { if (on) next.delete(id); else next.add(id) }
+      return next
+    })
 
   async function send() {
     if (busy || selected.size === 0) return
@@ -154,17 +169,28 @@ export default function StaffingInterest({
 
       {showPicker && (
         <div className="mt-3 p-4 bg-zinc-900 border border-zinc-800 rounded-lg">
-          <div className="flex items-center gap-2 mb-3 text-xs">
-            <span className="text-zinc-500">Preselect:</span>
-            <button onClick={selectQualified} className="px-2 py-0.5 rounded border border-zinc-700 text-zinc-400 hover:text-zinc-200 transition-colors">
-              All qualified
-            </button>
-            <button onClick={selectLeadsOnly} className="px-2 py-0.5 rounded border border-zinc-700 text-zinc-400 hover:text-zinc-200 transition-colors">
-              Lead-qualified only
-            </button>
-            <button onClick={selectAll} className="px-2 py-0.5 rounded border border-zinc-700 text-zinc-400 hover:text-zinc-200 transition-colors">
-              All instructors
-            </button>
+          {/* One row above the list, its first tick in the same column as
+              the rows below. */}
+          <div className="flex items-center gap-4 px-2 py-1.5 mb-1 border-b border-zinc-800 text-sm">
+            {GROUPS.map((g) => {
+              const ids = group(g.match)
+              const on = ids.length > 0 && ids.every((id) => selected.has(id))
+              const some = !on && ids.some((id) => selected.has(id))
+              return (
+                <label key={g.label} className="flex items-center gap-2.5 cursor-pointer text-zinc-400 hover:text-zinc-200 transition-colors">
+                  {/* `indeterminate` has no HTML attribute, so a ref callback
+                      is the only way it survives the first paint. */}
+                  <input
+                    ref={(el) => { if (el) el.indeterminate = some }}
+                    type="checkbox"
+                    checked={on}
+                    onChange={() => toggleGroup(ids, on)}
+                    className="accent-red-600"
+                  />
+                  {g.label}
+                </label>
+              )
+            })}
           </div>
           <div className="space-y-1 max-h-64 overflow-y-auto pr-1">
             {pickerRows.map((c) => (
