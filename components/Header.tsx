@@ -7,6 +7,7 @@ import { usePathname } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { createClient } from '@/lib/supabase/client'
 import { signOut } from '@/app/actions'
+import { NAV_LINKS, isPortalRoute } from '@/lib/portal-routes'
 
 function UserIcon() {
   return (
@@ -24,19 +25,14 @@ function SignOutIcon() {
   )
 }
 
-const navLinks = [
-  { href: '/services', label: 'Training' },
-  { href: '/team', label: 'Team' },
-  { href: '/gallery', label: 'Gallery' },
-  { href: '/blog', label: 'Blog' },
-  { href: '/contact', label: 'Contact' },
-]
+const navLinks = NAV_LINKS
 
 export default function Header() {
   const [scrolled, setScrolled] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [loggedIn, setLoggedIn] = useState(false)
   const pathname = usePathname()
+  const portalActive = isPortalRoute(pathname)
 
   useEffect(() => {
     const supabase = createClient()
@@ -109,27 +105,17 @@ export default function Header() {
             })}
             {loggedIn ? (
               <div className="ml-4 flex items-center gap-2">
-                {(() => {
-                  // /staffing is tokenized so it still works from the invite
-                  // email with no session, but it is a page for staff about
-                  // their own work — when there *is* a session it was reached
-                  // from the portal and belongs to it. The other tokenized
-                  // pages are for clients and students, so they stay outside.
-                  const portalActive = pathname === '/dashboard' || pathname.startsWith('/admin') || pathname.startsWith('/instructor') || pathname.startsWith('/portal') || pathname.startsWith('/staffing')
-                  return (
-                    <Link
-                      href="/dashboard"
-                      className={`flex items-center gap-1.5 px-3 py-1.5 border text-xs font-display font-600 tracking-widest uppercase transition-colors ${
-                        portalActive
-                          ? 'border-pr-red text-pr-red'
-                          : 'border-white/20 hover:border-white/40 text-pr-muted hover:text-pr-text'
-                      }`}
-                    >
-                      <UserIcon />
-                      Portal
-                    </Link>
-                  )
-                })()}
+                <Link
+                  href="/dashboard"
+                  className={`flex items-center gap-1.5 px-3 py-1.5 border text-xs font-display font-600 tracking-widest uppercase transition-colors ${
+                    portalActive
+                      ? 'border-pr-red text-pr-red'
+                      : 'border-white/20 hover:border-white/40 text-pr-muted hover:text-pr-text'
+                  }`}
+                >
+                  <UserIcon />
+                  Portal
+                </Link>
                 <form action={signOut}>
                   <button
                     type="submit"
@@ -212,21 +198,16 @@ export default function Header() {
               </Link>
               {loggedIn ? (
                 <>
-                  {(() => {
-                    const portalActive = pathname === '/dashboard' || pathname.startsWith('/admin') || pathname.startsWith('/instructor') || pathname.startsWith('/portal') || pathname.startsWith('/staffing')
-                    return (
-                      <Link
-                        href="/dashboard"
-                        className={`mt-2 py-3 flex items-center justify-center gap-2 border text-sm font-display font-600 tracking-widest uppercase transition-colors ${
-                          portalActive
-                            ? 'border-pr-red text-pr-red'
-                            : 'border-white/20 text-pr-muted'
-                        }`}
-                      >
-                        <UserIcon /> Portal
-                      </Link>
-                    )
-                  })()}
+                  <Link
+                    href="/dashboard"
+                    className={`mt-2 py-3 flex items-center justify-center gap-2 border text-sm font-display font-600 tracking-widest uppercase transition-colors ${
+                      portalActive
+                        ? 'border-pr-red text-pr-red'
+                        : 'border-white/20 text-pr-muted'
+                    }`}
+                  >
+                    <UserIcon /> Portal
+                  </Link>
                   <form action={signOut}>
                     <button
                       type="submit"
