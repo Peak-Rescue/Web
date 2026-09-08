@@ -4,10 +4,10 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import {
   KIND_META, LIBRARY_KINDS, BUCKET_META, BUCKET_ORDER,
-  TEMPLATE_SHELF_META, TEMPLATE_SHELF_ORDER, isTemplateShelf,
-  type LibraryItem, type TemplateShelf, type TemplateSummary, type Venue,
+  TEMPLATE_SHELF_META, TEMPLATE_SHELF_ORDER, SHELF_ORDER, isTemplateShelf,
+  shelfLabel, shelfHint,
+  type LibraryItem, type LibraryShelf, type TemplateShelf, type TemplateSummary, type Venue,
 } from '@/lib/library'
-import { CAPABILITY_META, CAPABILITY_ORDER } from '@/lib/capabilities'
 import { type GearItem, type GearList } from '@/app/admin/gear/GearListEditor'
 import { GEAR_ENTRIES_SELECT } from '@/lib/gear'
 import { type Schedule } from '@/app/admin/schedules/ScheduleEditor'
@@ -16,42 +16,87 @@ import TemplateRow from './TemplateRow'
 import AddTemplate from './AddTemplate'
 import ReviewQueue from './ReviewQueue'
 import AddLibraryItem from './AddLibraryItem'
+import ItemRow from './ItemRow'
+import TemplateReadOnly from './TemplateReadOnly'
 import InfoHint from '@/components/InfoHint'
+import { CAPABILITY_META, CAPABILITY_ORDER, type CapabilityCategory } from '@/lib/capabilities'
+import { readViewAs } from '@/lib/view-as'
+import ViewAsMenu from '@/components/ViewAsMenu'
 
 const input = 'w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500'
 
 export default async function LibraryPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; discipline?: string; kind?: string; audience?: string; venue?: string; bucket?: string; q?: string; template?: string; open?: string }>
+  searchParams: Promise<{ status?: string; discipline?: string; kind?: string; audience?: string; venue?: string; bucket?: string; q?: string; template?: string; open?: string; page?: string }>
 }) {
   // Published is the library. Pending review is a queue that Google Classroom
   // imports drop into, and landing on it meant the shelf you came to look at
   // read as empty — an item added by hand is published the moment it's added,
   // so the queue is usually empty and the answer usually isn't there.
-  const { status = 'published', discipline, kind, audience, venue, bucket, q, template, open } = await searchParams
+  const { status: askedStatus, discipline, kind, audience, venue, bucket, q, template, open, page } = await searchParams
 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
   const admin = createAdminClient()
   const { data: profile } = await admin.from('profiles').select('role').eq('id', user.id).single()
-  if (profile?.role !== 'admin') redirect('/dashboard')
+  // Instructors read the library; admins run it. It used to be two pages —
+  // /instructor/reference could only read, this one could only be reached by
+  // an admin — and the two drifted: only the reading one knew how to open a
+  // Drive document, only this one paginated at all. One page, and the
+  // difference is what you may do to a row, not which rows you may see.
+  if (!['admin', 'instructor'].includes(profile?.role ?? '')) redirect('/dashboard')
+  const realAdmin = profile?.role === 'admin'
+  // The preview means it here more than anywhere: the difference between the
+  // two roles on this page is the whole page's worth of verbs, and the only
+  // way to check that an instructor's library is usable is to read it as one.
+  const viewAs = await readViewAs(realAdmin)
+  if (viewAs === 'student') redirect('/dashboard')
+  const isAdmin = realAdmin && !viewAs
+  // Archived and pending are an admin's working states. Nobody else has a
+  // verb that acts on them, so nobody else is offered them.
+  const status = isAdmin ? (askedStatus ?? 'published') : 'published'
 
   // Gear lists and schedules are shelves too, but they're rows in their own
   // tables — so which of the two lists below runs depends on the shelf picked.
   // Filters that only a document can answer (type, venue, who-can-see, review
   // status) rule the template shelves out rather than showing them unfiltered.
   const docOnlyFilter = Boolean(kind || venue || audience)
-  const showDocs = !isTemplateShelf(bucket)
-  const showTemplates = (!bucket || isTemplateShelf(bucket)) && !docOnlyFilter
+  // Nothing asked for yet: the shelves themselves are the answer. 700 items
+  // behind four doors, and the old page opened straight onto the first 500 of
+  // them ordered by when they were imported — which is the one order nobody
+  // is ever looking in. The search box comes with the cards rather than after
+  // them, because a card that opens onto 333 items hasn't finished the job.
+  const landing = !bucket && !q && !discipline && !kind && !venue && !audience && status === 'published'
+  const showDocs = !isTemplateShelf(bucket) && !landing
+  const showTemplates = (!bucket || isTemplateShelf(bucket)) && !docOnlyFilter && !landing
   const shelves: TemplateShelf[] = isTemplateShelf(bucket) ? [bucket] : TEMPLATE_SHELF_ORDER
+
+  // A page of results, not the whole shelf. The reference page learned this —
+  // 800 rows cost about half a second to render a list nobody reads end to
+  // end — while this one capped at 500 and said nothing, so items 501 and on
+  // simply weren't reachable from here.
+  const PAGE = 60
+  const pageNo = Math.max(0, Number(page ?? '0') || 0)
+  const offset = pageNo * PAGE
 
   let query = admin
     .from('library_items')
     .select('id, title, description, source_type, url, edit_url, drive_file_id, kind, audience, disciplines, topics, venue_id, expires_at, status, bucket, region, source_class, source_topic, source_item, library_item_links(id, url, access, audience)')
-    .order('created_at', { ascending: false })
-    .limit(500)
+    // The review queue is a queue: oldest problems first is the wrong way
+    // round, and it is read top to bottom rather than looked up. Every other
+    // view is looked up, so it goes in the order a shelf goes in.
+    .order(status === 'pending' ? 'created_at' : 'title', { ascending: status !== 'pending' })
+    // Titles are not unique — 48 of them appear more than once on the teaching
+    // shelf alone, "Rope Tech" thirteen times — so ordering by title is not an
+    // order at all, and paging through one drops rows and repeats others
+    // depending on how the rows came back that time. The id breaks the tie and
+    // makes the sort total, which is what .range() needs to mean anything.
+    .order('id')
+    // One extra row tells us whether there's a next page — an exact count
+    // costs a full table scan and we only need "is there more".
+    .range(offset, offset + PAGE)
 
   if (status !== 'all') query = query.eq('status', status)
   if (discipline) query = query.contains('disciplines', [discipline])
@@ -64,7 +109,7 @@ export default async function LibraryPage({
   // Templates take the same search box and discipline tags the documents use.
   // They have no review status, so the status tabs pass them by — there's
   // nothing to approve about a kit list you wrote yourself.
-  const [{ data: itemRows }, { data: venueRows }, { data: siteRows }, gearRes, scheduleRes, catalogRes, { count: pendingCount }] = await Promise.all([
+  const [{ data: itemRows }, { data: venueRows }, { data: siteRows }, gearRes, scheduleRes, catalogRes, { count: pendingCount }, shelfCounts] = await Promise.all([
     showDocs ? query : Promise.resolve({ data: [] }),
     admin.from('venues').select('id, name, region, region_code, client_name, notes, active').order('name'),
     // A per-region template pins its canyons here, so the courses started from
@@ -101,12 +146,28 @@ export default async function LibraryPage({
     // land on, so the only thing keeping an import from rotting there unseen
     // is the number on the tab.
     admin.from('library_items').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
+    // What is behind each door, for the cards. Head-only counts, and only on
+    // the landing — a number on a card is the difference between picking a
+    // shelf and guessing at one.
+    landing
+      ? Promise.all([
+          ...BUCKET_ORDER.map(async (b) => [b, (await admin
+            .from('library_items').select('id', { count: 'exact', head: true })
+            .eq('status', 'published').eq('bucket', b)).count ?? 0] as [LibraryShelf, number]),
+          admin.from('gear_lists').select('id', { count: 'exact', head: true }).eq('is_template', true)
+            .then((r) => ['gear', r.count ?? 0] as [LibraryShelf, number]),
+          admin.from('course_schedules').select('id', { count: 'exact', head: true }).eq('is_template', true)
+            .then((r) => ['schedule', r.count ?? 0] as [LibraryShelf, number]),
+        ])
+      : Promise.resolve([] as [LibraryShelf, number][]),
   ])
 
   // The embed comes back under the table's name; the item calls them links.
-  const items = ((itemRows ?? []) as unknown as (LibraryItem & {
+  const fetched = ((itemRows ?? []) as unknown as (LibraryItem & {
     library_item_links?: LibraryItem['links']
   })[]).map((r) => ({ ...r, links: r.library_item_links ?? [] })) as LibraryItem[]
+  const hasMore = fetched.length > PAGE
+  const items = hasMore ? fetched.slice(0, PAGE) : fetched
   const venues = (venueRows ?? []) as Venue[]
   const siteOptions = ((siteRows ?? []) as unknown as {
     id: string; name: string; kind: string | null; beta: string | null; venue_id: string | null; venues: { name: string } | null
@@ -132,6 +193,8 @@ export default async function LibraryPage({
   })
 
   const shelfCount = gearTemplates.length + scheduleTemplates.length
+  const countByShelf = new Map<LibraryShelf, number>(shelfCounts)
+  const venueName = new Map(venues.map((v) => [v.id, v.name]))
 
   // Pending grouped by source class, derived from what we already fetched
   // rather than a second scan of the table.
@@ -146,12 +209,31 @@ export default async function LibraryPage({
   // "edit its name" and "show me what's in it" are different errands.
   const openPanel: 'contents' | 'details' = open === 'contents' ? 'contents' : 'details'
 
+  // Changing what you're looking at puts you back on page one; only paging
+  // carries the page, which is why it isn't in the merge.
   const href = (patch: Record<string, string | undefined>) => {
     const p = new URLSearchParams()
     const merged = { status, discipline, kind, audience, venue, bucket, q, ...patch }
     for (const [k, v] of Object.entries(merged)) if (v) p.set(k, v)
     return `/admin/library?${p.toString()}`
   }
+
+  // Documents on the current page, under the first expertise each is tagged
+  // with. The reference page listed an item once per discipline it carried,
+  // which read fine until you were looking at the same row twice; the filter
+  // above still matches on any of them, so nothing is unreachable for being
+  // grouped under one.
+  const grouped = (() => {
+    const by = new Map<string, LibraryItem[]>()
+    for (const i of items) {
+      const k = i.disciplines[0] ?? '_untagged'
+      by.set(k, [...(by.get(k) ?? []), i])
+    }
+    return [
+      ...CAPABILITY_ORDER.filter((c) => by.has(c)).map((c) => [c as string, by.get(c)!] as const),
+      ...(by.has('_untagged') ? [['_untagged', by.get('_untagged')!] as const] : []),
+    ]
+  })()
 
   const tab = (key: string, text: string, badge?: number) => (
     <Link
@@ -173,32 +255,41 @@ export default async function LibraryPage({
   return (
     <main className="min-h-screen bg-zinc-950 text-white pt-16 md:pt-20">
       <div className="max-w-5xl mx-auto px-4 py-10">
-        <Link href="/admin" className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors mb-6 inline-block">← Portal</Link>
+        <div className="mb-6 flex items-center justify-between gap-3">
+          <Link href="/admin" className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors">← Portal</Link>
+          {realAdmin && <ViewAsMenu viewAs={viewAs ?? ''} />}
+        </div>
 
         <div className="mb-8 flex items-end justify-between gap-4 flex-wrap">
           <div>
             <h1 className="text-2xl font-bold">Content Library</h1>
             <p className="text-zinc-400 mt-1">
-              Course material, references, maps and permits, plus the gear lists and schedules we build here.
+              {isAdmin
+                ? 'Everything we teach from, look things up in, and build courses out of — and where it is added, tagged and retired.'
+                : 'Everything we teach from and look things up in — teaching material, manuals, standards, maps, kit lists and running orders.'}
             </p>
           </div>
-          <div className="flex items-center gap-2">
-            <Link href="/admin/library/overview" className="text-xs px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded transition-colors">
-              Coverage
-            </Link>
-            <Link href="/admin/venues" className="text-xs px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded transition-colors">
-              Venues
-            </Link>
-            {/* Routes are shelved next to the maps and permits they go with —
-                a canyon's beta is library material, it just isn't a link. */}
-            <Link href="/admin/sites" className="text-xs px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded transition-colors">
-              Sites
-            </Link>
-          </div>
+          {/* Three consoles about the library rather than in it, so they sit
+              in the header and only for the people who run them. */}
+          {isAdmin && (
+            <div className="flex items-center gap-2">
+              <Link href="/admin/library/overview" className="text-xs px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded transition-colors">
+                Coverage
+              </Link>
+              <Link href="/admin/venues" className="text-xs px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded transition-colors">
+                Venues
+              </Link>
+              {/* Routes are shelved next to the maps and permits they go with —
+                  a canyon's beta is library material, it just isn't a link. */}
+              <Link href="/admin/sites" className="text-xs px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded transition-colors">
+                Sites
+              </Link>
+            </div>
+          )}
         </div>
 
         {/* ── Review queue ─────────────────────────────────────────────── */}
-        {pendingByClass.size > 0 && status === 'pending' && (
+        {isAdmin && pendingByClass.size > 0 && status === 'pending' && (
           <section className="mb-6 p-4 bg-zinc-900 border border-zinc-800 rounded-lg">
             <h2 className="text-sm font-semibold mb-1">What approving does</h2>
             <ul className="text-xs text-zinc-400 space-y-1 list-disc pl-4">
@@ -213,17 +304,22 @@ export default async function LibraryPage({
         )}
 
         {/* ── Filters ──────────────────────────────────────────────────── */}
-        <div className="flex items-center gap-1 mb-3 flex-wrap">
-          {/* The shelves first, in the order you'd read them; the import queue
-              last, where an exception belongs, carrying its own count. */}
-          {tab('published', 'Published')}
-          {tab('archived', 'Archived')}
-          {tab('all', 'All')}
-          {tab('pending', 'Pending review', pendingCount ?? 0)}
-        </div>
+        {/* Published / archived / pending are the states of the filing, not
+            of the material. Only the people who can move a row between them
+            are offered them. */}
+        {isAdmin && (
+          <div className="flex items-center gap-1 mb-3 flex-wrap">
+            {/* The shelves first, in the order you'd read them; the import queue
+                last, where an exception belongs, carrying its own count. */}
+            {tab('published', 'Published')}
+            {tab('archived', 'Archived')}
+            {tab('all', 'All')}
+            {tab('pending', 'Pending review', pendingCount ?? 0)}
+          </div>
+        )}
 
         <form className="grid grid-cols-2 sm:grid-cols-6 gap-2 mb-6" action="/admin/library">
-          <input type="hidden" name="status" value={status} />
+          {isAdmin && <input type="hidden" name="status" value={status} />}
           <input name="q" defaultValue={q ?? ''} placeholder="Search title…" className={input} />
           <select name="bucket" defaultValue={bucket ?? ''} className={input}>
             <option value="">All libraries</option>
@@ -250,27 +346,95 @@ export default async function LibraryPage({
         {/* ── Add ──────────────────────────────────────────────────────── */}
         {/* Documents only — a gear list or schedule is started from its
             own shelf below, where the editor is. */}
-        <details className={`mb-6 group ${showDocs ? '' : 'hidden'}`}>
-          <summary className="cursor-pointer list-none text-sm text-zinc-400 hover:text-zinc-200 transition-colors">
-            <span className="text-zinc-600 mr-2 inline-block transition-transform group-open:rotate-90">▶</span>
-            Add an item
-          </summary>
-          <AddLibraryItem venues={venues} />
-        </details>
+        {isAdmin && (
+          <details className={`mb-6 group ${showDocs ? '' : 'hidden'}`}>
+            <summary className="cursor-pointer list-none text-sm text-zinc-400 hover:text-zinc-200 transition-colors">
+              <span className="text-zinc-600 mr-2 inline-block transition-transform group-open:rotate-90">▶</span>
+              Add an item
+            </summary>
+            <AddLibraryItem venues={venues} />
+          </details>
+        )}
+
+        {/* ── Items ────────────────────────────────────────────────────── */}
+        {/* ── The shelves ──────────────────────────────────────────────── */}
+        {landing && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {SHELF_ORDER.map((shelf) => (
+              <Link
+                key={shelf}
+                href={href({ bucket: shelf })}
+                className="p-4 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-pr-red transition-colors"
+              >
+                <div className="flex items-baseline justify-between gap-3">
+                  <h2 className="font-semibold">{shelfLabel(shelf)}</h2>
+                  <span className="text-xs text-zinc-500 shrink-0 tabular-nums">{countByShelf.get(shelf) ?? 0}</span>
+                </div>
+                <p className="text-xs text-zinc-500 mt-1">{shelfHint(shelf)}</p>
+              </Link>
+            ))}
+          </div>
+        )}
 
         {/* ── Items ────────────────────────────────────────────────────── */}
         {showDocs && (
           <>
-            <p className="text-xs text-zinc-600 mb-3">{items.length} item{items.length === 1 ? '' : 's'}</p>
+            <p className="text-xs text-zinc-600 mb-3">
+              {items.length === 0
+                ? 'No items'
+                : `Showing ${offset + 1}–${offset + items.length}`}
+            </p>
             {status === 'pending' && items.length > 0 ? (
               <ReviewQueue items={items} venues={venues} />
             ) : (
-              <div className="space-y-2">
-                {items.map((it) => <LibraryRow key={it.id} item={it} venues={venues} />)}
+              <div className="space-y-8">
+                {grouped.map(([cat, rows]) => (
+                  <section key={cat}>
+                    <h2 className="text-sm font-semibold text-zinc-400 mb-2">
+                      {cat === '_untagged' ? 'Not tied to an expertise' : CAPABILITY_META[cat as CapabilityCategory].label}
+                      <span className="text-zinc-600 font-normal ml-2">{rows.length}</span>
+                    </h2>
+                    {/* The same rows either way. An admin gets the editor,
+                        which is a row that can be opened and changed; everyone
+                        else gets the row. */}
+                    {isAdmin ? (
+                      <div className="space-y-2">
+                        {rows.map((it) => <LibraryRow key={it.id} item={it} venues={venues} />)}
+                      </div>
+                    ) : (
+                      <div className="border border-zinc-800 rounded-lg divide-y divide-zinc-800/70">
+                        {rows.map((it) => (
+                          <ItemRow key={it.id} item={it} venueName={it.venue_id ? venueName.get(it.venue_id) : null} />
+                        ))}
+                      </div>
+                    )}
+                  </section>
+                ))}
                 {items.length === 0 && (
                   <p className="text-sm text-zinc-500">
                     {showTemplates && shelfCount > 0 ? 'No documents match — the shelves below still do.' : 'Nothing here yet.'}
                   </p>
+                )}
+              </div>
+            )}
+
+            {(hasMore || offset > 0) && (
+              <div className="flex items-center gap-3 mt-8">
+                {offset > 0 && (
+                  <Link
+                    href={href({ page: pageNo === 1 ? undefined : String(pageNo - 1) })}
+                    className="text-xs px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded transition-colors"
+                  >
+                    ← Previous
+                  </Link>
+                )}
+                {hasMore && (
+                  <Link
+                    href={href({ page: String(pageNo + 1) })}
+                    className="text-xs px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded transition-colors"
+                  >
+                    Next →
+                  </Link>
                 )}
               </div>
             )}
@@ -293,28 +457,47 @@ export default async function LibraryPage({
                     text={`${TEMPLATE_SHELF_META[shelf].hint}. Editing one here changes what the next course starts from — courses already using it keep their own copy.`}
                   />
                 </h2>
-                <AddTemplate shelf={shelf} />
+                {isAdmin && <AddTemplate shelf={shelf} />}
               </div>
               <div className="space-y-2">
                 {shelf === 'gear' && gearTemplates.map((t) => (
-                  <TemplateRow
-                    key={t.id}
-                    shelf="gear"
-                    list={t}
-                    catalog={catalog}
-                    summary={summarize(t, t.gear_list_entries?.length ?? 0, t.audience)}
-                    initialOpen={template === t.id ? openPanel : undefined}
-                  />
+                  isAdmin ? (
+                    <TemplateRow
+                      key={t.id}
+                      shelf="gear"
+                      list={t}
+                      catalog={catalog}
+                      summary={summarize(t, t.gear_list_entries?.length ?? 0, t.audience)}
+                      initialOpen={template === t.id ? openPanel : undefined}
+                    />
+                  ) : (
+                    <TemplateReadOnly
+                      key={t.id}
+                      shelf="gear"
+                      list={t}
+                      catalog={catalog}
+                      summary={summarize(t, t.gear_list_entries?.length ?? 0, t.audience)}
+                    />
+                  )
                 ))}
                 {shelf === 'schedule' && scheduleTemplates.map((t) => (
-                  <TemplateRow
-                    key={t.id}
-                    shelf="schedule"
-                    schedule={t}
-                    sites={siteOptions}
-                    summary={summarize(t, t.schedule_days?.length ?? 0)}
-                    initialOpen={template === t.id ? openPanel : undefined}
-                  />
+                  isAdmin ? (
+                    <TemplateRow
+                      key={t.id}
+                      shelf="schedule"
+                      schedule={t}
+                      sites={siteOptions}
+                      summary={summarize(t, t.schedule_days?.length ?? 0)}
+                      initialOpen={template === t.id ? openPanel : undefined}
+                    />
+                  ) : (
+                    <TemplateReadOnly
+                      key={t.id}
+                      shelf="schedule"
+                      schedule={t}
+                      summary={summarize(t, t.schedule_days?.length ?? 0)}
+                    />
+                  )
                 ))}
                 {rows.length === 0 && (
                   <p className="text-sm text-zinc-500">

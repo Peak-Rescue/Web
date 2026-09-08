@@ -50,6 +50,10 @@ export function shelfLabel(v: LibraryShelf): string {
   return isTemplateShelf(v) ? TEMPLATE_SHELF_META[v].label : BUCKET_META[v].label
 }
 
+export function shelfHint(v: LibraryShelf): string {
+  return isTemplateShelf(v) ? TEMPLATE_SHELF_META[v].hint : BUCKET_META[v].hint
+}
+
 export function isTemplateShelf(v: string | undefined): v is TemplateShelf {
   return v === 'gear' || v === 'schedule'
 }

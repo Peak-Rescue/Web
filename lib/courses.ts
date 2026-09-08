@@ -237,3 +237,58 @@ export function instanceLabel(i: InstanceLabelFields): string {
   ].filter(Boolean)
   return `${parts.join(' · ')} (PR-${String(i.ref_number).padStart(4, '0')})`
 }
+
+/** A course's working days, as the two facts that decide them. */
+export type CourseWindow = {
+  starts_at: string | null
+  ends_at: string | null
+  offDays: OffDayRange[]
+}
+
+/** The dates two courses both run — the real clash, not merely two windows
+    that touch. A course with a week off in the middle is free that week, and
+    someone can teach elsewhere in it, so the comparison is day by day rather
+    than range against range. Empty when either has no dates yet: a course
+    nobody has scheduled cannot clash with anything. */
+export function overlappingDates(a: CourseWindow, b: CourseWindow): string[] {
+  if (!a.starts_at || !b.starts_at) return []
+  const aDays = new Set(courseDates(a.starts_at, a.ends_at, a.offDays))
+  return courseDates(b.starts_at, b.ends_at, b.offDays).filter((d) => aDays.has(d))
+}
+
+/** A course somebody is already on that runs on this course's days: named,
+    and with the days the two share. Both parts are display-ready, and kept
+    apart because a dropdown has room for the days alone where a list has room
+    for the course as well. */
+export type StaffingClash = { course: string; days: string }
+
+/** Every clash this course has, by instructor id. Absent means free. */
+export type StaffingConflicts = Record<string, StaffingClash[]>
+
+/** A set of dates written the short way: "Mar 3–5", or "Mar 3–5, Mar 9" when
+    there's a gap. Consecutive days join up; the year is left off because
+    everything this labels is already sitting next to the course it belongs
+    to. Input need not be sorted. */
+export function formatDayList(dates: string[]): string {
+  const sorted = [...new Set(dates)].sort()
+  if (sorted.length === 0) return ''
+
+  const runs: [string, string][] = []
+  for (const d of sorted) {
+    const last = runs[runs.length - 1]
+    if (last && dayShift(last[1], 1) === d) last[1] = d
+    else runs.push([d, d])
+  }
+
+  const md = (d: string) =>
+    new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  const day = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('en-US', { day: 'numeric' })
+
+  return runs
+    .map(([from, to]) => {
+      if (from === to) return md(from)
+      // Same month, so the month is said once: "Mar 3–5", not "Mar 3–Mar 5".
+      return from.slice(0, 7) === to.slice(0, 7) ? `${md(from)}–${day(to)}` : `${md(from)}–${md(to)}`
+    })
+    .join(', ')
+}

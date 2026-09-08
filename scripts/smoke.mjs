@@ -61,8 +61,25 @@ const { data: adminRow } = await admin.from('profiles')
 const { data: enrolled } = await admin.from('enrollments')
   .select('instance_id, profiles!inner(email, role)')
   .not('profiles.email', 'is', null).neq('profiles.role', 'admin').limit(1).maybeSingle()
+// A real instructor, not an admin previewing as one: the library merged the
+// two roles onto one page, and only a real instructor proves the gate.
+const { data: instructorRow } = await admin.from('profiles')
+  .select('email').eq('role', 'instructor').not('email', 'is', null).limit(1).maybeSingle()
 const { data: courses } = await admin.from('course_instances')
   .select('id').order('created_at', { ascending: false }).limit(6)
+
+// The library reads for admins and instructors both, so every shelf is worth
+// asking for as each of them — the landing, a document shelf, a template shelf
+// with its read-only renderer, a search, and page two.
+const LIBRARY_PATHS = [
+  '/admin/library',
+  '/admin/library?bucket=teaching',
+  '/admin/library?bucket=teaching&page=1',
+  '/admin/library?bucket=map',
+  '/admin/library?bucket=gear',
+  '/admin/library?bucket=schedule',
+  '/admin/library?q=rope',
+]
 
 const runs = []
 const argv = process.argv.slice(2)
@@ -71,7 +88,9 @@ if (argv.length) {
 } else {
   runs.push({
     who: adminRow.email, label: 'admin',
-    paths: ['/admin', '/admin/courses', '/admin/employee-info', ...courses.flatMap((c) => [
+    paths: ['/admin', '/admin/courses', '/admin/employee-info',
+      ...LIBRARY_PATHS, '/admin/library?status=pending', '/admin/library?status=all',
+      ...courses.flatMap((c) => [
       `/portal/${c.id}`,
       `/portal/${c.id}?mode=build`,
       `/portal/${c.id}?mode=teach`,
@@ -83,12 +102,15 @@ if (argv.length) {
   // failure, and rightly: it isn't a page there.
   runs.push({
     who: adminRow.email, label: 'admin as instructor', preview: 'instructor',
-    paths: ['/admin', '/admin/employee-info', ...courses.map((c) => `/portal/${c.id}`)],
+    paths: ['/admin', '/admin/employee-info', ...LIBRARY_PATHS, ...courses.map((c) => `/portal/${c.id}`)],
   })
   runs.push({
     who: adminRow.email, label: 'admin as student', preview: 'student',
     paths: ['/dashboard', ...courses.map((c) => `/portal/${c.id}`)],
   })
+  if (instructorRow?.email) {
+    runs.push({ who: instructorRow.email, label: 'instructor', paths: ['/admin', ...LIBRARY_PATHS] })
+  }
   if (enrolled?.profiles?.email) {
     runs.push({
       who: enrolled.profiles.email, label: 'student',

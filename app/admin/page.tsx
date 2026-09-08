@@ -289,17 +289,6 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       ),
     },
     {
-      title: 'Reference',
-      desc: 'Manuals, tech notes, standards and venue beta',
-      href: '/instructor/reference',
-      section: 'personal',
-      icon: (
-        <svg {...svgProps}>
-          <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
-        </svg>
-      ),
-    },
-    {
       title: 'Gear Catalog',
       desc: 'The kit our lists are built from, and the models that satisfy each type',
       href: '/admin/gear',
@@ -311,13 +300,16 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       ),
     },
     {
+      // Under Your tools rather than Administration: instructors read the
+      // library too, and this was two cards sitting in different sections of
+      // the same page with the same list of nouns under each.
       title: 'Content Library',
-      desc: 'Course material, references, maps and venue packs',
+      desc: 'Look something up, or see what a course is built from',
       href: '/admin/library',
-      section: 'admin',
+      section: 'personal',
       icon: (
         <svg {...svgProps}>
-          <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+          <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
         </svg>
       ),
     },

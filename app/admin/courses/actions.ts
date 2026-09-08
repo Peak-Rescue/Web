@@ -225,7 +225,7 @@ export async function createInstance(formData: FormData) {
   }
 
   const { data: alreadyMade } = await duplicate.limit(1).maybeSingle()
-  if (alreadyMade) redirect(`/admin/courses/${alreadyMade.id}`)
+  if (alreadyMade) redirect(`/portal/${alreadyMade.id}`)
 
   assertCustomCourseTagged(course_type, custom_categories, internal)
 
@@ -245,7 +245,7 @@ export async function createInstance(formData: FormData) {
   // course, but a tentative one is precisely what an admin wants early.
   after(() => emailAdminsNewCourse(admin, data.id, creator.id))
 
-  redirect(`/admin/courses/${data.id}`)
+  redirect(`/portal/${data.id}`)
 }
 
 // The internal note on its own action, because it is no longer in the details

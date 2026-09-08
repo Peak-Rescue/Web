@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { assignInstructor } from './actions'
 import { sendInterestInvites, deleteInterestInvite } from './staffing-actions'
 import TrashIcon from '@/components/TrashIcon'
+import type { StaffingConflicts } from '@/lib/courses'
 
 export type InterestCandidate = {
   id: string
@@ -34,6 +35,7 @@ export default function StaffingInterest({
   invites,
   hasLead,
   preselect = true,
+  conflicts = {},
 }: {
   instanceId: string
   candidates: InterestCandidate[]
@@ -44,11 +46,19 @@ export default function StaffingInterest({
   // place is deliberate — who gets asked is the decision, so nobody is
   // pre-ticked and the "All qualified" button is one click away.
   preselect?: boolean
+  /** Courses each instructor is already on that run on this course's days.
+      Someone booked elsewhere is worth not emailing, and worth thinking twice
+      about before assigning off the back of a reply — but they are still
+      shown, and can still be picked. */
+  conflicts?: StaffingConflicts
 }) {
   const invitedIds = new Set(invites.map((i) => i.instructorId))
+  const busyOn = (id: string) => conflicts[id] ?? []
+  // Nobody double-booked is preselected — a mass email is the one place a
+  // clash should cost nothing to respect, since not asking is free.
   const defaultSelection = () =>
     preselect
-      ? new Set(candidates.filter((c) => c.qualified && c.hasEmail && !invitedIds.has(c.id)).map((c) => c.id))
+      ? new Set(candidates.filter((c) => c.qualified && c.hasEmail && !invitedIds.has(c.id) && busyOn(c.id).length === 0).map((c) => c.id))
       : new Set<string>()
 
   const [showPicker, setShowPicker] = useState(false)
@@ -71,17 +81,15 @@ export default function StaffingInterest({
     })
   }
 
-  function selectLeadsOnly() {
-    setSelected(new Set(candidates.filter((c) => c.leadQualified && c.hasEmail).map((c) => c.id)))
-  }
+  // All three skip anyone already working these days. They are shortcuts, and
+  // a shortcut that tries to email someone who can't come isn't one — ticking
+  // them by hand is still there for when the clash doesn't matter.
+  const pick = (match: (c: InterestCandidate) => boolean) =>
+    setSelected(new Set(candidates.filter((c) => match(c) && c.hasEmail && busyOn(c.id).length === 0).map((c) => c.id)))
 
-  function selectQualified() {
-    setSelected(new Set(candidates.filter((c) => c.qualified && c.hasEmail).map((c) => c.id)))
-  }
-
-  function selectAll() {
-    setSelected(new Set(candidates.filter((c) => c.hasEmail).map((c) => c.id)))
-  }
+  const selectLeadsOnly = () => pick((c) => c.leadQualified)
+  const selectQualified = () => pick((c) => c.qualified)
+  const selectAll = () => pick(() => true)
 
   async function send() {
     if (busy || selected.size === 0) return
@@ -122,8 +130,13 @@ export default function StaffingInterest({
   }
 
   // Qualified first, then the rest — mirrors the assign dropdown's grouping.
+  // Anyone already working these days sinks within their group, since they are
+  // the least likely to be asked.
   const pickerRows = [...candidates].sort(
-    (a, b) => Number(b.qualified) - Number(a.qualified) || a.name.localeCompare(b.name)
+    (a, b) =>
+      Number(b.qualified) - Number(a.qualified) ||
+      Number(busyOn(a.id).length > 0) - Number(busyOn(b.id).length > 0) ||
+      a.name.localeCompare(b.name)
   )
 
   return (
@@ -177,6 +190,9 @@ export default function StaffingInterest({
                   <span className="text-[10px] text-zinc-600">not qualified</span>
                 )}
                 {!c.hasEmail && <span className="text-[10px] text-zinc-600">no email</span>}
+                {busyOn(c.id).map((k) => (
+                  <span key={k.course} className="text-[10px] text-amber-400/90">booked {k.days}</span>
+                ))}
                 {invitedIds.has(c.id) && <span className="text-[10px] text-zinc-500 ml-auto">already invited — will re-send</span>}
               </label>
             ))}
@@ -251,6 +267,9 @@ export default function StaffingInterest({
                   </button>
                 </div>
               </div>
+              {!inv.assigned && busyOn(inv.instructorId).map((k) => (
+                <p key={k.course} className="mt-1.5 text-xs text-amber-400/90">Already on {k.course} · {k.days}</p>
+              ))}
               {inv.note && <p className="mt-1.5 text-xs text-zinc-400 italic">&ldquo;{inv.note}&rdquo;</p>}
             </div>
           ))}

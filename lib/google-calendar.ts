@@ -241,6 +241,11 @@ export async function syncCourseCalendar(admin: Admin, instanceId: string): Prom
       attendees?: { email?: string; responseStatus?: string }[]
     }
     let existing: ExistingEvent | null = null
+    // The pointer as the row had it when this run read it. Every branch below
+    // that decides "recreate" clears the local copy, so this is the only record
+    // of what we were asked to update — and it's what the claim at the end
+    // checks against to tell a stale event apart from a concurrent run's work.
+    const priorEventId = course.gcal_event_id
     if (course.gcal_event_id && course.gcal_calendar_id) {
       const res = await gcal(
         'GET',
@@ -321,7 +326,28 @@ export async function syncCourseCalendar(admin: Admin, instanceId: string): Prom
         return
       }
       const created = (await res.json()) as { id: string }
-      course.gcal_event_id = created.id
+
+      // Claim the pointer only if the row still holds what we started from
+      // (or nothing). Nearly every write path fires a sync via after(), so two
+      // runs overlap routinely — a course save landing with a staffing change —
+      // and each decides create-vs-patch from its own read. Without this the
+      // loser's event stays on the calendar forever: the row points at the
+      // winner's copy, so the portal never patches or deletes the other one,
+      // and the course shows up twice. Losing the race means our insert was
+      // redundant, so take it back off the calendar.
+      const claim = admin
+        .from('course_instances')
+        .update({ gcal_event_id: created.id, gcal_calendar_id: target })
+        .eq('id', instanceId)
+      const { data: claimed } = await (
+        priorEventId
+          ? claim.or(`gcal_event_id.is.null,gcal_event_id.eq.${priorEventId}`)
+          : claim.is('gcal_event_id', null)
+      )
+        .select('id')
+        .maybeSingle()
+      if (!claimed) await deleteEvent(target, created.id)
+      return
     }
 
     await admin

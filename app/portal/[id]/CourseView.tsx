@@ -1454,6 +1454,9 @@ export default async function CourseView({
                   courseCategory={inst.course_category as string | null}
                   customCategories={inst.custom_categories as string[] | null}
                   internal={Boolean(inst.internal)}
+                  startsAt={inst.starts_at as string | null}
+                  endsAt={inst.ends_at as string | null}
+                  offDays={offDays ?? []}
                 />
               ) : null
             }
