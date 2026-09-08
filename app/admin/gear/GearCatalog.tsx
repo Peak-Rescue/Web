@@ -114,6 +114,10 @@ export default function GearCatalog({ items }: { items: Row[] }) {
   // Which product has its link line open. A link is set once and read by
   // clicking, so it earns an icon and not a field on every row.
   const [linking, setLinking] = useState<string | null>(null)
+  // Which row is having a note written on it. Same shape as `linking`: the
+  // field is a line of its own, so it opens on a press rather than on the
+  // pointer passing over.
+  const [noting, setNoting] = useState<string | null>(null)
   // Which row has asked to be deleted and is waiting to be asked again.
   const [confirming, setConfirming] = useState<string | null>(null)
 
@@ -264,6 +268,20 @@ export default function GearCatalog({ items }: { items: Row[] }) {
                 <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
               </svg>
             </button>
+            {/* Opens the note line, next to the button that opens the link
+                line. Revealing the field itself on hover made the row grow as
+                the pointer went past, so a glance down the catalogue shuffled
+                every row under it — the press is what should change the shape
+                of the page, not the passing. */}
+            <button
+              onClick={() => setNoting(noting === row.id ? null : row.id)}
+              title={row.info ? 'Edit the note or spec' : 'Add a note or spec'}
+              className={`transition-colors ${row.info ? 'text-zinc-600 hover:text-white' : 'text-zinc-700 hover:text-white'}`}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+              </svg>
+            </button>
           </>
         )}
 
@@ -312,39 +330,78 @@ export default function GearCatalog({ items }: { items: Row[] }) {
   // at all times is a form, and this page is read far more than it is edited.
   function ItemRow({ row, sub }: { row: Row; sub?: boolean }) {
     return (
-      <div className={`px-2 py-1.5 ${sub ? 'pl-9 bg-zinc-950/30' : ''}`}>
+      <div className={`px-2 py-1.5 ${sub ? 'bg-zinc-950/30' : ''}`}>
         <div className="flex items-center gap-2">
-          <input
-            defaultValue={row.name}
-            onBlur={(e) => e.target.value !== row.name &&
-              run(() => upsertGearItem({ id: row.id, name: e.target.value }))}
-            className={`${CELL} ${sub ? 'text-[13px] text-zinc-300 w-52' : 'text-sm font-medium w-64'}`}
-          />
+          {/* A type is a heading; a model is a row under it.
+              Giving the type a column of its own meant the widest column on
+              the page was blank on every model row, and pushed the model's
+              name sixteen rems in to make space for it. As a heading it takes
+              the width it needs — "Cordelette" and "Harness and personal
+              rigging" both — and the table beneath is the two things that
+              actually vary per row.
 
-          {sub && (
+              The width belongs to the cell, not the field: CELL carries
+              w-full, so a width set on an input is quietly overruled by it,
+              which is how the name came to run the length of the row. */}
+          <span className={sub ? 'shrink-0 w-56' : 'min-w-0 flex-1'}>
             <input
-              list="gear-brands"
-              defaultValue={row.brand ?? ''}
-              onBlur={(e) => e.target.value !== (row.brand ?? '') &&
-                run(() => upsertGearItem({ id: row.id, name: row.name, brand: e.target.value }))}
-              placeholder="Brand"
-              className={`${CELL} text-[13px] text-zinc-300 w-40`}
+              defaultValue={row.name}
+              onBlur={(e) => e.target.value !== row.name &&
+                run(() => upsertGearItem({ id: row.id, name: e.target.value }))}
+              className={`${CELL} ${sub ? 'text-[13px] text-zinc-300' : 'text-sm font-medium'}`}
             />
+          </span>
+
+          {/* Only a model has a maker, and only a model row draws this cell —
+              a heading has nothing to put in it and no column to hold open. */}
+          {sub && (
+          <span className="shrink-0 w-40">
+            {(
+              <input
+                list="gear-brands"
+                defaultValue={row.brand ?? ''}
+                onBlur={(e) => e.target.value !== (row.brand ?? '') &&
+                  run(() => upsertGearItem({ id: row.id, name: row.name, brand: e.target.value }))}
+                placeholder="Brand"
+                className={`${CELL} text-[13px] text-zinc-300`}
+              />
+            )}
+          </span>
           )}
-
-          <span className="flex-1" />
-          <Actions row={row} />
+          {/* The slack belongs after the pair, not between them: model and
+              maker are read together — "Newt, Glacier Black" — and a hand's
+              width of nothing in the middle makes them two facts about
+              different things. */}
+          {sub && <span aria-hidden className="flex-1" />}
+          {/* Wide enough for both shapes it holds — "category delete" on a
+              type, three icons and "delete" on a model — because a cell that
+              resizes per row moves the brand column with it. */}
+          <span className="shrink-0 w-36 flex items-center justify-end">
+            <Actions row={row} />
+          </span>
         </div>
 
-        <div className="flex items-center gap-2 mt-0.5">
-          <input
-            defaultValue={row.info ?? ''}
-            onBlur={(e) => e.target.value !== (row.info ?? '') &&
-              run(() => upsertGearItem({ id: row.id, name: row.name, info: e.target.value }))}
-            placeholder="Notes / spec"
-            className={`${CELL} flex-1 min-w-0 text-[11px] text-zinc-500`}
-          />
-        </div>
+        {/* A second line on every row for a field two items in ninety use —
+            eighty-seven empty boxes, each one a line of the catalogue. It is
+            drawn when there is something to read, or when the pencil beside
+            the link button has been pressed. */}
+        {(row.info || noting === row.id) && (
+          <div className="flex items-center gap-2 mt-0.5">
+            <input
+              autoFocus={noting === row.id && !row.info}
+              defaultValue={row.info ?? ''}
+              onBlur={(e) => {
+                setNoting(null)
+                if (e.target.value !== (row.info ?? '')) {
+                  run(() => upsertGearItem({ id: row.id, name: row.name, info: e.target.value }))
+                }
+              }}
+              onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') setNoting(null) }}
+              placeholder="Notes / spec"
+              className={`${CELL} flex-1 min-w-0 text-[11px] text-zinc-500`}
+            />
+          </div>
+        )}
 
         {linking === row.id && (
           <input
@@ -485,7 +542,19 @@ export default function GearCatalog({ items }: { items: Row[] }) {
                       rail down the left so the nesting is a shape rather than
                       an indent you have to measure. */}
                   {(products.length > 0 || addingTo === t.id) && (
-                    <div className="ml-6 border-l-2 border-zinc-800 pl-1">
+                    <div className="ml-3 border-l-2 border-zinc-800 pl-3 divide-y divide-zinc-800/60">
+                      {/* Said once per type, over the two things a model row
+                          carries. The type itself is the heading above. */}
+                      <div className="flex items-center gap-2 px-2 pt-1 pb-0.5">
+                        <span className="shrink-0 w-56 text-[10px] uppercase tracking-widest text-zinc-700">
+                          Model
+                        </span>
+                        <span className="shrink-0 w-40 text-[10px] uppercase tracking-widest text-zinc-700">
+                          Brand
+                        </span>
+                        <span aria-hidden className="flex-1" />
+                        <span aria-hidden className="shrink-0 w-36" />
+                      </div>
                       {products.map((p) => <ItemRow key={p.id} row={p} sub />)}
                       {addingTo === t.id && (
                         <div className="py-0.5">
