@@ -110,7 +110,12 @@ export default function Header() {
             {loggedIn ? (
               <div className="ml-4 flex items-center gap-2">
                 {(() => {
-                  const portalActive = pathname === '/dashboard' || pathname.startsWith('/admin') || pathname.startsWith('/instructor') || pathname.startsWith('/portal')
+                  // /staffing is tokenized so it still works from the invite
+                  // email with no session, but it is a page for staff about
+                  // their own work — when there *is* a session it was reached
+                  // from the portal and belongs to it. The other tokenized
+                  // pages are for clients and students, so they stay outside.
+                  const portalActive = pathname === '/dashboard' || pathname.startsWith('/admin') || pathname.startsWith('/instructor') || pathname.startsWith('/portal') || pathname.startsWith('/staffing')
                   return (
                     <Link
                       href="/dashboard"
@@ -208,7 +213,7 @@ export default function Header() {
               {loggedIn ? (
                 <>
                   {(() => {
-                    const portalActive = pathname === '/dashboard' || pathname.startsWith('/admin') || pathname.startsWith('/instructor') || pathname.startsWith('/portal')
+                    const portalActive = pathname === '/dashboard' || pathname.startsWith('/admin') || pathname.startsWith('/instructor') || pathname.startsWith('/portal') || pathname.startsWith('/staffing')
                     return (
                       <Link
                         href="/dashboard"

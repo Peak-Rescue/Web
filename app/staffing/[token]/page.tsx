@@ -1,5 +1,7 @@
 import { notFound } from 'next/navigation'
+import Link from 'next/link'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { createClient } from '@/lib/supabase/server'
 import { courseDisplayName, courseShortName } from '@/lib/courses'
 import ResponseForm from './ResponseForm'
 import { courseZone, todayIn } from '@/lib/course-clock'
@@ -26,11 +28,20 @@ export default async function StaffingInvitePage({
   if (!/^[0-9a-f-]{36}$/.test(token)) notFound()
 
   const admin = createAdminClient()
-  const { data: invite } = await admin
-    .from('course_interest_invites')
-    .select('id, instance_id, interested, note, responded_at, instructors(name)')
-    .eq('token', token)
-    .maybeSingle()
+  // Signed in or not is only ever a question about the frame, never about the
+  // answer: the token is the whole gate, because the point of this page is
+  // that it opens from an email on a phone with no session. But when there is
+  // a session it was reached from the portal, and a page that gives you no way
+  // back is a page you leave by pressing back.
+  const supabase = await createClient()
+  const [{ data: invite }, { data: { user } }] = await Promise.all([
+    admin
+      .from('course_interest_invites')
+      .select('id, instance_id, interested, note, instructors(name)')
+      .eq('token', token)
+      .maybeSingle(),
+    supabase.auth.getUser(),
+  ])
   if (!invite) notFound()
 
   const { data: inst } = await admin
@@ -53,6 +64,11 @@ export default async function StaffingInvitePage({
   return (
     <main className="min-h-screen bg-zinc-950 text-white">
       <div className="max-w-2xl mx-auto px-6 py-16">
+        {user && (
+          <Link href="/admin" className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors mb-6 inline-block">
+            ← Portal
+          </Link>
+        )}
         <div className="w-16 h-[3px] bg-pr-red mb-8" />
         <p className="text-pr-red font-semibold tracking-[0.2em] text-sm uppercase mb-2">Staffing Interest</p>
         <h1 className="text-3xl md:text-4xl font-bold tracking-tight mb-2">{courseName}</h1>
@@ -85,19 +101,11 @@ export default async function StaffingInvitePage({
           </div>
         ) : (
           <>
-            {invite.responded_at && (
-              <div
-                className={`mb-6 p-4 rounded-lg border text-sm ${
-                  invite.interested
-                    ? 'bg-teal-900/30 border-teal-800 text-teal-200'
-                    : 'bg-zinc-900 border-zinc-700 text-zinc-300'
-                }`}
-              >
-                You responded: <span className="font-semibold">{invite.interested ? 'Interested' : "Can't make it"}</span>
-                {invite.note && <span className="block mt-1 text-zinc-400">&ldquo;{invite.note}&rdquo;</span>}
-                <span className="block mt-1 text-xs opacity-70">You can change your response below anytime.</span>
-              </div>
-            )}
+            {/* No "you responded: X" banner. The buttons below carry which
+                one you picked, and your answer written out above them as well
+                was the same fact in two shapes — the note repeated the field
+                it was already sitting in, and the line about changing your
+                response described a button that is right there. */}
             <ResponseForm token={token} currentInterested={invite.interested} currentNote={invite.note} />
             <p className="mt-6 text-xs text-zinc-500">
               Expressing interest isn&apos;t a commitment — the ops team confirms final staffing separately.
