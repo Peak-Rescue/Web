@@ -21,7 +21,13 @@ import AddLinkDialog from '@/components/AddLinkDialog'
 
 // "Your open tasks" on the portal home — same task rows as the course pages,
 // with the same notes and attachments (shared data, so edits show both places).
-export default function MyTasksList({ tasks }: { tasks: MyOpenTask[] }) {
+//
+// Ticked ones go behind a fold at the foot of the list rather than off the
+// page. A checked-off task used to be unreachable from here: to see what you
+// had attached to it, or to undo the tick, you had to remember which course it
+// came from and go digging. They are the same rows — notes, attachments, and a
+// checkbox that unticks — under a line that costs nothing while it's shut.
+export default function MyTasksList({ tasks, done = [] }: { tasks: MyOpenTask[]; done?: MyOpenTask[] }) {
   const router = useRouter()
   const [, startTransition] = useTransition()
   const [busyId, setBusyId] = useState<string | null>(null)
@@ -170,20 +176,29 @@ export default function MyTasksList({ tasks }: { tasks: MyOpenTask[] }) {
     return t.endsAt && t.endsAt !== t.startsAt ? `${f(t.startsAt)} – ${f(t.endsAt)}` : f(t.startsAt)
   }
 
-  const renderTask = (t: MyOpenTask) => (
-        <div key={t.id} className="px-4 py-2.5">
+  // `ticked` renders the same row from the other side: the box is checked, the
+  // title is spent, and the course it belonged to is named on the row itself —
+  // the history is in completion order, so there are no course headers above
+  // it to say which one this was.
+  const renderTask = (t: MyOpenTask, ticked = false) => (
+        <div key={t.id} className={`px-4 py-2.5 ${ticked ? 'bg-zinc-900/40' : ''}`}>
           <div className="flex items-center gap-3">
             <input
               type="checkbox"
-              checked={false}
+              checked={ticked}
               disabled={busyId === t.id}
-              onChange={() => run(() => setTaskStatus(t.instance_id, t.id, true), t.id)}
+              onChange={() => run(() => setTaskStatus(t.instance_id, t.id, !ticked), t.id)}
               className="accent-teal-600 size-4 shrink-0 disabled:opacity-40"
             />
             <button onClick={() => toggle(t)} className="min-w-0 flex-1 text-left group">
-              <p className="text-sm group-hover:text-pr-red-light transition-colors truncate">
+              <p className={`text-sm group-hover:text-pr-red-light transition-colors truncate ${ticked ? 'text-zinc-500 line-through decoration-zinc-700' : ''}`}>
                 {t.title}
               </p>
+              {ticked && (
+                <p className="text-[11px] text-zinc-600 truncate">
+                  {[t.courseName, t.clientName, fmtRange(t)].filter(Boolean).join(' · ')}
+                </p>
+              )}
             </button>
             <button
               onClick={() => openNotes(t)}
@@ -288,9 +303,21 @@ export default function MyTasksList({ tasks }: { tasks: MyOpenTask[] }) {
               {[g.first.clientName, g.first.location, fmtRange(g.first)].filter(Boolean).join(' · ')}
             </span>
           </div>
-          {g.items.map(renderTask)}
+          {g.items.map((t) => renderTask(t))}
         </div>
       ))}
+      {done.length > 0 && (
+        <details className="group">
+          <summary className="cursor-pointer list-none px-4 py-2 flex items-center gap-2 text-xs text-zinc-600 hover:text-zinc-400 transition-colors select-none">
+            <span aria-hidden className="transition-transform group-open:rotate-90">▶</span>
+            {done.length} done
+            <span className="text-zinc-700">on courses still to come</span>
+          </summary>
+          <div className="divide-y divide-zinc-800 border-t border-zinc-800">
+            {done.map((t) => renderTask(t, true))}
+          </div>
+        </details>
+      )}
       {error && <p className="px-4 py-2 text-xs text-pr-red-light">{error}</p>}
     </div>
   )

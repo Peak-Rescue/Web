@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import Link from 'next/link'
 import MyTasksList from '@/components/MyTasksList'
-import { loadMyOpenTasks } from '@/lib/course-tasks'
+import { loadMyOpenTasks, loadMyDoneTasks } from '@/lib/course-tasks'
 import CourseCalendar, { type CalendarCourse } from '@/components/CourseCalendar'
 import StaffingInterestList from '@/components/StaffingInterestList'
 import { courseShortName, courseEventTitle, crewFirstNames } from '@/lib/courses'
@@ -39,13 +39,14 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     instance_instructors?: { role: string; instructors: { name: string } | null }[] | null
   }
   // Profile gate + personalized data in one parallel round.
-  const [{ data: profile }, { data: assignmentRows }, myTasks, allInstancesRes, { data: inviteRows }, { data: capRow }] = await Promise.all([
+  const [{ data: profile }, { data: assignmentRows }, myTasks, myDoneTasks, allInstancesRes, { data: inviteRows }, { data: capRow }] = await Promise.all([
     admin.from('profiles').select('role, first_name, last_name, email').eq('id', user.id).single(),
     admin
       .from('instance_instructors')
       .select('role, course_instances!inner(id, ref_number, course_type, course_category, custom_title, client_name, location, starts_at, ends_at, status, instance_instructors(role, instructors(name))), instructors!inner(profile_id)')
       .eq('instructors.profile_id', user.id),
     loadMyOpenTasks(admin, user.id),
+    loadMyDoneTasks(admin, user.id, today),
     showAllCourses
       ? admin
           .from('course_instances')
@@ -100,25 +101,24 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
 
   // Live staffing-interest invites (answered or not) for upcoming courses the
   // viewer isn't already assigned to — answers stay changeable until then.
+  // Unanswered only. A reply you have already given is changed from the link
+  // in the invite email, which never expires — this page carries the asking,
+  // not the record of what was asked.
   const liveInvites = (inviteRows ?? [])
     .map((r) => ({
       token: r.token as string,
       interested: r.interested as boolean | null,
-      note: r.note as string | null,
       inst: r.course_instances as unknown as InstRow,
     }))
     .filter(
       (r) =>
         r.inst &&
+        r.interested === null &&
         r.inst.status !== 'cancelled' &&
         (!r.inst.ends_at || r.inst.ends_at >= today) &&
         !assignedIds.has(r.inst.id)
     )
-    .sort(
-      (a, b) =>
-        Number(a.interested !== null) - Number(b.interested !== null) ||
-        (a.inst.starts_at ?? '9999').localeCompare(b.inst.starts_at ?? '9999')
-    )
+    .sort((a, b) => (a.inst.starts_at ?? '9999').localeCompare(b.inst.starts_at ?? '9999'))
 
   // Calendar: assigned courses by default, every course when scope=all (past
   // months included so back-navigation isn't empty), cancelled excluded.
@@ -354,17 +354,21 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
                 title: courseShortName(r.inst.course_type, r.inst.custom_title),
                 client: r.inst.client_name,
                 meta: `${fmtRange(r.inst)}${r.inst.location ? ` · ${r.inst.location}` : ''}`,
-                interested: r.interested,
-                note: r.note,
               }))}
             />
           </section>
         )}
 
-        {myTasks.length > 0 && (
-          <section className="mb-10">
-            <h2 className="text-sm font-medium text-zinc-500 uppercase tracking-wide mb-3">Your open tasks</h2>
-            <MyTasksList tasks={myTasks} />
+        {(myTasks.length > 0 || myDoneTasks.length > 0) && (
+          // The heading names what is open. With nothing open the section is
+          // the fold and its own line says what it holds, the same way the
+          // staffing list above stops claiming a course wants staffing once
+          // you've answered.
+          <section className={myTasks.length > 0 ? 'mb-10' : 'mb-6'}>
+            {myTasks.length > 0 && (
+              <h2 className="text-sm font-medium text-zinc-500 uppercase tracking-wide mb-3">Your open tasks</h2>
+            )}
+            <MyTasksList tasks={myTasks} done={myDoneTasks} />
           </section>
         )}
 
