@@ -8,7 +8,7 @@
 // from a sheet that doesn't match the course.
 
 import {
-  gearLabel, gearQuantity, isChoice, placeSets, productName,
+  gearLabel, gearQuantity, isChoice, KIT_LABEL, placeSets, productName,
   type JoinerFields, type QuantityFields, type QuantityView,
 } from '@/lib/gear'
 import { CONTENT_W, FAINT, INK, MARGIN, MUTED, PdfBuilder, RED } from '@/lib/pdf-layout'
@@ -43,10 +43,14 @@ export type GearPdf = {
   students: number | null
 }
 
-const GROUP_LABEL: Record<QuantityView, Record<'personal' | 'group', string>> = {
-  person: { personal: 'Each person brings', group: 'Group kit' },
-  course: { personal: 'Personal kit — for everyone', group: 'Group kit' },
-}
+// The two number columns, in points, matching what the editor and the portal
+// draw: the rule it counts by, then what that comes to. A pair of alternatives
+// laid out side by side gets columns too narrow to hold both, so below this the
+// two fold back into one string — half a column is worse than a sentence.
+const RULE_W = 74
+const NUM_W = 30
+const COL_GAP = 8
+const MIN_COL_FOR_COLUMNS = 250
 
 const BOX = rgb(0.62, 0.62, 0.65)
 const NAME_SIZE = 10
@@ -107,14 +111,28 @@ export async function generateGearListPdf(data: GearPdf): Promise<Uint8Array> {
   const entryBox = (e: GearPdfEntry, x: number, width: number) => {
     const { name, sub } = readEntry(e)
     const q = gearQuantity(e, { students: data.students, view: data.view })
+    // Staff get both numbers, the way the editor and the portal now show them:
+    // the total for this roster, and the rule it came from. One without the
+    // other is half the answer — "× 3" does not say whether the next course
+    // needs three, and "1 per 4" does not say what to put in the van today.
+    //
     // No number and a rule means there is no roster to count against — a
-    // template on the shelf. The rule is what the row actually knows, and it is
-    // more use on paper than a blank.
-    const qty = q.text ? `× ${q.text}` : data.view === 'course' ? q.rule : null
-    const qtyW = qty ? b.font.widthOfTextAtSize(qty, SUB_SIZE) + 10 : 0
+    // template on the shelf — and then the rule is what the row actually
+    // knows, which is more use on paper than a blank.
+    // Two cells where there is room for two, so the sheet reads down its
+    // numbers the way the screen does. Narrow columns fold them back together.
+    const columns = data.view === 'course' && width >= MIN_COL_FOR_COLUMNS
+    const rule = data.view === 'course' ? q.rule : null
+    const total = q.text ? `× ${q.text}` : null
+    // Lowercase either way: "× 10 One each" beside a column reading "one each"
+    // is the same fact written two ways on one sheet.
+    const qty = columns ? null : [total, rule?.toLowerCase()].filter(Boolean).join('   ') || null
+    const qtyW = columns
+      ? RULE_W + COL_GAP + NUM_W + 10
+      : qty ? b.font.widthOfTextAtSize(qty, SUB_SIZE) + 10 : 0
     const textX = x + 15
     const textW = width - 15 - qtyW
-    return { name, sub, qty, textX, textW, x, width }
+    return { name, sub, qty, rule, total, columns, textX, textW, x, width }
   }
 
   type EntryBox = ReturnType<typeof entryBox>
@@ -136,7 +154,25 @@ export async function generateGearListPdf(data: GearPdf): Promise<Uint8Array> {
       borderColor: BOX,
       borderWidth: 0.8,
     })
-    if (box.qty) {
+    if (box.columns) {
+      const numX = box.x + box.width
+      if (box.rule) {
+        b.text(box.rule.toLowerCase(), {
+          x: numX - NUM_W - COL_GAP - b.font.widthOfTextAtSize(box.rule.toLowerCase(), SUB_SIZE),
+          size: SUB_SIZE,
+          color: FAINT,
+        })
+      }
+      if (box.total) {
+        // The one number the sheet is carried for, so it is the one in ink.
+        b.text(box.total, {
+          x: numX - b.font.widthOfTextAtSize(box.total, SUB_SIZE),
+          size: SUB_SIZE,
+          bold: true,
+          color: INK,
+        })
+      }
+    } else if (box.qty) {
       b.text(box.qty, {
         x: box.x + box.width - b.font.widthOfTextAtSize(box.qty, SUB_SIZE),
         size: SUB_SIZE,
@@ -206,15 +242,38 @@ export async function generateGearListPdf(data: GearPdf): Promise<Uint8Array> {
     const rows = data.entries.filter((e) => e.group_type === gt).sort((a, b2) => a.sort_order - b2.sort_order)
     if (rows.length === 0) continue
 
-    b.sectionHeading(GROUP_LABEL[data.view][gt])
+    b.sectionHeading(KIT_LABEL[gt])
+
+    // What the two columns on the right are, named once at the top of them —
+    // the same words the editor and the portal head them with. Without it the
+    // sheet has two unlabelled numbers per row and the reader has to work out
+    // which is the rule and which is the count.
+    const columnHeads = () => {
+      if (data.view !== 'course') return
+      b.text('ITEM', { size: 6.5, bold: true, color: FAINT })
+      const right = MARGIN + CONTENT_W
+      b.text('RULE', {
+        x: right - NUM_W - COL_GAP - b.font.widthOfTextAtSize('RULE', 6.5),
+        size: 6.5, bold: true, color: FAINT,
+      })
+      const forLabel = data.students ? `FOR ${data.students}` : 'RULE ONLY'
+      b.text(forLabel, {
+        x: right - b.font.widthOfTextAtSize(forLabel, 6.5),
+        size: 6.5, bold: true, color: FAINT,
+      })
+      b.y -= 11
+    }
+    columnHeads()
+
     // Everything below belongs to this side of the list until the next one, so
     // a break in the middle of it says so at the top of the next page.
     let openSection: string | null = null
     b.continued = () => {
-      b.text(`${GROUP_LABEL[data.view][gt]} (continued)`.toUpperCase(), { size: 9, bold: true, color: INK })
+      b.text(`${KIT_LABEL[gt]} (continued)`.toUpperCase(), { size: 9, bold: true, color: INK })
       b.y -= 6
       b.hairline()
       b.y -= 14
+      columnHeads()
       if (openSection) {
         b.text(openSection.toUpperCase(), { size: 7.5, bold: true, color: MUTED })
         b.y -= 13

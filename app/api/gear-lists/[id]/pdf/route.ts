@@ -11,12 +11,6 @@ import { GEAR_ENTRY_COLUMNS } from '@/lib/gear'
 
 export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params
-  // Which sheet this is. The student's — what one person packs — unless it was
-  // asked for as the course's, which is the POC's purchasing and pull sheet.
-  // Asked for, not inferred: the same list serves both, and the only thing that
-  // knows which one you want is the page you printed it from.
-  const wantsCourse = new URL(req.url).searchParams.get('for') === 'course'
-
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return new Response('Unauthorized', { status: 401 })
@@ -30,6 +24,8 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
     name: string
     audience: 'student' | 'instructor'
     intro: string | null
+    /** What this list is packed for, when it isn't the course's own maximum. */
+    students: number | null
     instance_id: string | null
     gear_list_entries: GearPdfEntry[]
   }
@@ -37,7 +33,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
   const { data: listRow } = await admin
     .from('gear_lists')
     .select(
-      `id, name, audience, intro, instance_id, ` +
+      `id, name, audience, intro, students, instance_id, ` +
       `gear_list_entries(id, ${GEAR_ENTRY_COLUMNS}, gear_items(name, brand, url), gear_entry_options(sort_order, gear_items(name, brand)))`
     )
     .eq('id', id)
@@ -68,7 +64,10 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
     if (inst) {
       courseTitle = courseDisplayName(inst.course_type, inst.custom_title)
       subtitle = courseSubtitle(inst)
-      students = (inst.max_students as number | null) ?? null
+      // The list's own headcount if it carries one, the course's otherwise —
+      // the same question the editor and the portal ask, so the sheet cannot
+      // print a different amount of gear from the screen it was printed off.
+      students = list.students ?? (inst.max_students as number | null) ?? null
     }
   } else if (!(await isAdmin(admin, user.id))) {
     return new Response('Not found', { status: 404 })
@@ -82,10 +81,14 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
     listName: list.name,
     intro: list.intro,
     entries,
-    // A student asking for the course's totals gets their own sheet instead:
-    // the roster size is staff's to know, and a sheet saying "× 12" is not the
-    // list they were given.
-    view: wantsCourse && isStaff ? 'course' : 'person',
+    // The sheet follows the reader rather than a query param. It was asked
+    // for — ?for=course — which meant two print buttons a thumb apart printing
+    // two documents, neither saying which, and the answer was never in doubt
+    // anyway: staff print to buy and pull the gear, so they get the rule and
+    // the total for the roster; a student prints what they pack, so they get
+    // their own share. The roster size stays staff's to know, and a sheet
+    // saying "× 12" is not the list a student was given.
+    view: isStaff ? 'course' : 'person',
     students,
   })
 

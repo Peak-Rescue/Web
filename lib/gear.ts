@@ -44,6 +44,18 @@ export const GEAR_CATEGORIES = [
 
 export type GearCategory = (typeof GEAR_CATEGORIES)[number]
 
+// The two halves of every gear list, named once.
+//
+// They were named in four places in three different ways — "Personal — each
+// person" in the editor, "Each person brings" on the course page and in the
+// student's PDF, "Personal kit — for everyone" on the POC's. Three phrasings
+// for one thing, and the reader has to work out each time whether they are
+// looking at the same division. They are.
+export const KIT_LABEL: Record<'personal' | 'group', string> = {
+  personal: 'Personal kit',
+  group: 'Group kit',
+}
+
 // What a piece of gear IS. Notes about it — spec, quantity, condition — are
 // not here on purpose: those are answers to "on this course", and the catalog
 // is the one place that doesn't know which course is asking. They live on the
