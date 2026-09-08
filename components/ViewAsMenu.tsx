@@ -1,7 +1,7 @@
 'use client'
 
-import Link from 'next/link'
-import { useEffect, useRef, useState } from 'react'
+import { Suspense, useEffect, useRef, useState } from 'react'
+import { usePathname, useSearchParams } from 'next/navigation'
 
 // Which role an admin is reading the page as.
 //
@@ -20,6 +20,11 @@ import { useEffect, useRef, useState } from 'react'
 // vanished at exactly the moment it was needed. You discover you are in a
 // preview when a control you expected is missing, and that is halfway down the
 // page — the chip is what answers it there.
+//
+// It lives in components/ because the portal home and the employee documents
+// page each had their own older copy of the idea — a row of always-on text
+// links, no amber, nothing to say you were still in a preview two pages later.
+// One control, one place, every page that has an admin reading it.
 
 const ROLES = [
   { key: '', label: 'Admin', hint: 'Everything, unfiltered' },
@@ -27,19 +32,21 @@ const ROLES = [
   { key: 'student', label: 'Student', hint: 'What an enrolled student sees' },
 ] as const
 
-export default function ViewAsMenu({
-  instanceId,
-  viewAs,
-  mode,
-}: {
-  instanceId: string
-  /** '' when the admin is reading as themselves. */
-  viewAs: string
-  /** Carried through so switching preview doesn't also switch the job. */
-  mode?: 'build' | 'teach'
-}) {
+export default function ViewAsMenu({ viewAs }: { viewAs: string }) {
+  // useSearchParams suspends; the chip is a corner of a header, so a hole in
+  // that corner for one render is the whole cost.
+  return (
+    <Suspense fallback={null}>
+      <Menu viewAs={viewAs} />
+    </Suspense>
+  )
+}
+
+function Menu({ viewAs }: { viewAs: string }) {
   const [open, setOpen] = useState(false)
   const box = useRef<HTMLDivElement>(null)
+  const pathname = usePathname()
+  const search = useSearchParams().toString()
 
   useEffect(() => {
     if (!open) return
@@ -57,12 +64,14 @@ export default function ViewAsMenu({
     }
   }, [open])
 
+  // Switching goes through a route handler because only it can write the
+  // cookie — and it comes back to the exact URL you left, query and all, so
+  // whatever else the page was holding (a month, a mode, a filter) survives.
+  const here = pathname + (search ? `?${search}` : '')
   const href = (key: string) => {
-    const q = new URLSearchParams()
+    const q = new URLSearchParams({ next: here })
     if (key) q.set('as', key)
-    if (mode) q.set('mode', mode)
-    const s = q.toString()
-    return `/portal/${instanceId}${s ? `?${s}` : ''}`
+    return `/api/view-as?${q}`
   }
 
   const current = ROLES.find((r) => r.key === viewAs) ?? ROLES[0]
@@ -106,15 +115,14 @@ export default function ViewAsMenu({
           ▾
         </button>
         {previewing && (
-          <Link
+          <a
             href={href('')}
-            prefetch={false}
             title="Back to admin"
             aria-label="Back to admin"
             className="border-l border-amber-800/70 px-1.5 py-1 leading-none hover:text-white transition-colors"
           >
             ✕
-          </Link>
+          </a>
         )}
       </span>
 
@@ -125,14 +133,12 @@ export default function ViewAsMenu({
         >
           <p className="px-2 pt-1.5 pb-1 text-[9.5px] uppercase tracking-widest text-zinc-500">See this page as</p>
           {ROLES.map((r) => (
-            <Link
+            // Plain anchors, not Link: the destination is a route handler that
+            // has to set a cookie, so this is a real navigation either way.
+            <a
               key={r.label}
               role="menuitem"
               href={href(r.key)}
-              // Three more full renders of the most expensive page we have,
-              // kicked off by the page itself, if these prefetch. Switching
-              // preview roles is rare enough to pay for its own navigation.
-              prefetch={false}
               title={r.hint}
               onClick={() => setOpen(false)}
               className={`flex items-center gap-2 rounded px-2 py-1.5 text-xs transition-colors ${
@@ -141,7 +147,7 @@ export default function ViewAsMenu({
             >
               <span className="w-3 shrink-0 text-pr-red-light">{r.key === viewAs ? '✓' : ''}</span>
               {r.label}
-            </Link>
+            </a>
           ))}
         </div>
       )}

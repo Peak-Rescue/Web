@@ -56,7 +56,8 @@ async function get(path, cookie) {
 const { data: adminRow } = await admin.from('profiles')
   .select('email').eq('role', 'admin').not('email', 'is', null).limit(1).single()
 // Somebody actually enrolled, so the student path is exercised by a student
-// rather than by an admin pretending — ?as= is a preview, not the real thing.
+// rather than by an admin pretending — the preview is a preview, not the real
+// thing.
 const { data: enrolled } = await admin.from('enrollments')
   .select('instance_id, profiles!inner(email, role)')
   .not('profiles.email', 'is', null).neq('profiles.role', 'admin').limit(1).maybeSingle()
@@ -70,13 +71,23 @@ if (argv.length) {
 } else {
   runs.push({
     who: adminRow.email, label: 'admin',
-    paths: ['/admin', '/admin/courses', ...courses.flatMap((c) => [
+    paths: ['/admin', '/admin/courses', '/admin/employee-info', ...courses.flatMap((c) => [
       `/portal/${c.id}`,
       `/portal/${c.id}?mode=build`,
       `/portal/${c.id}?mode=teach`,
-      `/portal/${c.id}?as=instructor`,
-      `/portal/${c.id}?as=student`,
     ])],
+  })
+  // The preview is a cookie now rather than a query param, so each role is its
+  // own run. Only the pages that render in that role — /admin under a student
+  // preview redirects to /dashboard, which a manual-redirect fetch reads as a
+  // failure, and rightly: it isn't a page there.
+  runs.push({
+    who: adminRow.email, label: 'admin as instructor', preview: 'instructor',
+    paths: ['/admin', '/admin/employee-info', ...courses.map((c) => `/portal/${c.id}`)],
+  })
+  runs.push({
+    who: adminRow.email, label: 'admin as student', preview: 'student',
+    paths: ['/dashboard', ...courses.map((c) => `/portal/${c.id}`)],
   })
   if (enrolled?.profiles?.email) {
     runs.push({
@@ -88,7 +99,7 @@ if (argv.length) {
 
 let bad = 0, total = 0
 for (const run of runs) {
-  const cookie = await sessionCookie(run.who)
+  const cookie = await sessionCookie(run.who) + (run.preview ? `; view_as=${run.preview}` : '')
   for (const t of run.paths) {
     total++
     const r = await get(t, cookie)
@@ -99,5 +110,19 @@ for (const run of runs) {
   }
   console.log(`  ${run.label}: ${run.paths.length} pages as ${run.who}`)
 }
+// The one thing no page render covers: the handler that writes the cookie.
+{
+  total++
+  const cookie = await sessionCookie(adminRow.email)
+  const res = await fetch(`${BASE}/api/view-as?as=instructor&next=%2Fadmin`, {
+    headers: { cookie }, redirect: 'manual',
+  })
+  const setCookie = res.headers.get('set-cookie') ?? ''
+  if (res.status >= 400 || !setCookie.includes('view_as=instructor')) {
+    bad++
+    console.log(`  HTTP ${res.status} no view_as cookie  [admin] /api/view-as`)
+  }
+}
+
 console.log(bad === 0 ? `smoke: all ${total} ok` : `smoke: ${bad} of ${total} FAILED`)
 process.exit(bad === 0 ? 0 : 1)

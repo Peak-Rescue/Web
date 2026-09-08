@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import CourseView, { type Viewer } from './CourseView'
+import { readViewAs } from '@/lib/view-as'
 
 // The course page for people who are on the course. All it does is work out
 // who is asking and what that entitles them to — the page itself is
@@ -15,10 +16,10 @@ export default async function PortalPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>
-  searchParams: Promise<{ as?: string; mode?: string }>
+  searchParams: Promise<{ mode?: string }>
 }) {
   const { id } = await params
-  const { as, mode } = await searchParams
+  const { mode } = await searchParams
 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -45,9 +46,9 @@ export default async function PortalPage({
   const isInstructor = !!instructorAssignment
   if (!(isAdmin || isInstructor || enrollment)) redirect('/dashboard')
 
-  // Admins can preview the page as a student or a (non-lead) instructor via
-  // ?as=… — purely a display role; the access check above uses the real one.
-  const viewAs = isAdmin && (as === 'student' || as === 'instructor') ? as : null
+  // Admins can preview the page as a student or a (non-lead) instructor —
+  // purely a display role; the access check above uses the real one.
+  const viewAs = await readViewAs(isAdmin)
 
   const viewer: Viewer = {
     userId: user.id,

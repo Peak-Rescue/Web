@@ -4,6 +4,8 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { courseDisplayName } from '@/lib/courses'
 import { todayHere } from '@/lib/course-clock'
+import { readViewAs } from '@/lib/view-as'
+import ViewAsMenu from '@/components/ViewAsMenu'
 
 // Where a student lands after accepting an invite or signing in.
 //
@@ -48,7 +50,12 @@ export default async function DashboardPage() {
     .eq('id', user.id)
     .single()
 
-  if (profile?.role === 'admin' || profile?.role === 'instructor') redirect('/admin')
+  // This page *is* the student's portal home, so it is also where an admin
+  // previewing as a student belongs — the only place their own enrolments (or
+  // the empty state a student with none actually reads) can be seen.
+  const isAdmin = profile?.role === 'admin'
+  const viewAs = await readViewAs(isAdmin)
+  if (viewAs !== 'student' && (profile?.role === 'admin' || profile?.role === 'instructor')) redirect('/admin')
 
   const { data: rows } = await admin
     .from('enrollments')
@@ -109,7 +116,10 @@ export default async function DashboardPage() {
   return (
     <main className="min-h-screen bg-zinc-950 text-white pt-16 md:pt-20">
       <div className="max-w-3xl mx-auto px-4 py-10">
-        <h1 className="text-2xl font-bold mb-1">{greeting}</h1>
+        <div className="mb-1 flex items-center justify-between gap-3">
+          <h1 className="text-2xl font-bold">{greeting}</h1>
+          {isAdmin && <ViewAsMenu viewAs={viewAs ?? ''} />}
+        </div>
         <p className="text-sm text-zinc-500 mb-8">
           {courses.length > 0
             ? 'Open a course for the schedule, what to bring, and anything your instructors have posted.'

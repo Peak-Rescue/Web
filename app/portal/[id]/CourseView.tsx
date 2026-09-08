@@ -36,7 +36,7 @@ import { loadTasksWithDocs } from '@/lib/course-tasks'
 import { LinkIcon, PaperclipIcon } from '@/components/TaskIcons'
 import { AudiencePills } from '@/components/AudiencePills'
 import CourseNav, { NavPanel } from './CourseNav'
-import ViewAsMenu from './ViewAsMenu'
+import ViewAsMenu from '@/components/ViewAsMenu'
 import { albumsEnabled } from '@/lib/drive-albums'
 import CourseUpdates, { type CourseUpdate, type NotifyCounts } from './CourseUpdates'
 import CourseNotes from './CourseNotes'
@@ -921,7 +921,7 @@ export default async function CourseView({
     authorName: [u.profiles?.first_name, u.profiles?.last_name].filter(Boolean).join(' ').trim() || null,
   }))
   // Marked seen after the response goes out, so the write never delays the
-  // page. A previewing admin is excluded: ?as=student is a look at someone
+  // page. A previewing admin is excluded: a preview is a look at someone
   // else's view, not a visit, and shouldn't clear your own dot.
   if (!viewAs && userId) {
     after(async () => {
@@ -1262,12 +1262,12 @@ export default async function CourseView({
               {showAsAdmin && (
                 <CourseMode
                   mode={mode}
-                  buildHref={`/portal/${id}?mode=build${viewAs ? `&as=${viewAs}` : ''}`}
-                  teachHref={`/portal/${id}?mode=teach${viewAs ? `&as=${viewAs}` : ''}`}
+                  buildHref={`/portal/${id}?mode=build`}
+                  teachHref={`/portal/${id}?mode=teach`}
                 />
               )}
               {isAdmin && (
-                <ViewAsMenu instanceId={id} viewAs={viewAs ?? ''} mode={showAsAdmin ? mode : undefined} />
+                <ViewAsMenu viewAs={viewAs ?? ''} />
               )}
             </>
           ) : null}
