@@ -64,7 +64,7 @@ export const services: Service[] = [
     title: 'StableFlight™ Bag and Seat Training',
     shortTitle: 'StableFlight™',
     category: 'sar',
-    heroImage: '/images/services/stableflight.png',
+    heroImage: '/images/services/stableflight.webp',
     tagline: 'Helicopter bag and seat operations for tactical and rescue teams.',
     description:
       'Purpose-built training for teams using the StableFlight™ hoist bag and rescue seat systems. Covers rigging, patient loading, in-flight stability, and crew coordination for helicopter-delivered rescue.',
@@ -359,7 +359,7 @@ export const services: Service[] = [
     title: 'Emergency Response Team Training',
     shortTitle: 'ERT Training',
     category: 'industrial',
-    heroImage: '/images/services/emergency-response-team.png',
+    heroImage: '/images/services/emergency-response-team.webp',
     tagline: 'Build and train a high-performance emergency response team.',
     description:
       'Comprehensive ERT program for industrial facilities and corporate campuses. Builds team capability from initial medical response through technical rescue, with an emphasis on managing the first critical minutes before outside resources arrive.',
@@ -377,7 +377,7 @@ export const services: Service[] = [
     title: 'Firefighter Survival Training',
     shortTitle: 'FF Survival',
     category: 'industrial',
-    heroImage: '/images/services/firefighter-survival.png',
+    heroImage: '/images/services/firefighter-survival.webp',
     tagline: 'Survive today\'s dynamic fire scene — recognize dangerous conditions and execute emergency escapes.',
     description:
       'Teaches firefighters how to survive today\'s dynamic fire scene. Covers recognition of deteriorating conditions, emergency escape procedures for upper-floor entrapments, and personal escape systems — combining case study analysis with extensive hands-on practical training for split-second decision-making.',
