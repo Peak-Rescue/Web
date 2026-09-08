@@ -228,10 +228,19 @@ export async function updateGearList(
     courseType?: string | null
     disciplines?: string[]
     topics?: string[]
+    /** The headcount this list is packed for. Null hands it back to the
+        course's own maximum, which is where every list starts. */
+    students?: number | null
   }
 ) {
   const admin = await requireAdmin()
   const update: Record<string, unknown> = { updated_at: new Date().toISOString() }
+  if (patch.students !== undefined) {
+    const n = patch.students === null ? null : Math.floor(Number(patch.students))
+    // Nought or a negative is a list packed for nobody, which is worse than
+    // following the course — so it is read as "follow the course".
+    update.students = n !== null && Number.isFinite(n) && n > 0 ? n : null
+  }
   if (patch.name !== undefined) update.name = patch.name.trim().slice(0, 120) || 'Gear list'
   if (patch.intro !== undefined) update.intro = patch.intro?.trim() || null
   if (patch.audience !== undefined) update.audience = patch.audience
@@ -746,6 +755,25 @@ export async function copyGearList(
   const entries = await copyEntriesInto(
     admin, (src.gear_list_entries ?? []) as unknown as EntryRow[], created.id
   )
+
+  // A course that already had an empty list of this audience now has two, and
+  // the empty one sits above the real one showing "nothing in personal kit
+  // yet" over a list that is full of it. Nobody keeps a blank list on purpose:
+  // it is what you get for pressing "blank student list" and then deciding to
+  // start from a template after all. So it goes, and only if it is genuinely
+  // empty — a list with a single row on it is somebody's work.
+  if (target.instanceId) {
+    const { data: siblings } = await admin
+      .from('gear_lists')
+      .select('id, gear_list_entries(id)')
+      .eq('instance_id', target.instanceId)
+      .eq('audience', src.audience)
+      .neq('id', created.id)
+    const blanks = (siblings ?? [])
+      .filter((l) => ((l.gear_list_entries as unknown as unknown[]) ?? []).length === 0)
+      .map((l) => l.id)
+    if (blanks.length) await admin.from('gear_lists').delete().in('id', blanks)
+  }
 
   touch(target.instanceId)
   return { id: created.id, entries }

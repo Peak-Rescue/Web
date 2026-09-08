@@ -4,15 +4,14 @@ import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useSteadyRefresh } from '@/components/useSteadyRefresh'
 import CategorySelect, { NEW_TYPE } from './CategorySelect'
-import PdfLink from '@/components/PdfLink'
 import { templateHref, templateShelfHref } from '@/lib/library'
+import PdfLink from '@/components/PdfLink'
+import { ForPill } from '@/components/AudiencePills'
 import NewTabIcon from '@/components/NewTabIcon'
 import CloseButton from '@/components/CloseButton'
+import InfoHint from '@/components/InfoHint'
 import TrashIcon from '@/components/TrashIcon'
-import {
-  GEAR_CATEGORIES, gearQuantity, isChoice, matchesGear, placeSets, productName, unwrap,
-  type CatalogItem, type Joiner,
-} from '@/lib/gear'
+import { GEAR_CATEGORIES, gearQuantity, isChoice, KIT_LABEL, matchesGear, placeSets, productName, unwrap, type CatalogItem, type Joiner } from '@/lib/gear'
 import {
   addGearEntry, updateGearEntry, removeGearEntry, updateGearList, copyGearList,
   saveGearListIntoTemplate, setGearEntryOptions, upsertGearItem, renameGearSection,
@@ -59,6 +58,8 @@ export type GearList = {
   name: string
   audience: 'student' | 'instructor'
   intro: string | null
+  /** The headcount this list is packed for, or null to follow the course. */
+  students?: number | null
   instance_id: string | null
   is_template: boolean
   gear_list_entries: GearEntry[]
@@ -82,11 +83,6 @@ const sameTarget = (a: Target, b: Target) => a.gt === b.gt && a.section === b.se
 const zoneKey = (t: Target, beforeId: string | 'end') =>
   `${t.gt}|${t.section ?? ''}|${beforeId}`
 
-const GROUP_LABEL: Record<GroupType, string> = {
-  personal: 'Personal — each person',
-  group: 'Group — shared kit',
-}
-
 // A row picked up and not yet dropped.
 type Drag = { id: string }
 
@@ -97,7 +93,7 @@ type Drag = { id: string }
 type ProductPanel = { id: string }
 
 const PAIR_BTN =
-  'text-[11px] px-1.5 py-0.5 rounded border border-zinc-800 text-zinc-600 hover:text-white hover:border-zinc-600 transition-colors disabled:opacity-40'
+  'text-[11px] leading-none px-1.5 py-0.5 rounded border border-zinc-800 text-zinc-600 hover:text-white hover:border-zinc-600 transition-colors disabled:opacity-40'
 
 // Builds a list from the gear catalog instead of retyping it into a document.
 //
@@ -114,6 +110,7 @@ export default function GearListEditor({
   catalog,
   courseType,
   templates,
+  onDelete,
   students,
 }: {
   list: GearList
@@ -127,6 +124,10 @@ export default function GearListEditor({
   // The gear shelf's templates, so a list refined on a course can be saved
   // back over the one it started from instead of only spawning another.
   templates?: GearTemplateOption[]
+  /** Set on a course, where the list is one of several and can be got rid of.
+      Its presence is also what says this editor owns the header: on the library
+      shelf the template row draws its own. */
+  onDelete?: () => void
 }) {
   // Rows are drawn here first and the server is caught up afterwards, so the
   // catching up waits until the clicking stops and holds the page still while
@@ -140,10 +141,29 @@ export default function GearListEditor({
   const [editingOptions, setEditingOptions] = useState<ProductPanel | null>(null)
   // Which section's add panel is open, as "personal:Ropes". One at a time —
   // two open panels and it stops being obvious where the next item lands.
-  const [adding, setAdding] = useState<string | null>(null)
   // Which row's "how many" panel is open. One at a time, like every other panel
   // on a row.
   const [ratioFor, setRatioFor] = useState<string | null>(null)
+  // The one add panel, and where it puts things. Both halves and every heading
+  // are reachable from it, so the panel no longer has to be opened in the right
+  // place to add to the right place.
+  const [addOpen, setAddOpen] = useState(false)
+  const [addTarget, setAddTarget] = useState<Target>({ gt: 'personal', section: null })
+  // Non-null while a heading is being typed; '' is an empty field, not absence.
+  const [newHeading, setNewHeading] = useState<string | null>(null)
+  // The template panel, opened from the header rather than standing open at
+  // the foot of the list.
+  const [shelfOpen, setShelfOpen] = useState(false)
+  // The thing chosen but not yet placed, and the last thing placed. One asks
+  // where it goes; the other says where it went, because adding used to happen
+  // in silence somewhere below the fold.
+  const [staged, setStaged] = useState<{ gearItemId?: string | null; name?: string; label: string } | null>(null)
+  const [justAdded, setJustAdded] = useState<string | null>(null)
+
+  // Which halves to draw. Named rather than inlined as a guard on the map:
+  // `cond && rows.map(cb)` reads to the React compiler as a callback that may
+  // run during render, and the handlers this list hands down close over refs.
+  const HALVES = ['personal', 'group'] as const
   const [drag, setDrag] = useState<Drag | null>(null)
   // Where the pointer went down on a row, and whether it has travelled far
   // enough to mean a drag rather than a click. Held in a ref because every
@@ -225,7 +245,6 @@ export default function GearListEditor({
   const [over, setOver] = useState<string | null>(null)
   // Sections named but not yet filled. A heading with no rows has nowhere to
   // live in the database, so it lives here until the first item lands in it.
-  const [drafts, setDrafts] = useState<{ key: GroupType; name: string }[]>([])
   // The list as the editor has it, ahead of the server. Every write to a row
   // is drawn here first: a click has to land instantly, and the server can't
   // oblige — an add is three round trips to Supabase and then a rebuild of the
@@ -330,6 +349,35 @@ export default function GearListEditor({
     }
     return out
   }, [ordered])
+
+  // Every heading this list has named, either half, in the order they appear —
+  // what the add panel offers as destinations. A heading is a fact about the
+  // list rather than about one half of it: filing the group's rope under
+  // "Rescue Equipment" should reach the same heading the personal kit uses.
+  // The headcount this list is packed against.
+  //
+  // It starts as the course's maximum and usually stays there, but the two are
+  // not always the same thing: a course capped at twelve with eight signed up
+  // is packed for eight, and one taking two at the door is packed for fourteen.
+  // Typing over every row would say the same thing and lose the rules that made
+  // the list worth having, so the list carries a headcount of its own instead.
+  // Null means follow the course, which is where every list starts.
+  const packFor = list.students ?? students ?? null
+  const drifted = list.students != null && students != null && list.students !== students
+
+  const halves = entries.length === 0 ? [] : HALVES
+
+  const headings = useMemo(() => {
+    const seen: string[] = []
+    for (const gt of ['personal', 'group'] as const) {
+      for (const s of grouped[gt].sections) if (!seen.includes(s.name)) seen.push(s.name)
+    }
+    // Plus the one being typed in the add panel, so it can be filed under
+    // before it exists — the heading becomes real when the first row lands.
+    const typed = addTarget.section
+    if (typed && !seen.includes(typed)) seen.push(typed)
+    return seen
+  }, [grouped, addTarget.section])
 
   async function run(fn: () => Promise<unknown>) {
     setBusy(true); setError(null)
@@ -536,18 +584,74 @@ export default function GearListEditor({
     >
       {error && <p className="text-sm text-pr-red">{error}</p>}
 
-      {/* The sheet this list becomes when it's handed out. Up here rather than
-          beside the template controls at the foot: printing is what you do
-          with a list you've finished, not part of saving it. */}
-      <div className="flex justify-end">
-        {/* Printed from here it is the POC's sheet: every quantity is what the
-            whole course needs. The same list printed from the portal is what
-            one person packs. */}
-        <PdfLink
-          href={`/api/gear-lists/${list.id}/pdf?for=course`}
-          label="Printable PDF"
+      {/* Everything you do to the list as a whole, on one row.
+          Print was a row of its own, the template controls a block at the foot,
+          the name and Delete somewhere above both — four verbs at three
+          different heights, the last of them thirty rows down the page. They
+          belong to the list, so the list's editor draws them. */}
+      {onDelete && (
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* The name is a field, because a list is very often a copy.
+              Starting from a saved template is the ordinary way to build one —
+              load it, change what this course needs, save it back to the shelf
+              — and the copy arrived carrying the template's name with no way
+              to change it, so the only route to a differently-named list was
+              a blank one and typing it all again. */}
+          <input
+            defaultValue={list.name}
+            onBlur={(ev) => {
+              const next = ev.target.value.trim()
+              if (!next || next === list.name) { ev.target.value = list.name; return }
+              run(() => updateGearList(list.id, { name: next }))
+            }}
+            aria-label="List name"
+            className="min-w-0 flex-1 sm:flex-none sm:w-72 text-base font-semibold bg-transparent border border-transparent rounded px-1.5 py-0.5 -ml-1.5 hover:border-zinc-700 focus:border-zinc-600 focus:bg-zinc-900 focus:outline-none transition-colors"
+          />
+          <ForPill audience={list.audience} />
+          {/* Said once, up here, rather than on the column head where the
+              number is being read: this list is packed for something other
+              than the course, and here is the way back. Same shape as the
+              estimate's drift line — a number kept on purpose is fine, and
+              only worth mentioning because Details has since moved. */}
+          {drifted ? (
+            <span className="inline-flex items-center gap-1.5 text-[11px] text-amber-400/90">
+              packed for {list.students}, Details says {students}
+              <button
+                onClick={() => run(() => updateGearList(list.id, { students: null }))}
+                disabled={busy}
+                className="underline decoration-amber-700 hover:text-amber-200 transition-colors disabled:opacity-40"
+              >
+                use {students}
+              </button>
+            </span>
+          ) : students != null ? (
+            <span className="text-[11px] text-zinc-600">roster {students}</span>
+          ) : null}
+          <PdfLink href={`/api/gear-lists/${list.id}/pdf`} label="Print" className="ml-auto" />
+          <button
+            onClick={() => setShelfOpen((v) => !v)}
+            className={`text-xs px-2 py-1 rounded transition-colors ${
+              shelfOpen ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:text-white'
+            }`}
+          >
+            Save as template
+          </button>
+          <button
+            onClick={onDelete}
+            disabled={busy}
+            className="text-xs px-2 py-1 rounded text-zinc-600 hover:text-red-400 transition-colors disabled:opacity-40"
+          >
+            Delete
+          </button>
+        </div>
+      )}
+
+      {shelfOpen && !list.is_template && (
+        <SaveToShelf
+          list={list} templates={templates ?? []} courseType={courseType}
+          busy={busy} run={run} input={input}
         />
-      </div>
+      )}
 
       <textarea
         defaultValue={list.intro ?? ''}
@@ -557,78 +661,242 @@ export default function GearListEditor({
         className={`w-full resize-y ${input}`}
       />
 
-      {(['personal', 'group'] as const).map((gt) => {
+      {/* One way in, for the whole list.
+          There were four — "+ Add gear" and "+ New section" under each half —
+          plus one at the foot of every section, so a list with three headings
+          offered nine ways to add a row and each of them decided, silently, by
+          where it happened to sit. The destination is a question now, asked
+          once, in the panel: which half, and under which heading. Naming a new
+          heading happens there too, which is when anyone ever wants one — an
+          empty section is not a thing people set out to make. */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <button
+          onClick={() => setAddOpen((v) => !v)}
+          className={addOpen
+            ? 'text-sm font-medium px-3 py-1.5 rounded border border-zinc-500 bg-zinc-800 text-white transition-colors'
+            : 'text-sm font-medium px-3 py-1.5 rounded border border-zinc-700 text-zinc-200 hover:border-zinc-500 hover:text-white transition-colors'}
+        >
+          + Add gear
+        </button>
+      </div>
+
+      {addOpen && (
+        <div className="rounded-lg border border-zinc-700 bg-zinc-900/60 p-3 space-y-3">
+          {justAdded && !staged && (
+            <p className="text-[11px] text-teal-300">{justAdded}</p>
+          )}
+          {!staged ? (
+            <AddGear
+              listId={list.id}
+              catalog={catalog}
+              childrenOf={childrenOf}
+              onPick={(picked) => {
+                setJustAdded(null)
+                setStaged({
+                  ...picked,
+                  label: picked.name ?? byId.get(picked.gearItemId ?? '')?.name ?? 'that',
+                })
+              }}
+              onClose={() => setAddOpen(false)}
+              busy={busy} run={run} input={input}
+            />
+          ) : (
+          <>
+          <p className="text-sm">
+            <span className="text-zinc-500">Adding </span>
+            <span className="font-medium">{staged.label}</span>
+          </p>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[11px] uppercase tracking-widest text-zinc-500 w-20 shrink-0">Carried by</span>
+            {(['personal', 'group'] as const).map((gt) => (
+              <button
+                key={gt}
+                onClick={() => setAddTarget((t) => ({ ...t, gt }))}
+                aria-pressed={addTarget.gt === gt}
+                className={addTarget.gt === gt
+                  ? 'text-xs px-2.5 py-1 rounded-full border border-zinc-500 bg-zinc-800 text-white'
+                  : 'text-xs px-2.5 py-1 rounded-full border border-zinc-700 text-zinc-400 hover:text-zinc-200'}
+              >
+                {KIT_LABEL[gt]}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[11px] uppercase tracking-widest text-zinc-500 w-20 shrink-0">Heading</span>
+            {[null, ...headings].map((h) => (
+              <button
+                key={h ?? '—'}
+                onClick={() => setAddTarget((t) => ({ ...t, section: h }))}
+                aria-pressed={addTarget.section === h}
+                className={addTarget.section === h
+                  ? 'text-xs px-2.5 py-1 rounded-full border border-zinc-500 bg-zinc-800 text-white'
+                  : 'text-xs px-2.5 py-1 rounded-full border border-zinc-700 text-zinc-400 hover:text-zinc-200'}
+              >
+                {h ?? 'None'}
+              </button>
+            ))}
+            {newHeading === null ? (
+              <button
+                onClick={() => setNewHeading('')}
+                className="text-xs px-2.5 py-1 rounded-full border border-dashed border-zinc-700 text-zinc-500 hover:text-zinc-200 hover:border-zinc-500"
+              >
+                + New…
+              </button>
+            ) : (
+              // Typed here rather than in a browser prompt(), which is unstyled,
+              // awkward on a phone and can be switched off entirely.
+              <input
+                autoFocus
+                value={newHeading}
+                placeholder="Heading students read"
+                onChange={(ev) => setNewHeading(ev.target.value)}
+                onKeyDown={(ev) => {
+                  if (ev.key === 'Escape') return setNewHeading(null)
+                  if (ev.key !== 'Enter') return
+                  const named = newHeading.trim()
+                  if (!named) return setNewHeading(null)
+                  setAddTarget((t) => ({ ...t, section: named }))
+                  setNewHeading(null)
+                }}
+                onBlur={() => {
+                  const named = newHeading.trim()
+                  if (named) setAddTarget((t) => ({ ...t, section: named }))
+                  setNewHeading(null)
+                }}
+                className={`w-48 ${input} py-1 text-xs`}
+              />
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                addEntry({ gearItemId: staged.gearItemId, name: staged.name, target: addTarget })
+                setJustAdded(
+                  `Added ${staged.label} to ${KIT_LABEL[addTarget.gt].toLowerCase()}` +
+                  (addTarget.section ? ` under ${addTarget.section}` : '')
+                )
+                setStaged(null)
+              }}
+              disabled={busy}
+              className="px-3 py-1.5 rounded bg-pr-red hover:bg-pr-red-dark text-white text-sm font-medium transition-colors disabled:opacity-40"
+            >
+              Add to the list
+            </button>
+            <button
+              onClick={() => setStaged(null)}
+              className="text-xs text-zinc-500 hover:text-white transition-colors"
+            >
+              Pick something else
+            </button>
+          </div>
+          </>
+          )}
+        </div>
+      )}
+
+      {/* A list with nothing on it says so once. Drawing both halves and an
+          empty line under each is two reports of the same nothing, stacked
+          under the button that fixes it. The halves appear when there is
+          something to put in them. */}
+      {entries.length === 0 && (
+        <p className="text-xs text-zinc-600">Nothing on this list yet.</p>
+      )}
+
+      {halves.map((gt) => {
         const { loose, sections: real } = grouped[gt]
-        // A draft the first item has already landed in is a real section now.
-        const draft = drafts.filter((d) => d.key === gt && !real.some((s) => s.name === d.name))
+        const halfCount = loose.length + real.reduce((n, sec) => n + sec.rows.length, 0)
         const shared = {
           listId: list.id, catalog, childrenOf,
-          adding, setAdding, editingOptions, setEditingOptions,
+          editingOptions, setEditingOptions,
           drag, setDrag, over, setOver, onDrop: drop, apply, onRow, addEntry,
           joining, setJoining, joinOnto, overRow, onRowPointerDown,
           instanceId: list.instance_id, busy, run, input, join,
-          students: students ?? null, ratioFor, setRatioFor, setRatio,
+          students: packFor, ratioFor, setRatioFor, setRatio,
         }
         return (
           <div key={gt}>
-            <h4 className="text-[11px] font-medium text-zinc-600 uppercase tracking-widest mb-2">
-              {GROUP_LABEL[gt]}
-            </h4>
+            {/* The half, named at the weight of a heading, with what it holds
+                beside it and what the two columns mean on the right. */}
+            <div className="flex items-baseline gap-2 mb-2 flex-wrap">
+              <h4 className="text-sm font-semibold text-zinc-200">{KIT_LABEL[gt]}</h4>
+              <span className="text-[11px] text-zinc-600">
+                {halfCount} item{halfCount === 1 ? '' : 's'}
+              </span>
+            </div>
 
-            <div className="space-y-3">
-              {/* Gear that needs no heading is still the common case, so adding
-                  it can't be behind naming a section first. But an empty card
-                  is a container for nothing — once a list has real sections it
-                  reads as a section someone forgot to name. So the card appears
-                  when it holds something, or while something is being put in
-                  it, and is a plain line the rest of the time. */}
-              {loose.length > 0 || adding === zoneKey({ gt, section: null }, 'end') ? (
+            <div className="rounded-lg border border-zinc-800 overflow-hidden">
+              {/* The columns named inside the table they head, on their own
+                  band. Sitting them out on the heading line left two labels
+                  floating over a border with nothing joining them to the rows
+                  underneath. */}
+              <div className="flex items-baseline gap-2 pl-3 pr-9 py-1.5 bg-zinc-900/70 border-b border-zinc-800">
+                <span className="text-[10px] uppercase tracking-widest text-zinc-600">Item</span>
+                <span className="ml-auto shrink-0 w-24 text-right text-[10px] uppercase tracking-widest text-zinc-600">
+                  Rule
+                </span>
+                {/* The one number anybody came for, so it is the one thing lit
+                    — and the one thing here worth being able to change. On a
+                    template there is no course to follow and no total to work
+                    out; the rule is the whole answer. */}
+                {packFor == null ? (
+                  <span className="shrink-0 w-16 text-right text-[10px] uppercase tracking-widest text-teal-300/90">
+                    rule only
+                  </span>
+                ) : (
+                  <span className="shrink-0 w-16 flex items-baseline justify-end gap-0.5 text-[10px] uppercase tracking-widest text-teal-300/90">
+                    for
+                    <input
+                      key={`pack:${packFor}`}
+                      defaultValue={packFor}
+                      inputMode="numeric"
+                      aria-label="How many people this list is packed for"
+                      title={drifted
+                        ? `Packed for ${list.students}. Details says ${students}.`
+                        : 'How many people this list is packed for. Starts at the course maximum; type over it to pack for a different number.'}
+                      onBlur={(ev) => {
+                        const v = ev.target.value.trim()
+                        const n = v === '' ? null : Math.floor(Number(v))
+                        const next = n !== null && Number.isFinite(n) && n > 0 ? n : null
+                        // Back to the course's own number is the same as never
+                        // having said one, so it is stored as nothing.
+                        const settled = next === students ? null : next
+                        if (settled === (list.students ?? null)) return
+                        run(() => updateGearList(list.id, { students: settled }))
+                      }}
+                      className="w-8 bg-transparent border border-transparent rounded px-0.5 text-right text-[11px] font-semibold tabular-nums text-teal-300 hover:border-zinc-700 focus:border-zinc-600 focus:bg-zinc-900 focus:outline-none transition-colors"
+                    />
+                  </span>
+                )}
+
+              </div>
+              <div className="divide-y divide-zinc-800/60">
+              {/* An empty card is a container for nothing, so the unheaded card
+                  appears only once it holds something. Nothing to click here
+                  any more — adding is one control, above. */}
+              {loose.length > 0 && (
                 <SectionCard key={`${gt}:loose`} {...shared} groupType={gt} name={null} rows={loose} />
-              ) : (
-                <button
-                  onClick={() => setAdding(zoneKey({ gt, section: null }, 'end'))}
-                  className="text-xs text-zinc-600 hover:text-white transition-colors py-1"
-                >
-                  + Add gear
-                </button>
               )}
 
               {real.map((s) => (
                 <SectionCard key={`${gt}:${s.name}`} {...shared} groupType={gt} name={s.name} rows={s.rows} />
               ))}
 
-              {draft.map((d) => (
-                <SectionCard
-                  key={`draft:${gt}:${d.name}`} {...shared}
-                  groupType={gt} name={d.name} rows={[]} isDraft
-                  onDiscard={() => setDrafts((xs) => xs.filter((x) => !(x.key === gt && x.name === d.name)))}
-                  onRename={(next) => setDrafts((xs) => xs.map((x) =>
-                    x.key === gt && x.name === d.name ? { ...x, name: next } : x
-                  ))}
-                />
-              ))}
-
-              <button
-                onClick={() => {
-                  const named = prompt('Name the new section — this is the heading students read:')?.trim()
-                  if (!named) return
-                  const zone = zoneKey({ gt, section: named }, 'end')
-                  if (real.some((s) => s.name === named) || draft.some((d) => d.name === named)) {
-                    return setAdding(zone)
-                  }
-                  setDrafts((xs) => [...xs, { key: gt, name: named }])
-                  setAdding(zone)
-                }}
-                className="text-xs text-zinc-500 hover:text-white border border-dashed border-zinc-800 hover:border-zinc-600 rounded-lg w-full py-2 transition-colors"
-              >
-                + New section
-              </button>
+              {loose.length === 0 && real.length === 0 && (
+                <p className="px-3 py-2 text-xs text-zinc-600">
+                  Nothing in {KIT_LABEL[gt].toLowerCase()} yet.
+                </p>
+              )}
+              </div>
             </div>
           </div>
         )
       })}
 
-      {!list.is_template && (
+      {/* Saving to the shelf used to stand open under every list forever —
+          four controls and a select, wider than the add control and louder than
+          the list. It is a thing you do once, if ever, so it waits behind its
+          own word in the header. */}
+      {!onDelete && !list.is_template && (
         <SaveToShelf
           list={list} templates={templates ?? []} courseType={courseType}
           busy={busy} run={run} input={input}
@@ -653,8 +921,6 @@ type Shared = {
   catalog: GearItem[]
   childrenOf: Map<string, GearItem[]>
   // One add panel open at a time, identified by the zone it would add to.
-  adding: string | null
-  setAdding: (key: string | null) => void
   editingOptions: ProductPanel | null
   setEditingOptions: (v: ProductPanel | null) => void
   drag: Drag | null
@@ -721,14 +987,11 @@ function gapProps(s: {
 // choices. A choice is its own block because "bring one of these" is a claim
 // about several rows at once, and there is nowhere to write that on a row.
 function SectionCard({
-  groupType, name, rows, isDraft, onDiscard, onRename, ...s
+  groupType, name, rows, ...s
 }: Shared & {
   groupType: GroupType
   name: string | null
   rows: ResolvedRow[]
-  isDraft?: boolean
-  onDiscard?: () => void
-  onRename?: (next: string) => void
 }) {
   const dragging = s.drag !== null
   const here: Target = { gt: groupType, section: name }
@@ -742,37 +1005,41 @@ function SectionCard({
   const gap = (beforeId: string | 'end') =>
     gapProps({ target: here, beforeId, dragging, over: s.over, setOver: s.setOver, onDrop: s.onDrop })
 
-  const addKey = zoneKey(here, 'end')
-
   // The first row of whatever is drawn next, which is the row an operator
   // placed in the gap above it belongs to.
   const leadRow = (p: (typeof placed)[number]) => (p.kind === 'item' ? p.row : p.rows[0])
 
   return (
     <div
-      className={`border rounded-lg overflow-hidden transition-colors ${
-        dragging && s.over?.startsWith(`${groupType}|${name ?? ''}|`) ? 'border-pr-red/70' : 'border-zinc-800'
+      // A caption and its rows, not a box. Every section drew its own bordered
+      // card, which chopped one list into three or four blocks and broke the
+      // number columns into three or four alignments — and a heading is an
+      // editorial aside about part of a list, not a container the list is made
+      // of. The only border left is the one the drag hover needs.
+      className={`rounded transition-colors ${
+        dragging && s.over?.startsWith(`${groupType}|${name ?? ''}|`)
+          ? 'ring-1 ring-inset ring-pr-red/70'
+          : ''
       }`}
       {...gap('end')}
     >
       {name !== null && (
-        <div className="flex items-center gap-2 px-3 py-2 bg-zinc-800/50 border-b border-zinc-800">
+        <div className="flex items-center gap-2 px-3 pt-3 pb-1">
           <input
             defaultValue={name}
             key={name}
             onBlur={(ev) => {
               const next = ev.target.value.trim()
               if (!next || next === name) { ev.target.value = name; return }
-              if (isDraft) return onRename?.(next)
               s.run(() => renameGearSection(s.listId, groupType, name, next))
             }}
             aria-label="Section heading"
-            className="min-w-0 flex-1 text-sm font-semibold text-white bg-transparent rounded px-1.5 py-0.5 -ml-1.5 border border-transparent hover:border-zinc-700 focus:border-zinc-600 focus:bg-zinc-900 focus:outline-none"
+            className="min-w-0 flex-1 text-[11px] font-medium uppercase tracking-widest text-zinc-500 bg-transparent rounded px-1.5 py-0.5 -ml-1.5 border border-transparent hover:border-zinc-700 focus:border-zinc-600 focus:bg-zinc-900 focus:outline-none"
           />
           <span className="shrink-0 text-[11px] text-zinc-500">
-            {isDraft ? 'empty' : `${rows.length} item${rows.length === 1 ? '' : 's'}`}
+            {`${rows.length} item${rows.length === 1 ? '' : 's'}`}
           </span>
-          {!isDraft && rows.length > 0 && (
+          {rows.length > 0 && (
             <button
               onClick={() => s.run(() => ungroupGearSection(s.listId, groupType, name))}
               disabled={s.busy}
@@ -784,23 +1051,16 @@ function SectionCard({
           )}
           <button
             onClick={() => {
-              if (isDraft) return onDiscard?.()
               if (!confirm(`Delete “${name}” and the ${rows.length} item${rows.length === 1 ? '' : 's'} under it?`)) return
               s.run(() => removeGearSection(s.listId, groupType, name))
             }}
             disabled={s.busy}
-            title={isDraft ? 'Discard this section' : 'Delete this section and its gear'}
+            title="Delete this section and its gear"
             className="shrink-0 text-xs text-zinc-600 hover:text-red-400 transition-colors disabled:opacity-40"
           >
             <TrashIcon />
           </button>
         </div>
-      )}
-
-      {isDraft && rows.length === 0 && (
-        <p className="px-3 py-2 text-[11px] text-zinc-600">
-          Nothing in here yet. Add the first item and the heading sticks.
-        </p>
       )}
 
       <div>
@@ -827,22 +1087,7 @@ function SectionCard({
                 gap={gap(leadRow(p).id)}
                 join={s.join}
                 busy={s.busy}
-                adding={s.adding}
-                setAdding={s.setAdding}
-                addKey={zoneKey(here, leadRow(p).id)}
               />
-            )}
-            {/* Opened from the gap, so it lands in the gap. */}
-            {s.adding === zoneKey(here, leadRow(p).id) && (
-              <div className="border-y border-zinc-800/70">
-                <AddGear
-                  listId={s.listId}
-                  target={{ ...here, before: leadRow(p).id }}
-                  catalog={s.catalog} childrenOf={s.childrenOf} addEntry={s.addEntry}
-                  onClose={() => s.setAdding(null)}
-                  busy={s.busy} run={s.run} input={s.input}
-                />
-              </div>
             )}
             {p.kind === 'item' ? (
               <div className="border-t border-zinc-800/70 first:border-t-0">
@@ -866,23 +1111,10 @@ function SectionCard({
         ))}
       </div>
 
-      <div className={rows.length > 0 ? 'border-t border-zinc-800/70' : ''}>
-        {s.adding === addKey ? (
-          <AddGear
-            listId={s.listId} target={here}
-            catalog={s.catalog} childrenOf={s.childrenOf} addEntry={s.addEntry}
-            onClose={() => s.setAdding(null)}
-            busy={s.busy} run={s.run} input={s.input}
-          />
-        ) : (
-          <button
-            onClick={() => s.setAdding(addKey)}
-            className="w-full text-left px-3 py-2 text-xs text-zinc-500 hover:text-white hover:bg-zinc-800/40 transition-colors"
-          >
-            + Add gear{name ? ` to ${name}` : ''}
-          </button>
-        )}
-      </div>
+      {/* No "+ add gear to this section" any more. It read as helpful and
+          multiplied by the number of headings — a list with three of them
+          offered it three times, on top of the four controls above. Adding is
+          one control now, and the heading is one of the two things it asks. */}
     </div>
   )
 }
@@ -947,7 +1179,7 @@ function JoinControls({
 // build a set meant that when it declined there was no way at all — so the
 // click is here, and the drag is the shortcut rather than the mechanism.
 function Gap({
-  rowBelow, dragging, isOver, gap, join, busy, adding, setAdding, addKey,
+  rowBelow, dragging, isOver, gap, join, busy,
 }: {
   rowBelow: ResolvedRow
   dragging: boolean
@@ -958,9 +1190,6 @@ function Gap({
   // Adding here rather than at the foot of the section, so gear that belongs
   // with the row above it arrives next to it instead of at the bottom with a
   // drag still to do.
-  adding: string | null
-  setAdding: (key: string | null) => void
-  addKey: string
 }) {
   return (
     <div
@@ -988,16 +1217,13 @@ function Gap({
         >
           + or
         </button>
-        {/* The gap is where you say what goes between two rows. Usually that is
-            how they relate; sometimes it is another item. */}
-        <button
-          onClick={() => setAdding(adding === addKey ? null : addKey)}
-          disabled={busy}
-          title="Add gear here, between these two rows"
-          className={adding === addKey ? `${PAIR_BTN} border-zinc-500 text-white bg-zinc-800` : PAIR_BTN}
-        >
-          + gear here
-        </button>
+        {/* The gap says how two rows relate, and only that.
+            It used to offer a third thing — "+ gear here" — from when adding
+            was done wherever you happened to be standing. There is one way in
+            now, at the top of the list, which asks where the item goes; a
+            second door in the gap is a second answer to a question already
+            asked. Anything that needs to sit here is dragged here, which is
+            what the gap is for. */}
       </span>
     </div>
   )
@@ -1181,7 +1407,7 @@ function Row({
           ? `flex-1 min-w-[15rem] rounded-lg border bg-zinc-900/40 px-2.5 py-2 group transition-colors ${
               isJoinTarget ? 'border-pr-red bg-pr-red/10' : 'border-zinc-800'
             }`
-          : `px-3 py-2 group transition-colors rounded ${
+          : `relative pl-3 pr-9 py-1.5 group transition-colors hover:bg-zinc-900 ${
               isJoinTarget ? 'bg-pr-red/10 ring-1 ring-inset ring-pr-red/60' : ''
             } ${dragging ? 'cursor-grabbing' : ''}`
       }
@@ -1199,98 +1425,29 @@ function Row({
         >
           ⠿
         </span>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 flex-wrap">
-            {e.r.url ? (
+        {/* One line, wrapping only when it must.
+            The name, the models it accepts and the note were three stacked
+            blocks, so a plain row was three lines high and a list of twenty was
+            a page — which is why nothing about it read as a list. They are one
+            row of items now: the note flexes into whatever is left and shows as
+            much as fits, and the whole of it is still there when you put the
+            cursor in it. */}
+        <div className="min-w-0 flex-1 flex items-center gap-x-2 gap-y-1 flex-wrap">
+          {e.r.url ? (
               <a href={e.r.url} target="_blank" rel="noreferrer" className="text-sm hover:text-pr-red-light transition-colors">
                 {e.r.name}
               </a>
             ) : (
               <span className="text-sm">{e.r.name}</span>
             )}
-            {/* How many, next to what — not in a column at the far right of
-                the card. The number belongs to the item, and a row reads as one
-                unit only if everything it says about that item is in it.
-
-                What the course needs, which is what this editor is for: the
-                POC reads it to buy or pull the gear. The student's copy of the
-                same row shows one person's share. */}
-            <span className="inline-flex items-center text-zinc-600">
-              <span className="text-xs pr-0.5">×</span>
-              {/* The box holds the override and nothing else. What the rule
-                  works out sits in it as the placeholder — greyed, because it
-                  is what the row says while the box is empty — so typing is how
-                  you overrule it and clearing is how you take that back. There
-                  is no third state to get into and no button to find. */}
-              <input
-                defaultValue={e.quantity ?? ''}
-                onBlur={(ev) => {
-                  const v = ev.target.value
-                  if (v === (e.quantity ?? '')) return
-                  apply(
-                    (es) => es.map((x) => (x.id === e.id ? { ...x, quantity: v.trim() || null } : x)),
-                    () => onRow(e.id, (id) => updateGearEntry(id, { quantity: v }, instanceId))
-                  )
-                }}
-                placeholder={auto.text ?? '1'}
-                aria-label="Quantity"
-                title={
-                  qty.overridden
-                    ? `Typed over the rule — ${auto.rule?.toLowerCase()}${auto.text ? `, so ${auto.text}` : ''}. Clear the box to go back to it.`
-                    : auto.rule
-                      ? `${auto.rule}${students ? ` — ${students} students` : ', once this course has a number of students'}`
-                      : 'This many, however many students come'
-                }
-                size={1}
-                className={`w-14 bg-transparent border rounded px-1 py-0.5 text-xs focus:bg-zinc-900 focus:outline-none transition-colors ${
-                  qty.overridden
-                    ? 'border-zinc-700 text-amber-300/90 hover:border-zinc-600 focus:border-zinc-500'
-                    : 'border-transparent text-zinc-300 placeholder:text-zinc-500 hover:border-zinc-800 focus:border-zinc-600'
-                }`}
-              />
-              {/* Where the number came from. A row that counts by students says
-                  so on its face, because "one each" and "1 per 4 students" are
-                  the difference between sixteen helmets and four.
-
-                  A row that doesn't counts as nothing but itself: × 1 is one,
-                  and a word explaining that one is one is a word in the way. So
-                  on those rows the chip waits for the pointer, like the buttons
-                  beside it — there when you want to change how the row counts,
-                  invisible when you are reading the list. */}
-              <button
-                onClick={() => setRatioFor(ratioFor === e.id ? null : e.id)}
-                disabled={busy}
-                title={
-                  auto.rule
-                    ? `${auto.rule} — click to change how this counts`
-                    : 'However many the box says, for the course — click to count it by students'
-                }
-                className={`text-[10px] ml-0.5 px-1 py-0.5 rounded border transition-colors ${
-                  ratioFor === e.id
-                    ? 'border-zinc-500 text-white bg-zinc-800'
-                    : e.qty_per_students
-                      ? 'border-transparent text-zinc-500 hover:text-white hover:border-zinc-700'
-                      : `border-transparent text-zinc-600 hover:text-white hover:border-zinc-700 ${
-                          dragging ? 'opacity-0' : 'opacity-0 group-hover:opacity-100 focus-within:opacity-100 focus:opacity-100'
-                        }`
-                }`}
-              >
-                {/* The rule, not the unit it is counted in. Beside a total,
-                    a bare "each" reads as a quantity of its own — "× 16 each"
-                    is sixteen apiece, which is the opposite of what it says:
-                    sixteen because everyone brings one. */}
-                ({auto.rule ? auto.rule.toLowerCase() : 'per course'})
-              </button>
-            </span>
-            {!e.r.catalogItem && <span className="text-[10px] text-zinc-700">one-off</span>}
-          </div>
+          {!e.r.catalogItem && <span className="text-[10px] text-zinc-700">one-off</span>}
           {/* The products we point people at sit directly under the name,
               ahead of the description, because the model someone has to go and
               buy is the answer to the question the row is asking. Everything
               that used to explain them — "these will do", "change which models
               work" — was wording stacked in front of the thing itself. */}
           {type && (
-            <div className="flex flex-wrap items-center gap-1.5 mt-1">
+            <>
               {e.r.options.map((o, i) => (
                 <Fragment key={o.id}>
                   {/* The operator is the point of the line. Two names side by
@@ -1301,14 +1458,21 @@ function Row({
                       or
                     </span>
                   )}
-                  <span className="inline-flex items-center gap-1.5 text-xs pl-2 pr-1.5 py-1 rounded border border-pr-red/60 bg-pr-red/10 text-white">
+                  {/* The model, at the weight a model deserves.
+                      These were boxed red pills, which put the thing narrowing
+                      the row above the row itself: "Team Wendy SAR Tactical"
+                      shouted while "Helmet" — what you are actually bringing —
+                      sat quietly beside it. The hierarchy is the type, then the
+                      model, then whatever is said about it, and it reads now
+                      the way the printed sheet has always read it. */}
+                  <span className="group/opt inline-flex items-center gap-1 text-xs text-zinc-400">
                     {productName(o)}
                     <button
                       onClick={() => setOptions(e.r.options.filter((x) => x.id !== o.id).map((x) => x.id))}
                       title={`Take the ${productName(o)} off this line`}
-                      className="text-zinc-500 hover:text-red-400 transition-colors disabled:opacity-40"
+                      className="text-zinc-700 hover:text-red-400 opacity-0 group-hover/opt:opacity-100 focus-visible:opacity-100 transition-opacity"
                     >
-                      <TrashIcon />
+                      ×
                     </button>
                   </span>
                 </Fragment>
@@ -1332,9 +1496,14 @@ function Row({
                   ? `${PAIR_BTN} border-zinc-500 text-white bg-zinc-800`
                   : PAIR_BTN}
               >
-                {e.r.options.length === 0 ? '+ specific model' : '+ another model'}
+                {/* Which kind of adding this is.
+                    A bare plus was ambiguous the moment it sat a few rows from
+                    "+ gear here": one narrows this item to a model that
+                    satisfies it, the other puts another item on the list. The
+                    noun is what tells them apart, and it is one word. */}
+                + model
               </button>
-            </div>
+            </>
           )}
           {/* The note is written here, on the course, and nowhere else. It
               reads as the line it prints on the student's list until you put
@@ -1350,8 +1519,96 @@ function Row({
                 () => onRow(e.id, (id) => updateGearEntry(id, { note: v }, instanceId))
               )
             }}
-            placeholder="Add a note for this course"
-            className="mt-1 w-full bg-transparent border border-transparent rounded px-1 py-0.5 text-[11px] text-zinc-500 placeholder:text-zinc-800 hover:border-zinc-800 focus:border-zinc-600 focus:bg-zinc-900 focus:text-zinc-300 focus:outline-none transition-colors"
+            placeholder="Note"
+            // Faded rather than removed: the box keeps its width whether or
+            // not it is showing, so a pointer travelling down the list does not
+            // reflow every row under it. The catalogue's note is a line of its
+            // own and cannot do that, so there it opens on a press instead.
+            className={`flex-1 min-w-[6rem] bg-transparent border border-transparent rounded px-1 py-0.5 text-[11px] text-zinc-500 text-ellipsis placeholder:text-zinc-700 hover:border-zinc-800 focus:border-zinc-600 focus:bg-zinc-900 focus:text-zinc-300 focus:outline-none transition-colors ${
+              e.r.note ? '' : 'opacity-0 group-hover:opacity-100 focus:opacity-100'
+            }`}
+          />
+        </div>
+
+        {/* How many, in a column of its own.
+            It sat inline after the name, on the argument that a row reads as
+            one unit only if everything about the item is inside it. True of a
+            row read on its own, and wrong down a list of thirty: the number is
+            what the POC came for, and inline it lands at a different place on
+            every line, so the one thing worth scanning is the one thing you
+            cannot. Aligned, the column reads as the packing sheet it is.
+
+            The course's number, which is what this editor is for — the POC
+            reads it to buy or pull the gear. The student's copy of the same
+            row shows one person's share instead. */}
+        {/* Two cells, not one. They were fused — "× 20 (2 each)" — which is a
+            sentence where a column was wanted: the rule and the total answer
+            different questions, and neither lines up down the list while they
+            share a box. The rule is what the next course inherits; the number
+            is what goes in the van today. */}
+        <div className="shrink-0 w-24 text-right">
+          <button
+            onClick={() => setRatioFor(ratioFor === e.id ? null : e.id)}
+            disabled={busy}
+            title={
+              auto.rule
+                ? `${auto.rule} — click to change how this counts`
+                : 'However many the box says, for the course — click to count it by students'
+            }
+            className={`text-[11px] px-1 py-0.5 rounded border transition-colors ${
+              ratioFor === e.id
+                ? 'border-zinc-500 text-white bg-zinc-800'
+                : 'border-transparent text-zinc-500 hover:text-white hover:border-zinc-700'
+            }`}
+          >
+            {/* The rule, not the unit it is counted in. Beside a total, a bare
+                "each" reads as a quantity of its own — "× 16 each" is sixteen
+                apiece, which is the opposite of what it says: sixteen because
+                everyone brings one.
+
+                Always drawn now that it is a column. It used to wait for the
+                pointer on rows with no ratio, which is right for a chip tucked
+                beside a number and wrong for a cell under a heading — a column
+                that is blank until you hover is not a column. */}
+            {auto.rule ? auto.rule.toLowerCase() : 'per course'}
+          </button>
+        </div>
+        {/* The number and the bin share this cell, one at a time: the figure
+            until the row is pointed at, the way out of the row while it is.
+            They were drawn on top of each other before — a bin with a strip of
+            backdrop, half over a "20" that was still there underneath. */}
+        <div className="shrink-0 w-16 flex items-baseline justify-end tabular-nums">
+          <span className="text-xs pr-0.5 text-zinc-700">×</span>
+          {/* The box holds the override and nothing else. What the rule works
+              out sits in it as the placeholder — greyed, because it is what the
+              row says while the box is empty — so typing is how you overrule it
+              and clearing is how you take that back. There is no third state to
+              get into and no button to find. */}
+          <input
+            defaultValue={e.quantity ?? ''}
+            onBlur={(ev) => {
+              const v = ev.target.value
+              if (v === (e.quantity ?? '')) return
+              apply(
+                (es) => es.map((x) => (x.id === e.id ? { ...x, quantity: v.trim() || null } : x)),
+                () => onRow(e.id, (id) => updateGearEntry(id, { quantity: v }, instanceId))
+              )
+            }}
+            placeholder={auto.text ?? '1'}
+            aria-label="Quantity"
+            title={
+              qty.overridden
+                ? `Typed over the rule — ${auto.rule?.toLowerCase()}${auto.text ? `, so ${auto.text}` : ''}. Clear the box to go back to it.`
+                : auto.rule
+                  ? `${auto.rule}${students ? ` — ${students} students` : ', once this course has a number of students'}`
+                  : 'This many, however many students come'
+            }
+            size={1}
+            className={`w-11 bg-transparent border rounded px-1 py-0.5 text-xs text-right font-semibold focus:bg-zinc-900 focus:outline-none transition-colors ${
+              qty.overridden
+                ? 'border-zinc-700 text-amber-300/90 hover:border-zinc-600 focus:border-zinc-500'
+                : 'border-transparent text-teal-300 placeholder:text-teal-300/80 hover:border-zinc-800 focus:border-zinc-600'
+            }`}
           />
         </div>
         <button
@@ -1366,7 +1623,19 @@ function Row({
             )
           }}
           title={`Take “${e.r.name}” off this list`}
-          className="shrink-0 text-xs text-zinc-600 hover:text-red-400 transition-colors"
+          // In a gutter of its own, past the numbers.
+          //
+          // It has been three things: a permanent cell, which pushed both
+          // number columns in by its width; then an overlay on the number,
+          // which meant hovering a row to reach the bin hid the figure you
+          // were reading — and drew the bin on top of it besides. The row
+          // reserves the space instead. The columns keep their alignment, the
+          // number is never covered, and the bin still waits for the pointer,
+          // because a bin lit on every row is twenty invitations to delete
+          // something down a list you are only reading.
+          className={`absolute right-2 top-1/2 -translate-y-1/2 text-xs text-zinc-600 hover:text-red-400 transition-opacity ${
+            dragging ? 'opacity-0' : 'opacity-0 group-hover:opacity-100 focus-visible:opacity-100'
+          }`}
         >
           <TrashIcon />
         </button>
@@ -1392,7 +1661,7 @@ function Row({
         const byCourse = per === null
         const total = byCourse ? each : students ? Math.ceil(students / per) * each : null
         return (
-          <div className="mt-2 p-2 bg-zinc-900 rounded border border-zinc-800 space-y-2">
+          <div className="relative mt-2 p-2 pr-8 bg-zinc-900 rounded border border-zinc-800 space-y-2">
             <div className="flex items-center gap-2 flex-wrap text-[11px] text-zinc-400">
               <span>Take</span>
               <input
@@ -1439,20 +1708,39 @@ function Row({
               </select>
             </div>
 
-            {/* What the sentence above comes to on this course, which is the
-                only reason anyone opened the panel. */}
-            <p className="text-[11px] text-zinc-500">
-              {byCourse
-                ? `${total} for the course, whatever the roster does.`
-                : !students
-                  ? 'This course has no maximum number of students yet — set it on the Details tab and this works itself out.'
-                  : `${students} students on this course, so ${total} of these. Change the maximum on the Details tab and every quantity follows it.`}
+            {/* What the sentence above comes to, and nothing else.
+                It used to spell out the whole arithmetic and then explain where
+                the roster is set — a paragraph under two boxes, read once and
+                then read past forever, in a panel whose entire job is to show
+                one number. The why is behind the icon. */}
+            <p className="flex items-center gap-1.5 text-[11px] text-zinc-500">
+              {!students && !byCourse ? (
+                <>No roster yet</>
+              ) : (
+                <>
+                  <span className="font-semibold text-teal-300">{total}</span>
+                  {byCourse ? 'for the course' : 'for this course'}
+                </>
+              )}
+              <InfoHint
+                below
+                text={byCourse
+                  ? 'A number the roster does not touch — the same on the student\u2019s sheet and the course\u2019s.'
+                  : 'Worked out from the maximum on the Details tab. Change it and every quantity on every list follows.'}
+              />
             </p>
             {qty.overridden && (
               <p className="text-[11px] text-amber-300/80">
-                This row is set to {qty.text} for this course, over its rule. Clear the quantity box to hand it back.
+                Set to {qty.text} for this course, over its rule. Clear the box to hand it back.
               </p>
             )}
+            {/* The way out, top right, where every window anyone has ever
+                closed puts it — see components/CloseButton. */}
+            <CloseButton
+              onClick={() => setRatioFor(null)}
+              label="Done"
+              className="absolute top-1 right-1"
+            />
           </div>
         )
       })()}
@@ -1524,7 +1812,7 @@ function Row({
           setNewModel(''); setNewBrand('')
         })
         return (
-          <div className="mt-2 p-2 bg-zinc-900 rounded border border-zinc-800 space-y-2">
+          <div className="relative mt-2 p-2 pr-8 bg-zinc-900 rounded border border-zinc-800 space-y-2">
             <p className="text-[11px] text-zinc-500">
               {e.r.models.length === 0
                 ? `The catalog has no models of ${type.name.toLowerCase()} yet. Name the one you recommend.`
@@ -1683,15 +1971,13 @@ function SaveToShelf({
 // where an item lands and the panel stays open across adds — filling a section
 // means adding six things to it, not confirming the destination six times.
 function AddGear({
-  listId, target, catalog, childrenOf, addEntry, onClose, busy, run, input,
+  listId, catalog, childrenOf, onPick, onClose, busy, run, input,
 }: {
   listId: string
-  // Where what's added lands. The panel opens inside that zone, so this is
-  // never a question put to the person using it.
-  target: Target
   catalog: GearItem[]
   childrenOf: Map<string, GearItem[]>
-  addEntry: (input: { gearItemId?: string | null; name?: string; target: Target }) => void
+  /** What was chosen. Placing it is the caller's job — see `add` below. */
+  onPick: (picked: { gearItemId?: string | null; name?: string }) => void
   onClose: () => void
   busy: boolean
   run: (fn: () => Promise<unknown>) => void
@@ -1767,7 +2053,11 @@ function AddGear({
   )
 
   function add(itemId: string | null, name?: string) {
-    addEntry({ gearItemId: itemId, name, target })
+    // Picked, not placed. Where it goes is the next question, asked once the
+    // thing being placed is known — choosing a destination for an item you have
+    // not chosen yet is answering in the wrong order, and it was silent besides:
+    // the row landed somewhere off screen and the panel looked untouched.
+    onPick({ gearItemId: itemId, name })
     setQuery('')
   }
 
@@ -1778,11 +2068,7 @@ function AddGear({
           autoFocus
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder={
-            target.section
-              ? `Search the catalog — adding to ${target.section}`
-              : `Search the catalog — adding to ${target.gt === 'personal' ? 'personal' : 'group'} kit`
-          }
+          placeholder="Search the catalog"
           className={`flex-1 min-w-0 ${input}`}
         />
         {/* Searching the catalog is where you find out it's wrong — a type
@@ -1807,23 +2093,23 @@ function AddGear({
         <CloseButton onClick={onClose} label="Done (Esc)" className="shrink-0" />
       </div>
 
-      <div className="flex flex-wrap gap-1.5">
-        {categories.map((c) => {
-          const on = !searching && browsing === c
-          return (
-            <button
-              key={c}
-              onClick={() => setBrowsing(browsing === c ? null : c)}
-              className={`text-[11px] px-2 py-0.5 rounded border transition-colors ${
-                on
-                  ? 'border-pr-red bg-pr-red/10 text-white'
-                  : 'border-zinc-700 text-zinc-500 hover:text-white hover:border-zinc-500'
-              } ${searching ? 'opacity-40' : ''}`}
-            >
-              {c}
-            </button>
-          )
-        })}
+      {/* Fourteen categories laid out as chips took two full lines above the
+          results, for a control that is the second way in — typing is the
+          first. One select, the width of its longest name. */}
+      <div className="flex items-center gap-2">
+        <label className="text-[11px] uppercase tracking-widest text-zinc-600" htmlFor={`cat-${listId}`}>
+          Browse
+        </label>
+        <select
+          id={`cat-${listId}`}
+          value={browsing ?? ''}
+          disabled={searching}
+          onChange={(ev) => setBrowsing(ev.target.value || null)}
+          className={`${input} py-1 text-xs ${searching ? 'opacity-40' : ''}`}
+        >
+          <option value="">All categories</option>
+          {categories.map((c) => <option key={c} value={c}>{c}</option>)}
+        </select>
       </div>
 
       <div className="space-y-1">
@@ -1872,7 +2158,7 @@ function AddGear({
           <div className="px-2 py-2 border-t border-zinc-800 space-y-2">
             <p className="text-[11px] text-zinc-500">
               {matches.length > 0
-                ? 'Not one of those? Add it — as a model under a type where that fits, so it stays findable.'
+                ? 'Not here? Add it to the catalog.'
                 : 'Nothing matches. Add it to the catalog:'}
             </p>
             <div className="flex flex-wrap items-end gap-2">
@@ -1951,10 +2237,11 @@ function AddGear({
                     category: newCategory,
                     parentId: parent || null,
                   }))
-                  await addGearEntry(listId, {
-                    gearItemId: id, groupType: target.gt, section: target.section,
-                  })
-                  setQuery(''); setNewParent(''); setNewItemBrand(''); setNewType(null)
+                  // Straight into the same staging step a catalog pick goes
+                  // through, so a brand-new item is placed by answering the
+                  // same question and lands with the same confirmation.
+                  onPick({ gearItemId: id })
+                  setNewParent(''); setNewItemBrand(''); setNewType(null)
                 })}
                 disabled={busy}
                 className="px-3 py-1.5 rounded bg-pr-red hover:bg-pr-red-dark text-white text-sm font-medium transition-colors disabled:opacity-40"
