@@ -26,12 +26,13 @@ import { plannedInstructorCount } from '@/lib/estimates'
 import { parseContacts, workEmail } from '@/lib/contacts'
 import { formatPhone } from '@/lib/phone'
 import { unseenSections, lastPushToStudents, behindOnPush, type Push } from '@/lib/course-pushes'
-import { GEAR_ENTRIES_SELECT } from '@/lib/gear'
+import { GEAR_ENTRIES_SELECT, KIT_LABEL } from '@/lib/gear'
 import { courseCapabilityCategories } from '@/lib/capabilities'
 import { GEAR_ENTRY_COLUMNS, gearLabel, gearQuantity, isChoice, placeSets, productName } from '@/lib/gear'
 import { courseDisplayName, computeBlocks, courseDates, dayShift } from '@/lib/courses'
 import CourseTasksPanel, { type CourseTask, type TaskPerson } from '@/components/CourseTasksPanel'
 import PdfLink from '@/components/PdfLink'
+import { ForPill } from '@/components/AudiencePills'
 import { loadTasksWithDocs } from '@/lib/course-tasks'
 import { LinkIcon, PaperclipIcon } from '@/components/TaskIcons'
 import { AudiencePills } from '@/components/AudiencePills'
@@ -224,7 +225,7 @@ export default async function CourseView({
   const gearSetupPromise = keep(showAsAdmin
     ? Promise.all([
         admin.from('gear_lists')
-          .select(`id, name, audience, intro, instance_id, is_template, ${GEAR_ENTRIES_SELECT}`)
+          .select(`id, name, audience, intro, students, instance_id, is_template, ${GEAR_ENTRIES_SELECT}`)
           .eq('instance_id', id),
         admin.from('gear_items')
           .select('id, name, brand, info, url, category, parent_id, aliases, disciplines')
@@ -239,7 +240,7 @@ export default async function CourseView({
 
   const gearRowsPromise = keep(admin
     .from('gear_lists')
-    .select(`id, name, audience, intro, gear_list_entries(id, ${GEAR_ENTRY_COLUMNS}, gear_items(name, brand, url, category), gear_entry_options(sort_order, gear_items(name, brand)))`)
+    .select(`id, name, audience, intro, students, gear_list_entries(id, ${GEAR_ENTRY_COLUMNS}, gear_items(name, brand, url, category), gear_entry_options(sort_order, gear_items(name, brand)))`)
     .eq('instance_id', id))
 
   const schedRowsPromise = keep(admin
@@ -810,6 +811,8 @@ export default async function CourseView({
   const { data: gearRows } = await gearRowsPromise
   type GearRow = {
     id: string; name: string; audience: string; intro: string | null
+    /** What this list is packed for, when it isn't the course's own maximum. */
+    students: number | null
     gear_list_entries: {
       id: string; gear_item_id: string | null; name: string | null; note: string | null; url: string | null
       section: string | null; group_type: 'personal' | 'group'; quantity: string | null
@@ -824,9 +827,18 @@ export default async function CourseView({
   // Which models sit under each type. A line that ticked nothing accepts any
   // of them, and saying so is the whole point of the catalog — before this the
   // student read a bare "Hand ascender" and had to guess what to buy.
-  const gearList = showTasks
-    ? gearAll.find((g) => g.audience === 'instructor') ?? gearAll[0]
-    : gearAll.find((g) => g.audience === 'student')
+  // Every list this reader may see, not one of them picked out of the pile.
+  //
+  // It used to show a single list — the instructor's if there was one, else
+  // whichever came back first — which meant a course with two lists showed one
+  // of them, and if the first happened to be an empty one you had to open the
+  // editor to find out the course had a gear list at all. The editor always
+  // drew them all, so the read view was the only place the second list did not
+  // exist. Empty ones are left out here: there is nothing to read on them, and
+  // the editor is where an empty list gets filled.
+  const gearVisible = gearAll
+    .filter((g) => showTasks || g.audience === 'student')
+    .filter((g) => g.gear_list_entries.length > 0)
 
   const [{ data: schedSiteRows }, { data: schedPointRows }] = await schedSetupPromise
 
@@ -885,7 +897,7 @@ export default async function CourseView({
   // section gets added, and a section that appears only once it has contents
   // is one nobody can put contents into.
   const hasCurriculum = orderedModules.length > 0 || showTasks
-  const hasGear = Boolean(gearList && gearList.gear_list_entries.length > 0)
+  const hasGear = gearVisible.length > 0
   // An admin gets the section with no list in it, because that is where the
   // first one is made. Same trap the schedule and the waiver had: a course
   // created this morning has none of these, and a section that only appears
@@ -1176,7 +1188,19 @@ export default async function CourseView({
 
   return (
     <main className="min-h-screen bg-zinc-950 text-white pt-16 md:pt-20">
-      <div className="max-w-3xl mx-auto px-4 py-10">
+      {/* Wider than it was.
+          3xl is a reading measure, and it was the right one when this page was
+          mostly prose — an intro, some notes, a feed of updates. It has since
+          grown tables: a gear list with two right-aligned numeric columns, a
+          schedule of days, a roster. Those want room, and on a wide screen the
+          page was leaving half of it empty while the numbers it exists to show
+          were crushed into 9rem at the far right.
+
+          5xl matches the other dense pages in the portal — the courses list and
+          the library — so the portal stops changing width depending which door
+          you came through. The prose that still wants a measure asks for one
+          itself, below, rather than the whole page being held to it. */}
+      <div className="max-w-5xl mx-auto px-4 py-10">
 
         {/* Title, dates, status. Not the "Details" anchor any more — that now
             names the block below the nav holding where to meet and who's on
@@ -1716,37 +1740,77 @@ export default async function CourseView({
                 <summary className="cursor-pointer list-none flex items-baseline gap-2 mb-2">
                   <span aria-hidden className="text-zinc-600 shrink-0 text-[10px] transition-transform group-open/gear:rotate-90">▸</span>
                   <h3 className="text-sm font-semibold text-zinc-200">Gear list</h3>
+                  {/* What is behind it, said on the line you decide by. Closed,
+                      this fold looked identical whether it held thirty items or
+                      nothing at all, so the only way to find out was to open it
+                      — which is the one thing a fold exists to save you. */}
+                  <span className="text-[11px] text-zinc-600 group-open/gear:hidden">
+                    {gearVisible.length === 0
+                      ? 'nothing yet'
+                      : gearVisible.length === 1
+                        ? `${gearVisible[0].gear_list_entries.length} items`
+                        : gearVisible.map((g) => `${g.name} · ${g.gear_list_entries.length}`).join('  ·  ')}
+                  </span>
                 </summary>
                 <div className="ml-0.5 pl-3 border-l-2 border-zinc-800">
-                {gearList && (
-                  <div className="flex justify-end mb-2">
-                    <PdfLink href={`/api/gear-lists/${gearList.id}/pdf`} />
-                  </div>
-                )}
-            {/* Admin-only, unlike every other editor on this page: assembling
-                a gear list is not something an instructor was ever meant to
-                deal with, and the toggle should show that by taking it away. */}
-            <EditInPlace
-              label="Edit gear list"
-              editor={
-                showAsAdmin ? (
-                  <CourseGear
-                    instanceId={id}
-                    courseType={inst.course_type as string | null}
-                    students={(inst.max_students as number | null) ?? null}
-                    lists={(gearListRows ?? []) as unknown as React.ComponentProps<typeof CourseGear>['lists']}
-                    templates={gearTemplateOptions}
-                    catalog={(gearCatalogRows ?? []) as unknown as React.ComponentProps<typeof CourseGear>['catalog']}
-                  />
-                ) : null
-              }
-            >
-            {gearList?.intro && <p className="text-sm text-zinc-400 mb-3 whitespace-pre-line">{gearList.intro}</p>}
-            {!gearList && showAsAdmin && (
+            {/* No "Edit gear list" gate for the people who can edit it.
+                It put the whole list behind a mode: press the button, get a
+                different-looking list, press × to get the first one back. The
+                rows have carried their own controls since the columns went in
+                — the note, the rule, the models and the bin are all on the row
+                you are pointing at — so the mode had nothing left to switch
+                into. An admin gets the list that can be changed; everyone else
+                gets the one that can be read.
+
+                The trade is real and worth naming: a live list is one a thumb
+                can nudge. Every field here saves on blur, so scrolling past on
+                a phone can land in a quantity box. The row's bin waits for a
+                pointer for that reason, and the fields that would silently
+                change a number are the ones that ask twice.
+
+                Admin-only, unlike every other editor on this page: assembling a
+                gear list is not something an instructor was ever meant to deal
+                with, and the toggle should show that by taking it away. */}
+            {showAsAdmin ? (
+              <CourseGear
+                instanceId={id}
+                courseType={inst.course_type as string | null}
+                students={(inst.max_students as number | null) ?? null}
+                lists={(gearListRows ?? []) as unknown as React.ComponentProps<typeof CourseGear>['lists']}
+                templates={gearTemplateOptions}
+                catalog={(gearCatalogRows ?? []) as unknown as React.ComponentProps<typeof CourseGear>['catalog']}
+              />
+            ) : (
+              <>
+            {/* Inside the read view, so it is not on screen beside the
+                editor's own print control — two buttons a thumb apart, one
+                saying PDF and the other Printable PDF, printing two different
+                documents and neither saying which. Named for what comes out
+                instead: this is the sheet one person packs from. */}
+            {gearVisible.length === 0 && showAsAdmin && (
               <p className="text-xs text-zinc-600">No gear list yet.</p>
             )}
-            {gearList && (['personal', 'group'] as const).map((gt) => {
-              const rows = gearList.gear_list_entries
+            {gearVisible.map((gl, gi) => {
+              // The number this list's quantities are worked out against: its
+              // own if it carries one, the course's otherwise. The editor,
+              // this page and the printed sheet all have to ask the same
+              // question or the three disagree about how much to bring.
+              const packFor = gl.students ?? (inst.max_students as number | null) ?? null
+              return (
+              <div key={gl.id} className={gi > 0 ? 'mt-6 pt-5 border-t border-zinc-800' : ''}>
+                {/* One header row for the list: what it is, who it is for, and
+                    the one thing you do with a finished one. */}
+                <div className="flex items-center gap-2 flex-wrap mb-2">
+                  <h4 className="text-sm font-semibold text-zinc-200">{gl.name}</h4>
+                  <ForPill audience={gl.audience as 'student' | 'instructor'} />
+                  <span className="text-[11px] text-zinc-600">
+                    {gl.gear_list_entries.length} item{gl.gear_list_entries.length === 1 ? '' : 's'}
+                  </span>
+                  <PdfLink href={`/api/gear-lists/${gl.id}/pdf`} label="Print" className="ml-auto" />
+                </div>
+                {gl.intro && <p className="text-sm text-zinc-400 mb-3 max-w-prose whitespace-pre-line">{gl.intro}</p>}
+                {(['personal', 'group'] as const).map((gt) => {
+              const rows = gl.gear_list_entries
                 .filter((e) => e.group_type === gt)
                 .sort((a, b) => a.sort_order - b.sort_order)
               if (rows.length === 0) return null
@@ -1761,22 +1825,39 @@ export default async function CourseView({
               }
               return (
                 <div key={gt} className="mb-5 last:mb-0">
-                  <h4 className="text-[13px] font-medium text-zinc-300 mb-2">
-                    {gt === 'personal' ? 'Each person brings' : 'Group kit'}
-                  </h4>
-                  {/* Categories hang off the group behind a rule, so "each
-                      person brings" visibly owns everything under it rather
-                      than the two levels reading as one flat run of lists. */}
-                  <div className="ml-0.5 pl-3 border-l-2 border-zinc-800">
+                  {/* The same two columns the editor and the printed sheet
+                      use, named the same way and in the same order. Three
+                      renderings of one list that label their numbers
+                      differently is how the wrong amount of gear gets loaded.
+                      Staff only: a student's list has one number at most and
+                      nothing to head. */}
+                  <div className="flex items-baseline gap-2 mb-2 flex-wrap">
+                    <h4 className="text-sm font-semibold text-zinc-200">{KIT_LABEL[gt]}</h4>
+                    <span className="text-[11px] text-zinc-600">
+                      {rows.length} item{rows.length === 1 ? '' : 's'}
+                    </span>
+                  </div>
+                  <div className="rounded-lg border border-zinc-800 overflow-hidden">
+                  {showTasks && (
+                    <div className="flex items-baseline gap-2 pl-3 pr-4 py-1.5 bg-zinc-900/70 border-b border-zinc-800">
+                      <span className="text-[10px] uppercase tracking-widest text-zinc-600">Item</span>
+                      <span className="ml-auto shrink-0 w-24 text-right text-[10px] uppercase tracking-widest text-zinc-600">
+                        Rule
+                      </span>
+                      <span className="shrink-0 w-16 text-right text-[10px] uppercase tracking-widest text-teal-300/90">
+                        {packFor ? `for ${packFor}` : 'rule only'}
+                      </span>
+                    </div>
+                  )}
                   {[...byCat.entries()].map(([cat, items]) => (
                     <div key={cat ?? '—'} className="mb-2 last:mb-0">
                       {cat && (
-                        <p className="text-[11px] uppercase tracking-wide text-zinc-500 mb-1">{cat}</p>
+                        <p className="px-3 pt-2 pb-1 text-[10px] font-medium uppercase tracking-widest text-zinc-500">{cat}</p>
                       )}
-                      <ul className="border border-zinc-800/70 rounded divide-y divide-zinc-800/70">
+                      <ul className="divide-y divide-zinc-800/60">
                         {placeSets(items).map((p) =>
                           p.kind === 'item' ? (
-                            <GearLine key={p.row.id} e={p.row} students={inst.max_students ?? null} />
+                            <GearLine key={p.row.id} e={p.row} students={packFor} staff={showTasks} />
                           ) : (
                             /* A set is drawn as a set: boxed off, with the
                                claim written above it, because "bring one of
@@ -1822,7 +1903,7 @@ export default async function CourseView({
                                                 and
                                               </span>
                                             )}
-                                            <GearLine e={e} students={inst.max_students ?? null} card />
+                                            <GearLine e={e} students={packFor} staff={showTasks} card />
                                           </React.Fragment>
                                         ))}
                                       </ul>
@@ -1839,8 +1920,12 @@ export default async function CourseView({
                   </div>
                 </div>
               )
+                })}
+              </div>
+              )
             })}
-            </EditInPlace>
+              </>
+            )}
 
             {/* What we ask the client to supply, off the back of that list.
                 Admin-only for the same reason the list is. */}
@@ -2095,7 +2180,7 @@ export default async function CourseView({
                 ) : null
               }
             >
-              {sched.overview && <p className="text-sm text-zinc-400 mb-3 whitespace-pre-line">{sched.overview}</p>}
+              {sched.overview && <p className="text-sm text-zinc-400 mb-3 max-w-prose whitespace-pre-line">{sched.overview}</p>}
               {sched.objectives.length > 0 && (
                 <div className="mb-4">
                   <SubHead title="Objectives" />
@@ -2324,7 +2409,7 @@ export default async function CourseView({
                               {(d.sites.beta ?? '').split('\n').find((l) => l.trim()) ?? ''}
                             </span>
                           </summary>
-                          <p className="text-xs text-zinc-400 whitespace-pre-line leading-relaxed mt-1.5">{d.sites.beta}</p>
+                          <p className="text-xs text-zinc-400 max-w-prose whitespace-pre-line leading-relaxed mt-1.5">{d.sites.beta}</p>
                           {/* The canyon's standing links — route page, gauge —
                               as opposed to anything pinned to one morning,
                               which sits in the meeting block above. */}
@@ -2644,13 +2729,18 @@ type GearLineEntry = {
 }
 
 function GearLine({
-  e, students, card,
+  e, students, staff, card,
 }: {
   e: GearLineEntry
   // The course's maximum, for the rows that count by it. A student's list is
   // what one person packs, so per-head gear reads as one and only shared kit —
   // one between four — shows the number the group ends up with.
   students: number | null
+  /** Staff read the same list to pack the van, so they get what the editor and
+      the printed sheet give them: the total for this roster and the rule it
+      came from. Three renderings of one list that disagree about the number is
+      how the wrong amount of gear gets loaded. */
+  staff?: boolean
   // A slot of a multi-slot line draws as a card, so the slots read as peers
   // beside each other rather than as separate requirements stacked up. The
   // operator between them is drawn by whatever holds them.
@@ -2670,19 +2760,39 @@ function GearLine({
   )
   // One person's share. "Bring one" is what a list for one person means by
   // saying nothing, so a per-head row prints no number at all.
-  const qty = gearQuantity(e, { students, view: 'person' })
+  const qty = gearQuantity(e, { students, view: staff ? 'course' : 'person' })
 
   return (
     <li className={card
       ? 'flex-1 min-w-[13rem] rounded border border-zinc-800/70 bg-zinc-900/40 px-3 py-2 text-sm'
-      : 'px-3 py-2 text-sm'}
+      : 'pl-3 pr-4 py-2 text-sm'}
     >
       <div className="flex items-center gap-2 flex-wrap">
         {url ? (
           <a href={url} target="_blank" rel="noreferrer" className="hover:text-pr-red-light transition-colors">{name}</a>
         ) : name}
+        {/* Type, then model, then whatever is said about it — the hierarchy
+            carried by size and colour rather than by a box around the model. */}
         {detail && <span className="text-xs text-zinc-400">{detail}</span>}
-        {qty.text && <span className="text-[11px] text-zinc-500">× {qty.text}</span>}
+        {/* Right-aligned into a column of its own for staff, the way the
+            editor sets it out: down thirty rows the number is what you are
+            scanning for, and inline it lands somewhere different on every
+            line. A student's list has one number at most and no column. */}
+        {staff ? (
+          // Fixed widths, and the rule before the number — the same two cells
+          // in the same order as the editor, so a list read here and the same
+          // list open for editing line up column for column.
+          <>
+            <span className="ml-auto shrink-0 w-24 text-right text-[11px] text-zinc-600">
+              {qty.rule ? qty.rule.toLowerCase() : ''}
+            </span>
+            <span className="shrink-0 w-16 text-right text-[11px] font-semibold text-teal-300 tabular-nums">
+              {qty.text ?? ''}
+            </span>
+          </>
+        ) : (
+          qty.text && <span className="text-[11px] text-zinc-500">× {qty.text}</span>
+        )}
       </div>
       {e.note && <p className="text-[11px] text-zinc-500 mt-0.5">{e.note}</p>}
     </li>

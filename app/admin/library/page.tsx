@@ -121,7 +121,7 @@ export default async function LibraryPage({
     showTemplates && shelves.includes('gear')
       ? (() => {
           let g = admin.from('gear_lists')
-            .select(`id, name, description, audience, intro, course_type, disciplines, topics, instance_id, is_template, ${GEAR_ENTRIES_SELECT}`)
+            .select(`id, name, description, audience, intro, students, course_type, disciplines, topics, instance_id, is_template, ${GEAR_ENTRIES_SELECT}`)
             .eq('is_template', true)
             .order('name')
           if (q) g = g.ilike('name', `%${q}%`)
