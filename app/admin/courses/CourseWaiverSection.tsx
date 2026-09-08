@@ -52,23 +52,32 @@ export default function CourseWaiverSection({
 
       {error && <p className="text-xs text-pr-red mb-2">{error}</p>}
 
-      <select
-        value={selectedId ?? ''}
-        disabled={busy}
-        onChange={(e) => run(() => setCourseWaiver(instanceId, e.target.value || null))}
-        className="w-full sm:w-auto bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:border-zinc-500 disabled:opacity-50"
-      >
-        <option value="">No waiver on this course</option>
-        {templates.map((t) => (
-          <option key={t.id} value={t.id}>
-            {t.name}{t.version ? ` (v${t.version})` : ''}
-          </option>
-        ))}
-      </select>
+      <div className="flex items-center gap-2">
+        <select
+          value={selectedId ?? ''}
+          disabled={busy}
+          onChange={(e) => run(() => setCourseWaiver(instanceId, e.target.value || null))}
+          className="w-full sm:w-auto bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:border-zinc-500 disabled:opacity-50"
+        >
+          <option value="">No waiver on this course</option>
+          {templates.map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.name}{t.version ? ` (v${t.version})` : ''}
+            </option>
+          ))}
+        </select>
+        <InfoHint
+          below
+          text="Changing this doesn’t affect anyone who has already signed — every signature records the version of the text it was shown, and keeps rendering that one."
+        />
+      </div>
 
       {selectedId && (
         <div className="mt-4">
-          <div className="flex items-baseline gap-2 mb-2">
+          {/* The reassurance about changing the waiver used to sit here as a
+              line of its own. It answers a question you have once, next to the
+              control that raises it, so it is the control's hint now. */}
+          <div className="flex items-baseline gap-2">
             <p className="text-xs uppercase tracking-wide text-zinc-500">
               Signed {signedCount} of {enrolledCount}
             </p>
@@ -76,11 +85,6 @@ export default function CourseWaiverSection({
               <span className="text-xs text-amber-400">{outstanding} outstanding</span>
             )}
           </div>
-
-          <p className="flex items-center gap-1.5 text-[11px] text-zinc-600 mt-2">
-            Changing the waiver doesn’t affect anyone who has already signed
-            <InfoHint text="Every signature records the exact version of the text it was shown, so an old one keeps rendering the old wording however many times the waiver is changed afterwards." />
-          </p>
         </div>
       )}
     </div>

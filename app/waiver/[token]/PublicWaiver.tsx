@@ -11,6 +11,12 @@ import { signWaiverPublicly } from './actions'
 // page has no idea who is holding the phone, and pretending otherwise — by
 // listing the roster to pick from, say — would put the students' names on a
 // public URL to save one person some typing.
+//
+// Everything above the form is read standing in a car park on a phone, by
+// somebody who has been handed a code and told to sign. There is no room here
+// for the hint pattern the portal uses — a tooltip needs a hover — so the
+// words are cut instead of hidden, down to the two facts that change what the
+// reader does: what this is, and that signing in first is better if they can.
 
 export default function PublicWaiver({
   token,
@@ -52,11 +58,10 @@ export default function PublicWaiver({
         <h1 className="text-2xl font-bold">{courseTitle}</h1>
         {courseSubtitle && <p className="text-sm text-zinc-400 mt-1">{courseSubtitle}</p>}
         <p className="text-sm text-zinc-300 mt-3">
-          Before taking part you need to read and sign the {templateName}.
+          Read and sign the {templateName} before taking part.
         </p>
         <p className="text-xs text-zinc-500 mt-1">
-          If you already have a Peak Rescue portal login, sign in and use your course page instead —
-          it prefills your details and ties the waiver straight to your enrollment.
+          Got a portal login? Sign in and use your course page — it fills this in for you.
         </p>
       </div>
 

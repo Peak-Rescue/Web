@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { generateWaiverQr, revokeWaiverQr } from '@/app/portal/[id]/waiver-actions'
+import InfoHint from '@/components/InfoHint'
 
 export type WaiverQr = { url: string; svg: string; expiresAt: string | null }
 
@@ -12,6 +13,10 @@ export type WaiverQr = { url: string; svg: string; expiresAt: string | null }
 // is available. What comes off it is an unverified waiver — a name typed by
 // whoever was holding the phone — and that is worth having when the
 // alternative is no waiver, and not otherwise.
+//
+// That paragraph used to be printed under the fold, and the consequence of
+// Replace under the buttons. Both are things you need once and then know, so
+// they are hints on the things they are about rather than standing text.
 
 export default function WaiverQrPanel({
   instanceId,
@@ -42,27 +47,26 @@ export default function WaiverQrPanel({
 
   return (
     <div>
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className="text-xs text-zinc-400 hover:text-zinc-200 transition-colors"
-      >
-        {open ? '▾' : '▸'} Signing without a login{qr ? ' · code active' : ''}
-      </button>
+      <span className="inline-flex items-center gap-1.5">
+        <button
+          onClick={() => setOpen((v) => !v)}
+          className="text-xs text-zinc-400 hover:text-zinc-200 transition-colors"
+        >
+          {open ? '▾' : '▸'} Signing without a login{qr ? ' · code active' : ''}
+        </button>
+        <InfoHint
+          below
+          text="For someone added at the last minute, or who can’t get into the portal. They sign the same waiver, but it records that nobody was logged in and has to be matched to a person afterwards."
+        />
+      </span>
 
       {open && (
         <div className="mt-3">
-          <p className="text-xs text-zinc-500 mb-3">
-            For someone added at the last minute, or who can’t get into the portal. They sign the
-            same waiver — but it records that nobody was logged in, and it has to be matched to a
-            person afterwards.
-          </p>
-
           {error && <p className="text-xs text-pr-red-light mb-2">{error}</p>}
 
           {!hasWaiver ? (
             <p className="text-xs text-amber-400">
-              This course has no waiver set yet, so a code would open an empty page. An admin picks
-              one on the course’s admin page.
+              No waiver on this course yet — an admin picks one on its admin page.
             </p>
           ) : qr ? (
             <div className="flex flex-wrap items-start gap-4">
@@ -93,6 +97,11 @@ export default function WaiverQrPanel({
                   <button
                     disabled={busy}
                     onClick={() => run(() => generateWaiverQr(instanceId))}
+                    // The old code stops working the moment this is pressed,
+                    // which is the whole point of pressing it — so it is on the
+                    // button rather than in a line underneath that is read
+                    // once and then read past forever.
+                    title="Kills the old code straight away"
                     className="px-3 py-1.5 rounded text-xs font-medium bg-zinc-800 hover:bg-zinc-700 text-zinc-300 disabled:opacity-50 transition-colors"
                   >
                     Replace
@@ -105,7 +114,6 @@ export default function WaiverQrPanel({
                     Turn off
                   </button>
                 </div>
-                <p className="text-[11px] text-zinc-600">Replacing kills the old code straight away.</p>
               </div>
             </div>
           ) : (
