@@ -40,7 +40,7 @@ export default function AddTemplate({ shelf }: { shelf: TemplateShelf }) {
       <button
         onClick={add}
         disabled={busy}
-        className="text-xs px-3 py-1.5 rounded border border-dashed border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500 transition-colors disabled:opacity-40"
+        className="inline-flex items-center gap-2 rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm font-medium text-zinc-200 hover:border-zinc-500 hover:text-white transition-colors disabled:opacity-40"
       >
         + Blank {meta.noun}
       </button>

@@ -68,6 +68,9 @@ export default async function LibraryPage({
   // them ordered by when they were imported — which is the one order nobody
   // is ever looking in. The search box comes with the cards rather than after
   // them, because a card that opens onto 333 items hasn't finished the job.
+  // Which shelf you are standing on, if it is one shelf rather than a search
+  // across all of them.
+  const onShelf = Boolean(bucket)
   const landing = !bucket && !q && !discipline && !kind && !venue && !audience && status === 'published'
   const showDocs = !isTemplateShelf(bucket) && !landing
   const showTemplates = (!bucket || isTemplateShelf(bucket)) && !docOnlyFilter && !landing
@@ -256,17 +259,31 @@ export default async function LibraryPage({
     <main className="min-h-screen bg-zinc-950 text-white pt-16 md:pt-20">
       <div className="max-w-5xl mx-auto px-4 py-10">
         <div className="mb-6 flex items-center justify-between gap-3">
-          <Link href="/admin" className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors">← Portal</Link>
+          {/* Where you came from, and — once you are on a shelf — the way back
+              to the rest of them. Picking a shelf used to change nothing above
+              the filters, so the only thing saying which of six you were
+              looking at was a select box in the middle of a row of five. */}
+          <div className="flex items-center gap-2 text-sm text-zinc-500 min-w-0">
+            <Link href="/admin" className="hover:text-zinc-300 transition-colors">← Portal</Link>
+            {onShelf && (
+              <>
+                <span className="text-zinc-700">/</span>
+                <Link href="/admin/library" className="hover:text-zinc-300 transition-colors">All libraries</Link>
+              </>
+            )}
+          </div>
           {realAdmin && <ViewAsMenu viewAs={viewAs ?? ''} />}
         </div>
 
         <div className="mb-8 flex items-end justify-between gap-4 flex-wrap">
-          <div>
-            <h1 className="text-2xl font-bold">Content Library</h1>
+          <div className="min-w-0">
+            <h1 className="text-2xl font-bold">{onShelf ? shelfLabel(bucket as LibraryShelf) : 'Content Library'}</h1>
             <p className="text-zinc-400 mt-1">
-              {isAdmin
-                ? 'Everything we teach from, look things up in, and build courses out of — and where it is added, tagged and retired.'
-                : 'Everything we teach from and look things up in — teaching material, manuals, standards, maps, kit lists and running orders.'}
+              {onShelf
+                ? shelfHint(bucket as LibraryShelf)
+                : isAdmin
+                  ? 'Everything we teach from, look things up in, and build courses out of — and where it is added, tagged and retired.'
+                  : 'Everything we teach from and look things up in — teaching material, manuals, standards, maps, kit lists and running orders.'}
             </p>
           </div>
           {/* Three consoles about the library rather than in it, so they sit
@@ -346,14 +363,26 @@ export default async function LibraryPage({
         {/* ── Add ──────────────────────────────────────────────────────── */}
         {/* Documents only — a gear list or schedule is started from its
             own shelf below, where the editor is. */}
+        {/* A button, not a line of grey text with a triangle in front of it.
+            Adding is the second thing anyone comes here to do and it read as a
+            footnote under the filters. */}
         {isAdmin && (
           <details className={`mb-6 group ${showDocs ? '' : 'hidden'}`}>
-            <summary className="cursor-pointer list-none text-sm text-zinc-400 hover:text-zinc-200 transition-colors">
-              <span className="text-zinc-600 mr-2 inline-block transition-transform group-open:rotate-90">▶</span>
-              Add an item
+            <summary className="cursor-pointer list-none inline-flex items-center gap-2 rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm font-medium text-zinc-200 hover:border-zinc-500 hover:text-white transition-colors">
+              <span className="text-base leading-none text-zinc-500 group-open:hidden">+</span>
+              <span className="hidden text-base leading-none text-zinc-500 group-open:inline">−</span>
+              {onShelf ? `Add to ${shelfLabel(bucket as LibraryShelf)}` : 'Add an item'}
             </summary>
             <AddLibraryItem venues={venues} />
           </details>
+        )}
+
+        {/* The same place on a shelf whose rows are built here rather than
+            filed here — a gear list or a running order. */}
+        {isAdmin && onShelf && isTemplateShelf(bucket) && (
+          <div className="mb-6">
+            <AddTemplate shelf={bucket} />
+          </div>
         )}
 
         {/* ── Items ────────────────────────────────────────────────────── */}
@@ -450,7 +479,10 @@ export default async function LibraryPage({
           const rows = shelf === 'gear' ? gearTemplates : scheduleTemplates
           return (
             <section key={shelf} className={showDocs ? 'mt-10 pt-8 border-t border-zinc-800' : ''}>
-              <div className="flex items-end justify-between gap-4 flex-wrap mb-3">
+              {/* Named here only when there is more than one shelf on the
+                  page. Standing on the shelf itself, the page title says it
+                  and the button has gone to the top with the other one. */}
+              <div className={`flex items-end justify-between gap-4 flex-wrap mb-3 ${onShelf ? 'hidden' : ''}`}>
                 <h2 className="text-lg font-semibold flex items-center gap-2">
                   {TEMPLATE_SHELF_META[shelf].label}
                   <InfoHint
