@@ -17,60 +17,13 @@ const MAX_FIELD = 500
 // Saving does not email. Telling people is the next step and its own decision,
 // made in the update composer where the audience, a map link and a photo of
 // the trailhead all live.
-export async function saveMeetingDetails(
-  instanceId: string,
-  input: {
-    // Empty means day one: the course start already says which day that is,
-    // and storing a copy of it would be a second answer to go stale when the
-    // course moves.
-    meetingDate: string
-    meetingPoint: string
-    meetingTime: string
-    // The dropped pin, the photo of the gate. They belong to the meeting
-    // point rather than to the announcement about it: a day later the
-    // announcement is somewhere down the updates feed, which is the one place
-    // nobody looks when they are already driving.
-    links: UpdateLink[]
-    attachments: UpdateAttachment[]
-  }
-): Promise<void> {
-  const { admin } = await requireCourseStaff(instanceId)
-
-  const point = input.meetingPoint.trim().slice(0, MAX_FIELD)
-  const time = input.meetingTime.trim().slice(0, MAX_FIELD)
-  // The field is a date input, so anything else is a fault rather than
-  // something a person did.
-  const date = input.meetingDate.trim()
-  if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error('That meeting date is not a date')
-
-  const links = (input.links ?? []).slice(0, 20).map((l) => {
-    const { url, filename } = normalizeDocLink(l.url, l.label ?? '')
-    return { label: filename, url }
-  })
-  const attachments = (input.attachments ?? []).slice(0, 20)
-
-  const { error } = await admin
-    .from('course_instances')
-    .update({
-      meeting_date: date || null,
-      meeting_point: point || null,
-      meeting_time: time || null,
-      meeting_links: links,
-      meeting_attachments: attachments,
-    })
-    .eq('id', instanceId)
-  if (error) throw new Error(error.message)
-
-  revalidatePath(`/portal/${instanceId}`)
-  revalidatePath(`/admin/courses/${instanceId}`)
-}
-
-// The same save, attached to a schedule day instead of the course.
 //
-// A day has no date of its own — it is the Nth date the course runs, worked
-// out from the course's own dates so that a schedule saved to the shelf as a
-// template belongs to no calendar. So there is no date to write here, which is
-// the only thing that differs from the course-level save above.
+// Always a schedule day. There was a course-level twin of this, writing the
+// same five fields onto course_instances for a course with no schedule, and
+// two places to answer "where do we meet" is one of them going stale. A day
+// has no date of its own — it is the Nth date the course runs, worked out from
+// the course's own dates so a schedule saved to the shelf as a template
+// belongs to no calendar — so there is no date to write here.
 export async function saveDayMeetingDetails(
   dayId: string,
   input: {

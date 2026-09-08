@@ -55,7 +55,7 @@ import UnmatchedWaivers from '@/components/UnmatchedWaivers'
 import { loadUnmatchedWaivers } from '@/lib/waiver-data'
 import { loadStudentWaiver } from '@/lib/waiver-data'
 import { notifyCountsFrom } from '@/lib/course-notify'
-import { meetingDetails, meetingDayPassed, resolveDayMeeting } from '@/lib/meeting-details'
+import { meetingDayPassed, resolveDayMeeting } from '@/lib/meeting-details'
 import { ChipRow } from '@/components/LinkChip'
 import { Section, SubHead, InstructorCard, StudentCard, BETWEEN_BLOCKS, SECTION_LABEL, type SectionKey } from './sections'
 import { PURPOSE_META, PURPOSE_ORDER, linkLabel, type CourseLink } from '@/lib/course-links'
@@ -393,7 +393,6 @@ export default async function CourseView({
   const signedDocsPromise = sign(docPaths)
   const signedUpdateDocsPromise = sign(updatePaths)
   const daySignedPromise = sign(dayPaths)
-  const meetingPromise = meetingDetails(admin, inst)
   // What a promoted resource would be filed under: the venue if this course
   // has one, the region otherwise.
   const venueRowPromise = keep(showTasks && inst.venue_id
@@ -873,7 +872,6 @@ export default async function CourseView({
   // Staff get this block whether or not anything is in it. An unset meeting
   // point is the thing they most need to notice, and hiding it hides the only
   // place they can fix it.
-  const meeting = await meetingPromise
   const hasSchedule = Boolean(sched && schedDays.length > 0)
   // Staff see the section whether or not there is a schedule in it: a course
   // created this morning is exactly the one that needs a running order, and it
@@ -1058,21 +1056,6 @@ export default async function CourseView({
   // course*, which the enrollment already says.
   const waiver = await waiverPromise
 
-  // Once any day carries its own morning, the day is where the morning lives
-  // and the course-level block is a second answer to one question. It steps
-  // aside rather than being deleted — nothing moves, and a course that never
-  // sets a day keeps the block it has always had.
-  const daysCarryMeeting = schedDays.some(
-    (d) => d.meeting_time || d.meeting_point || d.meeting_point_id
-  )
-
-  // The meeting block lives in here, so a course with no posts yet still has
-  // an Updates section for a student to find the meeting point in.
-  //
-  // Unless the days have taken the morning over — then that block steps aside
-  // (see `daysCarryMeeting` above) and this was justifying a section with the
-  // thing that had left it. A student on a course with a day-level meeting
-  // point and nothing posted got an Updates tab reading "nothing yet".
   const hasUpdates =
     // Staff always: it is where the first post goes.
     canPostUpdates ||
@@ -1088,12 +1071,7 @@ export default async function CourseView({
     Boolean(userId) ||
     // The album lives in here now, and a course can have one before anybody
     // has posted a word.
-    hasAlbum ||
-    // A share-link guest has no account and no feed, so for them it is still
-    // worth a door only while it holds the meeting block — and not once the
-    // days have taken that over.
-    (!daysCarryMeeting &&
-      Boolean(meeting.meetingPoint || meeting.meetingTime || meeting.links.length || meeting.files.length))
+    hasAlbum
   const hasDocuments = showTasks
   // Shown to staff even when empty: "nobody has enrolled yet" is the answer an
   // instructor came for, and a missing section reads as a missing feature. The
@@ -1104,10 +1082,6 @@ export default async function CourseView({
   // Notes moved to Details, so the Tasks section stands or falls on tasks —
   // it no longer appears because somebody wrote a note.
   const hasTasks = showTasks && (tasks.length > 0 || canManageTasks)
-
-  // Day one decides whether the meeting block leads the updates or folds to a
-  // line under them.
-  const meetingOver = meetingDayPassed(meeting.meetingDate, inst.starts_at as string | null)
 
   // Which calendar date each schedule day falls on. Derived, never stored: a
   // schedule can be saved to the shelf as a template, and a template day
@@ -1663,33 +1637,12 @@ export default async function CourseView({
           <Section
             id="updates"
           >
-            {/* Above the feed until the meeting day is behind us, a single
-                line after that. Where to meet is the most important thing on
-                the page right up to the moment everyone has met, and dead
-                weight from then on. */}
-            {/* Superseded once the schedule days carry their own mornings: two
-                blocks answering "where do we meet" is how one of them ends up
-                stale. It simply goes — the Schedule section is one heading
-                away and carries the answer on the day it belongs to. */}
-            {daysCarryMeeting ? null : (
-            <div className="mb-4">
-              <MeetingDetails
-                instanceId={id}
-                meetingDate={meeting.meetingDate}
-                courseStart={inst.starts_at as string | null}
-                meetingPoint={meeting.meetingPoint}
-                meetingTime={meeting.meetingTime}
-                links={meeting.links}
-                files={meeting.files}
-                canEdit={showTasks}
-                notifyCounts={notifyCounts}
-                // Only staff post, so only staff need the history.
-                announcedDates={showTasks ? ((inst.meeting_announced_dates as string[] | null) ?? []) : []}
-                folded={meetingOver}
-              />
-            </div>
-            )}
-
+            {/* The course-level meeting block used to lead this section, and
+                stepped aside once a schedule day carried its own morning. Both
+                are gone: where we meet is part of the day's plan, so it lives
+                on the day, and Updates is updates. A course with no schedule
+                has nowhere to say it — which is the point, because a course
+                with no schedule is not ready to run. */}
             <SubHead title="Updates" />
             <CourseUpdates
               instanceId={id}
@@ -2312,7 +2265,6 @@ export default async function CourseView({
                             inheritedPoint={d.meeting_point ? null : m.point}
                             inheritedTime={m.usualTime}
                             meetingDate={date}
-                            courseStart={date}
                             meetingPoint={d.meeting_point}
                             meetingTime={d.meeting_time}
                             links={d.meeting_links ?? []}

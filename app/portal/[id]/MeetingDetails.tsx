@@ -10,7 +10,7 @@ import type { MeetingLink, MeetingFile } from '@/lib/meeting-details'
 import type { UpdateLink, UpdateAttachment, UpdateAudience } from './update-actions'
 import type { NotifyCounts } from '@/lib/course-notify'
 import { announceMeetingDetails } from './update-actions'
-import { saveMeetingDetails, saveDayMeetingDetails } from './logistics-actions'
+import { saveDayMeetingDetails } from './logistics-actions'
 import { meetingDayLabel } from '@/lib/meeting-details'
 
 // Meeting point and time: read as two facts, edited in place, and announced
@@ -19,13 +19,18 @@ import { meetingDayLabel } from '@/lib/meeting-details'
 // The micro plan, not the venue — the schedule already says which crag. This
 // is the lot and the tree and the hour, decided late and sometimes changed the
 // morning of, which is why it is editable here rather than only from admin.
+//
+// Always a schedule day. There was a course-level twin of this block sitting
+// at the top of Updates, for a course with no schedule, and the two were a
+// second answer to one question waiting to disagree. Where we meet is part of
+// the day's plan, so it belongs to the day — and a course with no schedule has
+// nowhere to say it, which is honest: it isn't ready to run.
 export default function MeetingDetails({
   instanceId,
   dayId,
   inheritedPoint = null,
   inheritedTime = null,
   meetingDate,
-  courseStart,
   meetingPoint,
   meetingTime,
   links,
@@ -36,10 +41,9 @@ export default function MeetingDetails({
   folded,
 }: {
   instanceId: string
-  /** Set when this block belongs to a schedule day rather than to the course.
-      A day has no date of its own — it is the Nth date the course runs — so
-      the date field disappears and the save goes to the day's row. */
-  dayId?: string
+  /** The day this morning belongs to. A day has no date of its own — it is
+      the Nth date the course runs — so there is no date field to offer. */
+  dayId: string
   /** What this morning falls back to when nothing is typed here: the meetup
       the site usually uses. Shown rather than copied, so correcting the meetup
       still reaches every day that inherits it. */
@@ -48,9 +52,9 @@ export default function MeetingDetails({
       inherited silently, because a default that announces itself is a default
       nobody checked. */
   inheritedTime?: string | null
-  /** Null means day one, which courseStart answers. */
+  /** Which calendar date this day falls on, worked out by the caller from the
+      course's own dates. Only used for what the announcement calls the day. */
   meetingDate: string | null
-  courseStart: string | null
   meetingPoint: string | null
   meetingTime: string | null
   /** The pin, the gate-code page. Kept with the meeting point rather than on
@@ -86,7 +90,7 @@ export default function MeetingDetails({
   // The field opens on day one rather than empty: it is the answer nearly
   // every time, and an empty date box invites the question of whether leaving
   // it blank means today.
-  const [date, setDate] = useState(meetingDate ?? courseStart ?? '')
+  const [date] = useState(meetingDate ?? '')
   const [point, setPoint] = useState(meetingPoint ?? '')
   const pointRef = useRef<HTMLTextAreaElement>(null)
 
@@ -121,13 +125,13 @@ export default function MeetingDetails({
   const shownPoint = meetingPoint || inheritedPoint || null
   const inherited = !meetingPoint && Boolean(inheritedPoint)
   const isSet = Boolean(shownPoint || meetingTime || links.length || files.length)
-  const day = meetingDayLabel(meetingDate, courseStart)
+  const day = meetingDayLabel(meetingDate, null)
   // Which day the announcement will be about, and whether these people have
   // heard about that day already — read from the field being edited, so the
   // line under the button keeps up as the date is picked. The email is written
   // from the same two facts, server-side, where they cannot be stale.
-  const announceDay = date || courseStart || ''
-  const draftDay = meetingDayLabel(date || null, courseStart)
+  const announceDay = date || ''
+  const draftDay = meetingDayLabel(date || null, null)
   const moved = Boolean(announceDay) && announcedDates.includes(announceDay)
   const audience: UpdateAudience =
     toStudents && toInstructors ? 'everyone' : toInstructors ? 'instructors' : 'students'
@@ -140,22 +144,12 @@ export default function MeetingDetails({
   async function submit(thenTell: boolean) {
     setBusy(true); setError(null); setResult(null)
     try {
-      if (dayId) {
-        await saveDayMeetingDetails(dayId, {
-          meetingPoint: point,
-          meetingTime: time,
-          links: draftLinks,
-          attachments: draftFiles,
-        })
-      } else {
-        await saveMeetingDetails(instanceId, {
-          meetingDate: date,
-          meetingPoint: point,
-          meetingTime: time,
-          links: draftLinks,
-          attachments: draftFiles,
-        })
-      }
+      await saveDayMeetingDetails(dayId, {
+        meetingPoint: point,
+        meetingTime: time,
+        links: draftLinks,
+        attachments: draftFiles,
+      })
 
       if (!thenTell) {
         setEditing(false)
@@ -179,7 +173,6 @@ export default function MeetingDetails({
   }
 
   function discard() {
-    setDate(meetingDate ?? courseStart ?? '')
     setPoint(meetingPoint ?? ''); setTime(meetingTime ?? '')
     setDraftLinks(links)
     setDraftFiles(files.map(({ path, filename }) => ({ path, filename })))
@@ -192,24 +185,12 @@ export default function MeetingDetails({
         <CloseButton onClick={discard} disabled={busy} label="Cancel" />
       </div>
       <div className="grid sm:grid-cols-2 gap-3">
-        {dayId ? (
-          // The schedule already decided which day this is — it is the Nth
-          // date the course runs. Offering a date field here would be a second
-          // answer, and the two would disagree the moment a course moved.
-          <p className="sm:col-span-2 text-[11px] uppercase tracking-wide text-zinc-500">
-            {draftDay ?? 'This day'}
-          </p>
-        ) : (
-          <label className="block sm:col-span-2">
-            <span className="block text-[11px] uppercase tracking-wide text-zinc-500 mb-1">Day</span>
-            <input
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-zinc-200 focus:outline-none focus:border-zinc-500"
-            />
-          </label>
-        )}
+        {/* The schedule already decided which day this is — it is the Nth
+            date the course runs. Offering a date field here would be a second
+            answer, and the two would disagree the moment a course moved. */}
+        <p className="sm:col-span-2 text-[11px] uppercase tracking-wide text-zinc-500">
+          {draftDay ?? 'This day'}
+        </p>
         {/* Wide, and it grows with what you type. A meeting point is usually
             four words and sometimes a paragraph — where to park, which gate,
             what the water is doing — and a one-line box that scrolls what you
@@ -340,11 +321,7 @@ export default function MeetingDetails({
     </div>
   ) : (
     canEdit && (
-      <p className="text-xs text-zinc-600">
-        {dayId
-          ? 'Not set for this day.'
-          : 'Not set yet.'}
-      </p>
+      <p className="text-xs text-zinc-600">Not set for this day.</p>
     )
   )
 
