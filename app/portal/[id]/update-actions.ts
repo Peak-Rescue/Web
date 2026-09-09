@@ -137,6 +137,12 @@ async function notify(
         link. Without it the mail says "the course page", which is true of
         every mail this function has ever sent. */
     noun?: string
+    /** Addresses that are not in this audience and are meant not to be —
+        someone asked by name who is not on the course. Unioned in after the
+        filter rather than passed through it, because the audience is the very
+        thing they are outside of, so the caller has to have checked them
+        itself: this function will mail whatever it is handed here. */
+    extra?: string[] | null
   }
 ): Promise<NotifyOutcome> {
   const wantStudents = audience === 'students' || audience === 'everyone'
@@ -164,6 +170,16 @@ async function notify(
       .filter((e): e is string => Boolean(e))
   )].filter((e) => e.toLowerCase() !== mine)
     .filter((e) => !opts?.only || opts.only.some((o) => o.trim().toLowerCase() === e.toLowerCase()))
+
+  // Named people from outside the audience, added once and only once: an
+  // address can be both picked and rostered, and a duplicate here is a second
+  // identical email.
+  for (const e of opts?.extra ?? []) {
+    const one = e.trim()
+    if (!one || one.toLowerCase() === mine) continue
+    if (recipients.some((r) => r.toLowerCase() === one.toLowerCase())) continue
+    recipients.push(one)
+  }
 
   // Added back after the filter rather than left in it: the author is usually
   // an admin who is neither enrolled nor rostered, so they are not in the list
@@ -514,6 +530,26 @@ export async function requestGearReview(
     .maybeSingle()
   if (!list) throw new Error('That gear list is not on this course')
 
+  // Who was picked, and whether we know them.
+  //
+  // The picker offers this course's crew and every other active instructor,
+  // because the person you want packing eyes on a canyon list is often
+  // whoever has packed one before rather than whoever this course happened to
+  // staff. Widening it does not widen it to anybody: a name still has to be
+  // on the instructor roster before it becomes a recipient, so a typed or
+  // tampered address cannot be mailed by asking for it.
+  const wanted = (input?.to ?? []).map((e) => e.trim()).filter(Boolean)
+  let named: string[] = []
+  if (wanted.length) {
+    const { data: roster } = await admin.from('instructors').select('email').eq('active', true)
+    const ours = new Set(
+      ((roster ?? []) as { email: string | null }[])
+        .map((r) => r.email?.trim().toLowerCase())
+        .filter((e): e is string => Boolean(e))
+    )
+    named = wanted.filter((e) => ours.has(e.toLowerCase()))
+  }
+
   const outcome = await notify(
     admin,
     instanceId,
@@ -527,7 +563,9 @@ export async function requestGearReview(
     input?.copyMe !== false,
     `${authorName} has asked for a second pair of eyes on the ${list.name} gear list before it goes out.`,
     {
-      only: input?.to?.length ? input.to : null,
+      only: wanted.length ? wanted : null,
+      // The half of the picking the audience above cannot express.
+      extra: named,
       // Straight to the door the list is behind, rather than to whichever one
       // the reader happened to leave the course on.
       linkQuery: '?open=prep',
@@ -581,30 +619,67 @@ export async function reviewGearList(
   revalidatePath(`/admin/courses/${instanceId}`)
 }
 
+export type Askable = {
+  name: string
+  email: string
+  role: string
+  isMe: boolean
+  /** On the crew for this course, as against merely on the books. The picker
+      ticks the first group and folds the second away. */
+  onCourse: boolean
+}
+
 /**
- * The crew on a course, for a sender choosing who to ask.
+ * Everyone a sender can ask to check a list: this course's crew first, then
+ * every other active instructor.
  *
  * Read here rather than passed down from the page: the picker opens on a
  * press, long after the page was built, and a staffing change in between
  * should show up in it.
+ *
+ * The name is now narrower than what it returns, and kept anyway — the crew
+ * is still what the picker is for, and the rest is the exception it makes.
  */
-export async function courseCrew(
-  instanceId: string
-): Promise<{ name: string; email: string; role: string; isMe: boolean }[]> {
+export async function courseCrew(instanceId: string): Promise<Askable[]> {
   const { user, admin } = await requireCourseStaff(instanceId)
-  const { data } = await admin
-    .from('instance_instructors')
-    .select('role, instructors(name, email)')
-    .eq('instance_id', instanceId)
+  const [{ data: assigned }, { data: roster }] = await Promise.all([
+    admin
+      .from('instance_instructors')
+      .select('role, instructors(id, name, email)')
+      .eq('instance_id', instanceId),
+    // Everybody else on the books, in one round trip with the crew: the
+    // picker shows both, and two presses to see the second half would be a
+    // press to find out there is nobody there.
+    admin.from('instructors').select('id, name, email, instructor_role').eq('active', true).order('name'),
+  ])
 
   const mine = user.email?.trim().toLowerCase() ?? null
-  return ((data ?? []) as unknown as { role: string; instructors: { name: string; email: string | null } | null }[])
+  const mineIs = (email: string) => email.trim().toLowerCase() === mine
+
+  const rows = ((assigned ?? []) as unknown as
+    { role: string; instructors: { id: string; name: string; email: string | null } | null }[])
     .filter((r) => r.instructors?.email)
+
+  const crew = rows
     .map((r) => ({
       name: r.instructors!.name,
       email: r.instructors!.email!,
       role: r.role,
-      isMe: r.instructors!.email!.trim().toLowerCase() === mine,
+      isMe: mineIs(r.instructors!.email!),
+      onCourse: true,
     }))
     .sort((a, b) => (a.role === 'lead' ? 0 : 1) - (b.role === 'lead' ? 0 : 1) || a.name.localeCompare(b.name))
+
+  const staffed = new Set(rows.map((r) => r.instructors!.id))
+  const others = ((roster ?? []) as { id: string; name: string; email: string | null; instructor_role: string }[])
+    .filter((i) => i.email && !staffed.has(i.id))
+    .map((i) => ({
+      name: i.name,
+      email: i.email!,
+      role: i.instructor_role,
+      isMe: mineIs(i.email!),
+      onCourse: false,
+    }))
+
+  return [...crew, ...others]
 }

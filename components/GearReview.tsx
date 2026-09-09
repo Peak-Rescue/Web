@@ -2,7 +2,8 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { requestGearReview, reviewGearList, courseCrew } from '@/app/portal/[id]/update-actions'
+import { requestGearReview, reviewGearList, courseCrew, type Askable } from '@/app/portal/[id]/update-actions'
+import InfoHint from '@/components/InfoHint'
 
 export type GearReviewState = {
   requestedAt: string | null
@@ -84,9 +85,13 @@ export default function GearReview({
   const [noting, setNoting] = useState(false)
   // Who is on the course, loaded when the picker opens rather than with the
   // page: staffing can change between the two.
-  const [crew, setCrew] = useState<{ name: string; email: string; role: string; isMe: boolean }[] | null>(null)
+  const [crew, setCrew] = useState<Askable[] | null>(null)
   const [picked, setPicked] = useState<string[]>([])
   const [picking, setPicking] = useState(false)
+  // Whether the half of the roster that is not on this course is showing. Off
+  // by default: the crew is the ordinary answer, and a list of everyone would
+  // bury it.
+  const [wider, setWider] = useState(false)
   // Why the picker is empty, when it is. A rejected server action used to go
   // nowhere: the panel sat on "Reading the crew…" with the reason in a console
   // nobody had open.
@@ -109,6 +114,27 @@ export default function GearReview({
   // it was and where nobody would look for it.
   const VERB = 'text-xs px-2 py-1 rounded transition-colors disabled:opacity-40'
 
+  // Everyone worth offering, minus you: asking yourself for a second pair of
+  // eyes is the one ask that cannot mean anything.
+  const askable = (list: Askable[]) => list.filter((c) => !c.isMe)
+  const onCourse = askable(crew ?? []).filter((c) => c.onCourse)
+  const elsewhere = askable(crew ?? []).filter((c) => !c.onCourse)
+
+  const tick = (c: Askable) => (
+    <label key={c.email} className="flex items-center gap-2 px-1 py-0.5 text-xs text-zinc-300 cursor-pointer">
+      <input
+        type="checkbox"
+        checked={picked.includes(c.email)}
+        onChange={() => setPicked((p) =>
+          p.includes(c.email) ? p.filter((e) => e !== c.email) : [...p, c.email]
+        )}
+        className="accent-teal-600"
+      />
+      {c.name}
+      <span className="ml-auto text-[10px] text-zinc-600">{c.role}</span>
+    </label>
+  )
+
   return (
     <span className="inline-flex items-center gap-1.5 text-[11px]">
       {canAsk && !signedOff && (
@@ -127,7 +153,10 @@ export default function GearReview({
                 try {
                   const list = await courseCrew(instanceId)
                   setCrew(list)
-                  setPicked(list.filter((c) => !c.isMe).map((c) => c.email))
+                  // Ticked to start: the crew, and only the crew. Somebody
+                  // off the course is asked on purpose, one name at a time,
+                  // which is the opposite of a default.
+                  setPicked(list.filter((c) => !c.isMe && c.onCourse).map((c) => c.email))
                 } catch (e) {
                   setCrewError(e instanceof Error ? e.message : 'Could not read the crew')
                 }
@@ -147,27 +176,50 @@ export default function GearReview({
                 <span className="block px-1 py-1 text-[11px] text-pr-red">{crewError}</span>
               ) : crew === null ? (
                 <span className="block px-1 py-1 text-[11px] text-zinc-500">Reading the crew…</span>
-              ) : crew.filter((c) => !c.isMe).length === 0 ? (
+              ) : askable(crew).length === 0 ? (
                 <span className="block px-1 py-1 text-[11px] text-zinc-500">
-                  Nobody else is on this course yet — add crew on the Staffing tab.
+                  There is nobody else on the books to ask.
                 </span>
               ) : (
                 <>
-                  <span className="block px-1 pb-1 text-[10px] uppercase tracking-widest text-zinc-600">Ask</span>
-                  {crew.filter((c) => !c.isMe).map((c) => (
-                    <label key={c.email} className="flex items-center gap-2 px-1 py-0.5 text-xs text-zinc-300 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={picked.includes(c.email)}
-                        onChange={() => setPicked((p) =>
-                          p.includes(c.email) ? p.filter((e) => e !== c.email) : [...p, c.email]
-                        )}
-                        className="accent-teal-600"
-                      />
-                      {c.name}
-                      <span className="ml-auto text-[10px] text-zinc-600">{c.role}</span>
-                    </label>
-                  ))}
+                  <span className="block max-h-64 overflow-y-auto">
+                    {onCourse.length > 0 ? (
+                      <>
+                        <span className="block px-1 pb-1 text-[10px] uppercase tracking-widest text-zinc-600">Ask</span>
+                        {onCourse.map(tick)}
+                      </>
+                    ) : (
+                      <span className="block px-1 pb-1 text-[11px] text-zinc-500">
+                        Nobody else is on this course yet.
+                      </span>
+                    )}
+
+                    {/* The rest of the instructors, folded. A check is a
+                        favour you ask of whoever has packed this kind of
+                        course before, and that is often not who this course
+                        was staffed with — but it is the second question, so
+                        it waits behind a press unless there is no crew to
+                        ask, in which case it is the only question. */}
+                    {elsewhere.length > 0 && (wider || onCourse.length === 0 ? (
+                      <>
+                        <span className="flex items-center gap-1 px-1 pt-2 pb-1 text-[10px] uppercase tracking-widest text-zinc-600">
+                          Not on this course
+                          <InfoHint
+                            below
+                            text="The link goes to the course page, which only an admin or this course's own crew can open. Anyone else will need the list another way."
+                          />
+                        </span>
+                        {elsewhere.map(tick)}
+                      </>
+                    ) : (
+                      <button
+                        onClick={() => setWider(true)}
+                        className="block w-full text-left px-1 pt-1.5 text-[11px] text-zinc-500 hover:text-white transition-colors"
+                      >
+                        Someone else…
+                      </button>
+                    ))}
+                  </span>
                   <span className="flex items-center gap-2 mt-2 pt-2 border-t border-zinc-800">
                     <button
                       onClick={() => run(async () => {
