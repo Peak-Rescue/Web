@@ -1,6 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { removeEnrollment } from './actions'
-import StudentInvitePanel from './StudentInvitePanel'
+import StudentInviteSection from './StudentInviteSection'
 import ViewSharePanel from './ViewSharePanel'
 
 // The roster, the invite link that fills it, and the read-only links shared
@@ -57,11 +57,10 @@ export default async function CourseStudentsEditor({
         </div>
       )}
 
-      <StudentInvitePanel
+      <StudentInviteSection
         instanceId={instanceId}
-        inviteUrl={inviteToken ? `${process.env.NEXT_PUBLIC_SITE_URL}/join/${inviteToken}` : null}
-        expiresAt={inviteExpiresAt}
-        expired={!!inviteExpiresAt && new Date(inviteExpiresAt) < new Date()}
+        inviteToken={inviteToken}
+        inviteExpiresAt={inviteExpiresAt}
       />
 
       <ViewSharePanel

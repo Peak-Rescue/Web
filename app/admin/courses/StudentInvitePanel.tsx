@@ -6,11 +6,14 @@ import { generateInviteLink, revokeInviteLink } from './actions'
 export default function StudentInvitePanel({
   instanceId,
   inviteUrl,
+  /** Drawn on the server from the same token the link carries. */
+  inviteQrSvg,
   expiresAt,
   expired,
 }: {
   instanceId: string
   inviteUrl: string | null
+  inviteQrSvg: string | null
   expiresAt: string | null
   expired: boolean
 }) {
@@ -18,6 +21,11 @@ export default function StudentInvitePanel({
   const [copied, setCopied] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [duration, setDuration] = useState('')
+  // Folded away because the ordinary way this link travels is an email to the
+  // client contact, and the code is for the exception standing in front of
+  // you. Nothing is lost by opening it — same token, same link — so it is a
+  // toggle rather than a second thing to generate.
+  const [showQr, setShowQr] = useState(false)
 
   const expiresIn = duration === 'never' ? ('never' as const) : duration ? Number(duration) : undefined
 
@@ -89,7 +97,30 @@ export default function StudentInvitePanel({
         >
           {copied ? 'Copied!' : 'Copy'}
         </button>
+        {inviteQrSvg && (
+          <button
+            onClick={() => setShowQr(v => !v)}
+            className="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded text-xs font-medium transition-colors"
+          >
+            {showQr ? 'Hide QR' : 'QR code'}
+          </button>
+        )}
       </div>
+      {showQr && inviteQrSvg && (
+        <div className="flex items-center gap-4">
+          <div
+            className="bg-white p-2 rounded shrink-0"
+            // Rendered on the server by the qrcode library; nothing but a
+            // token we generated ourselves reaches it.
+            dangerouslySetInnerHTML={{ __html: inviteQrSvg }}
+          />
+          <p className="text-xs text-zinc-500">
+            {expired
+              ? 'This link has expired — regenerate it before anyone scans.'
+              : 'For a student in front of you who never signed up. They scan it, make an account and land enrolled in this course.'}
+          </p>
+        </div>
+      )}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <p className={`text-xs ${expired ? 'text-red-400' : 'text-zinc-500'}`}>
           {expiresAt

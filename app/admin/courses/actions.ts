@@ -1204,9 +1204,12 @@ export async function revokeViewShare(shareId: string, instanceId: string) {
   revalidatePath(`/admin/courses/${instanceId}`)
 }
 
+// Course staff, not admins only: the student who never signed up turns up at
+// the meeting point, and the person standing there is the instructor. Same
+// gate as the walk-up waiver code, and no wider than what an instructor on
+// this course can already see — the link only ever enrols into this one.
 export async function generateInviteLink(instanceId: string, expiresIn?: number | 'never') {
-  await requireAdmin()
-  const admin = createAdminClient()
+  const { admin } = await requireCourseStaff(instanceId)
 
   const expires = await linkExpiry(instanceId, expiresIn)
 
@@ -1217,18 +1220,20 @@ export async function generateInviteLink(instanceId: string, expiresIn?: number 
 
   if (error) throw new Error(error.message)
   revalidatePath(`/admin/courses/${instanceId}`)
+  revalidatePath(`/portal/${instanceId}`)
 }
 
 export async function revokeInviteLink(instanceId: string) {
-  await requireAdmin()
+  const { admin } = await requireCourseStaff(instanceId)
 
-  const { error } = await createAdminClient()
+  const { error } = await admin
     .from('course_instances')
     .update({ invite_token: null, invite_expires_at: null })
     .eq('id', instanceId)
 
   if (error) throw new Error(error.message)
   revalidatePath(`/admin/courses/${instanceId}`)
+  revalidatePath(`/portal/${instanceId}`)
 }
 
 export async function removeEnrollment(instanceId: string, enrollmentId: string) {

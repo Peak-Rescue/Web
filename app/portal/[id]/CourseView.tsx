@@ -14,6 +14,7 @@ import CourseGear from '@/app/admin/courses/CourseGear'
 import CourseDetailsEditor from '@/app/admin/courses/CourseDetailsEditor'
 import CourseStaffingEditor from '@/app/admin/courses/CourseStaffingEditor'
 import CourseStudentsEditor from '@/app/admin/courses/CourseStudentsEditor'
+import StudentInviteSection from '@/app/admin/courses/StudentInviteSection'
 import CoursePricingEditor from '@/app/admin/courses/CoursePricingEditor'
 import CreateSchedule from './CreateSchedule'
 import SaveToShelf from '@/app/admin/schedules/SaveToShelf'
@@ -1584,8 +1585,26 @@ export default async function CourseView({
                   Nobody has enrolled yet. Students join through the invite link
                   {showAsAdmin
                     ? ' under Edit students above.'
-                    : ', which the office sends to the client contact.'}
+                    : showTasks
+                      ? ' below.'
+                      : ', which the office sends to the client contact.'}
                 </p>
+              )}
+
+              {/* The same invite link the admin editor holds, for instructors
+                  who don't get that editor. Someone turns up at the meeting
+                  point who never signed up, and there is no admin standing
+                  there to send them a link — so the code is on the page the
+                  instructor already has open. Admins reach it one layer in,
+                  under Edit students, where the rest of the roster lives. */}
+              {showTasks && !showAsAdmin && (
+                <div className="mt-4">
+                  <StudentInviteSection
+                    instanceId={id}
+                    inviteToken={(inst.invite_token as string | null) ?? null}
+                    inviteExpiresAt={(inst.invite_expires_at as string | null) ?? null}
+                  />
+                </div>
               )}
 
             </div>
