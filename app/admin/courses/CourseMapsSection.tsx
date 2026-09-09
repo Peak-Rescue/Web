@@ -4,13 +4,13 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { errorFrom, type ActionResult } from '@/lib/action-result'
-import AddLinkDialog from '@/components/AddLinkDialog'
+import AddMapDialog from '@/components/AddMapDialog'
 import { type LibraryAudience } from '@/lib/library'
 import { AudiencePills } from '@/components/AudiencePills'
 import AudienceToggle from '@/components/AudienceToggle'
 import TrashIcon from '@/components/TrashIcon'
 import {
-  addCourseMapLink,
+  addCourseMapLinks,
   addCourseMapsFromLibrary,
   loadMapLibrary,
   removeCourseMap,
@@ -240,7 +240,7 @@ export default function CourseMapsSection({
 
       <div className="flex items-center gap-2 mt-3">
         <button onClick={openPicker} disabled={busy} className={btn}>+ Choose from map library</button>
-        <button onClick={() => setLinkOpen(true)} disabled={busy} className={btn}>+ Add a link</button>
+        <button onClick={() => setLinkOpen(true)} disabled={busy} className={btn}>+ Add a map</button>
         {/* Adding a second link for a map already on the shelf is usually
             meant as an edit to that entry, and until there was a way through
             to it the only door out of this section made a duplicate. Opens in
@@ -336,21 +336,20 @@ export default function CourseMapsSection({
         </div>
       )}
 
-      <AddLinkDialog
+      <AddMapDialog
         open={linkOpen}
         busy={busy}
-        withAudience
         libraryPlace={placeLabel}
         onCancel={() => setLinkOpen(false)}
-        onSubmit={(name, url, audience, toLibrary) =>
+        onSubmit={(input) =>
           run(async () => {
             // Close either way: a refusal ("already in the library") is
             // reported under the section, and a dialog left open would sit
             // on top of the sentence explaining what to do instead.
             try {
-              const result = await addCourseMapLink(instanceId, url, name, audience, toLibrary)
+              const result = await addCourseMapLinks(instanceId, input)
               if (result?.error) return result
-              if (toLibrary) setPicker(null) // the shelf just changed
+              if (input.toLibrary) setPicker(null) // the shelf just changed
             } finally {
               setLinkOpen(false)
             }

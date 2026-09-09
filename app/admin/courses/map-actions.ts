@@ -7,6 +7,7 @@ import { normalizeDocLink } from '@/lib/doc-links'
 import { type LibraryAudience } from '@/lib/library'
 import { regionLabel } from '@/lib/regions'
 import { refuse, type ActionResult } from '@/lib/action-result'
+import { courseCapabilityCategories } from '@/lib/capabilities'
 
 // Maps attached to a course, set alongside its location. Two ways in: pick a
 // map from the library's Maps bucket (the reusable venue map, with its
@@ -250,6 +251,123 @@ export async function addCourseMapLink(
   if (failed) return failed
 }
 
+/**
+ * A map added from the course, with both of its links.
+ *
+ * A map is usually two links to one thing — the editable copy the crew plans
+ * on and the read-only view students get — and the course could only ever add
+ * one of them, because a course_maps row holds a single url. So the honest
+ * answer to "add a map here" was "add half of it here and finish it in the
+ * library", which is the sort of instruction nobody remembers on a Friday.
+ *
+ * Both links means a library item, and not as a favour: the pair only fits
+ * there. The course row points at it, so the next course in the same place
+ * finds the same map with the same two links, and fixing either fixes both.
+ * One link on its own is the old path exactly, checkbox and all.
+ */
+export async function addCourseMapLinks(
+  instanceId: string,
+  input: { name: string; editUrl: string; readUrl: string; toLibrary: boolean }
+): Promise<ActionResult> {
+  const { user, admin } = await requireTeam(instanceId)
+
+  const edit = input.editUrl.trim() ? normalizeDocLink(input.editUrl, input.name) : null
+  const read = input.readUrl.trim() ? normalizeDocLink(input.readUrl, input.name) : null
+  if (!edit && !read) return refuse('A map needs a link.')
+
+  // One link is what the old path already does, and does with more care than
+  // this one could repeat: audience follows which link was given, since a
+  // students link that nobody can see is not what anyone meant by typing it.
+  if (!edit || !read) {
+    const only = (edit ?? read)!
+    return addCourseMapLink(instanceId, only.url, input.name, read ? 'shared' : 'internal', input.toLibrary)
+  }
+
+  const urls = [edit.url, read.url]
+  if (edit.url === read.url) return refuse('Those are the same link. A map with one link needs only one box.')
+
+  // Either link already on the shelf means the map is already there, whichever
+  // half was pasted. Sent to the item rather than the shelf: the errand is to
+  // give that one row a link, and a library filtered to three hundred
+  // documents is not that errand.
+  const [{ data: item }, { data: link }] = await Promise.all([
+    admin.from('library_items').select('id, title').eq('bucket', 'map').in('url', urls)
+      .neq('status', 'archived').limit(1).maybeSingle(),
+    admin.from('library_item_links').select('item_id, library_items(title, bucket, status)').in('url', urls).limit(1).maybeSingle(),
+  ])
+  const shelved = item ?? (() => {
+    const owner = (link?.library_items as unknown as { title: string; bucket: string; status: string } | null)
+    return owner && owner.bucket === 'map' && owner.status !== 'archived'
+      ? { id: (link as { item_id: string }).item_id, title: owner.title }
+      : null
+  })()
+  if (shelved) {
+    return refuse(
+      `“${shelved.title}” is already in the map library — add it with “Choose from map library” so this course points at that copy.`,
+      {
+        href: `/admin/library?status=all&bucket=map&q=${encodeURIComponent(shelved.title)}`,
+        label: 'Open it in the library',
+      }
+    )
+  }
+
+  const { data: onCourse } = await admin
+    .from('course_maps').select('id').eq('instance_id', instanceId).in('url', urls).limit(1).maybeSingle()
+  if (onCourse) return refuse('That map is already on this course.')
+
+  const { data: inst } = await admin
+    .from('course_instances')
+    .select('region, venue_id, course_type, custom_categories')
+    .eq('id', instanceId)
+    .single()
+
+  // The read link is the item's own url: it is the one that can be handed to
+  // anybody, and the library's Open button hands it to whoever is looking.
+  const { data: created, error: createError } = await admin
+    .from('library_items')
+    .insert({
+      title: read.filename || edit.filename || 'Map',
+      url: read.url,
+      source_type: 'link',
+      kind: 'map',
+      bucket: 'map',
+      // A students link was given, so students are who it is for. The course
+      // row can still overrule that for one delivery.
+      audience: 'shared',
+      region: inst?.region ?? null,
+      venue_id: inst?.venue_id ?? null,
+      // What this course says it is. A map filed under a place and nothing
+      // else is findable by anyone who already knows where to look, which is
+      // the one group that did not need the library.
+      disciplines: inst ? courseCapabilityCategories(inst.course_type, inst.custom_categories) : [],
+      // Left to whoever shelves it: a topic is what a document is *about*,
+      // and the course cannot know that about a map.
+      topics: [],
+      status: 'published',
+    })
+    .select('id')
+    .single()
+  if (createError) throw new Error(createError.message)
+
+  const { error: linkError } = await admin.from('library_item_links').insert([
+    { item_id: created.id, url: edit.url, access: 'edit', audience: 'instructors' },
+    { item_id: created.id, url: read.url, access: 'read', audience: 'students' },
+  ])
+  if (linkError) throw new Error(linkError.message)
+
+  const { error } = await admin.from('course_maps').insert({
+    instance_id: instanceId,
+    library_item_id: created.id,
+    audience: 'shared',
+    sort_order: await nextSort(admin, instanceId),
+    added_by: user.id,
+  })
+  if (error) throw new Error(error.message)
+
+  revalidate(instanceId)
+  revalidatePath('/admin/library')
+}
+
 export async function setCourseMapAudience(
   instanceId: string,
   mapId: string,
@@ -332,7 +450,7 @@ async function promoteToLibrary(
 ): Promise<{ error: string } | null> {
   const [{ data: row }, { data: inst }] = await Promise.all([
     admin.from('course_maps').select('id, url, label, audience, library_item_id').eq('id', mapId).eq('instance_id', instanceId).single(),
-    admin.from('course_instances').select('region, venue_id').eq('id', instanceId).single(),
+    admin.from('course_instances').select('region, venue_id, course_type, custom_categories').eq('id', instanceId).single(),
   ])
   if (!row) return refuse('That map is no longer on this course')
   if (row.library_item_id) return refuse('That map is already in the library')
@@ -362,7 +480,7 @@ async function promoteToLibrary(
         audience: row.audience === 'shared' ? 'shared' : 'internal',
         region: inst?.region ?? null,
         venue_id: inst?.venue_id ?? null,
-        disciplines: [],
+        disciplines: inst ? courseCapabilityCategories(inst.course_type, inst.custom_categories) : [],
         topics: [],
         status: 'published',
       })
