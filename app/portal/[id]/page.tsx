@@ -16,10 +16,10 @@ export default async function PortalPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>
-  searchParams: Promise<{ mode?: string }>
+  searchParams: Promise<{ mode?: string; open?: string }>
 }) {
   const { id } = await params
-  const { mode } = await searchParams
+  const { mode, open } = await searchParams
 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -57,6 +57,9 @@ export default async function PortalPage({
     instructorRole: instructorAssignment?.role ?? null,
     viewAs,
     mode: mode === 'build' || mode === 'teach' ? mode : null,
+    // A door named in the link — how "open the gear list" in an email lands
+    // on the gear list rather than on wherever you were last.
+    openSection: open ?? null,
     lastSeenAt: lastView?.last_seen_at ?? null,
   }
 

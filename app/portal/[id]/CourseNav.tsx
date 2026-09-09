@@ -75,9 +75,13 @@ export default function CourseNav({
   storageKey,
   controls,
   thumbReach,
+  openSection,
   children,
 }: {
   sections: NavSection[]
+  /** A door named in the URL — ?open=prep — from a link that means to send
+      somebody to one. Ignored when it names a door this course has not got. */
+  openSection?: string | null
   /** Per course, so returning to one puts you back where you were. */
   storageKey: string
   /** Build/Teach and the preview control. They sit at the far right of the
@@ -104,9 +108,18 @@ export default function CourseNav({
   // external store, with a server snapshot that says "no preference".
   const stored = useSyncExternalStore(subscribeToDoor, () => readDoor(storageKey), () => '')
 
+  // A door named in the link wins over the one you were last on.
+  //
+  // Read on the server and handed down, not pulled off window.location here:
+  // this component renders on both sides, and a value only the client can see
+  // is the hydration mismatch the comment above spent five lines avoiding.
+  // Someone following "open the gear list" from an email is being sent
+  // somewhere specific, and that beats the door they happened to leave on.
+  //
   // The list changes with the job — Pricing is Build's, Updates is Teach's —
   // so a remembered door can stop existing between one visit and the next.
-  const active = sections.some((s) => s.id === stored) ? stored : sections[0]?.id ?? ''
+  const asked = openSection && sections.some((s) => s.id === openSection) ? openSection : ''
+  const active = asked || (sections.some((s) => s.id === stored) ? stored : sections[0]?.id ?? '')
 
   const narrow = useSyncExternalStore(
     subscribeToWidth,

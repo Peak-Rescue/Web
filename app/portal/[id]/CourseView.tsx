@@ -33,7 +33,7 @@ import { courseDisplayName, computeBlocks, courseDates, dayShift } from '@/lib/c
 import CourseTasksPanel, { type CourseTask, type TaskPerson } from '@/components/CourseTasksPanel'
 import PdfLink from '@/components/PdfLink'
 import { ForPill } from '@/components/AudiencePills'
-import GearReview from '@/components/GearReview'
+import GearReview, { GearReviewStatus } from '@/components/GearReview'
 import { loadTasksWithDocs } from '@/lib/course-tasks'
 import { LinkIcon, PaperclipIcon } from '@/components/TaskIcons'
 import { AudiencePills } from '@/components/AudiencePills'
@@ -141,6 +141,8 @@ export type Viewer = {
   /** Which half of the job the jump bar shows an admin. Null means work it out
       from the dates. */
   mode: 'build' | 'teach' | null
+  /** A door named in the link, so a mail can send somebody to one. */
+  openSection?: string | null
   lastSeenAt: string | null
 }
 
@@ -153,6 +155,7 @@ export const GUEST: Viewer = {
   instructorRole: null,
   viewAs: null,
   mode: null,
+  openSection: null,
   lastSeenAt: null,
 }
 
@@ -1267,6 +1270,7 @@ export default async function CourseView({
         <CourseNav
           sections={navSections}
           storageKey={`course-door:${id}`}
+          openSection={viewer.openSection ?? null}
           // Running the course rather than building it. An instructor or a
           // student has no other job, so it is only an admin who can be doing
           // the other one.
@@ -1645,15 +1649,12 @@ export default async function CourseView({
               {/* Deleting a course is the last thing you would ever do to
                   one, and it is build work: nobody deletes a course from a
                   trailhead. So it lives at the bottom of the section that
-                  holds what the course is, and only while you are building. */}
+                  holds what the course is, and only while you are building.
+                  The button says what it does, and the confirm step it opens
+                  spells out the cost with real counts — a label and a warning
+                  beside it were the same sentence twice. */}
               {showAsAdmin && mode === 'build' && (
-                <div className="mt-16 pt-8 border-t border-zinc-800 flex items-center justify-between gap-4">
-                  <div>
-                    <p className="text-sm font-medium text-zinc-400">Delete course</p>
-                    <p className="text-xs text-zinc-600 mt-0.5">
-                      Removes this course instance, its schedule, materials, and enrollments. Cannot be undone.
-                    </p>
-                  </div>
+                <div className="mt-16 pt-8 border-t border-zinc-800 flex items-center justify-end gap-4">
                   <DeleteInstanceButton
                     instanceId={id}
                     displayName={courseDisplayName(inst.course_type, inst.custom_title)}
@@ -1825,29 +1826,39 @@ export default async function CourseView({
                   <span className="text-[11px] text-zinc-600">
                     {gl.gear_list_entries.length} item{gl.gear_list_entries.length === 1 ? '' : 's'}
                   </span>
-                  <PdfLink href={`/api/gear-lists/${gl.id}/pdf`} label="Print" className="ml-auto" />
+                  {/* Whether anyone but its author has read it, and the way
+                      to say so. Signing off is an instructor's act — the point
+                      is a reader who did not write the list. */}
+                  {showTasks && (
+                    <>
+                      <GearReviewStatus
+                        state={{
+                          requestedAt: gl.review_requested_at,
+                          reviewedAt: gl.reviewed_at,
+                          reviewerName: gl.reviewed_by ? reviewerName.get(gl.reviewed_by) ?? null : null,
+                          note: gl.review_note,
+                          updatedAt: gl.updated_at,
+                        }}
+                      />
+                      <span className="ml-auto flex items-center gap-1">
+                        <GearReview
+                          instanceId={id}
+                          listId={gl.id}
+                          canAsk={showAsAdmin}
+                          canSignOff
+                          state={{
+                            requestedAt: gl.review_requested_at,
+                            reviewedAt: gl.reviewed_at,
+                            reviewerName: gl.reviewed_by ? reviewerName.get(gl.reviewed_by) ?? null : null,
+                            note: gl.review_note,
+                            updatedAt: gl.updated_at,
+                          }}
+                        />
+                      </span>
+                    </>
+                  )}
+                  <PdfLink href={`/api/gear-lists/${gl.id}/pdf`} label="Print" className={showTasks ? '' : 'ml-auto'} />
                 </div>
-                {/* Whether anyone but its author has read it. Instructors can
-                    sign off — the point is a reader who did not write it — and
-                    only an admin can ask, because only an admin assembles the
-                    list in the first place. */}
-                {showTasks && (
-                  <div className="mb-2">
-                    <GearReview
-                      instanceId={id}
-                      listId={gl.id}
-                      canAsk={showAsAdmin}
-                      canSignOff
-                      state={{
-                        requestedAt: gl.review_requested_at,
-                        reviewedAt: gl.reviewed_at,
-                        reviewerName: gl.reviewed_by ? reviewerName.get(gl.reviewed_by) ?? null : null,
-                        note: gl.review_note,
-                        updatedAt: gl.updated_at,
-                      }}
-                    />
-                  </div>
-                )}
                 {gl.intro && <p className="text-sm text-zinc-400 mb-3 max-w-prose whitespace-pre-line">{gl.intro}</p>}
                 {(['personal', 'group'] as const).map((gt) => {
               const rows = gl.gear_list_entries

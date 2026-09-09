@@ -124,7 +124,20 @@ async function notify(
       meeting details, which live in their own block and were never quoted
       here anyway. Still says only that something is set or has moved, never
       what it says, so nothing freezes in an inbox. */
-  lead?: string | null
+  lead?: string | null,
+  opts?: {
+    /** Named recipients, when the sender picked them rather than taking the
+        whole audience. Still filtered through the audience above, so a name
+        that is not on this course cannot be mailed by asking for it. */
+    only?: string[] | null
+    /** Appended to the course link — "?open=prep" — so the mail lands on the
+        door it is about rather than wherever the reader was last. */
+    linkQuery?: string
+    /** What they are being sent to look at, for the line that carries the
+        link. Without it the mail says "the course page", which is true of
+        every mail this function has ever sent. */
+    noun?: string
+  }
 ): Promise<NotifyOutcome> {
   const wantStudents = audience === 'students' || audience === 'everyone'
   const wantCrew = audience === 'instructors' || audience === 'everyone'
@@ -150,6 +163,7 @@ async function notify(
       .map((e) => e?.trim())
       .filter((e): e is string => Boolean(e))
   )].filter((e) => e.toLowerCase() !== mine)
+    .filter((e) => !opts?.only || opts.only.some((o) => o.trim().toLowerCase() === e.toLowerCase()))
 
   // Added back after the filter rather than left in it: the author is usually
   // an admin who is neither enrolled nor rostered, so they are not in the list
@@ -165,7 +179,9 @@ async function notify(
   }
 
   const courseName = inst ? courseDisplayName(inst.course_type, inst.custom_title) : 'your course'
-  const link = `${process.env.NEXT_PUBLIC_SITE_URL || 'https://peak-rescue.com'}/portal/${instanceId}`
+  const link =
+    `${process.env.NEXT_PUBLIC_SITE_URL || 'https://peak-rescue.com'}/portal/${instanceId}` +
+    (opts?.linkQuery ?? '')
 
   // Deliberately says nothing about the update itself. Anything quoted here
   // is a second copy that an edit can't reach — which is the whole reason the
@@ -187,9 +203,13 @@ async function notify(
       ? `${authorName} has updated the information for the ${courseName} course.`
       : `${authorName} posted an update on the ${courseName} course.`),
     '',
-    `${lead ? 'The details are on the course page' : 'Read it on the course page'}: ${link}`,
+    opts?.noun
+      ? `${opts.noun}: ${link}`
+      : `${lead ? 'The details are on the course page' : 'Read it on the course page'}: ${link}`,
     '',
-    'The course page always has the current version, including any links or files attached.',
+    opts?.noun
+      ? 'That page always has the current version — nothing is copied into this email, so it cannot go stale.'
+      : 'The course page always has the current version, including any links or files attached.',
     '',
     '—',
     'Peak Rescue',
@@ -476,7 +496,13 @@ export async function announceMeetingDetails(
 export async function requestGearReview(
   instanceId: string,
   listId: string,
-  input?: { copyMe?: boolean }
+  input?: {
+    copyMe?: boolean
+    /** Who to ask, by email. Empty or absent means the whole crew — which is
+        what it did before there was a choice, and still the right default for
+        a list the whole crew will pack from. */
+    to?: string[]
+  }
 ): Promise<PostResult> {
   const { user, admin, authorName } = await requireCourseStaff(instanceId)
 
@@ -499,7 +525,14 @@ export async function requestGearReview(
     false,
     `${list.name} — a look before it goes out`,
     input?.copyMe !== false,
-    `${authorName} has asked for a second pair of eyes on the ${list.name} before it goes out.`
+    `${authorName} has asked for a second pair of eyes on the ${list.name} gear list before it goes out.`,
+    {
+      only: input?.to?.length ? input.to : null,
+      // Straight to the door the list is behind, rather than to whichever one
+      // the reader happened to leave the course on.
+      linkQuery: '?open=prep',
+      noun: `Open the ${list.name} gear list`,
+    }
   )
 
   // Written after the mail, so a list can't show as asked when nobody was.
@@ -546,4 +579,32 @@ export async function reviewGearList(
 
   revalidatePath(`/portal/${instanceId}`)
   revalidatePath(`/admin/courses/${instanceId}`)
+}
+
+/**
+ * The crew on a course, for a sender choosing who to ask.
+ *
+ * Read here rather than passed down from the page: the picker opens on a
+ * press, long after the page was built, and a staffing change in between
+ * should show up in it.
+ */
+export async function courseCrew(
+  instanceId: string
+): Promise<{ name: string; email: string; role: string; isMe: boolean }[]> {
+  const { user, admin } = await requireCourseStaff(instanceId)
+  const { data } = await admin
+    .from('instance_instructors')
+    .select('role, instructors(name, email)')
+    .eq('instance_id', instanceId)
+
+  const mine = user.email?.trim().toLowerCase() ?? null
+  return ((data ?? []) as unknown as { role: string; instructors: { name: string; email: string | null } | null }[])
+    .filter((r) => r.instructors?.email)
+    .map((r) => ({
+      name: r.instructors!.name,
+      email: r.instructors!.email!,
+      role: r.role,
+      isMe: r.instructors!.email!.trim().toLowerCase() === mine,
+    }))
+    .sort((a, b) => (a.role === 'lead' ? 0 : 1) - (b.role === 'lead' ? 0 : 1) || a.name.localeCompare(b.name))
 }

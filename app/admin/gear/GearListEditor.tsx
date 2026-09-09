@@ -7,7 +7,7 @@ import CategorySelect from './CategorySelect'
 import { templateHref, templateShelfHref } from '@/lib/library'
 import PdfLink from '@/components/PdfLink'
 import { ForPill } from '@/components/AudiencePills'
-import GearReview from '@/components/GearReview'
+import GearReview, { GearReviewStatus } from '@/components/GearReview'
 import NewTabIcon from '@/components/NewTabIcon'
 import CloseButton from '@/components/CloseButton'
 import InfoHint from '@/components/InfoHint'
@@ -633,7 +633,37 @@ export default function GearListEditor({
           ) : students != null ? (
             <span className="text-[11px] text-zinc-600">roster {students}</span>
           ) : null}
-          <PdfLink href={`/api/gear-lists/${list.id}/pdf`} label="Print" className="ml-auto" />
+          {/* Whether anyone but you has read it — a fact about the list, so it
+              sits with the other facts rather than in among the verbs. */}
+          <GearReviewStatus
+            state={{
+              requestedAt: list.review_requested_at ?? null,
+              reviewedAt: list.reviewed_at ?? null,
+              reviewerName: reviewerName ?? null,
+              note: list.review_note ?? null,
+              updatedAt: list.updated_at ?? null,
+            }}
+          />
+          {/* Asking for a check sits with the other things you do to a
+              finished list, not at the end of a sentence about its state. */}
+          <span className="ml-auto flex items-center gap-1">
+            {list.instance_id && (
+              <GearReview
+                instanceId={list.instance_id}
+                listId={list.id}
+                canAsk
+                canSignOff={false}
+                state={{
+                  requestedAt: list.review_requested_at ?? null,
+                  reviewedAt: list.reviewed_at ?? null,
+                  reviewerName: reviewerName ?? null,
+                  note: list.review_note ?? null,
+                  updatedAt: list.updated_at ?? null,
+                }}
+              />
+            )}
+          </span>
+          <PdfLink href={`/api/gear-lists/${list.id}/pdf`} label="Print" />
           <button
             onClick={() => setShelfOpen((v) => !v)}
             className={`text-xs px-2 py-1 rounded transition-colors ${
@@ -650,26 +680,6 @@ export default function GearListEditor({
             Delete
           </button>
         </div>
-      )}
-
-      {/* Whether anyone but you has read it. Asking is an admin's act — an
-          admin assembled the list — and signing off is not: the whole point is
-          a reader who did not write it, so that control lives on the course
-          page where the crew read it. */}
-      {onDelete && list.instance_id && (
-        <GearReview
-          instanceId={list.instance_id}
-          listId={list.id}
-          canAsk
-          canSignOff={false}
-          state={{
-            requestedAt: list.review_requested_at ?? null,
-            reviewedAt: list.reviewed_at ?? null,
-            reviewerName: reviewerName ?? null,
-            note: list.review_note ?? null,
-            updatedAt: list.updated_at ?? null,
-          }}
-        />
       )}
 
       {shelfOpen && !list.is_template && (
