@@ -20,6 +20,7 @@ export const NEW_TYPE = '__new_type__'
 // and a picker that can only pick sent you to the other page to type one word.
 export default function CategorySelect({
   value, options, onChange, className, disabled, autoFocus, onDismiss, allowEmpty = true,
+  emptyLabel = '— category —',
 }: {
   value: string | null
   options: readonly string[]
@@ -34,6 +35,9 @@ export default function CategorySelect({
   // the catalog can be in and has to be able to show, but not one to offer as
   // an answer on a form that is creating the item.
   allowEmpty?: boolean
+  // What the empty option reads as. On a form that is creating something it is
+  // not "no category" but "not answered yet", and it has to say so.
+  emptyLabel?: string
 }) {
   const [naming, setNaming] = useState(false)
   const [draft, setDraft] = useState('')
@@ -70,7 +74,7 @@ export default function CategorySelect({
       onChange={(e) => (e.target.value === NEW_CATEGORY ? setNaming(true) : onChange(e.target.value))}
       className={className}
     >
-      {allowEmpty && <option value="">— category —</option>}
+      {allowEmpty && <option value="">{emptyLabel}</option>}
       {options.map((c) => <option key={c} value={c}>{c}</option>)}
       <option value={NEW_CATEGORY}>+ New category…</option>
     </select>
