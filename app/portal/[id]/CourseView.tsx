@@ -1166,13 +1166,19 @@ export default async function CourseView({
   // only one that belongs to a single job: nobody quotes a course from a
   // canyon, and instructors never see it at all.
   //
-  // One order for running a course, whoever is doing it. An admin in Teach and
-  // an instructor were reading the same four doors in two different orders,
-  // because the instructor's was never ordered at all — it was the old
-  // nine-door list with the middle taken out, and Updates sat second because
-  // that is where it sat among nine. The two jobs differ; the reader does not.
+  // One structure, whichever job you are here for. Three of the four doors sit
+  // in the same place in both lists and only the second one changes — Pricing
+  // while you build it, Updates while you run it — because that is the slot
+  // holding whatever belongs to this job alone. Learn the bar once and flipping
+  // the switch moves nothing under your thumb.
+  //
+  // Read left to right it is one idea both times: what the course is, what
+  // this job adds to it, what happens before you go, the day you are standing
+  // in. Which is why Schedule is last in Teach despite being the door you open
+  // most at a trailhead — on a bottom bar all four are in reach, so its rank
+  // costs nothing, and buying consistency with it is cheap.
   const BUILD: SectionKey[] = ['details', 'pricing', 'prep', 'schedule']
-  const TEACH: SectionKey[] = ['details', 'schedule', 'prep', 'updates']
+  const TEACH: SectionKey[] = ['details', 'updates', 'prep', 'schedule']
 
   // The course's own dates decide which job you are probably here for, so the
   // switch is usually already right and pressing it is a correction.
