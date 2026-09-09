@@ -574,9 +574,21 @@ export async function requestGearReview(
   )
 
   // Written after the mail, so a list can't show as asked when nobody was.
+  //
+  // A new ask clears the last flag with it: the reader said the list was not
+  // ready, the list has presumably moved since, and leaving the flag standing
+  // would show "flagged" on a question that has just been reopened. The note
+  // goes with it — it was that flag's sentence, and keeping it would attach
+  // it to whatever answer comes back next.
   await admin
     .from('gear_lists')
-    .update({ review_requested_at: new Date().toISOString(), review_requested_by: user.id })
+    .update({
+      review_requested_at: new Date().toISOString(),
+      review_requested_by: user.id,
+      review_flagged_at: null,
+      review_flagged_by: null,
+      review_note: null,
+    })
     .eq('id', listId)
 
   await recordPush(admin, instanceId, 'prep', 'instructors', user.id)
@@ -709,6 +721,32 @@ async function tellTheAsker(
     return { told: null, problem: 'Saved, but the email to whoever asked didn’t send.' }
   }
   return { told: asker?.first_name?.trim() || to, problem: null }
+}
+
+/**
+ * Taking the ask back.
+ *
+ * An ask has no other ending. The asker cannot answer it — the whole point is
+ * a reader who did not write the list — so a list nobody ever got round to
+ * looking at sat on "waiting on a check" for good, with "Ask again" as the
+ * only thing to press. That is a status line that stops meaning anything,
+ * which is worse than no status line.
+ *
+ * Only the ask is cleared. A flag is an answer somebody took the trouble to
+ * give, and it survives the question being withdrawn.
+ */
+export async function withdrawGearReview(instanceId: string, listId: string): Promise<void> {
+  const { admin } = await requireCourseStaff(instanceId)
+
+  const { error } = await admin
+    .from('gear_lists')
+    .update({ review_requested_at: null, review_requested_by: null })
+    .eq('id', listId)
+    .eq('instance_id', instanceId)
+  if (error) throw new Error(error.message)
+
+  revalidatePath(`/portal/${instanceId}`)
+  revalidatePath(`/admin/courses/${instanceId}`)
 }
 
 /**

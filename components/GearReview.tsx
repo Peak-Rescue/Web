@@ -2,7 +2,9 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { requestGearReview, reviewGearList, courseCrew, type Askable } from '@/app/portal/[id]/update-actions'
+import {
+  requestGearReview, reviewGearList, courseCrew, withdrawGearReview, type Askable,
+} from '@/app/portal/[id]/update-actions'
 import InfoHint from '@/components/InfoHint'
 
 export type GearReviewState = {
@@ -207,6 +209,9 @@ export default function GearReview({
             {busy ? 'Asking…' : requestedAt ? 'Ask again' : 'Ask for a check'}
           </button>
 
+          {/* The way out of a question nobody answered. Beside the ask
+              rather than among the verbs at the end: it undoes the button it
+              sits next to, and reads as that button's small print. */}
           {picking && (
             <span className="absolute right-0 top-[calc(100%+4px)] z-30 w-64 p-2 rounded-lg border border-zinc-700 bg-zinc-950 shadow-xl block">
               {crewError ? (
@@ -281,6 +286,17 @@ export default function GearReview({
             </span>
           )}
         </span>
+      )}
+
+      {canAsk && requestedAt && !signedOff && !picking && (
+        <button
+          onClick={() => run(() => withdrawGearReview(instanceId, listId))}
+          disabled={busy}
+          className={`${VERB} text-zinc-600 hover:text-white`}
+          title="Stop waiting on this check"
+        >
+          Never mind
+        </button>
       )}
 
       {canSignOff && !signedOff && !noting && (
