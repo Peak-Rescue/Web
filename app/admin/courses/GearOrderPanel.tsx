@@ -102,6 +102,8 @@ function OrderCard({
   const router = useRouter()
   const [uploading, setUploading] = useState(false)
   const [es, setEs] = useState(order.es_quote_number ?? '')
+  const [adding, setAdding] = useState(false)
+  const [newName, setNewName] = useState('')
   const lines = [...order.gear_order_lines].sort((a, b) => a.sort_order - b.sort_order)
   const wanted = lines.filter((l) => !l.removed && Number(l.qty_wanted ?? 0) > 0)
 
@@ -251,8 +253,16 @@ function OrderCard({
         {lines.map((l) => (
           <div key={l.id} className="grid grid-cols-[1fr_4.5rem_auto] gap-2 items-center">
             <div className="min-w-0">
-              <p className={`text-sm truncate ${l.removed ? 'text-zinc-600 line-through' : ''}`}>{l.name}</p>
-              {l.client_note && <p className="text-[11px] text-amber-300/80 truncate">“{l.client_note}”</p>}
+              <input
+                defaultValue={l.name}
+                onBlur={(e) => {
+                  const v = e.target.value.trim()
+                  if (!v) { e.target.value = l.name; return }
+                  if (v !== l.name) run(() => updateGearOrderLine(instanceId, l.id, { name: v }))
+                }}
+                className={`w-full bg-transparent border border-transparent hover:border-zinc-700 focus:border-zinc-500 rounded px-1.5 py-1 text-sm focus:outline-none ${l.removed ? 'text-zinc-600 line-through' : ''}`}
+              />
+              {l.client_note && <p className="text-[11px] text-amber-300/80 truncate px-1.5">“{l.client_note}”</p>}
             </div>
             <input
               type="number"
@@ -284,13 +294,44 @@ function OrderCard({
         ))}
       </div>
 
-      <button
-        onClick={() => run(() => addGearOrderLine(instanceId, order.id))}
-        disabled={busy}
-        className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors mt-2 disabled:opacity-40"
-      >
-        + Add a line
-      </button>
+      {adding ? (
+        <form
+          className="flex items-center gap-2 mt-2"
+          onSubmit={(e) => {
+            e.preventDefault()
+            const v = newName.trim()
+            if (!v) return
+            run(() => addGearOrderLine(instanceId, order.id, v)).then(() => setNewName(''))
+          }}
+        >
+          <input
+            autoFocus
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Escape') { setAdding(false); setNewName('') } }}
+            placeholder="What are we ordering?"
+            className={`${input} flex-1`}
+          />
+          <button type="submit" disabled={busy || !newName.trim()} className="text-xs text-zinc-300 hover:text-white disabled:opacity-40">
+            Add
+          </button>
+          <button
+            type="button"
+            onClick={() => { setAdding(false); setNewName('') }}
+            className="text-xs text-zinc-600 hover:text-zinc-300"
+          >
+            Cancel
+          </button>
+        </form>
+      ) : (
+        <button
+          onClick={() => setAdding(true)}
+          disabled={busy}
+          className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors mt-2 disabled:opacity-40"
+        >
+          + Add a line
+        </button>
+      )}
     </div>
   )
 }

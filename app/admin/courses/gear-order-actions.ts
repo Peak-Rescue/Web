@@ -145,14 +145,20 @@ export async function updateGearOrderLine(
   touch(instanceId)
 }
 
-export async function addGearOrderLine(instanceId: string, orderId: string) {
+// The name comes in with the line. A row inserted as "New item" and renamed
+// afterwards is a line on the order — and on the client's page and the
+// purchasing PDF — that names nothing, for as long as it takes someone to go
+// back and fix it.
+export async function addGearOrderLine(instanceId: string, orderId: string, name: string) {
   const admin = await requireAdmin()
+  const clean = name.trim().slice(0, 200)
+  if (!clean) throw new Error('Give the line a name.')
   const { data: last } = await admin
     .from('gear_order_lines').select('sort_order')
     .eq('order_id', orderId).order('sort_order', { ascending: false }).limit(1).maybeSingle()
   const { error } = await admin.from('gear_order_lines').insert({
     order_id: orderId,
-    name: 'New item',
+    name: clean,
     sort_order: last ? (last.sort_order as number) + 1 : 0,
   })
   if (error) throw new Error(error.message)
