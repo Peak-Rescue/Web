@@ -338,6 +338,30 @@ export async function adminSendInvite(instructorId: string) {
   return { ok: true as const }
 }
 
+// What students on their courses can see of an instructor — the same pair
+// they set for themselves on /instructor. One field at a time, so a toggle
+// here can never carry the other one's stale value back with it.
+export async function adminSetStudentContact(
+  instructorId: string,
+  input: { showEmail?: boolean; showPhone?: boolean }
+) {
+  await requireAdmin()
+
+  const patch = {
+    ...(input.showEmail === undefined ? {} : { show_email: input.showEmail }),
+    ...(input.showPhone === undefined ? {} : { show_phone: input.showPhone }),
+  }
+  if (Object.keys(patch).length === 0) return
+
+  const { error } = await createAdminClient()
+    .from('instructors')
+    .update(patch)
+    .eq('id', instructorId)
+
+  if (error) throw new Error(error.message)
+  await revalidateInstructor(instructorId)
+}
+
 export async function adminSetShowOnTeamPage(instructorId: string, show: boolean) {
   await requireAdmin()
 

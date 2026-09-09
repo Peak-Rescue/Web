@@ -47,3 +47,19 @@ export function workEmail(email: string | null | undefined): string | null {
   const e = email?.trim().toLowerCase()
   return e && e.endsWith(WORK_DOMAIN) ? email!.trim() : null
 }
+
+// Two gates, and both have to open.
+//
+// The domain rule above is about the address: a personal one is never handed
+// to students, whatever anybody says. The switch is about the person: having
+// a work address is not the same as wanting eight students mailing it
+// directly, and the rule alone left the people it applies to nothing to say
+// so with. On by default, because that is what the page did before there was
+// a switch — and it can only ever hide an address, never promote a personal
+// one to a card.
+export function studentEmail(
+  email: string | null | undefined,
+  shown: boolean | null | undefined
+): string | null {
+  return shown === false ? null : workEmail(email)
+}

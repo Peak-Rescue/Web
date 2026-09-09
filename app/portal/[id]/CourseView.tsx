@@ -24,7 +24,7 @@ import DeleteInstanceButton from '@/app/admin/courses/DeleteInstanceButton'
 import CourseWaiverSection from '@/app/admin/courses/CourseWaiverSection'
 import { listWaiverTemplates } from '@/app/admin/courses/waiver-actions'
 import { plannedInstructorCount } from '@/lib/estimates'
-import { parseContacts, workEmail } from '@/lib/contacts'
+import { parseContacts, studentEmail } from '@/lib/contacts'
 import { formatPhone } from '@/lib/phone'
 import { unseenSections, lastPushToStudents, behindOnPush, type Push } from '@/lib/course-pushes'
 import { GEAR_ENTRIES_SELECT, KIT_LABEL } from '@/lib/gear'
@@ -284,7 +284,7 @@ export default async function CourseView({
         .order('off_date'),
       modulesQuery,
       admin.from('instance_instructors')
-        .select('role, instructors(name, email, profile_id, slug, active, title, avatar, avatar_position, avatar_scale, show_phone, profiles(phone))')
+        .select('role, instructors(name, email, profile_id, slug, active, title, avatar, avatar_position, avatar_scale, show_phone, show_email, profiles(phone))')
         .eq('instance_id', id),
       showTasks ? loadTasksWithDocs(admin, id) : Promise.resolve([]),
       showTasks
@@ -1540,6 +1540,7 @@ export default async function CourseView({
                   const p = a.instructors as unknown as {
                     name: string; slug: string | null; active: boolean | null; email: string | null
                     show_phone: boolean | null
+                    show_email: boolean | null
                     avatar: string | null; avatar_position: string | null; avatar_scale: number | null
                     profiles: { phone: string | null } | { phone: string | null }[] | null
                   } | null
@@ -1555,7 +1556,7 @@ export default async function CourseView({
                       avatar={p?.avatar}
                       avatarPosition={p?.avatar_position}
                       avatarScale={p?.avatar_scale}
-                      email={workEmail(p?.email)}
+                      email={studentEmail(p?.email, p?.show_email)}
                       phone={p?.show_phone ? pProfile?.phone : null}
                     />
                   )

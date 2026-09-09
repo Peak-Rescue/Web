@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { signCertDocs } from '@/lib/cert-docs'
+import { workEmail } from '@/lib/contacts'
 import CertGrid from '@/app/instructor/CertGrid'
 import ProfileForm from '@/app/instructor/ProfileForm'
 import AvatarEditor from '@/components/AvatarEditor'
@@ -10,6 +11,7 @@ import SaveButton from '@/components/SaveButton'
 import CapabilityPanel from '@/app/admin/instructors/CapabilityPanel'
 import SectorPanel from '@/app/admin/instructors/SectorPanel'
 import TeamPageToggle from '@/app/admin/instructors/TeamPageToggle'
+import StudentContactToggles from '@/app/admin/instructors/StudentContactToggles'
 import CalendarInviteStatus from '@/app/admin/instructors/CalendarInviteStatus'
 import CourseAlertsForm from '@/app/instructor/CourseAlertsForm'
 import ExemptToggle from '@/app/admin/instructors/ExemptToggle'
@@ -48,7 +50,7 @@ export default async function AdminInstructorDetailPage({ params }: { params: Pr
   // Look up by instructors.id (the URL param)
   const { data: instructor } = await admin
     .from('instructors')
-    .select('id, name, email, slug, profile_id, invite_sent_at, show_on_team_page, bio, avatar, avatar_position, avatar_scale, sectors, calendar_invites, course_alert_muted_disciplines, course_alert_muted_sectors, instructor_capabilities(category, role)')
+    .select('id, name, email, slug, profile_id, invite_sent_at, show_on_team_page, show_email, show_phone, bio, avatar, avatar_position, avatar_scale, sectors, calendar_invites, course_alert_muted_disciplines, course_alert_muted_sectors, instructor_capabilities(category, role)')
     .eq('id', id)
     .single()
 
@@ -256,6 +258,19 @@ export default async function AdminInstructorDetailPage({ params }: { params: Pr
         <section className="mb-10">
           <h2 className="text-lg font-semibold mb-4">Team Page</h2>
           <TeamPageToggle instructorId={instructor.id} initialValue={instructor.show_on_team_page} />
+        </section>
+
+        {/* Sat beside the team page toggle, which is the other question of
+            this kind: who, outside the crew, gets to see what. */}
+        <section className="mb-10">
+          <h2 className="text-lg font-semibold mb-4">What students see</h2>
+          <StudentContactToggles
+            instructorId={instructor.id}
+            showEmail={instructor.show_email !== false}
+            showPhone={Boolean(instructor.show_phone)}
+            hasWorkEmail={Boolean(workEmail(instructor.email))}
+            hasPhone={Boolean(profile?.phone)}
+          />
         </section>
 
         {profile && (

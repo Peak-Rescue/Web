@@ -8,7 +8,8 @@ import ProfileForm from './ProfileForm'
 import AvatarEditor from '@/components/AvatarEditor'
 import InfoHint from '@/components/InfoHint'
 import SaveButton from '@/components/SaveButton'
-import { upsertCert, deleteCert, addCertDocument, deleteCertDocument, updateProfile, updateInstructorProfile, updateCalendarInvites, updateCourseAlerts } from './actions'
+import { upsertCert, deleteCert, addCertDocument, deleteCertDocument, updateProfile, updateInstructorProfile, updateCalendarInvites, updateCourseAlerts, updateStudentContact } from './actions'
+import { workEmail } from '@/lib/contacts'
 import CourseAlertsForm from './CourseAlertsForm'
 import { signOut } from '@/app/actions'
 import { CAPABILITY_META, CAPABILITY_ORDER } from '@/lib/capabilities'
@@ -22,7 +23,7 @@ export default async function InstructorPage() {
 
   const [{ data: profile }, { data: instructor }] = await Promise.all([
     admin.from('profiles').select('role, first_name, last_name, email, phone, emergency_name, emergency_relationship, emergency_phone').eq('id', user.id).single(),
-    admin.from('instructors').select('id, name, bio, avatar, avatar_position, avatar_scale, calendar_invites, course_alert_muted_disciplines, course_alert_muted_sectors, instructor_capabilities(category, role)').eq('profile_id', user.id).maybeSingle(),
+    admin.from('instructors').select('id, name, email, bio, avatar, avatar_position, avatar_scale, calendar_invites, show_email, show_phone, course_alert_muted_disciplines, course_alert_muted_sectors, instructor_capabilities(category, role)').eq('profile_id', user.id).maybeSingle(),
   ])
 
   if (!instructor) redirect('/dashboard')
@@ -44,6 +45,10 @@ export default async function InstructorPage() {
   )
 
   const capabilities = (instructor.instructor_capabilities ?? []) as { category: string; role: string }[]
+
+  // A switch that cannot do anything is worse than no switch: the domain rule
+  // decides this one, and the box says so rather than pretending to.
+  const hasWorkEmail = Boolean(workEmail(instructor.email))
 
   return (
     <main className="min-h-screen bg-zinc-950 text-white pt-16 md:pt-20">
@@ -94,6 +99,72 @@ export default async function InstructorPage() {
             initialEmergencyPhone={profile?.emergency_phone ?? null}
             onUpdateProfile={updateProfile}
           />
+        </section>
+
+        {/* What the students on your courses can see of you.
+            Two questions, one screen, because they are the same question
+            asked about two things — and both were previously answered for
+            you: the phone by a column nothing could set, the email by a rule
+            about the address rather than about the person. */}
+        <section className="mb-10">
+          <h2 className="text-lg font-semibold mb-4">What students see</h2>
+          <form action={updateStudentContact} className="p-6 bg-zinc-900 rounded-lg border border-zinc-800 space-y-3">
+            <p className="text-sm text-zinc-400">
+              Your card on the courses you are staffed on. Everyone on the crew sees your details either way —
+              this is about the students.
+            </p>
+
+            {/* A disabled box posts nothing, and nothing reads as "off" —
+                which would quietly answer a question this person was never
+                allowed to be asked. The stored value rides along instead. */}
+            {!hasWorkEmail && (
+              <input type="hidden" name="show_email" value={instructor.show_email === false ? 'off' : 'on'} />
+            )}
+            <label className={`flex items-start gap-3 ${hasWorkEmail ? 'cursor-pointer' : 'opacity-60'}`}>
+              <input
+                type="checkbox"
+                name="show_email"
+                defaultChecked={instructor.show_email !== false}
+                disabled={!hasWorkEmail}
+                className="mt-0.5 w-4 h-4 accent-pr-red shrink-0"
+              />
+              <span className="text-sm inline-flex items-center gap-1.5">
+                Show my email
+                <InfoHint
+                  text={hasWorkEmail
+                    ? 'Students on your courses can email you directly. Off, the card shows your name and role and no address.'
+                    : 'Only a peak-rescue.com address is ever shown to students — a personal one is never put on a card, so there is nothing to turn on here.'}
+                />
+              </span>
+            </label>
+
+            {!profile?.phone && (
+              <input type="hidden" name="show_phone" value={instructor.show_phone ? 'on' : 'off'} />
+            )}
+            <label className={`flex items-start gap-3 ${profile?.phone ? 'cursor-pointer' : 'opacity-60'}`}>
+              <input
+                type="checkbox"
+                name="show_phone"
+                defaultChecked={Boolean(instructor.show_phone)}
+                disabled={!profile?.phone}
+                className="mt-0.5 w-4 h-4 accent-pr-red shrink-0"
+              />
+              <span className="text-sm inline-flex items-center gap-1.5">
+                Show my phone number
+                <InfoHint
+                  text={profile?.phone
+                    ? 'The number on your profile above, on the card students read at a trailhead. Off by default, because every number we hold is a personal mobile.'
+                    : 'There is no number on your profile yet. Add one above and this becomes available.'}
+                />
+              </span>
+            </label>
+
+            <div className="pt-1">
+              <SaveButton className="px-4 py-2 bg-pr-red hover:bg-pr-red-dark text-white rounded text-sm font-medium transition-colors">
+                Save
+              </SaveButton>
+            </div>
+          </form>
         </section>
 
         {/* Calendar */}

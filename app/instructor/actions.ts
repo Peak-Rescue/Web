@@ -213,6 +213,30 @@ export async function updateCalendarInvites(formData: FormData) {
   revalidatePath('/instructor')
 }
 
+// What the students on your courses can see of you.
+//
+// Both default to what the system did before anybody was asked: the email on,
+// because the domain rule already showed it, and the phone off, because a
+// personal mobile is nobody's to hand out. Ticking the email box on an
+// address that is not ours does nothing — the rule in lib/contacts is in
+// front of this, and the form disables the box for the same reason.
+export async function updateStudentContact(formData: FormData) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Not authenticated')
+
+  const { error } = await createAdminClient()
+    .from('instructors')
+    .update({
+      show_email: formData.get('show_email') === 'on',
+      show_phone: formData.get('show_phone') === 'on',
+    })
+    .eq('profile_id', user.id)
+
+  if (error) throw new Error(error.message)
+  revalidatePath('/instructor')
+}
+
 // Which new courses land in an admin's inbox.
 //
 // The form posts the boxes that are ticked; what gets stored is the ones that
