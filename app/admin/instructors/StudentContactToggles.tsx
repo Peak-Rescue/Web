@@ -67,7 +67,7 @@ export default function StudentContactToggles({
   return (
     <div className="space-y-2">
       {row(
-        'Show their email to students',
+        'Email',
         hasWorkEmail
           ? 'Their card on the courses they are staffed on. The crew see it either way.'
           : 'Only a peak-rescue.com address is ever shown to students, and this one is not, so there is nothing to switch.',
@@ -76,7 +76,7 @@ export default function StudentContactToggles({
         () => set('email', !email)
       )}
       {row(
-        'Show their phone to students',
+        'Phone number',
         hasPhone
           ? 'Every number we hold is a personal mobile, so this is theirs to give. Off unless they have said yes.'
           : 'There is no number on their profile, so there is nothing to show.',

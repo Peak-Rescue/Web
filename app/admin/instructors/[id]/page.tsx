@@ -263,7 +263,7 @@ export default async function AdminInstructorDetailPage({ params }: { params: Pr
         {/* Sat beside the team page toggle, which is the other question of
             this kind: who, outside the crew, gets to see what. */}
         <section className="mb-10">
-          <h2 className="text-lg font-semibold mb-4">What students see</h2>
+          <h2 className="text-lg font-semibold mb-4">Contact info shared with students</h2>
           <StudentContactToggles
             instructorId={instructor.id}
             showEmail={instructor.show_email !== false}

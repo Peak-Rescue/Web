@@ -107,13 +107,12 @@ export default async function InstructorPage() {
             you: the phone by a column nothing could set, the email by a rule
             about the address rather than about the person. */}
         <section className="mb-10">
-          <h2 className="text-lg font-semibold mb-4">What students see</h2>
+          <h2 className="text-lg font-semibold mb-4">Share your contact info with students</h2>
           <form action={updateStudentContact} className="p-6 bg-zinc-900 rounded-lg border border-zinc-800 space-y-3">
-            <p className="text-sm text-zinc-400">
-              Your card on the courses you are staffed on. Everyone on the crew sees your details either way —
-              this is about the students.
-            </p>
-
+            {/* No sentence under the heading, and no verb on the boxes. The
+                heading is the question — two words naming what is being
+                shared is the whole answer — and the crew seeing it regardless
+                is a why, which lives in the hint. */}
             {/* A disabled box posts nothing, and nothing reads as "off" —
                 which would quietly answer a question this person was never
                 allowed to be asked. The stored value rides along instead. */}
@@ -129,10 +128,10 @@ export default async function InstructorPage() {
                 className="mt-0.5 w-4 h-4 accent-pr-red shrink-0"
               />
               <span className="text-sm inline-flex items-center gap-1.5">
-                Show my email
+                Email
                 <InfoHint
                   text={hasWorkEmail
-                    ? 'Students on your courses can email you directly. Off, the card shows your name and role and no address.'
+                    ? 'On your card on the courses you are staffed on. The crew see it either way; off, students get your name and role and no address.'
                     : 'Only a peak-rescue.com address is ever shown to students — a personal one is never put on a card, so there is nothing to turn on here.'}
                 />
               </span>
@@ -150,10 +149,10 @@ export default async function InstructorPage() {
                 className="mt-0.5 w-4 h-4 accent-pr-red shrink-0"
               />
               <span className="text-sm inline-flex items-center gap-1.5">
-                Show my phone number
+                Phone number
                 <InfoHint
                   text={profile?.phone
-                    ? 'The number on your profile above, on the card students read at a trailhead. Off by default, because every number we hold is a personal mobile.'
+                    ? 'The number on your profile above, on the card students read at a trailhead. The crew see it either way. Off by default, because every number we hold is a personal mobile.'
                     : 'There is no number on your profile yet. Add one above and this becomes available.'}
                 />
               </span>
