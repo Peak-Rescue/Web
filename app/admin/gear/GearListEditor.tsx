@@ -7,7 +7,7 @@ import CategorySelect from './CategorySelect'
 import { templateHref, templateShelfHref } from '@/lib/library'
 import PdfLink from '@/components/PdfLink'
 import { ForPill } from '@/components/AudiencePills'
-import GearReview, { GearReviewStatus } from '@/components/GearReview'
+import GearReview, { GearReviewStatus, type GearReviewWho } from '@/components/GearReview'
 import NewTabIcon from '@/components/NewTabIcon'
 import CloseButton from '@/components/CloseButton'
 import InfoHint from '@/components/InfoHint'
@@ -64,6 +64,7 @@ export type GearList = {
   updated_at?: string | null
   review_requested_at?: string | null
   review_requested_by?: string | null
+  review_flagged_at?: string | null
   reviewed_at?: string | null
   review_note?: string | null
   instance_id: string | null
@@ -117,7 +118,7 @@ export default function GearListEditor({
   courseType,
   templates,
   onDelete,
-  reviewerName,
+  review,
   viewerId,
   students,
 }: {
@@ -137,7 +138,7 @@ export default function GearListEditor({
       shelf the template row draws its own. */
   onDelete?: () => void
   /** Who last signed this list off, by name. */
-  reviewerName?: string | null
+  review?: GearReviewWho
   /** Who is looking. Signing off is not the asker's to do — the whole point
       is a reader who did not write it — so the control appears for everyone
       else and not for them. */
@@ -587,6 +588,21 @@ export default function GearListEditor({
 
   const input = 'bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-zinc-500'
 
+  // The list's own columns, plus the names the page resolved for them. Said
+  // once: the status line and the control that changes it were reading two
+  // copies of the same object.
+  const reviewState = {
+    requestedAt: list.review_requested_at ?? null,
+    reviewedAt: list.reviewed_at ?? null,
+    note: list.review_note ?? null,
+    updatedAt: list.updated_at ?? null,
+    reviewerName: review?.reviewerName ?? null,
+    flaggedAt: review?.flaggedAt ?? list.review_flagged_at ?? null,
+    flaggedByName: review?.flaggedByName ?? null,
+    seenAt: review?.seenAt ?? null,
+    seenByName: review?.seenByName ?? null,
+  }
+
   return (
     <div
       className={`space-y-5 ${drag ? 'select-none' : ''}`}
@@ -641,15 +657,7 @@ export default function GearListEditor({
           ) : null}
           {/* Whether anyone but you has read it — a fact about the list, so it
               sits with the other facts rather than in among the verbs. */}
-          <GearReviewStatus
-            state={{
-              requestedAt: list.review_requested_at ?? null,
-              reviewedAt: list.reviewed_at ?? null,
-              reviewerName: reviewerName ?? null,
-              note: list.review_note ?? null,
-              updatedAt: list.updated_at ?? null,
-            }}
-          />
+          <GearReviewStatus state={reviewState} />
           {/* Asking for a check sits with the other things you do to a
               finished list, not at the end of a sentence about its state.
 
@@ -669,13 +677,7 @@ export default function GearListEditor({
                 listId={list.id}
                 canAsk
                 canSignOff={Boolean(viewerId) && list.review_requested_by !== viewerId}
-                state={{
-                  requestedAt: list.review_requested_at ?? null,
-                  reviewedAt: list.reviewed_at ?? null,
-                  reviewerName: reviewerName ?? null,
-                  note: list.review_note ?? null,
-                  updatedAt: list.updated_at ?? null,
-                }}
+                state={reviewState}
               />
             )}
           </span>

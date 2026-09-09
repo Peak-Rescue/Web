@@ -35,6 +35,7 @@ import CourseTasksPanel, { type CourseTask, type TaskPerson } from '@/components
 import PdfLink from '@/components/PdfLink'
 import { ForPill } from '@/components/AudiencePills'
 import GearReview, { GearReviewStatus } from '@/components/GearReview'
+import GearFold from '@/components/GearFold'
 import { loadTasksWithDocs } from '@/lib/course-tasks'
 import { LinkIcon, PaperclipIcon } from '@/components/TaskIcons'
 import { AudiencePills } from '@/components/AudiencePills'
@@ -230,7 +231,7 @@ export default async function CourseView({
   const gearSetupPromise = keep(showAsAdmin
     ? Promise.all([
         admin.from('gear_lists')
-          .select(`id, name, audience, intro, students, updated_at, review_requested_at, review_requested_by, reviewed_at, review_note, reviewed_by, instance_id, is_template, ${GEAR_ENTRIES_SELECT}`)
+          .select(`id, name, audience, intro, students, updated_at, review_requested_at, review_requested_by, reviewed_at, review_note, reviewed_by, review_flagged_at, review_flagged_by, instance_id, is_template, ${GEAR_ENTRIES_SELECT}`)
           .eq('instance_id', id),
         admin.from('gear_items')
           .select('id, name, brand, info, url, category, parent_id, aliases, disciplines')
@@ -245,7 +246,7 @@ export default async function CourseView({
 
   const gearRowsPromise = keep(admin
     .from('gear_lists')
-    .select(`id, name, audience, intro, students, updated_at, review_requested_at, review_requested_by, reviewed_at, review_note, reviewed_by, gear_list_entries(id, ${GEAR_ENTRY_COLUMNS}, gear_items(name, brand, url, category), gear_entry_options(sort_order, gear_items(name, brand)))`)
+    .select(`id, name, audience, intro, students, updated_at, review_requested_at, review_requested_by, reviewed_at, review_note, reviewed_by, review_flagged_at, review_flagged_by, gear_list_entries(id, ${GEAR_ENTRY_COLUMNS}, gear_items(name, brand, url, category), gear_entry_options(sort_order, gear_items(name, brand)))`)
     .eq('instance_id', id))
 
   const schedRowsPromise = keep(admin
@@ -826,6 +827,8 @@ export default async function CourseView({
     reviewed_at: string | null
     review_note: string | null
     reviewed_by: string | null
+    review_flagged_at: string | null
+    review_flagged_by: string | null
     gear_list_entries: {
       id: string; gear_item_id: string | null; name: string | null; note: string | null; url: string | null
       section: string | null; group_type: 'personal' | 'group'; quantity: string | null
@@ -840,15 +843,53 @@ export default async function CourseView({
   // Which models sit under each type. A line that ticked nothing accepts any
   // of them, and saying so is the whole point of the catalog — before this the
   // student read a bare "Hand ascender" and had to guess what to buy.
-  // Who signed a list off, by name rather than by id.
-  const reviewerIds = [...new Set(gearAll.map((g) => g.reviewed_by).filter(Boolean) as string[])]
-  const { data: reviewerRows } = reviewerIds.length
-    ? await admin.from('profiles').select('id, first_name, last_name').in('id', reviewerIds)
+  // Who answered a list, by name rather than by id — a sign-off, a flag, or
+  // an opening with no answer at all, which is the state an asker most wants
+  // told apart from silence. One round for the reads and one for the names
+  // they turn out to need.
+  const { data: gearViewRows } = gearAll.length
+    ? await admin
+        .from('gear_list_views')
+        .select('list_id, user_id, last_seen_at')
+        .in('list_id', gearAll.map((g) => g.id))
+    : { data: [] }
+  const gearViews = ((gearViewRows ?? []) as { list_id: string; user_id: string; last_seen_at: string }[])
+
+  // The asker opening their own list is not somebody having looked at it.
+  const askedBy = new Map(gearAll.map((g) => [g.id, g.review_requested_by]))
+  const lastGearSeen = new Map<string, { user_id: string; last_seen_at: string }>()
+  for (const v of gearViews) {
+    if (v.user_id === askedBy.get(v.list_id)) continue
+    const held = lastGearSeen.get(v.list_id)
+    if (!held || new Date(v.last_seen_at) > new Date(held.last_seen_at)) lastGearSeen.set(v.list_id, v)
+  }
+
+  const nameIds = [...new Set([
+    ...gearAll.map((g) => g.reviewed_by),
+    ...gearAll.map((g) => g.review_flagged_by),
+    ...[...lastGearSeen.values()].map((v) => v.user_id),
+  ].filter(Boolean) as string[])]
+  const { data: reviewerRows } = nameIds.length
+    ? await admin.from('profiles').select('id, first_name, last_name').in('id', nameIds)
     : { data: [] }
   const reviewerName = new Map(
     ((reviewerRows ?? []) as { id: string; first_name: string | null; last_name: string | null }[])
       .map((p) => [p.id, [p.first_name, p.last_name].filter(Boolean).join(' ').trim() || null])
   )
+
+  // Everything the review line says about one list, worked out once for the
+  // two places that draw it — the editor's header and the read view's.
+  const reviewOf = (g: GearRow) => ({
+    reviewerName: g.reviewed_by ? reviewerName.get(g.reviewed_by) ?? null : null,
+    flaggedAt: g.review_flagged_at,
+    flaggedByName: g.review_flagged_by ? reviewerName.get(g.review_flagged_by) ?? null : null,
+    seenAt: lastGearSeen.get(g.id)?.last_seen_at ?? null,
+    seenByName: (() => {
+      const seer = lastGearSeen.get(g.id)?.user_id
+      return seer ? reviewerName.get(seer) ?? null : null
+    })(),
+  })
+  const reviews = Object.fromEntries(gearAll.map((g) => [g.id, reviewOf(g)]))
 
   // Every list this reader may see, not one of them picked out of the pile.
   //
@@ -1776,12 +1817,15 @@ export default async function CourseView({
               // as different kinds of thing. Same heading row for both now,
               // with the caret the only difference — which is the one real
               // difference between them.
-              <details className="group/gear">
-                {/* Nothing but the caret and the name. A link or a button in
-                    here is pressed *and* folds the thing it is in, because a
-                    summary swallows the click on its way past — so the PDF and
-                    the edit control wait inside, where the list they act on
-                    is. */}
+              <GearFold
+                instanceId={id}
+                record={showTasks}
+                listIds={gearVisible.map((g) => g.id)}
+                // Nothing but the caret and the name. A link or a button in
+                // here is pressed *and* folds the thing it is in, because a
+                // summary swallows the click on its way past — so the PDF and
+                // the edit control wait inside, where the list they act on is.
+                summary={
                 <summary className="cursor-pointer list-none flex items-baseline gap-2 mb-2">
                   <span aria-hidden className="text-zinc-600 shrink-0 text-[10px] transition-transform group-open/gear:rotate-90">▸</span>
                   <h3 className="text-sm font-semibold text-zinc-200">Gear list</h3>
@@ -1797,6 +1841,8 @@ export default async function CourseView({
                         : gearVisible.map((g) => `${g.name} · ${g.gear_list_entries.length}`).join('  ·  ')}
                   </span>
                 </summary>
+                }
+              >
                 <div className="ml-0.5 pl-3 border-l-2 border-zinc-800">
             {/* No "Edit gear list" gate for the people who can edit it.
                 It put the whole list behind a mode: press the button, get a
@@ -1825,9 +1871,7 @@ export default async function CourseView({
                 lists={(gearListRows ?? []) as unknown as React.ComponentProps<typeof CourseGear>['lists']}
                 templates={gearTemplateOptions}
                 catalog={(gearCatalogRows ?? []) as unknown as React.ComponentProps<typeof CourseGear>['catalog']}
-                reviewerNames={Object.fromEntries(
-                  gearAll.map((g) => [g.id, g.reviewed_by ? reviewerName.get(g.reviewed_by) ?? null : null])
-                )}
+                reviews={reviews}
               />
             ) : (
               <>
@@ -1864,9 +1908,9 @@ export default async function CourseView({
                         state={{
                           requestedAt: gl.review_requested_at,
                           reviewedAt: gl.reviewed_at,
-                          reviewerName: gl.reviewed_by ? reviewerName.get(gl.reviewed_by) ?? null : null,
                           note: gl.review_note,
                           updatedAt: gl.updated_at,
+                          ...reviews[gl.id],
                         }}
                       />
                       <span className="ml-auto flex items-center gap-1">
@@ -1878,9 +1922,9 @@ export default async function CourseView({
                           state={{
                             requestedAt: gl.review_requested_at,
                             reviewedAt: gl.reviewed_at,
-                            reviewerName: gl.reviewed_by ? reviewerName.get(gl.reviewed_by) ?? null : null,
                             note: gl.review_note,
                             updatedAt: gl.updated_at,
+                            ...reviews[gl.id],
                           }}
                         />
                       </span>
@@ -2020,7 +2064,7 @@ export default async function CourseView({
               </div>
             )}
                 </div>
-              </details>
+              </GearFold>
             )}
             {/* The modules, each its own named group rather than a
                 page-length run of link rows. */}

@@ -596,27 +596,159 @@ export async function requestGearReview(
 export async function reviewGearList(
   instanceId: string,
   listId: string,
-  input: { note?: string; clear?: boolean }
-): Promise<void> {
-  const { user, admin } = await requireCourseStaff(instanceId)
+  input: { note?: string; clear?: boolean; flag?: boolean }
+): Promise<{ told: string | null; problem: string | null }> {
+  const { user, admin, authorName } = await requireCourseStaff(instanceId)
 
-  const { error } = await admin
+  const now = new Date().toISOString()
+  const note = input.note?.trim().slice(0, 500) || null
+
+  const { data: list, error } = await admin
     .from('gear_lists')
     .update(
       input.clear
-        ? { reviewed_at: null, reviewed_by: null, review_note: null }
-        : {
-            reviewed_at: new Date().toISOString(),
-            reviewed_by: user.id,
-            review_note: input.note?.trim().slice(0, 500) || null,
+        ? {
+            reviewed_at: null, reviewed_by: null, review_note: null,
+            review_flagged_at: null, review_flagged_by: null,
           }
+        : input.flag
+          // A flag leaves the ask open on purpose: the list is not ready, and
+          // saying so is not the same as saying nothing.
+          ? {
+              reviewed_at: null, reviewed_by: null, review_note: note,
+              review_flagged_at: now, review_flagged_by: user.id,
+            }
+          : {
+              reviewed_at: now, reviewed_by: user.id, review_note: note,
+              review_flagged_at: null, review_flagged_by: null,
+            }
     )
     .eq('id', listId)
     .eq('instance_id', instanceId)
+    .select('name, review_requested_by')
+    .maybeSingle()
   if (error) throw new Error(error.message)
+
+  // Undoing your own tick is not news.
+  if (input.clear || !list) {
+    revalidatePath(`/portal/${instanceId}`)
+    revalidatePath(`/admin/courses/${instanceId}`)
+    return { told: null, problem: null }
+  }
+
+  const answer = await tellTheAsker(admin, instanceId, list, user.id, authorName, {
+    flagged: Boolean(input.flag),
+    note,
+  })
 
   revalidatePath(`/portal/${instanceId}`)
   revalidatePath(`/admin/courses/${instanceId}`)
+  return answer
+}
+
+/**
+ * The answer goes back to whoever asked for it.
+ *
+ * An ask is one person waiting on another, and until now the waiting ended
+ * only by going back to look. Both answers travel — a flag most of all, since
+ * it is the one that needs somebody to do something.
+ *
+ * The note is quoted in the mail, which is the one place this app copies
+ * content into an inbox rather than linking to it. A note is not the list: it
+ * is a sentence someone wrote *about* the list, it is what the reader was
+ * asked for, and an email saying "there is a note on the course page" would
+ * be the same round trip the ask already made somebody take.
+ */
+async function tellTheAsker(
+  admin: ReturnType<typeof createAdminClient>,
+  instanceId: string,
+  list: { name: string; review_requested_by: string | null },
+  readerId: string,
+  readerName: string,
+  answer: { flagged: boolean; note: string | null }
+): Promise<{ told: string | null; problem: string | null }> {
+  // Nobody asked, so nobody is waiting. A list can be signed off unprompted —
+  // someone read it and said so — and that is a fact for the page, not a mail.
+  if (!list.review_requested_by) return { told: null, problem: null }
+  // Answering your own ask happens when the asker gives up waiting and reads
+  // it themselves. They do not need telling what they just did.
+  if (list.review_requested_by === readerId) return { told: null, problem: null }
+
+  const [{ data: asker }, { data: inst }] = await Promise.all([
+    admin.from('profiles').select('email, first_name').eq('id', list.review_requested_by).maybeSingle(),
+    admin.from('course_instances').select('course_type, custom_title').eq('id', instanceId).single(),
+  ])
+  const to = asker?.email?.trim()
+  if (!to) return { told: null, problem: 'Whoever asked has no email on file, so this is on the page only.' }
+  if (!process.env.RESEND_API_KEY) {
+    return { told: null, problem: 'Email isn’t configured, so this is on the page only.' }
+  }
+
+  const courseName = inst ? courseDisplayName(inst.course_type, inst.custom_title) : 'your course'
+  const link = `${process.env.NEXT_PUBLIC_SITE_URL || 'https://peak-rescue.com'}/portal/${instanceId}?open=prep`
+
+  const subject = answer.flagged
+    ? `${courseName} — ${readerName} flagged the ${list.name}`
+    : `${courseName} — ${readerName} checked the ${list.name}`
+
+  const text = [
+    answer.flagged
+      ? `${readerName} has read the ${list.name} gear list and flagged it. It is not signed off.`
+      : `${readerName} has read the ${list.name} gear list and signed it off.`,
+    '',
+    ...(answer.note ? [`They wrote:`, '', `  “${answer.note}”`, ''] : []),
+    `Open the ${list.name} gear list: ${link}`,
+    '',
+    '—',
+    'Peak Rescue',
+  ].join('\n')
+
+  const { error } = await sendMail({ from: FROM, to: [to], replyTo: 'info@peak-rescue.com', subject, text })
+  if (error) {
+    console.error('Gear review answer email failed:', error)
+    return { told: null, problem: 'Saved, but the email to whoever asked didn’t send.' }
+  }
+  return { told: asker?.first_name?.trim() || to, problem: null }
+}
+
+/**
+ * That somebody opened a list, which is not the same as answering about it.
+ *
+ * Recorded when the gear fold is opened rather than when the page renders:
+ * the list sits behind a fold, and a page view is not a read of what is
+ * inside it. Counting the second visit as well, because "opened it twice and
+ * said nothing" is a different silence from "has not been back".
+ */
+export async function sawGearList(instanceId: string, listIds: string[]): Promise<void> {
+  if (listIds.length === 0) return
+  const { user, admin } = await requireCourseStaff(instanceId)
+
+  // Only lists actually on this course, so an id from elsewhere cannot write
+  // a row here by being named.
+  const { data: mine } = await admin
+    .from('gear_lists').select('id').eq('instance_id', instanceId).in('id', listIds)
+  const ids = ((mine ?? []) as { id: string }[]).map((r) => r.id)
+  if (ids.length === 0) return
+
+  const { data: seen } = await admin
+    .from('gear_list_views').select('list_id, times, first_seen_at')
+    .eq('user_id', user.id).in('list_id', ids)
+  const before = new Map(((seen ?? []) as { list_id: string; times: number; first_seen_at: string }[])
+    .map((r) => [r.list_id, r]))
+
+  const now = new Date().toISOString()
+  await admin.from('gear_list_views').upsert(
+    ids.map((id) => ({
+      user_id: user.id,
+      list_id: id,
+      // Kept, not moved: the first read is the one that answers "did they
+      // ever look", which is the question the asker has.
+      first_seen_at: before.get(id)?.first_seen_at ?? now,
+      last_seen_at: now,
+      times: (before.get(id)?.times ?? 0) + 1,
+    })),
+    { onConflict: 'user_id,list_id' }
+  )
 }
 
 export type Askable = {

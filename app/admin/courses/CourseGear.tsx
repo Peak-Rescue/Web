@@ -5,6 +5,7 @@ import { useSteadyRefresh } from '@/components/useSteadyRefresh'
 import GearListEditor, { type GearItem, type GearList } from '@/app/admin/gear/GearListEditor'
 import { createGearList, copyGearList, deleteGearList } from '@/app/admin/gear/actions'
 import TemplatePicker, { type TemplateChoice } from '@/components/TemplatePicker'
+import { type GearReviewWho } from '@/components/GearReview'
 
 // A course's gear lists, built here rather than in a Google Doc that gets
 // linked. Student and instructor lists are separate because they differ, and
@@ -24,7 +25,7 @@ export default function CourseGear({
   templates,
   catalog,
   students,
-  reviewerNames,
+  reviews,
 }: {
   instanceId: string
   /** Who is looking, so the editor can tell the reader of a list from the
@@ -41,9 +42,9 @@ export default function CourseGear({
   // "save over one" menu only needs a name and a size.
   templates: (TemplateChoice & { audience: string; entries: number })[]
   catalog: GearItem[]
-  /** Who signed each list off, by list id — resolved by the page, which is
-      where the profiles are already being read. */
-  reviewerNames?: Record<string, string | null>
+  /** Who answered each list and when it was last opened, by list id —
+      resolved by the page, which is where the profiles are already read. */
+  reviews?: Record<string, GearReviewWho>
 }) {
   const refresh = useSteadyRefresh()
   const [busy, setBusy] = useState(false)
@@ -131,7 +132,7 @@ export default function CourseGear({
             list={l} catalog={catalog} courseType={courseType}
             templates={templates} students={students} viewerId={viewerId}
             onDelete={() => { if (confirm(`Delete "${l.name}"?`)) run(() => deleteGearList(l.id)) }}
-            reviewerName={reviewerNames?.[l.id] ?? null}
+            review={reviews?.[l.id]}
           />
         </section>
       ))}

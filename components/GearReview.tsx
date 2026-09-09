@@ -12,10 +12,25 @@ export type GearReviewState = {
   note: string | null
   /** When the list itself last changed, so a sign-off can be shown as stale. */
   updatedAt: string | null
+  /** A reader who looked and said the list is not ready. */
+  flaggedAt?: string | null
+  flaggedByName?: string | null
+  /** The last time somebody other than the asker opened the list, and who.
+      Not an answer — but "opened it and said nothing" is worth more to the
+      person waiting than "asked", which is all they had. */
+  seenAt?: string | null
+  seenByName?: string | null
 }
 
 const when = (iso: string) =>
   new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+
+/** The names and dates behind a list's review line, worked out by whoever
+    read the course — the page knows the profiles, the editor does not. */
+export type GearReviewWho = Pick<
+  GearReviewState,
+  'reviewerName' | 'flaggedAt' | 'flaggedByName' | 'seenAt' | 'seenByName'
+>
 
 // Whether anybody else has read this list.
 //
@@ -30,7 +45,7 @@ const when = (iso: string) =>
 // sign-off on a list that has changed since is not a sign-off on this list.
 /** Where the list stands, in words. Reads; does nothing. */
 export function GearReviewStatus({ state }: { state: GearReviewState }) {
-  const { signedOff, stale, reviewedAt, requestedAt } = read(state)
+  const { signedOff, stale, reviewedAt, requestedAt, flaggedAt } = read(state)
   if (signedOff) {
     return (
       <span className="text-[11px] text-teal-400" title={state.note ? `“${state.note}”` : undefined}>
@@ -44,8 +59,27 @@ export function GearReviewStatus({ state }: { state: GearReviewState }) {
     // on the page. Said plainly rather than left as a stale green tick.
     return <span className="text-[11px] text-amber-400/90">changed since it was checked</span>
   }
+  if (flaggedAt) {
+    // An answer, and the one that needs doing something about — so it is not
+    // filed under "waiting", which is what it looked like before there was
+    // any way to say no.
+    return (
+      <span className="text-[11px] text-amber-300" title={state.note ? `“${state.note}”` : undefined}>
+        {state.flaggedByName ?? 'Someone'} flagged this {when(flaggedAt)}
+        {state.note ? ' · note' : ''}
+      </span>
+    )
+  }
   if (requestedAt) {
-    return <span className="text-[11px] text-amber-400/90">waiting on a check · asked {when(requestedAt)}</span>
+    // Read and unanswered is a different silence from never opened, and the
+    // asker is the one who has to decide whether to go and ask again.
+    return (
+      <span className="text-[11px] text-amber-400/90">
+        waiting on a check · {state.seenAt
+          ? `${state.seenByName ?? 'opened'} opened it ${when(state.seenAt)}`
+          : `asked ${when(requestedAt)}`}
+      </span>
+    )
   }
   return <span className="text-[11px] text-zinc-600">not checked by anyone else</span>
 }
@@ -60,10 +94,11 @@ function read(state: GearReviewState) {
   const reviewedAt = state.reviewedAt ?? null
   const updatedAt = state.updatedAt ?? null
   const requestedAt = state.requestedAt ?? null
+  const flaggedAt = state.flaggedAt ?? null
   const stale =
     reviewedAt !== null && updatedAt !== null &&
     new Date(updatedAt) > new Date(reviewedAt)
-  return { reviewedAt, updatedAt, requestedAt, stale, signedOff: reviewedAt !== null && !stale }
+  return { reviewedAt, updatedAt, requestedAt, flaggedAt, stale, signedOff: reviewedAt !== null && !stale }
 }
 
 export default function GearReview({
@@ -82,7 +117,9 @@ export default function GearReview({
 }) {
   const router = useRouter()
   const [busy, setBusy] = useState(false)
-  const [noting, setNoting] = useState(false)
+  // Which answer is being written, if either. The note box is the same for
+  // both — what a reader has to say does not change shape with the verdict.
+  const [noting, setNoting] = useState<'ok' | 'flag' | null>(null)
   // Who is on the course, loaded when the picker opens rather than with the
   // page: staffing can change between the two.
   const [crew, setCrew] = useState<Askable[] | null>(null)
@@ -106,7 +143,7 @@ export default function GearReview({
     finally { setBusy(false) }
   }
 
-  const { signedOff, requestedAt } = read(state)
+  const { signedOff, requestedAt, flaggedAt } = read(state)
 
   // Asking for a check is a thing you do to a finished list, the same as
   // printing it or saving it to the shelf — so it is a button among those
@@ -247,13 +284,27 @@ export default function GearReview({
       )}
 
       {canSignOff && !signedOff && !noting && (
-        <button
-          onClick={() => setNoting(true)}
-          disabled={busy}
-          className={`${VERB} border border-teal-800 text-teal-300 hover:bg-teal-900/30`}
-        >
-          Looks right
-        </button>
+        // Two answers, because a check that can only come back yes is not a
+        // check. Both write a note and both tell whoever asked; only one of
+        // them closes the question.
+        <>
+          <button
+            onClick={() => setNoting('ok')}
+            disabled={busy}
+            className={`${VERB} border border-teal-800 text-teal-300 hover:bg-teal-900/30`}
+          >
+            Looks right
+          </button>
+          {!flaggedAt && (
+            <button
+              onClick={() => setNoting('flag')}
+              disabled={busy}
+              className={`${VERB} border border-amber-800/70 text-amber-300/90 hover:bg-amber-900/20`}
+            >
+              Something’s off
+            </button>
+          )}
+        </>
       )}
 
       {canSignOff && signedOff && (
@@ -268,28 +319,35 @@ export default function GearReview({
 
       {noting && (
         // The note is the half worth having. "Fine, but we're short two rope
-        // bags" is the answer people actually have, and a tick cannot carry it.
+        // bags" is the answer people actually have, and a tick cannot carry
+        // it. Required on a flag: "something's off" with nothing after it
+        // sends the asker back to the list to guess at what.
         <span className="inline-flex items-center gap-1">
           <input
             autoFocus
             value={note}
             onChange={(e) => setNote(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Escape') { setNoting(false); setNote('') } }}
-            placeholder="Anything to flag? (optional)"
+            onKeyDown={(e) => { if (e.key === 'Escape') { setNoting(null); setNote('') } }}
+            placeholder={noting === 'flag' ? 'What is off?' : 'Anything to flag? (optional)'}
             className="w-56 bg-zinc-800 border border-zinc-700 rounded px-2 py-0.5 text-[11px] focus:outline-none focus:border-zinc-500"
           />
           <button
             onClick={() => run(async () => {
-              await reviewGearList(instanceId, listId, { note })
-              setNoting(false); setNote('')
+              const r = await reviewGearList(instanceId, listId, { note, flag: noting === 'flag' })
+              setSaid(r.problem ?? (r.told ? `Told ${r.told}` : null))
+              setNoting(null); setNote('')
             })}
-            disabled={busy}
-            className="px-2 py-0.5 rounded border border-teal-700 text-teal-300 hover:bg-teal-900/30 transition-colors disabled:opacity-40"
+            disabled={busy || (noting === 'flag' && note.trim() === '')}
+            className={`px-2 py-0.5 rounded border transition-colors disabled:opacity-40 ${
+              noting === 'flag'
+                ? 'border-amber-700 text-amber-300 hover:bg-amber-900/25'
+                : 'border-teal-700 text-teal-300 hover:bg-teal-900/30'
+            }`}
           >
-            Sign off
+            {noting === 'flag' ? 'Send the flag' : 'Sign off'}
           </button>
           <button
-            onClick={() => { setNoting(false); setNote('') }}
+            onClick={() => { setNoting(null); setNote('') }}
             className="text-zinc-600 hover:text-white transition-colors"
           >
             cancel
