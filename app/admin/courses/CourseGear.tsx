@@ -18,6 +18,7 @@ import TemplatePicker, { type TemplateChoice } from '@/components/TemplatePicker
 // answers to a question you ask once per course.
 export default function CourseGear({
   instanceId,
+  viewerId,
   courseType,
   lists,
   templates,
@@ -26,6 +27,10 @@ export default function CourseGear({
   reviewerNames,
 }: {
   instanceId: string
+  /** Who is looking, so the editor can tell the reader of a list from the
+      person who asked for a reader. Absent outside a course — a template on
+      the shelf has nobody to check it. */
+  viewerId?: string | null
   courseType: string | null
   // The course's maximum number of students, from the Details tab. Rows that
   // count by students — one each, one between four — are worked out from it, so
@@ -124,7 +129,7 @@ export default function CourseGear({
               foot of it. */}
           <GearListEditor
             list={l} catalog={catalog} courseType={courseType}
-            templates={templates} students={students}
+            templates={templates} students={students} viewerId={viewerId}
             onDelete={() => { if (confirm(`Delete "${l.name}"?`)) run(() => deleteGearList(l.id)) }}
             reviewerName={reviewerNames?.[l.id] ?? null}
           />

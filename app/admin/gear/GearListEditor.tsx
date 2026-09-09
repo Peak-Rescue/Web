@@ -63,6 +63,7 @@ export type GearList = {
   students?: number | null
   updated_at?: string | null
   review_requested_at?: string | null
+  review_requested_by?: string | null
   reviewed_at?: string | null
   review_note?: string | null
   instance_id: string | null
@@ -117,6 +118,7 @@ export default function GearListEditor({
   templates,
   onDelete,
   reviewerName,
+  viewerId,
   students,
 }: {
   list: GearList
@@ -136,6 +138,10 @@ export default function GearListEditor({
   onDelete?: () => void
   /** Who last signed this list off, by name. */
   reviewerName?: string | null
+  /** Who is looking. Signing off is not the asker's to do — the whole point
+      is a reader who did not write it — so the control appears for everyone
+      else and not for them. */
+  viewerId?: string | null
 }) {
   // Rows are drawn here first and the server is caught up afterwards, so the
   // catching up waits until the clicking stops and holds the page still while
@@ -645,14 +651,24 @@ export default function GearListEditor({
             }}
           />
           {/* Asking for a check sits with the other things you do to a
-              finished list, not at the end of a sentence about its state. */}
+              finished list, not at the end of a sentence about its state.
+
+              Signing one off sits here too, which it did not use to: this is
+              an admin's editor, and the reasoning was that an admin assembled
+              the list so an admin cannot be the second pair of eyes on it.
+              True of the person who asked, and of nobody else — the people
+              being asked are mostly admins themselves, and every one of them
+              read the list, went to say so, and found the button was on a
+              page they do not get shown. A list can sit on "waiting on a
+              check" forever that way, which is worse than the wrong person
+              being able to tick it. So: anyone but the asker. */}
           <span className="ml-auto flex items-center gap-1">
             {list.instance_id && (
               <GearReview
                 instanceId={list.instance_id}
                 listId={list.id}
                 canAsk
-                canSignOff={false}
+                canSignOff={Boolean(viewerId) && list.review_requested_by !== viewerId}
                 state={{
                   requestedAt: list.review_requested_at ?? null,
                   reviewedAt: list.reviewed_at ?? null,

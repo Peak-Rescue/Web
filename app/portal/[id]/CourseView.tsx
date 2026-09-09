@@ -230,7 +230,7 @@ export default async function CourseView({
   const gearSetupPromise = keep(showAsAdmin
     ? Promise.all([
         admin.from('gear_lists')
-          .select(`id, name, audience, intro, students, updated_at, review_requested_at, reviewed_at, review_note, reviewed_by, instance_id, is_template, ${GEAR_ENTRIES_SELECT}`)
+          .select(`id, name, audience, intro, students, updated_at, review_requested_at, review_requested_by, reviewed_at, review_note, reviewed_by, instance_id, is_template, ${GEAR_ENTRIES_SELECT}`)
           .eq('instance_id', id),
         admin.from('gear_items')
           .select('id, name, brand, info, url, category, parent_id, aliases, disciplines')
@@ -245,7 +245,7 @@ export default async function CourseView({
 
   const gearRowsPromise = keep(admin
     .from('gear_lists')
-    .select(`id, name, audience, intro, students, updated_at, review_requested_at, reviewed_at, review_note, reviewed_by, gear_list_entries(id, ${GEAR_ENTRY_COLUMNS}, gear_items(name, brand, url, category), gear_entry_options(sort_order, gear_items(name, brand)))`)
+    .select(`id, name, audience, intro, students, updated_at, review_requested_at, review_requested_by, reviewed_at, review_note, reviewed_by, gear_list_entries(id, ${GEAR_ENTRY_COLUMNS}, gear_items(name, brand, url, category), gear_entry_options(sort_order, gear_items(name, brand)))`)
     .eq('instance_id', id))
 
   const schedRowsPromise = keep(admin
@@ -820,6 +820,9 @@ export default async function CourseView({
     students: number | null
     updated_at: string | null
     review_requested_at: string | null
+    /** Who asked. Not shown anywhere — it is what keeps the asker from
+        answering their own ask. */
+    review_requested_by: string | null
     reviewed_at: string | null
     review_note: string | null
     reviewed_by: string | null
@@ -1816,6 +1819,7 @@ export default async function CourseView({
             {showAsAdmin ? (
               <CourseGear
                 instanceId={id}
+                viewerId={viewer.userId}
                 courseType={inst.course_type as string | null}
                 students={(inst.max_students as number | null) ?? null}
                 lists={(gearListRows ?? []) as unknown as React.ComponentProps<typeof CourseGear>['lists']}
