@@ -87,12 +87,18 @@ export default function GearReview({
   const [crew, setCrew] = useState<{ name: string; email: string; role: string; isMe: boolean }[] | null>(null)
   const [picked, setPicked] = useState<string[]>([])
   const [picking, setPicking] = useState(false)
+  // Why the picker is empty, when it is. A rejected server action used to go
+  // nowhere: the panel sat on "Reading the crew…" with the reason in a console
+  // nobody had open.
+  const [crewError, setCrewError] = useState<string | null>(null)
   const [note, setNote] = useState('')
   const [said, setSaid] = useState<string | null>(null)
 
   async function run(fn: () => Promise<unknown>) {
     setBusy(true)
-    try { await fn(); router.refresh() } finally { setBusy(false) }
+    try { await fn(); router.refresh() }
+    catch (e) { setSaid(e instanceof Error ? e.message : 'That didn’t send') }
+    finally { setBusy(false) }
   }
 
   const { signedOff, requestedAt } = read(state)
@@ -117,9 +123,14 @@ export default function GearReview({
               if (picking) return setPicking(false)
               setPicking(true)
               if (!crew) {
-                const list = await courseCrew(instanceId)
-                setCrew(list)
-                setPicked(list.filter((c) => !c.isMe).map((c) => c.email))
+                setCrewError(null)
+                try {
+                  const list = await courseCrew(instanceId)
+                  setCrew(list)
+                  setPicked(list.filter((c) => !c.isMe).map((c) => c.email))
+                } catch (e) {
+                  setCrewError(e instanceof Error ? e.message : 'Could not read the crew')
+                }
               }
             }}
             disabled={busy}
@@ -132,7 +143,9 @@ export default function GearReview({
 
           {picking && (
             <span className="absolute right-0 top-[calc(100%+4px)] z-30 w-64 p-2 rounded-lg border border-zinc-700 bg-zinc-950 shadow-xl block">
-              {crew === null ? (
+              {crewError ? (
+                <span className="block px-1 py-1 text-[11px] text-pr-red">{crewError}</span>
+              ) : crew === null ? (
                 <span className="block px-1 py-1 text-[11px] text-zinc-500">Reading the crew…</span>
               ) : crew.filter((c) => !c.isMe).length === 0 ? (
                 <span className="block px-1 py-1 text-[11px] text-zinc-500">
