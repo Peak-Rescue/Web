@@ -107,12 +107,16 @@ export default async function InstructorPage() {
             you: the phone by a column nothing could set, the email by a rule
             about the address rather than about the person. */}
         <section className="mb-10">
-          <h2 className="text-lg font-semibold mb-4">Share your contact info with students</h2>
+          <h2 className="text-lg font-semibold mb-4 inline-flex items-center gap-1.5">
+            Share your contact info with students
+            <InfoHint below text="The crew see both either way." />
+          </h2>
           <form action={updateStudentContact} className="p-6 bg-zinc-900 rounded-lg border border-zinc-800 space-y-3">
-            {/* No sentence under the heading, and no verb on the boxes. The
-                heading is the question — two words naming what is being
-                shared is the whole answer — and the crew seeing it regardless
-                is a why, which lives in the hint. */}
+            {/* No sentence under the heading, no verb on the boxes, and one
+                hint rather than four. The heading is the question, the boxes
+                name what there is to share, and the single thing neither says
+                — that the crew see these regardless — is said once, up there.
+                A box explains itself only when it is dead. */}
             {/* A disabled box posts nothing, and nothing reads as "off" —
                 which would quietly answer a question this person was never
                 allowed to be asked. The stored value rides along instead. */}
@@ -129,11 +133,10 @@ export default async function InstructorPage() {
               />
               <span className="text-sm inline-flex items-center gap-1.5">
                 Email
-                <InfoHint
-                  text={hasWorkEmail
-                    ? 'On your card on the courses you are staffed on. The crew see it either way; off, students get your name and role and no address.'
-                    : 'Only a peak-rescue.com address is ever shown to students — a personal one is never put on a card, so there is nothing to turn on here.'}
-                />
+                {/* A hint only where the box cannot do anything and the
+                    reason is not on screen. Where it works, the heading has
+                    said it. */}
+                {!hasWorkEmail && <InfoHint text="Only peak-rescue.com addresses are shown." />}
               </span>
             </label>
 
@@ -150,11 +153,7 @@ export default async function InstructorPage() {
               />
               <span className="text-sm inline-flex items-center gap-1.5">
                 Phone number
-                <InfoHint
-                  text={profile?.phone
-                    ? 'The number on your profile above, on the card students read at a trailhead. The crew see it either way. Off by default, because every number we hold is a personal mobile.'
-                    : 'There is no number on your profile yet. Add one above and this becomes available.'}
-                />
+                {!profile?.phone && <InfoHint text="No number on your profile yet." />}
               </span>
             </label>
 

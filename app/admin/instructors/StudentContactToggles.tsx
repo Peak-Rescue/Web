@@ -40,9 +40,11 @@ export default function StudentContactToggles({
     }
   }
 
+  // A hint only where the switch cannot do anything: the heading above says
+  // what these are, and repeating it twice in grey helps nobody.
   const row = (
     label: string,
-    hint: string,
+    hint: string | null,
     on: boolean,
     live: boolean,
     onClick: () => void
@@ -50,7 +52,7 @@ export default function StudentContactToggles({
     <div className="flex items-center justify-between px-4 py-3 bg-zinc-900 border border-zinc-800 rounded-lg">
       <div className="flex items-center gap-1.5">
         <p className={`text-sm font-medium ${live ? '' : 'text-zinc-500'}`}>{label}</p>
-        <InfoHint text={hint} />
+        {hint && <InfoHint text={hint} />}
       </div>
       <button
         onClick={onClick}
@@ -68,18 +70,14 @@ export default function StudentContactToggles({
     <div className="space-y-2">
       {row(
         'Email',
-        hasWorkEmail
-          ? 'Their card on the courses they are staffed on. The crew see it either way.'
-          : 'Only a peak-rescue.com address is ever shown to students, and this one is not, so there is nothing to switch.',
+        hasWorkEmail ? null : 'Only peak-rescue.com addresses are shown.',
         email,
         hasWorkEmail,
         () => set('email', !email)
       )}
       {row(
         'Phone number',
-        hasPhone
-          ? 'Every number we hold is a personal mobile, so this is theirs to give. Off unless they have said yes.'
-          : 'There is no number on their profile, so there is nothing to show.',
+        hasPhone ? null : 'No number on their profile.',
         phone,
         hasPhone,
         () => set('phone', !phone)
