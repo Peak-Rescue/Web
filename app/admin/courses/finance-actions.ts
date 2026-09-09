@@ -253,6 +253,35 @@ export async function duplicateEstimateCoa(instanceId: string, estimateId: strin
   revalidatePath(`/admin/courses/${instanceId}`)
 }
 
+// A quote is only as live as the COAs it prices. After a COA moves in or out
+// of the set-aside pile, every quote on the course is re-checked: it goes
+// quiet when all of its source COAs are set aside, and comes back the moment
+// one of them does. An options quote draws on several COAs, so it survives
+// until the last of them is set aside — retiring one option must not take the
+// whole quote with it.
+async function syncQuoteVisibility(admin: Awaited<ReturnType<typeof requireAdmin>>, instanceId: string) {
+  const [{ data: coas }, { data: quotes }] = await Promise.all([
+    admin.from('course_estimates').select('id, archived_at').eq('instance_id', instanceId),
+    admin.from('course_quotes').select('id, estimate_id, options, archived_at').eq('instance_id', instanceId),
+  ])
+  const aside = new Map((coas ?? []).map((c) => [c.id as string, Boolean(c.archived_at)]))
+
+  await Promise.all((quotes ?? []).map((q) => {
+    const sources = [
+      q.estimate_id as string | null,
+      ...(((q.options ?? []) as { estimate_id?: string | null }[]).map((o) => o.estimate_id ?? null)),
+    ].filter((id): id is string => Boolean(id) && aside.has(id!))
+    // A quote whose COAs were deleted has nothing to follow — it stays put
+    // rather than vanishing on the next unrelated set-aside.
+    const shouldHide = sources.length > 0 && sources.every((id) => aside.get(id))
+    if (shouldHide === Boolean(q.archived_at)) return null
+    return admin
+      .from('course_quotes')
+      .update({ archived_at: shouldHide ? new Date().toISOString() : null })
+      .eq('id', q.id)
+  }).filter(Boolean))
+}
+
 // Set a COA aside, or bring it back. A rejected option keeps its lines and
 // its price — this only takes it out of the live comparison, so the record of
 // what was offered survives without cluttering the ones still in play.
@@ -264,6 +293,7 @@ export async function setEstimateArchived(instanceId: string, estimateId: string
     .eq('id', estimateId)
     .eq('instance_id', instanceId)
   if (error) throw new Error(error.message)
+  await syncQuoteVisibility(admin, instanceId)
   revalidatePath(`/admin/courses/${instanceId}`)
 }
 
@@ -275,6 +305,9 @@ export async function deleteEstimateCoa(instanceId: string, estimateId: string) 
     .eq('id', estimateId)
     .eq('instance_id', instanceId)
   if (error) throw new Error(error.message)
+  // Deleting a set-aside COA releases the quotes that were hiding behind it —
+  // they have nothing left to come back with, so they come back now.
+  await syncQuoteVisibility(admin, instanceId)
   revalidatePath(`/admin/courses/${instanceId}`)
 }
 
@@ -466,6 +499,9 @@ export async function createQuote(instanceId: string, formData: FormData) {
     .from('course_estimates')
     .select('id, title, margin, price_override, estimate_items(qty, rate)')
     .eq('instance_id', instanceId)
+    // Set-aside COAs are out of play: neither the newest-estimate default nor
+    // an options quote's column list may reach for one.
+    .is('archived_at', null)
   if (allCoas) {
     estimateQuery = estimateQuery.order('created_at')
   } else if (estimateId) {

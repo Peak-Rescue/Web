@@ -13,6 +13,8 @@ export type QuoteRow = {
   id: string
   accept_token: string
   estimate_id: string | null
+  /** Set when every COA this quote prices has been set aside. */
+  archived_at: string | null
   prepared_by: string | null
   prepared_by_name: string | null
   quote_seq: number
@@ -56,6 +58,7 @@ export default function QuotesSection({
   adminCcOptions,
   people,
   estimates,
+  coaTitles,
   heroPicker,
 }: {
   instanceId: string
@@ -68,6 +71,9 @@ export default function QuotesSection({
   adminCcOptions: { id: string; name: string; email: string }[]
   people: QuotePerson[]
   estimates: { id: string; title: string; price: number }[]
+  /** Title of every COA on the course, set-aside ones included — a quiet quote
+      still has to be able to say which option it priced. */
+  coaTitles: Record<string, string>
   /** The photo the quote page will use. It sits on this row because that is
       the row that makes a quote — a picture chosen somewhere else is a setting
       you do not know applies until you have already sent one. */
@@ -76,6 +82,17 @@ export default function QuotesSection({
   // Current price of every COA on the course, for the "update from estimate"
   // buttons on draft quotes.
   const coaPrices = Object.fromEntries(estimates.map((e) => [e.id, e.price]))
+  // Quotes whose every COA has been set aside. They keep their numbers, their
+  // status and their client-facing page — they just stop competing for
+  // attention with the quote that is actually in play.
+  const liveQuotes = quotes.filter((q) => !q.archived_at)
+  const asideQuotes = quotes.filter((q) => q.archived_at)
+  const sourceTitles = (q: QuoteRow) =>
+    [...new Set([q.estimate_id, ...(q.options ?? []).map((o) => o.estimate_id ?? null)])]
+      .filter((id): id is string => Boolean(id))
+      .map((id) => coaTitles[id])
+      .filter(Boolean)
+      .join(' + ')
   return (
     <div>
       {/* The way in sits above the list: with no quotes yet it's the only thing
@@ -98,7 +115,7 @@ export default function QuotesSection({
       </form>
 
       <div className="space-y-3">
-        {quotes.map((q) => (
+        {liveQuotes.map((q) => (
           <div key={q.id} className="bg-zinc-900 rounded-lg border border-zinc-800">
             <div className="px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
               <div className="flex items-center gap-3">
@@ -230,7 +247,48 @@ export default function QuotesSection({
             No quotes yet.
           </p>
         )}
+        {liveQuotes.length === 0 && asideQuotes.length > 0 && (
+          <p className="py-6 text-center text-sm text-zinc-500 border border-zinc-800 rounded-lg">
+            Every quote on this course came from a COA that has been set aside.
+          </p>
+        )}
       </div>
+
+      {asideQuotes.length > 0 && (
+        <details className="mt-4 group">
+          <summary className="flex items-center gap-2 text-xs text-zinc-500 hover:text-zinc-300 transition-colors cursor-pointer list-none">
+            <span className="transition-transform group-open:rotate-90">›</span>
+            {asideQuotes.length} set aside with {asideQuotes.length === 1 ? 'its' : 'their'} COA
+            <span className="text-zinc-600 min-w-0 truncate group-open:hidden">
+              {asideQuotes.map((q) => `${quoteNumber(refNumber, q.quote_seq)} (${q.status})`).join(', ')}
+            </span>
+          </summary>
+          <ul className="mt-2 border-l border-zinc-800 pl-3 space-y-1.5">
+            {asideQuotes.map((q) => (
+              <li key={q.id} className="flex items-center justify-between gap-3 text-sm">
+                <span className="min-w-0 flex items-center gap-2.5">
+                  <span className="font-mono text-xs text-zinc-400">{quoteNumber(refNumber, q.quote_seq)}</span>
+                  <span className={`px-1.5 py-0.5 text-[10px] font-medium rounded ${STATUS_BADGE[q.status] ?? STATUS_BADGE.draft}`}>
+                    {q.status}
+                  </span>
+                  <span className="text-xs text-zinc-600 min-w-0 truncate">{sourceTitles(q) || 'COA deleted'}</span>
+                </span>
+                <span className="shrink-0 flex items-center gap-3 text-xs">
+                  <span className="text-zinc-500 [font-variant-numeric:tabular-nums]">
+                    {q.options && q.total === 0 ? `${q.options.length} options` : fmtMoney(q.total)}
+                  </span>
+                  <a href={`/quote/${q.accept_token}`} target="_blank" className="text-zinc-500 underline hover:text-white transition-colors">
+                    View page
+                  </a>
+                </span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 pl-3 text-[11px] text-zinc-600">
+            These come back on their own when their COA does.
+          </p>
+        </details>
+      )}
     </div>
   )
 }

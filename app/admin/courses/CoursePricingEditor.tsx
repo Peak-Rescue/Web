@@ -59,7 +59,7 @@ export default async function CoursePricingEditor({
       .eq('instance_id', instanceId).order('created_at'),
     admin.from('pricing_rates').select('id, label, unit, rate, default_line').eq('active', true).order('sort_order'),
     admin.from('course_quotes')
-      .select('id, accept_token, estimate_id, prepared_by, prepared_by_name, quote_seq, status, issue_date, valid_until, total, options, unit_rate_note, scope_bullets, course_blurb, sent_at, accepted_at, accepted_name')
+      .select('id, accept_token, estimate_id, archived_at, prepared_by, prepared_by_name, quote_seq, status, issue_date, valid_until, total, options, unit_rate_note, scope_bullets, course_blurb, sent_at, accepted_at, accepted_name')
       .eq('instance_id', instanceId).order('quote_seq', { ascending: false }),
     admin.from('profiles').select('id, first_name, last_name, email').eq('role', 'admin').order('first_name'),
     admin.from('gallery_images').select('url, caption, categories').order('created_at', { ascending: false }),
@@ -279,6 +279,7 @@ export default async function CoursePricingEditor({
         ccOptions={ccEmailOptions(contacts)}
         adminCcOptions={adminCcOptions}
         people={quotePeople}
+        coaTitles={Object.fromEntries(allCoas.filter((e) => e.id).map((e) => [e.id!, e.title]))}
         estimates={estimatePanels
           .filter((e) => e.id)
           .map((e) => ({
