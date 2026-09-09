@@ -669,14 +669,26 @@ export default function GearListEditor({
               read the list, went to say so, and found the button was on a
               page they do not get shown. A list can sit on "waiting on a
               check" forever that way, which is worse than the wrong person
-              being able to tick it. So: anyone but the asker. */}
+              being able to tick it.
+
+              So: anyone but the asker, and only while there is an ask. An
+              answer is a reply to a question — with no question outstanding
+              the buttons offered the person who just built the list the
+              chance to declare it checked by themselves, which is the one
+              thing this whole feature exists to avoid. The crew's own page is
+              unchanged: reading the list you are about to pack from and
+              saying it looks right is worth something unprompted. */}
           <span className="ml-auto flex items-center gap-1">
             {list.instance_id && (
               <GearReview
                 instanceId={list.instance_id}
                 listId={list.id}
                 canAsk
-                canSignOff={Boolean(viewerId) && list.review_requested_by !== viewerId}
+                canSignOff={
+                  Boolean(viewerId) &&
+                  Boolean(list.review_requested_at) &&
+                  list.review_requested_by !== viewerId
+                }
                 state={reviewState}
               />
             )}
