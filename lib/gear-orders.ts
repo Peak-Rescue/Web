@@ -35,6 +35,9 @@ export type GearOrder = {
   responded_name: string | null
   responded_title: string | null
   client_note: string | null
+  /** Paperwork sent with the order — a quote, a spec sheet, a signed
+      agreement. Paths in the private bucket; the client's page signs them. */
+  attachments: { path: string; filename: string }[]
   gear_order_lines: GearOrderLine[]
 }
 

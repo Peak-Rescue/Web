@@ -251,3 +251,85 @@ export async function sendGearOrder(instanceId: string, orderId: string, formDat
 
   touch(instanceId)
 }
+
+// ─── Paperwork on an order ──────────────────────────────────────────────────
+//
+// A quote, a spec sheet, a signed agreement: things that travel with an order
+// and are not lines on it. The client used to get the lines and a bare intro,
+// and anything else had to go in a separate email that arrived unattached to
+// the thing it was about.
+//
+// Same signed-upload flow as course updates and task documents — the browser
+// puts the bytes straight into the private bucket and only the path comes
+// back here — and the client's page serves them through a short-lived signed
+// URL, because the bucket is private and the token page is not a login.
+
+export async function createGearOrderUploadTargets(
+  instanceId: string,
+  files: { name: string; size: number }[]
+): Promise<{ path: string; token: string }[]> {
+  const admin = await requireAdmin()
+  const { randomUUID } = await import('crypto')
+
+  const targets: { path: string; token: string }[] = []
+  for (const file of files) {
+    if (file.size > 20 * 1024 * 1024) throw new Error(`"${file.name}" is over the 20 MB limit`)
+    const ext = (file.name.split('.').pop() ?? 'pdf').toLowerCase().replace(/[^a-z0-9]/g, '') || 'pdf'
+    const path = `courses/${instanceId}/gear-orders/${randomUUID()}.${ext}`
+    const { data, error } = await admin.storage.from('task-documents').createSignedUploadUrl(path)
+    if (error || !data) throw new Error(error?.message ?? 'Could not create upload URL')
+    targets.push({ path: data.path, token: data.token })
+  }
+  return targets
+}
+
+/** Once the bytes are up, the order records what it is carrying. */
+export async function attachToGearOrder(
+  instanceId: string,
+  orderId: string,
+  files: { path: string; filename: string }[]
+): Promise<void> {
+  const admin = await requireAdmin()
+  const { data: order } = await admin
+    .from('gear_orders')
+    .select('attachments')
+    .eq('id', orderId).eq('instance_id', instanceId)
+    .single()
+  if (!order) throw new Error('Order not found')
+
+  const existing = (order.attachments ?? []) as { path: string; filename: string }[]
+  const { error } = await admin
+    .from('gear_orders')
+    .update({ attachments: [...existing, ...files].slice(0, 20) })
+    .eq('id', orderId)
+  if (error) throw new Error(error.message)
+
+  revalidatePath(`/admin/courses/${instanceId}`)
+  revalidatePath(`/portal/${instanceId}`)
+}
+
+/** Taking one off. The bytes go too — nothing else points at them. */
+export async function detachFromGearOrder(
+  instanceId: string,
+  orderId: string,
+  path: string
+): Promise<void> {
+  const admin = await requireAdmin()
+  const { data: order } = await admin
+    .from('gear_orders')
+    .select('attachments')
+    .eq('id', orderId).eq('instance_id', instanceId)
+    .single()
+  if (!order) throw new Error('Order not found')
+
+  const existing = (order.attachments ?? []) as { path: string; filename: string }[]
+  const { error } = await admin
+    .from('gear_orders')
+    .update({ attachments: existing.filter((a) => a.path !== path) })
+    .eq('id', orderId)
+  if (error) throw new Error(error.message)
+  await admin.storage.from('task-documents').remove([path])
+
+  revalidatePath(`/admin/courses/${instanceId}`)
+  revalidatePath(`/portal/${instanceId}`)
+}

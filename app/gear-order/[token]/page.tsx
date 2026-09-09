@@ -18,10 +18,18 @@ export default async function GearOrderPage({ params }: { params: Promise<{ toke
   const admin = createAdminClient()
   const { data: order } = await admin
     .from('gear_orders')
-    .select('id, instance_id, es_quote_number, status, intro, responded_at, responded_name, client_note, viewed_at, gear_order_lines(id, name, detail, category, qty_offered, qty_wanted, removed, client_note, sort_order)')
+    .select('id, instance_id, es_quote_number, status, intro, responded_at, responded_name, client_note, viewed_at, attachments, gear_order_lines(id, name, detail, category, qty_offered, qty_wanted, removed, client_note, sort_order)')
     .eq('accept_token', token)
     .maybeSingle()
   if (!order || order.status === 'draft') notFound()
+
+  // The bucket is private and a token page is not a login, so each file gets
+  // its own short-lived URL rather than the client being sent to storage.
+  const files = (order.attachments ?? []) as { path: string; filename: string }[]
+  const { data: signed } = files.length
+    ? await admin.storage.from('task-documents').createSignedUrls(files.map((f) => f.path), 3600)
+    : { data: [] }
+  const signedByPath = new Map((signed ?? []).map((x) => [x.path, x.signedUrl]))
 
   const { data: inst } = await admin
     .from('course_instances')
@@ -56,6 +64,28 @@ export default async function GearOrderPage({ params }: { params: Promise<{ toke
         )}
 
         {order.intro && <p className="text-sm text-zinc-300 mt-6 whitespace-pre-line leading-relaxed">{order.intro}</p>}
+
+        {files.length > 0 && (
+          <div className="mt-5">
+            <p className="text-[11px] uppercase tracking-widest text-zinc-500 mb-2">Sent with this</p>
+            <div className="flex flex-wrap gap-2">
+              {files.map((f) => (
+                <a
+                  key={f.path}
+                  href={signedByPath.get(f.path) ?? '#'}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded border border-zinc-700 text-sm text-zinc-200 hover:border-zinc-500 hover:text-white transition-colors"
+                >
+                  <svg aria-hidden xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" />
+                  </svg>
+                  {f.filename}
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="mt-8 rounded-lg border border-zinc-800 bg-zinc-900/50 p-4">
           <p className="text-sm text-zinc-300">

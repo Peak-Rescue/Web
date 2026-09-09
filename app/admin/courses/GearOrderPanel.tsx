@@ -5,7 +5,9 @@ import { useRouter } from 'next/navigation'
 import {
   createGearOrder, updateGearOrder, updateGearOrderLine,
   addGearOrderLine, deleteGearOrderLine, deleteGearOrder, sendGearOrder,
+  createGearOrderUploadTargets, attachToGearOrder, detachFromGearOrder,
 } from './gear-order-actions'
+import { createClient as createBrowserClient } from '@/lib/supabase/client'
 import { GEAR_ORDER_STATUS_LABEL, type GearOrder } from '@/lib/gear-orders'
 import PdfLink from '@/components/PdfLink'
 import AdminCcPicker from '@/components/AdminCcPicker'
@@ -62,7 +64,7 @@ export default function GearOrderPanel({
         {error && <p className="text-sm text-pr-red mb-3">{error}</p>}
 
         {orders.map((o) => (
-          <OrderCard key={o.id} instanceId={instanceId} order={o} run={run} busy={busy} adminCcOptions={adminCcOptions} />
+          <OrderCard key={o.id} instanceId={instanceId} order={o} run={run} busy={busy} adminCcOptions={adminCcOptions} setError={setError} />
         ))}
 
         {lists.length > 0 ? (
@@ -88,14 +90,17 @@ export default function GearOrderPanel({
 }
 
 function OrderCard({
-  instanceId, order, run, busy, adminCcOptions,
+  instanceId, order, run, busy, adminCcOptions, setError,
 }: {
   instanceId: string
   order: GearOrder
   run: (fn: () => Promise<unknown>) => Promise<void>
   busy: boolean
   adminCcOptions: { id: string; name: string; email: string }[]
+  setError: (m: string | null) => void
 }) {
+  const router = useRouter()
+  const [uploading, setUploading] = useState(false)
   const [es, setEs] = useState(order.es_quote_number ?? '')
   const lines = [...order.gear_order_lines].sort((a, b) => a.sort_order - b.sort_order)
   const wanted = lines.filter((l) => !l.removed && Number(l.qty_wanted ?? 0) > 0)
@@ -121,6 +126,68 @@ function OrderCard({
             Delete
           </button>
         </div>
+      </div>
+
+      {/* Paperwork that travels with the order and is not a line on it — a
+          quote, a spec sheet, a signed agreement. It used to have to go in a
+          separate email, arriving unattached to the thing it was about. */}
+      <div className="flex items-center gap-2 flex-wrap mb-3">
+        <span className="text-[11px] text-zinc-500">Attached</span>
+        {(order.attachments ?? []).map((a) => (
+          <span key={a.path} className="inline-flex items-center gap-1.5 text-[11px] px-2 py-0.5 rounded border border-zinc-700 text-zinc-300">
+            {a.filename}
+            <button
+              onClick={() => { if (confirm(`Remove "${a.filename}"?`)) run(() => detachFromGearOrder(instanceId, order.id, a.path)) }}
+              disabled={busy}
+              title="Take it off the order"
+              className="text-zinc-500 hover:text-red-400 transition-colors"
+            >
+              ×
+            </button>
+          </span>
+        ))}
+        {(order.attachments ?? []).length === 0 && (
+          <span className="text-[11px] text-zinc-700">nothing yet</span>
+        )}
+        <label className="text-[11px] px-2 py-0.5 rounded border border-dashed border-zinc-700 text-zinc-500 hover:text-white hover:border-zinc-500 transition-colors cursor-pointer">
+          {uploading ? 'Uploading…' : '+ file'}
+          <input
+            type="file"
+            multiple
+            accept=".pdf,.doc,.docx,.xls,.xlsx,image/*"
+            className="hidden"
+            disabled={busy || uploading}
+            onChange={async (ev) => {
+              const files = Array.from(ev.target.files ?? [])
+              ev.target.value = ''
+              if (!files.length) return
+              setUploading(true); setError(null)
+              try {
+                // The bytes go straight into the private bucket from here; only
+                // the path comes back to the server, same as every other
+                // attachment on a course.
+                const targets = await createGearOrderUploadTargets(
+                  instanceId, files.map((f) => ({ name: f.name, size: f.size }))
+                )
+                const supabase = createBrowserClient()
+                const done: { path: string; filename: string }[] = []
+                for (let i = 0; i < files.length; i++) {
+                  const { error: upErr } = await supabase.storage
+                    .from('task-documents')
+                    .uploadToSignedUrl(targets[i].path, targets[i].token, files[i], { contentType: files[i].type })
+                  if (upErr) throw new Error(`Upload failed for "${files[i].name}": ${upErr.message}`)
+                  done.push({ path: targets[i].path, filename: files[i].name })
+                }
+                await attachToGearOrder(instanceId, order.id, done)
+                router.refresh()
+              } catch (e) {
+                setError(e instanceof Error ? e.message : 'That upload failed')
+              } finally {
+                setUploading(false)
+              }
+            }}
+          />
+        </label>
       </div>
 
       {/* The number the client quotes back. Sending is gated on it, because an
