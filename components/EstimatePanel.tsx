@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { fmtMoney, round2 } from '@/lib/expenses'
 import { impliedMargin, factorValue, prefillFactor, unitFactorNames, dayCountFollowsCourse } from '@/lib/estimates'
 import { publishCoaPrice, retractCoaPrice } from '@/lib/live-coa-prices'
-import { saveEstimate, deleteEstimateCoa, type EstimateItemInput } from '@/app/admin/courses/finance-actions'
+import { saveEstimate, deleteEstimateCoa, setEstimateArchived, type EstimateItemInput } from '@/app/admin/courses/finance-actions'
 import { useRouter } from 'next/navigation'
 import { CalculatorIcon, NotesIcon } from '@/components/TaskIcons'
 import { useUnsavedGuard, withSaveTimeout } from '@/components/useUnsavedGuard'
@@ -64,6 +64,7 @@ export default function EstimatePanel({
   initialItems,
   rates,
   canDelete,
+  canArchive,
   solo,
   counts,
 }: {
@@ -75,6 +76,9 @@ export default function EstimatePanel({
   initialItems: { label: string; qty: number | null; rate: number; notes: string | null; factors: number[] | null; factor_labels: (string | null)[] | null; rate_id: string | null; drift_ack: { i: number; s: number | null; d: number | null; c?: number | null } | null }[]
   rates: PricingRate[]
   canDelete: boolean
+  /** Whether this COA can be set aside — false when it is the only live one,
+      since a course with nothing in play has nothing to compare. */
+  canArchive: boolean
   solo: boolean // only COA on the course — the default "COA n" title stays hidden until a second exists
   counts: CourseCounts
 }) {
@@ -83,6 +87,7 @@ export default function EstimatePanel({
   const [persistedId, setPersistedId] = useState<string | null>(estimateId)
   const [title, setTitle] = useState(initialTitle)
   const [deleting, setDeleting] = useState(false)
+  const [archiving, setArchiving] = useState(false)
   const nextKey = useRef(initialItems.length)
   const [rows, setRows] = useState<Row[]>(
     initialItems.map((i, idx) => ({
@@ -477,6 +482,28 @@ export default function EstimatePanel({
           {status === 'error' && (
             <button onClick={() => void flush()} className="text-xs text-zinc-300 underline hover:text-white">
               Retry
+            </button>
+          )}
+          {canArchive && persistedId && (
+            <button
+              onClick={async () => {
+                if (archiving) return
+                setArchiving(true)
+                try {
+                  // Flush first: setting aside re-renders the panel as a
+                  // summary row, and an in-flight edit would go with it.
+                  await flush()
+                  await setEstimateArchived(instanceId, estimateIdRef.current!, true)
+                  router.refresh()
+                } finally {
+                  setArchiving(false)
+                }
+              }}
+              disabled={archiving}
+              className="text-xs text-zinc-600 hover:text-zinc-300 transition-colors disabled:opacity-50"
+              title="Collapse this COA out of the comparison — it keeps its lines and can be brought back"
+            >
+              Set aside
             </button>
           )}
           {canDelete && persistedId && (

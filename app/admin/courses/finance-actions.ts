@@ -207,6 +207,7 @@ export async function duplicateCurrentEstimate(instanceId: string) {
     .from('course_estimates')
     .select('id')
     .eq('instance_id', instanceId)
+    .is('archived_at', null)
     .order('created_at')
     .limit(1)
     .maybeSingle()
@@ -249,6 +250,20 @@ export async function duplicateEstimateCoa(instanceId: string, estimateId: strin
     if (itemsError) throw new Error(itemsError.message)
   }
 
+  revalidatePath(`/admin/courses/${instanceId}`)
+}
+
+// Set a COA aside, or bring it back. A rejected option keeps its lines and
+// its price — this only takes it out of the live comparison, so the record of
+// what was offered survives without cluttering the ones still in play.
+export async function setEstimateArchived(instanceId: string, estimateId: string, archived: boolean) {
+  const admin = await requireAdmin()
+  const { error } = await admin
+    .from('course_estimates')
+    .update({ archived_at: archived ? new Date().toISOString() : null })
+    .eq('id', estimateId)
+    .eq('instance_id', instanceId)
+  if (error) throw new Error(error.message)
   revalidatePath(`/admin/courses/${instanceId}`)
 }
 

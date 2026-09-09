@@ -189,6 +189,9 @@ export async function cloneEstimates(
     .from('course_estimates')
     .select('title, margin, estimate_items(label, qty, rate, notes, qty_factors, rate_id, drift_ack, sort_order)')
     .eq('instance_id', sourceInstanceId)
+    // Options the source course set aside are part of its history, not a
+    // starting point for a new one.
+    .is('archived_at', null)
     .order('created_at')
 
   let cloned = 0

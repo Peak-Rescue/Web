@@ -6,6 +6,7 @@ import { primaryContactEmail, ccEmailOptions, type CoursePOC } from '@/lib/conta
 import EstimatePanel, { type PricingRate } from '@/components/EstimatePanel'
 import { EstimateReviewBanner, EstimateReviewRequest, type EstimateReviewRow } from './EstimateReviewBar'
 import CoaComparison from './CoaComparison'
+import ArchivedCoas from './ArchivedCoas'
 import NewCoaMenu, { type CopySource } from './NewCoaMenu'
 import QuoteHeroPicker from './QuoteHeroPicker'
 import QuotesSection, { type QuoteRow } from './QuotesSection'
@@ -54,7 +55,7 @@ export default async function CoursePricingEditor({
     { data: sourceRows }, { data: offDayRows },
   ] = await Promise.all([
     admin.from('course_estimates')
-      .select('id, title, margin, price_override, created_at, estimate_items(label, qty, rate, notes, qty_factors, rate_id, drift_ack, sort_order)')
+      .select('id, title, margin, price_override, created_at, archived_at, estimate_items(label, qty, rate, notes, qty_factors, rate_id, drift_ack, sort_order)')
       .eq('instance_id', instanceId).order('created_at'),
     admin.from('pricing_rates').select('id, label, unit, rate, default_line').eq('active', true).order('sort_order'),
     admin.from('course_quotes')
@@ -68,7 +69,7 @@ export default async function CoursePricingEditor({
     (async () => {
       // Somewhere to copy a COA from: recent courses, then this offering, then
       // this client — deduped, most recent first.
-      const sel = 'id, ref_number, course_type, custom_title, client_name, starts_at, course_estimates(id, title, margin, price_override, created_at, estimate_items(qty, rate))'
+      const sel = 'id, ref_number, course_type, custom_title, client_name, starts_at, course_estimates(id, title, margin, price_override, created_at, archived_at, estimate_items(qty, rate))'
       const q = () => admin.from('course_instances').select(sel).neq('id', instanceId)
         .order('starts_at', { ascending: false, nullsFirst: false })
       const client = (course.client_name ?? '').trim()
@@ -106,7 +107,7 @@ export default async function CoursePricingEditor({
 
   // Copy-picker sources: each course's COAs with their quote prices, plus the
   // relevance flags the picker groups by (same type first, then same client).
-  type SourceEstimate = { id: string; title: string; margin: number; price_override: number | null; created_at: string; estimate_items: { qty: number | null; rate: number }[] }
+  type SourceEstimate = { id: string; title: string; margin: number; price_override: number | null; created_at: string; archived_at: string | null; estimate_items: { qty: number | null; rate: number }[] }
   const currentClient = ((course.client_name as string | null) ?? '').trim().toLowerCase()
   const copySources: CopySource[] = (sourceRows ?? [])
     .map((s) => ({
@@ -121,6 +122,8 @@ export default async function CoursePricingEditor({
       sameType: s.course_type === course.course_type && s.course_type !== 'custom',
       sameClient: Boolean(currentClient) && (s.client_name ?? '').trim().toLowerCase() === currentClient,
       coas: ((s.course_estimates ?? []) as SourceEstimate[])
+        // An option that course set aside is its history, not a template.
+        .filter((e) => !e.archived_at)
         .sort((a, b) => a.created_at.localeCompare(b.created_at))
         .map((e) => ({
           id: e.id,
@@ -141,9 +144,10 @@ export default async function CoursePricingEditor({
     }
     return null
   }
-  let estimatePanels = (estimateRows ?? []).map((e) => ({
+  const allCoas = (estimateRows ?? []).map((e) => ({
     id: e.id as string | null,
     title: e.title as string,
+    archivedAt: (e.archived_at as string | null) ?? null,
     margin: Number(e.margin),
     priceOverride: e.price_override === null ? null : Number(e.price_override),
     items: ((e.estimate_items ?? []) as EstimateItemRow[])
@@ -159,6 +163,12 @@ export default async function CoursePricingEditor({
         drift_ack: i.drift_ack,
       })),
   }))
+
+  // Set-aside COAs come out of the working set entirely: no panel, no column
+  // in the comparison, no price to pull a quote from. They collapse to a
+  // summary line under the live ones.
+  const archivedCoas = allCoas.filter((e) => e.archivedAt)
+  let estimatePanels = allCoas.filter((e) => !e.archivedAt)
 
   const estimateReviews = (estimateReviewRows ?? []) as EstimateReviewRow[]
   // Same people as the reviewers, minus anyone without an address to copy.
@@ -196,9 +206,10 @@ export default async function CoursePricingEditor({
     }
     estimatePanels = [{
       id: null,
-      title: 'COA 1',
+      title: `COA ${allCoas.length + 1}`,
       margin: DEFAULT_MARGIN,
       priceOverride: null,
+      archivedAt: null,
       items: (pricingRateRows ?? [])
         .filter((r) => r.default_line)
         .map((r) => {
@@ -228,12 +239,24 @@ export default async function CoursePricingEditor({
             initialItems={e.items}
             rates={pricingRates}
             canDelete={estimatePanels.length > 1}
-            solo={estimatePanels.length === 1}
+            canArchive={estimatePanels.length > 1}
+            solo={estimatePanels.length === 1 && archivedCoas.length === 0}
             counts={estimateCounts}
           />
         ))}
       </div>
       {estimatePanels.length > 1 && <CoaComparison coas={estimatePanels} />}
+      {archivedCoas.length > 0 && (
+        <ArchivedCoas
+          instanceId={instanceId}
+          coas={archivedCoas.map((e) => ({
+            id: e.id!,
+            title: e.title,
+            price: coaPrice({ margin: e.margin, price_override: e.priceOverride, items: e.items }),
+            archivedAt: e.archivedAt,
+          }))}
+        />
+      )}
       <div className="mt-4">
         <NewCoaMenu
           instanceId={instanceId}
