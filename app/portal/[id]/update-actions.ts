@@ -101,7 +101,7 @@ type NotifyOutcome = { recipients: number; sent: number; problem: string | null 
 async function recordPush(
   admin: ReturnType<typeof createAdminClient>,
   instanceId: string,
-  section: 'schedule' | 'updates',
+  section: 'schedule' | 'updates' | 'prep',
   audience: UpdateAudience,
   pushedBy: string | null,
 ) {
@@ -458,4 +458,92 @@ export async function announceMeetingDetails(
   revalidatePath(`/portal/${instanceId}`)
   revalidatePath(`/admin/courses/${instanceId}`)
   return { recipients: outcome.recipients, sent: outcome.sent, emailProblem: outcome.problem }
+}
+
+// ─── A second pair of eyes ───────────────────────────────────────────────
+//
+// A gear list goes out to students and, through an order, to a client, and the
+// person who assembled it is usually the only one who has read it. Asking the
+// crew to look meant writing an update saying "please look at the gear list" —
+// which lands in a feed, points at nothing in particular, and leaves nowhere
+// to answer, so there was no way to tell afterwards whether anybody had.
+//
+// Same shape as the meeting-point announcement, and for the same reason: no
+// post goes with it. The list is the thing to read and it is one door away,
+// and a course that revises its kit twice in a week should not end the week
+// with a stack of notices saying so. The dot lands on Prep, where the list is.
+
+export async function requestGearReview(
+  instanceId: string,
+  listId: string,
+  input?: { copyMe?: boolean }
+): Promise<PostResult> {
+  const { user, admin, authorName } = await requireCourseStaff(instanceId)
+
+  const { data: list } = await admin
+    .from('gear_lists')
+    .select('name')
+    .eq('id', listId)
+    .eq('instance_id', instanceId)
+    .maybeSingle()
+  if (!list) throw new Error('That gear list is not on this course')
+
+  const outcome = await notify(
+    admin,
+    instanceId,
+    authorName,
+    user.email ?? null,
+    // The crew, and only the crew. A student has no say in what the course
+    // carries and would read it as something they had to do.
+    'instructors',
+    false,
+    `${list.name} — a look before it goes out`,
+    input?.copyMe !== false,
+    `${authorName} has asked for a second pair of eyes on the ${list.name} before it goes out.`
+  )
+
+  // Written after the mail, so a list can't show as asked when nobody was.
+  await admin
+    .from('gear_lists')
+    .update({ review_requested_at: new Date().toISOString(), review_requested_by: user.id })
+    .eq('id', listId)
+
+  await recordPush(admin, instanceId, 'prep', 'instructors', user.id)
+
+  revalidatePath(`/portal/${instanceId}`)
+  revalidatePath(`/admin/courses/${instanceId}`)
+  return { recipients: outcome.recipients, sent: outcome.sent, emailProblem: outcome.problem }
+}
+
+/**
+ * Signing one off, or taking the sign-off back.
+ *
+ * Any instructor on the course, not only an admin: the point is a reader who
+ * did not write it. The note is what makes this worth more than a tick —
+ * "fine, but we are short two rope bags" is the answer people actually have.
+ */
+export async function reviewGearList(
+  instanceId: string,
+  listId: string,
+  input: { note?: string; clear?: boolean }
+): Promise<void> {
+  const { user, admin } = await requireCourseStaff(instanceId)
+
+  const { error } = await admin
+    .from('gear_lists')
+    .update(
+      input.clear
+        ? { reviewed_at: null, reviewed_by: null, review_note: null }
+        : {
+            reviewed_at: new Date().toISOString(),
+            reviewed_by: user.id,
+            review_note: input.note?.trim().slice(0, 500) || null,
+          }
+    )
+    .eq('id', listId)
+    .eq('instance_id', instanceId)
+  if (error) throw new Error(error.message)
+
+  revalidatePath(`/portal/${instanceId}`)
+  revalidatePath(`/admin/courses/${instanceId}`)
 }

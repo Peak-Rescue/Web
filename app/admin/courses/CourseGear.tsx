@@ -23,6 +23,7 @@ export default function CourseGear({
   templates,
   catalog,
   students,
+  reviewerNames,
 }: {
   instanceId: string
   courseType: string | null
@@ -35,6 +36,9 @@ export default function CourseGear({
   // "save over one" menu only needs a name and a size.
   templates: (TemplateChoice & { audience: string; entries: number })[]
   catalog: GearItem[]
+  /** Who signed each list off, by list id — resolved by the page, which is
+      where the profiles are already being read. */
+  reviewerNames?: Record<string, string | null>
 }) {
   const refresh = useSteadyRefresh()
   const [busy, setBusy] = useState(false)
@@ -122,6 +126,7 @@ export default function CourseGear({
             list={l} catalog={catalog} courseType={courseType}
             templates={templates} students={students}
             onDelete={() => { if (confirm(`Delete "${l.name}"?`)) run(() => deleteGearList(l.id)) }}
+            reviewerName={reviewerNames?.[l.id] ?? null}
           />
         </section>
       ))}

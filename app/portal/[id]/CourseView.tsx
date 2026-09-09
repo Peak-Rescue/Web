@@ -33,6 +33,7 @@ import { courseDisplayName, computeBlocks, courseDates, dayShift } from '@/lib/c
 import CourseTasksPanel, { type CourseTask, type TaskPerson } from '@/components/CourseTasksPanel'
 import PdfLink from '@/components/PdfLink'
 import { ForPill } from '@/components/AudiencePills'
+import GearReview from '@/components/GearReview'
 import { loadTasksWithDocs } from '@/lib/course-tasks'
 import { LinkIcon, PaperclipIcon } from '@/components/TaskIcons'
 import { AudiencePills } from '@/components/AudiencePills'
@@ -225,7 +226,7 @@ export default async function CourseView({
   const gearSetupPromise = keep(showAsAdmin
     ? Promise.all([
         admin.from('gear_lists')
-          .select(`id, name, audience, intro, students, instance_id, is_template, ${GEAR_ENTRIES_SELECT}`)
+          .select(`id, name, audience, intro, students, updated_at, review_requested_at, reviewed_at, review_note, reviewed_by, instance_id, is_template, ${GEAR_ENTRIES_SELECT}`)
           .eq('instance_id', id),
         admin.from('gear_items')
           .select('id, name, brand, info, url, category, parent_id, aliases, disciplines')
@@ -240,7 +241,7 @@ export default async function CourseView({
 
   const gearRowsPromise = keep(admin
     .from('gear_lists')
-    .select(`id, name, audience, intro, students, gear_list_entries(id, ${GEAR_ENTRY_COLUMNS}, gear_items(name, brand, url, category), gear_entry_options(sort_order, gear_items(name, brand)))`)
+    .select(`id, name, audience, intro, students, updated_at, review_requested_at, reviewed_at, review_note, reviewed_by, gear_list_entries(id, ${GEAR_ENTRY_COLUMNS}, gear_items(name, brand, url, category), gear_entry_options(sort_order, gear_items(name, brand)))`)
     .eq('instance_id', id))
 
   const schedRowsPromise = keep(admin
@@ -705,7 +706,7 @@ export default async function CourseView({
   const [{ data: gearOrderRows }, { data: ccAdminRows }] = showAsAdmin
     ? await Promise.all([
         admin.from('gear_orders')
-          .select('id, instance_id, list_id, es_quote_number, status, accept_token, intro, sent_at, viewed_at, responded_at, responded_name, responded_title, client_note, gear_order_lines(id, entry_id, name, detail, category, qty_offered, qty_wanted, removed, client_note, admin_note, sort_order)')
+          .select('id, instance_id, list_id, es_quote_number, status, accept_token, intro, sent_at, viewed_at, responded_at, responded_name, responded_title, client_note, attachments, gear_order_lines(id, entry_id, name, detail, category, qty_offered, qty_wanted, removed, client_note, admin_note, sort_order)')
           .eq('instance_id', id)
           .order('created_at', { ascending: false }),
         admin.from('profiles').select('id, first_name, last_name, email').eq('role', 'admin').order('first_name'),
@@ -813,6 +814,11 @@ export default async function CourseView({
     id: string; name: string; audience: string; intro: string | null
     /** What this list is packed for, when it isn't the course's own maximum. */
     students: number | null
+    updated_at: string | null
+    review_requested_at: string | null
+    reviewed_at: string | null
+    review_note: string | null
+    reviewed_by: string | null
     gear_list_entries: {
       id: string; gear_item_id: string | null; name: string | null; note: string | null; url: string | null
       section: string | null; group_type: 'personal' | 'group'; quantity: string | null
@@ -827,6 +833,16 @@ export default async function CourseView({
   // Which models sit under each type. A line that ticked nothing accepts any
   // of them, and saying so is the whole point of the catalog — before this the
   // student read a bare "Hand ascender" and had to guess what to buy.
+  // Who signed a list off, by name rather than by id.
+  const reviewerIds = [...new Set(gearAll.map((g) => g.reviewed_by).filter(Boolean) as string[])]
+  const { data: reviewerRows } = reviewerIds.length
+    ? await admin.from('profiles').select('id, first_name, last_name').in('id', reviewerIds)
+    : { data: [] }
+  const reviewerName = new Map(
+    ((reviewerRows ?? []) as { id: string; first_name: string | null; last_name: string | null }[])
+      .map((p) => [p.id, [p.first_name, p.last_name].filter(Boolean).join(' ').trim() || null])
+  )
+
   // Every list this reader may see, not one of them picked out of the pile.
   //
   // It used to show a single list — the instructor's if there was one, else
@@ -1779,6 +1795,9 @@ export default async function CourseView({
                 lists={(gearListRows ?? []) as unknown as React.ComponentProps<typeof CourseGear>['lists']}
                 templates={gearTemplateOptions}
                 catalog={(gearCatalogRows ?? []) as unknown as React.ComponentProps<typeof CourseGear>['catalog']}
+                reviewerNames={Object.fromEntries(
+                  gearAll.map((g) => [g.id, g.reviewed_by ? reviewerName.get(g.reviewed_by) ?? null : null])
+                )}
               />
             ) : (
               <>
@@ -1808,6 +1827,27 @@ export default async function CourseView({
                   </span>
                   <PdfLink href={`/api/gear-lists/${gl.id}/pdf`} label="Print" className="ml-auto" />
                 </div>
+                {/* Whether anyone but its author has read it. Instructors can
+                    sign off — the point is a reader who did not write it — and
+                    only an admin can ask, because only an admin assembles the
+                    list in the first place. */}
+                {showTasks && (
+                  <div className="mb-2">
+                    <GearReview
+                      instanceId={id}
+                      listId={gl.id}
+                      canAsk={showAsAdmin}
+                      canSignOff
+                      state={{
+                        requestedAt: gl.review_requested_at,
+                        reviewedAt: gl.reviewed_at,
+                        reviewerName: gl.reviewed_by ? reviewerName.get(gl.reviewed_by) ?? null : null,
+                        note: gl.review_note,
+                        updatedAt: gl.updated_at,
+                      }}
+                    />
+                  </div>
+                )}
                 {gl.intro && <p className="text-sm text-zinc-400 mb-3 max-w-prose whitespace-pre-line">{gl.intro}</p>}
                 {(['personal', 'group'] as const).map((gt) => {
               const rows = gl.gear_list_entries

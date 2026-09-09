@@ -3,10 +3,11 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useSteadyRefresh } from '@/components/useSteadyRefresh'
-import CategorySelect, { NEW_TYPE } from './CategorySelect'
+import CategorySelect from './CategorySelect'
 import { templateHref, templateShelfHref } from '@/lib/library'
 import PdfLink from '@/components/PdfLink'
 import { ForPill } from '@/components/AudiencePills'
+import GearReview from '@/components/GearReview'
 import NewTabIcon from '@/components/NewTabIcon'
 import CloseButton from '@/components/CloseButton'
 import InfoHint from '@/components/InfoHint'
@@ -60,6 +61,10 @@ export type GearList = {
   intro: string | null
   /** The headcount this list is packed for, or null to follow the course. */
   students?: number | null
+  updated_at?: string | null
+  review_requested_at?: string | null
+  reviewed_at?: string | null
+  review_note?: string | null
   instance_id: string | null
   is_template: boolean
   gear_list_entries: GearEntry[]
@@ -111,6 +116,7 @@ export default function GearListEditor({
   courseType,
   templates,
   onDelete,
+  reviewerName,
   students,
 }: {
   list: GearList
@@ -128,6 +134,8 @@ export default function GearListEditor({
       Its presence is also what says this editor owns the header: on the library
       shelf the template row draws its own. */
   onDelete?: () => void
+  /** Who last signed this list off, by name. */
+  reviewerName?: string | null
 }) {
   // Rows are drawn here first and the server is caught up afterwards, so the
   // catching up waits until the clicking stops and holds the page still while
@@ -154,10 +162,8 @@ export default function GearListEditor({
   // The template panel, opened from the header rather than standing open at
   // the foot of the list.
   const [shelfOpen, setShelfOpen] = useState(false)
-  // The thing chosen but not yet placed, and the last thing placed. One asks
-  // where it goes; the other says where it went, because adding used to happen
-  // in silence somewhere below the fold.
-  const [staged, setStaged] = useState<{ gearItemId?: string | null; name?: string; label: string } | null>(null)
+  // The last thing placed, because adding happens in one click now and the row
+  // it makes can be below the fold.
   const [justAdded, setJustAdded] = useState<string | null>(null)
 
   // Which halves to draw. Named rather than inlined as a guard on the map:
@@ -646,6 +652,26 @@ export default function GearListEditor({
         </div>
       )}
 
+      {/* Whether anyone but you has read it. Asking is an admin's act — an
+          admin assembled the list — and signing off is not: the whole point is
+          a reader who did not write it, so that control lives on the course
+          page where the crew read it. */}
+      {onDelete && list.instance_id && (
+        <GearReview
+          instanceId={list.instance_id}
+          listId={list.id}
+          canAsk
+          canSignOff={false}
+          state={{
+            requestedAt: list.review_requested_at ?? null,
+            reviewedAt: list.reviewed_at ?? null,
+            reviewerName: reviewerName ?? null,
+            note: list.review_note ?? null,
+            updatedAt: list.updated_at ?? null,
+          }}
+        />
+      )}
+
       {shelfOpen && !list.is_template && (
         <SaveToShelf
           list={list} templates={templates ?? []} courseType={courseType}
@@ -682,32 +708,13 @@ export default function GearListEditor({
 
       {addOpen && (
         <div className="rounded-lg border border-zinc-700 bg-zinc-900/60 p-3 space-y-3">
-          {justAdded && !staged && (
-            <p className="text-[11px] text-teal-300">{justAdded}</p>
-          )}
-          {!staged ? (
-            <AddGear
-              listId={list.id}
-              catalog={catalog}
-              childrenOf={childrenOf}
-              onPick={(picked) => {
-                setJustAdded(null)
-                setStaged({
-                  ...picked,
-                  label: picked.name ?? byId.get(picked.gearItemId ?? '')?.name ?? 'that',
-                })
-              }}
-              onClose={() => setAddOpen(false)}
-              busy={busy} run={run} input={input}
-            />
-          ) : (
-          <>
-          <p className="text-sm">
-            <span className="text-zinc-500">Adding </span>
-            <span className="font-medium">{staged.label}</span>
-          </p>
+          {/* Where a pick lands is answered here, once, before anything is
+              picked — and it stays answered across adds, because a run of
+              anchors all goes to the same place. Asked after every pick it was
+              a second screen for a question with the same answer ten times
+              running, and by then the item looked added already. */}
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-[11px] uppercase tracking-widest text-zinc-500 w-20 shrink-0">Carried by</span>
+            <span className="text-[11px] uppercase tracking-widest text-zinc-500 w-20 shrink-0">Adding to</span>
             {(['personal', 'group'] as const).map((gt) => (
               <button
                 key={gt}
@@ -767,30 +774,31 @@ export default function GearListEditor({
               />
             )}
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => {
-                addEntry({ gearItemId: staged.gearItemId, name: staged.name, target: addTarget })
-                setJustAdded(
-                  `Added ${staged.label} to ${KIT_LABEL[addTarget.gt].toLowerCase()}` +
-                  (addTarget.section ? ` under ${addTarget.section}` : '')
-                )
-                setStaged(null)
-              }}
-              disabled={busy}
-              className="px-3 py-1.5 rounded bg-pr-red hover:bg-pr-red-dark text-white text-sm font-medium transition-colors disabled:opacity-40"
-            >
-              Add to the list
-            </button>
-            <button
-              onClick={() => setStaged(null)}
-              className="text-xs text-zinc-500 hover:text-white transition-colors"
-            >
-              Pick something else
-            </button>
-          </div>
-          </>
+
+          {/* Adding happens below the fold of a long list, so the panel says
+              what it just did and where it went. */}
+          {justAdded && (
+            <p className="text-[11px] text-teal-300">{justAdded}</p>
           )}
+
+          <AddGear
+            listId={list.id}
+            catalog={catalog}
+            childrenOf={childrenOf}
+            onPick={(picked) => {
+              // A catalog pick knows its own name; a brand-new item carries one
+              // down, because the catalog prop on this page is a round behind
+              // the write that made it — which is how "Adding that" happened.
+              const label = picked.label ?? picked.name ?? byId.get(picked.gearItemId ?? '')?.name ?? 'it'
+              addEntry({ gearItemId: picked.gearItemId, name: picked.name, target: addTarget })
+              setJustAdded(
+                `Added ${label} to ${KIT_LABEL[addTarget.gt].toLowerCase()}` +
+                (addTarget.section ? ` under ${addTarget.section}` : '')
+              )
+            }}
+            onClose={() => { setAddOpen(false); setJustAdded(null) }}
+            busy={busy} run={run} input={input}
+          />
         </div>
       )}
 
@@ -1977,7 +1985,7 @@ function AddGear({
   catalog: GearItem[]
   childrenOf: Map<string, GearItem[]>
   /** What was chosen. Placing it is the caller's job — see `add` below. */
-  onPick: (picked: { gearItemId?: string | null; name?: string }) => void
+  onPick: (picked: { gearItemId?: string | null; name?: string; label?: string }) => void
   onClose: () => void
   busy: boolean
   run: (fn: () => Promise<unknown>) => void
@@ -1985,13 +1993,18 @@ function AddGear({
 }) {
   const [query, setQuery] = useState('')
   const [browsing, setBrowsing] = useState<string | null>(null)
-  const [newCategory, setNewCategory] = useState<string>(GEAR_CATEGORIES[0])
-  const [newParent, setNewParent] = useState('')
-  // A generic item named here rather than picked, same as the catalog page.
-  const [newType, setNewType] = useState<string | null>(null)
-  // Only a product has a maker, so this is asked for only once one is
-  // being made — a brand on a type is a question with no answer.
+  // No category is preselected. A select that opens on Anchors is an answer
+  // nobody gave, and the button beside it files the thing under it — new gear
+  // ended up in Anchors because the form was already holding one.
+  const [newCategory, setNewCategory] = useState<string>('')
+  // Three fields, two of them optional, instead of a select asking whether the
+  // thing is a model of something. Empty item = whatever was typed in the
+  // search box; empty brand and model = it goes in generic. Naming the same
+  // generic as one this category already holds files it under that one rather
+  // than making a second.
+  const [newGeneric, setNewGeneric] = useState('')
   const [newItemBrand, setNewItemBrand] = useState('')
+  const [newModel, setNewModel] = useState('')
 
   // Escape closes the panel — the search box has focus the moment it opens, so
   // that is where the hand already is.
@@ -2052,12 +2065,12 @@ function AddGear({
     (c.aliases ?? []).includes(query.trim().toLowerCase())
   )
 
-  function add(itemId: string | null, name?: string) {
+  function add(itemId: string | null, name?: string, label?: string) {
     // Picked, not placed. Where it goes is the next question, asked once the
     // thing being placed is known — choosing a destination for an item you have
     // not chosen yet is answering in the wrong order, and it was silent besides:
     // the row landed somewhere off screen and the panel looked untouched.
-    onPick({ gearItemId: itemId, name })
+    onPick({ gearItemId: itemId, name, label })
     setQuery('')
   }
 
@@ -2124,7 +2137,7 @@ function AddGear({
           return (
             <div key={t.id} className="flex items-start gap-2 px-2 py-1.5 rounded hover:bg-zinc-800/60">
               <button
-                onClick={() => add(t.id)}
+                onClick={() => add(t.id, undefined, t.name)}
                 disabled={busy}
                 className="min-w-0 flex-1 text-left disabled:opacity-40"
               >
@@ -2140,7 +2153,7 @@ function AddGear({
                   {models.map((m) => (
                     <button
                       key={m.id}
-                      onClick={() => add(m.id)}
+                      onClick={() => add(m.id, undefined, productName(m))}
                       disabled={busy}
                       title={`Add just the ${productName(m)}`}
                       className="text-[11px] px-1.5 py-0.5 rounded border border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500 transition-colors disabled:opacity-40"
@@ -2162,94 +2175,98 @@ function AddGear({
                 : 'Nothing matches. Add it to the catalog:'}
             </p>
             <div className="flex flex-wrap items-end gap-2">
-              {/* Category first, because it decides which types are on offer:
-                  every type in the catalog under every category was a list
-                  that never changed and so never said which of them fitted. */}
+              {/* Category first, because it decides which generics the item
+                  field offers: every type in the catalog under every category
+                  was a list that never changed and so never said which of them
+                  fitted. */}
               <div>
                 <label className="block text-[11px] text-zinc-500 mb-1">Category</label>
                 <CategorySelect
                   value={newCategory}
                   options={allCategories}
-                  allowEmpty={false}
-                  // The type picked is one of this category's, so changing
-                  // category un-picks it rather than leaving a product filed
-                  // against a type that is no longer on offer.
-                  onChange={(next) => { setNewCategory(next); setNewParent(''); setNewType(null) }}
-                  className={`${input} w-44`}
+                  emptyLabel="— pick one —"
+                  onChange={(next) => setNewCategory(next)}
+                  className={`${input} w-40`}
                 />
               </div>
               <div>
-                <label className="block text-[11px] text-zinc-500 mb-1">Generic item</label>
-                {/* Naming one here rather than picking it. Without this, the
-                    first product of something new meant leaving for the catalog
-                    page, adding the type, and coming back to a search box you
-                    had already emptied. */}
-                {newType !== null ? (
-                  <input
-                    autoFocus
-                    value={newType}
-                    onChange={(e) => setNewType(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Escape') setNewType(null) }}
-                    placeholder="New generic item"
-                    className={`${input} w-44`}
-                  />
-                ) : (
-                  <select
-                    value={newParent}
-                    onChange={(e) => {
-                      if (e.target.value === NEW_TYPE) { setNewType(''); setNewParent('') }
-                      else setNewParent(e.target.value)
-                    }}
-                    className={`${input} w-44`}
-                  >
-                    <option value="">{typesHere.length === 0 ? '— nothing here yet —' : '— none, this is a generic item —'}</option>
-                    {typesHere.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-                    <option value={NEW_TYPE}>+ New generic item…</option>
-                  </select>
-                )}
+                <label className="block text-[11px] text-zinc-500 mb-1">Item</label>
+                {/* A list, not a select: the generics this category holds are
+                    offered, and anything else can be typed. Left empty it is
+                    whatever was searched for. */}
+                <input
+                  list={`generics-${listId}`}
+                  value={newGeneric}
+                  onChange={(e) => setNewGeneric(e.target.value)}
+                  placeholder={query.trim()}
+                  className={`${input} w-40`}
+                />
+                <datalist id={`generics-${listId}`}>
+                  {typesHere.map((t) => <option key={t.id} value={t.name} />)}
+                </datalist>
               </div>
-              {(newParent || newType) && (
-                <div>
-                  <label className="block text-[11px] text-zinc-500 mb-1">Brand</label>
-                  <input
-                    value={newItemBrand}
-                    onChange={(e) => setNewItemBrand(e.target.value)}
-                    placeholder="e.g. Petzl"
-                    className={`${input} w-36`}
-                  />
-                </div>
-              )}
+              <div>
+                <label className="block text-[11px] text-zinc-500 mb-1">Brand <span className="text-zinc-600">— optional</span></label>
+                <input
+                  value={newItemBrand}
+                  onChange={(e) => setNewItemBrand(e.target.value)}
+                  placeholder="e.g. Petzl"
+                  className={`${input} w-32`}
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] text-zinc-500 mb-1">Model <span className="text-zinc-600">— optional</span></label>
+                <input
+                  value={newModel}
+                  onChange={(e) => setNewModel(e.target.value)}
+                  placeholder="e.g. Grigri"
+                  className={`${input} w-32`}
+                />
+              </div>
               <button
                 onClick={() => run(async () => {
-                  // A named generic item is created first, in this category,
-                  // and the product filed under it — two writes for what reads
-                  // as one.
-                  let parent = newParent
-                  if (newType?.trim()) {
-                    const { id } = unwrap(await upsertGearItem({
-                      name: newType.trim(), category: newCategory,
-                    }))
-                    parent = id
+                  const generic = newGeneric.trim() || query.trim()
+                  const brand = newItemBrand.trim()
+                  const model = newModel.trim()
+                  // Typing the name of a generic this category already has is
+                  // filing under it, not making a rival with the same name.
+                  const held = typesHere.find((t) => t.name.toLowerCase() === generic.toLowerCase())
+                  let picked = held?.id ?? null
+                  let label = held?.name ?? generic
+                  if (!brand && !model) {
+                    if (!picked) {
+                      picked = unwrap(await upsertGearItem({ name: generic, category: newCategory })).id
+                    }
+                  } else {
+                    // A brand or a model means a product, and a product hangs
+                    // under a generic — made here if it does not exist yet, so
+                    // what reads as one add is two writes.
+                    if (!picked) {
+                      picked = unwrap(await upsertGearItem({ name: generic, category: newCategory })).id
+                    }
+                    const named = model || generic
+                    picked = unwrap(await upsertGearItem({
+                      name: named,
+                      brand: brand || null,
+                      category: newCategory,
+                      parentId: picked,
+                    })).id
+                    label = productName({ brand: brand || null, name: named })
                   }
-                  const { id } = unwrap(await upsertGearItem({
-                    name: query,
-                    brand: parent ? newItemBrand.trim() || null : null,
-                    category: newCategory,
-                    parentId: parent || null,
-                  }))
-                  // Straight into the same staging step a catalog pick goes
-                  // through, so a brand-new item is placed by answering the
-                  // same question and lands with the same confirmation.
-                  onPick({ gearItemId: id })
-                  setNewParent(''); setNewItemBrand(''); setNewType(null)
+                  // Straight onto the list, the same as a catalog pick — the
+                  // destination was answered at the top of the panel.
+                  onPick({ gearItemId: picked, label })
+                  setQuery('')
+                  setNewCategory(''); setNewGeneric(''); setNewItemBrand(''); setNewModel('')
                 })}
-                disabled={busy}
+                disabled={busy || !newCategory || !(newGeneric.trim() || query.trim())}
+                title={newCategory ? undefined : 'Pick a category first'}
                 className="px-3 py-1.5 rounded bg-pr-red hover:bg-pr-red-dark text-white text-sm font-medium transition-colors disabled:opacity-40"
               >
-                Add “{query.trim()}”
+                Add to the catalog
               </button>
               <button
-                onClick={() => add(null, query)}
+                onClick={() => add(null, query, query.trim())}
                 disabled={busy}
                 title="Put it on this list only — nothing is added to the catalog"
                 className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
