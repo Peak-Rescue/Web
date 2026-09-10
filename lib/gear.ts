@@ -272,8 +272,12 @@ const fmtQty = (n: number): string => String(Number(n.toFixed(2)))
 // the absence of a rule — it is a unit, and the honest name for a quantity that
 // doesn't move: one radio for the course, forty feet of webbing for the course.
 export function quantityRule(each: number, perStudents: number | null): string {
-  if (perStudents === null) return each === 1 ? 'One per course' : `${fmtQty(each)} per course`
-  if (perStudents === 1) return each === 1 ? 'One each' : `${fmtQty(each)} each`
+  // A digit, not a word, at one as much as at four. "One each" beside "2 each"
+  // and "1 per 4 students" is the same column answering in two alphabets, and
+  // the eye reading down it for numbers has to stop on the one that spelled
+  // itself out.
+  if (perStudents === null) return `${fmtQty(each)} per course`
+  if (perStudents === 1) return `${fmtQty(each)} each`
   return `${fmtQty(each)} per ${perStudents} students`
 }
 
