@@ -26,8 +26,15 @@ export default function CourseGear({
   catalog,
   students,
   reviews,
+  ownsCatalog = true,
 }: {
   instanceId: string
+  /** Whether the shared gear behind these lists is this person's — the catalog
+      and the templates. False for the course's own staff, who build this
+      course's lists out of what the catalog already holds. Deleting a whole
+      list goes with it: a list is often somebody else's afternoon, and taking
+      one off a course is not the same act as taking a row off a list. */
+  ownsCatalog?: boolean
   /** Who is looking, so the editor can tell the reader of a list from the
       person who asked for a reader. Absent outside a course — a template on
       the shelf has nobody to check it. */
@@ -131,7 +138,10 @@ export default function CourseGear({
           <GearListEditor
             list={l} catalog={catalog} courseType={courseType}
             templates={templates} students={students} viewerId={viewerId}
-            onDelete={() => { if (confirm(`Delete "${l.name}"?`)) run(() => deleteGearList(l.id)) }}
+            ownsCatalog={ownsCatalog}
+            onDelete={ownsCatalog
+              ? () => { if (confirm(`Delete "${l.name}"?`)) run(() => deleteGearList(l.id)) }
+              : undefined}
             review={reviews?.[l.id]}
           />
         </section>

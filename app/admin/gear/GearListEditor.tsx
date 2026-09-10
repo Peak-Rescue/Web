@@ -121,6 +121,7 @@ export default function GearListEditor({
   review,
   viewerId,
   students,
+  ownsCatalog = true,
 }: {
   list: GearList
   catalog: GearItem[]
@@ -143,6 +144,12 @@ export default function GearListEditor({
       is a reader who did not write it — so the control appears for everyone
       else and not for them. */
   viewerId?: string | null
+  /** Whether the shared gear behind this list is this person's to change: the
+      catalog every course draws on, and the templates on the shelf. Course
+      staff build their own list out of what the catalog already holds — what
+      outlives the course stays admin's, and the controls for it are taken
+      away rather than left to refuse on click. */
+  ownsCatalog?: boolean
 }) {
   // Rows are drawn here first and the server is caught up afterwards, so the
   // catching up waits until the clicking stops and holds the page still while
@@ -634,8 +641,14 @@ export default function GearListEditor({
           Print was a row of its own, the template controls a block at the foot,
           the name and Delete somewhere above both — four verbs at three
           different heights, the last of them thirty rows down the page. They
-          belong to the list, so the list's editor draws them. */}
-      {onDelete && (
+          belong to the list, so the list's editor draws them.
+
+          Drawn for a course's own list, which is the one that has them. A
+          template on the shelf is opened from a row that draws its own header,
+          and would get two. This used to ask whether it had been handed an
+          onDelete, which was the same question until Delete became a thing not
+          everyone editing a list can do. */}
+      {!list.is_template && (
         <div className="flex items-center gap-2 flex-wrap">
           {/* The name is a field, because a list is very often a copy.
               Starting from a saved template is the ordinary way to build one —
@@ -712,21 +725,25 @@ export default function GearListEditor({
             )}
           </span>
           <PdfLink href={`/api/gear-lists/${list.id}/pdf`} label="Print" />
-          <button
-            onClick={() => setShelfOpen((v) => !v)}
-            className={`text-xs px-2 py-1 rounded transition-colors ${
-              shelfOpen ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:text-white'
-            }`}
-          >
-            Save as template
-          </button>
-          <button
-            onClick={onDelete}
-            disabled={busy}
-            className="text-xs px-2 py-1 rounded text-zinc-600 hover:text-red-400 transition-colors disabled:opacity-40"
-          >
-            Delete
-          </button>
+          {ownsCatalog && (
+            <button
+              onClick={() => setShelfOpen((v) => !v)}
+              className={`text-xs px-2 py-1 rounded transition-colors ${
+                shelfOpen ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:text-white'
+              }`}
+            >
+              Save as template
+            </button>
+          )}
+          {onDelete && (
+            <button
+              onClick={onDelete}
+              disabled={busy}
+              className="text-xs px-2 py-1 rounded text-zinc-600 hover:text-red-400 transition-colors disabled:opacity-40"
+            >
+              Delete
+            </button>
+          )}
         </div>
       )}
 
@@ -841,6 +858,7 @@ export default function GearListEditor({
 
           <AddGear
             listId={list.id}
+            ownsCatalog={ownsCatalog}
             catalog={known}
             childrenOf={childrenOf}
             onPick={(picked) => {
@@ -881,7 +899,7 @@ export default function GearListEditor({
           drag, setDrag, over, setOver, onDrop: drop, apply, onRow, addEntry,
           joining, setJoining, joinOnto, overRow, onRowPointerDown,
           instanceId: list.instance_id, busy, run, input, join,
-          students: packFor, ratioFor, setRatioFor, setRatio,
+          students: packFor, ratioFor, setRatioFor, setRatio, ownsCatalog,
         }
         return (
           <div key={gt}>
@@ -966,7 +984,7 @@ export default function GearListEditor({
           four controls and a select, wider than the add control and louder than
           the list. It is a thing you do once, if ever, so it waits behind its
           own word in the header. */}
-      {!onDelete && !list.is_template && (
+      {!onDelete && !list.is_template && ownsCatalog && (
         <SaveToShelf
           list={list} templates={templates ?? []} courseType={courseType}
           busy={busy} run={run} input={input}
@@ -1026,6 +1044,9 @@ type Shared = {
   ratioFor: string | null
   setRatioFor: (id: string | null) => void
   setRatio: (rowId: string, rule: { each: number; perStudents: number | null } | null) => void
+  // Whether the catalog behind the list is this person's to write to. See the
+  // editor's own prop.
+  ownsCatalog: boolean
 }
 
 // The handlers that make one gap a drop zone. A row's own gap has to win over
@@ -1175,6 +1196,7 @@ function SectionCard({
                   busy={s.busy} run={s.run} input={s.input} noteItems={s.noteItems}
                   students={s.students} ratioFor={s.ratioFor}
                   setRatioFor={s.setRatioFor} setRatio={s.setRatio}
+                  ownsCatalog={s.ownsCatalog}
                 />
               </div>
             ) : (
@@ -1385,6 +1407,7 @@ function SetBlock({
                     busy={s.busy} run={s.run} input={s.input} noteItems={s.noteItems}
                     students={s.students} ratioFor={s.ratioFor}
                     setRatioFor={s.setRatioFor} setRatio={s.setRatio}
+                    ownsCatalog={s.ownsCatalog}
                   />
                 </Fragment>
               ))}
@@ -1399,7 +1422,7 @@ function SetBlock({
 function Row({
   e, editingOptions, setEditingOptions, dragging, isJoinTarget, joining, setJoining, joinOnto,
   onPointerDown, apply, onRow, instanceId, busy, run, input, card, noteItems,
-  students, ratioFor, setRatioFor, setRatio,
+  students, ratioFor, setRatioFor, setRatio, ownsCatalog,
 }: {
   e: GearEntry & { r: { name: string; note: string | null; url: string | null; section: string | null; catalogItem?: GearItem; options: GearItem[]; models: GearItem[] } }
   editingOptions: ProductPanel | null
@@ -1423,6 +1446,7 @@ function Row({
   ratioFor: string | null
   setRatioFor: (id: string | null) => void
   setRatio: (rowId: string, rule: { each: number; perStudents: number | null } | null) => void
+  ownsCatalog: boolean
   // A slot of a multi-slot line draws as a card, so the slots read as peers
   // sitting beside each other rather than as a run of separate requirements.
   // The operator is drawn between the cards by whatever holds them.
@@ -1896,11 +1920,18 @@ function Row({
         return (
           <div className="relative mt-2 p-2 pr-8 bg-zinc-900 rounded border border-zinc-800 space-y-2">
             <p className="text-[11px] text-zinc-500">
+              {/* What there is to do here, which is not the same question for
+                  someone who can write the catalog and someone who can only
+                  choose from it. */}
               {e.r.models.length === 0
-                ? `The catalog has no models of ${type.name.toLowerCase()} yet. Name the one you recommend.`
+                ? ownsCatalog
+                  ? `The catalog has no models of ${type.name.toLowerCase()} yet. Name the one you recommend.`
+                  : `The catalog has no models of ${type.name.toLowerCase()} yet, so this line stands as written.`
                 : rest.length > 0
                   ? 'Recommend a model. Recommend none and any one of them is fine.'
-                  : 'Every model in the catalog is already recommended. Add another below.'}
+                  : ownsCatalog
+                    ? 'Every model in the catalog is already recommended. Add another below.'
+                    : 'Every model in the catalog is already recommended.'}
             </p>
             {rest.length > 0 && (
               <div className="flex flex-wrap gap-1.5">
@@ -1915,30 +1946,32 @@ function Row({
                 ))}
               </div>
             )}
-            <div className="flex items-center gap-2">
-              <input
-                value={newModel}
-                onChange={(ev) => setNewModel(ev.target.value)}
-                onKeyDown={(ev) => { if (ev.key === 'Enter' && newModel.trim()) addNew() }}
-                placeholder={`New ${type.name.toLowerCase()} — e.g. RollClip`}
-                className={`flex-1 min-w-0 ${input}`}
-              />
-              <input
-                value={newBrand}
-                onChange={(ev) => setNewBrand(ev.target.value)}
-                onKeyDown={(ev) => { if (ev.key === 'Enter' && newModel.trim()) addNew() }}
-                placeholder="Brand — e.g. Petzl"
-                className={`w-36 shrink-0 ${input}`}
-              />
-              <button
-                onClick={addNew}
-                disabled={busy || !newModel.trim()}
-                title="Adds it to the gear catalog and puts it on this line"
-                className="shrink-0 text-xs px-2 py-1.5 rounded bg-pr-red hover:bg-pr-red-dark text-white transition-colors disabled:opacity-40"
-              >
-                Add to gear catalog
-              </button>
-            </div>
+            {ownsCatalog && (
+              <div className="flex items-center gap-2">
+                <input
+                  value={newModel}
+                  onChange={(ev) => setNewModel(ev.target.value)}
+                  onKeyDown={(ev) => { if (ev.key === 'Enter' && newModel.trim()) addNew() }}
+                  placeholder={`New ${type.name.toLowerCase()} — e.g. RollClip`}
+                  className={`flex-1 min-w-0 ${input}`}
+                />
+                <input
+                  value={newBrand}
+                  onChange={(ev) => setNewBrand(ev.target.value)}
+                  onKeyDown={(ev) => { if (ev.key === 'Enter' && newModel.trim()) addNew() }}
+                  placeholder="Brand — e.g. Petzl"
+                  className={`w-36 shrink-0 ${input}`}
+                />
+                <button
+                  onClick={addNew}
+                  disabled={busy || !newModel.trim()}
+                  title="Adds it to the gear catalog and puts it on this line"
+                  className="shrink-0 text-xs px-2 py-1.5 rounded bg-pr-red hover:bg-pr-red-dark text-white transition-colors disabled:opacity-40"
+                >
+                  Add to gear catalog
+                </button>
+              </div>
+            )}
           </div>
         )
       })()}
@@ -2053,9 +2086,10 @@ function SaveToShelf({
 // where an item lands and the panel stays open across adds — filling a section
 // means adding six things to it, not confirming the destination six times.
 function AddGear({
-  listId, catalog, childrenOf, onPick, onClose, busy, run, input,
+  listId, catalog, childrenOf, onPick, onClose, busy, run, input, ownsCatalog,
 }: {
   listId: string
+  ownsCatalog: boolean
   catalog: GearItem[]
   childrenOf: Map<string, GearItem[]>
   /** What was chosen. Placing it is the caller's job — see `add` below.
@@ -2245,7 +2279,18 @@ function AddGear({
           )
         })}
 
-        {query.trim() && !exact && (
+        {/* Nothing found, and no catalog to write: say where the missing gear
+            comes from rather than leaving a search that ends in silence. The
+            catalog is deliberately not everyone's to add to — see the
+            editor's ownsCatalog — so this is the door out of that. */}
+        {query.trim() && !exact && !ownsCatalog && (
+          <p className="px-2 py-2 border-t border-zinc-800 text-[11px] text-zinc-500">
+            Nothing in the catalog matches. Ask an admin to add it, and it will
+            be here for every course.
+          </p>
+        )}
+
+        {query.trim() && !exact && ownsCatalog && (
           <div className="px-2 py-2 border-t border-zinc-800 space-y-2">
             <p className="text-[11px] text-zinc-500">
               {matches.length > 0

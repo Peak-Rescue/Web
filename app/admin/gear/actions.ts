@@ -1,19 +1,46 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { GEAR_ENTRIES_COPY_SELECT, type Joiner } from '@/lib/gear'
 import { templateOffering } from '@/lib/library'
+import { requireAdminUser, requireCourseStaff, requireStaffOfCourse } from '@/lib/course-access'
 
 async function requireAdmin() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) throw new Error('Not authenticated')
-  const admin = createAdminClient()
-  const { data: profile } = await admin.from('profiles').select('role').eq('id', user.id).single()
-  if (profile?.role !== 'admin') throw new Error('Not authorized')
+  const { admin } = await requireAdminUser()
   return admin
+}
+
+// Who may change a gear list, decided by what the list is. A course's own list
+// belongs to the people running that course — they are the ones who know what
+// this delivery is carrying — while a template on the shelf is every future
+// course's, and stays admin's.
+//
+// The list's course is read here rather than taken from the caller's
+// `instanceId`, which the editor passes for revalidation and nothing else.
+async function requireListWriter(listId: string) {
+  const admin = createAdminClient()
+  const { data } = await admin.from('gear_lists').select('instance_id, is_template').eq('id', listId).single()
+  if (!data) throw new Error('That list no longer exists')
+  const instanceId = (data.is_template ? null : data.instance_id) as string | null
+  await requireStaffOfCourse(instanceId)
+  return { admin, instanceId }
+}
+
+// The same question asked of a row: the row's list decides, so a row is only
+// yours if the list under it is.
+async function requireEntryWriter(entryId: string) {
+  const admin = createAdminClient()
+  const { data } = await admin
+    .from('gear_list_entries')
+    .select('list_id, gear_lists(instance_id, is_template)')
+    .eq('id', entryId)
+    .single()
+  if (!data) throw new Error('That row no longer exists')
+  const list = data.gear_lists as unknown as { instance_id: string | null; is_template: boolean } | null
+  const instanceId = (list?.is_template ? null : list?.instance_id ?? null) as string | null
+  await requireStaffOfCourse(instanceId)
+  return { admin, instanceId, listId: data.list_id as string }
 }
 
 function touch(instanceId?: string | null) {
@@ -199,15 +226,19 @@ export async function createGearList(input: {
   courseType?: string | null
   isTemplate?: boolean
 }) {
-  const admin = await requireAdmin()
+  // A list for a course is that course's staff to start; a template is not.
+  const isTemplate = input.isTemplate ?? false
+  const { admin } = isTemplate || !input.instanceId
+    ? await requireAdminUser()
+    : await requireCourseStaff(input.instanceId)
   const { data, error } = await admin
     .from('gear_lists')
     .insert({
       name: input.name.trim().slice(0, 120) || 'Gear list',
       audience: input.audience,
       instance_id: input.instanceId ?? null,
-      course_type: input.isTemplate ? templateOffering(input.courseType) : input.courseType ?? null,
-      is_template: input.isTemplate ?? false,
+      course_type: isTemplate ? templateOffering(input.courseType) : input.courseType ?? null,
+      is_template: isTemplate,
     })
     .select('id')
     .single()
@@ -233,7 +264,7 @@ export async function updateGearList(
     students?: number | null
   }
 ) {
-  const admin = await requireAdmin()
+  const { admin } = await requireListWriter(id)
   const update: Record<string, unknown> = { updated_at: new Date().toISOString() }
   if (patch.students !== undefined) {
     const n = patch.students === null ? null : Math.floor(Number(patch.students))
@@ -291,7 +322,7 @@ export async function addGearEntry(
     beforeId?: string | null
   }
 ) {
-  const admin = await requireAdmin()
+  const { admin } = await requireListWriter(listId)
 
   // A row starts with no note. Anything to say about the item on *this*
   // course is typed onto the row afterwards — the catalog holds no notes to
@@ -388,7 +419,7 @@ export async function updateGearEntry(
   },
   instanceId?: string | null
 ) {
-  const admin = await requireAdmin()
+  const { admin } = await requireEntryWriter(id)
   const update: Record<string, unknown> = {}
   for (const [k, v] of Object.entries({
     name: patch.name, note: patch.note,
@@ -438,7 +469,7 @@ export async function setGearEntryOptions(
   gearItemIds: string[],
   instanceId?: string | null
 ) {
-  const admin = await requireAdmin()
+  const { admin } = await requireEntryWriter(entryId)
   await admin.from('gear_entry_options').delete().eq('entry_id', entryId)
   const ids = [...new Set(gearItemIds)]
   if (ids.length) {
@@ -465,7 +496,7 @@ export async function renameGearSection(
   from: string,
   to: string
 ) {
-  const admin = await requireAdmin()
+  const { admin } = await requireListWriter(listId)
   const next = to.trim()
   if (!next) throw new Error('Give the section a name')
   if (next === from) return
@@ -490,7 +521,7 @@ export async function ungroupGearSection(
   groupType: 'personal' | 'group',
   section: string
 ) {
-  const admin = await requireAdmin()
+  const { admin } = await requireListWriter(listId)
   const { error } = await admin
     .from('gear_list_entries')
     .update({ section: null })
@@ -511,7 +542,7 @@ export async function removeGearSection(
   groupType: 'personal' | 'group',
   section: string
 ) {
-  const admin = await requireAdmin()
+  const { admin } = await requireListWriter(listId)
   const { error } = await admin
     .from('gear_list_entries')
     .delete()
@@ -541,17 +572,22 @@ export async function moveGearEntry(
     joinedAbove?: Joiner | null
   }
 ) {
-  const admin = await requireAdmin()
+  const { admin } = await requireListWriter(listId)
 
   // Where it is leaving from, read before anything moves. The row that followed
   // it is joined to a neighbour that is about to be somewhere else, so that
   // seam is broken rather than left to re-point at whatever slides up into the
   // gap.
+  //
+  // Its list is read with it: a drag only ever rearranges one list, so a row
+  // from somewhere else arriving here is not a move, and the list is the thing
+  // the permission was granted against.
   const { data: was } = await admin
     .from('gear_list_entries')
-    .select('group_type, section, sort_order')
+    .select('list_id, group_type, section, sort_order')
     .eq('id', entryId)
     .single()
+  if (was && was.list_id !== listId) throw new Error('That row is on another list')
   if (was) {
     await breakSeamBelow(admin, {
       listId,
@@ -633,7 +669,7 @@ export async function setGearJoiner(
   joiner: Joiner | null,
   instanceId?: string | null
 ): Promise<Failed | void> {
-  const admin = await requireAdmin()
+  const { admin } = await requireEntryWriter(entryId)
 
   const { data: row } = await admin
     .from('gear_list_entries')
@@ -668,7 +704,7 @@ export async function setGearJoiner(
 }
 
 export async function removeGearEntry(id: string, instanceId?: string | null) {
-  const admin = await requireAdmin()
+  const { admin } = await requireEntryWriter(id)
   // Read where it sits before it goes: the row below is joined to this one by
   // position, and once it is deleted there is nothing left to ask.
   const { data } = await admin
@@ -733,10 +769,23 @@ export async function copyGearList(
   sourceId: string,
   target: { instanceId?: string | null; isTemplate?: boolean; name?: string; courseType?: string | null }
 ) {
-  const admin = await requireAdmin()
+  // Where the copy lands decides who may make it: onto a course, its staff;
+  // onto the shelf as a template, admin.
+  const { admin } = target.isTemplate || !target.instanceId
+    ? await requireAdminUser()
+    : await requireCourseStaff(target.instanceId)
 
-  const { data: src } = await admin.from('gear_lists').select(SOURCE_SELECT).eq('id', sourceId).single()
+  const { data: src } = await admin
+    .from('gear_lists')
+    .select(`is_template, instance_id, ${SOURCE_SELECT}`)
+    .eq('id', sourceId)
+    .single()
   if (!src) throw new Error('List not found')
+  // Starting from a template is the whole point of the shelf, so any staff who
+  // may write the target may read one. Copying another *course's* list is a
+  // different act — that list is somebody's delivery, not a shared starting
+  // point — so it asks to be on that course as well.
+  if (!src.is_template) await requireStaffOfCourse(src.instance_id as string | null)
 
   const { data: created, error } = await admin
     .from('gear_lists')

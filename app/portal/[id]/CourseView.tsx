@@ -228,7 +228,9 @@ export default async function CourseView({
     ? admin.from('venues').select('id, name, region, region_code, client_name, notes, active').order('name')
     : Promise.resolve({ data: null }))
 
-  const gearSetupPromise = keep(showAsAdmin
+  // The catalog and the shelf, for whoever is building this course's lists.
+  // Staff, not admins alone, since the people running the course pack it.
+  const gearSetupPromise = keep(showTasks
     ? Promise.all([
         admin.from('gear_lists')
           .select(`id, name, audience, intro, students, updated_at, review_requested_at, review_requested_by, reviewed_at, review_note, reviewed_by, review_flagged_at, review_flagged_by, instance_id, is_template, ${GEAR_ENTRIES_SELECT}`)
@@ -749,10 +751,8 @@ export default async function CourseView({
   const { data: venueRows } = await venuesPromise
   const coursePocs = parseContacts(inst.contacts)
 
-  // Building the gear list is admin work — instructors read it and take it to
-  // the trailhead, they don't assemble it — so this is the one editor gated on
-  // being an admin rather than on being staff. Loaded only then: the catalog
-  // is every item we own, and a student's page has no use for it.
+  // Loaded for staff only: the catalog is every item we own, and a student's
+  // page has no use for it.
   const [{ data: gearListRows }, { data: gearCatalogRows }, { data: gearTemplateRows }] = await gearSetupPromise
 
   const gearTemplateOptions = ((gearTemplateRows ?? []) as unknown as {
@@ -962,11 +962,11 @@ export default async function CourseView({
   // is one nobody can put contents into.
   const hasCurriculum = orderedModules.length > 0 || showTasks
   const hasGear = gearVisible.length > 0
-  // An admin gets the section with no list in it, because that is where the
-  // first one is made. Same trap the schedule and the waiver had: a course
-  // created this morning has none of these, and a section that only appears
-  // once it has contents is one nobody can put contents into.
-  const showGear = hasGear || showAsAdmin
+  // Staff get the section with no list in it, because that is where the first
+  // one is made. Same trap the schedule and the waiver had: a course created
+  // this morning has none of these, and a section that only appears once it
+  // has contents is one nobody can put contents into.
+  const showGear = hasGear || showTasks
   // Staff get the section whether or not anything is in it: it is where the
   // first resource and the first file get added, and a section that appears
   // only once it has contents is one nobody can put contents into.
@@ -1869,10 +1869,17 @@ export default async function CourseView({
                 pointer for that reason, and the fields that would silently
                 change a number are the ones that ask twice.
 
-                Admin-only, unlike every other editor on this page: assembling a
-                gear list is not something an instructor was ever meant to deal
-                with, and the toggle should show that by taking it away. */}
-            {showAsAdmin ? (
+                This was admin-only, on the reasoning that assembling a gear
+                list is not something an instructor was ever meant to deal with.
+                In practice the person who knows what this delivery is carrying
+                is the one running it, and every request to change a row came
+                through an admin who then had to go and find the list. So it is
+                staff's, like the curriculum beside it — with one line held
+                back. What an instructor builds here is *this course's* list:
+                the catalog every course draws on, the templates on the shelf,
+                and deleting a list outright stay ours, and the controls for
+                them are simply not drawn rather than refusing on click. */}
+            {showTasks ? (
               <CourseGear
                 instanceId={id}
                 viewerId={viewer.userId}
@@ -1882,6 +1889,7 @@ export default async function CourseView({
                 templates={gearTemplateOptions}
                 catalog={(gearCatalogRows ?? []) as unknown as React.ComponentProps<typeof CourseGear>['catalog']}
                 reviews={reviews}
+                ownsCatalog={showAsAdmin}
               />
             ) : (
               <>
