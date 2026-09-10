@@ -378,9 +378,18 @@ export default function MeetingDetails({
         <div className="flex items-center gap-3 flex-wrap">
           {/* The way into the only editable thing in this block, so it looks
               like something you press. As bare grey text it read as a caption
-              and sat at a different spot depending on how much was above it. */}
+              and sat at a different spot depending on how much was above it.
+
+              There was a "Tell the course" beside it, for details filled in on
+              the admin screen or saved here without telling anyone. It opened
+              this same box with the same tick already on, so the two buttons
+              were one button drawn twice — and two ways in invite the question
+              of what the other one does. Telling them is the tick inside, and
+              it is on every time this opens: a plan nobody has been told about
+              is what this block exists to prevent, so the quiet save stays the
+              one you have to ask for. */}
           <button
-            onClick={() => { setResult(null); setEditing(true) }}
+            onClick={() => { setResult(null); setTell(true); setEditing(true) }}
             className="inline-flex items-center gap-1.5 rounded border border-zinc-700 px-2 py-1 text-[11px] text-zinc-300 hover:text-white hover:border-zinc-500 transition-colors"
           >
             <svg
@@ -402,18 +411,6 @@ export default function MeetingDetails({
             </svg>
             {isSet ? 'Edit meeting details' : 'Add meeting details'}
           </button>
-          {/* For details set some other time and never announced — filled in
-              on the admin screen, or saved here without telling anyone. Opens
-              the same box: there is one screen for the plan and the message
-              about it, whichever of the two you came for. */}
-          {isSet && (
-            <button
-              onClick={() => { setResult(null); setTell(true); setEditing(true) }}
-              className="text-[11px] text-zinc-500 hover:text-white transition-colors"
-            >
-              Tell the course
-            </button>
-          )}
           {result && <span className="text-[11px] text-zinc-500">{result}</span>}
           {error && <span className="text-[11px] text-pr-red">{error}</span>}
         </div>
