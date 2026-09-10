@@ -25,9 +25,11 @@ export function meetingDayLabel(
 
 // Whether the meeting day is behind us.
 //
-// Where to meet is the most important thing on the page right up until the
-// moment everyone has met, and dead weight from then on — so the block that
-// carries it folds itself away once that day is over.
+// A day is the most important thing on the page right up until the moment it
+// is over, and dead weight from then on — so the day card folds itself away
+// once that day has passed, carrying its morning and its beta with it. This is
+// the only date-driven fold on a schedule: the blocks inside a day no longer
+// keep one of their own.
 //
 // Over, not started: the old test folded the block at midnight *on* the
 // morning of, which is the hour it exists for. And it read the course start
@@ -86,6 +88,10 @@ export type DayMeeting = {
   /** Getting there first, then the descent: the meetup's driving pin and gate
       code, then the canyon's Ropewiki, Mountain Project and gauge. */
   links: MeetingLink[]
+  /** The winning meetup's own links, without the canyon's. The portal draws
+      the two rows in two places — the driving pin belongs to the morning and
+      the gauge belongs to the descent — so it needs the halves apart. */
+  pointLinks: MeetingLink[]
   siteName: string | null
 }
 
@@ -136,6 +142,7 @@ export function resolveDayMeeting(
     usualTime: trim(site?.usual_meeting_time),
     coords: chosen?.meetup ? trim(chosen.meetup.coords) : null,
     links: [...(chosen?.meetup?.links ?? []), ...(site?.links ?? [])],
+    pointLinks: chosen?.meetup?.links ?? [],
     siteName: trim(site?.name),
   }
 }

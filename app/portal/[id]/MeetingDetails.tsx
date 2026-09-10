@@ -34,6 +34,7 @@ export default function MeetingDetails({
   meetingPoint,
   meetingTime,
   links,
+  inheritedLinks = [],
   files,
   canEdit,
   notifyCounts,
@@ -61,6 +62,12 @@ export default function MeetingDetails({
       the announcement about it — a day later the announcement is somewhere
       down the updates feed. */
   links: MeetingLink[]
+  /** The meetup's own pins — the driving link, the gate-code page — written
+      once on the meetup and shown on every day that meets there. Kept apart
+      from `links` because those are this day's and get saved back to it: fold
+      an inherited pin into the draft and editing the morning quietly copies
+      the meetup's links onto the day, where correcting them stops reaching. */
+  inheritedLinks?: MeetingLink[]
   /** Signed on the server: the bucket is private. */
   files: MeetingFile[]
   canEdit: boolean
@@ -69,19 +76,20 @@ export default function MeetingDetails({
       announcement for one of them a correction rather than the plan arriving.
       Empty for anyone who can't post. */
   announcedDates: string[]
-  /** Fold to a single line. Two reasons, one behaviour: the day is behind us
-      and everyone has met, or it is a later day on a schedule where only the
-      next morning is worth having open. The line still says what the plan is,
-      so folding costs a click rather than the answer. */
+  /** Fold to a single line — now only for a day with nothing on it, where the
+      line is a way in for staff rather than an announcement that nobody knows
+      where to go. Days ahead used to fold too, so that only the next morning
+      stood open; that hid plans people had come to read, and a day behind us
+      is already folded away whole by the day card around this one. */
   folded: boolean
 }) {
   const router = useRouter()
   const [editing, setEditing] = useState(false)
   const [open, setOpen] = useState(!folded)
-  // Folding is a fact about the date, not a preference, so it is re-decided
-  // whenever the date crosses that line: set the plan for a day still ahead
-  // and the block opens itself back up rather than staying shut on the answer
-  // that was just written. Between crossings the toggle is the reader's.
+  // Whether there is anything here is a fact, not a preference, so it is
+  // re-decided when that changes: fill in an empty morning and the block opens
+  // itself onto the answer just written rather than staying shut on it. Either
+  // side of that, the toggle is the reader's.
   const [foldedFor, setFoldedFor] = useState(folded)
   if (folded !== foldedFor) {
     setFoldedFor(folded)
@@ -124,7 +132,13 @@ export default function MeetingDetails({
   // pointing at a known place does not read as "nobody knows where to go".
   const shownPoint = meetingPoint || inheritedPoint || null
   const inherited = !meetingPoint && Boolean(inheritedPoint)
-  const isSet = Boolean(shownPoint || meetingTime || links.length || files.length)
+  // The morning's pins, this day's first and the meetup's after — and never
+  // the same URL twice, for the day that overrode a meetup link by retyping it.
+  const shownLinks = [
+    ...links,
+    ...inheritedLinks.filter((l) => !links.some((own) => own.url === l.url)),
+  ]
+  const isSet = Boolean(shownPoint || meetingTime || shownLinks.length || files.length)
   const day = meetingDayLabel(meetingDate, null)
   // Which day the announcement will be about, and whether these people have
   // heard about that day already — read from the field being edited, so the
@@ -284,7 +298,7 @@ export default function MeetingDetails({
   // The pin sits under the two boxes, not inside the prose: a URL typed into
   // the meeting point is unclickable text, and on a phone at 0855 what you
   // want is something to tap.
-  const pins = <ChipRow links={links} files={files} />
+  const pins = <ChipRow links={shownLinks} files={files} />
 
   const readout = isSet ? (
     <div className="space-y-3">

@@ -72,6 +72,19 @@ describe('resolveDayMeeting', () => {
     expect(m.links.map((l) => l.label)).toEqual(['driving pin', 'ropewiki'])
   })
 
+  // The portal draws these two rows in two places: the driving pin sits with
+  // the morning, the gauge sits with the beta. A merged list is how the pin
+  // ended up nowhere at all.
+  it('keeps the meetup’s own links apart from the canyon’s', () => {
+    const m = resolveDayMeeting({}, site)
+    expect(m.pointLinks.map((l) => l.label)).toEqual(['driving pin'])
+  })
+
+  it('reports no pins when the winning answer is the day’s own words', () => {
+    const m = resolveDayMeeting({ meeting_point: 'Meet at the shop' }, { ...site, meeting_points: null })
+    expect(m.pointLinks).toEqual([])
+  })
+
   it('treats whitespace as unset', () => {
     const m = resolveDayMeeting({ meeting_point: '   ', meeting_time: '  ' }, null, null)
     expect(m.point).toBeNull()

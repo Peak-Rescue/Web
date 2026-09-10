@@ -1172,17 +1172,18 @@ export default async function CourseView({
   const { data: daySignedRows } = await daySignedPromise
   const daySignedByPath = new Map((daySignedRows ?? []).map((r) => [r.path, r.signedUrl]))
 
-  // Today's morning and tomorrow's stand open; everything else folds to its
-  // one-line summary. The afternoon before is when people start thinking about
-  // where they are going, so a plan that only opens on the day itself opens
-  // too late — and eight open meeting blocks down one page is how the one that
-  // matters stops being findable.
-  // On the clock where the course runs, not the server's. Read from the
-  // server's own clock this rolled over at 6pm in the canyon — folding away
-  // the morning of the day people were still teaching — and at 2pm in Hawaii.
+  // Which day it is where the course runs, not where the server is. Read from
+  // the server's own clock this rolled over at 6pm in the canyon and at 2pm in
+  // Hawaii, which is a day ahead of everyone standing in it.
+  //
+  // There was a second fold inside each day here — the morning and the route
+  // beta stood open today and tomorrow and collapsed the rest of the week, on
+  // the grounds that eight open meeting blocks make the one that matters
+  // unfindable. But the day itself already folds once it is behind us, so a
+  // block that folds a day *ahead* only ever hides a plan someone came to
+  // read. One fold per day, on the day, and what is still ahead stays open.
   const todayISO = todayIn(courseZone(inst.region))
   const tomorrowISO = dayShift(todayISO, 1)
-  const isOpenDay = (d: string | null) => d === todayISO || d === tomorrowISO
 
 
   // An admin sees the section whether or not a waiver is set — choosing one
@@ -2331,8 +2332,10 @@ export default async function CourseView({
                     {/* Days already behind us fold to a line, so a five-day
                         course reads as today plus what is still ahead. The cut
                         is local midnight — "is that day behind us" is a
-                        question about the calendar, not the hour — which is
-                        the same test the meeting block folds on.
+                        question about the calendar, not the hour — and it is
+                        the only date this schedule folds on: the morning and
+                        the beta inside a day ride on this one rather than
+                        keeping tests of their own.
 
                         A day with no date can't be behind anything, so a
                         schedule longer than its course stays open. */}
@@ -2442,7 +2445,7 @@ export default async function CourseView({
                       const m = resolveDayMeeting(d, d.sites)
                       const date = dayDate
                       const own = Boolean(d.meeting_time || d.meeting_point || (d.meeting_links ?? []).length || (d.meeting_attachments ?? []).length)
-                      const empty = !own && !m.point
+                      const empty = !own && !m.point && !m.pointLinks.length
                       // Staff get the block on every day, because setting a
                       // morning is the only way to set one — the editor no
                       // longer carries those fields, so a day that renders
@@ -2478,6 +2481,11 @@ export default async function CourseView({
                             meetingPoint={d.meeting_point}
                             meetingTime={d.meeting_time}
                             links={d.meeting_links ?? []}
+                            // The meetup's driving pin, shown on every day
+                            // that meets there. Only the meetup's — the
+                            // canyon's own links have their row further down,
+                            // beside the beta they belong to.
+                            inheritedLinks={m.pointLinks}
                             files={(d.meeting_attachments ?? []).map((a) => ({
                               ...a,
                               url: daySignedByPath.get(a.path) ?? '#',
@@ -2487,8 +2495,9 @@ export default async function CourseView({
                             announcedDates={showTasks ? ((inst.meeting_announced_dates as string[] | null) ?? []) : []}
                             // An empty day never opens itself: it is a way
                             // in, not an announcement that nobody knows where
-                            // to go.
-                            folded={empty || !isOpenDay(date)}
+                            // to go. Every day that has one shows it — a day
+                            // behind us is already folded away whole.
+                            folded={empty}
                           />
                           </div>
                         </div>
@@ -2512,17 +2521,18 @@ export default async function CourseView({
                           <circle cx="18" cy="5" r="3" />
                           <path d="M9 19h4a4 4 0 0 0 0-8h-2a4 4 0 0 1 0-8h4" />
                         </svg>
-                        {/* Folded on the same rhythm as the morning above it:
-                            open today and tomorrow, a single line the rest of
-                            the week. The two are read together — where we are
-                            meeting and what we are dropping into — so one of
-                            them standing open while the other collapses makes a
-                            day look half-answered.
+                        {/* Open on the same rhythm as the morning above it —
+                            which is to say always, on any day still ahead. The
+                            two are read together, where we are meeting and
+                            what we are dropping into, so one of them standing
+                            open while the other collapses makes a day look
+                            half-answered.
 
-                            A <details> rather than state: this is a server
-                            component, and the browser already knows how to open
-                            and close a disclosure. */}
-                        <details open={isOpenDay(dayDates[di])} className="group flex-1 min-w-0">
+                            Still a <details>: this is a server component, the
+                            browser already knows how to open and close a
+                            disclosure, and a reader who wants the beta out of
+                            the way can put it away. */}
+                        <details open className="group flex-1 min-w-0">
                           <summary className="cursor-pointer list-none flex items-center gap-2 text-xs text-zinc-500 hover:text-zinc-300 transition-colors">
                             <span aria-hidden className="text-zinc-600 shrink-0 inline-block transition-transform group-open:rotate-90">▸</span>
                             <span className="font-medium text-zinc-400 shrink-0">Route</span>
