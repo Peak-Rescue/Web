@@ -3,12 +3,11 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { after } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { contactsFromForm } from '@/lib/contacts'
 import { syncCourseCalendar, removeCourseEvent } from '@/lib/google-calendar'
 import { isValidRegion } from '@/lib/regions'
-import { requireCourseStaff } from '@/lib/course-access'
+import { requireAdminUser, requireCourseStaff } from '@/lib/course-access'
 import { sendMail } from '@/lib/mailer'
 import { announcesChanges, emailAdminsNewCourse } from '@/lib/course-notify'
 import { clampOffDays, dayShift, strokeOffDays, type OffSpan } from '@/lib/courses'
@@ -161,18 +160,37 @@ async function resyncSlug(admin: ReturnType<typeof createAdminClient>, id: strin
 }
 
 async function requireAdmin() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) throw new Error('Not authenticated')
-
-  const { data: profile } = await createAdminClient()
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single()
-
-  if (profile?.role !== 'admin') throw new Error('Not authorized')
+  const { user } = await requireAdminUser()
   return user
+}
+
+// Staff of the course a section belongs to, with the course read from the
+// section rather than from the caller. The editor sends both — the row to
+// change and the course whose pages to rebuild — and only the first of those
+// is a fact about the row. Without this, "staff of this course" is a test
+// anyone passes by naming a course they do run while pointing at a section
+// they don't.
+async function requireModuleStaff(moduleId: string) {
+  const admin = createAdminClient()
+  const { data } = await admin.from('course_modules').select('instance_id').eq('id', moduleId).single()
+  if (!data) throw new Error('That section no longer exists')
+  await requireCourseStaff(data.instance_id as string)
+  return { admin, instanceId: data.instance_id as string }
+}
+
+// The same question asked of an item: its section decides.
+async function requireItemStaff(itemId: string) {
+  const admin = createAdminClient()
+  const { data } = await admin
+    .from('course_items')
+    .select('module_id, course_modules(instance_id)')
+    .eq('id', itemId)
+    .single()
+  if (!data) throw new Error('That item no longer exists')
+  const mod = data.course_modules as unknown as { instance_id: string } | null
+  if (!mod) throw new Error('That item no longer exists')
+  await requireCourseStaff(mod.instance_id)
+  return { admin, instanceId: mod.instance_id }
 }
 
 export async function createInstance(formData: FormData) {
@@ -610,7 +628,7 @@ export async function addModule(instanceId: string, formData: FormData) {
 }
 
 export async function deleteModule(instanceId: string, moduleId: string) {
-  await requireCourseStaff(instanceId)
+  await requireModuleStaff(moduleId)
 
   const { error } = await createAdminClient()
     .from('course_modules')
@@ -629,7 +647,7 @@ export async function setModuleAudience(
   moduleId: string,
   audience: 'internal' | 'shared'
 ) {
-  await requireCourseStaff(instanceId)
+  await requireModuleStaff(moduleId)
 
   // course_modules keeps the older three-value enum, where 'both' is the
   // shared case and 'instructor' the internal one. moduleAudience() folds
@@ -645,8 +663,7 @@ export async function setModuleAudience(
 }
 
 export async function addItem(instanceId: string, moduleId: string, formData: FormData) {
-  await requireCourseStaff(instanceId)
-  const admin = createAdminClient()
+  const { admin } = await requireModuleStaff(moduleId)
 
   const title       = formData.get('title') as string
   const type        = formData.get('type') as string
@@ -673,9 +690,11 @@ export async function addItem(instanceId: string, moduleId: string, formData: Fo
 
 // Attach published library items to a section. Stores references, not
 // copies — editing the library entry updates every course pointing at it.
+//
+// Course staff, like the rest of the curriculum writes: pulling published
+// material onto your own course is not editing the library.
 export async function addLibraryItems(instanceId: string, moduleId: string, itemIds: string[]) {
-  await requireAdmin()
-  const admin = createAdminClient()
+  const { admin } = await requireModuleStaff(moduleId)
   if (itemIds.length === 0) return
 
   const { data: existing } = await admin
@@ -758,7 +777,7 @@ export async function loadPickerItems(instanceId: string) {
 // isn't a leap of faith. Sections already present are marked, and items
 // already on the course are excluded from the counts.
 export async function previewCourseTemplate(instanceId: string, templateId: string) {
-  await requireAdmin()
+  await requireCourseStaff(instanceId)
   const admin = createAdminClient()
 
   const [{ data: sections }, { data: existingModules }, { data: onCourse }] = await Promise.all([
@@ -796,7 +815,7 @@ export async function previewCourseTemplate(instanceId: string, templateId: stri
 // preview arrive as excludeItemIds; a new section whose every item was
 // deselected is not created at all.
 export async function applyCourseTemplate(instanceId: string, templateId: string, excludeItemIds: string[] = []) {
-  await requireAdmin()
+  await requireCourseStaff(instanceId)
   const admin = createAdminClient()
   const excluded = new Set(excludeItemIds)
 
@@ -885,7 +904,7 @@ export async function applyLibrarySelection(
     items: { id: string; audience?: 'internal' | 'shared' }[]
   }[]
 ) {
-  await requireAdmin()
+  await requireCourseStaff(instanceId)
   const admin = createAdminClient()
 
   const wanted = groups.filter((g) => g.items.length > 0)
@@ -971,7 +990,7 @@ export async function removeCourseItems(instanceId: string, itemIds: string[]) {
 
 // Per-course visibility override; null restores the library item's own level.
 export async function setItemAudience(instanceId: string, itemId: string, audience: 'internal' | 'shared' | null) {
-  await requireCourseStaff(instanceId)
+  await requireItemStaff(itemId)
   const { error } = await createAdminClient()
     .from('course_items')
     .update({ audience })
@@ -982,7 +1001,7 @@ export async function setItemAudience(instanceId: string, itemId: string, audien
 }
 
 export async function deleteItem(instanceId: string, itemId: string) {
-  await requireCourseStaff(instanceId)
+  await requireItemStaff(itemId)
 
   const { error } = await createAdminClient()
     .from('course_items')

@@ -95,3 +95,38 @@ export async function requireCourseStaff(instanceId: string) {
   const name = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ').trim()
   return { user, admin, authorName: name || 'Your instructor' }
 }
+
+// The gate for anything that outlives a course — the gear catalog, the content
+// library, the templates every future course is built from. Sits here beside
+// requireCourseStaff because the two are read together: almost every write is
+// one or the other, and the pair is easier to keep honest in one place than in
+// the three copies this was.
+export async function requireAdminUser() {
+  const { createClient } = await import('@/lib/supabase/server')
+  const { createAdminClient } = await import('@/lib/supabase/admin')
+
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Not authenticated')
+  const admin = createAdminClient()
+
+  const { data: profile } = await admin.from('profiles').select('role').eq('id', user.id).single()
+  if (profile?.role !== 'admin') throw new Error('Not authorized')
+  return { user, admin }
+}
+
+// Staff of whichever course a row belongs to, where the row's course is looked
+// up rather than taken from the caller.
+//
+// Every one of these actions receives the course id as well as the row id, and
+// the two are not the same kind of fact: the row id says what to change, the
+// course id was only ever passed to save a round trip on revalidation. A
+// browser can send any pair it likes, so the course a row belongs to has to be
+// read from the row — otherwise "staff of this course" is a check anyone can
+// satisfy by naming a course they do run while pointing at a row they don't.
+//
+// A null course means the row belongs to no course — a template on the shelf,
+// the catalog behind it — and those are admin's.
+export async function requireStaffOfCourse(instanceId: string | null | undefined) {
+  return instanceId ? requireCourseStaff(instanceId) : requireAdminUser()
+}
