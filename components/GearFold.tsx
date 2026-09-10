@@ -19,6 +19,7 @@ export default function GearFold({
   listIds,
   record,
   summary,
+  className,
   children,
 }: {
   instanceId: string
@@ -27,13 +28,16 @@ export default function GearFold({
       list they were sent is not an answer anybody is waiting on. */
   record: boolean
   summary: React.ReactNode
+  /** The fold's own classes. The group name has to be set by the caller
+      because the head inside keys its open/closed variants off it. */
+  className?: string
   children: React.ReactNode
 }) {
   const told = useRef(false)
 
   return (
     <details
-      className="group/gear"
+      className={className ?? 'group/gear'}
       onToggle={(e) => {
         if (!e.currentTarget.open || told.current) return
         if (!record || listIds.length === 0) return

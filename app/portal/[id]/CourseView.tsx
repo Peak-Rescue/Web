@@ -48,6 +48,7 @@ import MeetingDetails from './MeetingDetails'
 import type { UpdateAudience } from './update-actions'
 import CourseMessages, { type CourseMessage } from './CourseMessages'
 import EditInPlace from './EditableSchedule'
+import { FoldHead, FOLD_PANEL } from './FoldIndex'
 import AddScheduleDay from './AddScheduleDay'
 import MoveDayArrows from './MoveDayArrows'
 import ScheduleOverviewFields from './ScheduleOverviewFields'
@@ -159,6 +160,35 @@ export const GUEST: Viewer = {
   mode: null,
   openSection: null,
   lastSeenAt: null,
+}
+
+// Where a curriculum item actually points, or null if it is not drawn at all.
+//
+// Two rows never appear in the list: one held back to instructors on a screen
+// that is not an instructor's, and one with nothing to link to. Both used to
+// be decided inline in the render, which was fine until the fold above the
+// list started counting what was behind it — a count that includes rows nobody
+// draws sends people looking for material that is not there. So the question
+// is asked in one place and the count and the list both ask it.
+//
+// Drive files go through the portal, which streams them with the service
+// account: a direct Drive link shows participants Google's request-access page.
+function curriculumItemUrl(
+  item: {
+    url: string | null
+    audience?: string | null
+    library_items?: unknown
+  },
+  showTasks: boolean
+): string | null {
+  const libRaw = item.library_items as unknown
+  const lib = (Array.isArray(libRaw) ? libRaw[0] : libRaw) as
+    { id: string; url: string | null; audience: string; drive_file_id?: string | null } | null
+  const effective = item.audience ?? lib?.audience ?? 'shared'
+  if (!showTasks && effective === 'internal') return null
+  const isDrive = Boolean(lib?.drive_file_id) || /drive\.google\.com|docs\.google\.com/.test(lib?.url ?? '')
+  if (lib && isDrive) return `/api/library/${lib.id}`
+  return lib?.url ?? item.url ?? null
 }
 
 export default async function CourseView({
@@ -961,6 +991,49 @@ export default async function CourseView({
   // section gets added, and a section that appears only once it has contents
   // is one nobody can put contents into.
   const hasCurriculum = orderedModules.length > 0 || showTasks
+
+  // What is behind each half of Prep, said on the line you decide by.
+  //
+  // A fold that looks the same whether it holds thirty rows or nothing is a
+  // lid, and opening it is the one thing a fold exists to save you. Named
+  // contents make it an index instead: two closed lines then carry the shape
+  // of the whole of prep, which is what the section was missing — not chrome.
+  //
+  // Counted as it renders, through the same question the list asks, so the
+  // number over the fold and the rows under it cannot disagree.
+  //
+  // Named parts with their own counts, not one run of prose. A sentence of
+  // dot-separated names is the same shape whether it holds four things or
+  // twelve — the eye has nothing to land on and no way to tell a big part from
+  // a small one. Each part carrying its own number makes the closed fold a
+  // thing you read rather than a thing you skim past.
+  const curriculumIndex = orderedModules.map((m) => ({
+    label: m.title as string,
+    count: ((m.course_items ?? []) as { url: string | null; audience?: string | null; library_items?: unknown }[])
+      .filter((it) => curriculumItemUrl(it, showTasks)).length,
+  }))
+  const curriculumItemCount = curriculumIndex.reduce((n, p) => n + p.count, 0)
+
+  // The same index for the gear list: its own headings in the order they are
+  // written, and whatever sits under none of them named by the half of the
+  // list it is on. A true partition — the parts add up to the total, so the
+  // number on the right is never contradicted by the row beneath it.
+  const gearIndex: { label: string; count: number }[] = (() => {
+    if (gearVisible.length === 0) return []
+    // More than one list is its own index: the lists are the parts.
+    if (gearVisible.length > 1) {
+      return gearVisible.map((g) => ({ label: g.name as string, count: g.gear_list_entries.length }))
+    }
+    const rows = [...gearVisible[0].gear_list_entries].sort((a, b) => a.sort_order - b.sort_order)
+    const parts: { label: string; count: number }[] = []
+    const bump = (label: string) => {
+      const found = parts.find((p) => p.label === label)
+      if (found) found.count += 1
+      else parts.push({ label, count: 1 })
+    }
+    for (const r of rows) bump(r.section?.trim() || KIT_LABEL[r.group_type as 'personal' | 'group'])
+    return parts
+  })()
   const hasGear = gearVisible.length > 0
   // Staff get the section with no list in it, because that is where the first
   // one is made. Same trap the schedule and the waiver had: a course created
@@ -1831,29 +1904,23 @@ export default async function CourseView({
                 instanceId={id}
                 record={showTasks}
                 listIds={gearVisible.map((g) => g.id)}
-                // Nothing but the caret and the name. A link or a button in
-                // here is pressed *and* folds the thing it is in, because a
-                // summary swallows the click on its way past — so the PDF and
-                // the edit control wait inside, where the list they act on is.
+                className={`group/gear ${FOLD_PANEL}`}
+                // Nothing but the head. A link or a button in here is pressed
+                // *and* folds the thing it is in, because a summary swallows
+                // the click on its way past — so the PDF and the edit control
+                // wait inside, where the list they act on is.
                 summary={
-                <summary className="cursor-pointer list-none flex items-baseline gap-2 mb-2">
-                  <span aria-hidden className="text-zinc-600 shrink-0 text-[10px] transition-transform group-open/gear:rotate-90">▸</span>
-                  <h3 className="text-sm font-semibold text-zinc-200">Gear list</h3>
-                  {/* What is behind it, said on the line you decide by. Closed,
-                      this fold looked identical whether it held thirty items or
-                      nothing at all, so the only way to find out was to open it
-                      — which is the one thing a fold exists to save you. */}
-                  <span className="text-[11px] text-zinc-600 group-open/gear:hidden">
-                    {gearVisible.length === 0
+                  <FoldHead
+                    open="gear"
+                    title="Gear list"
+                    total={gearVisible.length === 0
                       ? 'nothing yet'
-                      : gearVisible.length === 1
-                        ? `${gearVisible[0].gear_list_entries.length} items`
-                        : gearVisible.map((g) => `${g.name} · ${g.gear_list_entries.length}`).join('  ·  ')}
-                  </span>
-                </summary>
+                      : `${gearVisible.reduce((n, g) => n + g.gear_list_entries.length, 0)} items`}
+                    parts={gearIndex}
+                  />
                 }
               >
-                <div className="ml-0.5 pl-3 border-l-2 border-zinc-800">
+                <div className="px-3 pb-3">
             {/* No "Edit gear list" gate for the people who can edit it.
                 It put the whole list behind a mode: press the button, get a
                 different-looking list, press × to get the first one back. The
@@ -1898,9 +1965,6 @@ export default async function CourseView({
                 saying PDF and the other Printable PDF, printing two different
                 documents and neither saying which. Named for what comes out
                 instead: this is the sheet one person packs from. */}
-            {gearVisible.length === 0 && showAsAdmin && (
-              <p className="text-xs text-zinc-600">No gear list yet.</p>
-            )}
             {gearVisible.map((gl, gi) => {
               // The number this list's quantities are worked out against: its
               // own if it carries one, the course's otherwise. The editor,
@@ -2093,17 +2157,31 @@ export default async function CourseView({
                 back for. So the section opens as a named gear list you can
                 pull down and the material already in front of you. */}
             {hasCurriculum && (
-              <details open className={showGear ? `group/curric ${BETWEEN_BLOCKS}` : 'group/curric'}>
-                <summary className="cursor-pointer list-none flex items-baseline gap-2 mb-2">
-                  <span aria-hidden className="text-zinc-600 shrink-0 text-[10px] transition-transform group-open/curric:rotate-90">▸</span>
-                  <h3 className="text-sm font-semibold text-zinc-200">Curriculum</h3>
-                </summary>
+              <details open className={showGear ? `group/curric ${FOLD_PANEL} mt-3` : `group/curric ${FOLD_PANEL}`}>
+                <FoldHead
+                  open="curric"
+                  title="Curriculum"
+                  total={orderedModules.length === 0
+                    ? 'nothing yet'
+                    : `${orderedModules.length} section${orderedModules.length === 1 ? '' : 's'}` +
+                      (curriculumItemCount > 0 ? ` · ${curriculumItemCount} items` : '')}
+                  parts={curriculumIndex}
+                />
             {/* Sections and the items in them, assigned on the course. The
                 editor is a server component — it is server actions bound to
                 rows all the way down — so it is built here and handed over
                 rather than imported into the client. */}
+            <div className="px-3 pb-3">
             <EditInPlace
               label="Edit curriculum"
+              // Staff get this fold on a course that has no curriculum at all,
+              // because this is where the first section gets added. Empty, it
+              // drew a heading and then nothing — which is most of why opening
+              // Prep on a new course felt like opening an empty room.
+              empty={orderedModules.length === 0
+                ? 'No curriculum yet. Sections and the material under them — what students work through before the course, and what instructors need on the day.'
+                : undefined}
+              emptyLabel="Add the first section"
               editor={
                 showTasks ? (
                   <CourseCurriculumEditor
@@ -2124,7 +2202,7 @@ export default async function CourseView({
                 Each folds. Twenty-six cards across nine modules is a scroll
                 either way; open they are what they always were, and closed the
                 nine names are an index you can take in at once. */}
-            <div className="ml-0.5 pl-3 border-l-2 border-zinc-800 space-y-1">
+            <div className="space-y-1">
               {orderedModules.map(mod => {
                 const items = (mod.course_items ?? []).slice().sort((a, b) => a.order - b.order)
                 return (
@@ -2132,6 +2210,19 @@ export default async function CourseView({
                     <summary className="cursor-pointer list-none flex items-baseline gap-2 py-1.5">
                       <span aria-hidden className="shrink-0 text-[10px] text-zinc-600 transition-transform group-open/mod:rotate-90">▸</span>
                       <h3 className="text-[13px] font-medium text-zinc-300">{mod.title}</h3>
+                      {/* The same question the fold above answers, asked of
+                          one section: closed, a module name alone says nothing
+                          about whether there is anything under it. Counted
+                          through `curriculumItemUrl` so it agrees with both
+                          the rows below and the index up top. */}
+                      {(() => {
+                        const n = items.filter((it) => curriculumItemUrl(it, showTasks)).length
+                        return (
+                          <span className="shrink-0 text-[11px] text-zinc-600 tabular-nums">
+                            {n === 0 ? 'empty' : n}
+                          </span>
+                        )
+                      })()}
                       {(showAsAdmin || showAsInstructor) && mod.audience !== 'both' && (
                         <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${
                           mod.audience === 'instructor'
@@ -2149,14 +2240,10 @@ export default async function CourseView({
                         const libRaw = item.library_items as unknown
                         const lib = (Array.isArray(libRaw) ? libRaw[0] : libRaw) as
                           { id: string; title: string; url: string | null; audience: string; kind?: string | null; drive_file_id?: string | null } | null
-                        const effective = item.audience ?? lib?.audience ?? 'shared'
-                        if (!showTasks && effective === 'internal') return null
                         const title = lib?.title ?? item.title
-                        // Drive files go through the portal, which streams them
-                        // with the service account — a direct Drive link would
-                        // show participants Google's request-access page.
-                        const isDrive = Boolean(lib?.drive_file_id) || /drive\.google\.com|docs\.google\.com/.test(lib?.url ?? '')
-                        const url = lib && isDrive ? `/api/library/${lib.id}` : (lib?.url ?? item.url)
+                        // Audience and link both settled in one place, shared
+                        // with the count on the fold above.
+                        const url = curriculumItemUrl(item, showTasks)
                         if (!url) return null
                         return (
                           <a
@@ -2187,6 +2274,7 @@ export default async function CourseView({
               })}
             </div>
             </EditInPlace>
+            </div>
               </details>
             )}
           </Section>

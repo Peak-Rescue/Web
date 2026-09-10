@@ -22,6 +22,8 @@ export default function EditInPlace({
   note,
   badge,
   editor,
+  empty,
+  emptyLabel,
   children,
 }: {
   /** What pressing it does, said plainly — "Edit day". */
@@ -43,6 +45,16 @@ export default function EditInPlace({
   /** Built on the server, so its code only reaches the people who can open it
       and a student gets no button either. */
   editor: ReactNode
+  /** What to say when the block holds nothing yet — and the way in, on the
+      same panel. An empty block that renders as nothing at all is the one
+      place a person needs telling: there is no content to explain itself, and
+      the header button above sits at the top of a section they are still
+      scrolling. Passed only when there is genuinely nothing, so the block
+      itself decides what empty means. */
+  empty?: string
+  /** What starting from nothing is called, when "Edit" is the wrong verb for
+      it. Falls back to the ordinary label. */
+  emptyLabel?: string
   children: ReactNode
 }) {
   const router = useRouter()
@@ -106,7 +118,7 @@ export default function EditInPlace({
             {badge}
           </div>
         )}
-        {children}
+        {empty ? <p className="text-xs text-zinc-600">{empty}</p> : children}
       </>
     )
   }
@@ -139,7 +151,24 @@ export default function EditInPlace({
           </button>
         )}
       </div>
-      {editing ? <SavesProvider value={saves}>{editor}</SavesProvider> : children}
+      {editing ? (
+        <SavesProvider value={saves}>{editor}</SavesProvider>
+      ) : empty ? (
+        // Dashed, like every other panel on this page that is waiting to be
+        // filled, and the sentence and the way in are one thing rather than a
+        // statement here and a button somewhere above it.
+        <div className="rounded-lg border border-dashed border-zinc-700 bg-zinc-900/40 px-3 py-3 flex flex-wrap items-center gap-x-3 gap-y-2">
+          <p className="text-xs text-zinc-500 min-w-0">{empty}</p>
+          <button
+            onClick={() => setEditing(true)}
+            className="ml-auto shrink-0 text-[11px] px-2.5 py-1 rounded border border-zinc-700 text-zinc-300 hover:text-white hover:border-zinc-500 transition-colors"
+          >
+            {emptyLabel ?? label}
+          </button>
+        </div>
+      ) : (
+        children
+      )}
     </>
   )
 }
