@@ -276,6 +276,24 @@ export const services: Service[] = [
       'Casualty evacuation from deep canyon environments',
     ],
   },
+  {
+    slug: 'aerial-tramway-rescue',
+    title: 'Aerial Tramway Rescue & Ski Lift Evacuation',
+    shortTitle: 'Aerial Tramway Rescue',
+    category: 'sar',
+    heroImage: '/images/services/aerial-tramway-rescue.jpg',
+    tagline: 'Passenger evacuation systems for gondolas, chairlifts, cable cars, and aerial trams.',
+    description:
+      'Peak Rescue provides aerial rescue systems and training for evacuating passengers from gondolas, chairlifts, cable cars, and aerial trams worldwide. Programs comply with industry safety standards and integrate worker rescue components with pre-rigged equipment. Suitable for new installations and established operations.',
+    details: [
+      'Technician Level training — 5-day certification program',
+      'Instructor Level training — 5-day program for in-house trainers',
+      'Custom course delivery worldwide for existing operations',
+      'Evacuation plan development and emergency procedure writing',
+      'Pre-rigged equipment systems with integrated worker rescue',
+      'Design-phase consultation for new aerial systems and infrastructure',
+    ],
+  },
 
   // Industrial & Facilities
   {
@@ -388,24 +406,6 @@ export const services: Service[] = [
       'Situational awareness, mayday transmissions, and dis-entanglement',
       'Window egress, SCBA confidence, and multiple firefighter egress',
       'Advanced program: roof operations, firefighter rescue, and aerial ladder access',
-    ],
-  },
-  {
-    slug: 'aerial-tramway-rescue',
-    title: 'Aerial Tramway Rescue & Ski Lift Evacuation',
-    shortTitle: 'Aerial Tramway Rescue',
-    category: 'industrial',
-    heroImage: '/images/services/aerial-tramway-rescue.jpg',
-    tagline: 'Passenger evacuation systems for gondolas, chairlifts, cable cars, and aerial trams.',
-    description:
-      'Peak Rescue provides aerial rescue systems and training for evacuating passengers from gondolas, chairlifts, cable cars, and aerial trams worldwide. Programs comply with industry safety standards and integrate worker rescue components with pre-rigged equipment. Suitable for new installations and established operations.',
-    details: [
-      'Technician Level training — 5-day certification program',
-      'Instructor Level training — 5-day program for in-house trainers',
-      'Custom course delivery worldwide for existing operations',
-      'Evacuation plan development and emergency procedure writing',
-      'Pre-rigged equipment systems with integrated worker rescue',
-      'Design-phase consultation for new aerial systems and infrastructure',
     ],
   },
   {
