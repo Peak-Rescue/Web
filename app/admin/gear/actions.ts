@@ -398,6 +398,75 @@ export async function addGearEntry(
   return { id: added.id as string }
 }
 
+// A whole list at once, from a paste.
+//
+// One insert, not twenty round trips: a pasted list is twenty-odd rows and
+// adding them one at a time is twenty revalidations of the course page, each
+// racing the last. The rows arrive already parsed and already corrected — the
+// editor shows what it made of the text and writes only once the person
+// pasting says that is right.
+//
+// Free text throughout. Nothing is matched against the catalog on the way in,
+// deliberately: a line saying "Thermal Protection appropriate for the venue"
+// has no catalog row and does not need one, and guessing at matches would put
+// a wrong item's spec on someone's purchase order.
+export async function addGearEntries(
+  listId: string,
+  rows: {
+    name: string; note?: string | null; section?: string | null
+    groupType?: 'personal' | 'group'
+    each?: number | null; perStudents?: number | null
+  }[],
+  instanceId?: string | null
+): Promise<{ added: number } | Failed> {
+  const { admin } = await requireListWriter(listId)
+  const clean = rows
+    .map((r) => ({ ...r, name: r.name.trim().slice(0, 200) }))
+    .filter((r) => r.name)
+  if (clean.length === 0) return fail('Nothing to add')
+  if (clean.length > 200) return fail('That is more than 200 rows — paste it in parts')
+
+  // Onto the end of whatever is already there. A paste adds to a list; it does
+  // not replace one, and a half-built list must survive someone pasting the
+  // rest of it in.
+  const { data: last } = await admin
+    .from('gear_list_entries')
+    .select('sort_order')
+    .eq('list_id', listId)
+    .order('sort_order', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  let sortOrder = last ? (last.sort_order as number) + 1 : 0
+
+  const { error } = await admin.from('gear_list_entries').insert(
+    clean.map((r) => {
+      const side = r.groupType ?? 'personal'
+      // A count that was typed wins; a row with no count falls back to what
+      // the side of the list already means, the same as a row added by hand.
+      const counted = r.each != null && r.each > 0
+      return {
+        list_id: listId,
+        gear_item_id: null,
+        name: r.name,
+        note: r.note?.trim().slice(0, 1000) || null,
+        url: null,
+        section: r.section?.trim() || null,
+        group_type: side,
+        quantity: null,
+        ...(counted
+          ? { qty_each: r.each, qty_per_students: r.perStudents ?? (side === 'personal' ? 1 : null) }
+          : QTY_FOR_SIDE[side]),
+        sort_order: sortOrder++,
+        joined_above: null,
+      }
+    })
+  )
+  if (error) throw new Error(error.message)
+
+  await touchList(admin, listId, instanceId)
+  return { added: clean.length }
+}
+
 // The course whose pages need rebuilding. The caller usually knows it, and a
 // query to re-learn it costs as much as the write it follows.
 async function touchList(admin: Admin, listId: string, known?: string | null) {

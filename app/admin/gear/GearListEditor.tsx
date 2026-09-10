@@ -4,6 +4,7 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'rea
 import Link from 'next/link'
 import { useSteadyRefresh } from '@/components/useSteadyRefresh'
 import CategorySelect from './CategorySelect'
+import PasteList from './PasteList'
 import { templateHref, templateShelfHref } from '@/lib/library'
 import PdfLink from '@/components/PdfLink'
 import { ForPill } from '@/components/AudiencePills'
@@ -170,6 +171,10 @@ export default function GearListEditor({
   // are reachable from it, so the panel no longer has to be opened in the right
   // place to add to the right place.
   const [addOpen, setAddOpen] = useState(false)
+  // The other way in: a list that already exists as prose. One at a time and
+  // all at once are two different jobs, so they are two panels rather than one
+  // with a mode switch.
+  const [pasteOpen, setPasteOpen] = useState(false)
   const [addTarget, setAddTarget] = useState<Target>({ gt: 'personal', section: null })
   // Non-null while a heading is being typed; '' is an empty field, not absence.
   const [newHeading, setNewHeading] = useState<string | null>(null)
@@ -771,15 +776,50 @@ export default function GearListEditor({
           heading happens there too, which is when anyone ever wants one — an
           empty section is not a thing people set out to make. */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <button
-          onClick={() => setAddOpen((v) => !v)}
-          className={addOpen
-            ? 'text-sm font-medium px-3 py-1.5 rounded border border-zinc-500 bg-zinc-800 text-white transition-colors'
-            : 'text-sm font-medium px-3 py-1.5 rounded border border-zinc-700 text-zinc-200 hover:border-zinc-500 hover:text-white transition-colors'}
-        >
-          + Add gear
-        </button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={() => { setAddOpen((v) => !v); setPasteOpen(false) }}
+            className={addOpen
+              ? 'text-sm font-medium px-3 py-1.5 rounded border border-zinc-500 bg-zinc-800 text-white transition-colors'
+              : 'text-sm font-medium px-3 py-1.5 rounded border border-zinc-700 text-zinc-200 hover:border-zinc-500 hover:text-white transition-colors'}
+          >
+            + Add gear
+          </button>
+          {/* Quieter than the button beside it: pasting is how a list starts
+              and adding is how it is kept, so the everyday one leads. */}
+          <button
+            onClick={() => { setPasteOpen((v) => !v); setAddOpen(false) }}
+            title="Paste a list you already have — an email, a handout, a standards document"
+            className={pasteOpen
+              ? 'text-xs px-3 py-1.5 rounded border border-zinc-500 bg-zinc-800 text-white transition-colors'
+              : 'text-xs px-3 py-1.5 rounded border border-zinc-700 text-zinc-400 hover:border-zinc-500 hover:text-white transition-colors'}
+          >
+            Paste a list
+          </button>
+        </div>
       </div>
+
+      {/* Said out loud here as well as inside the add panel, because a paste
+          closes its panel on the way out and lands its rows below the fold —
+          with nothing said, a list that just grew by twenty rows looks
+          untouched from where you are standing. */}
+      {!addOpen && justAdded && (
+        <p className="text-[11px] text-teal-300">{justAdded}</p>
+      )}
+
+      {pasteOpen && (
+        <PasteList
+          listId={list.id}
+          instanceId={list.instance_id}
+          busy={busy}
+          run={run}
+          input={input}
+          onDone={(added) => {
+            setPasteOpen(false)
+            setJustAdded(`Added ${added} ${added === 1 ? 'row' : 'rows'} from the paste`)
+          }}
+        />
+      )}
 
       {addOpen && (
         <div className="rounded-lg border border-zinc-700 bg-zinc-900/60 p-3 space-y-3">
