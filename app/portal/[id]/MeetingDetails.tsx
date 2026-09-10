@@ -32,6 +32,11 @@ export default function MeetingDetails({
   inheritedTime = null,
   meetingDate,
   meetingPoint,
+  meetingPointId,
+  meetingPoints = [],
+  siteMeetupName = null,
+  inheritedFrom = null,
+  inheritedPlace = null,
   meetingTime,
   links,
   inheritedLinks = [],
@@ -57,6 +62,20 @@ export default function MeetingDetails({
       course's own dates. Only used for what the announcement calls the day. */
   meetingDate: string | null
   meetingPoint: string | null
+  /** The meetup this day gathers at, when it has been told to use one other
+      than the site's usual. Null means "whatever the canyon usually does",
+      which is the right answer nearly every day. */
+  meetingPointId: string | null
+  /** Everywhere a day could be told to gather. Empty for anyone who can't
+      edit, so a student is sent no list of the company's meetups. */
+  meetingPoints?: { id: string; name: string }[]
+  /** What the site usually uses, named — so the empty option reads "Meet at
+      the Grafton lot" rather than the blank that makes a picker look unset. */
+  siteMeetupName?: string | null
+  /** Where a shown-but-not-typed meeting point came from, so the line under it
+      can name the place instead of guessing at the site's. */
+  inheritedFrom?: 'day' | 'day-meetup' | 'site-meetup' | 'course' | null
+  inheritedPlace?: string | null
   meetingTime: string | null
   /** The pin, the gate-code page. Kept with the meeting point rather than on
       the announcement about it — a day later the announcement is somewhere
@@ -100,6 +119,7 @@ export default function MeetingDetails({
   // it blank means today.
   const [date] = useState(meetingDate ?? '')
   const [point, setPoint] = useState(meetingPoint ?? '')
+  const [pointId, setPointId] = useState(meetingPointId ?? '')
   const pointRef = useRef<HTMLTextAreaElement>(null)
 
   // Height follows the content rather than the other way round. Reset first:
@@ -138,6 +158,17 @@ export default function MeetingDetails({
     ...links,
     ...inheritedLinks.filter((l) => !links.some((own) => own.url === l.url)),
   ]
+  // Named, because "where did this come from" is the question behind every
+  // stale meeting point — and once a day can pick its own meetup, "the site's
+  // usual" is the wrong answer about half the time it gets asked.
+  const inheritedWhy =
+    inheritedFrom === 'day-meetup'
+      ? inheritedPlace ? `From ${inheritedPlace}, picked for this day` : 'From this day’s meetup'
+      : inheritedFrom === 'course'
+        ? 'From the course'
+        : inheritedPlace
+          ? `From ${inheritedPlace}, where this site usually meets`
+          : 'From the site’s usual meeting point'
   const isSet = Boolean(shownPoint || meetingTime || shownLinks.length || files.length)
   const day = meetingDayLabel(meetingDate, null)
   // Which day the announcement will be about, and whether these people have
@@ -159,6 +190,7 @@ export default function MeetingDetails({
     setBusy(true); setError(null); setResult(null)
     try {
       await saveDayMeetingDetails(dayId, {
+        meetingPointId: pointId || null,
         meetingPoint: point,
         meetingTime: time,
         links: draftLinks,
@@ -187,7 +219,7 @@ export default function MeetingDetails({
   }
 
   function discard() {
-    setPoint(meetingPoint ?? ''); setTime(meetingTime ?? '')
+    setPoint(meetingPoint ?? ''); setPointId(meetingPointId ?? ''); setTime(meetingTime ?? '')
     setDraftLinks(links)
     setDraftFiles(files.map(({ path, filename }) => ({ path, filename })))
     setError(null); setEditing(false)
@@ -205,6 +237,34 @@ export default function MeetingDetails({
         <p className="sm:col-span-2 text-[11px] uppercase tracking-wide text-zinc-500">
           {draftDay ?? 'This day'}
         </p>
+        {/* Which meetup, before the words about it — the place is the answer
+            most mornings, and the box under it is for the mornings where the
+            place is not enough. It lived in the day editor, one button away,
+            where picking it silently changed what this block read back and
+            nothing on either screen said so. Same question, so: same screen.
+
+            Left alone it says what the canyon usually does, which is why the
+            empty option is named rather than blank: an unset picker and a
+            picker set to the usual look identical otherwise. */}
+        {meetingPoints.length > 0 && (
+          <label className="block sm:col-span-2">
+            <span className="block text-[11px] uppercase tracking-wide text-zinc-500 mb-1">Meet at</span>
+            <select
+              value={pointId}
+              onChange={(e) => setPointId(e.target.value)}
+              className={`w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-zinc-500 ${
+                pointId ? 'text-zinc-200' : 'text-zinc-400'
+              }`}
+            >
+              <option value="">
+                {siteMeetupName ? `${siteMeetupName} — the usual` : 'Wherever this site usually meets'}
+              </option>
+              {meetingPoints.map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+          </label>
+        )}
         {/* Wide, and it grows with what you type. A meeting point is usually
             four words and sometimes a paragraph — where to park, which gate,
             what the water is doing — and a one-line box that scrolls what you
@@ -315,7 +375,7 @@ export default function MeetingDetails({
           {/* Said out loud, because "where did this come from" is the question
               behind every stale meeting point. */}
           {inherited && (
-            <dd className="text-[11px] text-zinc-600 mt-0.5">From the site’s usual meeting point</dd>
+            <dd className="text-[11px] text-zinc-600 mt-0.5">{inheritedWhy}</dd>
           )}
         </div>
       )}

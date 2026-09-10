@@ -27,6 +27,13 @@ const MAX_FIELD = 500
 export async function saveDayMeetingDetails(
   dayId: string,
   input: {
+    /** Which meetup this day gathers at, overriding the site's usual — the
+        carpool lot, the gas station, the morning we start at the shop. Set
+        here rather than in the day editor because it answers the same
+        question as the two fields under it, and an answer that lives on a
+        different screen from the answer it overrides is how a morning ends up
+        saying two things. */
+    meetingPointId: string | null
     meetingPoint: string
     meetingTime: string
     links: UpdateLink[]
@@ -57,6 +64,7 @@ export async function saveDayMeetingDetails(
   const { error } = await admin
     .from('schedule_days')
     .update({
+      meeting_point_id: input.meetingPointId,
       meeting_point: input.meetingPoint.trim().slice(0, MAX_FIELD) || null,
       meeting_time: input.meetingTime.trim().slice(0, MAX_FIELD) || null,
       meeting_links: links,

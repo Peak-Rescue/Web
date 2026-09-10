@@ -12,7 +12,7 @@ export type {
   Schedule, ScheduleDay, ScheduleBlock, SiteOption, MeetingPointOption, ScheduleTemplateOption,
 } from './types'
 import type {
-  Schedule, SiteOption, MeetingPointOption, ScheduleTemplateOption,
+  Schedule, SiteOption, ScheduleTemplateOption,
 } from './types'
 import PdfLink from '@/components/PdfLink'
 
@@ -26,7 +26,6 @@ export default function ScheduleEditor({
   templates,
   canTemplate = true,
   sites = [],
-  meetingPoints = [],
   venueId = null,
 }: {
   schedule: Schedule
@@ -43,9 +42,6 @@ export default function ScheduleEditor({
   // Canyons and crags with beta already written. A day picks one instead of
   // retyping what the place is like.
   sites?: SiteOption[]
-  // Where a day can be told to gather instead of the site's usual — the
-  // carpool lot, the gas station, the morning we start at the shop.
-  meetingPoints?: MeetingPointOption[]
   // The course's venue. A Maui course shouldn't have to scroll past every crag
   // in Washington to find Emerald, so the venue's own sites come first and the
   // rest sit under a heading you have to mean to reach.
@@ -124,7 +120,6 @@ export default function ScheduleEditor({
           key={day.id}
           day={day}
           sites={sites}
-          meetingPoints={meetingPoints}
           venueId={venueId}
           onRemoving={(id) => setRemoved((r) => [...r, id])}
           onRemoveFailed={(id) => setRemoved((r) => r.filter((x) => x !== id))}

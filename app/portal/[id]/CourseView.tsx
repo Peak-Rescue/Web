@@ -2399,48 +2399,22 @@ export default async function CourseView({
                         />
                       )}
                     </summary>
-                    {/* The way into this day, on this day. The element is only
-                        built for staff, so a student is sent neither the button
-                        nor the editor's code — and `canEditSchedule` is the
-                        rule the server actions enforce, so it is never offered
-                        where the write would be refused. */}
-                    <EditInPlace
-                      label="Edit day"
-                      editor={
-                        canEditSchedule && editableDay ? (
-                          <ScheduleDayCard
-                            day={editableDay}
-                            sites={schedSites}
-                            meetingPoints={schedMeetingPoints}
-                            venueId={inst.venue_id}
-                          />
-                        ) : null
-                      }
-                    >
-                    {/* Place and notes were joined with a dot, which read as
-                        one sentence — and on the canyon days the note is three
-                        facts long, so the place vanished into it. The pin says
-                        which half is the where. */}
-                    {d.location && (
-                      <p className="flex items-center gap-1.5 text-xs text-zinc-500 mt-0.5">
-                        <svg
-                          aria-hidden
-                          xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24"
-                          fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"
-                          className="shrink-0 text-zinc-600"
-                        >
-                          <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
-                          <circle cx="12" cy="10" r="3" />
-                        </svg>
-                        {d.location}
-                      </p>
-                    )}
                     {/* The morning, in the same block the course has always
-                        used — audience, copy-me, links, attachments, and save
-                        and notify as one press. It is attached to this day
-                        rather than to the course, which is the only thing that
-                        differs. Where nothing is typed here it shows the
-                        meetup the site usually uses. */}
+                        used — the meetup, the words, the hour, links,
+                        attachments, and save and notify as one press. It is
+                        attached to this day rather than to the course, which
+                        is the only thing that differs. Where nothing is typed
+                        here it shows the meetup the site usually uses.
+
+                        Above "Edit day", and outside it. Below, it sat inside
+                        that button's read view, so pressing Edit day swapped
+                        the morning away for the curriculum editor — and the
+                        two buttons answered questions that overlapped, with
+                        "Meeting point" naming a picker in one and a paragraph
+                        in the other. The line is drawn at gathering: where and
+                        when we meet is this block, and everything about what
+                        we do once gathered — the canyon, the beta, the
+                        objectives, the topics — is Edit day. */}
                     {(() => {
                       const m = resolveDayMeeting(d, d.sites)
                       const date = dayDate
@@ -2479,6 +2453,16 @@ export default async function CourseView({
                             inheritedTime={m.usualTime}
                             meetingDate={date}
                             meetingPoint={d.meeting_point}
+                            meetingPointId={d.meeting_point_id}
+                            // Only for staff: a student needs no list of every
+                            // lot the company gathers in.
+                            meetingPoints={showTasks ? schedMeetingPoints : []}
+                            siteMeetupName={d.sites?.meeting_points?.name ?? null}
+                            // Which of the three fallbacks answered, so the
+                            // line under an inherited point names the place
+                            // rather than always blaming the site.
+                            inheritedFrom={m.pointFrom}
+                            inheritedPlace={m.placeName}
                             meetingTime={d.meeting_time}
                             links={d.meeting_links ?? []}
                             // The meetup's driving pin, shown on every day
@@ -2503,6 +2487,41 @@ export default async function CourseView({
                         </div>
                       )
                     })()}
+                    {/* The way into this day, on this day. The element is only
+                        built for staff, so a student is sent neither the button
+                        nor the editor's code — and `canEditSchedule` is the
+                        rule the server actions enforce, so it is never offered
+                        where the write would be refused. */}
+                    <EditInPlace
+                      label="Edit day"
+                      editor={
+                        canEditSchedule && editableDay ? (
+                          <ScheduleDayCard
+                            day={editableDay}
+                            sites={schedSites}
+                            venueId={inst.venue_id}
+                          />
+                        ) : null
+                      }
+                    >
+                    {/* Place and notes were joined with a dot, which read as
+                        one sentence — and on the canyon days the note is three
+                        facts long, so the place vanished into it. The pin says
+                        which half is the where. */}
+                    {d.location && (
+                      <p className="flex items-center gap-1.5 text-xs text-zinc-500 mt-0.5">
+                        <svg
+                          aria-hidden
+                          xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24"
+                          fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"
+                          className="shrink-0 text-zinc-600"
+                        >
+                          <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
+                          <circle cx="12" cy="10" r="3" />
+                        </svg>
+                        {d.location}
+                      </p>
+                    )}
                     {/* The canyon, not the day. It's written once on the site
                         and shown live here, so a corrected rap count reaches
                         every course at once — which is also why it sits above

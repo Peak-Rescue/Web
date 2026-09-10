@@ -22,7 +22,6 @@ import { useTrackedSaves } from '@/components/PendingSaves'
 export default function ScheduleDayCard({
   day,
   sites = [],
-  meetingPoints = [],
   venueId = null,
   onRemoving,
   onRemoveFailed,
@@ -30,7 +29,6 @@ export default function ScheduleDayCard({
 }: {
   day: ScheduleDay
   sites?: SiteOption[]
-  meetingPoints?: MeetingPointOption[]
   venueId?: string | null
   /** The list, if there is one, takes the day off screen on the click rather
       than on the round trip — and puts it back if the server disagreed. */
@@ -63,9 +61,6 @@ export default function ScheduleDayCard({
   const site = sites.find((s) => s.id === day.site_id)
   // What the day falls back to, named rather than left blank: an empty picker
   // that silently means "the lower lot" is a picker nobody trusts.
-  const siteMeetupName = site?.meeting_point_id
-    ? meetingPoints.find((p) => p.id === site.meeting_point_id)?.name ?? null
-    : null
 
   // The course's own venue first, then everywhere else — the list is one
   // dropdown, so the ordering is the only thing making a Maui course feel like
@@ -109,6 +104,13 @@ export default function ScheduleDayCard({
           Remove day
         </button>
       </div>
+      {/* No meetup picker here any more. It asked the same question as the
+          meeting block on the portal day card — and answering it here quietly
+          changed what that block read back, a button away, with nothing
+          saying so. This card is the day's content: where we are going, the
+          beta, the objectives, the topics. Where we gather is the morning's,
+          and lives with the hour and the pins and the press that tells the
+          course about them. */}
       <div className="grid sm:grid-cols-2 gap-2">
         <Marked icon={<PinIcon />}>
           <input
@@ -141,26 +143,7 @@ export default function ScheduleDayCard({
             </select>
           </Marked>
         )}
-        {meetingPoints.length > 0 && (
-          <Marked icon={<FlagIcon />}>
-            <select
-              value={day.meeting_point_id ?? ''}
-              onChange={(e) => run(() => updateScheduleDay(day.id, { meeting_point_id: e.target.value || null }))}
-              className={`w-full pl-7 ${input} ${day.meeting_point_id ? 'text-zinc-200' : 'text-zinc-500'}`}
-            >
-              <option value="">
-                {siteMeetupName ? `Meet at ${siteMeetupName}` : 'Meeting point'}
-              </option>
-              {meetingPoints.map((p) => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
-          </Marked>
-        )}
       </div>
-      {/* The beta as the day will show it, read-only here: this is the
-          site's, and editing it belongs on the site, where the fix
-          reaches every other course too. */}
       {/* The beta as the day will show it, read-only here: this is the
           site's, and editing it belongs on the site, where the fix
           reaches every other course too. */}

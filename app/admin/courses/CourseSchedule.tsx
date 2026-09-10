@@ -16,7 +16,6 @@ export default function CourseSchedule({
   schedule,
   templates,
   sites,
-  meetingPoints,
   venueId,
 }: {
   instanceId: string
@@ -27,7 +26,6 @@ export default function CourseSchedule({
   // "save over one" menu only needs a name and a size.
   templates: (TemplateChoice & { days: number })[]
   sites: SiteOption[]
-  meetingPoints: MeetingPointOption[]
   // The course's venue, so its own canyons head the day's site list.
   venueId: string | null
 }) {
@@ -56,7 +54,7 @@ export default function CourseSchedule({
             Delete schedule
           </button>
         </div>
-        <ScheduleEditor schedule={schedule} courseType={courseType} templates={templates} sites={sites} meetingPoints={meetingPoints} venueId={venueId} />
+        <ScheduleEditor schedule={schedule} courseType={courseType} templates={templates} sites={sites} venueId={venueId} />
       </div>
     )
   }
