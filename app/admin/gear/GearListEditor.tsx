@@ -1,6 +1,6 @@
 'use client'
 
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useSteadyRefresh } from '@/components/useSteadyRefresh'
 import CategorySelect from './CategorySelect'
@@ -309,12 +309,30 @@ export default function GearListEditor({
       .finally(() => { inflight.current -= 1 })
   }
 
-  const byId = useMemo(() => new Map(catalog.map((c) => [c.id, c])), [catalog])
+  // Items this editor has just put in the catalog, held until the catalog prop
+  // catches up — the same round-behind the rows themselves are drawn around.
+  // Without them a brand-new item's row has no name to read: it sits saying
+  // "Item" for the second and a half the course page takes to rebuild.
+  const [freshItems, setFreshItems] = useState<GearItem[]>([])
+  const noteItems = useCallback((...items: GearItem[]) => {
+    setFreshItems((f) => [...f, ...items])
+  }, [])
+  // The real row wins the moment it arrives: the stand-in is dropped rather
+  // than left to disagree with the catalog about a name that has since been
+  // edited on the catalog page.
+  const known = useMemo(() => {
+    if (freshItems.length === 0) return catalog
+    const ids = new Set(catalog.map((c) => c.id))
+    const unseen = freshItems.filter((f) => !ids.has(f.id))
+    return unseen.length ? [...catalog, ...unseen] : catalog
+  }, [catalog, freshItems])
+
+  const byId = useMemo(() => new Map(known.map((c) => [c.id, c])), [known])
   const childrenOf = useMemo(() => {
     const m = new Map<string, GearItem[]>()
-    for (const c of catalog) if (c.parent_id) m.set(c.parent_id, [...(m.get(c.parent_id) ?? []), c])
+    for (const c of known) if (c.parent_id) m.set(c.parent_id, [...(m.get(c.parent_id) ?? []), c])
     return m
-  }, [catalog])
+  }, [known])
 
   const resolve = (e: GearEntry) => {
     const c = e.gear_item_id ? byId.get(e.gear_item_id) : undefined
@@ -823,12 +841,16 @@ export default function GearListEditor({
 
           <AddGear
             listId={list.id}
-            catalog={catalog}
+            catalog={known}
             childrenOf={childrenOf}
             onPick={(picked) => {
               // A catalog pick knows its own name; a brand-new item carries one
               // down, because the catalog prop on this page is a round behind
               // the write that made it — which is how "Adding that" happened.
+              // The item itself comes down with it, so the row it makes reads
+              // its name off the catalog this editor already has rather than
+              // waiting for the one the server is still rebuilding.
+              if (picked.items?.length) noteItems(...picked.items)
               const label = picked.label ?? picked.name ?? byId.get(picked.gearItemId ?? '')?.name ?? 'it'
               addEntry({ gearItemId: picked.gearItemId, name: picked.name, target: addTarget })
               setJustAdded(
@@ -854,7 +876,7 @@ export default function GearListEditor({
         const { loose, sections: real } = grouped[gt]
         const halfCount = loose.length + real.reduce((n, sec) => n + sec.rows.length, 0)
         const shared = {
-          listId: list.id, catalog, childrenOf,
+          listId: list.id, catalog: known, childrenOf, noteItems,
           editingOptions, setEditingOptions,
           drag, setDrag, over, setOver, onDrop: drop, apply, onRow, addEntry,
           joining, setJoining, joinOnto, overRow, onRowPointerDown,
@@ -968,6 +990,9 @@ type Shared = {
   listId: string
   catalog: GearItem[]
   childrenOf: Map<string, GearItem[]>
+  /** Catalog rows written from inside the list, so they can be drawn before
+      the catalog prop catches up. */
+  noteItems: (...items: GearItem[]) => void
   // One add panel open at a time, identified by the zone it would add to.
   editingOptions: ProductPanel | null
   setEditingOptions: (v: ProductPanel | null) => void
@@ -1147,7 +1172,7 @@ function SectionCard({
                   onPointerDown={s.onRowPointerDown}
                   isJoinTarget={s.overRow === p.row.id}
                   apply={s.apply} onRow={s.onRow} instanceId={s.instanceId}
-                  busy={s.busy} run={s.run} input={s.input}
+                  busy={s.busy} run={s.run} input={s.input} noteItems={s.noteItems}
                   students={s.students} ratioFor={s.ratioFor}
                   setRatioFor={s.setRatioFor} setRatio={s.setRatio}
                 />
@@ -1357,7 +1382,7 @@ function SetBlock({
                     onPointerDown={s.onRowPointerDown}
                     isJoinTarget={s.overRow === e.id}
                     apply={s.apply} onRow={s.onRow} instanceId={s.instanceId}
-                    busy={s.busy} run={s.run} input={s.input}
+                    busy={s.busy} run={s.run} input={s.input} noteItems={s.noteItems}
                     students={s.students} ratioFor={s.ratioFor}
                     setRatioFor={s.setRatioFor} setRatio={s.setRatio}
                   />
@@ -1373,7 +1398,7 @@ function SetBlock({
 
 function Row({
   e, editingOptions, setEditingOptions, dragging, isJoinTarget, joining, setJoining, joinOnto,
-  onPointerDown, apply, onRow, instanceId, busy, run, input, card,
+  onPointerDown, apply, onRow, instanceId, busy, run, input, card, noteItems,
   students, ratioFor, setRatioFor, setRatio,
 }: {
   e: GearEntry & { r: { name: string; note: string | null; url: string | null; section: string | null; catalogItem?: GearItem; options: GearItem[]; models: GearItem[] } }
@@ -1393,6 +1418,7 @@ function Row({
   busy: boolean
   run: (fn: () => Promise<unknown>) => void
   input: string
+  noteItems: (...items: GearItem[]) => void
   students: number | null
   ratioFor: string | null
   setRatioFor: (id: string | null) => void
@@ -1850,12 +1876,20 @@ function Row({
         // one of them — which is why two things you both need are two rows,
         // joined by dragging one onto the other, each with its own quantity.
         const pick = (id: string) => setOptions([...e.r.options.map((o) => o.id), id])
-        // This one waits: the chip can't be drawn from a catalog that doesn't
-        // have the product in it yet.
+        // Two writes: the product into the catalog, then the row's answer to
+        // what satisfies it.
         const addNew = () => run(async () => {
+          const name = newModel.trim()
+          const brand = newBrand.trim() || null
           const { id } = unwrap(await upsertGearItem({
-            name: newModel, brand: newBrand.trim() || null, category: type.category, parentId: type.id,
+            name, brand, category: type.category, parentId: type.id,
           }))
+          // The chip is drawn from the catalog, so the catalog is told what was
+          // just written rather than the chip waiting on the page to rebuild.
+          noteItems({
+            id, name, brand, url: null,
+            category: type.category, parent_id: type.id, aliases: [],
+          })
           await onRow(e.id, (rowId) => setGearEntryOptions(rowId, [...e.r.options.map((o) => o.id), id], instanceId))
           setNewModel(''); setNewBrand('')
         })
@@ -2024,8 +2058,12 @@ function AddGear({
   listId: string
   catalog: GearItem[]
   childrenOf: Map<string, GearItem[]>
-  /** What was chosen. Placing it is the caller's job — see `add` below. */
-  onPick: (picked: { gearItemId?: string | null; name?: string; label?: string }) => void
+  /** What was chosen. Placing it is the caller's job — see `add` below.
+      `items` are catalog rows this panel has just created: handed up so the
+      editor can draw them before the catalog prop knows about them. */
+  onPick: (picked: {
+    gearItemId?: string | null; name?: string; label?: string; items?: GearItem[]
+  }) => void
   onClose: () => void
   busy: boolean
   run: (fn: () => Promise<unknown>) => void
@@ -2273,29 +2311,32 @@ function AddGear({
                   const held = typesHere.find((t) => t.name.toLowerCase() === generic.toLowerCase())
                   let picked = held?.id ?? null
                   let label = held?.name ?? generic
-                  if (!brand && !model) {
-                    if (!picked) {
-                      picked = unwrap(await upsertGearItem({ name: generic, category: newCategory })).id
-                    }
-                  } else {
+                  // What was written, in the shape the catalog holds it. The
+                  // server hands back an id and nothing else, so the row is
+                  // rebuilt here from what was typed and sent up with the pick.
+                  const made: GearItem[] = []
+                  const write = async (item: {
+                    name: string; brand?: string | null; parentId?: string | null
+                  }) => {
+                    const { id } = unwrap(await upsertGearItem({ ...item, category: newCategory }))
+                    made.push({
+                      id, name: item.name, brand: item.brand ?? null,
+                      url: null, category: newCategory, parent_id: item.parentId ?? null, aliases: [],
+                    })
+                    return id
+                  }
+                  if (!picked) picked = await write({ name: generic })
+                  if (brand || model) {
                     // A brand or a model means a product, and a product hangs
-                    // under a generic — made here if it does not exist yet, so
-                    // what reads as one add is two writes.
-                    if (!picked) {
-                      picked = unwrap(await upsertGearItem({ name: generic, category: newCategory })).id
-                    }
+                    // under a generic — made just above if it did not exist
+                    // yet, so what reads as one add is two writes.
                     const named = model || generic
-                    picked = unwrap(await upsertGearItem({
-                      name: named,
-                      brand: brand || null,
-                      category: newCategory,
-                      parentId: picked,
-                    })).id
+                    picked = await write({ name: named, brand: brand || null, parentId: picked })
                     label = productName({ brand: brand || null, name: named })
                   }
                   // Straight onto the list, the same as a catalog pick — the
                   // destination was answered at the top of the panel.
-                  onPick({ gearItemId: picked, label })
+                  onPick({ gearItemId: picked, label, items: made })
                   setQuery('')
                   setNewCategory(''); setNewGeneric(''); setNewItemBrand(''); setNewModel('')
                 })}
