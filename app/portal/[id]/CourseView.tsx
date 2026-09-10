@@ -1189,7 +1189,15 @@ export default async function CourseView({
   // An admin sees the section whether or not a waiver is set — choosing one
   // is the point, and nobody is asked to sign anything until they do, so an
   // unset waiver is a silent nothing rather than a visible gap.
-  const showWaiver = Boolean(waiver) || showAsAdmin
+  //
+  // Instructors too, and for the same reason read from the other end: `waiver`
+  // is the *viewer's own* waiver, and an instructor is never enrolled, so
+  // asking for it hid the whole block from the one person standing at the
+  // trailhead. What they need out of it isn't a document to sign — it's the
+  // walk-up QR code, and the unmatched signatures it produces. Those have to
+  // be reachable on a course where nobody has enrolled yet, because that is
+  // exactly the course somebody walks up to.
+  const showWaiver = Boolean(waiver) || showTasks
   // Staff see the crew whether or not anyone is on it yet — an unstaffed
   // course is the one that needs the section.
   const showStaffing = (instructors ?? []).length > 0 || showTasks
