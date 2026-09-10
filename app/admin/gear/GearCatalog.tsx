@@ -605,9 +605,13 @@ function AddProduct({
   const submit = () => {
     if (!name.trim()) return
     run(async () => {
-      await upsertGearItem({
+      // Unwrapped here, not left to `run`: this arrow hands back nothing, so a
+      // returned refusal — the name is already in the catalog — would be
+      // dropped on the floor and the add would look like it simply didn't
+      // happen.
+      unwrap(await upsertGearItem({
         name: name.trim(), brand: brand.trim() || null, category: type.category, parentId: type.id,
-      })
+      }))
       setBrand(''); setName(''); onDone()
     })
   }
@@ -746,9 +750,12 @@ function AddItem({
             const { id } = unwrap(await upsertGearItem({ name: newType.trim(), category }))
             parent = id
           }
-          await upsertGearItem({
+          // Unwrapped for the same reason as the generic item above: a name
+          // the catalog already holds comes back as a message, and swallowing
+          // it made adding a duplicate look like nothing at all.
+          unwrap(await upsertGearItem({
             name, brand: parent ? brand.trim() || null : null, category, parentId: parent || null,
-          })
+          }))
           setName(''); setBrand(''); setParentId(''); setNewType(null); onDone()
         })}
         disabled={busy || !name.trim()}
