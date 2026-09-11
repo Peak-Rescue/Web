@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Tick } from './UpdateComposer'
 import AttachmentFields from './AttachmentFields'
 import { ChipRow } from '@/components/LinkChip'
+import { Linkified, shortUrl, urlsIn } from '@/lib/linkify'
 import CloseButton from '@/components/CloseButton'
 import type { MeetingLink, MeetingFile } from '@/lib/meeting-details'
 import type { UpdateLink, UpdateAttachment, UpdateAudience } from './update-actions'
@@ -170,6 +171,13 @@ export default function MeetingDetails({
           ? `From ${inheritedPlace}, where this site usually meets`
           : 'From the site’s usual meeting point'
   const isSet = Boolean(shownPoint || meetingTime || shownLinks.length || files.length)
+  // A URL pasted into the words, that isn't already a pin. Offered, never
+  // taken: the prose renders it as a link either way, so ignoring this costs
+  // the reader nothing — it is here for the morning where what you want is the
+  // big teal button, not the link three lines into a paragraph. Matched
+  // against the draft rather than the saved links so an offer taken stops
+  // being offered.
+  const pinnable = urlsIn(point).filter((u) => !draftLinks.some((l) => l.url === u))
   const day = meetingDayLabel(meetingDate, null)
   // Which day the announcement will be about, and whether these people have
   // heard about that day already — read from the field being edited, so the
@@ -281,6 +289,24 @@ export default function MeetingDetails({
             className="w-full min-h-[4.5rem] resize-y bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-zinc-200 leading-relaxed focus:outline-none focus:border-zinc-500"
           />
         </label>
+        {pinnable.length > 0 && (
+          <div className="sm:col-span-2 -mt-1 flex flex-wrap items-center gap-2 text-[11px] text-zinc-500">
+            <span>Add {pinnable.length === 1 ? 'it' : 'them'} as a pin too?</span>
+            {pinnable.map((u) => (
+              <button
+                key={u}
+                type="button"
+                disabled={busy}
+                onClick={() => setDraftLinks((prev) => [...prev, { url: u, label: '' }])}
+                title={u}
+                className="inline-flex items-center gap-1 max-w-full rounded-full border border-teal-500/30 bg-teal-500/10 px-2 py-0.5 text-teal-300 hover:border-teal-400 hover:text-teal-100 transition-colors disabled:opacity-40"
+              >
+                <span aria-hidden className="shrink-0">+</span>
+                <span className="truncate">{shortUrl(u)}</span>
+              </button>
+            ))}
+          </div>
+        )}
         <label className="block">
           <span className="block text-[11px] uppercase tracking-wide text-zinc-500 mb-1">Meeting time</span>
           <input
@@ -370,8 +396,11 @@ export default function MeetingDetails({
           shownPoint.length > 80 || shownPoint.includes('\n') ? 'sm:col-span-2' : ''
         }`}>
           <dt className="text-[11px] uppercase tracking-wide text-zinc-500">Where</dt>
-          {/* Typed over several lines, read back over several lines. */}
-          <dd className="text-sm text-zinc-200 mt-0.5 whitespace-pre-line">{shownPoint}</dd>
+          {/* Typed over several lines, read back over several lines — and a
+              URL typed into the middle of them is followed, not retyped. */}
+          <dd className="text-sm text-zinc-200 mt-0.5 whitespace-pre-line">
+            <Linkified text={shownPoint} />
+          </dd>
           {/* Said out loud, because "where did this come from" is the question
               behind every stale meeting point. */}
           {inherited && (

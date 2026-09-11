@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { saveCourseNotes } from './notes-actions'
 import CloseButton from '@/components/CloseButton'
 import ComposerTrigger, { NoteIcon } from '@/components/ComposerTrigger'
+import { Linkified } from '@/lib/linkify'
 
 // Internal notes: read as a block, edited in place. Nothing here is emailed
 // and nobody outside the team can see it, so there's no confirmation step —
@@ -59,12 +60,12 @@ export function NotesBody({ notes }: { notes: string }) {
             {block.items.map((item, j) => (
               <li key={j} className="flex gap-2">
                 <span aria-hidden className="text-zinc-500 select-none">•</span>
-                <span className="flex-1 whitespace-pre-wrap">{item}</span>
+                <span className="flex-1 whitespace-pre-wrap"><Linkified text={item} /></span>
               </li>
             ))}
           </ul>
         ) : (
-          <p key={i} className="whitespace-pre-wrap">{block.lines.join('\n')}</p>
+          <p key={i} className="whitespace-pre-wrap"><Linkified text={block.lines.join('\n')} /></p>
         ),
       )}
     </div>

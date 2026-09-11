@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { moduleAudience, templateRelevance, materialKind, KIND_META, type LibraryKind } from '@/lib/library'
 import { regionLabel } from '@/lib/regions'
+import { Linkified } from '@/lib/linkify'
 import CourseResourcesSection, { type CourseResource } from '@/app/admin/courses/CourseResourcesSection'
 import CourseMapsSection, { type CourseMap } from '@/app/admin/courses/CourseMapsSection'
 import CourseAlbumSection from './CourseAlbumSection'
@@ -2623,7 +2624,7 @@ export default async function CourseView({
                           <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
                           <circle cx="12" cy="10" r="3" />
                         </svg>
-                        {d.location}
+                        <Linkified text={d.location} />
                       </p>
                     )}
                     {/* The canyon, not the day. It's written once on the site
@@ -2667,7 +2668,7 @@ export default async function CourseView({
                               {(d.sites.beta ?? '').split('\n').find((l) => l.trim()) ?? ''}
                             </span>
                           </summary>
-                          <p className="text-xs text-zinc-400 max-w-prose whitespace-pre-line leading-relaxed mt-1.5">{d.sites.beta}</p>
+                          <p className="text-xs text-zinc-400 max-w-prose whitespace-pre-line leading-relaxed mt-1.5"><Linkified text={d.sites.beta} /></p>
                           {/* The canyon's standing links — route page, gauge —
                               as opposed to anything pinned to one morning,
                               which sits in the meeting block above. */}
@@ -2703,7 +2704,7 @@ export default async function CourseView({
                           <path d="M14 21v-3a2 2 0 0 1 2-2h3" />
                         </svg>
                         <p className="flex-1 min-w-0 text-xs text-zinc-400 whitespace-pre-line leading-relaxed">
-                          {d.notes}
+                          <Linkified text={d.notes} />
                         </p>
                       </div>
                     )}
@@ -2772,7 +2773,7 @@ export default async function CourseView({
                                     <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
                                     <circle cx="12" cy="10" r="3" />
                                   </svg>
-                                  {t.location}
+                                  <Linkified text={t.location} />
                                 </span>
                               )}
                               {kids.length > 0 && (
