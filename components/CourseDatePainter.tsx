@@ -59,6 +59,13 @@ function monthCells(month: string): (string | null)[] {
  *  cutting a break out of it, or rubbing one out if the day already has one.
  *  The date fields stay for exact entry, and because a gesture is no way to
  *  reach a keyboard.
+ *
+ *  A drag is one way to say a range and a pair of clicks is the other, and a
+ *  calendar that took the first was expected to take the second. So a click
+ *  that lands on the window commits nothing: it sets one end and waits for the
+ *  click that says the other, with the days between drawn in as you move
+ *  across them. Only a click strictly inside the window still acts at once,
+ *  because a break is a click on a day and has no second end to wait for.
  */
 export default function CourseDatePainter({
   instanceId,
@@ -157,6 +164,8 @@ export default function CourseDatePainter({
   // every instructor on it hears that it has. So the field shows the change at
   // once and the save waits for the typing to stop.
   function typeWindow(start: string | null, end: string | null) {
+    setPending(null)
+    setStroke(null)
     setWin({ start, end })
     if (typing.current) clearTimeout(typing.current)
     typing.current = setTimeout(() => saveWindow(start, end), 900)
@@ -185,12 +194,38 @@ export default function CourseDatePainter({
   // ——— the gesture ———————————————————————————————————————————————
 
   const gridRef = useRef<HTMLDivElement>(null)
-  const drag = useRef<{ mode: 'window' | 'break'; anchor: string; paint: boolean } | null>(null)
+  const drag = useRef<
+    { mode: 'window' | 'break'; anchor: string; paint: boolean; origin: string; clickAnchor: string; moved: boolean } | null
+  >(null)
   const [stroke, setStroke] = useState<{ mode: 'window' | 'break'; from: string; to: string; paint: boolean } | null>(null)
+  // The end a click put down, waiting for the click that says the other end.
+  const [pending, setPending] = useState<string | null>(null)
 
   const inWindow = (d: string) => Boolean(win.start && win.end && d >= win.start && d <= win.end)
   const isEdge = (d: string) => d === win.start || d === win.end
   const breakOn = (d: string) => breaks.find((b) => d >= b.from && d <= b.to)
+
+  // Half a range is a state you must be able to get out of, and the two ways
+  // out of any half-finished thing are Escape and pressing somewhere else.
+  useEffect(() => {
+    if (!pending) return
+    const key = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      setPending(null)
+      setStroke(null)
+    }
+    const away = (e: PointerEvent) => {
+      if (gridRef.current?.contains(e.target as Node)) return
+      setPending(null)
+      setStroke(null)
+    }
+    document.addEventListener('keydown', key)
+    document.addEventListener('pointerdown', away)
+    return () => {
+      document.removeEventListener('keydown', key)
+      document.removeEventListener('pointerdown', away)
+    }
+  }, [pending])
 
   const dayAt = (x: number, y: number) =>
     (document.elementFromPoint(x, y) as HTMLElement | null)?.closest('[data-day]')?.getAttribute('data-day') ?? null
@@ -198,10 +233,21 @@ export default function CourseDatePainter({
   function onPointerDown(day: string, ev: React.PointerEvent) {
     if (ev.button !== 0) return
     ev.preventDefault()
-    gridRef.current?.setPointerCapture(ev.pointerId)
     // A half-typed date waiting to save would land after the stroke and undo
     // it. Drawing is the more recent answer.
     if (typing.current) { clearTimeout(typing.current); typing.current = null }
+
+    // The click that says the other end. Everything between the two is the
+    // course, whatever the day happens to be now — mid-range there is no such
+    // thing as a click that means a break.
+    if (pending) {
+      drag.current = null
+      setPending(null)
+      setStroke(null)
+      saveWindow(day < pending ? day : pending, day < pending ? pending : day)
+      return
+    }
+    gridRef.current?.setPointerCapture(ev.pointerId)
 
     // Where you press is the whole of what you meant. On an end of the window
     // you have taken hold of that end, so the other one anchors and the window
@@ -209,24 +255,41 @@ export default function CourseDatePainter({
     // the nearer end out to meet you; inside it you are cutting a break, or
     // rubbing one out if the day already has one.
     if (!win.start || !win.end) {
-      drag.current = { mode: 'window', anchor: day, paint: true }
+      drag.current = { mode: 'window', anchor: day, paint: true, origin: day, clickAnchor: day, moved: false }
     } else if (day === win.start) {
-      drag.current = { mode: 'window', anchor: win.end, paint: true }
+      drag.current = { mode: 'window', anchor: win.end, paint: true, origin: day, clickAnchor: day, moved: false }
     } else if (day === win.end) {
-      drag.current = { mode: 'window', anchor: win.start, paint: true }
+      drag.current = { mode: 'window', anchor: win.start, paint: true, origin: day, clickAnchor: day, moved: false }
     } else if (!inWindow(day)) {
-      drag.current = { mode: 'window', anchor: day < win.start ? win.end : win.start, paint: true }
+      drag.current = { mode: 'window', anchor: day < win.start ? win.end : win.start, paint: true, origin: day, clickAnchor: day, moved: false }
     } else {
-      drag.current = { mode: 'break', anchor: day, paint: !breakOn(day) }
+      drag.current = { mode: 'break', anchor: day, paint: !breakOn(day), origin: day, clickAnchor: day, moved: false }
     }
+    // Which end a click puts down, if the press turns out to be a click and
+    // not a drag: the day you pressed, except on an end of the window, where
+    // you have taken hold of that end and it is the other one that stays put —
+    // the same thing dragging it would mean.
+    drag.current.clickAnchor = day === win.start && win.end ? win.end : day === win.end && win.start ? win.start : day
     setStroke({ mode: drag.current.mode, from: day, to: day, paint: drag.current.paint })
   }
 
   function onPointerMove(ev: React.PointerEvent) {
     const d = drag.current
-    if (!d) return
     const day = dayAt(ev.clientX, ev.clientY)
+    // Between the two clicks the days you cross are drawn in, so the range is
+    // something you can see before you commit to it rather than after.
+    if (!d) {
+      if (!pending || !day) return
+      setStroke({
+        mode: 'window',
+        from: day < pending ? day : pending,
+        to: day < pending ? pending : day,
+        paint: true,
+      })
+      return
+    }
     if (!day) return
+    if (day !== d.origin) d.moved = true
     setStroke({
       mode: d.mode,
       from: day < d.anchor ? day : d.anchor,
@@ -239,8 +302,16 @@ export default function CourseDatePainter({
     const d = drag.current
     const s = stroke
     drag.current = null
+    if (!d || !s) { setStroke(null); return }
+    // Pressed and released on the one day, you have not drawn a one-day
+    // course — you have put down one end of a range and the second click says
+    // the other. A break has no second end and still lands on the click.
+    if (d.mode === 'window' && !d.moved) {
+      setPending(d.clickAnchor)
+      setStroke({ mode: 'window', from: d.clickAnchor, to: d.clickAnchor, paint: true })
+      return
+    }
     setStroke(null)
-    if (!d || !s) return
     if (d.mode === 'window') saveWindow(s.from, s.to)
     else saveStroke(s.from, s.to, s.paint)
   }
@@ -282,7 +353,12 @@ export default function CourseDatePainter({
     <div className="p-4 bg-zinc-950/40 border border-zinc-800 rounded-lg">
       <div className="flex items-center justify-between gap-3 mb-3">
         <p className="text-xs text-zinc-500">
-          {win.start && win.end ? (
+          {pending ? (
+            <>
+              <span className="text-zinc-300">{fmtDay(pending)}</span>
+              <span className="text-zinc-600"> → now click the other end</span>
+            </>
+          ) : win.start && win.end ? (
             <>
               <span className="text-zinc-300">{fmtDay(win.start)}</span>
               <span className="text-zinc-600"> → </span>
@@ -293,11 +369,11 @@ export default function CourseDatePainter({
               </span>
             </>
           ) : (
-            'Drag across the days the course runs'
+            'Drag across the days the course runs, or click the first day then the last'
           )}
           <InfoHint
             below
-            text="Drag across the calendar to paint the course window; drag either end to move it. Once the window is painted, a click on a day inside it cuts a break out of the course, and a click on a break rubs it out. The first and last day are the course itself and cannot be a break — pull that end in instead."
+            text="Drag across the calendar to paint the course window, or click the first day and then the last — everything between the two clicks becomes the course. Dragging either end moves it. Once the window is painted, a click on a day inside it cuts a break out of the course, and a click on a break rubs it out. The first and last day are the course itself and cannot be a break — pull that end in instead. Escape abandons a half-made range."
           />
         </p>
         <div className="flex items-center gap-2 shrink-0">
@@ -326,6 +402,9 @@ export default function CourseDatePainter({
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
+        onPointerLeave={() => {
+          if (pending && !drag.current) setStroke({ mode: 'window', from: pending, to: pending, paint: true })
+        }}
         className="grid grid-cols-1 sm:grid-cols-2 gap-4"
       >
         {months.map((m) => (
@@ -346,7 +425,9 @@ export default function CourseDatePainter({
                     data-day={day}
                     onPointerDown={(ev) => onPointerDown(day, ev)}
                     title={
-                      isEdge(day)
+                      pending
+                        ? 'Click to set the other end of the course'
+                        : isEdge(day)
                         ? `${day === win.start ? 'First' : 'Last'} day — drag to move it`
                         : breakOn(day)
                           ? 'Break — click to put the day back'
