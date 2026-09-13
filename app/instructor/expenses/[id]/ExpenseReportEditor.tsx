@@ -18,6 +18,8 @@ import {
   daysInRange,
   fmtDateRange,
   fmtMoney,
+  itemLabel,
+  DESCRIPTION_SUGGESTIONS,
 } from '@/lib/expenses'
 import {
   updateReportMeta,
@@ -273,7 +275,7 @@ export default function ExpenseReportEditor({
       router.refresh()
     } catch (e) {
       alert(
-        `Couldn't save "${f.description || CATEGORY_LABELS[f.category]}" — please re-add it.` +
+        `Couldn't save "${itemLabel({ description: f.description, details: f.details }) || CATEGORY_LABELS[f.category]}" — please re-add it.` +
           (e instanceof Error ? ` (${e.message})` : '')
       )
     } finally {
@@ -625,7 +627,7 @@ export default function ExpenseReportEditor({
                     <div className="min-w-0">
                       <p className="text-sm font-medium truncate">
                         {CATEGORY_LABELS[item.category]}
-                        {item.description ? ` — ${item.description}` : ''}
+                        {itemLabel(item) ? ` — ${itemLabel(item)}` : ''}
                       </p>
                       <p className="text-xs text-zinc-500 mt-0.5">
                         {fmtDateRange(item.start_date, item.end_date)}
@@ -713,10 +715,22 @@ export default function ExpenseReportEditor({
                   <label className={labelCls}>Description</label>
                   <input
                     value={form.description}
+                    list="expense-description-suggestions"
                     onChange={(e) => setFormAndSchedule({ ...form, description: e.target.value })}
-                    placeholder={form.category === 'personal_auto' ? 'e.g. Fort Carson ↔ Estes, 2 trips' : 'What was this for?'}
+                    placeholder={
+                      form.category === 'personal_auto'
+                        ? 'e.g. Fort Carson ↔ Estes, 2 trips'
+                        : needsDetails
+                          ? 'optional — the details below stand in'
+                          : 'What was this for?'
+                    }
                     className={inputCls}
                   />
+                  <datalist id="expense-description-suggestions">
+                    {(DESCRIPTION_SUGGESTIONS[form.category] ?? []).map((s) => (
+                      <option key={s} value={s} />
+                    ))}
+                  </datalist>
                 </div>
                 <div>
                   <label className={labelCls}>Paid with</label>
@@ -948,7 +962,7 @@ export default function ExpenseReportEditor({
                       <div className="min-w-0">
                         <p className="truncate">
                           {CATEGORY_LABELS[item.category]}
-                          {item.description ? ` — ${item.description}` : ''}
+                          {itemLabel(item) ? ` — ${itemLabel(item)}` : ''}
                         </p>
                         <p className="text-xs text-zinc-500">
                           {fmtDateRange(item.start_date, item.end_date)}

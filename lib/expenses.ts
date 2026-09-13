@@ -124,3 +124,39 @@ export function computeTotals(
 export function balanceDueEmployee(totals: ReportTotals): number {
   return totals.personal
 }
+
+// One-line label for an item. Description is optional: when it's blank, the
+// first line of the long-form details stands in, so an "Other" expense whose
+// story is already in Details doesn't have to be typed twice.
+export function itemLabel(item: { description: string | null; details: string | null }): string | null {
+  const desc = item.description?.trim()
+  if (desc) return desc
+  const firstLine = item.details?.split('\n').map((l) => l.trim()).find(Boolean)
+  return firstLine ?? null
+}
+
+// Description suggestions per category. The recurring ones come from what
+// instructors have actually filed (82 line items as of Sept 2026); the rest are
+// plausible additions. Offered as a datalist: the common case is one click,
+// anything else is still free text. Not validated anywhere, and a fee filed
+// under either of two categories has never bounced back from accounting —
+// baggage appears under both air fare and transport on purpose.
+export const DESCRIPTION_SUGGESTIONS: Partial<Record<ExpenseCategory, string[]>> = {
+  // 14 of 24 mileage lines are one of these two runs.
+  personal_auto: ['Old Colorado City to Fort Carson', 'Old Colorado City to Elevenmile Canyon'],
+  air_fare: ['Airfare', 'Round trip airfare', 'Checked bag fee', 'Baggage fee', 'Seat / carry-on fee', 'Flight change fee'],
+  transport: ['Airport parking', 'Parking', 'Fuel', 'Tolls', 'Taxi', 'Rideshare', 'Airport shuttle', 'Baggage fee'],
+  auto_rental: ['Rental car', 'Rental car refuel', 'Rental insurance'],
+  lodging: ['Lodging', 'Hotel', 'Campground fee', 'Cabin / Airbnb'],
+  other: [
+    'Meals — crew',
+    'Meals — crew and client',
+    'Shipping of course gear',
+    'Student supplies',
+    'Stove fuel',
+    'Permit fee',
+    'Ice',
+    'Printing / copies',
+    'Gear repair',
+  ],
+}

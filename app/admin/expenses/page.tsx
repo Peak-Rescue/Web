@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import DeleteReportButton from './DeleteReportButton'
 import { fmtMoney, round2 } from '@/lib/expenses'
 import { instanceLabel } from '@/lib/courses'
+import { loadReportCourseLabels } from '@/lib/expense-report-data'
 
 export default async function AdminExpensesPage() {
   const supabase = await createClient()
@@ -36,8 +37,15 @@ export default async function AdminExpensesPage() {
       total: round2(items.reduce((s, i) => s + Number(i.amount), 0)),
       personal: round2(items.filter((i) => i.paid_by === 'personal').reduce((s, i) => s + Number(i.amount), 0)),
       items,
+      courses: [] as string[],
     }
   })
+
+  // Each report's courses, so a row is named by the course it belongs to.
+  const courseLabels = await loadReportCourseLabels(
+    reports.map((r) => ({ id: r.id, default_instance_id: r.default_instance_id, items: r.items }))
+  )
+  for (const r of reports) r.courses = courseLabels.get(r.id) ?? []
 
   // Per-course rollup (submitted reports only): item course link, falling back
   // to the report's default course.
@@ -102,7 +110,11 @@ export default async function AdminExpensesPage() {
                   <div className="min-w-0">
                     <p className="text-sm font-medium truncate">
                       {r.name}
-                      {r.reason ? <span className="text-zinc-400 font-normal"> — {r.reason}</span> : null}
+                      {r.courses.length > 0 ? (
+                        <span className="text-zinc-400 font-normal"> — {r.courses.join(' + ')}</span>
+                      ) : r.reason ? (
+                        <span className="text-zinc-400 font-normal"> — {r.reason}</span>
+                      ) : null}
                     </p>
                     <p className="text-xs text-zinc-500 mt-0.5">
                       Submitted {r.submitted_at ? fmtDate(r.submitted_at) : '—'} · reimburse {fmtMoney(r.personal)}
@@ -141,7 +153,11 @@ export default async function AdminExpensesPage() {
                   <div>
                     <p className="text-sm font-medium">
                       {r.name}
-                      {r.reason ? <span className="text-zinc-400 font-normal"> — {r.reason}</span> : null}
+                      {r.courses.length > 0 ? (
+                        <span className="text-zinc-400 font-normal"> — {r.courses.join(' + ')}</span>
+                      ) : r.reason ? (
+                        <span className="text-zinc-400 font-normal"> — {r.reason}</span>
+                      ) : null}
                     </p>
                     <p className="text-xs text-zinc-500 mt-0.5">Started {fmtDate(r.created_at)}</p>
                   </div>

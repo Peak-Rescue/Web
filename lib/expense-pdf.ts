@@ -12,6 +12,7 @@ import {
   balanceDueEmployee,
   daysInRange,
   fmtDateRange,
+  itemLabel,
   round2,
 } from '@/lib/expenses'
 
@@ -177,7 +178,7 @@ export async function generateExpensePdf(report: PdfReport): Promise<Uint8Array>
     drawCell(page, y, 'date', fmtDateRange(item.start_date, item.end_date))
     const desc = [
       item.category === 'per_diem' ? perDiemLabel(item) : null,
-      item.description,
+      itemLabel(item),
       item.courseTitle ? `[${item.courseTitle}]` : null,
     ].filter(Boolean).join(' ')
     drawCell(page, y, 'desc', desc || '—')

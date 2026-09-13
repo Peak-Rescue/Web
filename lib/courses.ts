@@ -226,6 +226,15 @@ export type InstanceLabelFields = {
   starts_at: string | null
 }
 
+/** Compact course label for lists that name a row by its course rather than
+    describe it: "SPRAT L1 · PR-0123". The client, location and month that
+    instanceLabel carries are too long to sit several-to-a-line. */
+export function instanceShortLabel(
+  i: { ref_number: number; course_type: string; custom_title: string | null }
+): string {
+  return `${courseShortName(i.course_type, i.custom_title)} · PR-${String(i.ref_number).padStart(4, '0')}`
+}
+
 export function instanceLabel(i: InstanceLabelFields): string {
   const parts = [
     courseShortName(i.course_type, i.custom_title),

@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import ReimbursedToggle from './ReimbursedToggle'
 import { createReport } from './actions'
 import { fmtMoney, round2 } from '@/lib/expenses'
+import { loadReportCourseLabels } from '@/lib/expense-report-data'
 
 export default async function ExpenseReportsPage() {
   const supabase = await createClient()
@@ -21,15 +22,25 @@ export default async function ExpenseReportsPage() {
 
   const { data: reports } = await admin
     .from('expense_reports')
-    .select('id, created_at, reason, status, submitted_at, payment_received_on, expense_items(amount, paid_by)')
+    .select('id, created_at, reason, status, submitted_at, payment_received_on, default_instance_id, expense_items(amount, paid_by, instance_id)')
     .eq('profile_id', user.id)
     .order('created_at', { ascending: false })
 
-  type ItemLite = { amount: number; paid_by: string }
+  type ItemLite = { amount: number; paid_by: string; instance_id: string | null }
+  // Reports are named by the course they belong to — "Course lead" and a date
+  // says nothing about which course it was.
+  const courseLabels = await loadReportCourseLabels(
+    (reports ?? []).map((r) => ({
+      id: r.id,
+      default_instance_id: r.default_instance_id,
+      items: (r.expense_items ?? []) as ItemLite[],
+    }))
+  )
   const rows = (reports ?? []).map((r) => {
     const items = (r.expense_items ?? []) as ItemLite[]
     return {
       ...r,
+      courses: courseLabels.get(r.id) ?? [],
       total: round2(items.reduce((s, i) => s + Number(i.amount), 0)),
       // Only personal-paid money comes back to you; company-card charges never do.
       personal: round2(items.filter((i) => i.paid_by === 'personal').reduce((s, i) => s + Number(i.amount), 0)),
@@ -96,7 +107,7 @@ export default async function ExpenseReportsPage() {
             >
               <Link href={`/instructor/expenses/${r.id}`} className="min-w-0 flex-1">
                 <p className="text-sm font-medium">
-                  {r.reason?.trim() || 'Untitled report'}
+                  {r.courses.join(' + ') || r.reason?.trim() || 'Untitled report'}
                   <span
                     className={`ml-3 px-1.5 py-0.5 text-[10px] font-medium rounded ${
                       r.status === 'submitted' ? 'bg-teal-900/60 text-teal-300' : 'bg-yellow-900/60 text-yellow-300'
@@ -114,6 +125,8 @@ export default async function ExpenseReportsPage() {
                   {r.status === 'submitted' && r.submitted_at
                     ? `Submitted ${fmtDate(r.submitted_at)}`
                     : `Started ${fmtDate(r.created_at)}`}
+                  {/* Once the course names the row, the reason is the detail. */}
+                  {r.courses.length > 0 && r.reason?.trim() ? ` · ${r.reason.trim()}` : ''}
                 </p>
               </Link>
               <div className="flex items-center gap-3 shrink-0">

@@ -3,7 +3,7 @@
 
 import { createAdminClient } from '@/lib/supabase/admin'
 import { type CurrentRates, type ExpenseCategory } from '@/lib/expenses'
-import { instanceLabel } from '@/lib/courses'
+import { instanceLabel, instanceShortLabel } from '@/lib/courses'
 import { type PdfReport } from '@/lib/expense-pdf'
 
 // Current reimbursement prices from the pricing library (rows tagged
@@ -116,4 +116,51 @@ export async function loadReport(reportId: string): Promise<{
   const receiptPaths = items.flatMap((i) => i.expense_receipts.map((r) => ({ path: r.path, filename: r.filename })))
 
   return { report: report as LoadedReport, items, pdfReport, receiptPaths }
+}
+
+export type ReportCourseRow = {
+  id: string
+  default_instance_id: string | null
+  items: { instance_id: string | null }[]
+}
+
+/** Every course a report touches, keyed by report id, for list views that name
+    a report by its courses. An item's own course link wins; the report default
+    stands in for items that carry none, so a single-course report needs no
+    per-item links. Reports with no course link at all are simply absent. */
+export async function loadReportCourseLabels(
+  rows: ReportCourseRow[]
+): Promise<Map<string, string[]>> {
+  const idsByReport = new Map<string, string[]>()
+  for (const r of rows) {
+    const ids = new Set<string>()
+    for (const i of r.items) {
+      const id = i.instance_id ?? r.default_instance_id
+      if (id) ids.add(id)
+    }
+    // A report with no items yet still names its default course.
+    if (r.items.length === 0 && r.default_instance_id) ids.add(r.default_instance_id)
+    if (ids.size > 0) idsByReport.set(r.id, [...ids])
+  }
+
+  const allIds = [...new Set([...idsByReport.values()].flat())]
+  if (allIds.length === 0) return new Map()
+
+  const { data: instances } = await createAdminClient()
+    .from('course_instances')
+    .select('id, ref_number, course_type, custom_title, starts_at')
+    .in('id', allIds)
+  const byId = new Map((instances ?? []).map((i) => [i.id, i]))
+
+  const out = new Map<string, string[]>()
+  for (const [reportId, ids] of idsByReport) {
+    const labels = ids
+      .map((id) => byId.get(id))
+      .filter((i): i is NonNullable<typeof i> => Boolean(i))
+      // Earliest course first, so a multi-course trip reads in the order it ran.
+      .sort((a, b) => (a.starts_at ?? '').localeCompare(b.starts_at ?? ''))
+      .map(instanceShortLabel)
+    if (labels.length > 0) out.set(reportId, labels)
+  }
+  return out
 }
