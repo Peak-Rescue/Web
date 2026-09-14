@@ -74,10 +74,13 @@ export default function DayOutline({
   // Tapping a line normally puts the caret in it. Held down, the same tap
   // reaches for the far end of a run instead — what Shift+click is on a desk.
   const [extending, setExtending] = useState(false)
-  // Which line has been asked for its `where`. The column is gone on a narrow
-  // screen, so the field appears only where it holds something already or
-  // where the bar has just asked for it.
-  const [whereFor, setWhereFor] = useState<string | null>(null)
+  // Which line has been asked for its time and its place. The columns are
+  // gone on a narrow screen and these two are the quiet half of a line — most
+  // lines have neither — so they show where they hold something already, or
+  // where the bar has just asked for them. Without this, every topic carried a
+  // greyed-out "time" on a line of its own, which is a row and a half of
+  // nothing per topic.
+  const [metaFor, setMetaFor] = useState<string | null>(null)
   // How much of the window the keyboard is sitting on. Fixed-to-the-bottom is
   // underneath it on iOS; the visual viewport is the only thing that knows
   // where the keyboard's top edge actually is.
@@ -92,15 +95,40 @@ export default function DayOutline({
     return () => { vv.removeEventListener('resize', on); vv.removeEventListener('scroll', on) }
   }, [])
 
-  const inputs = useRef(new Map<string, HTMLInputElement>())
+  const inputs = useRef(new Map<string, HTMLTextAreaElement>())
   const wheres = useRef(new Map<string, HTMLInputElement>())
+  const times = useRef(new Map<string, HTMLInputElement>())
   const focusNext = useRef<{ key: string; caret: number } | null>(null)
 
-  // Asking for a `where` is asking to type one — the field appears and takes
-  // the caret, rather than appearing somewhere below the thumb that asked.
+  // Asking for these is asking to type one — the fields appear and the first
+  // of them takes the caret, rather than appearing somewhere below the thumb
+  // that asked. The hour on a topic; the place on a line under one, which has
+  // no hour of its own.
   useEffect(() => {
-    if (whereFor) wheres.current.get(whereFor)?.focus()
-  }, [whereFor])
+    if (metaFor) (times.current.get(metaFor) ?? wheres.current.get(metaFor))?.focus()
+  }, [metaFor])
+
+  // A line grows to hold what was typed into it. It was an <input>, which is
+  // a box text scrolls sideways out of — fine at a desk, where a topic is
+  // sixty characters in a field six hundred wide, and useless on a phone,
+  // where the same topic is cut off at "Course overview, safety, eq". The read
+  // view has always wrapped; this is the editor catching up to it.
+  function fit(el: HTMLTextAreaElement | null) {
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${el.scrollHeight}px`
+  }
+  // Every render, because a line can change height without being typed in:
+  // pasting an outline, merging two lines with backspace, or simply the
+  // keyboard coming up and narrowing the page under it.
+  useEffect(() => { inputs.current.forEach(fit) })
+
+  /** Whether this line is taller than the one line it started as — which is
+      what decides whether an arrow key belongs to the text or to the outline. */
+  function wrapped(el: HTMLTextAreaElement) {
+    const line = parseFloat(getComputedStyle(el).lineHeight) || 20
+    return el.scrollHeight > line * 1.5
+  }
 
   // Focus follows the edit that caused it — a split line, a merged one, an
   // arrow key — so the caret ends up where a typist expects it.
@@ -278,7 +306,7 @@ export default function DayOutline({
   // Keys that mean something to a run of lines rather than to a caret. Runs
   // through before the single-line handling below, and falls through to it
   // when there's no run.
-  function runKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+  function runKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === 'Escape') { e.preventDefault(); setSel(null); return true }
 
     // Alt with an arrow means move, and the line handling below already moves
@@ -355,7 +383,7 @@ export default function DayOutline({
     return !['Shift', 'Meta', 'Control', 'Alt'].includes(e.key)
   }
 
-  function keyDown(e: React.KeyboardEvent<HTMLInputElement>, i: number) {
+  function keyDown(e: React.KeyboardEvent<HTMLTextAreaElement>, i: number) {
     if (sel && runKeyDown(e)) return
     const el = e.currentTarget
     const caret = el.selectionStart ?? 0
@@ -446,13 +474,18 @@ export default function DayOutline({
       return
     }
 
+    // Up and down leave the line for the one above or below it — but a line
+    // that has wrapped has lines of its own to walk first, so the arrow is the
+    // text's until the caret is at the end it is heading for.
     if (e.key === 'ArrowUp' && i > 0) {
+      if (wrapped(el) && caret > 0) return
       e.preventDefault()
       focusNext.current = { key: rows[i - 1].key, caret }
       setRows([...rows])
       return
     }
     if (e.key === 'ArrowDown' && i < rows.length - 1) {
+      if (wrapped(el) && caret < row.title.length) return
       e.preventDefault()
       focusNext.current = { key: rows[i + 1].key, caret }
       setRows([...rows])
@@ -466,7 +499,7 @@ export default function DayOutline({
 
   // Pasting an outline mid-line splits it into lines here rather than in a
   // separate import box — indentation still means sub-topic.
-  function paste(e: React.ClipboardEvent<HTMLInputElement>, i: number) {
+  function paste(e: React.ClipboardEvent<HTMLTextAreaElement>, i: number) {
     const text = e.clipboardData.getData('text/plain')
     if (!sel && !text.includes('\n')) return
     e.preventDefault()
@@ -556,9 +589,15 @@ export default function DayOutline({
             focusNext.current = { key: row.key, caret: 0 }
             setSel({ a: from, b: i })
           }}
-          // Wrapping, so the `where` at the end of the line has somewhere to
-          // go on a phone instead of squeezing the topic into a keyhole.
-          className={`group/row flex flex-wrap items-center gap-1 rounded ${
+          // On a phone the line comes first and its trappings follow it.
+          // Ranged down the sides, a 56px time gutter and two levels of indent
+          // left a topic about fifteen characters to live in — and the gutter
+          // was sized for "0830", not for "Afternoon", so it truncated the one
+          // thing it existed to show. The break after the title is what drops
+          // the time and the where onto a quiet line of their own; on a wider
+          // screen it collapses and `order` puts the columns back exactly as
+          // they were.
+          className={`group/row flex flex-wrap sm:flex-nowrap items-start gap-x-1 gap-y-0.5 rounded ${
             sel && i >= lo && i <= hi ? 'bg-zinc-700/50' : ''
           }`}
         >
@@ -569,10 +608,21 @@ export default function DayOutline({
               tabIndex={-1}
               placeholder="time"
               title="Optional time — click to fill in"
-              className={`w-14 shrink-0 sm:w-16 text-[11px] text-zinc-500 text-right placeholder:text-zinc-700 ${input}`}
+              ref={(el) => {
+                if (el) times.current.set(row.key, el)
+                else times.current.delete(row.key)
+              }}
+              // Wide enough for "Afternoon" where it has a line to itself, and
+              // back to the narrow right-ranged column where it doesn't. The
+              // gutter was 56px and ranged right, which is a width for "0830"
+              // and not for the words people actually write here.
+              className={`order-4 sm:order-1 w-24 text-left shrink-0 sm:w-16 sm:text-right text-[11px] text-zinc-500 placeholder:text-zinc-700 ${
+                row.time || metaFor === row.key ? '' : 'hidden sm:block [@media(hover:none)]:hidden'
+              } ${input}`}
             />
           ) : (
-            <span className="w-14 shrink-0 sm:w-16" />
+            // The gutter only exists where there are columns to line up.
+            <span className="hidden sm:block sm:w-16 shrink-0 sm:order-1" />
           )}
           {/* A dot for a topic, a dash for what hangs off it, and a shorter,
               fainter dash further in for the level below that — the marker gets
@@ -580,29 +630,39 @@ export default function DayOutline({
               the spine of the day. */}
           <span
             aria-hidden
-            className={`shrink-0 ${
+            // Shallower steps on a phone: the indent is there to be read, and
+            // at 36px a third-level line started two thirds of the way across
+            // a 300px card. And the marker sits against the first line of the
+            // text rather than the middle of a paragraph of it.
+            className={`order-1 sm:order-2 shrink-0 mt-3 ${
               row.depth === 0
                 ? 'w-1 h-1 rounded-full bg-zinc-600 mx-1'
                 : row.depth === 1
-                  ? 'w-1.5 h-px bg-zinc-700 ml-5 mr-1'
-                  : 'w-1 h-px bg-zinc-800 ml-9 mr-1.5'
+                  ? 'w-1.5 h-px bg-zinc-700 ml-3 sm:ml-5 mr-1'
+                  : 'w-1 h-px bg-zinc-800 ml-6 sm:ml-9 mr-1.5'
             }`}
           />
-          <input
+          <textarea
             ref={(el) => {
-              if (el) inputs.current.set(row.key, el)
+              if (el) { inputs.current.set(row.key, el); fit(el) }
               else inputs.current.delete(row.key)
             }}
+            rows={1}
             value={row.title}
-            onChange={(e) => edit(rows.map((r, n) => (n === i ? { ...r, title: e.target.value } : r)))}
+            onChange={(e) => { fit(e.currentTarget); edit(rows.map((r, n) => (n === i ? { ...r, title: e.target.value } : r))) }}
             onKeyDown={(e) => keyDown(e, i)}
             onPaste={(e) => paste(e, i)}
             onFocus={() => { focused.current = i; setActive(i) }}
-            placeholder={i === 0 && rows.length === 1 ? 'Type a topic — Tab indents, Enter starts the next line' : ''}
-            className={`flex-1 min-w-0 ${
+            // Named for what it does on every screen. Tab is a key a phone
+            // doesn't have, and the bar under the keyboard says the rest.
+            placeholder={i === 0 && rows.length === 1 ? 'Type a topic — Enter starts the next line' : ''}
+            className={`order-2 sm:order-3 flex-1 min-w-0 resize-none overflow-hidden leading-snug ${
               row.depth === 0 ? 'text-sm' : row.depth === 1 ? 'text-[13px] text-zinc-300' : 'text-[12px] text-zinc-400'
             } ${input}`}
           />
+          {/* The break. A full-width nothing, so what follows starts a line —
+              and gone entirely once there is room for columns. */}
+          <span aria-hidden className="order-3 w-full h-0 sm:hidden" />
           {/* Where this line happens, when it isn't simply where the day is.
               Kept out of the tab order like the time at the other end — the
               outline is typed, not tabbed through — and out of sight until it
@@ -623,9 +683,9 @@ export default function DayOutline({
             // bar's pin has asked for it, and takes a line of its own — the
             // one thing on the row worth losing width to, and only on the few
             // lines that have anything to say here.
-            className={`w-full shrink-0 text-[11px] ${
-              row.where || whereFor === row.key ? '' : 'hidden sm:block [@media(hover:none)]:hidden'
-            } sm:w-24 text-right ${input} ${
+            className={`order-5 sm:order-4 flex-1 sm:flex-none sm:w-24 sm:shrink-0 text-[11px] text-left sm:text-right ${
+              row.where || metaFor === row.key ? '' : 'hidden sm:block [@media(hover:none)]:hidden'
+            } ${input} ${
               row.where
                 ? 'text-zinc-500'
                 : 'text-zinc-500 placeholder:text-zinc-800 sm:opacity-0 focus:opacity-100 sm:group-hover/row:opacity-100'
@@ -633,7 +693,7 @@ export default function DayOutline({
           />
         </div>
       ))}
-      <div className="flex items-center justify-between pl-14 sm:pl-[4.5rem] pt-1">
+      <div className="flex items-center justify-between pl-0 sm:pl-[4.5rem] pt-1">
         {/* Two lines for the same job, because the keys named here are keys a
             phone doesn't have. Where there are none, the bar is the answer and
             the only thing worth saying is what is currently held. */}
@@ -688,16 +748,15 @@ export default function DayOutline({
           />
           {held > 0 && <span className="shrink-0 px-1 text-[11px] tabular-nums text-zinc-400">{held}</span>}
           <Key
-            label="Where this line happens"
-            on={whereFor === rows[aim].key}
+            label="Time and place for this line"
+            on={metaFor === rows[aim].key}
             onClick={() => {
-              if (whereFor === rows[aim].key) {
-                setWhereFor(null)
+              if (metaFor === rows[aim].key) {
+                setMetaFor(null)
                 inputs.current.get(rows[aim].key)?.focus()
-              } else setWhereFor(rows[aim].key)
+              } else setMetaFor(rows[aim].key)
             }}
-            d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"
-            extra={<circle cx="12" cy="10" r="3" />}
+            d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18M12 7v5l3 2"
           />
           <Key label={held > 1 ? `Delete ${held} lines` : 'Delete line'} danger onClick={() => replaceRun(runFrom, runTo, [])}
             d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" />
@@ -718,7 +777,6 @@ function Key({
   onClick,
   on,
   danger,
-  extra,
   className = '',
 }: {
   label: string
@@ -727,7 +785,6 @@ function Key({
   /** Lit, because it is a mode rather than a press — reaching, and the where. */
   on?: boolean
   danger?: boolean
-  extra?: React.ReactNode
   className?: string
 }) {
   return (
@@ -751,7 +808,6 @@ function Key({
         fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"
       >
         <path d={d} />
-        {extra}
       </svg>
     </button>
   )

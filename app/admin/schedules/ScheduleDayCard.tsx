@@ -84,12 +84,16 @@ export default function ScheduleDayCard({
       {error && <p className="text-sm text-pr-red mb-2">{error}</p>}
   <div className="border border-zinc-800 rounded-lg overflow-hidden">
     <div className="touch-type bg-zinc-900 px-3 py-2 space-y-2">
-      <div className="flex items-center gap-2">
+      {/* The name of the day is the long thing here and "Remove day" is the
+          short one, so on a narrow screen they stop sharing a line: side by
+          side, a day called "Day 1 — Refresher, Rigging & Anchors" showed
+          about half of itself. */}
+      <div className="flex flex-wrap items-center gap-2">
         <input
           defaultValue={day.title}
           onBlur={(e) => e.target.value !== day.title && run(() => updateScheduleDay(day.id, { title: e.target.value }), { quiet: true })}
           placeholder="Day 1: Basic rope skills"
-          className={`flex-1 font-medium ${input}`}
+          className={`w-full sm:w-auto sm:flex-1 font-medium ${input}`}
         />
         <button
           onClick={() => {
@@ -103,7 +107,7 @@ export default function ScheduleDayCard({
           // from the title field a thumb is aiming at. Given an edge and a
           // press's worth of padding: still quiet, but now both hittable and
           // missable on purpose.
-          className="shrink-0 rounded border border-zinc-800 px-2 py-1.5 text-xs text-zinc-500 hover:text-red-400 hover:border-red-900/60 transition-colors"
+          className="ml-auto shrink-0 rounded border border-zinc-800 px-2 py-1.5 text-xs text-zinc-500 hover:text-red-400 hover:border-red-900/60 transition-colors"
         >
           Remove day
         </button>
