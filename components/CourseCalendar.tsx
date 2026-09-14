@@ -142,10 +142,72 @@ export default function CourseCalendar({
     lanes.set(c.id, lane)
   }
 
+  // Every month a course touches, so the jump-to panel can say where the work
+  // is. Both callers hand over their whole set with no date bound, so an
+  // unmarked month really is an empty one.
+  const busyMonths = new Set<string>()
+  for (const c of visible) {
+    const last = c.ends_at.slice(0, 7)
+    for (let cur = c.starts_at.slice(0, 7); cur <= last; ) {
+      busyMonths.add(cur)
+      const [cy, cm] = cur.split('-').map(Number)
+      cur = ymd(new Date(Date.UTC(cy, cm, 1))).slice(0, 7)
+    }
+  }
+  // The panel spans the years that hold work, and always the year you are on
+  // and the year it is — an empty calendar still needs somewhere to point.
+  const yearsWithWork = [...busyMonths].map((ym) => Number(ym.slice(0, 4)))
+  const thisYear = Number(todayStr.slice(0, 4))
+  const firstYear = Math.min(y, thisYear, ...yearsWithWork)
+  const lastYear = Math.max(y, thisYear, ...yearsWithWork)
+  const years = Array.from({ length: lastYear - firstYear + 1 }, (_, i) => firstYear + i)
+  const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
   return (
     <div>
       <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-semibold">{fmtMonth(first)}</h3>
+        {/* Eight months ahead was eight clicks. The heading is the jump-to
+            control: it says which month you are on, and opens onto every
+            month there is. Keyed on the month so picking one remounts the
+            panel closed — a details element would otherwise stay open over
+            the grid it just changed. */}
+        <details key={month} className="relative group/pick">
+          <summary className="cursor-pointer list-none flex items-center gap-1.5 text-sm font-semibold select-none hover:text-white">
+            <span>{fmtMonth(first)}</span>
+            <span className="text-[8px] text-zinc-500 transition-transform group-open/pick:rotate-180">▼</span>
+          </summary>
+          <div className="absolute left-0 top-full z-20 mt-1 w-56 max-h-72 overflow-y-auto rounded-lg border border-zinc-700 bg-zinc-900 p-2 shadow-xl">
+            {years.map((yr) => (
+              <div key={yr} className="mb-2 last:mb-0">
+                <p className="px-1 pb-1 text-[10px] uppercase tracking-wide text-zinc-500">{yr}</p>
+                <div className="grid grid-cols-4 gap-0.5">
+                  {MONTH_ABBR.map((abbr, idx) => {
+                    const key = `${yr}-${String(idx + 1).padStart(2, '0')}`
+                    const isShown = key === month
+                    return (
+                      <Link
+                        key={key}
+                        href={navHref(key)}
+                        scroll={false}
+                        // A month with nothing on it is still reachable, just
+                        // dimmed: the panel is a map of the work, not a filter.
+                        className={`rounded px-1 py-1 text-center text-[11px] transition-colors ${
+                          isShown
+                            ? 'bg-pr-red font-semibold text-white'
+                            : busyMonths.has(key)
+                              ? 'text-zinc-200 hover:bg-zinc-800'
+                              : 'text-zinc-600 hover:bg-zinc-800'
+                        }`}
+                      >
+                        {abbr}
+                      </Link>
+                    )
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        </details>
         <div className="flex gap-2 text-sm">
           <Link href={navHref(ymd(prev).slice(0, 7))} scroll={false} className="px-2 py-1 bg-zinc-800 hover:bg-zinc-700 rounded text-zinc-300 transition-colors">←</Link>
           <Link href={navHref()} scroll={false} className="px-2 py-1 bg-zinc-800 hover:bg-zinc-700 rounded text-zinc-300 transition-colors text-xs leading-5">Today</Link>
