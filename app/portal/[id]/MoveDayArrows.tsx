@@ -16,7 +16,9 @@ import { moveScheduleDay } from '@/app/admin/schedules/actions'
 // read-first rule is there because a live field can have a start time nudged by
 // a thumb on a phone; a press on an arrow is deliberate, so it does not carry
 // that risk. Dim until the card is hovered or the button is focused, so a
-// five-day course does not read as ten buttons.
+// five-day course does not read as ten buttons — except where there is no
+// hover to dim them with, and a control that waits for one is a control that
+// never appears. On a phone they simply stand there.
 export default function MoveDayArrows({
   dayId,
   isFirst,
@@ -47,7 +49,7 @@ export default function MoveDayArrows({
   }
 
   return (
-    <span className="ml-auto flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover/day:opacity-100 focus-within:opacity-100">
+    <span className="ml-auto flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover/day:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100">
       {([
         ['up', isFirst, 'Move day earlier', 'M18 15l-6-6-6 6'],
         ['down', isLast, 'Move day later', 'M6 9l6 6 6-6'],
@@ -59,7 +61,7 @@ export default function MoveDayArrows({
           disabled={busy || atEnd}
           aria-label={label}
           title={label}
-          className="rounded p-1 text-zinc-500 hover:text-white hover:bg-zinc-800 transition-colors disabled:opacity-25 disabled:hover:bg-transparent disabled:hover:text-zinc-500"
+          className="rounded p-1 [@media(hover:none)]:p-2 text-zinc-500 hover:text-white hover:bg-zinc-800 transition-colors disabled:opacity-25 disabled:hover:bg-transparent disabled:hover:text-zinc-500"
         >
           <svg
             aria-hidden

@@ -65,6 +65,20 @@ body::-webkit-scrollbar {
   display: none;
 }
 
+/* A touch keyboard zooms the page in on any field it can't read at arm's
+   length — under 16px, every tap on a line of the schedule jumps the layout
+   and has to be pinched back out, which is most of what editing on a phone
+   feels like. Inside an editor marked for thumbs, the fields are set at a size
+   the phone will leave alone, which is also the size worth reading at a
+   trailhead. Pointer devices keep the compact scale. */
+@media (pointer: coarse) {
+  .touch-type input,
+  .touch-type textarea,
+  .touch-type select {
+    font-size: 16px;
+  }
+}
+
 /* Typography scale */
 .display-xl {
   font-family: var(--font-display);

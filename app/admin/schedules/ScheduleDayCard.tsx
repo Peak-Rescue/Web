@@ -83,7 +83,7 @@ export default function ScheduleDayCard({
     <>
       {error && <p className="text-sm text-pr-red mb-2">{error}</p>}
   <div className="border border-zinc-800 rounded-lg overflow-hidden">
-    <div className="bg-zinc-900 px-3 py-2 space-y-2">
+    <div className="touch-type bg-zinc-900 px-3 py-2 space-y-2">
       <div className="flex items-center gap-2">
         <input
           defaultValue={day.title}
@@ -99,7 +99,11 @@ export default function ScheduleDayCard({
               if (!ok) onRemoveFailed?.(day.id)
             })
           }}
-          className="shrink-0 text-xs text-zinc-600 hover:text-red-400 transition-colors"
+          // A word-sized target in the quietest grey on the card, an inch
+          // from the title field a thumb is aiming at. Given an edge and a
+          // press's worth of padding: still quiet, but now both hittable and
+          // missable on purpose.
+          className="shrink-0 rounded border border-zinc-800 px-2 py-1.5 text-xs text-zinc-500 hover:text-red-400 hover:border-red-900/60 transition-colors"
         >
           Remove day
         </button>

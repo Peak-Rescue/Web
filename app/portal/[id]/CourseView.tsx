@@ -2444,7 +2444,13 @@ export default async function CourseView({
 
                         A day with no date can't be behind anything, so a
                         schedule longer than its course stays open. */}
-                    <summary className="cursor-pointer list-none flex items-baseline gap-2">
+                    {/* Wrapping, and nothing in here fixed at its own width:
+                        a no-wrap row of shrink-0 parts ran the move arrows off
+                        the right edge of a phone, where `overflow-x: clip`
+                        took them away rather than letting anyone scroll to
+                        them. A long day name now takes a second line and the
+                        arrows stay on the card. */}
+                    <summary className="cursor-pointer list-none flex flex-wrap items-baseline gap-x-2 gap-y-1">
                       <span
                         aria-hidden
                         className="text-zinc-600 shrink-0 text-[10px] transition-transform group-open/day:rotate-90"
@@ -2454,7 +2460,7 @@ export default async function CourseView({
                       {!/^day\s*\d+\b/i.test(d.title.trim()) && (
                         <span className="text-[11px] font-mono text-zinc-600 shrink-0">Day {di + 1}</span>
                       )}
-                      <h3 className="font-semibold text-[15px] text-zinc-100 shrink-0">{d.title}</h3>
+                      <h3 className="font-semibold text-[15px] text-zinc-100 min-w-0">{d.title}</h3>
                       {/* Which calendar day this one is, worked out from the
                           course's start and the off days painted on it — so a
                           rest day in the middle pushes everything after it

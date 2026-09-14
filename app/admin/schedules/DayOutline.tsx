@@ -61,8 +61,46 @@ export default function DayOutline({
   const lo = sel ? Math.min(sel.a, sel.b) : -1
   const hi = sel ? Math.max(sel.a, sel.b) : -1
 
+  // A phone has no Tab, no Alt and no Shift, and a drag down the margin is a
+  // scroll. So the outline's verbs get buttons as well as keys: a bar that
+  // rides above the keyboard and acts on the line the caret is in — or on the
+  // run, once one is held. It is built on every screen and shown only where
+  // the pointer is a thumb; where there are keys, the keys are still the way.
+  //
+  // `active` is the line the bar is aimed at. It survives a press because the
+  // bar refuses the blur that would otherwise take the caret, the selection
+  // and the keyboard down with it.
+  const [active, setActive] = useState<number | null>(null)
+  // Tapping a line normally puts the caret in it. Held down, the same tap
+  // reaches for the far end of a run instead — what Shift+click is on a desk.
+  const [extending, setExtending] = useState(false)
+  // Which line has been asked for its `where`. The column is gone on a narrow
+  // screen, so the field appears only where it holds something already or
+  // where the bar has just asked for it.
+  const [whereFor, setWhereFor] = useState<string | null>(null)
+  // How much of the window the keyboard is sitting on. Fixed-to-the-bottom is
+  // underneath it on iOS; the visual viewport is the only thing that knows
+  // where the keyboard's top edge actually is.
+  const [kb, setKb] = useState(0)
+  useEffect(() => {
+    const vv = window.visualViewport
+    if (!vv) return
+    const on = () => setKb(Math.max(0, window.innerHeight - vv.height - vv.offsetTop))
+    on()
+    vv.addEventListener('resize', on)
+    vv.addEventListener('scroll', on)
+    return () => { vv.removeEventListener('resize', on); vv.removeEventListener('scroll', on) }
+  }, [])
+
   const inputs = useRef(new Map<string, HTMLInputElement>())
+  const wheres = useRef(new Map<string, HTMLInputElement>())
   const focusNext = useRef<{ key: string; caret: number } | null>(null)
+
+  // Asking for a `where` is asking to type one — the field appears and takes
+  // the caret, rather than appearing somewhere below the thumb that asked.
+  useEffect(() => {
+    if (whereFor) wheres.current.get(whereFor)?.focus()
+  }, [whereFor])
 
   // Focus follows the edit that caused it — a split line, a merged one, an
   // arrow key — so the caret ends up where a typist expects it.
@@ -193,6 +231,50 @@ export default function DayOutline({
     edit(next)
   }
 
+  // The outline's two structural verbs, written once. A keystroke and a button
+  // press are the same edit — which is the whole point, because the phone has
+  // no key to press.
+  //
+  // Each takes the run to act on (the held selection, or the line the caret is
+  // in), and where to put the caret afterwards: a thumb pressing indent has
+  // not finished with the line it is writing.
+
+  /** Where the caret is in a given line, for the bar — which has no keystroke
+      to read one off, and must put it back exactly where the thumb left it. */
+  function caretIn(key: string) {
+    return inputs.current.get(key)?.selectionStart ?? 0
+  }
+
+  /** One step in or out for every line of the run, so the shape inside the run
+      survives the move. `normalize` does the clamping — nothing ends up a
+      level further in than the line above it can carry, and pulling a topic
+      out drags what hangs off it along. */
+  function indentBy(step: 1 | -1, from: number, to: number, at: number, caret: number) {
+    const next = normalize(rows.map((r, n) =>
+      n >= from && n <= to
+        ? { ...r, depth: Math.min(Math.max(r.depth + step, 0), MAX_DEPTH) as Depth }
+        : r
+    ))
+    // Already as far in as the line above allows: no edit, and no save.
+    if (next.every((r, n) => r.depth === rows[n].depth)) return
+    focusNext.current = { key: rows[aim].key, caret }
+    edit(next)
+    if (sel) setSel(sel)
+  }
+
+  /** The run past the line above or below it, carrying the selection with it
+      so a second press keeps moving the same lines. */
+  function moveBy(dir: -1 | 1, from: number, to: number, at: number, caret: number) {
+    const landing = dir < 0 ? from - 1 : to + 1
+    if (landing < 0 || landing >= rows.length) return
+    const next = [...rows]
+    const moved = next.splice(from, to - from + 1)
+    next.splice(dir < 0 ? from - 1 : from + 1, 0, ...moved)
+    focusNext.current = { key: rows[aim].key, caret }
+    edit(next)
+    if (sel) setSel({ a: lo + dir, b: hi + dir })
+  }
+
   // Keys that mean something to a run of lines rather than to a caret. Runs
   // through before the single-line handling below, and falls through to it
   // when there's no run.
@@ -213,7 +295,7 @@ export default function DayOutline({
       } else {
         // Stepping off a run leaves you at the end you stepped towards.
         const at = down ? hi : lo
-        focusNext.current = { key: rows[at].key, caret: down ? rows[at].title.length : 0 }
+        focusNext.current = { key: rows[aim].key, caret: down ? rows[at].title.length : 0 }
         setSel(null)
       }
       return true
@@ -221,18 +303,7 @@ export default function DayOutline({
 
     if (e.key === 'Tab') {
       e.preventDefault()
-      // Every line of the run moves one step the same way, so the shape inside
-      // the run survives the move; the clamp above keeps the run legal against
-      // the line it lands under.
-      const step = e.shiftKey ? -1 : 1
-      const next = rows.map((r, n) =>
-        n >= lo && n <= hi
-          ? { ...r, depth: Math.min(Math.max(r.depth + step, 0), MAX_DEPTH) as Depth }
-          : r
-      )
-      focusNext.current = { key: rows[hi].key, caret: 0 }
-      edit(next)
-      setSel(sel)
+      indentBy(e.shiftKey ? -1 : 1, lo, hi, hi, 0)
       return true
     }
 
@@ -273,7 +344,7 @@ export default function DayOutline({
     if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
       e.preventDefault()
       const at = e.key === 'ArrowLeft' ? lo : hi
-      focusNext.current = { key: rows[at].key, caret: e.key === 'ArrowLeft' ? 0 : rows[at].title.length }
+      focusNext.current = { key: rows[aim].key, caret: e.key === 'ArrowLeft' ? 0 : rows[at].title.length }
       setSel(null)
       return true
     }
@@ -315,11 +386,7 @@ export default function DayOutline({
       e.preventDefault()
       // One step per press, and never further in than one below the line
       // above — the first line of a day has nothing to hang off at all.
-      const ceiling = i === 0 ? 0 : Math.min(rows[i - 1].depth + 1, MAX_DEPTH)
-      const depth = Math.min(Math.max(row.depth + (e.shiftKey ? -1 : 1), 0), ceiling) as Depth
-      if (depth === row.depth) return
-      focusNext.current = { key: row.key, caret }
-      edit(rows.map((r, n) => (n === i ? { ...r, depth } : r)))
+      indentBy(e.shiftKey ? -1 : 1, i, i, i, caret)
       return
     }
 
@@ -355,17 +422,7 @@ export default function DayOutline({
     // than a drag. With a run selected it moves all of them, together.
     if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && e.altKey) {
       e.preventDefault()
-      const up = e.key === 'ArrowUp'
-      const from = sel ? lo : i
-      const to = sel ? hi : i
-      const landing = up ? from - 1 : to + 1
-      if (landing < 0 || landing >= rows.length) return
-      const next = [...rows]
-      const moved = next.splice(from, to - from + 1)
-      next.splice(up ? from - 1 : from + 1, 0, ...moved)
-      focusNext.current = { key: row.key, caret }
-      edit(next)
-      if (sel) setSel({ a: up ? lo - 1 : lo + 1, b: up ? hi - 1 : hi + 1 })
+      moveBy(e.key === 'ArrowUp' ? -1 : 1, sel ? lo : i, sel ? hi : i, i, caret)
       return
     }
 
@@ -444,14 +501,42 @@ export default function DayOutline({
 
   const input = 'bg-transparent border-0 px-1 py-1 focus:outline-none focus:bg-zinc-800/60 rounded'
 
+  // What the bar is aimed at: the line holding the caret, and the run it
+  // stands for — itself, or the whole selection when one is held. An edit can
+  // shorten the outline under a stale index, so it is clamped to what exists.
+  const aim = active === null ? -1 : Math.min(active, rows.length - 1)
+  const runFrom = sel ? lo : aim
+  const runTo = sel ? hi : aim
+  const held = sel && hi > lo ? hi - lo + 1 : 0
+
   return (
     <div
-      className="px-3 py-2"
-      onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) flush() }}
+      // `touch-type` sizes the fields at 16px where the pointer is a thumb.
+      // Under that, a tap on a line zooms the whole page in and has to be
+      // pinched back out — which on a phone is every single edit.
+      className={`touch-type px-3 py-2 ${active !== null ? '[@media(hover:none)]:pb-16' : ''}`}
+      onBlur={(e) => {
+        if (e.currentTarget.contains(e.relatedTarget as Node | null)) return
+        // Focus left the outline for good — the bar goes with it, and so does
+        // the reach it was holding.
+        setActive(null)
+        setExtending(false)
+        flush()
+      }}
     >
       {rows.map((row, i) => (
         <div
           key={row.key}
+          onPointerDown={(e) => {
+            // Reaching for the far end of a run. Taken here rather than in the
+            // mouse handler below because a tap has to be refused *before* it
+            // moves the caret: letting it land would put the keyboard away,
+            // scroll the line under it out of view, and drop the very
+            // selection the tap is trying to draw.
+            if (!extending) return
+            e.preventDefault()
+            setSel({ a: sel ? sel.a : focused.current, b: i })
+          }}
           onMouseDown={(e) => {
             // Shift reaches from wherever the caret is to the line clicked;
             // a plain press starts a drag and drops any run already held.
@@ -471,7 +556,9 @@ export default function DayOutline({
             focusNext.current = { key: row.key, caret: 0 }
             setSel({ a: from, b: i })
           }}
-          className={`group/row flex items-center gap-1 rounded ${
+          // Wrapping, so the `where` at the end of the line has somewhere to
+          // go on a phone instead of squeezing the topic into a keyhole.
+          className={`group/row flex flex-wrap items-center gap-1 rounded ${
             sel && i >= lo && i <= hi ? 'bg-zinc-700/50' : ''
           }`}
         >
@@ -482,10 +569,10 @@ export default function DayOutline({
               tabIndex={-1}
               placeholder="time"
               title="Optional time — click to fill in"
-              className={`w-16 shrink-0 text-[11px] text-zinc-500 text-right placeholder:text-zinc-700 ${input}`}
+              className={`w-14 shrink-0 sm:w-16 text-[11px] text-zinc-500 text-right placeholder:text-zinc-700 ${input}`}
             />
           ) : (
-            <span className="w-16 shrink-0" />
+            <span className="w-14 shrink-0 sm:w-16" />
           )}
           {/* A dot for a topic, a dash for what hangs off it, and a shorter,
               fainter dash further in for the level below that — the marker gets
@@ -510,7 +597,7 @@ export default function DayOutline({
             onChange={(e) => edit(rows.map((r, n) => (n === i ? { ...r, title: e.target.value } : r)))}
             onKeyDown={(e) => keyDown(e, i)}
             onPaste={(e) => paste(e, i)}
-            onFocus={() => { focused.current = i }}
+            onFocus={() => { focused.current = i; setActive(i) }}
             placeholder={i === 0 && rows.length === 1 ? 'Type a topic — Tab indents, Enter starts the next line' : ''}
             className={`flex-1 min-w-0 ${
               row.depth === 0 ? 'text-sm' : row.depth === 1 ? 'text-[13px] text-zinc-300' : 'text-[12px] text-zinc-400'
@@ -522,30 +609,151 @@ export default function DayOutline({
               holds something or the row is hovered, because most lines have
               nothing to say here. */}
           <input
+            ref={(el) => {
+              if (el) wheres.current.set(row.key, el)
+              else wheres.current.delete(row.key)
+            }}
             value={row.where}
             onChange={(e) => edit(rows.map((r, n) => (n === i ? { ...r, where: e.target.value } : r)))}
             tabIndex={-1}
             placeholder="where"
             title="Optional — where this part of the day happens, if it differs from the day"
-            className={`w-24 shrink-0 text-[11px] text-right ${input} ${
+            // Hiding behind a hover is hiding for good on a phone, so on a
+            // narrow screen this is shown when it holds something or when the
+            // bar's pin has asked for it, and takes a line of its own — the
+            // one thing on the row worth losing width to, and only on the few
+            // lines that have anything to say here.
+            className={`w-full shrink-0 text-[11px] ${
+              row.where || whereFor === row.key ? '' : 'hidden sm:block [@media(hover:none)]:hidden'
+            } sm:w-24 text-right ${input} ${
               row.where
                 ? 'text-zinc-500'
-                : 'text-zinc-500 placeholder:text-zinc-800 opacity-0 focus:opacity-100 group-hover/row:opacity-100'
+                : 'text-zinc-500 placeholder:text-zinc-800 sm:opacity-0 focus:opacity-100 sm:group-hover/row:opacity-100'
             }`}
           />
         </div>
       ))}
-      <div className="flex items-center justify-between pl-[4.5rem] pt-1">
-        <p className="text-[10px] text-zinc-700">
+      <div className="flex items-center justify-between pl-14 sm:pl-[4.5rem] pt-1">
+        {/* Two lines for the same job, because the keys named here are keys a
+            phone doesn't have. Where there are none, the bar is the answer and
+            the only thing worth saying is what is currently held. */}
+        <p className="text-[10px] text-zinc-700 [@media(hover:none)]:hidden">
           {sel && hi > lo
             ? `${hi - lo + 1} lines · Tab indents · Alt+↑↓ moves them · ⌫ deletes`
             : 'Tab indents · Shift+Tab outdents · Alt+↑↓ moves a line · Shift+↑↓ selects'}
+        </p>
+        <p className="hidden text-[10px] text-zinc-700 [@media(hover:none)]:block">
+          {sel && hi > lo ? `${hi - lo + 1} lines held` : 'Tap a line to edit it'}
         </p>
         <span className={`text-[10px] transition-opacity ${saving ? 'text-zinc-500 opacity-100' : 'opacity-0'}`}>
           Saving…
         </span>
       </div>
+
+      {/* The bar.
+          
+          Everything the outline can do that isn't typing, within a thumb's
+          reach of the line being typed: in, out, up, down, reach, where, gone.
+          It sits on the keyboard's top edge rather than the window's, because
+          the window's is underneath the keyboard.
+
+          Nothing here takes focus. A press that blurred the field would put
+          the keyboard away, scroll the line out from under the thumb and drop
+          the run — so the whole bar refuses the press that would do it, and
+          every button works on the line the caret is still sitting in. */}
+      {aim >= 0 && rows[aim] && (
+        <div
+          style={{ bottom: kb }}
+          onPointerDown={(e) => e.preventDefault()}
+          className="fixed inset-x-0 z-40 hidden [@media(hover:none)]:flex items-center gap-0.5 overflow-x-auto no-scrollbar border-t border-zinc-700 bg-zinc-900/95 px-2 py-1.5 backdrop-blur supports-[backdrop-filter]:bg-zinc-900/80"
+        >
+          <Key label="Outdent" onClick={() => indentBy(-1, runFrom, runTo, aim, caretIn(rows[aim].key))}
+            d="M21 6H10M21 12H10M21 18H10M7 8l-4 4 4 4" />
+          <Key label="Indent" onClick={() => indentBy(1, runFrom, runTo, aim, caretIn(rows[aim].key))}
+            d="M21 6H10M21 12H10M21 18H10M3 8l4 4-4 4" />
+          <Key label="Move up" onClick={() => moveBy(-1, runFrom, runTo, aim, caretIn(rows[aim].key))}
+            d="M12 19V5M5 12l7-7 7 7" />
+          <Key label="Move down" onClick={() => moveBy(1, runFrom, runTo, aim, caretIn(rows[aim].key))}
+            d="M12 5v14M19 12l-7 7-7-7" />
+          <Key
+            label={extending ? 'Stop reaching' : 'Select lines'}
+            on={extending}
+            onClick={() => {
+              // On: the line the caret is in is the anchor, held and lit, so
+              // the next tap has something visible to reach from.
+              if (extending) { setExtending(false); setSel(null) }
+              else { setExtending(true); setSel({ a: aim, b: aim }) }
+            }}
+            d="M9 4H5v4M15 4h4v4M9 20H5v-4M15 20h4v-4M4 12h16"
+          />
+          {held > 0 && <span className="shrink-0 px-1 text-[11px] tabular-nums text-zinc-400">{held}</span>}
+          <Key
+            label="Where this line happens"
+            on={whereFor === rows[aim].key}
+            onClick={() => {
+              if (whereFor === rows[aim].key) {
+                setWhereFor(null)
+                inputs.current.get(rows[aim].key)?.focus()
+              } else setWhereFor(rows[aim].key)
+            }}
+            d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"
+            extra={<circle cx="12" cy="10" r="3" />}
+          />
+          <Key label={held > 1 ? `Delete ${held} lines` : 'Delete line'} danger onClick={() => replaceRun(runFrom, runTo, [])}
+            d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" />
+          <Key label="Done" className="ml-auto" onClick={() => inputs.current.get(rows[aim].key)?.blur()}
+            d="M6 9l6 6 6-6" />
+        </div>
+      )}
     </div>
+  )
+}
+
+// One key of the bar. Sized for a thumb rather than for the 11px type around
+// it — a control you reach for in a parking lot at seven in the morning is not
+// a control to make small.
+function Key({
+  label,
+  d,
+  onClick,
+  on,
+  danger,
+  extra,
+  className = '',
+}: {
+  label: string
+  d: string
+  onClick: () => void
+  /** Lit, because it is a mode rather than a press — reaching, and the where. */
+  on?: boolean
+  danger?: boolean
+  extra?: React.ReactNode
+  className?: string
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      aria-pressed={on}
+      title={label}
+      className={`shrink-0 rounded p-2.5 transition-colors ${
+        on
+          ? 'bg-zinc-700 text-white'
+          : danger
+            ? 'text-zinc-400 active:bg-zinc-800 active:text-red-400'
+            : 'text-zinc-300 active:bg-zinc-800 active:text-white'
+      } ${className}`}
+    >
+      <svg
+        aria-hidden
+        xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
+        fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"
+      >
+        <path d={d} />
+        {extra}
+      </svg>
+    </button>
   )
 }
 
