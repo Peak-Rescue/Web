@@ -18,7 +18,7 @@ export type OtherCourse = {
   client: string | null
 }
 
-// How many overlapping courses a day cell can draw before it runs out of
+// How many overlapping courses one day can name before the cell runs out of
 // room. Anything past this still names itself in the day's tooltip — the
 // drawing thins out, the answer to "what is on that day" does not.
 const MAX_BARS = 3
@@ -395,7 +395,11 @@ export default function CourseDatePainter({
 
   function cellClass(day: string): string {
     const previewing = stroke && day >= stroke.from && day <= stroke.to
-    const base = `relative ${showOthers ? 'h-12' : 'h-9'} flex items-center justify-center text-xs rounded-md select-none touch-none transition-colors cursor-pointer`
+    // With the overlay on, the cell becomes a calendar square like the month
+    // calendar's: the date in the corner and the courses named underneath.
+    const base = showOthers
+      ? 'relative h-20 rounded-md select-none touch-none transition-colors cursor-pointer'
+      : 'relative h-9 flex items-center justify-center text-xs rounded-md select-none touch-none transition-colors cursor-pointer'
 
     // Mid-stroke the day is drawn as it will be, not as it is: painting is
     // only worth the name if the paint shows up under the pointer.
@@ -447,10 +451,10 @@ export default function CourseDatePainter({
             'Drag across the days the course runs, or click the first day then the last'
           )}
           <InfoHint
-            below
+            below={!local}
             text={
               local
-                ? 'Drag across the calendar to paint the course window, or click the first day and then the last — everything between the two clicks becomes the course. Dragging either end moves it. Escape abandons a half-made range. Breaks in the middle of a course are cut once it exists, on the course page.'
+                ? 'Drag across the calendar, or click the first day and then the last. Dragging either end moves it, and Escape abandons a half-made range. Breaks are cut later, on the course page.'
                 : 'Drag across the calendar to paint the course window, or click the first day and then the last — everything between the two clicks becomes the course. Dragging either end moves it. Once the window is painted, a click on a day inside it cuts a break out of the course, and a click on a break rubs it out. The first and last day are the course itself and cannot be a break — pull that end in instead. Escape abandons a half-made range.'
             }
           />
@@ -495,8 +499,8 @@ export default function CourseDatePainter({
               ))}
             </div>
             <div className="grid grid-cols-7 gap-0.5">
-              {monthCells(m).map((day, i) => {
-                if (day === null) return <div key={i} className={showOthers ? 'h-12' : 'h-9'} />
+              {monthCells(m).map((day, i, mc) => {
+                if (day === null) return <div key={i} className={showOthers ? 'h-20' : 'h-9'} />
                 const booked = othersOn(day)
                 const gesture = pending
                   ? 'Click to set the other end of the course'
@@ -517,22 +521,40 @@ export default function CourseDatePainter({
                     title={booked.length ? `${booked.map((o) => o.label).join('\n')}\n\n${gesture}` : gesture}
                     className={cellClass(day)}
                   >
+                    <span className={showOthers ? 'absolute top-1 left-1.5 text-[10px] leading-none' : undefined}>
+                      {Number(day.slice(8))}
+                    </span>
                     {/* Drawn, not clickable: the day underneath is still a day
                         of this course to be painted. */}
-                    {booked.length > 0 && (
-                      <span className="pointer-events-none absolute inset-x-0.5 top-0.5 flex flex-col gap-px">
+                    {showOthers && (
+                      <span className="pointer-events-none absolute inset-x-0.5 top-5 flex flex-col gap-px">
                         {Array.from({ length: MAX_BARS }, (_, lane) => {
                           const o = booked.find((b) => overlay.lanes.get(b.id) === lane)
+                          // One chip per course per week row, drawn on its
+                          // first day in the row and stretched over the days
+                          // it covers — so the name has the whole bar's width,
+                          // as it does on the month calendar.
+                          const opens = o && (day === o.starts_at || i % 7 === 0 || mc[i - 1] === null)
+                          if (!o || !opens) return <span key={lane} className="h-4" />
+                          const toEnd = Math.round((Date.parse(o.ends_at) - Date.parse(day)) / 86_400_000)
+                          // Clamped to the week and to the month: the next
+                          // month is a separate grid, and the trailing cells
+                          // of this one are padding, not days.
+                          let room = 0
+                          while (room < 7 - (i % 7) && mc[i + room] != null) room += 1
+                          const span = Math.max(1, Math.min(toEnd + 1, room))
                           return (
                             <span
                               key={lane}
-                              className={`h-[3px] rounded-full ${o ? CATEGORY_STYLE[sectorOf(o)].bar : 'bg-transparent'}`}
-                            />
+                              style={span > 1 ? { width: `calc(${span * 100}% + ${(span - 1) * 6}px)` } : undefined}
+                              className={`relative z-10 block h-4 px-1 border rounded text-[10px] leading-4 truncate ${CATEGORY_STYLE[sectorOf(o)].solid}`}
+                            >
+                              {o.label}
+                            </span>
                           )
                         })}
                       </span>
                     )}
-                    {Number(day.slice(8))}
                     {isEdge(day) && (
                       <span className="absolute inset-x-0 -bottom-0.5 mx-auto h-0.5 w-4 rounded-full bg-white/70" />
                     )}
@@ -544,12 +566,12 @@ export default function CourseDatePainter({
         ))}
       </div>
 
-      {/* What else is on those days. Folded away by default and drawn as bars
-          rather than named chips: the cells are a third the width of the
-          month calendar's, so the colour is what fits and the name is on
-          hover. Same sector checkboxes as that calendar, same rule — both on
+      {/* What else is on those days, drawn as the month calendar draws it:
+          named chips in the same colours, stretched across the days they
+          cover, with the same sector checkboxes and the same rule — both on
           by default, and unticking the last one flips to the other rather
-          than emptying the overlay. */}
+          than emptying the overlay. Off to start with; the cells shrink back
+          to bare dates when it is. */}
       {others && others.length > 0 && (
         <div className="flex flex-wrap items-center gap-4 mt-3 text-[11px]">
           <label className="flex items-center gap-1.5 text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer">
