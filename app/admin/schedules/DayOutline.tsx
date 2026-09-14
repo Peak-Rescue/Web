@@ -703,7 +703,9 @@ export default function DayOutline({
             : 'Tab indents · Shift+Tab outdents · Alt+↑↓ moves a line · Shift+↑↓ selects'}
         </p>
         <p className="hidden text-[10px] text-zinc-700 [@media(hover:none)]:block">
-          {sel && hi > lo ? `${hi - lo + 1} lines held` : 'Tap a line to edit it'}
+          {extending
+            ? (sel && hi > lo ? `${hi - lo + 1} lines held — tap another to reach further` : 'Tap another line to reach it')
+            : sel && hi > lo ? `${hi - lo + 1} lines held` : 'Tap a line to edit it'}
         </p>
         <span className={`text-[10px] transition-opacity ${saving ? 'text-zinc-500 opacity-100' : 'opacity-0'}`}>
           Saving…
@@ -727,18 +729,18 @@ export default function DayOutline({
           onPointerDown={(e) => e.preventDefault()}
           className="fixed inset-x-0 z-40 hidden [@media(hover:none)]:flex items-center gap-0.5 overflow-x-auto no-scrollbar border-t border-zinc-700 bg-zinc-900/95 px-2 py-1.5 backdrop-blur supports-[backdrop-filter]:bg-zinc-900/80"
         >
-          <Key label="Outdent" onClick={() => indentBy(-1, runFrom, runTo, aim, caretIn(rows[aim].key))}
+          <Key label="Outdent" onPress={() => indentBy(-1, runFrom, runTo, aim, caretIn(rows[aim].key))}
             d="M21 6H10M21 12H10M21 18H10M7 8l-4 4 4 4" />
-          <Key label="Indent" onClick={() => indentBy(1, runFrom, runTo, aim, caretIn(rows[aim].key))}
+          <Key label="Indent" onPress={() => indentBy(1, runFrom, runTo, aim, caretIn(rows[aim].key))}
             d="M21 6H10M21 12H10M21 18H10M3 8l4 4-4 4" />
-          <Key label="Move up" onClick={() => moveBy(-1, runFrom, runTo, aim, caretIn(rows[aim].key))}
+          <Key label="Move up" onPress={() => moveBy(-1, runFrom, runTo, aim, caretIn(rows[aim].key))}
             d="M12 19V5M5 12l7-7 7 7" />
-          <Key label="Move down" onClick={() => moveBy(1, runFrom, runTo, aim, caretIn(rows[aim].key))}
+          <Key label="Move down" onPress={() => moveBy(1, runFrom, runTo, aim, caretIn(rows[aim].key))}
             d="M12 5v14M19 12l-7 7-7-7" />
           <Key
             label={extending ? 'Stop reaching' : 'Select lines'}
             on={extending}
-            onClick={() => {
+            onPress={() => {
               // On: the line the caret is in is the anchor, held and lit, so
               // the next tap has something visible to reach from.
               if (extending) { setExtending(false); setSel(null) }
@@ -746,11 +748,20 @@ export default function DayOutline({
             }}
             d="M9 4H5v4M15 4h4v4M9 20H5v-4M15 20h4v-4M4 12h16"
           />
-          {held > 0 && <span className="shrink-0 px-1 text-[11px] tabular-nums text-zinc-400">{held}</span>}
+          {/* A drag across two bullets selects nothing: each line is its own
+              field and the browser will not carry a selection between two of
+              them. Reaching is the way, so while it is on the bar says so —
+              at the bottom of the outline the same words are under the
+              keyboard, which is no place to explain anything. */}
+          {extending && (
+            <span className="shrink-0 whitespace-nowrap px-1 text-[11px] text-zinc-400">
+              {held > 1 ? `${held} lines` : 'tap a line'}
+            </span>
+          )}
           <Key
             label="Time and place for this line"
             on={metaFor === rows[aim].key}
-            onClick={() => {
+            onPress={() => {
               if (metaFor === rows[aim].key) {
                 setMetaFor(null)
                 inputs.current.get(rows[aim].key)?.focus()
@@ -758,9 +769,9 @@ export default function DayOutline({
             }}
             d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18M12 7v5l3 2"
           />
-          <Key label={held > 1 ? `Delete ${held} lines` : 'Delete line'} danger onClick={() => replaceRun(runFrom, runTo, [])}
+          <Key label={held > 1 ? `Delete ${held} lines` : 'Delete line'} danger onPress={() => replaceRun(runFrom, runTo, [])}
             d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" />
-          <Key label="Done" className="ml-auto" onClick={() => inputs.current.get(rows[aim].key)?.blur()}
+          <Key label="Done" className="ml-auto" onPress={() => inputs.current.get(rows[aim].key)?.blur()}
             d="M6 9l6 6 6-6" />
         </div>
       )}
@@ -771,17 +782,25 @@ export default function DayOutline({
 // One key of the bar. Sized for a thumb rather than for the 11px type around
 // it — a control you reach for in a parking lot at seven in the morning is not
 // a control to make small.
+//
+// It acts on the press, not on a click. The bar cannot let a press land or the
+// field loses focus and the keyboard goes down with it — but cancelling the
+// press also cancels the compatibility events the browser would have
+// synthesised from it, and whether `click` is among them is up to the browser.
+// Safari sometimes sent one and sometimes didn't, which is exactly what a
+// toolbar that works about half the time looks like. Nothing here waits for a
+// click any more: the press is the event.
 function Key({
   label,
   d,
-  onClick,
+  onPress,
   on,
   danger,
   className = '',
 }: {
   label: string
   d: string
-  onClick: () => void
+  onPress: () => void
   /** Lit, because it is a mode rather than a press — reaching, and the where. */
   on?: boolean
   danger?: boolean
@@ -790,11 +809,14 @@ function Key({
   return (
     <button
       type="button"
-      onClick={onClick}
+      onPointerDown={(e) => { e.preventDefault(); onPress() }}
+      // The press already did it. Without this, a browser that does synthesise
+      // the click runs the whole thing twice — two indents for one press.
+      onClick={(e) => e.preventDefault()}
       aria-label={label}
       aria-pressed={on}
       title={label}
-      className={`shrink-0 rounded p-2.5 transition-colors ${
+      className={`shrink-0 select-none touch-manipulation rounded p-2.5 transition-colors ${
         on
           ? 'bg-zinc-700 text-white'
           : danger
