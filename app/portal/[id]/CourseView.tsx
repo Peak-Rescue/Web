@@ -9,7 +9,7 @@ import CourseResourcesSection, { type CourseResource } from '@/app/admin/courses
 import CourseMapsSection, { type CourseMap } from '@/app/admin/courses/CourseMapsSection'
 import CourseAlbumSection from './CourseAlbumSection'
 import CourseFilesSection, { type CourseFile } from '@/app/admin/courses/CourseFilesSection'
-import CourseMode from './CourseMode'
+import CourseMode, { CourseModeProvider, BuildOnly } from './CourseMode'
 import CourseCurriculumEditor, { type CurriculumModule } from '@/app/admin/courses/CourseCurriculumEditor'
 import CourseGear from '@/app/admin/courses/CourseGear'
 import CourseDetailsEditor from '@/app/admin/courses/CourseDetailsEditor'
@@ -1328,16 +1328,20 @@ export default async function CourseView({
   }
   // Only an admin gets the two jobs, and only they get the switch. Everyone
   // else is running the course, which is the same list an admin reads while
-  // running it.
-  const navSections = (showAsAdmin && mode === 'build' ? BUILD : TEACH)
-    .filter((k) => present[k])
-    .map((id) => ({
-      id,
-      label: SECTION_LABEL[id],
-      // The whole notification: something was sent behind this door and you
-      // have not been back since. Opening it is how you find out what.
-      unread: unseen.has(id) || (id === 'updates' && unreadUpdates > 0),
-    }))
+  // running it. Both lists are built here and the bar picks between them, so
+  // pressing the switch is not a trip back to this function.
+  const doors = (keys: SectionKey[]) =>
+    keys
+      .filter((k) => present[k])
+      .map((id) => ({
+        id,
+        label: SECTION_LABEL[id],
+        // The whole notification: something was sent behind this door and you
+        // have not been back since. Opening it is how you find out what.
+        unread: unseen.has(id) || (id === 'updates' && unreadUpdates > 0),
+      }))
+  const teachSections = doors(TEACH)
+  const buildSections = showAsAdmin ? doors(BUILD) : null
 
   return (
     <main className="min-h-screen bg-zinc-950 text-white pt-16 md:pt-20">
@@ -1401,23 +1405,15 @@ export default async function CourseView({
           )}
         </div>
 
+        <CourseModeProvider initial={mode}>
         <CourseNav
-          sections={navSections}
+          sections={teachSections}
+          buildSections={buildSections}
           storageKey={`course-door:${id}`}
           openSection={viewer.openSection ?? null}
-          // Running the course rather than building it. An instructor or a
-          // student has no other job, so it is only an admin who can be doing
-          // the other one.
-          thumbReach={!showAsAdmin || mode === 'teach'}
           controls={showAsAdmin || isAdmin ? (
             <>
-              {showAsAdmin && (
-                <CourseMode
-                  mode={mode}
-                  buildHref={`/portal/${id}?mode=build`}
-                  teachHref={`/portal/${id}?mode=teach`}
-                />
-              )}
+              {showAsAdmin && <CourseMode />}
               {isAdmin && (
                 <ViewAsMenu viewAs={viewAs ?? ''} />
               )}
@@ -1806,15 +1802,17 @@ export default async function CourseView({
                   The button says what it does, and the confirm step it opens
                   spells out the cost with real counts — a label and a warning
                   beside it were the same sentence twice. */}
-              {showAsAdmin && mode === 'build' && (
-                <div className="mt-16 pt-8 border-t border-zinc-800 flex items-center justify-end gap-4">
-                  <DeleteInstanceButton
-                    instanceId={id}
-                    displayName={courseDisplayName(inst.course_type, inst.custom_title)}
-                    enrollmentCount={enrolledCount}
-                    expenseCount={expenseCount ?? 0}
-                  />
-                </div>
+              {showAsAdmin && (
+                <BuildOnly>
+                  <div className="mt-16 pt-8 border-t border-zinc-800 flex items-center justify-end gap-4">
+                    <DeleteInstanceButton
+                      instanceId={id}
+                      displayName={courseDisplayName(inst.course_type, inst.custom_title)}
+                      enrollmentCount={enrolledCount}
+                      expenseCount={expenseCount ?? 0}
+                    />
+                  </div>
+                </BuildOnly>
               )}
             </div>
           </Section>
@@ -2972,8 +2970,9 @@ export default async function CourseView({
         )}
 
         </CourseNav>
+        </CourseModeProvider>
 
-        {navSections.length === 0 && (
+        {teachSections.length === 0 && !buildSections?.length && (
           <p className="text-zinc-500 text-sm">Nothing has been added to this course yet.</p>
         )}
       </div>

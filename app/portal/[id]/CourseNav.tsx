@@ -2,6 +2,7 @@
 
 import { createPortal } from 'react-dom'
 import { createContext, useContext, useSyncExternalStore } from 'react'
+import { useCourseMode } from './CourseMode'
 
 // The course page's four doors.
 //
@@ -72,13 +73,17 @@ const DOOR_ICON: Record<string, string> = {
 
 export default function CourseNav({
   sections,
+  buildSections,
   storageKey,
   controls,
-  thumbReach,
   openSection,
   children,
 }: {
+  /** The doors for running the course — what everybody gets. */
   sections: NavSection[]
+  /** The doors for building one, when this reader has that job as well. Given
+      only to an admin, so its presence is what says the switch is on the bar. */
+  buildSections?: NavSection[] | null
   /** A door named in the URL — ?open=prep — from a link that means to send
       somebody to one. Ignored when it names a door this course has not got. */
   openSection?: string | null
@@ -89,13 +94,13 @@ export default function CourseNav({
       edge where the title and every card below it start. Four doors leave the
       room for this that nine never did. */
   controls?: React.ReactNode
-  /** Whether this reader is running the course rather than building it. On a
-      phone that job happens with one hand and the screen at arm's length, so
-      the doors move to the bottom where a thumb reaches; at a desk, and while
-      building, they stay a tab strip. */
-  thumbReach?: boolean
   children: React.ReactNode
 }) {
+  // Which job, and so which doors. Client state: pressing the switch swaps
+  // four labels, and every panel is mounted either way.
+  const mode = useCourseMode()
+  const building = Boolean(buildSections) && mode === 'build'
+  const doors = building ? buildSections! : sections
   // Come back to the door you were last on — you usually return to a course
   // for the same reason you left it.
   //
@@ -118,8 +123,8 @@ export default function CourseNav({
   //
   // The list changes with the job — Pricing is Build's, Updates is Teach's —
   // so a remembered door can stop existing between one visit and the next.
-  const asked = openSection && sections.some((s) => s.id === openSection) ? openSection : ''
-  const active = asked || (sections.some((s) => s.id === stored) ? stored : sections[0]?.id ?? '')
+  const asked = openSection && doors.some((s) => s.id === openSection) ? openSection : ''
+  const active = asked || (doors.some((s) => s.id === stored) ? stored : doors[0]?.id ?? '')
 
   const narrow = useSyncExternalStore(
     subscribeToWidth,
@@ -137,7 +142,11 @@ export default function CourseNav({
     doorChanged()
   }
 
-  const thumb = narrow && Boolean(thumbReach)
+  // Running the course happens on a phone with one hand and the screen at
+  // arm's length, so the doors move to the bottom where a thumb reaches.
+  // Building it does not — nobody assembles a course at a trailhead — so
+  // while building they stay a tab strip.
+  const thumb = narrow && !building
 
   return (
     <ActiveSection.Provider value={active}>
@@ -145,7 +154,7 @@ export default function CourseNav({
       <nav className="sticky top-16 md:top-20 z-20 -mx-4 px-4 pb-2.5 mb-8 bg-zinc-950/90 backdrop-blur">
         <div className="flex items-stretch gap-4">
           <div className="flex-1 min-w-0 flex gap-1 overflow-x-auto no-scrollbar border-b border-zinc-900">
-            {sections.map((s) => {
+            {doors.map((s) => {
               const on = s.id === active
               return (
                 <button
@@ -183,7 +192,7 @@ export default function CourseNav({
           className="fixed inset-x-0 bottom-0 z-30 flex border-t border-zinc-800 bg-zinc-950/95 px-1 pt-1.5 backdrop-blur"
           style={{ paddingBottom: 'calc(0.5rem + env(safe-area-inset-bottom))' }}
         >
-          {sections.map((s) => {
+          {doors.map((s) => {
             const on = s.id === active
             return (
               <button
