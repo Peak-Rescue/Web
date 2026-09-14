@@ -634,7 +634,7 @@ export default function EstimatePanel({
                     type="number"
                     value={r.qty}
                     min="0"
-                    step="0.5"
+                    step="1"
                     onChange={(e) => updateRow(r.key, { qty: e.target.value, factors: null })}
                     placeholder="—"
                     className={`${inputCls} w-20 text-right ${r.qty.trim() === '' ? 'border-amber-600' : ''}`}
@@ -682,7 +682,7 @@ export default function EstimatePanel({
                         type="number"
                         value={f}
                         min="0"
-                        step="0.5"
+                        step="1"
                         onChange={(e) => setFactor(r.key, i, e.target.value)}
                         className={`${inputCls} w-16 text-right ${
                           driftsByKey.get(r.key)?.some((d) => d.idx === i) ? 'border-amber-600' : ''
