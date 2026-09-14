@@ -14,7 +14,11 @@ import ViewAsMenu from '@/components/ViewAsMenu'
 
 export default async function AdminPage({ searchParams }: { searchParams: Promise<{ cal?: string; scope?: string; cat?: string }> }) {
   const { cal, scope, cat } = await searchParams
-  const showAllCourses = scope === 'all'
+  // Everyone lands on the whole calendar: for an admin that is every
+  // course, for an instructor it is already narrowed to their expertise
+  // below. ?scope=mine is how you say otherwise, and it has to be an
+  // explicit value now that an absent param means "all".
+  const showAllCourses = scope !== 'mine'
   const supabase = await createClient()
 
   const { data: { user } } = await supabase.auth.getUser()
@@ -172,7 +176,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   const homeHref = ({ all = showAllCourses, month = cal }: { all?: boolean; month?: string } = {}) => {
     const q = new URLSearchParams()
     if (month) q.set('cal', month)
-    if (all) q.set('scope', 'all')
+    q.set('scope', all ? 'all' : 'mine')
     if (cat) q.set('cat', cat)
     const s = q.toString()
     return s ? `/admin?${s}` : '/admin'
@@ -415,7 +419,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
               basePath="/admin"
               courses={calendarCourses}
               category={cat}
-              params={showAllCourses ? { scope: 'all' } : {}}
+              params={{ scope: showAllCourses ? 'all' : 'mine' }}
             />
           </div>
         </details>
