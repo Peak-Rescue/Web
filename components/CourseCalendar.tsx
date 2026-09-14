@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import CalendarChip from './CalendarChip'
-import MonthJump from './MonthJump'
+import MonthJump, { YM } from './MonthJump'
 import { todayHere } from '@/lib/course-clock'
 import { CATEGORY_STYLE, sectorOf } from '@/lib/calendar-colors'
 
@@ -130,31 +130,10 @@ export default function CourseCalendar({
       cur = ymd(new Date(Date.UTC(cy, cm, 1))).slice(0, 7)
     }
   }
-  // The panel spans the years that hold work, and always the year you are on
-  // and the year it is — an empty calendar still needs somewhere to point.
-  const yearsWithWork = [...busyMonths].map((ym) => Number(ym.slice(0, 4)))
-  const thisYear = Number(todayStr.slice(0, 4))
-  const firstYear = Math.min(y, thisYear, ...yearsWithWork)
-  const lastYear = Math.max(y, thisYear, ...yearsWithWork)
-  const years = Array.from({ length: lastYear - firstYear + 1 }, (_, i) => firstYear + i)
-  const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-
   return (
     <div>
       <div className="flex items-center justify-between mb-3">
-        <MonthJump
-          month={month}
-          years={years}
-          busy={[...busyMonths]}
-          hrefs={Object.fromEntries(
-            years.flatMap((yr) =>
-              MONTH_ABBR.map((_, idx) => {
-                const ym = `${yr}-${String(idx + 1).padStart(2, '0')}`
-                return [ym, navHref(ym)]
-              })
-            )
-          )}
-        />
+        <MonthJump month={month} busy={[...busyMonths]} hrefTemplate={navHref(YM)} />
         <div className="flex gap-2 text-sm">
           <Link href={navHref(ymd(prev).slice(0, 7))} scroll={false} className="px-2 py-1 bg-zinc-800 hover:bg-zinc-700 rounded text-zinc-300 transition-colors">←</Link>
           <Link href={navHref()} scroll={false} className="px-2 py-1 bg-zinc-800 hover:bg-zinc-700 rounded text-zinc-300 transition-colors text-xs leading-5">Today</Link>

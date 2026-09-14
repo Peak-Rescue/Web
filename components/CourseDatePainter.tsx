@@ -399,15 +399,8 @@ export default function CourseDatePainter({
         cur = ymd(new Date(Date.UTC(cy, cm, 1))).slice(0, 7)
       }
     }
-    // Always the year on screen and the year it is, so a book with nothing in
-    // it still has somewhere to point.
-    const ys = [...months].map((ym) => Number(ym.slice(0, 4)))
-    const here = Number(month.slice(0, 4))
-    const now = Number(today.slice(0, 4))
-    const from = Math.min(here, now, ...ys)
-    const to = Math.max(here, now, ...ys)
-    return { busy: [...months], years: Array.from({ length: to - from + 1 }, (_, i) => from + i) }
-  }, [others, month, today])
+    return { busy: [...months] }
+  }, [others])
 
   // ——— what a day looks like ————————————————————————————————————
 
@@ -512,7 +505,7 @@ export default function CourseDatePainter({
         {[month].map((m) => (
           <div key={m}>
             <div className="mb-2">
-              <MonthJump month={m} years={jump.years} busy={jump.busy} onPick={setMonth} />
+              <MonthJump month={m} busy={jump.busy} onPick={setMonth} />
             </div>
             <div className="grid grid-cols-7 text-[10px] text-zinc-600 uppercase tracking-wide mb-1">
               {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
