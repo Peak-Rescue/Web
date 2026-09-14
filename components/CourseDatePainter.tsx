@@ -86,27 +86,34 @@ function monthCells(month: string): (string | null)[] {
  */
 export default function CourseDatePainter({
   instanceId,
+  onChange,
   startsAt,
   endsAt,
-  offDays,
-  breaksPaid,
+  offDays = [],
+  breaksPaid = true,
   today,
   others,
 }: {
-  instanceId: string
+  /** Absent before the course exists: nothing is saved, the window is handed
+      up through onChange, and there are no breaks to cut. */
+  instanceId?: string
+  onChange?: (start: string | null, end: string | null) => void
   startsAt: string | null
   endsAt: string | null
   /** Whether the crew is paid through this course's breaks — one answer for
       the course, not one per break. */
-  breaksPaid: boolean
+  breaksPaid?: boolean
   // What day it is where the course runs, worked out on the server. The
   // browser's own clock would be the admin's, and an admin travelling is the
   // one person likely to open this on a different continent to the course.
   today: string
-  offDays: { off_date: string; end_date: string | null }[]
+  offDays?: { off_date: string; end_date: string | null }[]
   /** Every other course on the books, for the overlay. Absent → no toggle. */
   others?: OtherCourse[]
 }) {
+  // No row to write to yet: the painter is an input on someone else's form.
+  const local = !instanceId
+
   const fromProps = (): OffSpan[] =>
     offDays
       .map((o) => ({ from: o.off_date, to: o.end_date ?? o.off_date }))
@@ -164,6 +171,12 @@ export default function CourseDatePainter({
   }
 
   function saveWindow(start: string | null, end: string | null) {
+    if (local) {
+      saved.current = { start, end }
+      setWin({ start, end })
+      onChange?.(start, end)
+      return
+    }
     const before = { win: saved.current, breaks }
     if (start === saved.current.start && end === saved.current.end) return
     // The server trims breaks the new window no longer contains; the drawing
@@ -192,11 +205,15 @@ export default function CourseDatePainter({
     setPending(null)
     setStroke(null)
     setWin({ start, end })
+    if (local) { onChange?.(start, end); return }
     if (typing.current) clearTimeout(typing.current)
     typing.current = setTimeout(() => saveWindow(start, end), 900)
   }
 
+  // Breaks and their pay only exist on a saved course; the local painter never
+  // reaches either, having no window to cut one out of.
   function saveStroke(from: string, to: string, paint: boolean) {
+    if (!instanceId) return
     const before = breaks
     setBreaks(strokeOffDays(breaks, from, to, paint))
     void run(
@@ -208,6 +225,7 @@ export default function CourseDatePainter({
   // Pay is a fact about the course, not about a particular break: the crew
   // stays over the weekend on the clock, or they go home and are off it.
   function savePaid(next: boolean) {
+    if (!instanceId) return
     const before = paid
     setPaid(next)
     void run(
@@ -287,6 +305,10 @@ export default function CourseDatePainter({
       drag.current = { mode: 'window', anchor: win.start, paint: true, origin: day, clickAnchor: day, moved: false }
     } else if (!inWindow(day)) {
       drag.current = { mode: 'window', anchor: day < win.start ? win.end : win.start, paint: true, origin: day, clickAnchor: day, moved: false }
+    } else if (local) {
+      // Nothing to cut a break out of yet, so a press inside the window is the
+      // start of a new one rather than a break in this one.
+      drag.current = { mode: 'window', anchor: day, paint: true, origin: day, clickAnchor: day, moved: false }
     } else {
       drag.current = { mode: 'break', anchor: day, paint: !breakOn(day), origin: day, clickAnchor: day, moved: false }
     }
@@ -426,7 +448,11 @@ export default function CourseDatePainter({
           )}
           <InfoHint
             below
-            text="Drag across the calendar to paint the course window, or click the first day and then the last — everything between the two clicks becomes the course. Dragging either end moves it. Once the window is painted, a click on a day inside it cuts a break out of the course, and a click on a break rubs it out. The first and last day are the course itself and cannot be a break — pull that end in instead. Escape abandons a half-made range."
+            text={
+              local
+                ? 'Drag across the calendar to paint the course window, or click the first day and then the last — everything between the two clicks becomes the course. Dragging either end moves it. Escape abandons a half-made range. Breaks in the middle of a course are cut once it exists, on the course page.'
+                : 'Drag across the calendar to paint the course window, or click the first day and then the last — everything between the two clicks becomes the course. Dragging either end moves it. Once the window is painted, a click on a day inside it cuts a break out of the course, and a click on a break rubs it out. The first and last day are the course itself and cannot be a break — pull that end in instead. Escape abandons a half-made range.'
+            }
           />
         </p>
         <div className="flex items-center gap-2 shrink-0">
@@ -567,7 +593,9 @@ export default function CourseDatePainter({
         </div>
       )}
 
-      <div className="flex flex-wrap items-end gap-4 mt-4 pt-3 border-t border-zinc-800">
+      {/* Typed entry lives on the form itself when the painter is one field of
+          one, so the course's dates are not asked for in two places. */}
+      <div className={`flex flex-wrap items-end gap-4 mt-4 pt-3 border-t border-zinc-800${local ? ' hidden' : ''}`}>
         {/* Typed entry stays: a drag is no way to reach a date two years out,
             and no way to reach anything at all from a keyboard. */}
         <div>

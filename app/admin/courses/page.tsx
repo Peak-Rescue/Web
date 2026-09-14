@@ -7,6 +7,7 @@ import CreateCourseButton from './CreateCourseButton'
 import { CourseTypeSelect } from './CourseTypeSelect'
 import { courseShortName, courseEventTitle, crewFirstNames } from '@/lib/courses'
 import CourseCalendar, { type CalendarCourse } from '@/components/CourseCalendar'
+import NewCourseDates from '@/components/NewCourseDates'
 import CourseContactsEditor from '@/components/CourseContactsEditor'
 import CourseList, { type Instance } from './CourseList'
 import CourseLocationFields from '@/components/CourseLocationFields'
@@ -46,6 +47,20 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
   const instances = (raw ?? []) as unknown as Instance[]
 
   const today = todayHere()
+
+  // Everything already on the books, for the date painter's overlay in the
+  // create form — the same set the calendar below draws, minus its chrome.
+  const otherCourses = instances
+    .filter((i) => i.starts_at && i.ends_at && i.status !== 'cancelled')
+    .map((i) => ({
+      id: i.id,
+      label: courseEventTitle(i, []),
+      starts_at: i.starts_at!,
+      ends_at: i.ends_at! >= i.starts_at! ? i.ends_at! : i.starts_at!,
+      category: i.course_category ?? null,
+      internal: Boolean(i.internal),
+      client: i.client_name,
+    }))
 
   // Upcoming: last end date is today or in the future (or no dates yet)
   // Past: last end date is before today
@@ -123,14 +138,7 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
               <input name="client_name" placeholder="e.g. 24th STS" className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
             </div>
             <CourseContactsEditor initial={[]} />
-            <div>
-              <label className="block text-xs text-zinc-400 mb-1">Start date (optional)</label>
-              <input name="starts_at" type="date" className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
-            </div>
-            <div>
-              <label className="block text-xs text-zinc-400 mb-1">End date (optional)</label>
-              <input name="ends_at" type="date" className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
-            </div>
+            <NewCourseDates today={today} others={otherCourses} />
             <div>
               <label className="block text-xs text-zinc-400 mb-1">Number of students</label>
               <input name="max_students" type="number" min="1" placeholder="e.g. 10" className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
