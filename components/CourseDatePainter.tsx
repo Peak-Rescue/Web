@@ -5,6 +5,7 @@ import { updateInstanceDates, paintOffDays, setBreaksPaid } from '@/app/admin/co
 import { clampOffDays, strokeOffDays, type OffSpan } from '@/lib/courses'
 import { useSteadyRefresh } from './useSteadyRefresh'
 import InfoHint from './InfoHint'
+import MonthJump from './MonthJump'
 import { CATEGORY_STYLE, sectorOf } from '@/lib/calendar-colors'
 
 /** Another course on the books, as this calendar needs to draw it. */
@@ -32,11 +33,6 @@ function daysBetween(a: string, b: string): number {
 const fmtDay = (d: string) =>
   new Date(d + 'T00:00:00Z').toLocaleDateString('en-US', {
     weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC',
-  })
-
-const fmtMonth = (m: string) =>
-  new Date(m + '-01T00:00:00Z').toLocaleDateString('en-US', {
-    month: 'long', year: 'numeric', timeZone: 'UTC',
   })
 
 const monthOf = (d: string) => d.slice(0, 7)
@@ -391,6 +387,28 @@ export default function CourseDatePainter({
 
   const othersOn = (day: string) => overlay.shown.filter((o) => o.starts_at <= day && day <= o.ends_at)
 
+  // Where the work is, for the jump panel. Every course, not the ticked ones:
+  // the map of the book should not move when you hide a sector.
+  const jump = useMemo(() => {
+    const months = new Set<string>()
+    for (const o of others ?? []) {
+      const last = o.ends_at.slice(0, 7)
+      for (let cur = o.starts_at.slice(0, 7); cur <= last; ) {
+        months.add(cur)
+        const [cy, cm] = cur.split('-').map(Number)
+        cur = ymd(new Date(Date.UTC(cy, cm, 1))).slice(0, 7)
+      }
+    }
+    // Always the year on screen and the year it is, so a book with nothing in
+    // it still has somewhere to point.
+    const ys = [...months].map((ym) => Number(ym.slice(0, 4)))
+    const here = Number(month.slice(0, 4))
+    const now = Number(today.slice(0, 4))
+    const from = Math.min(here, now, ...ys)
+    const to = Math.max(here, now, ...ys)
+    return { busy: [...months], years: Array.from({ length: to - from + 1 }, (_, i) => from + i) }
+  }, [others, month, today])
+
   // ——— what a day looks like ————————————————————————————————————
 
   function cellClass(day: string): string {
@@ -493,7 +511,9 @@ export default function CourseDatePainter({
       >
         {[month].map((m) => (
           <div key={m}>
-            <p className="text-xs font-semibold text-zinc-300 mb-2">{fmtMonth(m)}</p>
+            <div className="mb-2">
+              <MonthJump month={m} years={jump.years} busy={jump.busy} onPick={setMonth} />
+            </div>
             <div className="grid grid-cols-7 text-[10px] text-zinc-600 uppercase tracking-wide mb-1">
               {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
                 <div key={i} className="text-center py-0.5">{d}</div>
