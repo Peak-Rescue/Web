@@ -31,7 +31,7 @@ import { unseenSections, lastPushToStudents, behindOnPush, type Push } from '@/l
 import { GEAR_ENTRIES_SELECT, KIT_LABEL } from '@/lib/gear'
 import { courseCapabilityCategories } from '@/lib/capabilities'
 import { GEAR_ENTRY_COLUMNS, gearLabel, gearQuantity, isChoice, placeSets, productName } from '@/lib/gear'
-import { courseDisplayName, computeBlocks, courseDates, dayShift } from '@/lib/courses'
+import { courseDisplayName, computeBlocks, courseDates, dayShift, courseEventTitle } from '@/lib/courses'
 import CourseTasksPanel, { type CourseTask, type TaskPerson } from '@/components/CourseTasksPanel'
 import PdfLink from '@/components/PdfLink'
 import { ForPill } from '@/components/AudiencePills'
@@ -257,6 +257,19 @@ export default async function CourseView({
 
   const venuesPromise = keep(showAsAdmin
     ? admin.from('venues').select('id, name, region, region_code, client_name, notes, active').order('name')
+    : Promise.resolve({ data: null }))
+
+  // What else is on the books, for the overlay the date painter can put behind
+  // this course's window — "is that week free" is asked while the dates are
+  // being set, not afterwards. Same round as the venues, and the same gate:
+  // the painter only exists for whoever can edit the details.
+  const otherCoursesPromise = keep(showAsAdmin
+    ? admin
+        .from('course_instances')
+        .select('id, course_type, custom_title, client_name, location, starts_at, ends_at, course_category, internal')
+        .neq('status', 'cancelled')
+        .not('starts_at', 'is', null)
+        .not('ends_at', 'is', null)
     : Promise.resolve({ data: null }))
 
   // The catalog and the shelf, for whoever is building this course's lists.
@@ -779,7 +792,26 @@ export default async function CourseView({
   // What a course *is* — the offering, who asked, who to call, how many. Setup
   // rather than delivery, so it is the admin's to change, and loaded only for
   // them.
-  const { data: venueRows } = await venuesPromise
+  const [{ data: venueRows }, { data: otherCourseRows }] = await Promise.all([venuesPromise, otherCoursesPromise])
+  const otherCourses = ((otherCourseRows ?? []) as {
+    id: string
+    course_type: string
+    custom_title: string | null
+    client_name: string | null
+    location: string | null
+    starts_at: string
+    ends_at: string
+    course_category: string | null
+    internal: boolean | null
+  }[]).map((o) => ({
+    id: o.id,
+    label: courseEventTitle(o, []),
+    starts_at: o.starts_at,
+    ends_at: o.ends_at >= o.starts_at ? o.ends_at : o.starts_at,
+    category: o.course_category,
+    internal: Boolean(o.internal),
+    client: o.client_name,
+  }))
   const coursePocs = parseContacts(inst.contacts)
 
   // Loaded for staff only: the catalog is every item we own, and a student's
@@ -1447,6 +1479,7 @@ export default async function CourseView({
                       contacts={coursePocs}
                       venues={(venueRows ?? []) as unknown as React.ComponentProps<typeof CourseDetailsEditor>['venues']}
                       offDays={(offDays ?? []) as unknown as React.ComponentProps<typeof CourseDetailsEditor>['offDays']}
+                      others={otherCourses}
                       internal={Boolean(inst.internal)}
                     />
                   }

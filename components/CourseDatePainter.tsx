@@ -1,10 +1,27 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { updateInstanceDates, paintOffDays, setBreaksPaid } from '@/app/admin/courses/actions'
 import { clampOffDays, strokeOffDays, type OffSpan } from '@/lib/courses'
 import { useSteadyRefresh } from './useSteadyRefresh'
 import InfoHint from './InfoHint'
+import { CATEGORY_STYLE, sectorOf } from '@/lib/calendar-colors'
+
+/** Another course on the books, as this calendar needs to draw it. */
+export type OtherCourse = {
+  id: string
+  label: string
+  starts_at: string
+  ends_at: string
+  category: string | null
+  internal: boolean
+  client: string | null
+}
+
+// How many overlapping courses a day cell can draw before it runs out of
+// room. Anything past this still names itself in the day's tooltip — the
+// drawing thins out, the answer to "what is on that day" does not.
+const MAX_BARS = 3
 
 const ymd = (d: Date) => d.toISOString().slice(0, 10)
 
@@ -74,6 +91,7 @@ export default function CourseDatePainter({
   offDays,
   breaksPaid,
   today,
+  others,
 }: {
   instanceId: string
   startsAt: string | null
@@ -86,6 +104,8 @@ export default function CourseDatePainter({
   // one person likely to open this on a different continent to the course.
   today: string
   offDays: { off_date: string; end_date: string | null }[]
+  /** Every other course on the books, for the overlay. Absent → no toggle. */
+  others?: OtherCourse[]
 }) {
   const fromProps = (): OffSpan[] =>
     offDays
@@ -96,6 +116,11 @@ export default function CourseDatePainter({
   const [breaks, setBreaks] = useState<OffSpan[]>(fromProps)
   const [month, setMonth] = useState(() => monthOf(startsAt ?? today))
   const [paid, setPaid] = useState(breaksPaid)
+  // Off by default: the question this calendar answers first is "when does
+  // this course run", and every other course on the books drawn over it is
+  // noise until you are asking the second question — "is that week free".
+  const [showOthers, setShowOthers] = useState(false)
+  const [sector, setSector] = useState<'military' | 'civilian' | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
@@ -316,11 +341,39 @@ export default function CourseDatePainter({
     else saveStroke(s.from, s.to, s.paint)
   }
 
+  // ——— the other courses ————————————————————————————————————————
+
+  // Same rule as the month calendar's legend: both sectors show by default,
+  // and asking for one drops the courses belonging to neither.
+  const overlay = useMemo(() => {
+    if (!showOthers || !others?.length) return { lanes: new Map<string, number>(), shown: [] as OtherCourse[] }
+    const shown = others
+      .filter((o) => o.id !== instanceId && o.starts_at && o.ends_at)
+      .filter((o) => {
+        const sec = sectorOf(o)
+        return sector ? sec === sector : true
+      })
+      .sort((a, b) => a.starts_at.localeCompare(b.starts_at) || a.ends_at.localeCompare(b.ends_at))
+    // A course holds one lane for its whole span, so its bar sits at the same
+    // height on every day it covers instead of hopping rows across the week.
+    const lanes = new Map<string, number>()
+    const laneEnds: string[] = []
+    for (const o of shown) {
+      let lane = laneEnds.findIndex((end) => end < o.starts_at)
+      if (lane === -1) lane = laneEnds.length
+      laneEnds[lane] = o.ends_at
+      lanes.set(o.id, lane)
+    }
+    return { lanes, shown }
+  }, [showOthers, others, sector, instanceId])
+
+  const othersOn = (day: string) => overlay.shown.filter((o) => o.starts_at <= day && day <= o.ends_at)
+
   // ——— what a day looks like ————————————————————————————————————
 
   function cellClass(day: string): string {
     const previewing = stroke && day >= stroke.from && day <= stroke.to
-    const base = 'relative h-9 flex items-center justify-center text-xs rounded-md select-none touch-none transition-colors cursor-pointer'
+    const base = `relative ${showOthers ? 'h-12' : 'h-9'} flex items-center justify-center text-xs rounded-md select-none touch-none transition-colors cursor-pointer`
 
     // Mid-stroke the day is drawn as it will be, not as it is: painting is
     // only worth the name if the paint shows up under the pointer.
@@ -416,38 +469,103 @@ export default function CourseDatePainter({
               ))}
             </div>
             <div className="grid grid-cols-7 gap-0.5">
-              {monthCells(m).map((day, i) =>
-                day === null ? (
-                  <div key={i} className="h-9" />
-                ) : (
+              {monthCells(m).map((day, i) => {
+                if (day === null) return <div key={i} className={showOthers ? 'h-12' : 'h-9'} />
+                const booked = othersOn(day)
+                const gesture = pending
+                  ? 'Click to set the other end of the course'
+                  : isEdge(day)
+                    ? `${day === win.start ? 'First' : 'Last'} day — drag to move it`
+                    : breakOn(day)
+                      ? 'Break — click to put the day back'
+                      : inWindow(day)
+                        ? 'Course day — click to make it a break'
+                        : 'Click to set the course dates'
+                return (
                   <div
                     key={day}
                     data-day={day}
                     onPointerDown={(ev) => onPointerDown(day, ev)}
-                    title={
-                      pending
-                        ? 'Click to set the other end of the course'
-                        : isEdge(day)
-                        ? `${day === win.start ? 'First' : 'Last'} day — drag to move it`
-                        : breakOn(day)
-                          ? 'Break — click to put the day back'
-                          : inWindow(day)
-                            ? 'Course day — click to make it a break'
-                            : 'Click to set the course dates'
-                    }
+                    // Every course on the day is named here, including any the
+                    // cell had no room to draw.
+                    title={booked.length ? `${booked.map((o) => o.label).join('\n')}\n\n${gesture}` : gesture}
                     className={cellClass(day)}
                   >
+                    {/* Drawn, not clickable: the day underneath is still a day
+                        of this course to be painted. */}
+                    {booked.length > 0 && (
+                      <span className="pointer-events-none absolute inset-x-0.5 top-0.5 flex flex-col gap-px">
+                        {Array.from({ length: MAX_BARS }, (_, lane) => {
+                          const o = booked.find((b) => overlay.lanes.get(b.id) === lane)
+                          return (
+                            <span
+                              key={lane}
+                              className={`h-[3px] rounded-full ${o ? CATEGORY_STYLE[sectorOf(o)].bar : 'bg-transparent'}`}
+                            />
+                          )
+                        })}
+                      </span>
+                    )}
                     {Number(day.slice(8))}
                     {isEdge(day) && (
                       <span className="absolute inset-x-0 -bottom-0.5 mx-auto h-0.5 w-4 rounded-full bg-white/70" />
                     )}
                   </div>
                 )
-              )}
+              })}
             </div>
           </div>
         ))}
       </div>
+
+      {/* What else is on those days. Folded away by default and drawn as bars
+          rather than named chips: the cells are a third the width of the
+          month calendar's, so the colour is what fits and the name is on
+          hover. Same sector checkboxes as that calendar, same rule — both on
+          by default, and unticking the last one flips to the other rather
+          than emptying the overlay. */}
+      {others && others.length > 0 && (
+        <div className="flex flex-wrap items-center gap-4 mt-3 text-[11px]">
+          <label className="flex items-center gap-1.5 text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer">
+            <input
+              type="checkbox"
+              checked={showOthers}
+              onChange={(e) => setShowOthers(e.target.checked)}
+              className="w-3.5 h-3.5 accent-pr-red bg-zinc-800 border-zinc-700 rounded"
+            />
+            Show other courses
+          </label>
+          {showOthers &&
+            (['military', 'civilian'] as const).map((k) => {
+              const other = k === 'military' ? ('civilian' as const) : ('military' as const)
+              const checked = sector !== other
+              return (
+                <button
+                  key={k}
+                  type="button"
+                  onClick={() => setSector(checked ? other : null)}
+                  title={checked ? `Hide ${k} courses` : `Show ${k} courses`}
+                  className={`flex items-center gap-1.5 transition-colors ${
+                    checked ? 'text-zinc-300 hover:text-white' : 'text-zinc-600 hover:text-zinc-400'
+                  }`}
+                >
+                  <span
+                    className={`flex items-center justify-center w-3 h-3 rounded-sm border ${
+                      checked ? CATEGORY_STYLE[k].swatch : 'border-zinc-600'
+                    }`}
+                  >
+                    {checked && (
+                      <svg xmlns="http://www.w3.org/2000/svg" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M20 6 9 17l-5-5" />
+                      </svg>
+                    )}
+                  </span>
+                  {k === 'military' ? 'Military' : 'Civilian'}
+                </button>
+              )
+            })}
+        </div>
+      )}
 
       <div className="flex flex-wrap items-end gap-4 mt-4 pt-3 border-t border-zinc-800">
         {/* Typed entry stays: a drag is no way to reach a date two years out,

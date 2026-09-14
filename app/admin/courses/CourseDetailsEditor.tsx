@@ -4,7 +4,7 @@ import TrashIcon from '@/components/TrashIcon'
 import { CourseTypeSelect } from './CourseTypeSelect'
 import CourseLocationFields from '@/components/CourseLocationFields'
 import CourseContactsEditor from '@/components/CourseContactsEditor'
-import CourseDatePainter from '@/components/CourseDatePainter'
+import CourseDatePainter, { type OtherCourse } from '@/components/CourseDatePainter'
 import { courseZone, todayIn } from '@/lib/course-clock'
 import { computeBlocks } from '@/lib/courses'
 
@@ -48,6 +48,7 @@ export default function CourseDetailsEditor({
   contacts,
   venues,
   offDays,
+  others,
   internal,
 }: {
   instanceId: string
@@ -55,6 +56,8 @@ export default function CourseDetailsEditor({
   contacts: CoursePOC[]
   venues: Venue[]
   offDays: CourseOffDay[]
+  /** Everything else on the books, for the painter's overlay. */
+  others?: OtherCourse[]
   internal: boolean
 }) {
   const updateDetails = updateInstanceDetails.bind(null, instanceId)
@@ -123,6 +126,7 @@ export default function CourseDetailsEditor({
           offDays={offDays ?? []}
           breaksPaid={course.breaks_paid ?? true}
           today={todayIn(courseZone(course.region))}
+          others={others}
         />
       </div>
 
