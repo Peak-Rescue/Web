@@ -420,6 +420,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
               courses={calendarCourses}
               category={cat}
               params={{ scope: showAllCourses ? 'all' : 'mine' }}
+              newHref={showAsAdmin ? '/admin/courses?new=1#new-course' : undefined}
             />
           </div>
         </details>

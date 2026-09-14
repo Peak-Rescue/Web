@@ -20,8 +20,8 @@ function lastEndDate(inst: Instance): string | null {
   return inst.ends_at ?? null
 }
 
-export default async function CoursesPage({ searchParams }: { searchParams: Promise<{ cal?: string; cat?: string }> }) {
-  const { cal, cat } = await searchParams
+export default async function CoursesPage({ searchParams }: { searchParams: Promise<{ cal?: string; cat?: string; new?: string }> }) {
+  const { cal, cat, new: openNew } = await searchParams
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
@@ -90,7 +90,9 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
             that look like setup numbers and the one that looks like workflow
             state. The headcount drives gear, staffing and the estimate, and
             the status is how sure we are the thing is real. */}
-        <details className="mb-10 group">
+        {/* Opens itself for the + on the portal calendar, which is where
+            the gap you are filling was visible. */}
+        <details id="new-course" open={Boolean(openNew)} className="mb-10 group scroll-mt-24">
           <summary className="cursor-pointer list-none">
             <div className="inline-flex items-center gap-2 px-4 py-2 bg-pr-red hover:bg-pr-red-dark text-white rounded font-medium text-sm transition-colors">
               <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">

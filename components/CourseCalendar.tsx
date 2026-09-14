@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import CalendarChip from './CalendarChip'
 import { todayHere } from '@/lib/course-clock'
+import { CATEGORY_STYLE, sectorOf } from '@/lib/calendar-colors'
 
 export type CalendarCourse = {
   id: string
@@ -18,37 +19,11 @@ export type CalendarCourse = {
   crew?: string[]
 }
 
-// Chips are colored by designation like the Google calendars — military vs
-// civilian, same rule as the sync (course_category 'tactical' → military,
-// everything else → civilian) — while status shows as solidity: confirmed
-// filled, quoted outlined, tentative dashed, completed dimmed.
-const CATEGORY_STYLE = {
-  military: {
-    swatch: 'bg-orange-900 border-orange-700 text-orange-100',
-    solid: 'bg-orange-900/80 text-orange-100 border-orange-700',
-    outline: 'border-orange-700 text-orange-300',
-  },
-  civilian: {
-    swatch: 'bg-cyan-900 border-cyan-700 text-cyan-100',
-    solid: 'bg-cyan-900/80 text-cyan-100 border-cyan-700',
-    outline: 'border-cyan-700 text-cyan-300',
-  },
-  // Work of ours with no client belongs to neither sector and syncs to the
-  // admin calendar rather than the military or civilian one — so it reads as
-  // neither colour here either. A client job with no students keeps its
-  // sector; the client is what the colour is about.
-  ours: {
-    swatch: 'bg-zinc-700 border-zinc-500 text-zinc-100',
-    solid: 'bg-zinc-700/80 text-zinc-100 border-zinc-500',
-    outline: 'border-zinc-500 text-zinc-300',
-  },
-}
-
 // No client of any kind — see CATEGORY_STYLE.ours.
-const isOurs = (c: CalendarCourse) => !!c.internal && !c.client
+const isOurs = (c: CalendarCourse) => sectorOf(c) === 'ours'
 
 function chipStyle(c: CalendarCourse): string {
-  const s = CATEGORY_STYLE[isOurs(c) ? 'ours' : c.category === 'tactical' ? 'military' : 'civilian']
+  const s = CATEGORY_STYLE[sectorOf(c)]
   switch (c.status) {
     case 'tentative':
       return `${s.outline} border-dashed`
@@ -75,12 +50,14 @@ export default function CourseCalendar({
   basePath,
   params,
   category,
+  newHref,
 }: {
   month: string
   courses: CalendarCourse[]
   basePath: string
   params?: Record<string, string> // extra query params to preserve in month-nav links
   category?: string | null // active military/civilian filter (?cat=), toggled via the legend
+  newHref?: string // when set, a + beside the arrows opens the new-course form
 }) {
   const catFilter = category === 'military' || category === 'civilian' ? category : null
   const isMilitary = (c: CalendarCourse) => c.category === 'tactical'
@@ -212,6 +189,20 @@ export default function CourseCalendar({
           <Link href={navHref(ymd(prev).slice(0, 7))} scroll={false} className="px-2 py-1 bg-zinc-800 hover:bg-zinc-700 rounded text-zinc-300 transition-colors">←</Link>
           <Link href={navHref()} scroll={false} className="px-2 py-1 bg-zinc-800 hover:bg-zinc-700 rounded text-zinc-300 transition-colors text-xs leading-5">Today</Link>
           <Link href={navHref(ymd(next).slice(0, 7))} scroll={false} className="px-2 py-1 bg-zinc-800 hover:bg-zinc-700 rounded text-zinc-300 transition-colors">→</Link>
+          {/* Reading the month is when you notice the gap worth filling, and
+              the form that fills it was two pages away. Not offered on the
+              courses page, where it sits directly above this calendar. */}
+          {newHref && (
+            <Link
+              href={newHref}
+              title="New course"
+              className="px-2 py-1 bg-pr-red hover:bg-pr-red-dark rounded text-white transition-colors"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="block my-0.5">
+                <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+            </Link>
+          )}
         </div>
       </div>
 
