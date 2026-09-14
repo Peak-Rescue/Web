@@ -46,19 +46,19 @@ const shiftMonth = (m: string, n: number) => {
   return ymd(t).slice(0, 7)
 }
 
-/** The cells of one month, Sunday-start, with the lead and trail padded out.
-    Blank rather than the adjacent months' real dates, unlike the read-only
-    course calendar: two months are drawn side by side here, and a day that
-    appeared twice would be a day you could paint in one place and not the
-    other. */
-function monthCells(month: string): (string | null)[] {
+/** The cells of one month, Sunday-start, with the lead and trail carrying the
+    adjacent months' real dates — the same grid the read-only course calendar
+    draws. They were blank while two months sat side by side, because a day
+    that appeared twice would be a day you could paint in one place and not
+    the other. One month at a time, that cannot happen, and the days either
+    side are worth having: a course that runs over the turn of the month is
+    one stroke again rather than two clicks a page apart. */
+function monthCells(month: string): string[] {
   const [y, m] = month.split('-').map(Number)
   const lead = new Date(Date.UTC(y, m - 1, 1)).getUTCDay()
   const days = new Date(Date.UTC(y, m, 0)).getUTCDate()
-  const cells: (string | null)[] = Array.from({ length: lead }, () => null)
-  for (let d = 1; d <= days; d++) cells.push(ymd(new Date(Date.UTC(y, m - 1, d))))
-  while (cells.length % 7 !== 0) cells.push(null)
-  return cells
+  const total = Math.ceil((lead + days) / 7) * 7
+  return Array.from({ length: total }, (_, i) => ymd(new Date(Date.UTC(y, m - 1, i + 1 - lead))))
 }
 
 /** Course dates as a thing you draw rather than a thing you type.
@@ -123,10 +123,10 @@ export default function CourseDatePainter({
   const [breaks, setBreaks] = useState<OffSpan[]>(fromProps)
   const [month, setMonth] = useState(() => monthOf(startsAt ?? today))
   const [paid, setPaid] = useState(breaksPaid)
-  // Off by default: the question this calendar answers first is "when does
-  // this course run", and every other course on the books drawn over it is
-  // noise until you are asking the second question — "is that week free".
-  const [showOthers, setShowOthers] = useState(false)
+  // On by default. Setting a date without seeing what it lands on is how two
+  // courses end up on one week, and the answer is only in the way when you
+  // already know the dates — in which case you typed them.
+  const [showOthers, setShowOthers] = useState(true)
   const [sector, setSector] = useState<'military' | 'civilian' | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -421,10 +421,12 @@ export default function CourseDatePainter({
     const ring = previewing ? ' ring-2 ring-inset ring-pr-red-light' : ''
     if (course && off) return `${base} bg-zinc-800 text-zinc-500 border border-dashed border-zinc-600${ring}`
     if (course) return `${base} bg-pr-red/85 text-white font-medium hover:bg-pr-red${ring}`
-    return `${base} text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300${ring}`
+    // The days either side of the turn of the month are real days and can be
+    // painted; they just are not what this page is about.
+    const dim = day.slice(0, 7) === month ? 'text-zinc-500' : 'text-zinc-700'
+    return `${base} ${dim} hover:bg-zinc-800 hover:text-zinc-300${ring}`
   }
 
-  const months = [month, shiftMonth(month, 1)]
   const total = win.start && win.end ? daysBetween(win.start, win.end) : 0
   const offCount = breaks.reduce((n, b) => n + daysBetween(b.from, b.to), 0)
 
@@ -488,9 +490,8 @@ export default function CourseDatePainter({
         onPointerLeave={() => {
           if (pending && !drag.current) setStroke({ mode: 'window', from: pending, to: pending, paint: true })
         }}
-        className="grid grid-cols-1 sm:grid-cols-2 gap-4"
       >
-        {months.map((m) => (
+        {[month].map((m) => (
           <div key={m}>
             <p className="text-xs font-semibold text-zinc-300 mb-2">{fmtMonth(m)}</p>
             <div className="grid grid-cols-7 text-[10px] text-zinc-600 uppercase tracking-wide mb-1">
@@ -499,8 +500,7 @@ export default function CourseDatePainter({
               ))}
             </div>
             <div className="grid grid-cols-7 gap-0.5">
-              {monthCells(m).map((day, i, mc) => {
-                if (day === null) return <div key={i} className={showOthers ? 'h-20' : 'h-9'} />
+              {monthCells(m).map((day, i) => {
                 const booked = othersOn(day)
                 const gesture = pending
                   ? 'Click to set the other end of the course'
@@ -534,15 +534,11 @@ export default function CourseDatePainter({
                           // first day in the row and stretched over the days
                           // it covers — so the name has the whole bar's width,
                           // as it does on the month calendar.
-                          const opens = o && (day === o.starts_at || i % 7 === 0 || mc[i - 1] === null)
+                          const opens = o && (day === o.starts_at || i % 7 === 0)
                           if (!o || !opens) return <span key={lane} className="h-4" />
                           const toEnd = Math.round((Date.parse(o.ends_at) - Date.parse(day)) / 86_400_000)
-                          // Clamped to the week and to the month: the next
-                          // month is a separate grid, and the trailing cells
-                          // of this one are padding, not days.
-                          let room = 0
-                          while (room < 7 - (i % 7) && mc[i + room] != null) room += 1
-                          const span = Math.max(1, Math.min(toEnd + 1, room))
+                          // Clamped to the week: the next row redraws it.
+                          const span = Math.max(1, Math.min(toEnd + 1, 7 - (i % 7)))
                           return (
                             <span
                               key={lane}
