@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { deletePricingRate } from '@/app/admin/courses/finance-actions'
+import TrashIcon from '@/components/TrashIcon'
 
 export default function DeletePricingRateButton({ rateId, label }: { rateId: string; label: string }) {
   const [busy, setBusy] = useState(false)
@@ -17,9 +18,11 @@ export default function DeletePricingRateButton({ rateId, label }: { rateId: str
         }
       }}
       disabled={busy}
-      className="text-xs text-zinc-500 hover:text-pr-red-light transition-colors disabled:opacity-50"
+      title={`Remove ${label} — existing estimates keep their values`}
+      aria-label={`Remove ${label}`}
+      className="text-zinc-600 hover:text-pr-red-light transition-colors disabled:opacity-50"
     >
-      Remove
+      <TrashIcon className="w-4 h-4" />
     </button>
   )
 }

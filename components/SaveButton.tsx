@@ -16,6 +16,10 @@ function serialize(form: HTMLFormElement): string {
 type Props = {
   children?: React.ReactNode
   className?: string
+  /** A tick instead of the word, for a table row where the label is the
+      widest thing in its column and says nothing the icon does not. The
+      three states move to the tooltip. */
+  icon?: boolean
 }
 
 /**
@@ -23,7 +27,7 @@ type Props = {
  * disabled until something changes, shows "Saving…" while the action runs,
  * then "Saved ✓" briefly on success. Drop it inside any <form action={…}>.
  */
-export default function SaveButton({ children = 'Save', className = '' }: Props) {
+export default function SaveButton({ children = 'Save', className = '', icon = false }: Props) {
   const { pending } = useFormStatus()
   const btnRef = useRef<HTMLButtonElement>(null)
   const baseline = useRef('')
@@ -65,9 +69,33 @@ export default function SaveButton({ children = 'Save', className = '' }: Props)
       ref={btnRef}
       type="submit"
       disabled={pending || !dirty}
+      title={icon ? (pending ? 'Saving…' : saved ? 'Saved' : 'Save') : undefined}
+      aria-label={icon ? 'Save' : undefined}
       className={`${className} disabled:opacity-50 disabled:cursor-not-allowed`}
     >
-      {pending ? 'Saving…' : saved ? 'Saved ✓' : children}
+      {icon ? (
+        <svg
+          aria-hidden
+          xmlns="http://www.w3.org/2000/svg"
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.25"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className={saved ? 'text-teal-400' : undefined}
+        >
+          <path d="M20 6 9 17l-5-5" />
+        </svg>
+      ) : pending ? (
+        'Saving…'
+      ) : saved ? (
+        'Saved ✓'
+      ) : (
+        children
+      )}
     </button>
   )
 }

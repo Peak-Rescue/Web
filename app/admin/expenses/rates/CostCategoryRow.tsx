@@ -59,14 +59,16 @@ export default function CostCategoryRow({
           {picked.length === 0 ? 'None' : `${picked.length} type${picked.length === 1 ? '' : 's'}`}
           <span className="ml-1 text-zinc-600">{open ? '▴' : '▾'}</span>
         </button>
-        <SaveButton className="px-2.5 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-white rounded text-xs font-medium transition-colors">
-          Save
-        </SaveButton>
+        <SaveButton
+          icon
+          className="flex items-center justify-center text-zinc-500 hover:text-white transition-colors"
+        />
         <button
           type="submit"
           formAction={retireCostAccount.bind(null, id)}
           title="Remove — deleted if unused, retired if costs point at it"
-          className="text-zinc-600 hover:text-pr-red-light transition-colors"
+          aria-label={`Remove ${label}`}
+          className="flex items-center justify-center text-zinc-600 hover:text-pr-red-light transition-colors"
         >
           <TrashIcon className="w-4 h-4" />
         </button>
