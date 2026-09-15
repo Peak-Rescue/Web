@@ -544,10 +544,7 @@ export default function DayOutline({
 
   return (
     <div
-      // `touch-type` sizes the fields at 16px where the pointer is a thumb.
-      // Under that, a tap on a line zooms the whole page in and has to be
-      // pinched back out — which on a phone is every single edit.
-      className={`touch-type px-3 py-2 ${active !== null ? '[@media(hover:none)]:pb-16' : ''}`}
+      className={`px-3 py-2 ${active !== null ? '[@media(hover:none)]:pb-16' : ''}`}
       onBlur={(e) => {
         if (e.currentTarget.contains(e.relatedTarget as Node | null)) return
         // Focus left the outline for good — the bar goes with it, and so does

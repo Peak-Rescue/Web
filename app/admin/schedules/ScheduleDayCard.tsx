@@ -89,7 +89,7 @@ export default function ScheduleDayCard({
     <>
       {error && <p className="text-sm text-pr-red mb-2">{error}</p>}
   <div className="border border-zinc-800 rounded-lg overflow-hidden">
-    <div className="touch-type bg-zinc-900 px-3 py-2 space-y-2">
+    <div className="bg-zinc-900 px-3 py-2 space-y-2">
       {/* The name of the day is the long thing here and "Remove day" is the
           short one, so on a narrow screen they stop sharing a line: side by
           side, a day called "Day 1 — Refresher, Rigging & Anchors" showed
