@@ -61,7 +61,7 @@ export default function CostCategoryRow({
         <button
           type="submit"
           formAction={retireCostAccount.bind(null, id)}
-          title="Retire — costs already sorted into it keep their history"
+          title="Remove — deleted if nothing has used it, retired if costs point at it"
           className="text-zinc-600 hover:text-pr-red-light transition-colors"
         >
           <TrashIcon className="w-4 h-4" />

@@ -124,6 +124,19 @@ export type AccountRollup = {
   typedLines: TypedCostLine[]
 }
 
+/** Which categories the summary draws. A category earns its row by holding
+    something: a chart of eight rows of $0.00 is a table of contents for an
+    empty book, and the full chart is one click away in any cost row's
+    dropdown.
+
+    A total of zero is not proof of emptiness — two costs that cancel out are
+    still a category somebody used — so the lines are what count. */
+export function accountsWorthShowing(rollups: AccountRollup[]): AccountRollup[] {
+  return rollups.filter(
+    (r) => r.expenseLines.length > 0 || r.typedLines.length > 0 || r.total !== 0
+  )
+}
+
 export type Actuals = {
   accounts: AccountRollup[]
   /** Submitted expense money whose account no longer exists. Counted in the

@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { amountValue } from '@/components/ActualsPanel'
 import {
+  accountsWorthShowing,
   accountForExpense,
   expenseLineLabel,
   payRatesFrom,
@@ -8,6 +9,7 @@ import {
   actualsAreLive,
   paySuggestion,
   rollUpActuals,
+  type AccountRollup,
   type ActualExpenseLine,
   type CostAccount,
 } from '@/lib/actuals'
@@ -286,5 +288,36 @@ describe('an amount box you are halfway through typing', () => {
 
   it('lets the box be emptied', () => {
     expect(amountValue({ amount: 0, amountText: '' })).toBe('')
+  })
+})
+
+describe('which categories the summary draws', () => {
+  const rollup = (over: Partial<AccountRollup>): AccountRollup => ({
+    account: TRAVEL,
+    fromExpenses: 0,
+    typed: 0,
+    total: 0,
+    expenseLines: [],
+    typedLines: [],
+    ...over,
+  })
+
+  it('leaves out a category nothing has touched', () => {
+    expect(accountsWorthShowing([rollup({})])).toHaveLength(0)
+  })
+
+  it('draws one holding expense-report money', () => {
+    expect(accountsWorthShowing([rollup({ expenseLines: [line()], total: 100 })])).toHaveLength(1)
+  })
+
+  it('draws one holding a typed cost', () => {
+    const typed = { id: 't1', account_id: 'travel', spend_date: null, description: 'Patches', amount: 240 }
+    expect(accountsWorthShowing([rollup({ typedLines: [typed], total: 240 })])).toHaveLength(1)
+  })
+
+  it('still draws one whose costs cancel out — somebody used it', () => {
+    const a = { id: 'a', account_id: 'travel', spend_date: null, description: 'Charge', amount: 100 }
+    const b = { id: 'b', account_id: 'travel', spend_date: null, description: 'Refund', amount: -100 }
+    expect(accountsWorthShowing([rollup({ typedLines: [a, b], total: 0 })])).toHaveLength(1)
   })
 })

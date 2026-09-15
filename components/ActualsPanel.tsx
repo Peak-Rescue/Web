@@ -3,11 +3,17 @@
 import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { fmtMoney, fmtDateRange, round2 } from '@/lib/expenses'
-import { expenseLineLabel, rollUpActuals, type CostAccount, type PayLine, type TypedCostLine } from '@/lib/actuals'
+import {
+  accountsWorthShowing,
+  expenseLineLabel,
+  rollUpActuals,
+  type CostAccount,
+  type PayLine,
+  type TypedCostLine,
+} from '@/lib/actuals'
 import { type LoadedActuals } from '@/lib/actuals-data'
 import {
   addCostAccount,
-  deleteCostAccount,
   setActualsShared,
   addSuggestedPayLines,
   deleteCostItem,
@@ -39,6 +45,12 @@ import InfoHint from '@/components/InfoHint'
 // per block.
 
 const DEBOUNCE_MS = 800
+
+// Not a category id. Picked out of the same dropdown, because the moment you
+// need a new category is the moment you are looking at a cost that has no
+// home, and a separate "add category" box beside the list was one more thing
+// on screen for something done twice a year.
+const NEW_CATEGORY = '__new__'
 
 /** `amountText` is what is in the box while it is being typed. Without it a
     row shows the parsed number back, so "0.5" loses its zero the moment it
@@ -90,7 +102,6 @@ export default function ActualsPanel({
   const [openAccount, setOpenAccount] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [newAccount, setNewAccount] = useState('')
 
   const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>())
   const chains = useRef(new Map<string, Promise<unknown>>())
@@ -209,6 +220,25 @@ export default function ActualsPanel({
     if (id) await deleteCostItem(instanceId, id).catch(() => router.refresh())
   }
 
+  /** A category invented while typing the cost that needed it, which is the
+      only moment anybody wants one. Returns its id so the row that asked can
+      assign itself to it. */
+  async function createCategory(): Promise<string | null> {
+    const name = window.prompt('New cost category')?.trim()
+    if (!name) return null
+    setBusy(true)
+    try {
+      const { id } = await addCostAccount(instanceId, name)
+      router.refresh()
+      return id
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not add that category')
+      return null
+    } finally {
+      setBusy(false)
+    }
+  }
+
   async function fileExpense(itemId: string, accountId: string) {
     setOverrides((m) => {
       const next = new Map(m)
@@ -220,6 +250,8 @@ export default function ActualsPanel({
       setError(e instanceof Error ? e.message : 'Could not move that expense')
     )
   }
+
+  const liveAccounts = accountsWorthShowing(actuals.accounts)
 
   // The part of the uncategorised pile that came from the list above rather
   // than from an expense report whose category was retired.
@@ -409,7 +441,7 @@ export default function ActualsPanel({
       <div>
         <div className="flex items-baseline gap-2 mb-2">
           <h4 className="text-sm font-semibold text-zinc-200">Costs</h4>
-          <InfoHint text="Type what the company card and direct invoices paid for. Submitted expense reports arrive on their own, by category." />
+          <InfoHint text="Type what the company card and direct invoices paid for; submitted expense reports arrive on their own. Categories are shared by every course — rename or retire them on the rates page." />
         </div>
 
         <div className="space-y-1.5">
@@ -420,17 +452,20 @@ export default function ActualsPanel({
               accounts={accounts}
               input={input}
               blank={costIsBlank(row)}
+              onNewCategory={createCategory}
               onChange={(p) => updateCost(row.key, p)}
               onRemove={() => void removeCost(row)}
             />
           ))}
         </div>
 
-        {/* ── What it all adds up to ─────────────────────────────────────── */}
-        <div className="mt-5 border border-zinc-800 rounded divide-y divide-zinc-800">
-          {actuals.accounts.map((r) => {
+        {/* ── What it all adds up to ───────────────────────────────────────
+            Only the categories with something in them. The full chart is one
+            click away in any row's dropdown; printed down the screen as eight
+            rows of $0.00 it was a table of contents for an empty book. */}
+        <div className={liveAccounts.length > 0 || actuals.unfiled.amount > 0 ? 'mt-5 border border-zinc-800 rounded divide-y divide-zinc-800' : ''}>
+          {liveAccounts.map((r) => {
             const open = openAccount === r.account.id
-            const empty = r.total === 0 && r.expenseLines.length === 0
             return (
               <div key={r.account.id}>
                 <button
@@ -485,32 +520,6 @@ export default function ActualsPanel({
                       </p>
                     )}
 
-                    {/* A way back out of a category added by mistake. Only
-                        offered on an empty one: they are shared by every
-                        course, and this screen cannot see what another course
-                        has put in them. */}
-                    {empty && (
-                      <button
-                        disabled={busy}
-                        onClick={async () => {
-                          setBusy(true)
-                          try {
-                            await deleteCostAccount(instanceId, r.account.id)
-                            router.refresh()
-                          } catch (e) {
-                            setError(e instanceof Error ? e.message : 'Could not remove that category')
-                          } finally {
-                            setBusy(false)
-                          }
-                        }}
-                        className="text-xs text-zinc-500 hover:text-pr-red-light transition-colors disabled:opacity-50"
-                      >
-                        Remove {r.account.label}
-                      </button>
-                    )}
-                    {!empty && r.expenseLines.length === 0 && r.typedLines.length === 0 && (
-                      <p className="text-xs text-zinc-600">Nothing on this course.</p>
-                    )}
                   </div>
                 )}
               </div>
@@ -553,34 +562,6 @@ export default function ActualsPanel({
               )}
             </div>
           )}
-        </div>
-
-        <div className="mt-2 flex items-center gap-2 flex-wrap">
-          <input
-            value={newAccount}
-            onChange={(e) => setNewAccount(e.target.value)}
-            placeholder="New category"
-            className={`${input} w-36`}
-          />
-          <button
-            disabled={!newAccount.trim() || busy}
-            onClick={async () => {
-              setBusy(true)
-              try {
-                await addCostAccount(instanceId, newAccount)
-                setNewAccount('')
-                router.refresh()
-              } catch (e) {
-                setError(e instanceof Error ? e.message : 'Could not add that category')
-              } finally {
-                setBusy(false)
-              }
-            }}
-            className="px-2.5 py-1 bg-zinc-800 hover:bg-zinc-700 rounded text-xs transition-colors disabled:opacity-40"
-          >
-            Add category
-          </button>
-          <InfoHint text="Categories are shared by every course. Rename or retire them, and set which expense categories land in each, on the rates page." />
         </div>
 
         {actuals.pending.amount > 0 && (
@@ -709,6 +690,7 @@ function CostRowFields({
   accounts,
   input,
   blank,
+  onNewCategory,
   onChange,
   onRemove,
 }: {
@@ -717,6 +699,8 @@ function CostRowFields({
   input: string
   /** Nothing typed yet, so nothing to remove. */
   blank?: boolean
+  /** Invents a category and returns its id, for the row that needed one. */
+  onNewCategory: () => Promise<string | null>
   onChange: (patch: Partial<CostRow>) => void
   onRemove: () => void
 }) {
@@ -734,15 +718,26 @@ function CostRowFields({
         placeholder="What it was"
         className={`${input} flex-1 min-w-32`}
       />
+      {/* The whole chart, plus a way to add to it. Inventing a category is
+          something you do while typing the cost that needed one, so it lives
+          here rather than as a second pair of controls under the list. */}
       <select
         value={row.account_id ?? ''}
-        onChange={(e) => onChange({ account_id: e.target.value || null })}
+        onChange={async (e) => {
+          if (e.target.value !== NEW_CATEGORY) {
+            onChange({ account_id: e.target.value || null })
+            return
+          }
+          const id = await onNewCategory()
+          if (id) onChange({ account_id: id })
+        }}
         className={`${input} w-36`}
       >
         <option value="">— category —</option>
         {accounts.map((a) => (
           <option key={a.id} value={a.id}>{a.label}</option>
         ))}
+        <option value={NEW_CATEGORY}>+ New category…</option>
       </select>
       <input
         value={amountValue(row)}
