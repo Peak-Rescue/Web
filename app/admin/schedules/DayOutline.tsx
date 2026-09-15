@@ -158,6 +158,10 @@ export default function DayOutline({
   // next tick.
   const running = useRef<Promise<void>>(Promise.resolve())
 
+  // The debt being paid right now. `inFlight` covers a save; this covers the
+  // other half of a quiet one, which writes nothing and only tells the pages.
+  const touching = useRef(false)
+
   const drain = useCallback(async (first: Job) => {
     inFlight.current = true
     setSaving(true)
@@ -194,19 +198,37 @@ export default function DayOutline({
     return running.current
   }, [drain])
 
-  const flush = useCallback(() => {
+  const flush = useCallback((): Promise<void> => {
     if (timer.current) { clearTimeout(timer.current); timer.current = null }
     const rows = pending.current
     pending.current = null
     if (rows) return push({ rows, quiet: false })
-    if (owed.current) { owed.current = false; return touchDay(dayId).catch(() => {}) }
+    // A save already in the air carries the debt with it — it sets `owed` when
+    // it lands, and the round after this one spends it.
+    if (inFlight.current) return running.current
+    if (owed.current) {
+      owed.current = false
+      // Held in `running`, and owned up to by `isPending`, like every other
+      // save. Loose, it was a promise nobody waited for: the debt was marked
+      // paid the moment it was sent, so a close right behind it found nothing
+      // outstanding and re-read the page while the revalidate was still on its
+      // way out — the page came back the way it went in. That is the shape of
+      // a phone: the tap on the X blurs the line, the blur flushes on its way
+      // past, and the close sails through the gap it left.
+      touching.current = true
+      running.current = touchDay(dayId)
+        .catch(() => {})
+        .finally(() => { touching.current = false })
+      return running.current
+    }
     return running.current
   }, [push, dayId])
 
   // An outline saves a beat after typing stops, which is the same beat someone
   // presses the X in. Closing the editor asks for that beat back.
   useRegisterSaver({
-    isPending: () => timer.current !== null || inFlight.current || pending.current !== null || owed.current,
+    isPending: () =>
+      timer.current !== null || inFlight.current || touching.current || pending.current !== null || owed.current,
     flush: async () => { await flush() },
   })
 
