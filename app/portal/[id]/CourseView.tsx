@@ -48,7 +48,7 @@ import CourseNotes from './CourseNotes'
 import MeetingDetails from './MeetingDetails'
 import type { UpdateAudience } from './update-actions'
 import CourseMessages, { type CourseMessage } from './CourseMessages'
-import EditInPlace from './EditableSchedule'
+import EditInPlace, { DayFold } from './EditableSchedule'
 import { FoldHead, FOLD_PANEL } from './FoldIndex'
 import AddScheduleDay from './AddScheduleDay'
 import ScheduleOverviewFields from './ScheduleOverviewFields'
@@ -2459,28 +2459,20 @@ export default async function CourseView({
                 const dayDate = dayDates[di]
                 const dayPassed = meetingDayPassed(dayDate, null)
                 return (
-                  <details
+                  <DayFold
                     key={d.id}
                     open={!dayPassed}
-                    className="group/day bg-zinc-900 border border-zinc-800 rounded-lg p-4"
-                  >
-                    {/* Days already behind us fold to a line, so a five-day
-                        course reads as today plus what is still ahead. The cut
-                        is local midnight — "is that day behind us" is a
-                        question about the calendar, not the hour — and it is
-                        the only date this schedule folds on: the morning and
-                        the beta inside a day ride on this one rather than
-                        keeping tests of their own.
+                    /* Days already behind us fold to a line, so a five-day
+                       course reads as today plus what is still ahead. The cut
+                       is local midnight — "is that day behind us" is a
+                       question about the calendar, not the hour — and it is
+                       the only date this schedule folds on: the morning and
+                       the beta inside a day ride on this one rather than
+                       keeping tests of their own.
 
-                        A day with no date can't be behind anything, so a
-                        schedule longer than its course stays open. */}
-                    {/* Wrapping, and nothing in here fixed at its own width:
-                        a no-wrap row of shrink-0 parts ran the move arrows off
-                        the right edge of a phone, where `overflow-x: clip`
-                        took them away rather than letting anyone scroll to
-                        them. A long day name now takes a second line and the
-                        arrows stay on the card. */}
-                    <summary className="cursor-pointer list-none flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                       A day with no date can't be behind anything, so a
+                       schedule longer than its course stays open. */
+                    summary={<>
                       <span
                         aria-hidden
                         className="text-zinc-600 shrink-0 text-[10px] transition-transform group-open/day:rotate-90"
@@ -2527,102 +2519,97 @@ export default async function CourseView({
                           {d.location}
                         </span>
                       )}
-                    </summary>
-                    {/* The morning, in the same block the course has always
-                        used — the meetup, the words, the hour, links,
-                        attachments, and save and notify as one press. It is
-                        attached to this day rather than to the course, which
-                        is the only thing that differs. Where nothing is typed
-                        here it shows the meetup the site usually uses.
+                    </>}
+                      /* The morning, in the same block the course has always
+                         used — the meetup, the words, the hour, links,
+                         attachments, and save and notify as one press. It is
+                         attached to this day rather than to the course, which
+                         is the only thing that differs. Where nothing is typed
+                         here it shows the meetup the site usually uses.
 
-                        Above "Edit day", and outside it. Below, it sat inside
-                        that button's read view, so pressing Edit day swapped
-                        the morning away for the curriculum editor — and the
-                        two buttons answered questions that overlapped, with
-                        "Meeting point" naming a picker in one and a paragraph
-                        in the other. The line is drawn at gathering: where and
-                        when we meet is this block, and everything about what
-                        we do once gathered — the canyon, the beta, the
-                        objectives, the topics — is Edit day. */}
-                    {(() => {
-                      const m = resolveDayMeeting(d, d.sites)
-                      const date = dayDate
-                      const own = Boolean(d.meeting_time || d.meeting_point || (d.meeting_links ?? []).length || (d.meeting_attachments ?? []).length)
-                      const empty = !own && !m.point && !m.pointLinks.length
-                      // Staff get the block on every day, because setting a
-                      // morning is the only way to set one — the editor no
-                      // longer carries those fields, so a day that renders
-                      // nothing is a day whose morning can never be written.
-                      // Folded, it is one quiet line saying "not set", which is
-                      // a way in rather than an announcement. Students see only
-                      // the mornings that exist.
-                      if (empty && (!showTasks || !date)) return null
-                      return (
-                        <div className="flex gap-1.5 mt-2">
-                          {/* The flag sits in the same gutter as the pin, the
-                              rope and the page corner. Without it this block
-                              started at the card's edge while everything under
-                              it started a glyph's width in, so the morning's
-                              own link and the canyon's stood at two different
-                              indents and read as two unrelated things. */}
-                          <svg
-                            aria-hidden
-                            xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24"
-                            fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"
-                            className="shrink-0 mt-[5px] text-zinc-600"
-                          >
-                            <path d="M5 21V4" />
-                            <path d="M5 4h11l-2 3.5L16 11H5" />
-                          </svg>
-                          <div className="flex-1 min-w-0">
-                          <MeetingDetails
-                            instanceId={id}
-                            dayId={d.id}
-                            inheritedPoint={d.meeting_point ? null : m.point}
-                            inheritedTime={m.usualTime}
-                            meetingDate={date}
-                            meetingPoint={d.meeting_point}
-                            meetingPointId={d.meeting_point_id}
-                            // Only for staff: a student needs no list of every
-                            // lot the company gathers in.
-                            meetingPoints={showTasks ? schedMeetingPoints : []}
-                            siteMeetupName={d.sites?.meeting_points?.name ?? null}
-                            // Which of the three fallbacks answered, so the
-                            // line under an inherited point names the place
-                            // rather than always blaming the site.
-                            inheritedFrom={m.pointFrom}
-                            inheritedPlace={m.placeName}
-                            meetingTime={d.meeting_time}
-                            links={d.meeting_links ?? []}
-                            // The meetup's driving pin, shown on every day
-                            // that meets there. Only the meetup's — the
-                            // canyon's own links have their row further down,
-                            // beside the beta they belong to.
-                            inheritedLinks={m.pointLinks}
-                            files={(d.meeting_attachments ?? []).map((a) => ({
-                              ...a,
-                              url: daySignedByPath.get(a.path) ?? '#',
-                            }))}
-                            canEdit={showTasks}
-                            notifyCounts={notifyCounts}
-                            announcedDates={showTasks ? ((inst.meeting_announced_dates as string[] | null) ?? []) : []}
-                            // An empty day never opens itself: it is a way
-                            // in, not an announcement that nobody knows where
-                            // to go. Every day that has one shows it — a day
-                            // behind us is already folded away whole.
-                            folded={empty}
-                          />
+                         Passed as `above` rather than as a child, which is to
+                         say: under the day's own button and outside the swap.
+                         As a child it sat inside that button's read view, so
+                         pressing Edit day swapped the morning away for the
+                         curriculum editor — and the two buttons answered
+                         questions that overlapped, with "Meeting point" naming
+                         a picker in one and a paragraph in the other. The line
+                         is drawn at gathering: where and when we meet is this
+                         block, and everything about what we do once gathered —
+                         the canyon, the beta, the objectives, the topics — is
+                         Edit day. */
+                      above={(() => {
+                        const m = resolveDayMeeting(d, d.sites)
+                        const date = dayDate
+                        const own = Boolean(d.meeting_time || d.meeting_point || (d.meeting_links ?? []).length || (d.meeting_attachments ?? []).length)
+                        const empty = !own && !m.point && !m.pointLinks.length
+                        // Staff get the block on every day, because setting a
+                        // morning is the only way to set one — the editor no
+                        // longer carries those fields, so a day that renders
+                        // nothing is a day whose morning can never be written.
+                        // Folded, it is one quiet line saying "not set", which is
+                        // a way in rather than an announcement. Students see only
+                        // the mornings that exist.
+                        if (empty && (!showTasks || !date)) return null
+                        return (
+                          <div className="flex gap-1.5 mt-2">
+                            {/* The flag sits in the same gutter as the pin, the
+                                rope and the page corner. Without it this block
+                                started at the card's edge while everything under
+                                it started a glyph's width in, so the morning's
+                                own link and the canyon's stood at two different
+                                indents and read as two unrelated things. */}
+                            <svg
+                              aria-hidden
+                              xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24"
+                              fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"
+                              className="shrink-0 mt-[5px] text-zinc-600"
+                            >
+                              <path d="M5 21V4" />
+                              <path d="M5 4h11l-2 3.5L16 11H5" />
+                            </svg>
+                            <div className="flex-1 min-w-0">
+                            <MeetingDetails
+                              instanceId={id}
+                              dayId={d.id}
+                              inheritedPoint={d.meeting_point ? null : m.point}
+                              inheritedTime={m.usualTime}
+                              meetingDate={date}
+                              meetingPoint={d.meeting_point}
+                              meetingPointId={d.meeting_point_id}
+                              // Only for staff: a student needs no list of every
+                              // lot the company gathers in.
+                              meetingPoints={showTasks ? schedMeetingPoints : []}
+                              siteMeetupName={d.sites?.meeting_points?.name ?? null}
+                              // Which of the three fallbacks answered, so the
+                              // line under an inherited point names the place
+                              // rather than always blaming the site.
+                              inheritedFrom={m.pointFrom}
+                              inheritedPlace={m.placeName}
+                              meetingTime={d.meeting_time}
+                              links={d.meeting_links ?? []}
+                              // The meetup's driving pin, shown on every day
+                              // that meets there. Only the meetup's — the
+                              // canyon's own links have their row further down,
+                              // beside the beta they belong to.
+                              inheritedLinks={m.pointLinks}
+                              files={(d.meeting_attachments ?? []).map((a) => ({
+                                ...a,
+                                url: daySignedByPath.get(a.path) ?? '#',
+                              }))}
+                              canEdit={showTasks}
+                              notifyCounts={notifyCounts}
+                              announcedDates={showTasks ? ((inst.meeting_announced_dates as string[] | null) ?? []) : []}
+                              // An empty day never opens itself: it is a way
+                              // in, not an announcement that nobody knows where
+                              // to go. Every day that has one shows it — a day
+                              // behind us is already folded away whole.
+                              folded={empty}
+                            />
+                            </div>
                           </div>
-                        </div>
-                      )
-                    })()}
-                    {/* The way into this day, on this day. The element is only
-                        built for staff, so a student is sent neither the button
-                        nor the editor's code — and `canEditSchedule` is the
-                        rule the server actions enforce, so it is never offered
-                        where the write would be refused. */}
-                    <EditInPlace
-                      label="Edit day"
+                        )
+                      })()}
                       editor={
                         canEditSchedule && editableDay ? (
                           <ScheduleDayCard
@@ -2836,8 +2823,7 @@ export default async function CourseView({
                         </ul>
                       </div>
                     )}
-                    </EditInPlace>
-                  </details>
+                  </DayFold>
                 )
               })}
             </div>
