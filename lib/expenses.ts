@@ -84,6 +84,25 @@ export function computeItem(
   return { amount: round2(item.amount ?? 0), rate_used: null }
 }
 
+// Whether a line is one a receipt is expected for. Mileage and per diem are
+// worked out from a rate and a count — there is no receipt to have, and asking
+// for one would be asking for something that does not exist. Everything else
+// was bought from somebody, company card included: the card statement says an
+// amount left the account, and the receipt says what it bought.
+export function itemNeedsReceipt(item: { category: ExpenseCategory }): boolean {
+  return !COMPUTED_CATEGORIES.includes(item.category)
+}
+
+// The lines a receipt is expected for and missing from. Not a block — a
+// receipt can genuinely be lost, and a report held hostage to one is a report
+// filed late or not at all — so this is what the question before submitting is
+// asked about, and it names the lines rather than counting them.
+export function itemsMissingReceipts<T extends { category: ExpenseCategory; receipts: unknown[] }>(
+  items: T[]
+): T[] {
+  return items.filter((i) => itemNeedsReceipt(i) && i.receipts.length === 0)
+}
+
 // Whether a line still has to say what it was for. Course actuals roll this
 // money up per course, so a line that names neither a course nor overhead is
 // money the books cannot place. The report's default course counts — a

@@ -19,6 +19,8 @@ import {
   fmtDateRange,
   fmtMoney,
   itemIsUnclassified,
+  itemNeedsReceipt,
+  itemsMissingReceipts,
   itemLabel,
   DESCRIPTION_SUGGESTIONS,
 } from '@/lib/expenses'
@@ -191,6 +193,9 @@ export default function ExpenseReportEditor({
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [signatureSaved, setSignatureSaved] = useState(hasSignature)
   const [reviewOpen, setReviewOpen] = useState(false)
+  // Answered in the review, and only asked where there is something to answer:
+  // said out loud once that the missing receipts are missing on purpose.
+  const [receiptsOk, setReceiptsOk] = useState(false)
   const sigRef = useRef<SignaturePadHandle>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const uploadItemRef = useRef<string | null>(null)
@@ -533,6 +538,9 @@ export default function ExpenseReportEditor({
     await waitForItemIdle()
     const hasSig = (await sigRef.current?.saveIfDrawn()) ?? signatureSaved
     setSignatureSaved(hasSig)
+    // Asked afresh every time: a receipt added since the last look changes the
+    // question, and an answer given to the old one should not carry over.
+    setReceiptsOk(false)
     setReviewOpen(true)
   }
 
@@ -566,6 +574,22 @@ export default function ExpenseReportEditor({
   // from a description in six months' time.
   const unclassified = localItems.filter((i) => itemIsUnclassified(i, defaultCourse || null))
   const receiptCount = localItems.reduce((s, i) => s + i.receipts.length, 0)
+  // Lines that should have a receipt and don't. Unlike a missing course this
+  // does not block — a receipt can genuinely be lost, and a report held up
+  // waiting for one is a report filed late or not at all — so it is a question
+  // asked once, in the review, and answered on purpose.
+  const missingReceipts = itemsMissingReceipts(localItems)
+
+  /** What a line says it was for, in words, for the review — where there is no
+      form to open and read the answer out of. The report's default stands in
+      where the line names no course of its own, because that is what the books
+      will do with it. */
+  function courseOf(item: EditorItem): string {
+    if (item.non_course) return 'Overhead'
+    const id = item.instance_id ?? defaultCourse
+    if (!id) return 'No course'
+    return courses.find((c) => c.id === id)?.label ?? 'Another course'
+  }
 
   const statusText: Record<SaveStatus, string> = {
     idle: '',
@@ -677,6 +701,17 @@ export default function ExpenseReportEditor({
                         <button onClick={() => void removeReceipt(r.id)} className="text-zinc-500 hover:text-pr-red-light"><TrashIcon /></button>
                       </span>
                     ))}
+                    {/* Said on the line rather than only in the review, and
+                        right beside the button that answers it: by the time the
+                        review is open, the phone with the receipt on it may no
+                        longer be the thing in your hand. Only the absence is
+                        worth words here — a receipt that is attached is already
+                        sitting there with its name on it, and a line that could
+                        not have one, mileage or per diem, says nothing at all
+                        because there is nothing to say. */}
+                    {itemNeedsReceipt(item) && item.receipts.length === 0 && (
+                      <span className="text-xs text-amber-400">No receipt</span>
+                    )}
                     <button
                       onClick={() => pickReceipts(item.id)}
                       disabled={uploadingFor === item.id}
@@ -988,7 +1023,7 @@ export default function ExpenseReportEditor({
               </p>
 
               {/* Anything blocking submission, called out specifically. */}
-              {(items.length === 0 || !tripInfoOk || !signatureSaved || unclassified.length > 0) && (
+              {(localItems.length === 0 || !tripInfoOk || !signatureSaved || unclassified.length > 0) && (
                 <div className="space-y-1.5 mb-4 text-sm text-pr-red-light">
                   {localItems.length === 0 && <p>✗ No expenses added yet</p>}
                   {!tripInfoOk && <p>✗ Trip info is empty — fill in the reason for travel or pick a course</p>}
@@ -1020,7 +1055,27 @@ export default function ExpenseReportEditor({
                           ? ` · ${daysInRange(item.start_date, item.end_date)} day${daysInRange(item.start_date, item.end_date) === 1 ? '' : 's'} · ${item.meal_count} meals`
                           : ''}
                           {item.paid_by === 'company_card' ? ' · company card' : ''}
-                          {item.receipts.length > 0 ? ` · ${item.receipts.length} receipt${item.receipts.length === 1 ? '' : 's'}` : ''}
+                        </p>
+                        {/* The two questions asked of every line, on a line of
+                            their own so they can be read straight down the
+                            list rather than hunted for at the end of a run of
+                            dates and dots. What it was for is the answer the
+                            books need — the report's default counts, so this
+                            says the course either way rather than only when a
+                            line disagrees with it — and whether the receipt is
+                            here is the one thing that cannot be fixed after
+                            submitting. */}
+                        <p className="text-xs mt-0.5 flex flex-wrap items-center gap-x-2">
+                          <span className="text-zinc-400">{courseOf(item)}</span>
+                          {!itemNeedsReceipt(item) ? (
+                            <span className="text-zinc-600">no receipt needed</span>
+                          ) : item.receipts.length > 0 ? (
+                            <span className="text-teal-400">
+                              {item.receipts.length === 1 ? 'Receipt ✓' : `${item.receipts.length} receipts ✓`}
+                            </span>
+                          ) : (
+                            <span className="text-amber-400">No receipt</span>
+                          )}
                         </p>
                       </div>
                       <span className="font-medium shrink-0">{fmtMoney(item.amount)}</span>
@@ -1034,6 +1089,33 @@ export default function ExpenseReportEditor({
                     <span className="font-semibold">{fmtMoney(totals.total)}</span>
                   </div>
                 </div>
+              )}
+
+              {/* The one thing submitting cannot be undone for. A missing
+                  receipt does not block — receipts get lost, and a report held
+                  hostage to one is a report filed late or not at all — but it
+                  is also not something to discover on the approver's desk, so
+                  it is a deliberate yes rather than a line of grey text above
+                  a button. Only asked when there is something to ask about. */}
+              {missingReceipts.length > 0 && (
+                <label className="flex gap-2.5 mb-5 p-3 rounded border border-amber-500/40 bg-amber-500/5 text-sm text-amber-200 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={receiptsOk}
+                    onChange={(e) => setReceiptsOk(e.target.checked)}
+                    className="mt-0.5 accent-amber-500 shrink-0"
+                  />
+                  <span>
+                    No receipt on{' '}
+                    {missingReceipts.map((i) => itemLabel(i) || CATEGORY_LABELS[i.category]).join(', ')}
+                    {' — '}submit without {missingReceipts.length === 1 ? 'it' : 'them'}?
+                    <span className="block text-xs text-amber-200/70 mt-0.5">
+                      Receipts can&apos;t be added after submitting. Go back and attach{' '}
+                      {missingReceipts.length === 1 ? 'it' : 'them'} if you have{' '}
+                      {missingReceipts.length === 1 ? 'it' : 'them'}.
+                    </span>
+                  </span>
+                </label>
               )}
 
               <a
@@ -1057,7 +1139,14 @@ export default function ExpenseReportEditor({
                 </button>
                 <button
                   onClick={() => void confirmSubmit()}
-                  disabled={submitting || localItems.length === 0 || !signatureSaved || !tripInfoOk || unclassified.length > 0}
+                  disabled={
+                    submitting ||
+                    localItems.length === 0 ||
+                    !signatureSaved ||
+                    !tripInfoOk ||
+                    unclassified.length > 0 ||
+                    (missingReceipts.length > 0 && !receiptsOk)
+                  }
                   className="px-5 py-2.5 bg-pr-red hover:bg-pr-red-dark text-white rounded text-sm font-semibold transition-colors disabled:opacity-50"
                 >
                   {submitting ? 'Submitting…' : 'Submit report'}
