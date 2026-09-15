@@ -119,3 +119,21 @@ export function todayIn(zone: string = HOME_ZONE, now: Date = new Date()): strin
 export function todayHere(now: Date = new Date()): string {
   return todayIn(HOME_ZONE, now)
 }
+
+/** The day a timestamp fell on, at the office. For printing "closed on …" off
+    a timestamptz: the instant is the fact, the date is a question about where
+    you are standing, and the office is who is asking. */
+export function dateAtOffice(instant: string | Date): string {
+  return todayIn(HOME_ZONE, typeof instant === 'string' ? new Date(instant) : instant)
+}
+
+/** A stored yyyy-mm-dd as prose. UTC on purpose: a bare date carries no zone,
+    so reading it in the reader's own would shift it a day west of Greenwich. */
+export function longDate(day: string): string {
+  return new Date(day + 'T00:00:00Z').toLocaleDateString('en-US', {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+    timeZone: 'UTC',
+  })
+}

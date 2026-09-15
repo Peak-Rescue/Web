@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { courseZone, todayIn, todayHere, HOME_ZONE } from '@/lib/course-clock'
+import { courseZone, todayIn, todayHere, dateAtOffice, longDate, HOME_ZONE } from '@/lib/course-clock'
 
 // Turning "now" into a date is a question about where you are standing, and
 // every place that did it was standing on the server — UTC. These are the
@@ -68,5 +68,19 @@ describe('todayHere', () => {
     const t = new Date('2026-08-25T01:00:00Z')
     expect(todayHere(t)).toBe(todayIn(HOME_ZONE, t))
     expect(todayHere(t)).toBe('2026-08-24')
+  })
+})
+
+// Printing a date, which is two different questions.
+describe('dates on a printed page', () => {
+  it('reads an instant on the office clock, not on UTC', () => {
+    // 9pm in Colorado is already tomorrow in Greenwich. A page printed then
+    // used to be stamped with tomorrow's date.
+    const evening = new Date('2026-09-15T03:30:00Z')
+    expect(dateAtOffice(evening)).toBe('2026-09-14')
+  })
+
+  it('reads a stored yyyy-mm-dd as itself, wherever it is read', () => {
+    expect(longDate('2026-09-14')).toBe('September 14, 2026')
   })
 })
