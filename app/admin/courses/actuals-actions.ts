@@ -237,6 +237,44 @@ export async function addCostAccount(instanceId: string, label: string) {
   return { id: data.id as string }
 }
 
+/** Removes a category added by mistake, from the course it was added on.
+    A hard delete, not a retire: a category nothing has ever used has no
+    history to keep, and retiring it would leave it greyed out on the rates
+    page for somebody to wonder about later.
+
+    Refused the moment anything depends on it, because the categories are
+    shared by every course and nothing on one course's screen can see what
+    another has put in them. Retiring a category that is genuinely in use is
+    a deliberate act and it lives on the rates page. */
+export async function deleteCostAccount(instanceId: string, accountId: string) {
+  const { admin } = await requireAdminUser()
+
+  const [{ count: costCount }, { count: filedCount }, { data: account }] = await Promise.all([
+    admin.from('course_cost_items').select('id', { count: 'exact', head: true }).eq('account_id', accountId),
+    admin.from('expense_item_accounts').select('expense_item_id', { count: 'exact', head: true }).eq('account_id', accountId),
+    admin.from('cost_accounts').select('label, categories').eq('id', accountId).maybeSingle(),
+  ])
+
+  if ((costCount ?? 0) > 0) {
+    throw new Error(
+      `${account?.label ?? 'That category'} has costs in it, possibly on another course. Retire it on the rates page instead.`
+    )
+  }
+  if ((filedCount ?? 0) > 0) {
+    throw new Error(`Expenses have been filed under ${account?.label ?? 'that category'}. Retire it on the rates page instead.`)
+  }
+  if ((((account?.categories as string[] | null) ?? []).length) > 0) {
+    throw new Error(
+      `Expense types route into ${account?.label ?? 'that category'}. Clear them on the rates page first, or retire it there.`
+    )
+  }
+
+  const { error } = await admin.from('cost_accounts').delete().eq('id', accountId)
+  if (error) throw new Error(error.message)
+  revalidateCourse(instanceId)
+  revalidatePath('/admin/expenses/rates')
+}
+
 // ─── The category library, on the rates page ─────────────────────────────────
 
 /** Rename a category, and set which expense-report categories land in it.

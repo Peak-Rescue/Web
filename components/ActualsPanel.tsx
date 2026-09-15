@@ -2,11 +2,12 @@
 
 import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { fmtMoney, fmtDateRange } from '@/lib/expenses'
+import { fmtMoney, fmtDateRange, round2 } from '@/lib/expenses'
 import { expenseLineLabel, rollUpActuals, type CostAccount, type PayLine, type TypedCostLine } from '@/lib/actuals'
 import { type LoadedActuals } from '@/lib/actuals-data'
 import {
   addCostAccount,
+  deleteCostAccount,
   setActualsShared,
   addSuggestedPayLines,
   deleteCostItem,
@@ -194,15 +195,6 @@ export default function ActualsPanel({
     await (chains.current.get(key) ?? Promise.resolve()).catch(() => {})
   }
 
-  // Starting a row already in a category — the one shortcut worth a click,
-  // since it answers the only field the trailing blank row cannot guess.
-  function addCostRow(accountId: string) {
-    setCosts((rs) => withBlankCost([
-      ...rs,
-      { key: newKey(), id: '', account_id: accountId, spend_date: null, description: null, amount: 0 },
-    ]))
-  }
-
   async function removePay(row: PayRow) {
     setPay((rs) => withBlankPay(rs.filter((r) => r.key !== row.key)))
     await settle(`pay:${row.key}`)
@@ -229,10 +221,11 @@ export default function ActualsPanel({
     )
   }
 
-  // Typed costs with nowhere to sit: no account, or one that has since been
-  // retired. Both count in the total — the money went out either way — so
-  // both need a row, or it is money nobody can see or correct.
-  const homelessCosts = costs.filter((c) => !accounts.some((a) => a.id === c.account_id))
+  // The part of the uncategorised pile that came from the list above rather
+  // than from an expense report whose category was retired.
+  const unfiledTyped = round2(
+    actuals.unfiled.amount - actuals.unfiled.lines.reduce((t, l) => t + l.amount, 0)
+  )
 
   const input = 'bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-zinc-500'
   const cell = 'text-sm text-zinc-300'
@@ -397,19 +390,47 @@ export default function ActualsPanel({
       </div>
 
       {/* ── Costs ────────────────────────────────────────────────────────── */}
-      {/* "Category" here is the DB's cost_account. The books call it an
+      {/* Two different jobs, so two different lists.
+ 
+          What you type is the work: every one of them visible at once, in a
+          flat list you can read down, ending in an empty row. Grouping these
+          under collapsed category headings meant hunting for where to type,
+          then expanding, then clicking add — three clicks before the first
+          keystroke, for the one part of this screen that is pure data entry.
+ 
+          The categories are the answer, not the work: totals, with the
+          expense-report lines behind them a caret away. Nothing is in both
+          lists — a typed cost shows its category on its own row.
+ 
+          "Category" here is the DB's cost_account. The books call it an
           account and the schema keeps that word; on screen it is a category,
           because the person filling this in is sorting costs into buckets,
           not keeping a ledger. */}
       <div>
         <div className="flex items-baseline gap-2 mb-2">
           <h4 className="text-sm font-semibold text-zinc-200">Costs</h4>
-          <InfoHint text="Submitted expense reports land here by category — correcting a report corrects this. The company card, and anything else a report never sees, is typed on." />
+          <InfoHint text="Type what the company card and direct invoices paid for. Submitted expense reports arrive on their own, by category." />
         </div>
 
-        <div className="border border-zinc-800 rounded divide-y divide-zinc-800">
+        <div className="space-y-1.5">
+          {costs.map((row) => (
+            <CostRowFields
+              key={row.key}
+              row={row}
+              accounts={accounts}
+              input={input}
+              blank={costIsBlank(row)}
+              onChange={(p) => updateCost(row.key, p)}
+              onRemove={() => void removeCost(row)}
+            />
+          ))}
+        </div>
+
+        {/* ── What it all adds up to ─────────────────────────────────────── */}
+        <div className="mt-5 border border-zinc-800 rounded divide-y divide-zinc-800">
           {actuals.accounts.map((r) => {
             const open = openAccount === r.account.id
+            const empty = r.total === 0 && r.expenseLines.length === 0
             return (
               <div key={r.account.id}>
                 <button
@@ -418,9 +439,9 @@ export default function ActualsPanel({
                 >
                   <span className="text-sm text-zinc-300">
                     {r.account.label}
-                    {r.fromExpenses > 0 && (
+                    {r.expenseLines.length > 0 && (
                       <span className="ml-2 text-xs text-zinc-500">
-                        {fmtMoney(r.fromExpenses)} from {r.expenseLines.length} expense line
+                        {fmtMoney(r.fromExpenses)} of it from {r.expenseLines.length} expense line
                         {r.expenseLines.length === 1 ? '' : 's'}
                       </span>
                     )}
@@ -457,18 +478,39 @@ export default function ActualsPanel({
                       </div>
                     ))}
 
-                    {r.typedLines.map((l) => {
-                      const row = costs.find((c) => c.id === l.id)
-                      if (!row) return null
-                      return <CostRowFields key={row.key} row={row} accounts={accounts} input={input} blank={costIsBlank(row)} onChange={(p) => updateCost(row.key, p)} onRemove={() => void removeCost(row)} />
-                    })}
+                    {r.typedLines.length > 0 && (
+                      <p className="text-xs text-zinc-500">
+                        {fmtMoney(r.typed)} typed above, on {r.typedLines.length} line
+                        {r.typedLines.length === 1 ? '' : 's'}.
+                      </p>
+                    )}
 
-                    <button
-                      onClick={() => addCostRow(r.account.id)}
-                      className="text-xs text-zinc-400 hover:text-white transition-colors"
-                    >
-                      + Add a cost to {r.account.label}
-                    </button>
+                    {/* A way back out of a category added by mistake. Only
+                        offered on an empty one: they are shared by every
+                        course, and this screen cannot see what another course
+                        has put in them. */}
+                    {empty && (
+                      <button
+                        disabled={busy}
+                        onClick={async () => {
+                          setBusy(true)
+                          try {
+                            await deleteCostAccount(instanceId, r.account.id)
+                            router.refresh()
+                          } catch (e) {
+                            setError(e instanceof Error ? e.message : 'Could not remove that category')
+                          } finally {
+                            setBusy(false)
+                          }
+                        }}
+                        className="text-xs text-zinc-500 hover:text-pr-red-light transition-colors disabled:opacity-50"
+                      >
+                        Remove {r.account.label}
+                      </button>
+                    )}
+                    {!empty && r.expenseLines.length === 0 && r.typedLines.length === 0 && (
+                      <p className="text-xs text-zinc-600">Nothing on this course.</p>
+                    )}
                   </div>
                 )}
               </div>
@@ -476,15 +518,13 @@ export default function ActualsPanel({
           })}
 
           {/* Expense money whose category was retired out from under it.
-              Counted in the total — it was spent either way — and called out
+              Counted in the total — it was spent either way — and called out,
               because only a person can say where it should have gone. */}
-          {actuals.unfiled.lines.length > 0 && (
+          {actuals.unfiled.amount > 0 && (
             <div className="px-3 py-2 space-y-2">
               <div className="flex items-center justify-between gap-4">
                 <span className="text-sm text-amber-400/90">Needs a category</span>
-                <span className="text-sm text-zinc-200">
-                  {fmtMoney(actuals.unfiled.lines.reduce((t, l) => t + l.amount, 0))}
-                </span>
+                <span className="text-sm text-zinc-200">{fmtMoney(actuals.unfiled.amount)}</span>
               </div>
               {actuals.unfiled.lines.map((l) => (
                 <div key={l.id} className="flex items-center gap-2 flex-wrap text-xs">
@@ -503,46 +543,43 @@ export default function ActualsPanel({
                   </select>
                 </div>
               ))}
+              {/* Typed costs land in the list above, where they are fixed.
+                  Named here too so the categories still add up to the total —
+                  a summary that quietly omits money is worse than none. */}
+              {unfiledTyped > 0 && (
+                <p className="text-xs text-zinc-500">
+                  {fmtMoney(unfiledTyped)} of that is typed above, with no category picked yet.
+                </p>
+              )}
             </div>
           )}
-
-          {/* Where a cost is typed, and where one waits while you decide
-              which category it belongs to. Always present: this is the row
-              you start in, not a state the list gets into. */}
-          <div className="px-3 py-2 space-y-2">
-            {homelessCosts.map((row) => (
-              <CostRowFields key={row.key} row={row} accounts={accounts} input={input} blank={costIsBlank(row)} onChange={(p) => updateCost(row.key, p)} onRemove={() => void removeCost(row)} />
-            ))}
-          </div>
         </div>
 
-        <div className="mt-2 flex items-center gap-3 flex-wrap">
-          <span className="flex items-center gap-2">
-            <input
-              value={newAccount}
-              onChange={(e) => setNewAccount(e.target.value)}
-              placeholder="New category"
-              className={`${input} w-36`}
-            />
-            <button
-              disabled={!newAccount.trim() || busy}
-              onClick={async () => {
-                setBusy(true)
-                try {
-                  await addCostAccount(instanceId, newAccount)
-                  setNewAccount('')
-                  router.refresh()
-                } catch (e) {
-                  setError(e instanceof Error ? e.message : 'Could not add that category')
-                } finally {
-                  setBusy(false)
-                }
-              }}
-              className="px-2.5 py-1 bg-zinc-800 hover:bg-zinc-700 rounded text-xs transition-colors disabled:opacity-40"
-            >
-              Add category
-            </button>
-          </span>
+        <div className="mt-2 flex items-center gap-2 flex-wrap">
+          <input
+            value={newAccount}
+            onChange={(e) => setNewAccount(e.target.value)}
+            placeholder="New category"
+            className={`${input} w-36`}
+          />
+          <button
+            disabled={!newAccount.trim() || busy}
+            onClick={async () => {
+              setBusy(true)
+              try {
+                await addCostAccount(instanceId, newAccount)
+                setNewAccount('')
+                router.refresh()
+              } catch (e) {
+                setError(e instanceof Error ? e.message : 'Could not add that category')
+              } finally {
+                setBusy(false)
+              }
+            }}
+            className="px-2.5 py-1 bg-zinc-800 hover:bg-zinc-700 rounded text-xs transition-colors disabled:opacity-40"
+          >
+            Add category
+          </button>
           <InfoHint text="Categories are shared by every course. Rename or retire them, and set which expense categories land in each, on the rates page." />
         </div>
 
