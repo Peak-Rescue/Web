@@ -7,10 +7,9 @@ import { updateCostAccount, retireCostAccount } from '@/app/admin/courses/actual
 
 // One cost category: its name, and which kinds of expense land in it.
 //
-// The routing is the part worth showing. Without it, "Travel expenses"
-// on a course is a total with no explanation of how the money got there —
-// and the first time a lodging receipt turns up under Misc, there is nowhere
-// to go and look.
+// The routing is the part worth showing. Without it, "Travel expenses" on a
+// course is a total with no explanation of how the money got there — and the
+// first time a lodging receipt turns up under Misc, there is nowhere to look.
 
 export type ExpenseCategoryChoice = { value: string; label: string }
 
@@ -61,7 +60,7 @@ export default function CostCategoryRow({
         <button
           type="submit"
           formAction={retireCostAccount.bind(null, id)}
-          title="Remove — deleted if nothing has used it, retired if costs point at it"
+          title="Remove — deleted if unused, retired if costs point at it"
           className="text-zinc-600 hover:text-pr-red-light transition-colors"
         >
           <TrashIcon className="w-4 h-4" />

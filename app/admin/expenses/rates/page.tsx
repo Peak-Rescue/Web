@@ -56,15 +56,14 @@ export default async function AdminExpenseRatesPage() {
           ← Expense Admin
         </Link>
         <h1 className="text-2xl font-bold mb-2">Rates Library</h1>
-        <p className="text-zinc-400 mb-10">
-          One library for all prices — course estimates and employee expense reports both use whatever rate is
-          current. Saved estimates and expense lines keep the numbers they were created with, so changing a rate
-          here never rewrites existing records.
+        <p className="text-zinc-400 mb-3">
+          One library for course estimates and expense reports. Changing a rate never rewrites what&apos;s
+          already saved.
         </p>
-        <p className="text-zinc-500 text-sm mb-10">
+        <p className="text-zinc-500 text-sm mb-8">
           <span className="text-zinc-300">Rate</span> is what we quote at;{' '}
-          <span className="text-zinc-300">pay</span> is what a person is actually paid. Leave pay blank on
-          anything that isn&apos;t somebody&apos;s time.
+          <span className="text-zinc-300">pay</span> is what we actually pay. Leave pay blank on anything that
+          isn&apos;t somebody&apos;s time.
         </p>
 
         <div className="bg-zinc-900 rounded-lg border border-zinc-800 divide-y divide-zinc-800 scroll-mt-24" id="pay-rates">
@@ -75,13 +74,13 @@ export default async function AdminExpenseRatesPage() {
                   name="label"
                   required
                   defaultValue={r.label}
-                  title="Shown on estimate lines when added from the library"
+                  title="Shown on estimate lines"
                   className="flex-1 min-w-36 bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm font-medium focus:outline-none focus:border-zinc-500"
                 />
                 {r.reimb_type && (
                   <span
                     className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-teal-900/60 text-teal-300"
-                    title="Used to compute employee expense reports"
+                    title="Used by expense reports"
                   >
                     Reimbursement
                   </span>
@@ -90,7 +89,7 @@ export default async function AdminExpenseRatesPage() {
                   name="unit"
                   defaultValue={r.unit ?? ''}
                   placeholder="per day"
-                  title='Drives the quantity calculator, e.g. "per instructor per day"'
+                  title='Drives the quantity calculator — "per instructor per day"'
                   className="w-40 bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-xs text-zinc-400 focus:outline-none focus:border-zinc-500"
                 />
                 <input
@@ -112,7 +111,7 @@ export default async function AdminExpenseRatesPage() {
                   min="0"
                   defaultValue={r.pay_rate ?? ''}
                   placeholder="pay"
-                  title="What a person is actually paid for this — blank if this line is not somebody's time"
+                  title="What we actually pay. Blank if this isn't somebody's time."
                   className="w-20 bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-right text-zinc-400 placeholder-zinc-600 focus:outline-none focus:border-zinc-500"
                 />
                 <SaveButton className="px-2.5 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-white rounded text-xs font-medium transition-colors">
@@ -136,7 +135,7 @@ export default async function AdminExpenseRatesPage() {
           <div className="mt-10 scroll-mt-24" id="org-wide">
             <h2 className="text-sm font-semibold text-zinc-200 mb-1">Org-wide numbers</h2>
             <p className="text-xs text-zinc-500 mb-3">
-              One value, every course. A course can still override it on its own actuals.
+              One value, every course — a course can override it on its actuals.
             </p>
             <div className="bg-zinc-900 rounded-lg border border-zinc-800 divide-y divide-zinc-800">
               {(orgRows ?? []).map((o) => (
@@ -174,8 +173,7 @@ export default async function AdminExpenseRatesPage() {
         <div className="mt-10 scroll-mt-24" id="cost-categories">
           <h2 className="text-sm font-semibold text-zinc-200 mb-1">Cost categories</h2>
           <p className="text-xs text-zinc-500 mb-3">
-            What a course&apos;s costs are grouped into on its actuals. Submitted expense reports sort themselves
-            by the expense types routed into each — anything else is typed on the course by hand.
+            How a course&apos;s costs are grouped. Expense reports sort themselves by the types routed into each.
           </p>
           <div className="bg-zinc-900 rounded-lg border border-zinc-800 divide-y divide-zinc-800">
             {(costAccountRows ?? []).map((a) => (
