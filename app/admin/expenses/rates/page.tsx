@@ -67,7 +67,7 @@ export default async function AdminExpenseRatesPage() {
           anything that isn&apos;t somebody&apos;s time.
         </p>
 
-        <div className="bg-zinc-900 rounded-lg border border-zinc-800 divide-y divide-zinc-800">
+        <div className="bg-zinc-900 rounded-lg border border-zinc-800 divide-y divide-zinc-800 scroll-mt-24" id="pay-rates">
           {pricingRates.map((r) => (
             <div key={r.id} className="flex items-center justify-between gap-4 px-4 py-2.5 flex-wrap">
               <form action={updatePricingRate.bind(null, r.id)} className="flex items-center gap-2 flex-1 min-w-0 flex-wrap">
@@ -133,7 +133,7 @@ export default async function AdminExpenseRatesPage() {
             list above: nothing here is multiplied by a quantity, and a rate in
             that list is also an estimate line waiting to be added. */}
         {(orgRows ?? []).length > 0 && (
-          <div className="mt-10">
+          <div className="mt-10 scroll-mt-24" id="org-wide">
             <h2 className="text-sm font-semibold text-zinc-200 mb-1">Org-wide numbers</h2>
             <p className="text-xs text-zinc-500 mb-3">
               One value, every course. A course can still override it on its own actuals.
@@ -171,7 +171,7 @@ export default async function AdminExpenseRatesPage() {
 
         {/* What a course's costs get sorted into, and how expense-report
             money finds its way there on its own. */}
-        <div className="mt-10">
+        <div className="mt-10 scroll-mt-24" id="cost-categories">
           <h2 className="text-sm font-semibold text-zinc-200 mb-1">Cost categories</h2>
           <p className="text-xs text-zinc-500 mb-3">
             What a course&apos;s costs are grouped into on its actuals. Submitted expense reports sort themselves
