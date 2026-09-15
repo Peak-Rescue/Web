@@ -51,7 +51,6 @@ import CourseMessages, { type CourseMessage } from './CourseMessages'
 import EditInPlace from './EditableSchedule'
 import { FoldHead, FOLD_PANEL } from './FoldIndex'
 import AddScheduleDay from './AddScheduleDay'
-import MoveDayArrows from './MoveDayArrows'
 import ScheduleOverviewFields from './ScheduleOverviewFields'
 import ScheduleDayCard from '@/app/admin/schedules/ScheduleDayCard'
 import type { ScheduleDay as EditableDay } from '@/app/admin/schedules/types'
@@ -2528,18 +2527,6 @@ export default async function CourseView({
                           {d.location}
                         </span>
                       )}
-                      {/* Order is a relationship between days, so it is set on
-                          the header rather than inside one day's editor — and
-                          a past day is folded, which would put an
-                          editor-bound arrow out of reach. Built only for
-                          staff, the same rule the action enforces. */}
-                      {canEditSchedule && (
-                        <MoveDayArrows
-                          dayId={d.id}
-                          isFirst={di === 0}
-                          isLast={di === schedDays.length - 1}
-                        />
-                      )}
                     </summary>
                     {/* The morning, in the same block the course has always
                         used — the meetup, the words, the hour, links,
@@ -2642,6 +2629,8 @@ export default async function CourseView({
                             day={editableDay}
                             sites={schedSites}
                             venueId={inst.venue_id}
+                            isFirst={di === 0}
+                            isLast={di === schedDays.length - 1}
                           />
                         ) : null
                       }

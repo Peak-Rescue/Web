@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { updateScheduleDay, removeScheduleDay } from './actions'
+import { updateScheduleDay, removeScheduleDay, moveScheduleDay } from './actions'
 import DayOutline from './DayOutline'
 import { Grows, Marked, PinIcon, RouteIcon, FlagIcon, NoteIcon, TargetIcon, PencilIcon } from './fields'
 import type { ScheduleDay, SiteOption, MeetingPointOption } from './types'
@@ -23,6 +23,8 @@ export default function ScheduleDayCard({
   day,
   sites = [],
   venueId = null,
+  isFirst,
+  isLast,
   onRemoving,
   onRemoveFailed,
   onError,
@@ -30,6 +32,10 @@ export default function ScheduleDayCard({
   day: ScheduleDay
   sites?: SiteOption[]
   venueId?: string | null
+  /** Where this day sits in the running order. Both absent → no reordering
+      offered, for a list that has no order to speak of. */
+  isFirst?: boolean
+  isLast?: boolean
   /** The list, if there is one, takes the day off screen on the click rather
       than on the round trip — and puts it back if the server disagreed. */
   onRemoving?: (id: string) => void
@@ -95,6 +101,31 @@ export default function ScheduleDayCard({
           placeholder="Day 1: Basic rope skills"
           className={`w-full sm:w-auto sm:flex-1 font-medium ${input}`}
         />
+        {/* Order is set from inside the day's editor, not from the header of
+            the day you are reading. It used to be a pair of arrows on that
+            header, which put a live reordering control under every thumb
+            scrolling a schedule on a phone — a mis-tap there silently swapped
+            two days of a course. Getting here takes a deliberate press, and
+            these are word-sized targets like Remove day beside them rather
+            than twelve-pixel chevrons. */}
+        {(isFirst !== undefined || isLast !== undefined) && (
+          <span className="ml-auto flex shrink-0 items-center gap-1.5">
+            {([
+              ['up', 'Move earlier', isFirst],
+              ['down', 'Move later', isLast],
+            ] as const).map(([direction, label, atEnd]) => (
+              <button
+                key={direction}
+                type="button"
+                disabled={busy || atEnd}
+                onClick={() => run(() => moveScheduleDay(day.id, direction))}
+                className="rounded border border-zinc-800 px-2 py-1.5 text-xs text-zinc-500 hover:text-white hover:border-zinc-600 transition-colors disabled:opacity-30 disabled:hover:text-zinc-500 disabled:hover:border-zinc-800"
+              >
+                {label}
+              </button>
+            ))}
+          </span>
+        )}
         <button
           onClick={() => {
             if (!confirm(`Remove "${day.title}"?`)) return
@@ -107,7 +138,7 @@ export default function ScheduleDayCard({
           // from the title field a thumb is aiming at. Given an edge and a
           // press's worth of padding: still quiet, but now both hittable and
           // missable on purpose.
-          className="ml-auto shrink-0 rounded border border-zinc-800 px-2 py-1.5 text-xs text-zinc-500 hover:text-red-400 hover:border-red-900/60 transition-colors"
+          className="ml-auto shrink-0 rounded border border-zinc-800 px-2 py-1.5 text-xs text-zinc-500 hover:text-red-400 hover:border-red-900/60 transition-colors [&:not(:first-child)]:ml-0"
         >
           Remove day
         </button>
