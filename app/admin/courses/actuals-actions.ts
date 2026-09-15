@@ -117,23 +117,36 @@ export async function savePayItem(instanceId: string, itemId: string | null, inp
 /** Accepts the suggestion built from the course's shape, as ordinary lines.
     They arrive editable and unmarked — once accepted they are what we paid,
     not what we guessed, and a line that remembered being a guess would invite
-    the next reader to trust it less than the ones typed beside it. */
+    the next reader to trust it less than the ones typed beside it.
+
+    Returns the rows it made. The panel puts them straight into the list:
+    asking the page to reload instead meant re-running every query the course
+    page has, and the panel's own state would not have picked the new lines up
+    anyway — so they landed in the database and appeared nowhere. */
 export async function addSuggestedPayLines(
   instanceId: string,
   lines: { description: string; amount: number }[]
-) {
+): Promise<{ id: string; description: string | null; amount: number }[]> {
   const { admin } = await ensureActuals(instanceId)
-  if (lines.length === 0) return
-  const { error } = await admin.from('course_pay_items').insert(
-    lines.map((l, i) => ({
-      instance_id: instanceId,
-      description: l.description.slice(0, 200),
-      amount: round2(l.amount),
-      sort_order: i,
-    }))
-  )
-  if (error) throw new Error(error.message)
+  if (lines.length === 0) return []
+  const { data, error } = await admin
+    .from('course_pay_items')
+    .insert(
+      lines.map((l, i) => ({
+        instance_id: instanceId,
+        description: l.description.slice(0, 200),
+        amount: round2(l.amount),
+        sort_order: i,
+      }))
+    )
+    .select('id, description, amount')
+  if (error || !data) throw new Error(error?.message ?? 'Could not add those lines')
   revalidateCourse(instanceId)
+  return data.map((r) => ({
+    id: r.id as string,
+    description: (r.description as string | null) ?? null,
+    amount: Number(r.amount),
+  }))
 }
 
 export async function deletePayItem(instanceId: string, itemId: string) {
@@ -230,11 +243,18 @@ export async function addCostAccount(instanceId: string, label: string) {
   const { data, error } = await admin
     .from('cost_accounts')
     .insert({ label: trimmed, sort_order: (last?.sort_order ?? 0) + 10 })
-    .select('id')
+    .select('id, label, categories, sort_order')
     .single()
   if (error || !data) throw new Error(error?.message ?? 'Could not add that category')
   revalidateCourse(instanceId)
-  return { id: data.id as string }
+  // The whole row, so the panel can offer it in every dropdown without
+  // reloading the course page to find out what it just created.
+  return {
+    id: data.id as string,
+    label: data.label as string,
+    categories: ((data.categories as string[] | null) ?? []),
+    sort_order: data.sort_order as number,
+  }
 }
 
 // ─── The category library, on the rates page ─────────────────────────────────

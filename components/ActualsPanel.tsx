@@ -80,7 +80,11 @@ export default function ActualsPanel({
   acceptedQuote: { seq: number; total: number } | null
 }) {
   const router = useRouter()
-  const { accounts, expenseLines } = loaded
+  const { expenseLines } = loaded
+  // Local, because a category invented while typing has to appear in every
+  // dropdown immediately. Asking the server for it again would re-run every
+  // query on the course page to learn one row we already have.
+  const [accounts, setAccounts] = useState<CostAccount[]>(loaded.accounts)
 
   const [invoiced, setInvoiced] = useState(loaded.invoiced === null ? '' : String(loaded.invoiced))
   // Blank means "follow the org number", which is what nearly every course
@@ -231,9 +235,9 @@ export default function ActualsPanel({
     if (!name) return null
     setBusy(true)
     try {
-      const { id } = await addCostAccount(instanceId, name)
-      router.refresh()
-      return id
+      const created = await addCostAccount(instanceId, name)
+      setAccounts((a) => [...a, created].sort((x, y) => x.sort_order - y.sort_order))
+      return created.id
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not add that category')
       return null
@@ -346,8 +350,20 @@ export default function ActualsPanel({
               onClick={async () => {
                 setBusy(true)
                 try {
-                  await addSuggestedPayLines(instanceId, suggestion.lines)
-                  router.refresh()
+                  const created = await addSuggestedPayLines(instanceId, suggestion.lines)
+                  setPay((rows) =>
+                    withBlankPay([
+                      ...rows.filter((r) => !payIsBlank(r)),
+                      ...created.map((c) => ({
+                        key: c.id,
+                        id: c.id,
+                        profile_id: null,
+                        work_date: null,
+                        description: c.description,
+                        amount: c.amount,
+                      })),
+                    ])
+                  )
                 } catch (e) {
                   setError(e instanceof Error ? e.message : 'Could not add those lines')
                 } finally {
