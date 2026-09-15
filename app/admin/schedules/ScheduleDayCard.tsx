@@ -105,23 +105,36 @@ export default function ScheduleDayCard({
             the day you are reading. It used to be a pair of arrows on that
             header, which put a live reordering control under every thumb
             scrolling a schedule on a phone — a mis-tap there silently swapped
-            two days of a course. Getting here takes a deliberate press, and
-            these are word-sized targets like Remove day beside them rather
-            than twelve-pixel chevrons. */}
+            two days of a course. Getting here takes a deliberate press.
+
+            Arrows again, now that they are behind that press: "Move earlier"
+            and "Move later" are two words that read alike at a glance, and the
+            thing they do is a direction. They keep the press's worth of
+            padding the words had rather than shrinking to the glyph, and say
+            their names to a screen reader and on hover. */}
         {(isFirst !== undefined || isLast !== undefined) && (
           <span className="ml-auto flex shrink-0 items-center gap-1.5">
             {([
-              ['up', 'Move earlier', isFirst],
-              ['down', 'Move later', isLast],
-            ] as const).map(([direction, label, atEnd]) => (
+              ['up', 'Move earlier', isFirst, 'M12 19V5', 'm5 12 7-7 7 7'],
+              ['down', 'Move later', isLast, 'M12 5v14', 'm19 12-7 7-7-7'],
+            ] as const).map(([direction, label, atEnd, stem, head]) => (
               <button
                 key={direction}
                 type="button"
                 disabled={busy || atEnd}
                 onClick={() => run(() => moveScheduleDay(day.id, direction))}
-                className="rounded border border-zinc-800 px-2 py-1.5 text-xs text-zinc-500 hover:text-white hover:border-zinc-600 transition-colors disabled:opacity-30 disabled:hover:text-zinc-500 disabled:hover:border-zinc-800"
+                aria-label={label}
+                title={label}
+                className="rounded border border-zinc-800 px-2 py-1.5 text-zinc-500 hover:text-white hover:border-zinc-600 transition-colors disabled:opacity-30 disabled:hover:text-zinc-500 disabled:hover:border-zinc-800"
               >
-                {label}
+                <svg
+                  aria-hidden
+                  xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24"
+                  fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"
+                >
+                  <path d={stem} />
+                  <path d={head} />
+                </svg>
               </button>
             ))}
           </span>
