@@ -19,6 +19,9 @@ export default function DefaultLineToggle({ rateId, initialValue }: { rateId: st
       className="flex md:justify-center items-center gap-1.5 text-[10px] text-zinc-500 cursor-pointer"
       title="Pre-added to every new course estimate"
     >
+      {/* Deliberately nameless: FormData skips unnamed controls, so this is
+          neither submitted with the rate nor counted as an unsaved change by
+          the Save button watching the same form. */}
       <input
         type="checkbox"
         checked={on}

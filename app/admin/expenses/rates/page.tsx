@@ -19,12 +19,16 @@ import DefaultLineToggle from './DefaultLineToggle'
 // fighting over one element.
 // One template per table, shared by the header and every row. The grid lives
 // on the row; each row's <form> is display:contents so its inputs are cells of
-// that grid rather than a box of their own — which is what lets the two
-// buttons that are not part of the form sit in columns beside them.
+// that grid rather than a box of their own.
 //
 // Columns: name · unit · quote · pay · default · save · remove
+//
+// DOM order matches column order, and nothing is placed by hand. col-start put
+// the row on two lines: auto-placement walks forward only, so a save button
+// pinned to column 6 left the cursor past column 5, and the tick box pinned
+// there had to start a new row to get back.
 const RATE_GRID =
-  'md:grid md:grid-cols-[1fr_9rem_5.5rem_4.5rem_4rem_1.75rem_1.75rem] md:gap-2 md:items-center'
+  'md:grid md:grid-cols-[minmax(0,1fr)_11rem_5rem_4.5rem_3.5rem_1.75rem_1.75rem] md:gap-2 md:items-center'
 const RATE_ROW = `flex flex-wrap items-center gap-2 ${RATE_GRID}`
 // Columns: category · routed in · save · remove
 const CATEGORY_GRID = 'md:grid md:grid-cols-[1fr_7rem_1.75rem_1.75rem] md:gap-2 md:items-center'
@@ -167,17 +171,17 @@ export default async function AdminExpenseRatesPage() {
                   title="What we actually pay. Blank if this isn't somebody's time."
                   className={`${BOX} text-sm text-right text-zinc-400 placeholder-zinc-600`}
                 />
+                {/* Inside the form only to sit in the right column. Its box
+                    carries no name, so it is absent from the submitted data
+                    and from what Save watches for changes — it fires its own
+                    action the moment it is ticked. */}
+                <DefaultLineToggle rateId={r.id} initialValue={r.default_line} />
                 <SaveButton
                   icon
-                  className="md:col-start-6 flex items-center justify-center text-zinc-500 hover:text-white transition-colors"
+                  className="flex items-center justify-center text-zinc-500 hover:text-white transition-colors"
                 />
               </form>
-              {/* Outside the form: each fires its own action, and neither is
-                  part of what Save submits. */}
-              <div className="md:col-start-5">
-                <DefaultLineToggle rateId={r.id} initialValue={r.default_line} />
-              </div>
-              <div className="md:col-start-7 flex items-center justify-center">
+              <div className="flex items-center justify-center">
                 {r.reimb_type ? <ReimbursementLock /> : <DeletePricingRateButton rateId={r.id} label={r.label} />}
               </div>
             </div>

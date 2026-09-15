@@ -74,6 +74,8 @@ export default function SaveButton({ children = 'Save', className = '', icon = f
       className={`${className} disabled:opacity-50 disabled:cursor-not-allowed`}
     >
       {icon ? (
+        // A disk to press, a tick once it landed: the action and its
+        // confirmation should not look like the same thing.
         <svg
           aria-hidden
           xmlns="http://www.w3.org/2000/svg"
@@ -82,12 +84,20 @@ export default function SaveButton({ children = 'Save', className = '', icon = f
           viewBox="0 0 24 24"
           fill="none"
           stroke="currentColor"
-          strokeWidth="2.25"
+          strokeWidth={saved ? 2.25 : 1.75}
           strokeLinecap="round"
           strokeLinejoin="round"
           className={saved ? 'text-teal-400' : undefined}
         >
-          <path d="M20 6 9 17l-5-5" />
+          {saved ? (
+            <path d="M20 6 9 17l-5-5" />
+          ) : (
+            <>
+              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+              <path d="M17 21v-8H7v8" />
+              <path d="M7 3v5h8" />
+            </>
+          )}
         </svg>
       ) : pending ? (
         'Saving…'
