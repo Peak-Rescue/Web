@@ -41,6 +41,7 @@ export type LoadedItem = {
   meal_count: number | null
   amount: number
   instance_id: string | null
+  non_course: boolean
   sort_order: number
   expense_receipts: { id: string; path: string; filename: string | null }[]
 }
@@ -68,7 +69,7 @@ export async function loadReport(reportId: string): Promise<{
 
   const { data: itemRows } = await admin
     .from('expense_items')
-    .select('id, start_date, end_date, category, paid_by, description, details, paid_for_others, miles, meal_count, amount, instance_id, sort_order, expense_receipts(id, path, filename)')
+    .select('id, start_date, end_date, category, paid_by, description, details, paid_for_others, miles, meal_count, amount, instance_id, non_course, sort_order, expense_receipts(id, path, filename)')
     .eq('report_id', reportId)
     .order('sort_order')
     .order('start_date')

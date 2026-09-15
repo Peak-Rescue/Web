@@ -8,11 +8,15 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import {
   type ExpenseCategory,
+  CATEGORY_LABELS,
   MEAL_CATEGORIES,
   categoriesFor,
   computeItem,
   computeTotals,
+  fmtDateRange,
   fmtMoney,
+  itemIsUnclassified,
+  itemLabel,
 } from '@/lib/expenses'
 import { generateExpensePdf } from '@/lib/expense-pdf'
 import { loadCurrentRates, loadReport } from '@/lib/expense-report-data'
@@ -119,6 +123,9 @@ export type ItemPayload = {
   meal_count: number | null
   amount: number | null
   instance_id: string | null
+  /** Deliberately not a course expense. The only thing that makes an empty
+      course link mean overhead rather than unfinished. */
+  non_course: boolean
 }
 
 function validateItem(p: ItemPayload, isExempt: boolean) {
@@ -157,7 +164,8 @@ export async function saveItem(reportId: string, itemId: string | null, payload:
     meal_count: payload.category === 'per_diem' ? payload.meal_count : null,
     rate_used,
     amount,
-    instance_id: payload.instance_id || null,
+    instance_id: payload.non_course ? null : payload.instance_id || null,
+    non_course: payload.non_course,
   }
 
   let savedId = itemId
@@ -355,6 +363,22 @@ async function doSubmitReport(reportId: string): Promise<{ ok: true } | { ok: fa
   if (loaded.items.length === 0) return { ok: false, error: 'This report has no expenses — add at least one before submitting' }
   if (!loaded.report.reason?.trim() && !loaded.report.default_instance_id) {
     return { ok: false, error: 'Trip info is empty — fill in the reason for travel (or pick a course) and save it' }
+  }
+  // Every line says what it was for. Course actuals place this money against
+  // the course that spent it, so a line naming neither a course nor overhead
+  // is money the books cannot attribute — and it is far cheaper to ask now
+  // than to work it out from a description six months later.
+  const unclassified = loaded.items.filter((i) =>
+    itemIsUnclassified(i, loaded.report.default_instance_id)
+  )
+  if (unclassified.length > 0) {
+    const which = unclassified
+      .map((i) => `${CATEGORY_LABELS[i.category]}${itemLabel(i) ? ` — ${itemLabel(i)}` : ''} (${fmtDateRange(i.start_date, i.end_date)})`)
+      .join('; ')
+    return {
+      ok: false,
+      error: `${unclassified.length === 1 ? 'One expense does not' : `${unclassified.length} expenses do not`} say which course they belong to: ${which}. Pick a course on each, or mark it as not course-related.`,
+    }
   }
   if (!profile?.signature_data_url) {
     return { ok: false, error: 'No signature is saved on your profile — draw one in the Sign & submit section and tap "Save signature"' }

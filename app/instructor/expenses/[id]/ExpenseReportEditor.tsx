@@ -18,6 +18,7 @@ import {
   daysInRange,
   fmtDateRange,
   fmtMoney,
+  itemIsUnclassified,
   itemLabel,
   DESCRIPTION_SUGGESTIONS,
 } from '@/lib/expenses'
@@ -46,6 +47,7 @@ export type EditorItem = {
   meal_count: number | null
   amount: number
   instance_id: string | null
+  non_course: boolean
   receipts: { id: string; filename: string; url: string }[]
 }
 
@@ -63,6 +65,7 @@ type FormState = {
   meal_count: string
   amount: string
   instance_id: string
+  non_course: boolean
 }
 
 const EMPTY_FORM: FormState = {
@@ -77,6 +80,7 @@ const EMPTY_FORM: FormState = {
   meal_count: '',
   amount: '',
   instance_id: '',
+  non_course: false,
 }
 
 // Everything auto-saves: trip info and expense lines persist in the background
@@ -230,7 +234,8 @@ export default function ExpenseReportEditor({
       miles: f.miles ? Number(f.miles) : null,
       meal_count: f.meal_count ? Number(f.meal_count) : null,
       amount: f.amount ? Number(f.amount) : null,
-      instance_id: f.instance_id || null,
+      instance_id: f.non_course ? null : f.instance_id || null,
+      non_course: f.non_course,
     }
   }
 
@@ -258,7 +263,8 @@ export default function ExpenseReportEditor({
       miles: f.category === 'personal_auto' && f.miles ? Number(f.miles) : null,
       meal_count: f.category === 'per_diem' && f.meal_count ? Number(f.meal_count) : null,
       amount: computed.amount,
-      instance_id: f.instance_id || null,
+      instance_id: f.non_course ? null : f.instance_id || null,
+      non_course: f.non_course,
       receipts: [],
     }
   }
@@ -352,7 +358,7 @@ export default function ExpenseReportEditor({
       stagedRef.current = []
       setStagedFiles([])
     } else if (!editingIdRef.current) {
-      const touched = JSON.stringify({ ...f, instance_id: '' }) !== JSON.stringify({ ...EMPTY_FORM })
+      const touched = JSON.stringify({ ...f, instance_id: '', non_course: false }) !== JSON.stringify({ ...EMPTY_FORM })
       if (touched && !confirm(`This line is missing ${missingFields(f).join(' and ')} and won't be kept. Discard it?`)) {
         return false
       }
@@ -395,6 +401,7 @@ export default function ExpenseReportEditor({
       meal_count: item.meal_count?.toString() ?? '',
       amount: item.amount ? item.amount.toString() : '',
       instance_id: item.instance_id ?? '',
+      non_course: item.non_course,
     }
     setForm(f)
     formRef.current = f
@@ -554,6 +561,10 @@ export default function ExpenseReportEditor({
   }
 
   const tripInfoOk = Boolean(reason.trim() || defaultCourse)
+  // Lines that never said what they were for. Blocks submission, because
+  // course actuals cannot place this money and nobody will reconstruct it
+  // from a description in six months' time.
+  const unclassified = localItems.filter((i) => itemIsUnclassified(i, defaultCourse || null))
   const receiptCount = localItems.reduce((s, i) => s + i.receipts.length, 0)
 
   const statusText: Record<SaveStatus, string> = {
@@ -636,7 +647,16 @@ export default function ExpenseReportEditor({
                           ? ` · ${daysInRange(item.start_date, item.end_date)} day${daysInRange(item.start_date, item.end_date) === 1 ? '' : 's'} · ${item.meal_count} meals`
                           : ''}
                         {item.paid_by === 'company_card' ? ' · company card' : ''}
+                        {item.non_course ? ' · overhead' : ''}
+                        {!item.non_course && item.instance_id && item.instance_id !== defaultCourse
+                          ? ` · ${courses.find((c) => c.id === item.instance_id)?.label ?? 'another course'}`
+                          : ''}
                       </p>
+                      {/* Findable from the list, not only from the submit
+                          dialog: the fix is inside this line's form. */}
+                      {itemIsUnclassified(item, defaultCourse || null) && (
+                        <p className="text-xs text-pr-red-light mt-0.5">Needs a course</p>
+                      )}
                     </div>
                     <div className="flex items-center gap-3 shrink-0">
                       <span className="text-sm font-medium">{fmtMoney(item.amount)}</span>
@@ -773,14 +793,36 @@ export default function ExpenseReportEditor({
                 )}
 
                 <div>
-                  <label className={labelCls}>Course (overrides default)</label>
+                  <label className={labelCls}>
+                    Course {defaultCourse ? '(overrides default)' : ''}
+                  </label>
                   <CoursePicker
                     courses={courses}
                     value={form.instance_id}
-                    onChange={(id) => setFormAndSchedule({ ...form, instance_id: id })}
-                    noneLabel="— report default —"
+                    onChange={(id) => setFormAndSchedule({ ...form, instance_id: id, non_course: false })}
+                    noneLabel={defaultCourse ? '— report default —' : '— pick a course —'}
+                    disabled={form.non_course}
                     className={inputCls}
                   />
+                  {/* The deliberate no. Every line has to say what it was for
+                      before the report can be submitted, and some spending
+                      genuinely belongs to no course — so the escape hatch is
+                      a thing you tick, not a box you leave empty. */}
+                  <label className="flex items-center gap-2 mt-2 text-xs text-zinc-400">
+                    <input
+                      type="checkbox"
+                      checked={form.non_course}
+                      onChange={(e) =>
+                        setFormAndSchedule({
+                          ...form,
+                          non_course: e.target.checked,
+                          instance_id: e.target.checked ? '' : form.instance_id,
+                        })
+                      }
+                      className="accent-red-600"
+                    />
+                    Not for a course — general overhead
+                  </label>
                 </div>
 
                 {showPaidForOthers && (
@@ -946,10 +988,18 @@ export default function ExpenseReportEditor({
               </p>
 
               {/* Anything blocking submission, called out specifically. */}
-              {(items.length === 0 || !tripInfoOk || !signatureSaved) && (
+              {(items.length === 0 || !tripInfoOk || !signatureSaved || unclassified.length > 0) && (
                 <div className="space-y-1.5 mb-4 text-sm text-pr-red-light">
                   {localItems.length === 0 && <p>✗ No expenses added yet</p>}
                   {!tripInfoOk && <p>✗ Trip info is empty — fill in the reason for travel or pick a course</p>}
+                  {unclassified.length > 0 && (
+                    <p>
+                      ✗ {unclassified.length === 1 ? 'One expense does not' : `${unclassified.length} expenses do not`} say
+                      which course{unclassified.length === 1 ? ' it belongs' : ' they belong'} to — open{' '}
+                      {unclassified.map((i) => CATEGORY_LABELS[i.category] + (itemLabel(i) ? ` — ${itemLabel(i)}` : '')).join(', ')}{' '}
+                      and pick a course, or tick &ldquo;not for a course&rdquo;
+                    </p>
+                  )}
                   {!signatureSaved && <p>✗ No signature saved — draw one in the Sign &amp; submit section</p>}
                 </div>
               )}
@@ -1008,7 +1058,7 @@ export default function ExpenseReportEditor({
                 </button>
                 <button
                   onClick={() => void confirmSubmit()}
-                  disabled={submitting || localItems.length === 0 || !signatureSaved || !tripInfoOk}
+                  disabled={submitting || localItems.length === 0 || !signatureSaved || !tripInfoOk || unclassified.length > 0}
                   className="px-5 py-2.5 bg-pr-red hover:bg-pr-red-dark text-white rounded text-sm font-semibold transition-colors disabled:opacity-50"
                 >
                   {submitting ? 'Submitting…' : 'Submit report'}

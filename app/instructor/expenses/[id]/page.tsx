@@ -34,7 +34,7 @@ export default async function ExpenseReportPage({ params }: { params: Promise<{ 
       admin.from('profiles').select('is_exempt, signature_data_url').eq('id', user.id).single(),
       admin
         .from('expense_items')
-        .select('id, start_date, end_date, category, paid_by, description, details, paid_for_others, miles, meal_count, amount, instance_id, expense_receipts(id, path, filename)')
+        .select('id, start_date, end_date, category, paid_by, description, details, paid_for_others, miles, meal_count, amount, instance_id, non_course, expense_receipts(id, path, filename)')
         .eq('report_id', id)
         .order('start_date')
         .order('created_at'),
@@ -85,6 +85,7 @@ export default async function ExpenseReportPage({ params }: { params: Promise<{ 
       meal_count: row.meal_count,
       amount: Number(row.amount),
       instance_id: row.instance_id,
+      non_course: row.non_course,
       receipts,
     })
   }

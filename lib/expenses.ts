@@ -84,6 +84,20 @@ export function computeItem(
   return { amount: round2(item.amount ?? 0), rate_used: null }
 }
 
+// Whether a line still has to say what it was for. Course actuals roll this
+// money up per course, so a line that names neither a course nor overhead is
+// money the books cannot place. The report's default course counts — a
+// single-course trip needs no per-item links — and `non_course` is the
+// deliberate no, which is the whole reason it exists as a flag rather than as
+// an empty instance_id.
+export function itemIsUnclassified(
+  item: { instance_id: string | null; non_course: boolean },
+  reportDefaultInstanceId: string | null
+): boolean {
+  if (item.non_course) return false
+  return !(item.instance_id ?? reportDefaultInstanceId)
+}
+
 export function round2(n: number): number {
   return Math.round((n + Number.EPSILON) * 100) / 100
 }

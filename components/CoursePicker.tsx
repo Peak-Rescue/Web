@@ -42,12 +42,16 @@ export default function CoursePicker({
   value,
   onChange,
   noneLabel = '— none / general —',
+  disabled = false,
   className,
 }: {
   courses: CourseOption[]
   value: string
   onChange: (id: string) => void
   noneLabel?: string
+  /** Greyed and unopenable — for when something else has already answered
+      the question this picker asks. */
+  disabled?: boolean
   className?: string
 }) {
   const [open, setOpen] = useState(false)
@@ -139,13 +143,14 @@ export default function CoursePicker({
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className={`${className ?? ''} text-left flex items-center justify-between gap-2`}
+        disabled={disabled}
+        className={`${className ?? ''} text-left flex items-center justify-between gap-2 disabled:opacity-50 disabled:cursor-not-allowed`}
       >
         <span className={`truncate ${selected ? '' : 'text-zinc-500'}`}>{selected?.label ?? noneLabel}</span>
         <span className="shrink-0 text-zinc-500">▾</span>
       </button>
 
-      {open && (
+      {open && !disabled && (
         <div className="absolute left-0 right-0 top-full mt-1 z-20 bg-zinc-900 border border-zinc-700 rounded-lg shadow-xl p-2">
           <input
             ref={inputRef}
