@@ -56,41 +56,125 @@ export function splitRegion(code: string | null | undefined): { country: string;
 }
 
 // Every ISO 3166-1 country, so a course somewhere unanticipated never needs a
-// code added here. Names come from Intl, pinned to 'en' so server and client
-// render the same string.
-const COUNTRY_CODES =
-  'AD,AE,AF,AG,AI,AL,AM,AO,AQ,AR,AT,AU,AW,AX,AZ,BA,BB,BD,BE,BF,BG,BH,BI,BJ,BL,' +
-  'BM,BN,BO,BQ,BR,BS,BT,BV,BW,BY,BZ,CA,CC,CD,CF,CG,CH,CI,CK,CL,CM,CN,CO,CR,CU,CV,' +
-  'CW,CX,CY,CZ,DE,DJ,DK,DM,DO,DZ,EC,EE,EG,EH,ER,ES,ET,FI,FJ,FK,FM,FO,FR,GA,GB,' +
-  'GD,GE,GF,GG,GH,GI,GL,GM,GN,GP,GQ,GR,GS,GT,GW,GY,HK,HM,HN,HR,HT,HU,ID,IE,IL,' +
-  'IM,IN,IO,IQ,IR,IS,IT,JE,JM,JO,JP,KE,KG,KH,KI,KM,KN,KP,KR,KW,KY,KZ,LA,LB,LC,' +
-  'LI,LK,LR,LS,LT,LU,LV,LY,MA,MC,MD,ME,MF,MG,MH,MK,ML,MM,MN,MO,MQ,MR,MS,MT,MU,' +
-  'MV,MW,MX,MY,MZ,NA,NC,NE,NF,NG,NI,NL,NO,NP,NR,NU,NZ,OM,PA,PE,PF,PG,PH,PK,PL,' +
-  'PM,PN,PS,PT,PW,PY,QA,RE,RO,RS,RU,RW,SA,SB,SC,SD,SE,SG,SH,SI,SJ,SK,SL,SM,SN,' +
-  'SO,SR,SS,ST,SV,SX,SY,SZ,TC,TD,TF,TG,TH,TJ,TK,TL,TM,TN,TO,TR,TT,TV,TW,TZ,UA,' +
-  'UG,UM,US,UY,UZ,VA,VC,VE,VG,VN,VU,WF,WS,YE,YT,ZA,ZM,ZW'
+// code added here.
+//
+// Written out rather than read from Intl.DisplayNames. Pinning the locale to
+// 'en' was supposed to make the server and the browser agree and does not:
+// they each carry their own copy of the CLDR data, and the two copies differ.
+// Node said "Falkland Islands" where Chrome said "Falkland Islands (Islas
+// Malvinas)", and likewise on Hong Kong, Macao and Palestine — four options
+// whose text did not match the HTML they were hydrating, which threw out the
+// whole form's tree and re-rendered it on the client. A browser release or a
+// Node bump moves the set; nothing in the app can pin it.
+//
+// So the names are the app's own, written out in the order they are shown.
+// Where the two disagreed, the shorter and plainer reading won. The order is
+// written out for the same reason the names are: localeCompare reads the same
+// divergent data, so a list sorted at render time could come out in a
+// different order on the two sides and mismatch by position instead of by
+// text. ~4KB in the bundle, and the picker renders the same string in the same
+// place everywhere it is drawn, for good.
+const COUNTRY_NAMES: Record<string, string> = {
+  AF: "Afghanistan", AX: "Åland Islands", AL: "Albania",
+  DZ: "Algeria", AD: "Andorra", AO: "Angola",
+  AI: "Anguilla", AQ: "Antarctica", AG: "Antigua & Barbuda",
+  AR: "Argentina", AM: "Armenia", AW: "Aruba",
+  AU: "Australia", AT: "Austria", AZ: "Azerbaijan",
+  BS: "Bahamas", BH: "Bahrain", BD: "Bangladesh",
+  BB: "Barbados", BY: "Belarus", BE: "Belgium",
+  BZ: "Belize", BJ: "Benin", BM: "Bermuda",
+  BT: "Bhutan", BO: "Bolivia", BA: "Bosnia & Herzegovina",
+  BW: "Botswana", BV: "Bouvet Island", BR: "Brazil",
+  IO: "British Indian Ocean Territory", VG: "British Virgin Islands", BN: "Brunei",
+  BG: "Bulgaria", BF: "Burkina Faso", BI: "Burundi",
+  KH: "Cambodia", CM: "Cameroon", CA: "Canada",
+  CV: "Cape Verde", BQ: "Caribbean Netherlands", KY: "Cayman Islands",
+  CF: "Central African Republic", TD: "Chad", CL: "Chile",
+  CN: "China", CX: "Christmas Island", CC: "Cocos (Keeling) Islands",
+  CO: "Colombia", KM: "Comoros", CG: "Congo - Brazzaville",
+  CD: "Congo - Kinshasa", CK: "Cook Islands", CR: "Costa Rica",
+  CI: "Côte d’Ivoire", HR: "Croatia", CU: "Cuba",
+  CW: "Curaçao", CY: "Cyprus", CZ: "Czechia",
+  DK: "Denmark", DJ: "Djibouti", DM: "Dominica",
+  DO: "Dominican Republic", EC: "Ecuador", EG: "Egypt",
+  SV: "El Salvador", GQ: "Equatorial Guinea", ER: "Eritrea",
+  EE: "Estonia", SZ: "Eswatini", ET: "Ethiopia",
+  FK: "Falkland Islands", FO: "Faroe Islands", FJ: "Fiji",
+  FI: "Finland", FR: "France", GF: "French Guiana",
+  PF: "French Polynesia", TF: "French Southern Territories", GA: "Gabon",
+  GM: "Gambia", GE: "Georgia", DE: "Germany",
+  GH: "Ghana", GI: "Gibraltar", GR: "Greece",
+  GL: "Greenland", GD: "Grenada", GP: "Guadeloupe",
+  GT: "Guatemala", GG: "Guernsey", GN: "Guinea",
+  GW: "Guinea-Bissau", GY: "Guyana", HT: "Haiti",
+  HM: "Heard & McDonald Islands", HN: "Honduras", HK: "Hong Kong",
+  HU: "Hungary", IS: "Iceland", IN: "India",
+  ID: "Indonesia", IR: "Iran", IQ: "Iraq",
+  IE: "Ireland", IM: "Isle of Man", IL: "Israel",
+  IT: "Italy", JM: "Jamaica", JP: "Japan",
+  JE: "Jersey", JO: "Jordan", KZ: "Kazakhstan",
+  KE: "Kenya", KI: "Kiribati", KW: "Kuwait",
+  KG: "Kyrgyzstan", LA: "Laos", LV: "Latvia",
+  LB: "Lebanon", LS: "Lesotho", LR: "Liberia",
+  LY: "Libya", LI: "Liechtenstein", LT: "Lithuania",
+  LU: "Luxembourg", MO: "Macao", MG: "Madagascar",
+  MW: "Malawi", MY: "Malaysia", MV: "Maldives",
+  ML: "Mali", MT: "Malta", MH: "Marshall Islands",
+  MQ: "Martinique", MR: "Mauritania", MU: "Mauritius",
+  YT: "Mayotte", MX: "Mexico", FM: "Micronesia",
+  MD: "Moldova", MC: "Monaco", MN: "Mongolia",
+  ME: "Montenegro", MS: "Montserrat", MA: "Morocco",
+  MZ: "Mozambique", MM: "Myanmar (Burma)", NA: "Namibia",
+  NR: "Nauru", NP: "Nepal", NL: "Netherlands",
+  NC: "New Caledonia", NZ: "New Zealand", NI: "Nicaragua",
+  NE: "Niger", NG: "Nigeria", NU: "Niue",
+  NF: "Norfolk Island", KP: "North Korea", MK: "North Macedonia",
+  NO: "Norway", OM: "Oman", PK: "Pakistan",
+  PW: "Palau", PS: "Palestine", PA: "Panama",
+  PG: "Papua New Guinea", PY: "Paraguay", PE: "Peru",
+  PH: "Philippines", PN: "Pitcairn Islands", PL: "Poland",
+  PT: "Portugal", QA: "Qatar", RE: "Réunion",
+  RO: "Romania", RU: "Russia", RW: "Rwanda",
+  WS: "Samoa", SM: "San Marino", ST: "São Tomé & Príncipe",
+  SA: "Saudi Arabia", SN: "Senegal", RS: "Serbia",
+  SC: "Seychelles", SL: "Sierra Leone", SG: "Singapore",
+  SX: "Sint Maarten", SK: "Slovakia", SI: "Slovenia",
+  SB: "Solomon Islands", SO: "Somalia", ZA: "South Africa",
+  GS: "South Georgia & South Sandwich Islands", KR: "South Korea", SS: "South Sudan",
+  ES: "Spain", LK: "Sri Lanka", BL: "St. Barthélemy",
+  SH: "St. Helena", KN: "St. Kitts & Nevis", LC: "St. Lucia",
+  MF: "St. Martin", PM: "St. Pierre & Miquelon", VC: "St. Vincent & Grenadines",
+  SD: "Sudan", SR: "Suriname", SJ: "Svalbard & Jan Mayen",
+  SE: "Sweden", CH: "Switzerland", SY: "Syria",
+  TW: "Taiwan", TJ: "Tajikistan", TZ: "Tanzania",
+  TH: "Thailand", TL: "Timor-Leste", TG: "Togo",
+  TK: "Tokelau", TO: "Tonga", TT: "Trinidad & Tobago",
+  TN: "Tunisia", TR: "Türkiye", TM: "Turkmenistan",
+  TC: "Turks & Caicos Islands", TV: "Tuvalu", UM: "U.S. Outlying Islands",
+  UG: "Uganda", UA: "Ukraine", AE: "United Arab Emirates",
+  GB: "United Kingdom", US: "United States", UY: "Uruguay",
+  UZ: "Uzbekistan", VU: "Vanuatu", VA: "Vatican City",
+  VE: "Venezuela", VN: "Vietnam", WF: "Wallis & Futuna",
+  EH: "Western Sahara", YE: "Yemen", ZM: "Zambia",
+  ZW: "Zimbabwe",
+}
 
-const displayNames = new Intl.DisplayNames(['en'], { type: 'region' })
+const COUNTRY_CODES = Object.keys(COUNTRY_NAMES).join(',')
 
 function countryName(code: string): string {
-  try {
-    return displayNames.of(code) ?? code
-  } catch {
-    return code
-  }
+  return COUNTRY_NAMES[code] ?? code
 }
 
 // One alphabetical list of every country, US and Canada included. A single flat
 // list is what makes type-ahead work: in a native select, typing jumps within
 // the whole list, so "F" reaches France instead of stopping at Florida.
 //
-// The subdivision countries are unioned in rather than trusted to the list
-// above, which had lost both of them: a country you hold states for and cannot
-// pick is the worst cell in the table — every US course, and no way back to
-// one once another country is chosen.
+// Already in order — see COUNTRY_NAMES. The subdivision countries are unioned
+// in rather than trusted to the list above, which had lost both of them: a
+// country you hold states for and cannot pick is the worst cell in the table —
+// every US course, and no way back to one once another country is chosen.
 export const COUNTRIES = [...new Set([...COUNTRY_CODES.split(','), ...Object.keys(SUBDIVISIONS)])]
   .map((code) => ({ code, name: countryName(code) }))
-  .sort((a, b) => a.name.localeCompare(b.name))
 
 // "Hawaii, United States" — the long form, for selects and detail lines.
 export function regionLabel(code: string | null | undefined): string {
