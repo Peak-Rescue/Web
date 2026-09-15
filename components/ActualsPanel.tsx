@@ -1,11 +1,13 @@
 'use client'
 
 import { useRef, useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { fmtMoney, fmtDateRange, round2 } from '@/lib/expenses'
 import {
   accountsWorthShowing,
   expenseLineLabel,
+  groupByReport,
   rollUpActuals,
   type CostAccount,
   type PayLine,
@@ -100,6 +102,7 @@ export default function ActualsPanel({
   const [costs, setCosts] = useState<CostRow[]>(withBlankCost(loaded.costLines.map((l) => ({ ...l, key: l.id }))))
   const [overrides, setOverrides] = useState<Map<string, string>>(new Map(loaded.expenseAccounts))
   const [openAccount, setOpenAccount] = useState<string | null>(null)
+  const [pendingOpen, setPendingOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -253,11 +256,19 @@ export default function ActualsPanel({
 
   const liveAccounts = accountsWorthShowing(actuals.accounts)
 
+  // Grouped by report rather than listed flat: two lines in draft are almost
+  // always one person's unfiled report, and "ask Jake" is the whole of what
+  // a reader can do about it.
+  const pendingByReport = groupByReport(actuals.pending.lines)
+
   // The part of the uncategorised pile that came from the list above rather
   // than from an expense report whose category was retired.
   const unfiledTyped = round2(
     actuals.unfiled.amount - actuals.unfiled.lines.reduce((t, l) => t + l.amount, 0)
   )
+
+  // Where a number comes from, when it does not come from this screen.
+  const libraryLink = 'text-xs text-zinc-500 hover:text-zinc-300 underline underline-offset-2 decoration-zinc-700 transition-colors'
 
   const input = 'bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-zinc-500'
   const cell = 'text-sm text-zinc-300'
@@ -312,6 +323,9 @@ export default function ActualsPanel({
         <div className="flex items-baseline gap-2 mb-2">
           <h4 className="text-sm font-semibold text-zinc-200">Pay</h4>
           <InfoHint text="Hours live in ADP, not here, so pay is typed. Any suggestion comes from the course's length and the library's pay rates." />
+          <Link href="/admin/expenses/rates#pay-rates" className={libraryLink}>
+            Pay rates
+          </Link>
         </div>
 
         {suggestion && pay.every(payIsBlank) && (
@@ -402,7 +416,9 @@ export default function ActualsPanel({
               />
               %
               {loadPct.trim() === '' ? (
-                <span className="text-xs text-zinc-600">org-wide</span>
+                <Link href="/admin/expenses/rates#org-wide" className="text-xs text-zinc-500 hover:text-zinc-300 underline underline-offset-2 decoration-zinc-700 transition-colors">
+                  org-wide
+                </Link>
               ) : (
                 <button
                   onClick={() => {
@@ -441,7 +457,10 @@ export default function ActualsPanel({
       <div>
         <div className="flex items-baseline gap-2 mb-2">
           <h4 className="text-sm font-semibold text-zinc-200">Costs</h4>
-          <InfoHint text="Type what the company card and direct invoices paid for; submitted expense reports arrive on their own. Categories are shared by every course — rename or retire them on the rates page." />
+          <InfoHint text="Type what the company card and direct invoices paid for; submitted expense reports arrive on their own. Categories are shared by every course." />
+          <Link href="/admin/expenses/rates#cost-categories" className={libraryLink}>
+            Categories
+          </Link>
         </div>
 
         <div className="space-y-1.5">
@@ -564,11 +583,45 @@ export default function ActualsPanel({
           )}
         </div>
 
+        {/* Money we are going to pay and have not. Naming a figure without
+            saying whose it is leaves the reader with a number and nowhere to
+            go — and the only way to move it is to ask that person to file,
+            since a draft belongs to whoever is writing it. */}
         {actuals.pending.amount > 0 && (
-          <p className="mt-3 text-xs text-amber-400/90">
-            {fmtMoney(actuals.pending.amount)} across {actuals.pending.lines.length} expense line
-            {actuals.pending.lines.length === 1 ? '' : 's'} is still in draft, and not counted.
-          </p>
+          <div className="mt-3">
+            <button
+              onClick={() => setPendingOpen((o) => !o)}
+              className="text-xs text-amber-400/90 hover:text-amber-300 transition-colors text-left"
+            >
+              {fmtMoney(actuals.pending.amount)} across {actuals.pending.lines.length} expense line
+              {actuals.pending.lines.length === 1 ? '' : 's'} is still in draft, and not counted.
+              <span className="ml-1 text-amber-400/60">{pendingOpen ? '▴' : '▾'}</span>
+            </button>
+
+            {pendingOpen && (
+              <div className="mt-2 pl-3 space-y-3">
+                {pendingByReport.map((g) => (
+                  <div key={g.reportId}>
+                    <p className="text-xs text-zinc-500">
+                      {g.personName ?? 'Unknown'} · {fmtMoney(g.total)} · not submitted yet
+                    </p>
+                    <div className="mt-1 space-y-0.5">
+                      {g.lines.map((l) => (
+                        <div key={l.id} className="flex items-center gap-2 flex-wrap text-xs">
+                          <span className="text-zinc-500 w-24 shrink-0">{fmtDateRange(l.start_date, null)}</span>
+                          <span className="text-zinc-400 flex-1 min-w-32 truncate">
+                            {expenseLineLabel(l)}
+                            {l.paid_by === 'company_card' ? <span className="text-zinc-600"> · card</span> : null}
+                          </span>
+                          <span className="text-zinc-400 w-20 text-right">{fmtMoney(l.amount)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         )}
       </div>
 

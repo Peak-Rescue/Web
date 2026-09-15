@@ -3,6 +3,7 @@ import { amountValue } from '@/components/ActualsPanel'
 import {
   accountsWorthShowing,
   accountForExpense,
+  groupByReport,
   expenseLineLabel,
   payRatesFrom,
   routeReassignments,
@@ -319,5 +320,44 @@ describe('which categories the summary draws', () => {
     const a = { id: 'a', account_id: 'travel', spend_date: null, description: 'Charge', amount: 100 }
     const b = { id: 'b', account_id: 'travel', spend_date: null, description: 'Refund', amount: -100 }
     expect(accountsWorthShowing([rollup({ typedLines: [a, b], total: 0 })])).toHaveLength(1)
+  })
+})
+
+describe('draft expense lines, grouped so you know who to ask', () => {
+  const l = (over: Partial<ActualExpenseLine>) => line({ submitted: false, ...over })
+
+  it('gathers lines into the report they belong to', () => {
+    const out = groupByReport([
+      l({ id: 'a', reportId: 'r1', amount: 100, personName: 'Jake Shultz' }),
+      l({ id: 'b', reportId: 'r1', amount: 50, personName: 'Jake Shultz' }),
+      l({ id: 'c', reportId: 'r2', amount: 400, personName: 'Nadav Oakes' }),
+    ])
+    expect(out).toHaveLength(2)
+    expect(out[0]).toMatchObject({ reportId: 'r2', personName: 'Nadav Oakes', total: 400 })
+    expect(out[1]).toMatchObject({ reportId: 'r1', personName: 'Jake Shultz', total: 150 })
+  })
+
+  it('puts the biggest report first — that is the one worth chasing', () => {
+    const out = groupByReport([
+      l({ id: 'a', reportId: 'small', amount: 12 }),
+      l({ id: 'b', reportId: 'big', amount: 900 }),
+    ])
+    expect(out.map((g) => g.reportId)).toEqual(['big', 'small'])
+  })
+
+  it("orders a report's own lines by date, as the trip ran", () => {
+    const out = groupByReport([
+      l({ id: 'a', reportId: 'r1', start_date: '2026-06-05' }),
+      l({ id: 'b', reportId: 'r1', start_date: '2026-06-01' }),
+    ])
+    expect(out[0].lines.map((x) => x.id)).toEqual(['b', 'a'])
+  })
+
+  it('still names the report when one line lost its person', () => {
+    const out = groupByReport([
+      l({ id: 'a', reportId: 'r1', personName: null }),
+      l({ id: 'b', reportId: 'r1', personName: 'Jake Shultz' }),
+    ])
+    expect(out[0].personName).toBe('Jake Shultz')
   })
 })

@@ -124,6 +124,25 @@ export type AccountRollup = {
   typedLines: TypedCostLine[]
 }
 
+/** Draft expense lines gathered into the reports they belong to, biggest
+    first. Two lines in draft are almost always one person's unfiled report,
+    and the only thing a reader can do about the money is ask that person to
+    file it — so whose report it is matters more than the lines do. */
+export function groupByReport(
+  lines: ActualExpenseLine[]
+): { reportId: string; personName: string | null; total: number; lines: ActualExpenseLine[] }[] {
+  const byReport = new Map<string, ActualExpenseLine[]>()
+  for (const l of lines) byReport.set(l.reportId, [...(byReport.get(l.reportId) ?? []), l])
+  return [...byReport.entries()]
+    .map(([reportId, group]) => ({
+      reportId,
+      personName: group.find((l) => l.personName)?.personName ?? null,
+      total: round2(group.reduce((t, l) => t + l.amount, 0)),
+      lines: [...group].sort((a, b) => a.start_date.localeCompare(b.start_date)),
+    }))
+    .sort((a, b) => b.total - a.total)
+}
+
 /** Which categories the summary draws. A category earns its row by holding
     something: a chart of eight rows of $0.00 is a table of contents for an
     empty book, and the full chart is one click away in any cost row's
