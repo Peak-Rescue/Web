@@ -267,6 +267,9 @@ export default function ActualsPanel({
     actuals.unfiled.amount - actuals.unfiled.lines.reduce((t, l) => t + l.amount, 0)
   )
 
+  // What separates one segment of the panel from the next.
+  const sectionRule = 'pt-6 border-t border-zinc-800'
+
   // Where a number comes from, when it does not come from this screen.
   const libraryLink = 'text-xs text-zinc-500 hover:text-zinc-300 underline underline-offset-2 decoration-zinc-700 transition-colors'
 
@@ -319,7 +322,11 @@ export default function ActualsPanel({
       </div>
 
       {/* ── Pay ──────────────────────────────────────────────────────────── */}
-      <div>
+      {/* Full-width rules divide the four segments — billed, pay, costs, and
+          what it left. Inside a segment, a rule means "the sum of the rows
+          above", and those are short ones over the amount column only.
+          A full rule doing both jobs read as a division in the wrong place. */}
+      <div className={sectionRule}>
         <div className="flex items-baseline gap-2 mb-2">
           <h4 className="text-sm font-semibold text-zinc-200">Pay</h4>
           <InfoHint text="Hours live in ADP, not here, so pay is typed. Any suggestion comes from the course's length and the library's pay rates." />
@@ -398,7 +405,12 @@ export default function ActualsPanel({
           ))}
         </div>
 
-        <div className="mt-3 pt-3 border-t border-zinc-800 space-y-1 text-sm">
+        <div className="mt-3 space-y-1 text-sm">
+          {/* Sums the rows above it, so the rule sits over the numbers rather
+              than across the panel. */}
+          <div className="flex justify-end pb-1">
+            <div className="w-40 border-t border-zinc-800" />
+          </div>
           <Row label="Pay total" value={fmtMoney(actuals.payTotal)} />
           <div className="flex items-center justify-between gap-4">
             <span className="text-zinc-400 flex items-center gap-1.5 flex-wrap">
@@ -454,7 +466,7 @@ export default function ActualsPanel({
           account and the schema keeps that word; on screen it is a category,
           because the person filling this in is sorting costs into buckets,
           not keeping a ledger. */}
-      <div>
+      <div className={sectionRule}>
         <div className="flex items-baseline gap-2 mb-2">
           <h4 className="text-sm font-semibold text-zinc-200">Costs</h4>
           <InfoHint text="Type what the company card and direct invoices paid for; submitted expense reports arrive on their own. Categories are shared by every course." />
@@ -626,7 +638,7 @@ export default function ActualsPanel({
       </div>
 
       {/* ── What it left ─────────────────────────────────────────────────── */}
-      <div className="pt-4 border-t border-zinc-800 space-y-1">
+      <div className={`${sectionRule} space-y-1`}>
         <Row label="Invoiced" value={fmtMoney(actuals.invoiced)} />
         <Row label="Costs" value={fmtMoney(actuals.costsTotal)} />
         <div className="flex items-center justify-between gap-4 pt-1">
@@ -641,7 +653,9 @@ export default function ActualsPanel({
       </div>
 
       {/* ── Sending it out ───────────────────────────────────────────────── */}
-      <div className="flex items-center gap-3 flex-wrap text-xs">
+      {/* Below the rule with the notes: these are things you do with the
+          numbers, not part of working them out. */}
+      <div className={`${sectionRule} flex items-center gap-3 flex-wrap text-xs`}>
         <a
           href={`/api/actuals/${instanceId}/pdf`}
           target="_blank"
