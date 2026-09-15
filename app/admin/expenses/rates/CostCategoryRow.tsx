@@ -19,8 +19,12 @@ export default function CostCategoryRow({
   categories,
   choices,
   claimedElsewhere,
+  columns,
 }: {
   id: string
+  /** The table's column template, handed down so the row cannot line up to
+      anything other than the header above it. */
+  columns: string
   label: string
   categories: string[]
   choices: ExpenseCategoryChoice[]
@@ -37,21 +41,22 @@ export default function CostCategoryRow({
 
   return (
     <form action={updateCostAccount.bind(null, id)} className="px-4 py-3">
-      <div className="flex items-center gap-2 flex-wrap">
+      <div className={columns}>
         <input
           name="label"
           required
           defaultValue={label}
-          className="flex-1 min-w-36 bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm font-medium focus:outline-none focus:border-zinc-500"
+          className="w-full md:w-auto md:min-w-0 bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm font-medium focus:outline-none focus:border-zinc-500"
         />
+        {/* The count only, because the column above it says what is being
+            counted. "Nothing routes here" on seven rows was a sentence
+            repeated down the page to say nothing had happened yet. */}
         <button
           type="button"
           onClick={() => setOpen((o) => !o)}
-          className="text-xs text-zinc-400 hover:text-white transition-colors"
+          className="md:min-w-0 text-left text-xs text-zinc-400 hover:text-white transition-colors"
         >
-          {picked.length === 0
-            ? 'Nothing routes here'
-            : `${picked.length} expense type${picked.length === 1 ? '' : 's'} route here`}
+          {picked.length === 0 ? 'None' : `${picked.length} type${picked.length === 1 ? '' : 's'}`}
           <span className="ml-1 text-zinc-600">{open ? '▴' : '▾'}</span>
         </button>
         <SaveButton className="px-2.5 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-white rounded text-xs font-medium transition-colors">
