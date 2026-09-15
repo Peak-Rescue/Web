@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import { amountValue } from '@/components/ActualsPanel'
 import {
   accountForExpense,
   expenseLineLabel,
@@ -264,5 +265,26 @@ describe('routing expense types into cost categories', () => {
       { id: 'travel', categories: ['lodging'] },
       { id: 'misc', categories: [] },
     ])
+  })
+})
+
+describe('an amount box you are halfway through typing', () => {
+  it('shows nothing in a row nobody has touched', () => {
+    expect(amountValue({ amount: 0 })).toBe('')
+  })
+
+  it('keeps the zero in "0.5", which the parsed number cannot', () => {
+    // Typing 0 then . then 5: the number is 0 until the 5 lands, so a box
+    // showing the number back would eat the character as it was typed.
+    expect(amountValue({ amount: 0, amountText: '0.' })).toBe('0.')
+    expect(amountValue({ amount: 0.5, amountText: '0.5' })).toBe('0.5')
+  })
+
+  it('shows a saved amount that was never typed in this session', () => {
+    expect(amountValue({ amount: 612.4 })).toBe('612.4')
+  })
+
+  it('lets the box be emptied', () => {
+    expect(amountValue({ amount: 0, amountText: '' })).toBe('')
   })
 })

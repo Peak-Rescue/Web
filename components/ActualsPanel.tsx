@@ -39,8 +39,11 @@ import InfoHint from '@/components/InfoHint'
 
 const DEBOUNCE_MS = 800
 
-type PayRow = PayLine & { key: string }
-type CostRow = TypedCostLine & { key: string }
+/** `amountText` is what is in the box while it is being typed. Without it a
+    row shows the parsed number back, so "0.5" loses its zero the moment it
+    is typed — the number is 0 until the 5 arrives. */
+type PayRow = PayLine & { key: string; amountText?: string }
+type CostRow = TypedCostLine & { key: string; amountText?: string }
 
 export default function ActualsPanel({
   instanceId,
@@ -75,8 +78,13 @@ export default function ActualsPanel({
   const [closed, setClosed] = useState(Boolean(loaded.closedAt))
   const [shareToken, setShareToken] = useState(loaded.shareToken)
 
-  const [pay, setPay] = useState<PayRow[]>(loaded.payLines.map((l) => ({ ...l, key: l.id })))
-  const [costs, setCosts] = useState<CostRow[]>(loaded.costLines.map((l) => ({ ...l, key: l.id })))
+  // Both lists end in an empty row, always. Entering a cost was a click to
+  // expand, a click to add and then the typing; this is a spreadsheet, which
+  // is what it replaced and what the person doing it already has open. An
+  // untouched blank never reaches the server — the save fires on change — so
+  // the row costs nothing to keep on screen.
+  const [pay, setPay] = useState<PayRow[]>(withBlankPay(loaded.payLines.map((l) => ({ ...l, key: l.id }))))
+  const [costs, setCosts] = useState<CostRow[]>(withBlankCost(loaded.costLines.map((l) => ({ ...l, key: l.id }))))
   const [overrides, setOverrides] = useState<Map<string, string>>(new Map(loaded.expenseAccounts))
   const [openAccount, setOpenAccount] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -136,7 +144,7 @@ export default function ActualsPanel({
 
   function updatePay(key: string, patch: Partial<PayRow>) {
     setPay((rows) => {
-      const next = rows.map((r) => (r.key === key ? { ...r, ...patch } : r))
+      const next = withBlankPay(rows.map((r) => (r.key === key ? { ...r, ...patch } : r)))
       const row = next.find((r) => r.key === key)!
       schedule(`pay:${key}`, async () => {
         const known = row.id || ids.current.get(key) || null
@@ -157,7 +165,7 @@ export default function ActualsPanel({
 
   function updateCost(key: string, patch: Partial<CostRow>) {
     setCosts((rows) => {
-      const next = rows.map((r) => (r.key === key ? { ...r, ...patch } : r))
+      const next = withBlankCost(rows.map((r) => (r.key === key ? { ...r, ...patch } : r)))
       const row = next.find((r) => r.key === key)!
       schedule(`cost:${key}`, async () => {
         const known = row.id || ids.current.get(key) || null
@@ -186,24 +194,24 @@ export default function ActualsPanel({
     await (chains.current.get(key) ?? Promise.resolve()).catch(() => {})
   }
 
-  // One place a cost row is born, from either button. A row with no category
-  // yet is legal and visible; picking one moves it under that category.
-  function addCostRow(accountId: string | null) {
-    setCosts((rs) => [
+  // Starting a row already in a category — the one shortcut worth a click,
+  // since it answers the only field the trailing blank row cannot guess.
+  function addCostRow(accountId: string) {
+    setCosts((rs) => withBlankCost([
       ...rs,
       { key: newKey(), id: '', account_id: accountId, spend_date: null, description: null, amount: 0 },
-    ])
+    ]))
   }
 
   async function removePay(row: PayRow) {
-    setPay((rs) => rs.filter((r) => r.key !== row.key))
+    setPay((rs) => withBlankPay(rs.filter((r) => r.key !== row.key)))
     await settle(`pay:${row.key}`)
     const id = row.id || ids.current.get(row.key)
     if (id) await deletePayItem(instanceId, id).catch(() => router.refresh())
   }
 
   async function removeCost(row: CostRow) {
-    setCosts((rs) => rs.filter((r) => r.key !== row.key))
+    setCosts((rs) => withBlankCost(rs.filter((r) => r.key !== row.key)))
     await settle(`cost:${row.key}`)
     const id = row.id || ids.current.get(row.key)
     if (id) await deleteCostItem(instanceId, id).catch(() => router.refresh())
@@ -281,7 +289,7 @@ export default function ActualsPanel({
           <InfoHint text="Hours live in ADP, not here, so pay is typed. Any suggestion comes from the course's length and the library's pay rates." />
         </div>
 
-        {suggestion && pay.length === 0 && (
+        {suggestion && pay.every(payIsBlank) && (
           <div className="mb-3 p-3 rounded border border-zinc-800 bg-zinc-900/60">
             <p className="text-xs text-zinc-400">
               Suggested <span className="text-zinc-200 font-medium">{fmtMoney(suggestion.total)}</span>
@@ -333,24 +341,23 @@ export default function ActualsPanel({
                 className={`${input} flex-1 min-w-40`}
               />
               <input
-                value={String(row.amount ?? '')}
-                onChange={(e) => updatePay(row.key, { amount: Number(e.target.value.replace(/[$,\s]/g, '')) || 0 })}
+                value={amountValue(row)}
+                onChange={(e) => updatePay(row.key, { amountText: e.target.value, amount: parseAmount(e.target.value) })}
                 inputMode="decimal"
-                className={`${input} w-24 text-right`}
+                placeholder="0.00"
+                className={`${input} w-24 text-right placeholder-zinc-600`}
               />
-              <button onClick={() => void removePay(row)} className="text-zinc-600 hover:text-pr-red-light transition-colors" title="Remove">
-                <TrashIcon className="w-4 h-4" />
-              </button>
+              {/* Nothing to remove from a row nobody has typed in yet. */}
+              {payIsBlank(row) ? (
+                <span className="w-4" />
+              ) : (
+                <button onClick={() => void removePay(row)} className="text-zinc-600 hover:text-pr-red-light transition-colors" title="Remove">
+                  <TrashIcon className="w-4 h-4" />
+                </button>
+              )}
             </div>
           ))}
         </div>
-
-        <button
-          onClick={() => setPay((rs) => [...rs, { key: newKey(), id: '', profile_id: null, work_date: null, description: null, amount: 0 }])}
-          className="mt-2 text-xs text-zinc-400 hover:text-white transition-colors"
-        >
-          + Add a pay line
-        </button>
 
         <div className="mt-3 pt-3 border-t border-zinc-800 space-y-1 text-sm">
           <Row label="Pay total" value={fmtMoney(actuals.payTotal)} />
@@ -453,7 +460,7 @@ export default function ActualsPanel({
                     {r.typedLines.map((l) => {
                       const row = costs.find((c) => c.id === l.id)
                       if (!row) return null
-                      return <CostRowFields key={row.key} row={row} accounts={accounts} input={input} onChange={(p) => updateCost(row.key, p)} onRemove={() => void removeCost(row)} />
+                      return <CostRowFields key={row.key} row={row} accounts={accounts} input={input} blank={costIsBlank(row)} onChange={(p) => updateCost(row.key, p)} onRemove={() => void removeCost(row)} />
                     })}
 
                     <button
@@ -499,28 +506,17 @@ export default function ActualsPanel({
             </div>
           )}
 
-          {/* A cost added from the button below, before it has been sorted.
-              It lands here rather than nowhere, so a row you just typed is
-              never out of sight while you decide where it goes. */}
-          {homelessCosts.length > 0 && (
-            <div className="px-3 py-2 space-y-2">
-              {homelessCosts.map((row) => (
-                <CostRowFields key={row.key} row={row} accounts={accounts} input={input} onChange={(p) => updateCost(row.key, p)} onRemove={() => void removeCost(row)} />
-              ))}
-            </div>
-          )}
+          {/* Where a cost is typed, and where one waits while you decide
+              which category it belongs to. Always present: this is the row
+              you start in, not a state the list gets into. */}
+          <div className="px-3 py-2 space-y-2">
+            {homelessCosts.map((row) => (
+              <CostRowFields key={row.key} row={row} accounts={accounts} input={input} blank={costIsBlank(row)} onChange={(p) => updateCost(row.key, p)} onRemove={() => void removeCost(row)} />
+            ))}
+          </div>
         </div>
 
         <div className="mt-2 flex items-center gap-3 flex-wrap">
-          {/* The main way costs get in. Adding one should not mean picking its
-              category first, expanding that category, and finding a link
-              inside — the row can say where it belongs once it exists. */}
-          <button
-            onClick={() => addCostRow(null)}
-            className="px-2.5 py-1 bg-zinc-800 hover:bg-zinc-700 rounded text-xs font-medium text-zinc-200 transition-colors"
-          >
-            + Add a cost
-          </button>
           <span className="flex items-center gap-2">
             <input
               value={newAccount}
@@ -675,13 +671,16 @@ function CostRowFields({
   row,
   accounts,
   input,
+  blank,
   onChange,
   onRemove,
 }: {
   row: CostRow & { key: string }
   accounts: CostAccount[]
   input: string
-  onChange: (patch: Partial<TypedCostLine>) => void
+  /** Nothing typed yet, so nothing to remove. */
+  blank?: boolean
+  onChange: (patch: Partial<CostRow>) => void
   onRemove: () => void
 }) {
   return (
@@ -709,14 +708,19 @@ function CostRowFields({
         ))}
       </select>
       <input
-        value={String(row.amount ?? '')}
-        onChange={(e) => onChange({ amount: Number(e.target.value.replace(/[$,\s]/g, '')) || 0 })}
+        value={amountValue(row)}
+        onChange={(e) => onChange({ amountText: e.target.value, amount: Number(e.target.value.replace(/[$,\s]/g, '')) || 0 })}
         inputMode="decimal"
-        className={`${input} w-24 text-right`}
+        placeholder="0.00"
+        className={`${input} w-24 text-right placeholder-zinc-600`}
       />
-      <button onClick={onRemove} className="text-zinc-600 hover:text-pr-red-light transition-colors" title="Remove">
-        <TrashIcon className="w-4 h-4" />
-      </button>
+      {blank ? (
+        <span className="w-4" />
+      ) : (
+        <button onClick={onRemove} className="text-zinc-600 hover:text-pr-red-light transition-colors" title="Remove">
+          <TrashIcon className="w-4 h-4" />
+        </button>
+      )}
     </div>
   )
 }
@@ -731,6 +735,39 @@ function round1(n: number): number {
 function shareUrl(token: string): string {
   const origin = typeof window === 'undefined' ? '' : window.location.origin
   return `${origin}/actuals/${token}`
+}
+
+// An untouched row: nothing typed, nothing saved, nothing to lose by keeping
+// it on screen. One of these always sits at the end of each list so entering
+// the next line is typing rather than clicking.
+function payIsBlank(r: PayRow): boolean {
+  return !r.id && !r.description?.trim() && !r.amount && !r.amountText?.trim() && !r.profile_id && !r.work_date
+}
+
+function costIsBlank(r: CostRow): boolean {
+  return !r.id && !r.description?.trim() && !r.amount && !r.amountText?.trim() && !r.account_id && !r.spend_date
+}
+
+/** What to show in an amount box: the text being typed, the saved number, or
+    nothing at all — never a 0 sitting in an empty row looking like an entry
+    somebody made. */
+export function amountValue(row: { amount: number; amountText?: string }): string {
+  if (row.amountText !== undefined) return row.amountText
+  return row.amount ? String(row.amount) : ''
+}
+
+function parseAmount(text: string): number {
+  return Number(text.replace(/[$,\s]/g, '')) || 0
+}
+
+function withBlankPay(rows: PayRow[]): PayRow[] {
+  if (rows.some(payIsBlank)) return rows
+  return [...rows, { key: newKey(), id: '', profile_id: null, work_date: null, description: null, amount: 0 }]
+}
+
+function withBlankCost(rows: CostRow[]): CostRow[] {
+  if (rows.some(costIsBlank)) return rows
+  return [...rows, { key: newKey(), id: '', account_id: null, spend_date: null, description: null, amount: 0 }]
 }
 
 // A row's identity before the server has given it one. Only has to be unique
