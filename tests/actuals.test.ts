@@ -3,6 +3,7 @@ import {
   accountForExpense,
   expenseLineLabel,
   payRatesFrom,
+  routeReassignments,
   actualsAreLive,
   paySuggestion,
   rollUpActuals,
@@ -231,5 +232,37 @@ describe('what an expense line is called on a page of accounts', () => {
 
   it('shows an unknown category as itself rather than as nothing', () => {
     expect(expenseLineLabel({ ...base, category: 'drone_hire' })).toBe('drone_hire')
+  })
+})
+
+describe('routing expense types into cost categories', () => {
+  const CATS = [
+    { id: 'travel', categories: ['lodging', 'air_fare'] },
+    { id: 'misc', categories: ['other'] },
+    { id: 'swag', categories: [] },
+  ]
+
+  it('takes a route off whoever had it, because two claims would double-count', () => {
+    expect(routeReassignments(CATS, 'misc', ['lodging'])).toEqual([
+      { id: 'travel', categories: ['air_fare'] },
+    ])
+  })
+
+  it('writes nothing when the claim displaces nothing', () => {
+    expect(routeReassignments(CATS, 'swag', [])).toEqual([])
+    expect(routeReassignments(CATS, 'travel', ['lodging', 'air_fare'])).toEqual([])
+  })
+
+  it('never touches the category doing the claiming', () => {
+    const out = routeReassignments(CATS, 'travel', ['lodging', 'other'])
+    expect(out.map((o) => o.id)).toEqual(['misc'])
+    expect(out[0].categories).toEqual([])
+  })
+
+  it('can strip a route from more than one at once', () => {
+    expect(routeReassignments(CATS, 'swag', ['air_fare', 'other'])).toEqual([
+      { id: 'travel', categories: ['lodging'] },
+      { id: 'misc', categories: [] },
+    ])
   })
 })

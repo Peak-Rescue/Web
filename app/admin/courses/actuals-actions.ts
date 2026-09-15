@@ -4,6 +4,7 @@ import { randomUUID } from 'crypto'
 import { revalidatePath } from 'next/cache'
 import { requireAdminUser } from '@/lib/course-access'
 import { round2 } from '@/lib/expenses'
+import { routeReassignments } from '@/lib/actuals'
 
 // Writes for the course's actuals — what it really cost and what we really
 // billed. Admin-only, like the whole of the pricing page: requireAdminUser
@@ -205,16 +206,19 @@ export async function setExpenseItemAccount(
   revalidateCourse(instanceId)
 }
 
-// ─── The chart of accounts ───────────────────────────────────────────────────
+// ─── Cost categories ─────────────────────────────────────────────────────────
+//
+// The books call these accounts and the schema keeps that word. On screen they
+// are categories: the person filling in a course's costs is sorting them into
+// buckets, not keeping a ledger, and "account" read to them as a login.
 
-/** Adds an account from the panel, because the moment you need one is the
-    moment you are looking at a cost that has nowhere to go. The full library
-    (renaming, retiring, which expense categories route where) lives with the
-    rates on the expense admin page. */
+/** Adds one from the panel, because the moment you need a category is the
+    moment you are looking at a cost that has nowhere to go. Renaming,
+    retiring and routing live on the rates page. */
 export async function addCostAccount(instanceId: string, label: string) {
   const { admin } = await requireAdminUser()
   const trimmed = label.trim()
-  if (!trimmed) throw new Error('An account needs a name')
+  if (!trimmed) throw new Error('A category needs a name')
 
   const { data: last } = await admin
     .from('cost_accounts')
@@ -228,9 +232,76 @@ export async function addCostAccount(instanceId: string, label: string) {
     .insert({ label: trimmed, sort_order: (last?.sort_order ?? 0) + 10 })
     .select('id')
     .single()
-  if (error || !data) throw new Error(error?.message ?? 'Could not add that account')
+  if (error || !data) throw new Error(error?.message ?? 'Could not add that category')
   revalidateCourse(instanceId)
   return { id: data.id as string }
+}
+
+// ─── The category library, on the rates page ─────────────────────────────────
+
+/** Rename a category, and set which expense-report categories land in it.
+    Routing is exclusive: an expense category can only feed one cost category,
+    so claiming one takes it off whoever had it. Two categories both claiming
+    lodging would double-count it, which is worse than it landing in the wrong
+    one — that at least can be seen and moved. */
+export async function updateCostAccount(accountId: string, formData: FormData) {
+  const { admin } = await requireAdminUser()
+
+  const label = String(formData.get('label') ?? '').trim().slice(0, 60)
+  if (!label) throw new Error('A category needs a name')
+  const claimed = formData.getAll('categories').map((c) => String(c))
+
+  const { data: all } = await admin.from('cost_accounts').select('id, categories')
+  const displaced = routeReassignments(
+    (all ?? []).map((a) => ({ id: a.id as string, categories: (a.categories as string[] | null) ?? [] })),
+    accountId,
+    claimed
+  )
+  for (const row of displaced) {
+    const { error } = await admin.from('cost_accounts').update({ categories: row.categories }).eq('id', row.id)
+    if (error) throw new Error(error.message)
+  }
+
+  const { error } = await admin
+    .from('cost_accounts')
+    .update({ label, categories: claimed })
+    .eq('id', accountId)
+  if (error) throw new Error(error.message)
+  revalidatePath('/admin/expenses/rates')
+  revalidatePath('/portal', 'layout')
+}
+
+/** Retires a category. Never deleted: costs already sorted into it keep
+    pointing at it, and a course whose books are closed must not have its
+    numbers move because somebody tidied the library. A retired category
+    stops being offered, and money still sitting in it surfaces on the course
+    as needing one. */
+export async function retireCostAccount(accountId: string) {
+  const { admin } = await requireAdminUser()
+  const { error } = await admin.from('cost_accounts').update({ active: false }).eq('id', accountId)
+  if (error) throw new Error(error.message)
+  revalidatePath('/admin/expenses/rates')
+  revalidatePath('/portal', 'layout')
+}
+
+export async function addCostAccountToLibrary(formData: FormData) {
+  const { admin } = await requireAdminUser()
+  const label = String(formData.get('label') ?? '').trim().slice(0, 60)
+  if (!label) throw new Error('A category needs a name')
+
+  const { data: last } = await admin
+    .from('cost_accounts')
+    .select('sort_order')
+    .order('sort_order', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  const { error } = await admin
+    .from('cost_accounts')
+    .insert({ label, sort_order: (last?.sort_order ?? 0) + 10 })
+  if (error) throw new Error(error.message)
+  revalidatePath('/admin/expenses/rates')
+  revalidatePath('/portal', 'layout')
 }
 
 // ─── Sending the actuals out ─────────────────────────────────────────────────

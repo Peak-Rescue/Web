@@ -4,7 +4,9 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import SaveButton from '@/components/SaveButton'
 import { addPricingRate, updatePricingRate } from '@/app/admin/courses/finance-actions'
-import { updateOrgSetting } from '@/app/admin/courses/actuals-actions'
+import { updateOrgSetting, addCostAccountToLibrary } from '@/app/admin/courses/actuals-actions'
+import CostCategoryRow from './CostCategoryRow'
+import { CATEGORY_LABELS, categoriesFor, type ExpenseCategory } from '@/lib/expenses'
 import DeletePricingRateButton from './DeletePricingRateButton'
 import DefaultLineToggle from './DefaultLineToggle'
 
@@ -16,6 +18,12 @@ export default async function AdminExpenseRatesPage() {
   const admin = createAdminClient()
   const { data: profile } = await admin.from('profiles').select('role').eq('id', user.id).single()
   if (profile?.role !== 'admin') redirect('/dashboard')
+
+  const { data: costAccountRows } = await admin
+    .from('cost_accounts')
+    .select('id, label, categories, sort_order')
+    .eq('active', true)
+    .order('sort_order')
 
   const { data: orgRows } = await admin
     .from('org_settings')
@@ -31,6 +39,14 @@ export default async function AdminExpenseRatesPage() {
     ...r,
     rate: Number(r.rate),
     pay_rate: r.pay_rate === null ? null : Number(r.pay_rate),
+  }))
+
+  // Every expense type an instructor can file, offered for routing. The
+  // exempt-only one is included: routing says where money lands, not who is
+  // allowed to claim it.
+  const expenseChoices = categoriesFor(true).map((c: ExpenseCategory) => ({
+    value: c,
+    label: CATEGORY_LABELS[c],
   }))
 
   return (
@@ -152,6 +168,44 @@ export default async function AdminExpenseRatesPage() {
             </div>
           </div>
         )}
+
+        {/* What a course's costs get sorted into, and how expense-report
+            money finds its way there on its own. */}
+        <div className="mt-10">
+          <h2 className="text-sm font-semibold text-zinc-200 mb-1">Cost categories</h2>
+          <p className="text-xs text-zinc-500 mb-3">
+            What a course&apos;s costs are grouped into on its actuals. Submitted expense reports sort themselves
+            by the expense types routed into each — anything else is typed on the course by hand.
+          </p>
+          <div className="bg-zinc-900 rounded-lg border border-zinc-800 divide-y divide-zinc-800">
+            {(costAccountRows ?? []).map((a) => (
+              <CostCategoryRow
+                key={a.id as string}
+                id={a.id as string}
+                label={a.label as string}
+                categories={((a.categories as string[] | null) ?? [])}
+                choices={expenseChoices}
+                claimedElsewhere={Object.fromEntries(
+                  (costAccountRows ?? [])
+                    .filter((o) => o.id !== a.id)
+                    .flatMap((o) => ((o.categories as string[] | null) ?? []).map((c) => [c, o.label as string]))
+                )}
+              />
+            ))}
+            {(costAccountRows ?? []).length === 0 && (
+              <p className="px-4 py-3 text-sm text-zinc-500">No categories yet.</p>
+            )}
+          </div>
+          <form action={addCostAccountToLibrary} className="mt-3 flex items-end gap-2 flex-wrap">
+            <div className="flex-1 min-w-40">
+              <label className="block text-xs text-zinc-400 mb-1">New cost category</label>
+              <input name="label" required placeholder="e.g. Gear shipping" className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
+            </div>
+            <SaveButton className="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 text-white rounded text-sm font-medium transition-colors">
+              Add category
+            </SaveButton>
+          </form>
+        </div>
 
         <form action={addPricingRate} className="mt-10 flex items-end gap-2 flex-wrap">
           <div className="flex-1 min-w-40">

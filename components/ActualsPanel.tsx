@@ -186,6 +186,15 @@ export default function ActualsPanel({
     await (chains.current.get(key) ?? Promise.resolve()).catch(() => {})
   }
 
+  // One place a cost row is born, from either button. A row with no category
+  // yet is legal and visible; picking one moves it under that category.
+  function addCostRow(accountId: string | null) {
+    setCosts((rs) => [
+      ...rs,
+      { key: newKey(), id: '', account_id: accountId, spend_date: null, description: null, amount: 0 },
+    ])
+  }
+
   async function removePay(row: PayRow) {
     setPay((rs) => rs.filter((r) => r.key !== row.key))
     await settle(`pay:${row.key}`)
@@ -381,6 +390,10 @@ export default function ActualsPanel({
       </div>
 
       {/* ── Costs ────────────────────────────────────────────────────────── */}
+      {/* "Category" here is the DB's cost_account. The books call it an
+          account and the schema keeps that word; on screen it is a category,
+          because the person filling this in is sorting costs into buckets,
+          not keeping a ledger. */}
       <div>
         <div className="flex items-baseline gap-2 mb-2">
           <h4 className="text-sm font-semibold text-zinc-200">Costs</h4>
@@ -422,13 +435,13 @@ export default function ActualsPanel({
                           {l.paid_by === 'company_card' ? <span className="text-zinc-500"> · card</span> : null}
                         </span>
                         <span className="text-zinc-300 w-20 text-right">{fmtMoney(l.amount)}</span>
-                        {/* Reported by an instructor, filed by a bookkeeper —
+                        {/* Reported by an instructor, sorted by a bookkeeper —
                             moving it here never edits their report. */}
                         <select
                           value={overrides.get(l.id) ?? r.account.id}
                           onChange={(e) => void fileExpense(l.id, e.target.value)}
                           className="bg-zinc-800 border border-zinc-700 rounded px-1.5 py-0.5 text-xs text-zinc-300"
-                          title="File this expense under another account"
+                          title="Move this expense to another category"
                         >
                           {accounts.map((a) => (
                             <option key={a.id} value={a.id}>{a.label}</option>
@@ -444,12 +457,7 @@ export default function ActualsPanel({
                     })}
 
                     <button
-                      onClick={() =>
-                        setCosts((rs) => [
-                          ...rs,
-                          { key: newKey(), id: '', account_id: r.account.id, spend_date: null, description: null, amount: 0 },
-                        ])
-                      }
+                      onClick={() => addCostRow(r.account.id)}
                       className="text-xs text-zinc-400 hover:text-white transition-colors"
                     >
                       + Add a cost to {r.account.label}
@@ -460,67 +468,86 @@ export default function ActualsPanel({
             )
           })}
 
-          {/* Costs whose account was retired, and any new row not yet given
-              one. Counted in the total — the money went out either way. */}
-          {(actuals.unfiled.amount > 0 || homelessCosts.length > 0) && (
+          {/* Expense money whose category was retired out from under it.
+              Counted in the total — it was spent either way — and called out
+              because only a person can say where it should have gone. */}
+          {actuals.unfiled.lines.length > 0 && (
             <div className="px-3 py-2 space-y-2">
               <div className="flex items-center justify-between gap-4">
-                <span className="text-sm text-amber-400/90">Not filed anywhere</span>
-                <span className="text-sm text-zinc-200">{fmtMoney(actuals.unfiled.amount)}</span>
+                <span className="text-sm text-amber-400/90">Needs a category</span>
+                <span className="text-sm text-zinc-200">
+                  {fmtMoney(actuals.unfiled.lines.reduce((t, l) => t + l.amount, 0))}
+                </span>
               </div>
               {actuals.unfiled.lines.map((l) => (
                 <div key={l.id} className="flex items-center gap-2 flex-wrap text-xs">
                   <span className="text-zinc-500 w-24 shrink-0">{fmtDateRange(l.start_date, null)}</span>
-                  <span className="text-zinc-300 flex-1 min-w-32 truncate">
-                    {expenseLineLabel(l)}
-                  </span>
+                  <span className="text-zinc-300 flex-1 min-w-32 truncate">{expenseLineLabel(l)}</span>
                   <span className="text-zinc-300 w-20 text-right">{fmtMoney(l.amount)}</span>
                   <select
                     value=""
                     onChange={(e) => void fileExpense(l.id, e.target.value)}
                     className="bg-zinc-800 border border-zinc-700 rounded px-1.5 py-0.5 text-xs text-zinc-300"
                   >
-                    <option value="">— file under —</option>
+                    <option value="">— pick one —</option>
                     {accounts.map((a) => (
                       <option key={a.id} value={a.id}>{a.label}</option>
                     ))}
                   </select>
                 </div>
               ))}
-              {homelessCosts
-                .map((row) => (
-                  <CostRowFields key={row.key} row={row} accounts={accounts} input={input} onChange={(p) => updateCost(row.key, p)} onRemove={() => void removeCost(row)} />
-                ))}
+            </div>
+          )}
+
+          {/* A cost added from the button below, before it has been sorted.
+              It lands here rather than nowhere, so a row you just typed is
+              never out of sight while you decide where it goes. */}
+          {homelessCosts.length > 0 && (
+            <div className="px-3 py-2 space-y-2">
+              {homelessCosts.map((row) => (
+                <CostRowFields key={row.key} row={row} accounts={accounts} input={input} onChange={(p) => updateCost(row.key, p)} onRemove={() => void removeCost(row)} />
+              ))}
             </div>
           )}
         </div>
 
-        <div className="mt-2 flex items-center gap-2 flex-wrap">
-          <input
-            value={newAccount}
-            onChange={(e) => setNewAccount(e.target.value)}
-            placeholder="New account"
-            className={`${input} w-40`}
-          />
+        <div className="mt-2 flex items-center gap-3 flex-wrap">
+          {/* The main way costs get in. Adding one should not mean picking its
+              category first, expanding that category, and finding a link
+              inside — the row can say where it belongs once it exists. */}
           <button
-            disabled={!newAccount.trim() || busy}
-            onClick={async () => {
-              setBusy(true)
-              try {
-                await addCostAccount(instanceId, newAccount)
-                setNewAccount('')
-                router.refresh()
-              } catch (e) {
-                setError(e instanceof Error ? e.message : 'Could not add that account')
-              } finally {
-                setBusy(false)
-              }
-            }}
-            className="px-2.5 py-1 bg-zinc-800 hover:bg-zinc-700 rounded text-xs transition-colors disabled:opacity-40"
+            onClick={() => addCostRow(null)}
+            className="px-2.5 py-1 bg-zinc-800 hover:bg-zinc-700 rounded text-xs font-medium text-zinc-200 transition-colors"
           >
-            Add account
+            + Add a cost
           </button>
-          <InfoHint text="Shared by every course. Rename or retire them on the rates page." />
+          <span className="flex items-center gap-2">
+            <input
+              value={newAccount}
+              onChange={(e) => setNewAccount(e.target.value)}
+              placeholder="New category"
+              className={`${input} w-36`}
+            />
+            <button
+              disabled={!newAccount.trim() || busy}
+              onClick={async () => {
+                setBusy(true)
+                try {
+                  await addCostAccount(instanceId, newAccount)
+                  setNewAccount('')
+                  router.refresh()
+                } catch (e) {
+                  setError(e instanceof Error ? e.message : 'Could not add that category')
+                } finally {
+                  setBusy(false)
+                }
+              }}
+              className="px-2.5 py-1 bg-zinc-800 hover:bg-zinc-700 rounded text-xs transition-colors disabled:opacity-40"
+            >
+              Add category
+            </button>
+          </span>
+          <InfoHint text="Categories are shared by every course. Rename or retire them, and set which expense categories land in each, on the rates page." />
         </div>
 
         {actuals.pending.amount > 0 && (
@@ -676,7 +703,7 @@ function CostRowFields({
         onChange={(e) => onChange({ account_id: e.target.value || null })}
         className={`${input} w-36`}
       >
-        <option value="">— account —</option>
+        <option value="">— category —</option>
         {accounts.map((a) => (
           <option key={a.id} value={a.id}>{a.label}</option>
         ))}

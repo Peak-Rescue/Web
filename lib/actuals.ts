@@ -88,6 +88,31 @@ export function accountForExpense(
   return accounts.find((a) => a.categories.includes(line.category))?.id ?? null
 }
 
+/** Which categories have to give up a route, when one category claims a set
+    of expense types.
+
+    Routing is exclusive on purpose: two cost categories both claiming
+    lodging would count every lodging receipt twice, and a total that is
+    quietly double the truth is worse than one in the wrong bucket — the
+    wrong bucket can at least be seen and moved.
+
+    Returns only the rows that actually change, so a save that reshuffles
+    nothing writes nothing. */
+export function routeReassignments(
+  accounts: { id: string; categories: string[] }[],
+  targetId: string,
+  claimed: string[]
+): { id: string; categories: string[] }[] {
+  if (claimed.length === 0) return []
+  const out: { id: string; categories: string[] }[] = []
+  for (const a of accounts) {
+    if (a.id === targetId) continue
+    const kept = a.categories.filter((c) => !claimed.includes(c))
+    if (kept.length !== a.categories.length) out.push({ id: a.id, categories: kept })
+  }
+  return out
+}
+
 export type AccountRollup = {
   account: CostAccount
   /** Submitted expense-report money routed here. */
