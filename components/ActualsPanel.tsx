@@ -230,7 +230,7 @@ export default function ActualsPanel({
       <div>
         <div className="flex items-baseline gap-2 mb-2">
           <h4 className="text-sm font-semibold text-zinc-200">Invoiced</h4>
-          <InfoHint text="What the client was actually billed, which is not always the quote they accepted — gear bought on their behalf, an invoice split in two, or a renegotiation after the fact all move it." />
+          <InfoHint text="What we actually billed, which is not always the quote they accepted." />
         </div>
         <div className="flex items-center gap-3 flex-wrap">
           <div className="flex items-center gap-1.5">
@@ -269,14 +269,14 @@ export default function ActualsPanel({
       <div>
         <div className="flex items-baseline gap-2 mb-2">
           <h4 className="text-sm font-semibold text-zinc-200">Pay</h4>
-          <InfoHint text="Typed, because nothing in the portal knows what anybody worked — there is no hours feed and no rate on a person. The suggestion below is built from the course's length and the pay rates in the library; the crew who ran it are the authority." />
+          <InfoHint text="Hours live in ADP, not here, so pay is typed. Any suggestion comes from the course's length and the library's pay rates." />
         </div>
 
         {suggestion && pay.length === 0 && (
           <div className="mb-3 p-3 rounded border border-zinc-800 bg-zinc-900/60">
             <p className="text-xs text-zinc-400">
-              The course&apos;s shape suggests <span className="text-zinc-200 font-medium">{fmtMoney(suggestion.total)}</span>{' '}
-              — {suggestion.assumptions}.
+              Suggested <span className="text-zinc-200 font-medium">{fmtMoney(suggestion.total)}</span>
+              {' · '}{suggestion.assumptions}
             </p>
             <button
               disabled={busy}
@@ -356,7 +356,7 @@ export default function ActualsPanel({
                 }}
                 inputMode="decimal"
                 placeholder={String(round1(loaded.orgPayrollLoad * 100))}
-                title="Blank follows the org-wide number; type one to override it for this course only"
+                title="Blank follows the org-wide number"
                 className={`${input} w-14 text-right placeholder-zinc-500`}
               />
               %
@@ -384,7 +384,7 @@ export default function ActualsPanel({
       <div>
         <div className="flex items-baseline gap-2 mb-2">
           <h4 className="text-sm font-semibold text-zinc-200">Costs</h4>
-          <InfoHint text="Submitted expense reports land here by category and are read live, so a corrected report moves this course's net. Everything a report never sees — the company card, an invoice paid directly — is typed on the account it belongs to." />
+          <InfoHint text="Submitted expense reports land here by category — correcting a report corrects this. The company card, and anything else a report never sees, is typed on." />
         </div>
 
         <div className="border border-zinc-800 rounded divide-y divide-zinc-800">
@@ -520,14 +520,13 @@ export default function ActualsPanel({
           >
             Add account
           </button>
-          <InfoHint text="Accounts are shared by every course. Renaming or retiring one, and choosing which expense categories route into it, lives with the rates on the expense admin page." />
+          <InfoHint text="Shared by every course. Rename or retire them on the rates page." />
         </div>
 
         {actuals.pending.amount > 0 && (
           <p className="mt-3 text-xs text-amber-400/90">
             {fmtMoney(actuals.pending.amount)} across {actuals.pending.lines.length} expense line
-            {actuals.pending.lines.length === 1 ? '' : 's'} is still in draft and is not counted below — the net
-            moves when it is filed, not when it was spent.
+            {actuals.pending.lines.length === 1 ? '' : 's'} is still in draft, and not counted.
           </p>
         )}
       </div>
@@ -601,7 +600,7 @@ export default function ActualsPanel({
             Make a link to send
           </button>
         )}
-        <InfoHint text="The link is a read-only page of these numbers at an unguessable address — no sign-in, so anyone holding it can read them. It exists only once you ask for one, and revoking it is immediate. The PDF is the same page as a file to attach." />
+        <InfoHint text="Anyone with the link can read these numbers without signing in. Revoking it is immediate." />
       </div>
 
       <div>
@@ -626,7 +625,7 @@ export default function ActualsPanel({
             className="accent-red-600"
           />
           The books on this course are done
-          <InfoHint text="Locks nothing — a number that turns out wrong still has to be fixable. It tells the year's totals which courses have stopped moving." />
+          <InfoHint text="Locks nothing — it tells the year's totals which courses have stopped moving." />
         </label>
       </div>
     </div>

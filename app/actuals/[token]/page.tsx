@@ -64,7 +64,7 @@ export default async function SharedActualsPage({ params }: { params: Promise<{ 
         <p className="text-xs text-zinc-500 mt-4">
           {actuals.closedAt
             ? `Closed ${longDate(dateAtOffice(actuals.closedAt))}.`
-            : 'Expense-report costs are read live, so these figures move as reports are filed and corrected.'}
+            : 'These figures move as expense reports are filed and corrected.'}
         </p>
 
         <a
@@ -147,7 +147,7 @@ export default async function SharedActualsPage({ params }: { params: Promise<{ 
         {rolled.pending.amount > 0 && (
           <p className="mt-4 text-xs text-amber-400/90">
             {fmtMoney(rolled.pending.amount)} across {rolled.pending.lines.length} expense line
-            {rolled.pending.lines.length === 1 ? '' : 's'} is still in draft and is not counted above.
+            {rolled.pending.lines.length === 1 ? '' : 's'} is still in draft, and not counted.
           </p>
         )}
 

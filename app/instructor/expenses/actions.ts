@@ -373,11 +373,11 @@ async function doSubmitReport(reportId: string): Promise<{ ok: true } | { ok: fa
   )
   if (unclassified.length > 0) {
     const which = unclassified
-      .map((i) => `${CATEGORY_LABELS[i.category]}${itemLabel(i) ? ` — ${itemLabel(i)}` : ''} (${fmtDateRange(i.start_date, i.end_date)})`)
-      .join('; ')
+      .map((i) => `${itemLabel(i) || CATEGORY_LABELS[i.category]} (${fmtDateRange(i.start_date, i.end_date)})`)
+      .join(', ')
     return {
       ok: false,
-      error: `${unclassified.length === 1 ? 'One expense does not' : `${unclassified.length} expenses do not`} say which course they belong to: ${which}. Pick a course on each, or mark it as not course-related.`,
+      error: `No course on ${which}. Pick one, or tick "not for a course".`,
     }
   }
   if (!profile?.signature_data_url) {

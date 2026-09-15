@@ -994,10 +994,9 @@ export default function ExpenseReportEditor({
                   {!tripInfoOk && <p>✗ Trip info is empty — fill in the reason for travel or pick a course</p>}
                   {unclassified.length > 0 && (
                     <p>
-                      ✗ {unclassified.length === 1 ? 'One expense does not' : `${unclassified.length} expenses do not`} say
-                      which course{unclassified.length === 1 ? ' it belongs' : ' they belong'} to — open{' '}
-                      {unclassified.map((i) => CATEGORY_LABELS[i.category] + (itemLabel(i) ? ` — ${itemLabel(i)}` : '')).join(', ')}{' '}
-                      and pick a course, or tick &ldquo;not for a course&rdquo;
+                      ✗ No course on{' '}
+                      {unclassified.map((i) => itemLabel(i) || CATEGORY_LABELS[i.category]).join(', ')} — pick one,
+                      or tick &ldquo;not for a course&rdquo;
                     </p>
                   )}
                   {!signatureSaved && <p>✗ No signature saved — draw one in the Sign &amp; submit section</p>}

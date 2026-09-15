@@ -46,10 +46,9 @@ export default async function AdminExpenseRatesPage() {
           here never rewrites existing records.
         </p>
         <p className="text-zinc-500 text-sm mb-10">
-          Two numbers on a line where they differ: the <span className="text-zinc-300">rate</span> is what we
-          quote at, padded on purpose, and <span className="text-zinc-300">pay</span> is what a person is
-          actually paid. Course actuals use the second to suggest what a course&apos;s pay came to; leave it
-          blank on anything that is not somebody&apos;s time.
+          <span className="text-zinc-300">Rate</span> is what we quote at;{' '}
+          <span className="text-zinc-300">pay</span> is what a person is actually paid. Leave pay blank on
+          anything that isn&apos;t somebody&apos;s time.
         </p>
 
         <div className="bg-zinc-900 rounded-lg border border-zinc-800 divide-y divide-zinc-800">

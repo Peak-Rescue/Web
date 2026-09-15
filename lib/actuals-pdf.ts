@@ -42,7 +42,7 @@ export async function generateActualsPdf(data: ActualsPdf): Promise<Uint8Array> 
   b.paragraph(
     actuals.closedAt
       ? `Closed ${longDate(dateAtOffice(actuals.closedAt))}. Printed ${asOf}.`
-      : `As of ${asOf}. Expense-report costs are read live, so this figure moves as reports are filed and corrected.`,
+      : `As of ${asOf}. These figures move as expense reports are filed and corrected.`,
     { size: 9, color: MUTED }
   )
   b.y -= 12
@@ -152,7 +152,7 @@ export async function generateActualsPdf(data: ActualsPdf): Promise<Uint8Array> 
 
   if (rolled.pending.amount > 0) {
     b.paragraph(
-      `${fmtMoney(rolled.pending.amount)} across ${rolled.pending.lines.length} expense line${rolled.pending.lines.length === 1 ? '' : 's'} is still in draft and is not counted above.`,
+      `${fmtMoney(rolled.pending.amount)} across ${rolled.pending.lines.length} expense line${rolled.pending.lines.length === 1 ? '' : 's'} is still in draft, and not counted.`,
       { size: 9, color: RED }
     )
     b.y -= 8
