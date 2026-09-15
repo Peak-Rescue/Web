@@ -1,0 +1,282 @@
+// What the course actually cost, and what that leaves.
+//
+// Pure math, same arrangement as lib/expenses.ts: the panel previews with
+// these functions while you type and the server recomputes with the same ones,
+// so a number on screen and a number in the books cannot disagree.
+//
+// Three cost sources meet here (expense reports, typed costs, pay) and the
+// arithmetic that joins them is the whole point — it is one screen's worth of
+// rules that the year's profit and loss also has to apply, so it lives in a
+// library rather than in the panel.
+
+import { CATEGORY_LABELS, round2, type ExpenseCategory } from '@/lib/expenses'
+
+/** Taxes, insurance and the rest, as a multiplier on pay. Matched by the
+    column default on course_actuals, so a course whose row has never been
+    touched shows the same number as one that has. Per course in the data
+    because it is a running assumption rather than a fact of the org. */
+export const DEFAULT_PAYROLL_LOAD = 0.25
+
+export type CostAccount = {
+  id: string
+  label: string
+  /** Expense-report categories that land here unless a line says otherwise. */
+  categories: string[]
+  sort_order: number
+}
+
+/** An expense line as the books see it. Whose report it was and whether that
+    report is filed matter as much as the amount: a draft is money we expect
+    to pay and have not, and counting it would move the net on the day
+    somebody finally hits submit rather than on the day it was spent. */
+export type ActualExpenseLine = {
+  id: string
+  category: string
+  amount: number
+  start_date: string
+  description: string | null
+  details: string | null
+  paid_by: 'personal' | 'company_card'
+  submitted: boolean
+  personName: string | null
+  reportId: string
+}
+
+/** What an expense line is called on a page of accounts. Its description if
+    it has one, the first line of its details if the story was typed there
+    instead, and its category as prose last of all — never the raw category
+    key, which is how "air_fare" reached a printed PDF. */
+export function expenseLineLabel(line: {
+  category: string
+  description: string | null
+  details: string | null
+}): string {
+  const described = line.description?.trim()
+  if (described) return described
+  const firstLine = line.details?.split('\n').map((l) => l.trim()).find(Boolean)
+  if (firstLine) return firstLine
+  return CATEGORY_LABELS[line.category as ExpenseCategory] ?? line.category
+}
+
+export type TypedCostLine = {
+  id: string
+  account_id: string | null
+  spend_date: string | null
+  description: string | null
+  amount: number
+}
+
+export type PayLine = {
+  id: string
+  profile_id: string | null
+  work_date: string | null
+  description: string | null
+  amount: number
+}
+
+/** Where an expense line is filed: its own override if it has one, otherwise
+    the account that claims its category, otherwise nowhere — an account can
+    be renamed or retired out from under a line, and money with no home has to
+    stay visible rather than quietly leaving the total. */
+export function accountForExpense(
+  line: { id: string; category: string },
+  accounts: CostAccount[],
+  overrides: Map<string, string>
+): string | null {
+  const override = overrides.get(line.id)
+  if (override && accounts.some((a) => a.id === override)) return override
+  return accounts.find((a) => a.categories.includes(line.category))?.id ?? null
+}
+
+export type AccountRollup = {
+  account: CostAccount
+  /** Submitted expense-report money routed here. */
+  fromExpenses: number
+  /** Typed directly on the course — the company card, an invoice paid. */
+  typed: number
+  total: number
+  expenseLines: ActualExpenseLine[]
+  typedLines: TypedCostLine[]
+}
+
+export type Actuals = {
+  accounts: AccountRollup[]
+  /** Submitted expense money whose account no longer exists. Counted in the
+      costs total — the money was spent either way — and shown as its own row
+      so it can be filed somewhere real. */
+  unfiled: { amount: number; lines: ActualExpenseLine[] }
+  /** Filed but not yet submitted. Excluded from every total; surfaced so the
+      net is read knowing what is still coming. */
+  pending: { amount: number; lines: ActualExpenseLine[] }
+  payTotal: number
+  payrollLoad: number
+  /** Pay plus the load — the single line the old spreadsheet called
+      INSTRUCTOR PAY. */
+  instructorPay: number
+  costsTotal: number
+  invoiced: number
+  net: number
+  /** Net as a share of what was invoiced. Null when nothing was invoiced:
+      a percentage of zero is not 0%, it is not a number yet. */
+  netPct: number | null
+}
+
+export function rollUpActuals(input: {
+  accounts: CostAccount[]
+  expenseLines: ActualExpenseLine[]
+  expenseAccountOverrides: Map<string, string>
+  typedLines: TypedCostLine[]
+  payLines: PayLine[]
+  payrollLoadPct: number
+  invoiced: number
+}): Actuals {
+  const { accounts, expenseLines, expenseAccountOverrides, typedLines, payLines } = input
+
+  const sorted = [...accounts].sort((a, b) => a.sort_order - b.sort_order)
+  const submitted = expenseLines.filter((l) => l.submitted)
+  const drafts = expenseLines.filter((l) => !l.submitted)
+
+  const placed = new Map<string, ActualExpenseLine[]>()
+  const unfiledLines: ActualExpenseLine[] = []
+  for (const line of submitted) {
+    const accountId = accountForExpense(line, sorted, expenseAccountOverrides)
+    if (!accountId) {
+      unfiledLines.push(line)
+      continue
+    }
+    const list = placed.get(accountId) ?? []
+    list.push(line)
+    placed.set(accountId, list)
+  }
+
+  const typedByAccount = new Map<string, TypedCostLine[]>()
+  for (const line of typedLines) {
+    // A typed cost with no account still counts. It sits under the first
+    // account only if it names one; otherwise it joins the unfiled pile.
+    const key = line.account_id && sorted.some((a) => a.id === line.account_id) ? line.account_id : ''
+    const list = typedByAccount.get(key) ?? []
+    list.push(line)
+    typedByAccount.set(key, list)
+  }
+
+  const rollups: AccountRollup[] = sorted.map((account) => {
+    const expense = placed.get(account.id) ?? []
+    const typed = typedByAccount.get(account.id) ?? []
+    const fromExpenses = sum(expense.map((l) => l.amount))
+    const typedTotal = sum(typed.map((l) => l.amount))
+    return {
+      account,
+      fromExpenses,
+      typed: typedTotal,
+      total: round2(fromExpenses + typedTotal),
+      expenseLines: expense,
+      typedLines: typed,
+    }
+  })
+
+  const orphanTyped = typedByAccount.get('') ?? []
+  const unfiledAmount = round2(sum(unfiledLines.map((l) => l.amount)) + sum(orphanTyped.map((l) => l.amount)))
+
+  const payTotal = sum(payLines.map((l) => l.amount))
+  const payrollLoad = round2(payTotal * input.payrollLoadPct)
+  const instructorPay = round2(payTotal + payrollLoad)
+
+  const costsTotal = round2(sum(rollups.map((r) => r.total)) + unfiledAmount + instructorPay)
+  const net = round2(input.invoiced - costsTotal)
+
+  return {
+    accounts: rollups,
+    unfiled: { amount: unfiledAmount, lines: unfiledLines },
+    pending: { amount: sum(drafts.map((l) => l.amount)), lines: drafts },
+    payTotal,
+    payrollLoad,
+    instructorPay,
+    costsTotal,
+    invoiced: input.invoiced,
+    net,
+    netPct: input.invoiced > 0 ? net / input.invoiced : null,
+  }
+}
+
+function sum(ns: number[]): number {
+  return round2(ns.reduce((s, n) => s + (Number(n) || 0), 0))
+}
+
+/** Pay rates as the library holds them: what a person is actually paid for a
+    day, which is not what the estimator quotes a day at. */
+export type PayRates = { fieldDay: number | null; travelDay: number | null }
+
+/** The library's pay rates, found by what a line means rather than by an
+    exact label — renaming "Instructor field day" in the library must not
+    silently stop the suggestion working, the same rule the estimator's factor
+    names follow. Null where the library carries no pay rate for that kind of
+    day, which is how a fresh install says "nobody has told me what we pay".*/
+export function payRatesFrom(
+  rates: { label: string; pay_rate?: number | string | null }[]
+): PayRates {
+  const priced = rates.filter((r) => r.pay_rate !== null && r.pay_rate !== undefined)
+  const rate = (match: (label: string) => boolean) => {
+    const hit = priced.find((r) => match(r.label))
+    return hit ? Number(hit.pay_rate) : null
+  }
+  // Travel is tested first and excluded from the field test, because a day of
+  // somebody's time is spelled "... day" either way: a lone /instructor.*day/
+  // happily claims "Instructor travel day" and pays a field day at the travel
+  // rate, which is the kind of wrong that looks like a number somebody chose.
+  const isTravel = (label: string) => /travel/i.test(label)
+  return {
+    travelDay: rate((l) => isTravel(l) && /instructor|day/i.test(l)),
+    fieldDay: rate((l) => !isTravel(l) && /instructor/i.test(l) && /field|day/i.test(l)),
+  }
+}
+
+export type PaySuggestionLine = { description: string; amount: number }
+
+/** What the course's own shape says pay should come to — offered, never
+    applied. The crew that actually worked it is the authority: somebody
+    shadowed a day, somebody drove instead of flying, a day ran long. So this
+    produces lines you can accept and then edit, and says out loud what it
+    assumed.
+    Travel is two days, out and back, matching what the estimator prefills. */
+export function paySuggestion(
+  counts: { instructors: number; days: number | null },
+  rates: PayRates
+): { lines: PaySuggestionLine[]; total: number; assumptions: string } | null {
+  const { instructors, days } = counts
+  if (!days || instructors < 1) return null
+  if (rates.fieldDay === null && rates.travelDay === null) return null
+
+  const lines: PaySuggestionLine[] = []
+  if (rates.fieldDay !== null) {
+    lines.push({
+      description: `Field days — ${instructors} × ${days} day${days === 1 ? '' : 's'} @ ${rates.fieldDay}`,
+      amount: round2(instructors * days * rates.fieldDay),
+    })
+  }
+  if (rates.travelDay !== null) {
+    lines.push({
+      description: `Travel days — ${instructors} × 2 days @ ${rates.travelDay}`,
+      amount: round2(instructors * 2 * rates.travelDay),
+    })
+  }
+  return {
+    lines,
+    total: sum(lines.map((l) => l.amount)),
+    assumptions: `${instructors} instructor${instructors === 1 ? '' : 's'}, ${days} field day${days === 1 ? '' : 's'}, 2 travel days each`,
+  }
+}
+
+export const TRAVEL_DAYS_EACH_WAY = 2
+
+/** Whether the course has reached the point where actuals are the live
+    question and the estimate is history. The first day, not the last: costs
+    start landing the moment the crew travels, and a course mid-run is already
+    being reconciled. */
+export function actualsAreLive(
+  course: { starts_at: string | null; status?: string | null },
+  today: string
+): boolean {
+  if (course.status === 'completed') return true
+  if (course.status === 'cancelled') return false
+  return Boolean(course.starts_at && course.starts_at <= today)
+}

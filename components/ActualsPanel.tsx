@@ -1,0 +1,716 @@
+'use client'
+
+import { useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { fmtMoney, fmtDateRange } from '@/lib/expenses'
+import { expenseLineLabel, rollUpActuals, type CostAccount, type PayLine, type TypedCostLine } from '@/lib/actuals'
+import { type LoadedActuals } from '@/lib/actuals-data'
+import {
+  addCostAccount,
+  setActualsShared,
+  addSuggestedPayLines,
+  deleteCostItem,
+  deletePayItem,
+  saveActualsHeader,
+  saveCostItem,
+  savePayItem,
+  setActualsClosed,
+  setExpenseItemAccount,
+} from '@/app/admin/courses/actuals-actions'
+import TrashIcon from '@/components/TrashIcon'
+import InfoHint from '@/components/InfoHint'
+
+// What the course actually cost, next to what we actually billed.
+//
+// The estimator upstairs argues about what a course should cost; this is the
+// part that finds out. Three sources of cost meet here and they are kept
+// visibly apart, because "where did this number come from" is the question
+// somebody asks six months later:
+//
+//   · expense reports, pulled live and never copied, so a corrected report
+//     moves the net;
+//   · costs typed straight on, which is most of it — the company card is not
+//     expensed for reimbursement and so never passes through a report;
+//   · pay, which has no source in the app at all and is therefore typed, with
+//     a suggestion offered from the course's own shape.
+//
+// Everything auto-saves, expense-editor style: no save buttons, a status line
+// per block.
+
+const DEBOUNCE_MS = 800
+
+type PayRow = PayLine & { key: string }
+type CostRow = TypedCostLine & { key: string }
+
+export default function ActualsPanel({
+  instanceId,
+  actuals: loaded,
+  people,
+  suggestion,
+  acceptedQuote,
+}: {
+  instanceId: string
+  /** Everything as the shared loader assembled it — the same shape the
+      emailed page and the PDF read, so the three cannot drift. */
+  actuals: LoadedActuals
+  /** The staffed crew, for attributing a pay line to a person. */
+  people: { id: string; name: string }[]
+  suggestion: { lines: { description: string; amount: number }[]; total: number; assumptions: string } | null
+  /** Where the conversation landed. Offered as a starting point for what we
+      invoiced, never as the value — gear bought for the client, an invoice
+      split in two, or a renegotiation all move the real number. */
+  acceptedQuote: { seq: number; total: number } | null
+}) {
+  const router = useRouter()
+  const { accounts, expenseLines } = loaded
+
+  const [invoiced, setInvoiced] = useState(loaded.invoiced === null ? '' : String(loaded.invoiced))
+  // Blank means "follow the org number", which is what nearly every course
+  // does — so the box shows the org's figure as a placeholder rather than
+  // stamping a copy of it onto this course.
+  const [loadPct, setLoadPct] = useState(
+    loaded.payrollLoadOverride === null ? '' : String(round1(loaded.payrollLoadOverride * 100))
+  )
+  const [notes, setNotes] = useState(loaded.notes ?? '')
+  const [closed, setClosed] = useState(Boolean(loaded.closedAt))
+  const [shareToken, setShareToken] = useState(loaded.shareToken)
+
+  const [pay, setPay] = useState<PayRow[]>(loaded.payLines.map((l) => ({ ...l, key: l.id })))
+  const [costs, setCosts] = useState<CostRow[]>(loaded.costLines.map((l) => ({ ...l, key: l.id })))
+  const [overrides, setOverrides] = useState<Map<string, string>>(new Map(loaded.expenseAccounts))
+  const [openAccount, setOpenAccount] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [newAccount, setNewAccount] = useState('')
+
+  const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>())
+  const chains = useRef(new Map<string, Promise<unknown>>())
+  // Server ids for rows added in this session, so the second save of a new
+  // row updates the first save's row instead of inserting a second one. The
+  // id cannot be read off state here: a save fired while the previous one is
+  // still in flight would see the id state had before it landed.
+  const ids = useRef(new Map<string, string>())
+
+  // One debounce per thing being edited, keyed so typing in two rows does not
+  // make one cancel the other's save — and one queue per key behind it, so a
+  // fast typist on a brand-new row cannot have two inserts in flight at once.
+  function schedule(key: string, run: () => Promise<unknown>) {
+    const existing = timers.current.get(key)
+    if (existing) clearTimeout(existing)
+    timers.current.set(
+      key,
+      setTimeout(() => {
+        timers.current.delete(key)
+        const previous = chains.current.get(key) ?? Promise.resolve()
+        const next = previous
+          .catch(() => {})
+          .then(run)
+          .then(() => setError(null))
+          .catch((e: unknown) => setError(e instanceof Error ? e.message : 'Could not save that'))
+        chains.current.set(key, next)
+      }, DEBOUNCE_MS)
+    )
+  }
+
+  const actuals = rollUpActuals({
+    accounts,
+    expenseLines,
+    expenseAccountOverrides: overrides,
+    typedLines: costs,
+    payLines: pay,
+    payrollLoadPct: loadPct.trim() === '' ? loaded.orgPayrollLoad : (Number(loadPct) || 0) / 100,
+    invoiced: Number(String(invoiced).replace(/[$,\s]/g, '')) || 0,
+  })
+
+  function saveHeader(next?: { invoiced?: string; loadPct?: string; notes?: string }) {
+    const pct = next?.loadPct ?? loadPct
+    const payload = {
+      invoiced: next?.invoiced ?? invoiced,
+      // Null rather than a number: this course follows the org, and copying
+      // the org's figure in would freeze it here the day the org's changes.
+      payrollLoadPct: pct.trim() === '' ? null : (Number(pct) || 0) / 100,
+      notes: next?.notes ?? notes,
+    }
+    schedule('header', () => saveActualsHeader(instanceId, payload))
+  }
+
+  function updatePay(key: string, patch: Partial<PayRow>) {
+    setPay((rows) => {
+      const next = rows.map((r) => (r.key === key ? { ...r, ...patch } : r))
+      const row = next.find((r) => r.key === key)!
+      schedule(`pay:${key}`, async () => {
+        const known = row.id || ids.current.get(key) || null
+        const saved = await savePayItem(instanceId, known, {
+          profile_id: row.profile_id,
+          work_date: row.work_date,
+          description: row.description,
+          amount: String(row.amount),
+        })
+        if (!known) {
+          ids.current.set(key, saved.id)
+          setPay((rs) => rs.map((r) => (r.key === key ? { ...r, id: saved.id } : r)))
+        }
+      })
+      return next
+    })
+  }
+
+  function updateCost(key: string, patch: Partial<CostRow>) {
+    setCosts((rows) => {
+      const next = rows.map((r) => (r.key === key ? { ...r, ...patch } : r))
+      const row = next.find((r) => r.key === key)!
+      schedule(`cost:${key}`, async () => {
+        const known = row.id || ids.current.get(key) || null
+        const saved = await saveCostItem(instanceId, known, {
+          account_id: row.account_id,
+          spend_date: row.spend_date,
+          description: row.description,
+          amount: String(row.amount),
+        })
+        if (!known) {
+          ids.current.set(key, saved.id)
+          setCosts((rs) => rs.map((r) => (r.key === key ? { ...r, id: saved.id } : r)))
+        }
+      })
+      return next
+    })
+  }
+
+  // A row deleted while its own save is still queued: let the queue drain
+  // first and then delete what it created, or the insert lands after the
+  // delete and leaves a line nobody can see.
+  async function settle(key: string) {
+    const timer = timers.current.get(key)
+    if (timer) clearTimeout(timer)
+    timers.current.delete(key)
+    await (chains.current.get(key) ?? Promise.resolve()).catch(() => {})
+  }
+
+  async function removePay(row: PayRow) {
+    setPay((rs) => rs.filter((r) => r.key !== row.key))
+    await settle(`pay:${row.key}`)
+    const id = row.id || ids.current.get(row.key)
+    if (id) await deletePayItem(instanceId, id).catch(() => router.refresh())
+  }
+
+  async function removeCost(row: CostRow) {
+    setCosts((rs) => rs.filter((r) => r.key !== row.key))
+    await settle(`cost:${row.key}`)
+    const id = row.id || ids.current.get(row.key)
+    if (id) await deleteCostItem(instanceId, id).catch(() => router.refresh())
+  }
+
+  async function fileExpense(itemId: string, accountId: string) {
+    setOverrides((m) => {
+      const next = new Map(m)
+      if (accountId) next.set(itemId, accountId)
+      else next.delete(itemId)
+      return next
+    })
+    await setExpenseItemAccount(instanceId, itemId, accountId || null).catch((e: unknown) =>
+      setError(e instanceof Error ? e.message : 'Could not move that expense')
+    )
+  }
+
+  // Typed costs with nowhere to sit: no account, or one that has since been
+  // retired. Both count in the total — the money went out either way — so
+  // both need a row, or it is money nobody can see or correct.
+  const homelessCosts = costs.filter((c) => !accounts.some((a) => a.id === c.account_id))
+
+  const input = 'bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-zinc-500'
+  const cell = 'text-sm text-zinc-300'
+
+  return (
+    <div className="space-y-6">
+      {error && (
+        <p className="text-xs text-pr-red-light">{error} — the last change may not have been kept.</p>
+      )}
+
+      {/* ── What we billed ───────────────────────────────────────────────── */}
+      <div>
+        <div className="flex items-baseline gap-2 mb-2">
+          <h4 className="text-sm font-semibold text-zinc-200">Invoiced</h4>
+          <InfoHint text="What the client was actually billed, which is not always the quote they accepted — gear bought on their behalf, an invoice split in two, or a renegotiation after the fact all move it." />
+        </div>
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-1.5">
+            <span className="text-zinc-500 text-sm">$</span>
+            <input
+              value={invoiced}
+              onChange={(e) => {
+                setInvoiced(e.target.value)
+                saveHeader({ invoiced: e.target.value })
+              }}
+              inputMode="decimal"
+              placeholder="0.00"
+              className={`${input} w-32 text-right`}
+            />
+          </div>
+          {acceptedQuote && (
+            <span className="text-xs text-zinc-500">
+              Quote {acceptedQuote.seq} was accepted at {fmtMoney(acceptedQuote.total)}
+              {Math.abs(actuals.invoiced - acceptedQuote.total) > 0.005 && (
+                <button
+                  onClick={() => {
+                    setInvoiced(String(acceptedQuote.total))
+                    saveHeader({ invoiced: String(acceptedQuote.total) })
+                  }}
+                  className="ml-2 text-zinc-400 hover:text-white underline underline-offset-2 transition-colors"
+                >
+                  use it
+                </button>
+              )}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* ── Pay ──────────────────────────────────────────────────────────── */}
+      <div>
+        <div className="flex items-baseline gap-2 mb-2">
+          <h4 className="text-sm font-semibold text-zinc-200">Pay</h4>
+          <InfoHint text="Typed, because nothing in the portal knows what anybody worked — there is no hours feed and no rate on a person. The suggestion below is built from the course's length and the pay rates in the library; the crew who ran it are the authority." />
+        </div>
+
+        {suggestion && pay.length === 0 && (
+          <div className="mb-3 p-3 rounded border border-zinc-800 bg-zinc-900/60">
+            <p className="text-xs text-zinc-400">
+              The course&apos;s shape suggests <span className="text-zinc-200 font-medium">{fmtMoney(suggestion.total)}</span>{' '}
+              — {suggestion.assumptions}.
+            </p>
+            <button
+              disabled={busy}
+              onClick={async () => {
+                setBusy(true)
+                try {
+                  await addSuggestedPayLines(instanceId, suggestion.lines)
+                  router.refresh()
+                } catch (e) {
+                  setError(e instanceof Error ? e.message : 'Could not add those lines')
+                } finally {
+                  setBusy(false)
+                }
+              }}
+              className="mt-2 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 rounded text-xs font-medium transition-colors disabled:opacity-50"
+            >
+              Add as pay lines
+            </button>
+          </div>
+        )}
+
+        <div className="space-y-1.5">
+          {pay.map((row) => (
+            <div key={row.key} className="flex items-center gap-2 flex-wrap">
+              <select
+                value={row.profile_id ?? ''}
+                onChange={(e) => updatePay(row.key, { profile_id: e.target.value || null })}
+                className={`${input} w-40`}
+              >
+                <option value="">— whole crew —</option>
+                {people.map((p) => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+              <input
+                type="date"
+                value={row.work_date ?? ''}
+                onChange={(e) => updatePay(row.key, { work_date: e.target.value || null })}
+                className={`${input} w-36`}
+              />
+              <input
+                value={row.description ?? ''}
+                onChange={(e) => updatePay(row.key, { description: e.target.value })}
+                placeholder="What for"
+                className={`${input} flex-1 min-w-40`}
+              />
+              <input
+                value={String(row.amount ?? '')}
+                onChange={(e) => updatePay(row.key, { amount: Number(e.target.value.replace(/[$,\s]/g, '')) || 0 })}
+                inputMode="decimal"
+                className={`${input} w-24 text-right`}
+              />
+              <button onClick={() => void removePay(row)} className="text-zinc-600 hover:text-pr-red-light transition-colors" title="Remove">
+                <TrashIcon className="w-4 h-4" />
+              </button>
+            </div>
+          ))}
+        </div>
+
+        <button
+          onClick={() => setPay((rs) => [...rs, { key: newKey(), id: '', profile_id: null, work_date: null, description: null, amount: 0 }])}
+          className="mt-2 text-xs text-zinc-400 hover:text-white transition-colors"
+        >
+          + Add a pay line
+        </button>
+
+        <div className="mt-3 pt-3 border-t border-zinc-800 space-y-1 text-sm">
+          <Row label="Pay total" value={fmtMoney(actuals.payTotal)} />
+          <div className="flex items-center justify-between gap-4">
+            <span className="text-zinc-400 flex items-center gap-1.5 flex-wrap">
+              Payroll load
+              <input
+                value={loadPct}
+                onChange={(e) => {
+                  setLoadPct(e.target.value)
+                  saveHeader({ loadPct: e.target.value })
+                }}
+                inputMode="decimal"
+                placeholder={String(round1(loaded.orgPayrollLoad * 100))}
+                title="Blank follows the org-wide number; type one to override it for this course only"
+                className={`${input} w-14 text-right placeholder-zinc-500`}
+              />
+              %
+              {loadPct.trim() === '' ? (
+                <span className="text-xs text-zinc-600">org-wide</span>
+              ) : (
+                <button
+                  onClick={() => {
+                    setLoadPct('')
+                    saveHeader({ loadPct: '' })
+                  }}
+                  className="text-xs text-zinc-500 hover:text-zinc-300 underline underline-offset-2 transition-colors"
+                >
+                  use the org-wide {round1(loaded.orgPayrollLoad * 100)}%
+                </button>
+              )}
+            </span>
+            <span className={cell}>{fmtMoney(actuals.payrollLoad)}</span>
+          </div>
+          <Row label="Instructor pay" value={fmtMoney(actuals.instructorPay)} strong />
+        </div>
+      </div>
+
+      {/* ── Costs ────────────────────────────────────────────────────────── */}
+      <div>
+        <div className="flex items-baseline gap-2 mb-2">
+          <h4 className="text-sm font-semibold text-zinc-200">Costs</h4>
+          <InfoHint text="Submitted expense reports land here by category and are read live, so a corrected report moves this course's net. Everything a report never sees — the company card, an invoice paid directly — is typed on the account it belongs to." />
+        </div>
+
+        <div className="border border-zinc-800 rounded divide-y divide-zinc-800">
+          {actuals.accounts.map((r) => {
+            const open = openAccount === r.account.id
+            return (
+              <div key={r.account.id}>
+                <button
+                  onClick={() => setOpenAccount(open ? null : r.account.id)}
+                  className="w-full flex items-center justify-between gap-4 px-3 py-2 hover:bg-zinc-900/60 transition-colors text-left"
+                >
+                  <span className="text-sm text-zinc-300">
+                    {r.account.label}
+                    {r.fromExpenses > 0 && (
+                      <span className="ml-2 text-xs text-zinc-500">
+                        {fmtMoney(r.fromExpenses)} from {r.expenseLines.length} expense line
+                        {r.expenseLines.length === 1 ? '' : 's'}
+                      </span>
+                    )}
+                  </span>
+                  <span className="flex items-center gap-2 shrink-0">
+                    <span className={`text-sm ${r.total > 0 ? 'text-zinc-200' : 'text-zinc-600'}`}>{fmtMoney(r.total)}</span>
+                    <span className="text-zinc-600 text-xs">{open ? '▴' : '▾'}</span>
+                  </span>
+                </button>
+
+                {open && (
+                  <div className="px-3 pb-3 space-y-2 bg-zinc-950/40">
+                    {r.expenseLines.map((l) => (
+                      <div key={l.id} className="flex items-center gap-2 flex-wrap text-xs">
+                        <span className="text-zinc-500 w-24 shrink-0">{fmtDateRange(l.start_date, null)}</span>
+                        <span className="text-zinc-300 flex-1 min-w-32 truncate">
+                          {expenseLineLabel(l)}
+                          {l.personName ? <span className="text-zinc-500"> · {l.personName}</span> : null}
+                          {l.paid_by === 'company_card' ? <span className="text-zinc-500"> · card</span> : null}
+                        </span>
+                        <span className="text-zinc-300 w-20 text-right">{fmtMoney(l.amount)}</span>
+                        {/* Reported by an instructor, filed by a bookkeeper —
+                            moving it here never edits their report. */}
+                        <select
+                          value={overrides.get(l.id) ?? r.account.id}
+                          onChange={(e) => void fileExpense(l.id, e.target.value)}
+                          className="bg-zinc-800 border border-zinc-700 rounded px-1.5 py-0.5 text-xs text-zinc-300"
+                          title="File this expense under another account"
+                        >
+                          {accounts.map((a) => (
+                            <option key={a.id} value={a.id}>{a.label}</option>
+                          ))}
+                        </select>
+                      </div>
+                    ))}
+
+                    {r.typedLines.map((l) => {
+                      const row = costs.find((c) => c.id === l.id)
+                      if (!row) return null
+                      return <CostRowFields key={row.key} row={row} accounts={accounts} input={input} onChange={(p) => updateCost(row.key, p)} onRemove={() => void removeCost(row)} />
+                    })}
+
+                    <button
+                      onClick={() =>
+                        setCosts((rs) => [
+                          ...rs,
+                          { key: newKey(), id: '', account_id: r.account.id, spend_date: null, description: null, amount: 0 },
+                        ])
+                      }
+                      className="text-xs text-zinc-400 hover:text-white transition-colors"
+                    >
+                      + Add a cost to {r.account.label}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+
+          {/* Costs whose account was retired, and any new row not yet given
+              one. Counted in the total — the money went out either way. */}
+          {(actuals.unfiled.amount > 0 || homelessCosts.length > 0) && (
+            <div className="px-3 py-2 space-y-2">
+              <div className="flex items-center justify-between gap-4">
+                <span className="text-sm text-amber-400/90">Not filed anywhere</span>
+                <span className="text-sm text-zinc-200">{fmtMoney(actuals.unfiled.amount)}</span>
+              </div>
+              {actuals.unfiled.lines.map((l) => (
+                <div key={l.id} className="flex items-center gap-2 flex-wrap text-xs">
+                  <span className="text-zinc-500 w-24 shrink-0">{fmtDateRange(l.start_date, null)}</span>
+                  <span className="text-zinc-300 flex-1 min-w-32 truncate">
+                    {expenseLineLabel(l)}
+                  </span>
+                  <span className="text-zinc-300 w-20 text-right">{fmtMoney(l.amount)}</span>
+                  <select
+                    value=""
+                    onChange={(e) => void fileExpense(l.id, e.target.value)}
+                    className="bg-zinc-800 border border-zinc-700 rounded px-1.5 py-0.5 text-xs text-zinc-300"
+                  >
+                    <option value="">— file under —</option>
+                    {accounts.map((a) => (
+                      <option key={a.id} value={a.id}>{a.label}</option>
+                    ))}
+                  </select>
+                </div>
+              ))}
+              {homelessCosts
+                .map((row) => (
+                  <CostRowFields key={row.key} row={row} accounts={accounts} input={input} onChange={(p) => updateCost(row.key, p)} onRemove={() => void removeCost(row)} />
+                ))}
+            </div>
+          )}
+        </div>
+
+        <div className="mt-2 flex items-center gap-2 flex-wrap">
+          <input
+            value={newAccount}
+            onChange={(e) => setNewAccount(e.target.value)}
+            placeholder="New account"
+            className={`${input} w-40`}
+          />
+          <button
+            disabled={!newAccount.trim() || busy}
+            onClick={async () => {
+              setBusy(true)
+              try {
+                await addCostAccount(instanceId, newAccount)
+                setNewAccount('')
+                router.refresh()
+              } catch (e) {
+                setError(e instanceof Error ? e.message : 'Could not add that account')
+              } finally {
+                setBusy(false)
+              }
+            }}
+            className="px-2.5 py-1 bg-zinc-800 hover:bg-zinc-700 rounded text-xs transition-colors disabled:opacity-40"
+          >
+            Add account
+          </button>
+          <InfoHint text="Accounts are shared by every course. Renaming or retiring one, and choosing which expense categories route into it, lives with the rates on the expense admin page." />
+        </div>
+
+        {actuals.pending.amount > 0 && (
+          <p className="mt-3 text-xs text-amber-400/90">
+            {fmtMoney(actuals.pending.amount)} across {actuals.pending.lines.length} expense line
+            {actuals.pending.lines.length === 1 ? '' : 's'} is still in draft and is not counted below — the net
+            moves when it is filed, not when it was spent.
+          </p>
+        )}
+      </div>
+
+      {/* ── What it left ─────────────────────────────────────────────────── */}
+      <div className="pt-4 border-t border-zinc-800 space-y-1">
+        <Row label="Invoiced" value={fmtMoney(actuals.invoiced)} />
+        <Row label="Costs" value={fmtMoney(actuals.costsTotal)} />
+        <div className="flex items-center justify-between gap-4 pt-1">
+          <span className="text-sm font-semibold text-zinc-200">Net</span>
+          <span className={`text-base font-semibold ${actuals.net < 0 ? 'text-pr-red-light' : 'text-emerald-400'}`}>
+            {fmtMoney(actuals.net)}
+            {actuals.netPct !== null && (
+              <span className="ml-2 text-xs font-normal text-zinc-500">{(actuals.netPct * 100).toFixed(2)}%</span>
+            )}
+          </span>
+        </div>
+      </div>
+
+      {/* ── Sending it out ───────────────────────────────────────────────── */}
+      <div className="flex items-center gap-3 flex-wrap text-xs">
+        <a
+          href={`/api/actuals/${instanceId}/pdf`}
+          target="_blank"
+          rel="noreferrer"
+          className="px-2.5 py-1 bg-zinc-800 hover:bg-zinc-700 rounded font-medium text-zinc-200 transition-colors"
+        >
+          Download PDF
+        </a>
+        {shareToken ? (
+          <>
+            <input
+              readOnly
+              value={shareUrl(shareToken)}
+              onFocus={(e) => e.currentTarget.select()}
+              className={`${input} flex-1 min-w-52 text-zinc-400`}
+            />
+            <button
+              disabled={busy}
+              onClick={async () => {
+                setBusy(true)
+                try {
+                  await setActualsShared(instanceId, false)
+                  setShareToken(null)
+                } catch (e) {
+                  setError(e instanceof Error ? e.message : 'Could not revoke the link')
+                } finally {
+                  setBusy(false)
+                }
+              }}
+              className="text-zinc-500 hover:text-pr-red-light transition-colors"
+            >
+              Revoke link
+            </button>
+          </>
+        ) : (
+          <button
+            disabled={busy}
+            onClick={async () => {
+              setBusy(true)
+              try {
+                setShareToken(await setActualsShared(instanceId, true))
+              } catch (e) {
+                setError(e instanceof Error ? e.message : 'Could not make a link')
+              } finally {
+                setBusy(false)
+              }
+            }}
+            className="px-2.5 py-1 bg-zinc-800 hover:bg-zinc-700 rounded font-medium text-zinc-200 transition-colors disabled:opacity-50"
+          >
+            Make a link to send
+          </button>
+        )}
+        <InfoHint text="The link is a read-only page of these numbers at an unguessable address — no sign-in, so anyone holding it can read them. It exists only once you ask for one, and revoking it is immediate. The PDF is the same page as a file to attach." />
+      </div>
+
+      <div>
+        <textarea
+          value={notes}
+          onChange={(e) => {
+            setNotes(e.target.value)
+            saveHeader({ notes: e.target.value })
+          }}
+          rows={2}
+          placeholder="Notes on this course's numbers"
+          className={`${input} w-full`}
+        />
+        <label className="flex items-center gap-2 mt-2 text-xs text-zinc-400">
+          <input
+            type="checkbox"
+            checked={closed}
+            onChange={async (e) => {
+              setClosed(e.target.checked)
+              await setActualsClosed(instanceId, e.target.checked).catch(() => router.refresh())
+            }}
+            className="accent-red-600"
+          />
+          The books on this course are done
+          <InfoHint text="Locks nothing — a number that turns out wrong still has to be fixable. It tells the year's totals which courses have stopped moving." />
+        </label>
+      </div>
+    </div>
+  )
+}
+
+function Row({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
+  return (
+    <div className="flex items-center justify-between gap-4">
+      <span className={strong ? 'text-sm font-medium text-zinc-200' : 'text-sm text-zinc-400'}>{label}</span>
+      <span className={strong ? 'text-sm font-medium text-zinc-100' : 'text-sm text-zinc-300'}>{value}</span>
+    </div>
+  )
+}
+
+// One typed cost. Identical fields wherever it appears — under its account, or
+// in the not-filed pile — because a cost in the wrong place has to read like
+// the ones it belongs beside or it looks like a different kind of thing.
+function CostRowFields({
+  row,
+  accounts,
+  input,
+  onChange,
+  onRemove,
+}: {
+  row: CostRow & { key: string }
+  accounts: CostAccount[]
+  input: string
+  onChange: (patch: Partial<TypedCostLine>) => void
+  onRemove: () => void
+}) {
+  return (
+    <div className="flex items-center gap-2 flex-wrap">
+      <input
+        type="date"
+        value={row.spend_date ?? ''}
+        onChange={(e) => onChange({ spend_date: e.target.value || null })}
+        className={`${input} w-36`}
+      />
+      <input
+        value={row.description ?? ''}
+        onChange={(e) => onChange({ description: e.target.value })}
+        placeholder="What it was"
+        className={`${input} flex-1 min-w-32`}
+      />
+      <select
+        value={row.account_id ?? ''}
+        onChange={(e) => onChange({ account_id: e.target.value || null })}
+        className={`${input} w-36`}
+      >
+        <option value="">— account —</option>
+        {accounts.map((a) => (
+          <option key={a.id} value={a.id}>{a.label}</option>
+        ))}
+      </select>
+      <input
+        value={String(row.amount ?? '')}
+        onChange={(e) => onChange({ amount: Number(e.target.value.replace(/[$,\s]/g, '')) || 0 })}
+        inputMode="decimal"
+        className={`${input} w-24 text-right`}
+      />
+      <button onClick={onRemove} className="text-zinc-600 hover:text-pr-red-light transition-colors" title="Remove">
+        <TrashIcon className="w-4 h-4" />
+      </button>
+    </div>
+  )
+}
+
+function round1(n: number): number {
+  return Math.round(n * 10) / 10
+}
+
+// Absolute, because the point of it is to be pasted into an email. Read off
+// the browser rather than threaded down from the server: this only ever runs
+// after a click, and the origin the admin is looking at is the right one.
+function shareUrl(token: string): string {
+  const origin = typeof window === 'undefined' ? '' : window.location.origin
+  return `${origin}/actuals/${token}`
+}
+
+// A row's identity before the server has given it one. Only has to be unique
+// within this panel for as long as it is open.
+let keySeq = 0
+function newKey(): string {
+  keySeq += 1
+  return `new-${keySeq}`
+}

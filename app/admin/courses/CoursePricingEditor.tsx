@@ -10,6 +10,12 @@ import ArchivedCoas from './ArchivedCoas'
 import NewCoaMenu, { type CopySource } from './NewCoaMenu'
 import QuoteHeroPicker from './QuoteHeroPicker'
 import QuotesSection, { type QuoteRow } from './QuotesSection'
+import ActualsPanel from '@/components/ActualsPanel'
+import PricingFold from '@/components/PricingFold'
+import { actualsAreLive, payRatesFrom, paySuggestion } from '@/lib/actuals'
+import { loadActuals } from '@/lib/actuals-data'
+import { courseZone, todayIn } from '@/lib/course-clock'
+import { fmtMoney } from '@/lib/expenses'
 
 // What a course costs and what we told the client it costs.
 //
@@ -37,6 +43,11 @@ export default async function CoursePricingEditor({
     starts_at: string | null
     ends_at: string | null
     breaks_paid?: boolean | null
+    /** Both only so the page can tell whether the course has reached the
+        point where actuals are the live question and the estimate is
+        history — the status, and the clock the answer is asked on. */
+    status?: string | null
+    region?: string | null
     hero_image: string | null
     hero_position: string | null
     hero_scale: string | number | null
@@ -53,11 +64,12 @@ export default async function CoursePricingEditor({
     { data: estimateRows }, { data: pricingRateRows }, { data: quoteRows },
     { data: adminRows }, { data: galleryImageRows }, { data: estimateReviewRows },
     { data: sourceRows }, { data: offDayRows },
+    actuals, { data: rosterRows },
   ] = await Promise.all([
     admin.from('course_estimates')
       .select('id, title, margin, price_override, created_at, archived_at, estimate_items(label, qty, rate, notes, qty_factors, rate_id, drift_ack, sort_order)')
       .eq('instance_id', instanceId).order('created_at'),
-    admin.from('pricing_rates').select('id, label, unit, rate, default_line').eq('active', true).order('sort_order'),
+    admin.from('pricing_rates').select('id, label, unit, rate, pay_rate, default_line').eq('active', true).order('sort_order'),
     admin.from('course_quotes')
       .select('id, accept_token, estimate_id, archived_at, prepared_by, prepared_by_name, quote_seq, status, issue_date, valid_until, total, options, unit_rate_note, scope_bullets, course_blurb, sent_at, accepted_at, accepted_name')
       .eq('instance_id', instanceId).order('quote_seq', { ascending: false }),
@@ -85,6 +97,11 @@ export default async function CoursePricingEditor({
       return { data: rows }
     })(),
     admin.from('instance_off_days').select('off_date, end_date').eq('instance_id', instanceId),
+    // Everything the actuals need, assembled by the one loader the emailed
+    // page and the PDF also go through — as a single entry here so it still
+    // rides in this page's existing round trip.
+    loadActuals(admin, instanceId),
+    admin.from('instance_instructors').select('instructors(name, profile_id)').eq('instance_id', instanceId),
   ])
 
   const quotePeople = (adminRows ?? [])
@@ -223,10 +240,62 @@ export default async function CoursePricingEditor({
   // duplicated until it's been touched and saved.
   const persistedCoas = estimatePanels.filter((e) => e.id !== null)
 
+  // ── Actuals ───────────────────────────────────────────────────────────────
+
+  // Only the crew with a portal account can carry a pay line; everyone else's
+  // time goes on an unattributed one, which is how the paper version did it.
+  const payPeople = (rosterRows ?? [])
+    .map((r) => r.instructors as unknown as { name: string | null; profile_id: string | null } | null)
+    .filter((i): i is { name: string; profile_id: string } => Boolean(i?.profile_id && i?.name))
+    .map((i) => ({ id: i.profile_id, name: i.name }))
+
+  // Where the conversation landed, offered to the invoiced field as a
+  // starting point. The highest-numbered accepted quote wins — quotes come
+  // back newest first, and a re-quote that was also accepted supersedes.
+  const accepted = quotes.find((q) => q.status === 'accepted' && !q.archived_at)
+  const acceptedQuote = accepted ? { seq: accepted.quote_seq as number, total: accepted.total } : null
+
+  const actualsLive = actualsAreLive(
+    { starts_at: course.starts_at, status: course.status ?? null },
+    todayIn(courseZone(course.region))
+  )
+  const suggestion = paySuggestion(
+    { instructors: instructorCount, days: lengths.days },
+    payRatesFrom((pricingRateRows ?? []) as { label: string; pay_rate?: number | string | null }[])
+  )
+
+  // What each folded section says while shut, so folding one away costs
+  // nothing at a glance.
+  const liveCoaPrices = estimatePanels.map((e) =>
+    coaPrice({ margin: e.margin, price_override: e.priceOverride, items: e.items })
+  )
+  const costSummary =
+    liveCoaPrices.length === 0
+      ? undefined
+      : liveCoaPrices.length === 1
+        ? fmtMoney(liveCoaPrices[0])
+        : `${liveCoaPrices.length} COAs · ${fmtMoney(Math.min(...liveCoaPrices))}–${fmtMoney(Math.max(...liveCoaPrices))}`
+  const latestQuote = quotes[0]
+  const quoteSummary = latestQuote
+    ? `Quote ${latestQuote.quote_seq} ${latestQuote.status} · ${fmtMoney(latestQuote.total)}`
+    : undefined
+
+  // Nothing reconciled yet says so, rather than showing a net of zero as
+  // though the course had broken even.
+  const actualsSummary =
+    actuals.rolled.invoiced === 0 && actuals.rolled.costsTotal === 0
+      ? 'nothing entered yet'
+      : `${fmtMoney(actuals.rolled.net)}${actuals.rolled.netPct === null ? '' : ` · ${(actuals.rolled.netPct * 100).toFixed(1)}%`}`
+
   return (
     <div>
       <EstimateReviewBanner reviews={estimateReviews} admins={reviewAdmins} currentUserId={currentUserId} subject="estimate" />
-      <h3 className="text-sm font-semibold text-zinc-200 mb-2">Cost</h3>
+
+      {/* Three sections, one live at a time. Which one is open follows the
+          course: before it runs the question is what to charge, and from the
+          first day the question is what it cost. Defaults only — a course
+          that already ran still gets its estimate argued about. */}
+      <PricingFold title="Cost" summary={costSummary} defaultOpen={!actualsLive}>
       <div className="space-y-8">
         {estimatePanels.map((e) => (
           <EstimatePanel
@@ -265,9 +334,9 @@ export default async function CoursePricingEditor({
         />
       </div>
       <EstimateReviewRequest instanceId={instanceId} reviews={estimateReviews} admins={reviewAdmins} currentUserId={currentUserId} subject="estimate" />
+      </PricingFold>
 
-      <div className="mt-6 pt-6 border-t border-zinc-800">
-      <h3 className="text-sm font-semibold text-zinc-200 mb-2">Quotes</h3>
+      <PricingFold title="Quotes" summary={quoteSummary} defaultOpen={!actualsLive}>
       <p className="text-xs text-zinc-500 mb-4">
         Marking a quote sent or accepted moves the course to Quoted or Confirmed.
       </p>
@@ -288,7 +357,21 @@ export default async function CoursePricingEditor({
             price: coaPrice({ margin: e.margin, price_override: e.priceOverride, items: e.items }),
           }))}
       />
-      </div>
+      </PricingFold>
+
+      <PricingFold
+        title="Actuals"
+        summary={actualsSummary}
+        defaultOpen={actualsLive}
+      >
+        <ActualsPanel
+          instanceId={instanceId}
+          actuals={actuals}
+          people={payPeople}
+          suggestion={suggestion}
+          acceptedQuote={acceptedQuote}
+        />
+      </PricingFold>
     </div>
   )
 }

@@ -333,7 +333,16 @@ export async function updatePricingRate(rateId: string, formData: FormData) {
   if (!label) throw new Error('Label is required')
   const unit = String(formData.get('unit') ?? '').trim().slice(0, 60) || null
 
-  const { error } = await admin.from('pricing_rates').update({ rate, label, unit }).eq('id', rateId)
+  // What we actually pay for this line, where that differs from what we quote
+  // it at. Blank clears it: a line that is not somebody's time has no pay
+  // rate, and a zero would read as "we pay nothing for this".
+  const payRaw = String(formData.get('pay_rate') ?? '').trim()
+  const pay_rate = payRaw === '' ? null : Number(payRaw)
+  if (pay_rate !== null && (!Number.isFinite(pay_rate) || pay_rate < 0)) {
+    throw new Error('Pay rate must be a non-negative number')
+  }
+
+  const { error } = await admin.from('pricing_rates').update({ rate, label, unit, pay_rate }).eq('id', rateId)
   if (error) throw new Error(error.message)
   revalidatePath('/admin/expenses/rates')
 }
