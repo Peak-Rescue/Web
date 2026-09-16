@@ -52,6 +52,7 @@ export default function CourseResourcesSection({
   const [linkOpen, setLinkOpen] = useState(false)
   const [picker, setPicker] = useState<ResourcePickerItem[] | null>(null)
   const [pickerOpen, setPickerOpen] = useState(false)
+  const [showAll, setShowAll] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
 
   // An expected refusal comes back as a value and is shown as it was written;
@@ -97,9 +98,15 @@ export default function CourseResourcesSection({
   const btn =
     'text-xs px-2.5 py-1.5 rounded border border-zinc-700 text-zinc-300 hover:text-white hover:border-zinc-500 transition-colors disabled:opacity-40'
 
-  const available = (picker ?? [])
+  const unadded = (picker ?? [])
     .filter((i) => !i.alreadyAdded)
     .sort((a, b) => Number(b.suggested) - Number(a.suggested) || a.title.localeCompare(b.title))
+  // What fits this course — its venue, its region, or its expertise — is what
+  // the picker opens on. The rest of the shelf is one press away and says how
+  // much of it there is, so nothing is hidden, only stood back from.
+  const fitting = unadded.filter((i) => i.suggested)
+  const available = showAll || fitting.length === 0 ? unadded : fitting
+  const offCourse = unadded.length - fitting.length
 
   return (
     <div className="p-6 pt-5 border-t border-zinc-800">
@@ -249,6 +256,9 @@ export default function CourseResourcesSection({
                     {i.matchedOn === 'region' && i.regionLabel && (
                       <span className="text-[10px] px-1 rounded bg-zinc-800 text-zinc-400 shrink-0">{i.regionLabel}</span>
                     )}
+                    {i.matchedOn === 'discipline' && i.disciplineLabel && (
+                      <span className="text-[10px] px-1 rounded bg-zinc-800 text-zinc-400 shrink-0">{i.disciplineLabel}</span>
+                    )}
                     {i.audience === 'internal' && <AudiencePills audience="internal" className="shrink-0" />}
                   </div>
                 </div>
@@ -276,6 +286,17 @@ export default function CourseResourcesSection({
             )}
             {picker === null && <p className="text-xs text-zinc-500 px-2.5 py-4">Loading resources…</p>}
           </div>
+
+          {offCourse > 0 && fitting.length > 0 && (
+            <button
+              onClick={() => setShowAll(!showAll)}
+              className="mt-2 text-[11px] text-zinc-500 hover:text-zinc-200 transition-colors"
+            >
+              {showAll
+                ? `Only what fits this course`
+                : `Show all ${unadded.length} (${offCourse} for other courses)`}
+            </button>
+          )}
 
           <div className="flex items-center gap-3 mt-3">
             <button

@@ -117,6 +117,7 @@ export default function GearListEditor({
   list,
   catalog,
   courseType,
+  courseDisciplines,
   templates,
   onDelete,
   review,
@@ -127,6 +128,10 @@ export default function GearListEditor({
   list: GearList
   catalog: GearItem[]
   courseType?: string | null
+  /** What kind of work this course is, in the catalog's own vocabulary. The
+      add panel leads with the gear tagged for it. Absent on the shelf, where a
+      template belongs to no one course and the whole catalog is fair game. */
+  courseDisciplines?: string[]
   // The course's maximum number of students, from the Details tab. Quantities
   // that count by students are worked out from it here rather than stored, so
   // changing it there carries every one of them with it. A template has no
@@ -900,6 +905,7 @@ export default function GearListEditor({
             listId={list.id}
             ownsCatalog={ownsCatalog}
             catalog={known}
+            courseDisciplines={courseDisciplines}
             childrenOf={childrenOf}
             onPick={(picked) => {
               // A catalog pick knows its own name; a brand-new item carries one
@@ -2126,11 +2132,16 @@ function SaveToShelf({
 // where an item lands and the panel stays open across adds — filling a section
 // means adding six things to it, not confirming the destination six times.
 function AddGear({
-  listId, catalog, childrenOf, onPick, onClose, busy, run, input, ownsCatalog,
+  listId, catalog, courseDisciplines, childrenOf, onPick, onClose, busy, run, input, ownsCatalog,
 }: {
   listId: string
   ownsCatalog: boolean
   catalog: GearItem[]
+  /** This course's expertise. Gear tagged for another discipline stands back
+      behind a count; gear tagged for none has made no claim either way and is
+      shown, since most of the catalog is untagged and hiding it would empty
+      the panel. */
+  courseDisciplines?: string[]
   childrenOf: Map<string, GearItem[]>
   /** What was chosen. Placing it is the caller's job — see `add` below.
       `items` are catalog rows this panel has just created: handed up so the
@@ -2145,6 +2156,7 @@ function AddGear({
 }) {
   const [query, setQuery] = useState('')
   const [browsing, setBrowsing] = useState<string | null>(null)
+  const [showOther, setShowOther] = useState(false)
   // No category is preselected. A select that opens on Anchors is an answer
   // nobody gave, and the button beside it files the thing under it — new gear
   // ended up in Anchors because the form was already holding one.
@@ -2211,6 +2223,21 @@ function AddGear({
     if (browsing) return types.filter((t) => t.category === browsing)
     return []
   }, [types, query, searching, browsing, childrenOf])
+
+  // Cut to this course. A type carries the disciplines it is for, and a type
+  // tagged for none of them is not evidence of a mismatch — the catalog is
+  // mostly untagged, and a panel that hid everything untagged would be empty.
+  // So only gear tagged for *other* work stands back, behind a count that says
+  // how much and opens it.
+  const scoped = useMemo(() => {
+    if (!courseDisciplines?.length) return matches
+    return matches.filter((t) => {
+      const tags = t.disciplines ?? []
+      return tags.length === 0 || tags.some((d) => courseDisciplines.includes(d))
+    })
+  }, [matches, courseDisciplines])
+  const elsewhere = matches.length - scoped.length
+  const shownMatches = showOther ? matches : scoped
 
   const exact = catalog.some((c) =>
     c.name.toLowerCase() === query.trim().toLowerCase() ||
@@ -2284,7 +2311,7 @@ function AddGear({
           </p>
         )}
 
-        {matches.map((t) => {
+        {shownMatches.map((t) => {
           const models = childrenOf.get(t.id) ?? []
           return (
             <div key={t.id} className="flex items-start gap-2 px-2 py-1.5 rounded hover:bg-zinc-800/60">
@@ -2319,6 +2346,17 @@ function AddGear({
           )
         })}
 
+        {elsewhere > 0 && (
+          <button
+            onClick={() => setShowOther(!showOther)}
+            className="px-2 py-1 text-[11px] text-zinc-500 hover:text-zinc-200 transition-colors"
+          >
+            {showOther
+              ? 'Only gear for this course'
+              : `Show ${elsewhere} more tagged for other disciplines`}
+          </button>
+        )}
+
         {/* Nothing found, and no catalog to write: say where the missing gear
             comes from rather than leaving a search that ends in silence. The
             catalog is deliberately not everyone's to add to — see the
@@ -2333,7 +2371,7 @@ function AddGear({
         {query.trim() && !exact && ownsCatalog && (
           <div className="px-2 py-2 border-t border-zinc-800 space-y-2">
             <p className="text-[11px] text-zinc-500">
-              {matches.length > 0
+              {shownMatches.length > 0
                 ? 'Not here? Add it to the catalog.'
                 : 'Nothing matches. Add it to the catalog:'}
             </p>

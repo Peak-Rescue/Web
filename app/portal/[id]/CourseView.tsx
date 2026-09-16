@@ -741,9 +741,13 @@ export default async function CourseView({
       description: t.description,
       sections: t.course_template_sections.length,
       items: t.course_template_sections.reduce((n, sec) => n + sec.course_template_items.length, 0),
-      isDefault: t.course_type === inst.course_type,
+      // Why this setup is offered here, on the same terms as the gear and
+      // schedule shelves: its own offering, or the expertise that offering
+      // implies. An exact course_type compare reached no custom course at all,
+      // however many boxes were ticked on it.
+      relevance: templateRelevance(t, templateCourse),
     }))
-    .sort((a, b) => Number(b.isDefault) - Number(a.isDefault) || a.name.localeCompare(b.name))
+    .sort((a, b) => Number(Boolean(b.relevance)) - Number(Boolean(a.relevance)) || a.name.localeCompare(b.name))
 
   const knownSectionNames = [...new Set(
     ((sectionNameRows ?? []) as { title: string }[]).map((m) => m.title)
@@ -1982,6 +1986,7 @@ export default async function CourseView({
                 instanceId={id}
                 viewerId={viewer.userId}
                 courseType={inst.course_type as string | null}
+                courseDisciplines={courseDisciplines as string[]}
                 students={(inst.max_students as number | null) ?? null}
                 lists={(gearListRows ?? []) as unknown as React.ComponentProps<typeof CourseGear>['lists']}
                 templates={gearTemplateOptions}

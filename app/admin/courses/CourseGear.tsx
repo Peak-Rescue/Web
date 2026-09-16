@@ -21,6 +21,7 @@ export default function CourseGear({
   instanceId,
   viewerId,
   courseType,
+  courseDisciplines,
   lists,
   templates,
   catalog,
@@ -40,6 +41,10 @@ export default function CourseGear({
       the shelf has nobody to check it. */
   viewerId?: string | null
   courseType: string | null
+  /** The expertise this course draws on — its offering's, or the boxes ticked
+      on a custom one. The catalog is tagged with the same vocabulary, so it is
+      what the add panel offers first. */
+  courseDisciplines?: string[]
   // The course's maximum number of students, from the Details tab. Rows that
   // count by students — one each, one between four — are worked out from it, so
   // a roster that changes carries the whole list with it.
@@ -137,6 +142,7 @@ export default function CourseGear({
               foot of it. */}
           <GearListEditor
             list={l} catalog={catalog} courseType={courseType}
+            courseDisciplines={courseDisciplines}
             templates={templates} students={students} viewerId={viewerId}
             ownsCatalog={ownsCatalog}
             onDelete={ownsCatalog

@@ -7,6 +7,7 @@ import { normalizeDocLink } from '@/lib/doc-links'
 import { type LibraryAudience } from '@/lib/library'
 import { regionLabel } from '@/lib/regions'
 import { refuse, type ActionResult } from '@/lib/action-result'
+import { courseCapabilityCategories, CAPABILITY_META, type CapabilityCategory } from '@/lib/capabilities'
 
 // Reference attached to a course, set alongside its location for the same
 // reason maps are: a med plan belongs to a place, not to a course type. Two
@@ -76,7 +77,9 @@ export type ResourcePickerItem = {
   venueName: string | null
   regionLabel: string | null
   suggested: boolean
-  matchedOn: 'venue' | 'region' | null
+  matchedOn: 'venue' | 'region' | 'discipline' | null
+  /** The expertise it shares with the course, when that is why it is offered. */
+  disciplineLabel: string | null
   alreadyAdded: boolean
 }
 
@@ -88,10 +91,10 @@ export async function loadResourceLibrary(instanceId: string): Promise<ResourceP
   const { admin } = await requireTeam(instanceId)
 
   const [{ data: inst }, { data: rows }, { data: existing }] = await Promise.all([
-    admin.from('course_instances').select('location, region, venue_id').eq('id', instanceId).single(),
+    admin.from('course_instances').select('location, region, venue_id, course_type, custom_categories').eq('id', instanceId).single(),
     admin
       .from('library_items')
-      .select('id, title, url, kind, audience, region, venue_id, venues(name)')
+      .select('id, title, url, kind, audience, region, venue_id, disciplines, venues(name)')
       .eq('bucket', 'resource')
       .eq('status', 'published')
       .order('title')
@@ -103,6 +106,12 @@ export async function loadResourceLibrary(instanceId: string): Promise<ResourceP
   const loc = (inst?.location ?? '').toLowerCase().trim()
   const courseRegion = inst?.region ?? null
   const courseVenue = inst?.venue_id ?? null
+  // Place is the strongest signal for a reference, but not the only one — a
+  // rescue plan tagged canyon belongs on a canyon course wherever it runs, and
+  // a course with no venue yet had nothing else to match on.
+  const courseDisciplines = inst
+    ? (courseCapabilityCategories(inst.course_type, inst.custom_categories) as string[])
+    : []
 
   return (rows ?? []).map((r) => {
     const venueName = (r.venues as unknown as { name: string } | null)?.name ?? null
@@ -111,6 +120,7 @@ export async function loadResourceLibrary(instanceId: string): Promise<ResourceP
       ? r.venue_id === courseVenue
       : Boolean(loc && venueLower && (loc.includes(venueLower) || venueLower.includes(loc)))
     const regionHit = Boolean(courseRegion && r.region && r.region === courseRegion)
+    const shared = ((r.disciplines ?? []) as string[]).filter((d) => courseDisciplines.includes(d))
     return {
       id: r.id,
       title: r.title,
@@ -119,8 +129,9 @@ export async function loadResourceLibrary(instanceId: string): Promise<ResourceP
       audience: r.audience as LibraryAudience,
       venueName,
       regionLabel: regionLabel(r.region),
-      suggested: venueHit || regionHit,
-      matchedOn: venueHit ? 'venue' : regionHit ? 'region' : null,
+      suggested: venueHit || regionHit || shared.length > 0,
+      matchedOn: venueHit ? 'venue' : regionHit ? 'region' : shared.length > 0 ? 'discipline' : null,
+      disciplineLabel: shared.map((d) => CAPABILITY_META[d as CapabilityCategory]?.label ?? d).join(', ') || null,
       alreadyAdded: added.has(r.id),
     }
   })

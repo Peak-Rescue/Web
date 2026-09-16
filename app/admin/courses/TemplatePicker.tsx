@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { applyCourseTemplate, previewCourseTemplate } from './actions'
 import InfoHint from '@/components/InfoHint'
@@ -11,7 +11,10 @@ export type TemplateOption = {
   description: string | null
   sections: number
   items: number
-  isDefault: boolean
+  /** Why it is offered for this course — its offering, or the expertise it
+      shares with it. Null means it isn't specific to this course, which is
+      what the shelf is cut to before anything is shown. */
+  relevance: string | null
 }
 
 // Sets a course up the way that kind of course is normally run: its usual
@@ -37,7 +40,16 @@ export default function TemplatePicker({
   // Items unticked in the preview — they stay out when the setup is applied.
   const [excluded, setExcluded] = useState<Set<string>>(new Set())
   const [msg, setMsg] = useState<string | null>(null)
+  const [showAll, setShowAll] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Setups tagged for this course lead, and the rest of the shelf is behind one
+  // press — a canyon course was being offered the HAZMAT and tower setups with
+  // nothing to tell them apart but their names. A shelf where nothing matches
+  // shows itself whole rather than reading as empty.
+  const forThisCourse = useMemo(() => templates.filter((t) => t.relevance), [templates])
+  const shown = showAll || forThisCourse.length === 0 ? templates : forThisCourse
+  const hidden = templates.length - forThisCourse.length
 
   if (templates.length === 0) return null
 
@@ -91,7 +103,7 @@ export default function TemplatePicker({
         <InfoHint text="Adds the sections and material this kind of course normally uses — change anything afterwards." />
       </p>
       <div className="flex flex-wrap gap-2">
-        {templates.map((t) => (
+        {shown.map((t) => (
           <button
             key={t.id}
             onClick={() => open(t)}
@@ -103,10 +115,18 @@ export default function TemplatePicker({
             <span className="text-zinc-600 ml-1.5">
               {t.sections} section{t.sections === 1 ? '' : 's'} · {t.items}
             </span>
-            {t.isDefault && <span className="text-teal-500/80 ml-1.5">suggested</span>}
+            {t.relevance && <span className="text-teal-500/80 ml-1.5">{t.relevance}</span>}
           </button>
         ))}
       </div>
+      {hidden > 0 && forThisCourse.length > 0 && (
+        <button
+          onClick={() => setShowAll(!showAll)}
+          className="mt-2 text-[11px] text-zinc-500 hover:text-zinc-200 transition-colors"
+        >
+          {showAll ? 'Only what fits this course' : `Show all ${templates.length} setups (${hidden} for other courses)`}
+        </button>
+      )}
       {preview && (
         <div className="mt-3 border border-zinc-700 rounded-lg overflow-hidden">
           <div className="px-3 py-2 bg-zinc-950/60 flex items-center gap-2 flex-wrap">

@@ -7,7 +7,7 @@ import { normalizeDocLink } from '@/lib/doc-links'
 import { type LibraryAudience } from '@/lib/library'
 import { regionLabel } from '@/lib/regions'
 import { refuse, type ActionResult } from '@/lib/action-result'
-import { courseCapabilityCategories } from '@/lib/capabilities'
+import { courseCapabilityCategories, CAPABILITY_META, type CapabilityCategory } from '@/lib/capabilities'
 
 // Maps attached to a course, set alongside its location. Two ways in: pick a
 // map from the library's Maps bucket (the reusable venue map, with its
@@ -76,7 +76,9 @@ export type MapPickerItem = {
   venueName: string | null
   regionLabel: string | null
   suggested: boolean
-  matchedOn: 'venue' | 'region' | null
+  matchedOn: 'venue' | 'region' | 'discipline' | null
+  /** The expertise it shares with the course, when that is why it is offered. */
+  disciplineLabel: string | null
   alreadyAdded: boolean
 }
 
@@ -88,10 +90,10 @@ export async function loadMapLibrary(instanceId: string): Promise<MapPickerItem[
   const { admin } = await requireTeam(instanceId)
 
   const [{ data: inst }, { data: rows }, { data: existing }] = await Promise.all([
-    admin.from('course_instances').select('location, region, venue_id').eq('id', instanceId).single(),
+    admin.from('course_instances').select('location, region, venue_id, course_type, custom_categories').eq('id', instanceId).single(),
     admin
       .from('library_items')
-      .select('id, title, url, audience, region, venue_id, venues(name)')
+      .select('id, title, url, audience, region, venue_id, disciplines, venues(name)')
       .eq('bucket', 'map')
       .neq('status', 'archived')
       .order('title')
@@ -103,6 +105,12 @@ export async function loadMapLibrary(instanceId: string): Promise<MapPickerItem[
   const loc = (inst?.location ?? '').toLowerCase().trim()
   const courseRegion = inst?.region ?? null
   const courseVenue = inst?.venue_id ?? null
+  // What kind of work this course is. A map is about a place first, but an
+  // overview drawn for canyon work is still canyon work, and a course with no
+  // venue set yet had nothing else to go on — it was offered the whole shelf.
+  const courseDisciplines = inst
+    ? (courseCapabilityCategories(inst.course_type, inst.custom_categories) as string[])
+    : []
 
   return (rows ?? []).map((r) => {
     const venueName = (r.venues as unknown as { name: string } | null)?.name ?? null
@@ -113,6 +121,7 @@ export async function loadMapLibrary(instanceId: string): Promise<MapPickerItem[
       ? r.venue_id === courseVenue
       : Boolean(loc && venueLower && (loc.includes(venueLower) || venueLower.includes(loc)))
     const regionHit = Boolean(courseRegion && r.region && r.region === courseRegion)
+    const shared = ((r.disciplines ?? []) as string[]).filter((d) => courseDisciplines.includes(d))
     return {
       id: r.id,
       title: r.title,
@@ -120,8 +129,9 @@ export async function loadMapLibrary(instanceId: string): Promise<MapPickerItem[
       audience: r.audience as LibraryAudience,
       venueName,
       regionLabel: regionLabel(r.region),
-      suggested: venueHit || regionHit,
-      matchedOn: venueHit ? 'venue' : regionHit ? 'region' : null,
+      suggested: venueHit || regionHit || shared.length > 0,
+      matchedOn: venueHit ? 'venue' : regionHit ? 'region' : shared.length > 0 ? 'discipline' : null,
+      disciplineLabel: shared.map((d) => CAPABILITY_META[d as CapabilityCategory]?.label ?? d).join(', ') || null,
       alreadyAdded: added.has(r.id),
     }
   })
