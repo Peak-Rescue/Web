@@ -210,7 +210,7 @@ export default async function AdminInstructorDetailPage({ params }: { params: Pr
           {instructor.profile_id && signInOptions.length > 0 && (
             <div className="mt-4 p-6 bg-zinc-900 rounded-lg border border-zinc-800">
               <h3 className="text-sm font-medium text-zinc-300 mb-3 inline-flex items-center gap-1.5">
-                What they sign in with
+                Portal login email
                 <InfoHint text="The address they type on the login page, and where their code is sent. Changing it moves the account — their old address stops working, so tell them before you do it." />
               </h3>
               <SignInAddressPicker

@@ -91,12 +91,11 @@ export default async function InstructorPage() {
           </form>
         </section>
 
-        {/* How you sign in — the one address on this account that nothing on
-            any other screen could change, which is exactly why it needed a
-            screen of its own. */}
+        {/* The one address on this account that nothing on any other screen
+            could change, which is exactly why it needed a screen of its own. */}
         <section className="mb-10">
           <h2 className="text-lg font-semibold mb-4 inline-flex items-center gap-1.5">
-            How you sign in
+            Portal login email
             <InfoHint text="The address you type on the login page, and where your sign-in code is sent. Changing it here changes the account itself — the old address stops working. The other addresses below are for reaching you, and none of them sign you in." />
           </h2>
           <SignInAddressPicker options={signInOptions} onChoose={setMySignInAddress} />
