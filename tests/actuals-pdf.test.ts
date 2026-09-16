@@ -40,6 +40,11 @@ function loaded(over: Partial<LoadedActuals> = {}): LoadedActuals {
   const costLines = over.costLines ?? [
     { id: 'c1', account_id: 'swag', spend_date: '2026-05-20', description: 'Patches', amount: 240 },
   ]
+  // Company-card money reaches the books the same way typed money does, so
+  // the PDF has to add it in without being told which is which.
+  const cardLines = over.cardLines ?? [
+    { id: 'k1', account_id: 'travel', spend_date: '2026-06-01', description: 'HAMPTON INN CASPER', amount: 312, source: 'card' as const, cardholder: 'NADAV OAKES' },
+  ]
   const base: LoadedActuals = {
     exists: true,
     invoiced: 55000,
@@ -56,12 +61,13 @@ function loaded(over: Partial<LoadedActuals> = {}): LoadedActuals {
     expenseAccounts: [],
     payLines,
     costLines,
+    cardLines,
     peopleById: { u1: 'Nadav Oakes' },
     rolled: rollUpActuals({
       accounts: ACCOUNTS,
       expenseLines,
       expenseAccountOverrides: new Map(),
-      typedLines: costLines,
+      typedLines: [...costLines, ...cardLines],
       payLines,
       payrollLoadPct: over.payrollLoadPct ?? 0.25,
       invoiced: over.invoiced ?? 55000,

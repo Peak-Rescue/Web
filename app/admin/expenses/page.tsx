@@ -91,14 +91,25 @@ export default async function AdminExpensesPage() {
         </Link>
         <div className="flex items-center justify-between mb-2">
           <h1 className="text-2xl font-bold">Expense Admin</h1>
-          <Link
-            href="/admin/expenses/rates"
-            className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded text-sm font-medium transition-colors"
-          >
-            Manage rates
-          </Link>
+          <div className="flex items-center gap-2">
+            {/* The other half of what a course spends. Reimbursements are the
+                list below; the card is its own screen because it arrives as a
+                file rather than as somebody's report. */}
+            <Link
+              href="/admin/expenses/card"
+              className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded text-sm font-medium transition-colors"
+            >
+              Company card
+            </Link>
+            <Link
+              href="/admin/expenses/rates"
+              className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded text-sm font-medium transition-colors"
+            >
+              Manage rates
+            </Link>
+          </div>
         </div>
-        <p className="text-zinc-400 mb-10">Everyone's expense reports, rates, and per-course spending</p>
+        <p className="text-zinc-400 mb-10">Everyone's expense reports, the company card, rates, and per-course spending</p>
 
         {/* ── Submitted reports ── */}
         <section className="mb-12">

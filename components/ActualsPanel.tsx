@@ -26,7 +26,9 @@ import {
   savePayItem,
   seedActualsFromEstimate,
   setActualsClosed,
+  setCardChargeAccount,
   setExpenseItemAccount,
+  unfileCardCharge,
 } from '@/app/admin/courses/actuals-actions'
 import TrashIcon from '@/components/TrashIcon'
 import InfoHint from '@/components/InfoHint'
@@ -138,6 +140,11 @@ export default function ActualsPanel({
   // the row costs nothing to keep on screen.
   const [pay, setPay] = useState<PayRow[]>(withBlankPay(loaded.payLines.map((l) => ({ ...l, key: l.id }))))
   const [costs, setCosts] = useState<CostRow[]>(withBlankCost(loaded.costLines.map((l) => ({ ...l, key: l.id }))))
+  // Card charges are the statement's, not this screen's: the only things that
+  // can change about one here are which category it sits in and whether it
+  // belongs to this course at all. Held in state so both answers show
+  // immediately, the same as everything else in the panel.
+  const [cards, setCards] = useState<TypedCostLine[]>(loaded.cardLines)
   const [overrides, setOverrides] = useState<Map<string, string>>(new Map(loaded.expenseAccounts))
   const [openAccount, setOpenAccount] = useState<string | null>(null)
   const [pendingOpen, setPendingOpen] = useState(false)
@@ -223,7 +230,9 @@ export default function ActualsPanel({
     accounts,
     expenseLines,
     expenseAccountOverrides: overrides,
-    typedLines: costs,
+    // One list to the books: a charge on the card and a line somebody typed
+    // are the same money in the same category.
+    typedLines: [...costs, ...cards],
     payLines: pay,
     payrollLoadPct: loadPct.trim() === '' ? loaded.orgPayrollLoad : (Number(loadPct) || 0) / 100,
     invoiced: Number(String(invoiced).replace(/[$,\s]/g, '')) || 0,
@@ -273,6 +282,8 @@ export default function ActualsPanel({
           spend_date: row.spend_date,
           description: row.description,
           amount: String(row.amount),
+          payment_method: row.payment_method ?? null,
+          payment_ref: row.payment_ref ?? null,
         })
         if (!known) {
           ids.current.set(key, saved.id)
@@ -305,6 +316,22 @@ export default function ActualsPanel({
     await settle(`cost:${row.key}`)
     const id = row.id || ids.current.get(row.key)
     if (id) await deleteCostItem(instanceId, id).catch(() => router.refresh())
+  }
+
+  async function fileCard(chargeId: string, accountId: string | null) {
+    setCards((cs) => cs.map((c) => (c.id === chargeId ? { ...c, account_id: accountId } : c)))
+    await setCardChargeAccount(instanceId, chargeId, accountId).catch((e: unknown) =>
+      setError(e instanceof Error ? e.message : 'Could not move that charge')
+    )
+  }
+
+  async function dropCard(chargeId: string) {
+    const previous = cards
+    setCards((cs) => cs.filter((c) => c.id !== chargeId))
+    await unfileCardCharge(instanceId, chargeId).catch((e: unknown) => {
+      setCards(previous)
+      setError(e instanceof Error ? e.message : 'Could not take that charge off this course')
+    })
   }
 
   /** A category invented while typing the cost that needed it, which is the
@@ -344,6 +371,8 @@ export default function ActualsPanel({
   // always one person's unfiled report, and "ask Jake" is the whole of what
   // a reader can do about it.
   const pendingByReport = groupByReport(actuals.pending.lines)
+
+  const cardTotal = round2(cards.reduce((t, c) => t + c.amount, 0))
 
   // The part of the uncategorised pile that came from the list above rather
   // than from an expense report whose category was retired.
@@ -578,7 +607,7 @@ export default function ActualsPanel({
       <div className={sectionRule}>
         <div className="flex items-baseline gap-2 mb-2">
           <h4 className="text-sm font-semibold text-zinc-200">Costs</h4>
-          <InfoHint text="Type what the company card and direct invoices paid for; submitted expense reports arrive on their own. Categories are shared by every course." />
+          <InfoHint text="Type what no feed will bring in on its own — a check, an ACH, an invoice paid from the bank. Card charges and submitted expense reports arrive by themselves. Categories are shared by every course." />
           <Link href="/admin/expenses/rates#cost-categories" className={libraryLink}>
             Categories
           </Link>
@@ -598,6 +627,61 @@ export default function ActualsPanel({
             />
           ))}
         </div>
+
+        {/* ── From the card ────────────────────────────────────────────────
+            The statement's rows, tagged to this course on the card screen and
+            read live from there. Deliberately not editable here beyond the
+            two things a course can say about a charge: which category it
+            belongs in, and that it does not belong to this course. The date,
+            the merchant and the amount are the bank's facts, and a screen
+            that let somebody retype them would be inviting the books to
+            disagree with the statement they are reconciled against. */}
+        {cards.length > 0 && (
+          <div className="mt-5">
+            <div className="flex items-baseline gap-2 mb-2">
+              <h5 className="text-xs uppercase tracking-wide text-zinc-500">From the card</h5>
+              <InfoHint text="Statement rows tagged to this course. Read live from the card screen, so re-tagging one there moves the money here." />
+              <Link href="/admin/expenses/card" className={libraryLink}>
+                Statement
+              </Link>
+            </div>
+            <div className="space-y-1.5">
+              {cards.map((c) => (
+                <div key={c.id} className="flex items-center gap-2 flex-wrap text-sm">
+                  <span className="text-xs text-zinc-500 w-20 shrink-0">
+                    {c.spend_date ? fmtDateRange(c.spend_date, null) : ''}
+                  </span>
+                  <span className="text-zinc-300 flex-1 min-w-40 truncate" title={c.description ?? ''}>
+                    {c.description}
+                    {c.cardholder && <span className="ml-2 text-xs text-zinc-600">{c.cardholder}</span>}
+                  </span>
+                  <span className="text-zinc-300 w-24 text-right tabular-nums">{fmtMoney(c.amount)}</span>
+                  <select
+                    value={c.account_id ?? ''}
+                    onChange={(e) => void fileCard(c.id, e.target.value || null)}
+                    className="bg-zinc-800 border border-zinc-700 rounded px-1.5 py-0.5 text-xs text-zinc-300"
+                    title="Which category this charge belongs in"
+                  >
+                    <option value="">— category —</option>
+                    {accounts.map((a) => (
+                      <option key={a.id} value={a.id}>{a.label}</option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={() => void dropCard(c.id)}
+                    title="Not this course — put it back in the pile to be filed"
+                    className="text-zinc-600 hover:text-pr-red-light transition-colors text-xs"
+                  >
+                    &times;
+                  </button>
+                </div>
+              ))}
+            </div>
+            <p className="text-xs text-zinc-600 mt-2">
+              {fmtMoney(cardTotal)} on {cards.length} {cards.length === 1 ? 'charge' : 'charges'}.
+            </p>
+          </div>
+        )}
 
         {/* ── What it all adds up to ───────────────────────────────────────
             Only the categories with something in them. The full chart is one
@@ -653,10 +737,18 @@ export default function ActualsPanel({
                       </div>
                     ))}
 
+                    {/* Both of these are already on screen above, so the
+                        category only has to say how much of its total came
+                        from each — and which list to go and look at. */}
                     {r.typedLines.length > 0 && (
                       <p className="text-xs text-zinc-500">
-                        {fmtMoney(r.typed)} typed above, on {r.typedLines.length} line
-                        {r.typedLines.length === 1 ? '' : 's'}.
+                        {[
+                          countOf(r.typedLines, 'typed'),
+                          countOf(r.typedLines, 'card'),
+                        ]
+                          .filter(Boolean)
+                          .join(' · ')}
+                        , above.
                       </p>
                     )}
 
@@ -954,6 +1046,30 @@ function CostRowFields({
         placeholder="0.00"
         className={`${input} w-24 text-right placeholder-zinc-600`}
       />
+      {/* How it went out. Blank for most lines and that is fine — it earns its
+          place on the ones no feed will ever announce: a check to a venue, an
+          ACH to a permit office. Those are the costs that go missing, and the
+          number beside them is what the books are asked for later. */}
+      <select
+        value={row.payment_method ?? ''}
+        onChange={(e) => onChange({ payment_method: (e.target.value || null) as CostRow['payment_method'] })}
+        title="How it was paid"
+        className={`${input} w-24`}
+      >
+        <option value="">— paid by —</option>
+        <option value="check">Check</option>
+        <option value="ach">ACH</option>
+        <option value="card">Card</option>
+        <option value="other">Other</option>
+      </select>
+      {(row.payment_method === 'check' || row.payment_method === 'ach') && (
+        <input
+          value={row.payment_ref ?? ''}
+          onChange={(e) => onChange({ payment_ref: e.target.value })}
+          placeholder={row.payment_method === 'check' ? 'Check no.' : 'Reference'}
+          className={`${input} w-24 placeholder-zinc-600`}
+        />
+      )}
       {blank ? (
         <span className="w-4" />
       ) : (
@@ -963,6 +1079,17 @@ function CostRowFields({
       )}
     </div>
   )
+}
+
+/** "$240 typed" / "$312 on the card", or nothing at all when a category has
+    none of that kind. Money first, because the reader is chasing a number. */
+function countOf(lines: TypedCostLine[], source: 'typed' | 'card'): string {
+  const mine = lines.filter((l) => (l.source ?? 'typed') === source)
+  if (mine.length === 0) return ''
+  const total = fmtMoney(round2(mine.reduce((t, l) => t + l.amount, 0)))
+  return source === 'card'
+    ? `${total} on ${mine.length} card ${mine.length === 1 ? 'charge' : 'charges'}`
+    : `${total} typed on ${mine.length} ${mine.length === 1 ? 'line' : 'lines'}`
 }
 
 function round1(n: number): number {
@@ -991,7 +1118,13 @@ function payIsBlank(r: PayRow): boolean {
 }
 
 function costIsBlank(r: CostRow): boolean {
-  return !r.id && !r.description?.trim() && !r.amount && !r.amountText?.trim() && !r.account_id && !r.spend_date
+  // How it was paid counts as having typed something: choosing "Check" on the
+  // trailing row saves it, so a row that still called itself blank would have
+  // no way to be deleted and no new blank row under it.
+  return (
+    !r.id && !r.description?.trim() && !r.amount && !r.amountText?.trim() && !r.account_id && !r.spend_date &&
+    !r.payment_method
+  )
 }
 
 /** What to show in an amount box: the text being typed, the saved number, or

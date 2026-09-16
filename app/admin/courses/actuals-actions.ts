@@ -262,16 +262,27 @@ export type CostItemInput = {
   spend_date: string | null
   description: string | null
   amount: string
+  /** How it went out, for money no feed will ever announce — a check, an ACH,
+      an invoice paid from the bank. Optional: most lines are typed in a hurry
+      and the method is not the point of them. */
+  payment_method?: string | null
+  payment_ref?: string | null
 }
+
+const PAYMENT_METHODS = ['check', 'ach', 'card', 'other']
 
 export async function saveCostItem(instanceId: string, itemId: string | null, input: CostItemInput) {
   const { admin } = await ensureActuals(instanceId)
+  const method = input.payment_method?.trim() || null
+  if (method && !PAYMENT_METHODS.includes(method)) throw new Error('That is not a way of paying')
   const row = {
     instance_id: instanceId,
     account_id: input.account_id || null,
     spend_date: input.spend_date || null,
     description: input.description?.trim() || null,
     amount: money(input.amount) ?? 0,
+    payment_method: method,
+    payment_ref: input.payment_ref?.trim().slice(0, 60) || null,
   }
   if (itemId) {
     const { error } = await admin.from('course_cost_items').update(row).eq('id', itemId).eq('instance_id', instanceId)
@@ -289,6 +300,40 @@ export async function deleteCostItem(instanceId: string, itemId: string) {
   const { admin } = await requireAdminUser()
   const { error } = await admin.from('course_cost_items').delete().eq('id', itemId).eq('instance_id', instanceId)
   if (error) throw new Error(error.message)
+  revalidateCourse(instanceId)
+}
+
+// ─── Company-card charges, as seen from the course ───────────────────────────
+//
+// The charge itself lives with the statement it came in on (see the card
+// import screen); a course only ever reads it. So the two things a course can
+// say about one are the two below — which category it belongs in, and that it
+// does not belong to this course at all.
+
+/** Files a card charge under a different cost category. */
+export async function setCardChargeAccount(instanceId: string, chargeId: string, accountId: string | null) {
+  const { admin } = await requireAdminUser()
+  const { error } = await admin
+    .from('card_charges')
+    .update({ account_id: accountId })
+    .eq('id', chargeId)
+    .eq('instance_id', instanceId)
+  if (error) throw new Error(error.message)
+  revalidateCourse(instanceId)
+}
+
+/** Takes a charge off this course and puts it back in the pile waiting to be
+    filed — rather than marking it overhead, which is a different claim than
+    "not this one" and belongs to whoever works that pile. */
+export async function unfileCardCharge(instanceId: string, chargeId: string) {
+  const { admin } = await requireAdminUser()
+  const { error } = await admin
+    .from('card_charges')
+    .update({ instance_id: null, non_course: false })
+    .eq('id', chargeId)
+    .eq('instance_id', instanceId)
+  if (error) throw new Error(error.message)
+  revalidatePath('/admin/expenses/card')
   revalidateCourse(instanceId)
 }
 

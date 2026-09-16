@@ -64,6 +64,27 @@ export type TypedCostLine = {
   spend_date: string | null
   description: string | null
   amount: number
+  /** Where the line came from. Typed straight onto the course, or a row of
+      the company card's statement tagged to it.
+
+      The books do not care — both are money out, in the same categories, and
+      the roll-up adds them the same way. The screen cares a great deal: a
+      typed line is somebody's sentence and can be corrected, while a card
+      charge is a fact of the statement and the only thing to change about it
+      is which course and which category it belongs to. Absent means typed,
+      so every caller written before the card existed still means what it
+      said. */
+  source?: 'typed' | 'card'
+  /** Whose card, where the export said. */
+  cardholder?: string | null
+  /** How a typed line was paid, for the money that reaches the books through
+      no feed at all: a check to a venue, an ACH to a permit office, an invoice
+      paid from the bank. The card has its own import and reimbursements have
+      their reports; these are the ones only a person will ever enter, so the
+      line says how it went out and carries the check or reference number that
+      proves it. Null means nobody said. */
+  payment_method?: 'check' | 'ach' | 'card' | 'other' | null
+  payment_ref?: string | null
 }
 
 export type PayLine = {

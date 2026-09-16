@@ -44,6 +44,11 @@ export type LoadedActuals = {
   expenseAccounts: [string, string][]
   payLines: PayLine[]
   costLines: TypedCostLine[]
+  /** Company-card charges tagged to this course. Read, never copied — the
+      statement row is the only record of itself, so re-tagging it on the card
+      screen moves the money rather than leaving a stale copy here. Rolled up
+      alongside the typed lines, because to the books they are the same thing. */
+  cardLines: TypedCostLine[]
   /** Names for pay lines attributed to a person, so the PDF and the shared
       page can say who was paid without a second lookup. */
   peopleById: Record<string, string>
@@ -56,6 +61,7 @@ export async function loadActuals(admin: Admin, instanceId: string): Promise<Loa
     { data: accountRows },
     { data: payItemRows },
     { data: costItemRows },
+    { data: cardChargeRows },
     { data: expenseLineRows },
     { data: expenseAccountRows },
     { data: orgRow },
@@ -75,10 +81,15 @@ export async function loadActuals(admin: Admin, instanceId: string): Promise<Loa
       .order('created_at'),
     admin
       .from('course_cost_items')
-      .select('id, account_id, spend_date, description, amount')
+      .select('id, account_id, spend_date, description, amount, payment_method, payment_ref')
       .eq('instance_id', instanceId)
       .order('sort_order')
       .order('created_at'),
+    admin
+      .from('card_charges')
+      .select('id, account_id, posted_date, description, amount, cardholder')
+      .eq('instance_id', instanceId)
+      .order('posted_date'),
     (async () => {
       // Expense money is read, never copied: a report corrected next week has
       // to move this course's net, and a snapshot would quietly stop matching.
@@ -161,6 +172,19 @@ export async function loadActuals(admin: Admin, instanceId: string): Promise<Loa
     spend_date: (l.spend_date as string | null) ?? null,
     description: (l.description as string | null) ?? null,
     amount: Number(l.amount),
+    source: 'typed' as const,
+    payment_method: (l.payment_method as TypedCostLine['payment_method']) ?? null,
+    payment_ref: (l.payment_ref as string | null) ?? null,
+  }))
+
+  const cardLines: TypedCostLine[] = (cardChargeRows ?? []).map((c) => ({
+    id: c.id as string,
+    account_id: (c.account_id as string | null) ?? null,
+    spend_date: (c.posted_date as string | null) ?? null,
+    description: (c.description as string | null) ?? null,
+    amount: Number(c.amount),
+    source: 'card' as const,
+    cardholder: (c.cardholder as string | null) ?? null,
   }))
 
   // Only the lines this course can actually show. An override row for some
@@ -191,6 +215,7 @@ export async function loadActuals(admin: Admin, instanceId: string): Promise<Loa
     expenseAccounts,
     payLines,
     costLines,
+    cardLines,
     peopleById: Object.fromEntries(
       (profileRows ?? []).map((p) => [
         p.id as string,
@@ -201,7 +226,7 @@ export async function loadActuals(admin: Admin, instanceId: string): Promise<Loa
       accounts,
       expenseLines,
       expenseAccountOverrides: new Map(expenseAccounts),
-      typedLines: costLines,
+      typedLines: [...costLines, ...cardLines],
       payLines,
       payrollLoadPct,
       invoiced: invoiced ?? 0,
