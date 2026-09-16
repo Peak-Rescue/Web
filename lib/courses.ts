@@ -90,6 +90,43 @@ export function courseDayCounts(
   return { days, calendarDays }
 }
 
+const COUNT_WORDS = ['', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten']
+
+/** How long a course teaches, said the way a quote should say it. The span
+    first day to last is the wrong answer the moment a break sits in the
+    middle: twelve calendar days with a weekend off is two five-day segments,
+    and nobody is being sold twelve days. The quote prints the outside dates
+    above this line already, so the segments are what is left to say.
+
+    Null until the course has dates — a length nobody knows is not 1. */
+export function trainingDurationPhrase(
+  starts_at: string | null,
+  ends_at: string | null,
+  offDays: OffDayRange[]
+): string | null {
+  if (!starts_at) return null
+  const blocks = computeBlocks(starts_at, ends_at ?? starts_at, offDays)
+  if (blocks.length === 0) return null
+
+  const lengths = blocks.map(
+    (b) => Math.round((Date.parse(b.ends_at) - Date.parse(b.starts_at)) / 86_400_000) + 1
+  )
+  if (lengths.length === 1) {
+    const n = lengths[0]
+    return `${n} day${n === 1 ? '' : 's'} of training`
+  }
+
+  const count = COUNT_WORDS[lengths.length] ?? String(lengths.length)
+  // Equal segments are the common shape (a course broken over a weekend), and
+  // "two 5-day segments" says it in one phrase. Ragged ones get spelled out
+  // in order, because which segment is which is what the reader is after.
+  if (lengths.every((n) => n === lengths[0])) {
+    return `${count} ${lengths[0]}-day segments of training`
+  }
+  const parts = lengths.map((n) => `${n}-day`)
+  return `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]} segments of training`
+}
+
 /** A break, normalised to two dates. The rows in the table say the same thing
     with a nullable end date. Whether the crew is paid through breaks is asked
     once for the whole course, not here — see courseDayCounts. */

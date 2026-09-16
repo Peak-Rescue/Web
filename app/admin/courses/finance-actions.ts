@@ -7,7 +7,7 @@ import { after } from 'next/server'
 import { syncCourseCalendar } from '@/lib/google-calendar'
 import { parseContacts, primaryContactEmail, ccEmailOptions } from '@/lib/contacts'
 import { guessSeedQty, coaPrice, type SeedCounts, plannedInstructorCount } from '@/lib/estimates'
-import { courseDayCounts } from '@/lib/courses'
+import { courseDayCounts, trainingDurationPhrase } from '@/lib/courses'
 import { sendMail } from '@/lib/mailer'
 
 async function requireAdmin() {
@@ -519,7 +519,7 @@ export async function createQuote(instanceId: string, formData: FormData) {
     estimateQuery = estimateQuery.order('created_at', { ascending: false }).limit(1)
   }
 
-  const [{ data: inst }, { data: estimates }, { data: lastQuote }, { data: profile }] = await Promise.all([
+  const [{ data: inst }, { data: estimates }, { data: lastQuote }, { data: profile }, { data: offDays }] = await Promise.all([
     admin
       .from('course_instances')
       .select('course_type, custom_title, client_name, location, starts_at, ends_at, max_students')
@@ -528,6 +528,7 @@ export async function createQuote(instanceId: string, formData: FormData) {
     estimateQuery,
     admin.from('course_quotes').select('quote_seq').eq('instance_id', instanceId).order('quote_seq', { ascending: false }).limit(1).maybeSingle(),
     user ? admin.from('profiles').select('first_name, last_name, email').eq('id', user.id).single() : { data: null },
+    admin.from('instance_off_days').select('off_date, end_date').eq('instance_id', instanceId),
   ])
   if (!inst) throw new Error('Course not found')
   let estimate = (estimates ?? [])[0] ?? null
@@ -556,12 +557,12 @@ export async function createQuote(instanceId: string, formData: FormData) {
   if (allCoas && (options?.length ?? 0) < 2) throw new Error('Need at least two COAs for an options quote')
   const total = allCoas ? 0 : quotePrice(estimate)
 
-  const days =
-    inst.starts_at && inst.ends_at
-      ? Math.max(Math.round((Date.parse(inst.ends_at) - Date.parse(inst.starts_at)) / 86_400_000) + 1, 1)
-      : null
+  // The dates head the quote already, so the duration line is about the shape
+  // of the teaching inside them: a course broken over a weekend is two 5-day
+  // segments, not 12 days.
+  const duration = trainingDurationPhrase(inst.starts_at, inst.ends_at, offDays ?? [])
   const bullets = [
-    days ? `Duration: ${days} days of training` : null,
+    duration ? `Duration: ${duration}` : null,
     inst.max_students ? `Participants: up to ${inst.max_students} students` : null,
     inst.location ? `Location: ${inst.location}` : null,
   ].filter((b): b is string => Boolean(b))
