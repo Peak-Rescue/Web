@@ -75,7 +75,7 @@ function LoginInner() {
           <h1 className="text-2xl font-bold text-white">Peak Rescue Portal</h1>
           <p className="mt-2 text-sm text-zinc-400">
             {sent
-              ? `We sent a code to ${email}. Enter it below.`
+              ? `If ${email} has a portal account, a code is on its way. Enter it below.`
               : 'Access is by invite. Enter the email it was sent to, or contact your course organizer.'}
           </p>
         </div>
@@ -119,6 +119,19 @@ function LoginInner() {
             >
               Use a different email, or send a new code
             </button>
+
+            {/* The conditional wording above is honest but unhelpful on its
+                own: somebody whose address simply has no account would sit
+                waiting for mail that was never sent. This is the answer to
+                "nothing arrived", and it does not depend on knowing why. */}
+            <p className="text-xs text-zinc-500 text-center">
+              Nothing after a minute? Check the address, and your spam folder. Staff and students
+              are sometimes on file under a different address — ask your course organizer, or email{' '}
+              <a href="mailto:info@peak-rescue.com" className="underline decoration-zinc-600 hover:text-zinc-300">
+                info@peak-rescue.com
+              </a>
+              .
+            </p>
           </form>
         ) : (
           <form onSubmit={handleSend} className="space-y-4">
