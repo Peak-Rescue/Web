@@ -168,27 +168,39 @@ export default function CourseContactsEditor({ initial }: { initial: CoursePOC[]
         </div>
       ))}
 
-      {/* The rule stated where the list is, rather than discovered at the
-          handover. Invoices follow the point of contact, which is right on
-          nearly every course; the exception is a real one — accounts payable
-          is often a different human — and it is one sentence and one click
-          away instead of a button abbreviated to "+ Billing" in a row of
-          icons. Once there is a billing contact the row above says so in its
-          own label, so the sentence retires rather than repeating itself. */}
-      {!hasBilling && (
-        <p className="text-xs text-zinc-500">
-          Invoices go to the point of contact.{' '}
-          <button
-            type="button"
-            onClick={() =>
+      {/* One box, the state of one fact: invoices follow the point of contact
+          unless somebody says otherwise. A checkbox rather than a sentence
+          with a link in it because the answer is yes or no and it has to read
+          as answerable at a glance — and because it can be unticked, which a
+          link that only ever adds a row could not be.
+
+          Unticking asks first when the row has anything in it. Somebody typed
+          that person's details, and a checkbox that silently throws away
+          typing is a checkbox people stop trusting. */}
+      <label className="flex items-center gap-2 text-xs text-zinc-400 cursor-pointer w-fit">
+        <input
+          type="checkbox"
+          checked={hasBilling}
+          onChange={(e) => {
+            if (e.target.checked) {
               update((n) => void n.push({ name: '', phones: [''], emails: [''], role: 'billing' }), { notify: true })
+              return
             }
-            className="underline underline-offset-2 decoration-zinc-600 hover:text-zinc-300 transition-colors"
-          >
-            Someone else pays?
-          </button>
-        </p>
-      )}
+            const row = pocs.find((p) => p.role === 'billing')
+            const typed = Boolean(row && (row.name.trim() || row.phones.some(Boolean) || row.emails.some(Boolean)))
+            if (typed && !confirm('Remove the billing contact? Invoices will go to the point of contact.')) return
+            update(
+              (n) => {
+                const at = n.findIndex((c) => c.role === 'billing')
+                if (at !== -1) n.splice(at, 1)
+              },
+              { notify: true }
+            )
+          }}
+          className="accent-pr-red"
+        />
+        Bill someone other than the point of contact
+      </label>
     </div>
   )
 }
