@@ -9,6 +9,8 @@ import {
   routeReassignments,
   actualsAreLive,
   paySuggestion,
+  estimateCostSeed,
+  accountForEstimateLine,
   rollUpActuals,
   type AccountRollup,
   type ActualExpenseLine,
@@ -359,5 +361,47 @@ describe('draft expense lines, grouped so you know who to ask', () => {
       l({ id: 'b', reportId: 'r1', personName: 'Jake Shultz' }),
     ])
     expect(out[0].personName).toBe('Jake Shultz')
+  })
+})
+
+describe('the actuals starting from the estimate', () => {
+  const PAY_RATES = new Set(['field-day', 'travel-day'])
+  const items = [
+    { label: 'Instructor field day', qty: 10, rate: 750, rate_id: 'field-day' },
+    { label: 'Instructor travel day', qty: 4, rate: 300, rate_id: 'travel-day' },
+    { label: 'Admin day', qty: 2, rate: 700, rate_id: 'admin-day' },
+    { label: 'Lodging', qty: 14, rate: 150, rate_id: 'lodging' },
+    { label: 'SWAG', qty: 8, rate: 30, rate_id: 'swag' },
+    { label: 'Mileage', qty: null, rate: 0.73, rate_id: 'mileage' },
+  ]
+
+  it('copies what we spend and leaves out what we keep and what we are', () => {
+    const seeded = estimateCostSeed(items, ACCOUNTS, PAY_RATES)
+    expect(seeded.map((l) => l.description)).toEqual(['Lodging', 'SWAG', 'Mileage'])
+    // At cost: the margin is what we keep, not what the course costs.
+    expect(seeded[0].amount).toBe(2100)
+  })
+
+  it('keeps a line the estimator could not put a number on, at zero', () => {
+    const mileage = estimateCostSeed(items, ACCOUNTS, PAY_RATES).find((l) => l.description === 'Mileage')
+    expect(mileage?.amount).toBe(0)
+  })
+
+  it('files a line where its expense category would have landed', () => {
+    expect(accountForEstimateLine('Lodging', ACCOUNTS)).toBe('travel')
+    expect(accountForEstimateLine('Fuel', ACCOUNTS)).toBe('travel')
+  })
+
+  it('lets a category named after the line claim it, expense categories or not', () => {
+    expect(accountForEstimateLine('SWAG', ACCOUNTS)).toBe('swag')
+  })
+
+  it('leaves a cost the books have never heard of asking for a category', () => {
+    expect(accountForEstimateLine('Permits', ACCOUNTS)).toBeNull()
+  })
+
+  it('treats a renamed pay rate as our own time, by its id', () => {
+    const renamed = [{ label: 'Guide day (2027 rate)', qty: 6, rate: 800, rate_id: 'field-day' }]
+    expect(estimateCostSeed(renamed, ACCOUNTS, PAY_RATES)).toEqual([])
   })
 })

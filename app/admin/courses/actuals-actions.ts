@@ -149,6 +149,100 @@ export async function addSuggestedPayLines(
   }))
 }
 
+/** Writes the estimate in as the actuals' starting point: its lines as costs
+    at cost, and the pay suggestion beside them at the rates we actually pay.
+    Called by the panel the first time anybody opens the actuals on a course
+    that has a COA, so the reconciliation starts from the list somebody
+    already typed upstairs instead of from an empty screen.
+
+    Seeded once, whatever happens next. The stamp goes on even when there was
+    nothing to write, because the point of it is not "lines exist" — it is
+    "this course has had its chance": a line deleted on purpose must not
+    reappear the next time the page is opened.
+
+    Refuses if anything has been typed already, or if a seed has run before.
+    The panel checks both before calling; this is the check that counts,
+    because two tabs open on the same course would otherwise both call. */
+export async function seedActualsFromEstimate(
+  instanceId: string,
+  seed: {
+    pay: { description: string; amount: number }[]
+    costs: { account_id: string | null; description: string; amount: number }[]
+  }
+): Promise<{
+  pay: { id: string; description: string | null; amount: number }[]
+  costs: { id: string; account_id: string | null; description: string | null; amount: number }[]
+} | null> {
+  const { admin } = await ensureActuals(instanceId)
+
+  const [{ data: row }, { count: payCount }, { count: costCount }] = await Promise.all([
+    admin.from('course_actuals').select('seeded_at').eq('instance_id', instanceId).maybeSingle(),
+    admin.from('course_pay_items').select('id', { count: 'exact', head: true }).eq('instance_id', instanceId),
+    admin.from('course_cost_items').select('id', { count: 'exact', head: true }).eq('instance_id', instanceId),
+  ])
+  if (row?.seeded_at || (payCount ?? 0) > 0 || (costCount ?? 0) > 0) return null
+
+  // The stamp goes on first, and only onto a row that has none — so of two
+  // tabs that both got past the check above, exactly one comes back holding a
+  // row and the other writes nothing. Claiming the seed before writing the
+  // lines is the safe order: the worst case is a course that was never seeded
+  // and never will be, which is an empty list somebody types into, rather
+  // than two copies of every line.
+  const { data: claimed, error: stampError } = await admin
+    .from('course_actuals')
+    .update({ seeded_at: new Date().toISOString() })
+    .eq('instance_id', instanceId)
+    .is('seeded_at', null)
+    .select('id')
+  if (stampError) throw new Error(stampError.message)
+  if ((claimed ?? []).length === 0) return null
+
+  const [payRows, costRows] = await Promise.all([
+    seed.pay.length === 0
+      ? Promise.resolve({ data: [] as { id: string; description: string | null; amount: number }[] })
+      : admin
+          .from('course_pay_items')
+          .insert(
+            seed.pay.map((l, i) => ({
+              instance_id: instanceId,
+              description: l.description.slice(0, 200),
+              amount: round2(l.amount),
+              sort_order: i,
+            }))
+          )
+          .select('id, description, amount'),
+    seed.costs.length === 0
+      ? Promise.resolve({ data: [] as { id: string; account_id: string | null; description: string | null; amount: number }[] })
+      : admin
+          .from('course_cost_items')
+          .insert(
+            seed.costs.map((l, i) => ({
+              instance_id: instanceId,
+              account_id: l.account_id,
+              description: l.description.slice(0, 200),
+              amount: round2(l.amount),
+              sort_order: i,
+            }))
+          )
+          .select('id, account_id, description, amount'),
+  ])
+
+  revalidateCourse(instanceId)
+  return {
+    pay: (payRows.data ?? []).map((r) => ({
+      id: r.id as string,
+      description: (r.description as string | null) ?? null,
+      amount: Number(r.amount),
+    })),
+    costs: (costRows.data ?? []).map((r) => ({
+      id: r.id as string,
+      account_id: (r.account_id as string | null) ?? null,
+      description: (r.description as string | null) ?? null,
+      amount: Number(r.amount),
+    })),
+  }
+}
+
 export async function deletePayItem(instanceId: string, itemId: string) {
   const { admin } = await requireAdminUser()
   const { error } = await admin.from('course_pay_items').delete().eq('id', itemId).eq('instance_id', instanceId)

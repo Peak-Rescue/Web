@@ -22,3 +22,33 @@ export function quoteNumber(refNumber: number, seq: number): string {
 }
 
 export const QUOTE_VALIDITY_DAYS = 30
+
+export type QuoteOption = { estimate_id?: string | null; title: string; total: number; chosen?: boolean }
+
+/** A quote as every screen that lists one reads it. Lives here rather than on
+    the list component because the action that makes a quote hands one back. */
+export type QuoteRow = {
+  id: string
+  accept_token: string
+  estimate_id: string | null
+  /** Set when every COA this quote prices has been set aside. */
+  archived_at: string | null
+  prepared_by: string | null
+  prepared_by_name: string | null
+  quote_seq: number
+  status: string
+  issue_date: string
+  valid_until: string | null
+  total: number
+  options: QuoteOption[] | null
+  unit_rate_note: string | null
+  scope_bullets: string[] | null
+  course_blurb: string | null
+  sent_at: string | null
+  accepted_at: string | null
+  accepted_name: string | null
+}
+
+/** The columns a QuoteRow needs, for the queries that load or return one. */
+export const QUOTE_ROW_COLUMNS =
+  'id, accept_token, estimate_id, archived_at, prepared_by, prepared_by_name, quote_seq, status, issue_date, valid_until, total, options, unit_rate_note, scope_bullets, course_blurb, sent_at, accepted_at, accepted_name' as const

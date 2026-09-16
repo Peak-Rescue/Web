@@ -48,6 +48,7 @@ function loaded(over: Partial<LoadedActuals> = {}): LoadedActuals {
     payrollLoadPct: 0.25,
     notes: 'Client added a day on site. Invoiced above the quote by agreement.',
     closedAt: null,
+    seededAt: null,
     shareToken: null,
     accounts: ACCOUNTS,
     expenseLines,

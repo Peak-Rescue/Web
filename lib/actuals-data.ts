@@ -31,6 +31,10 @@ export type LoadedActuals = {
   payrollLoadPct: number
   notes: string | null
   closedAt: string | null
+  /** When the estimate was copied in as a starting point, or null if it never
+      was. Once set, it stays set — a seeded line somebody deleted must not
+      come back the next time the panel is opened. */
+  seededAt: string | null
   shareToken: string | null
   accounts: CostAccount[]
   expenseLines: ActualExpenseLine[]
@@ -56,7 +60,7 @@ export async function loadActuals(admin: Admin, instanceId: string): Promise<Loa
   ] = await Promise.all([
     admin
       .from('course_actuals')
-      .select('invoiced, payroll_load_pct, notes, closed_at, share_token')
+      .select('invoiced, payroll_load_pct, notes, closed_at, seeded_at, share_token')
       .eq('instance_id', instanceId)
       .maybeSingle(),
     admin.from('cost_accounts').select('id, label, categories, sort_order').eq('active', true).order('sort_order'),
@@ -176,6 +180,7 @@ export async function loadActuals(admin: Admin, instanceId: string): Promise<Loa
     payrollLoadPct,
     notes: row?.notes ?? null,
     closedAt: row?.closed_at ?? null,
+    seededAt: (row?.seeded_at as string | null) ?? null,
     shareToken: (row?.share_token as string | null) ?? null,
     accounts,
     expenseLines,

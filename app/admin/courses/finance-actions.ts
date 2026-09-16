@@ -9,6 +9,7 @@ import { parseContacts, primaryContactEmail, ccEmailOptions } from '@/lib/contac
 import { guessSeedQty, coaPrice, type SeedCounts, plannedInstructorCount } from '@/lib/estimates'
 import { courseDayCounts, trainingDurationPhrase } from '@/lib/courses'
 import { sendMail } from '@/lib/mailer'
+import { QUOTE_ROW_COLUMNS, type QuoteRow } from '@/lib/quotes'
 
 async function requireAdmin() {
   const supabase = await createClient()
@@ -495,14 +496,22 @@ export async function respondEstimateReview(reviewId: string, formData: FormData
 
 // ─── Quotes ──────────────────────────────────────────────────────────────────
 
-export async function createQuote(instanceId: string, formData: FormData) {
+// Returns the row it made rather than revalidating the page.
+//
+// Adding a quote used to re-render the whole course page — pricing alone is a
+// dozen queries, and the rest of the page is a great deal more than that —
+// for a list the browser already had everything it needed to extend. The
+// quotes list adds this row itself; nothing else on the page reads a draft.
+export async function createQuote(
+  instanceId: string,
+  estimateId: string,
+): Promise<{ ok: true; quote: QuoteRow } | { ok: false; error: string }> {
   const admin = await requireAdmin()
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
   // Which COA prices this quote: explicit choice, else the newest estimate.
   // "__all__" presents every COA as a priced option the client picks from.
-  const estimateId = String(formData.get('estimate_id') ?? '')
   const allCoas = estimateId === '__all__'
   let estimateQuery = admin
     .from('course_estimates')
@@ -530,14 +539,14 @@ export async function createQuote(instanceId: string, formData: FormData) {
     user ? admin.from('profiles').select('first_name, last_name, email').eq('id', user.id).single() : { data: null },
     admin.from('instance_off_days').select('off_date, end_date').eq('instance_id', instanceId),
   ])
-  if (!inst) throw new Error('Course not found')
+  if (!inst) return { ok: false, error: 'Course not found' }
   let estimate = (estimates ?? [])[0] ?? null
 
   // No persisted estimate: the course page shows a virtual default COA that
   // only saves once touched. Persist those same defaults so the quote prices
   // from real lines instead of silently coming out $0.
   if (!allCoas && !estimate) {
-    if (estimateId) throw new Error('That estimate no longer exists — reload the page and try again')
+    if (estimateId) return { ok: false, error: 'That estimate no longer exists — reload the page and try again' }
     estimate = await seedDefaultCoa(admin, instanceId)
   }
 
@@ -554,7 +563,7 @@ export async function createQuote(instanceId: string, formData: FormData) {
   const options = allCoas
     ? (estimates ?? []).map((e) => ({ estimate_id: e.id, title: e.title, total: quotePrice(e) }))
     : null
-  if (allCoas && (options?.length ?? 0) < 2) throw new Error('Need at least two COAs for an options quote')
+  if (allCoas && (options?.length ?? 0) < 2) return { ok: false, error: 'Need at least two COAs for an options quote' }
   const total = allCoas ? 0 : quotePrice(estimate)
 
   // The dates head the quote already, so the duration line is about the shape
@@ -574,22 +583,26 @@ export async function createQuote(instanceId: string, formData: FormData) {
   const validUntil = new Date()
   validUntil.setDate(validUntil.getDate() + QUOTE_VALIDITY_DAYS)
 
-  const { error } = await admin.from('course_quotes').insert({
-    instance_id: instanceId,
-    quote_seq: (lastQuote?.quote_seq ?? 0) + 1,
-    total,
-    options,
-    // Options quotes carry a COA per option instead of one for the quote.
-    estimate_id: allCoas ? null : estimate?.id ?? null,
-    valid_until: validUntil.toISOString().slice(0, 10),
-    scope_bullets: bullets,
-    course_blurb: blurb,
-    prepared_by: user?.id ?? null,
-    prepared_by_name: [profile?.first_name, profile?.last_name].filter(Boolean).join(' ') || null,
-    prepared_by_email: profile?.email ?? null,
-  })
-  if (error) throw new Error(error.message)
-  revalidatePath(`/admin/courses/${instanceId}`)
+  const { data: created, error } = await admin
+    .from('course_quotes')
+    .insert({
+      instance_id: instanceId,
+      quote_seq: (lastQuote?.quote_seq ?? 0) + 1,
+      total,
+      options,
+      // Options quotes carry a COA per option instead of one for the quote.
+      estimate_id: allCoas ? null : estimate?.id ?? null,
+      valid_until: validUntil.toISOString().slice(0, 10),
+      scope_bullets: bullets,
+      course_blurb: blurb,
+      prepared_by: user?.id ?? null,
+      prepared_by_name: [profile?.first_name, profile?.last_name].filter(Boolean).join(' ') || null,
+      prepared_by_email: profile?.email ?? null,
+    })
+    .select(QUOTE_ROW_COLUMNS)
+    .single()
+  if (error || !created) return { ok: false, error: error?.message ?? 'Could not create the quote' }
+  return { ok: true, quote: { ...created, total: Number(created.total) } as QuoteRow }
 }
 
 export async function updateQuote(instanceId: string, quoteId: string, formData: FormData) {
@@ -707,7 +720,13 @@ export async function setQuoteStatus(instanceId: string, quoteId: string, status
   revalidatePath('/admin')
 }
 
-export async function deleteQuote(instanceId: string, quoteId: string) {
+// Like createQuote, this reports back instead of revalidating: the list drops
+// the row itself, and a draft nothing else on the page reads is not worth a
+// re-render of the whole course.
+export async function deleteQuote(
+  instanceId: string,
+  quoteId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
   const admin = await requireAdmin()
   const { error } = await admin
     .from('course_quotes')
@@ -715,8 +734,8 @@ export async function deleteQuote(instanceId: string, quoteId: string) {
     .eq('id', quoteId)
     .eq('instance_id', instanceId)
     .eq('status', 'draft')
-  if (error) throw new Error(error.message)
-  revalidatePath(`/admin/courses/${instanceId}`)
+  if (error) return { ok: false, error: error.message }
+  return { ok: true }
 }
 
 // Emails the quote link to the course's primary POC and marks it sent. The

@@ -106,6 +106,23 @@ function Row({ r, token }: { r: InvoiceRequest; token: string }) {
           <div>
             <label className="block text-xs text-zinc-400 mb-1">Your invoice number</label>
             <input value={invoiceNumber} onChange={(e) => setInvoiceNumber(e.target.value)} className={inputCls} />
+            {/* Our quote number, offered rather than filled in. Matching the
+                two makes the invoice and the quote reconcile on sight, which
+                is what most of these end up being numbered anyway — but it is
+                Harken's number to choose, so it stays a suggestion. */}
+            {r.quote_number && invoiceNumber.trim() === '' && (
+              <p className="mt-1.5 text-xs text-zinc-500">
+                Suggested{' '}
+                <button
+                  type="button"
+                  onClick={() => setInvoiceNumber(r.quote_number!)}
+                  className="text-zinc-300 underline hover:text-white transition-colors"
+                >
+                  {r.quote_number}
+                </button>{' '}
+                — our quote number. Or type your own.
+              </p>
+            )}
           </div>
           <div>
             <label className="block text-xs text-zinc-400 mb-1">Note (optional)</label>

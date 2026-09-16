@@ -1,35 +1,16 @@
+'use client'
+
+import { useState, useTransition } from 'react'
 import SaveButton from '@/components/SaveButton'
 import QuoteSendForm from './QuoteSendForm'
 import { createQuote, updateQuote, setQuoteStatus, deleteQuote, sendQuote } from './finance-actions'
 import QuoteTotalFields from './QuoteTotalFields'
-import { quoteNumber } from '@/lib/quotes'
+import { quoteNumber, type QuoteOption, type QuoteRow } from '@/lib/quotes'
 import { fmtMoney } from '@/lib/expenses'
 
 export type QuotePerson = { id: string; name: string; email: string | null }
 
-export type QuoteOption = { estimate_id?: string | null; title: string; total: number; chosen?: boolean }
-
-export type QuoteRow = {
-  id: string
-  accept_token: string
-  estimate_id: string | null
-  /** Set when every COA this quote prices has been set aside. */
-  archived_at: string | null
-  prepared_by: string | null
-  prepared_by_name: string | null
-  quote_seq: number
-  status: string
-  issue_date: string
-  valid_until: string | null
-  total: number
-  options: QuoteOption[] | null
-  unit_rate_note: string | null
-  scope_bullets: string[] | null
-  course_blurb: string | null
-  sent_at: string | null
-  accepted_at: string | null
-  accepted_name: string | null
-}
+export type { QuoteOption, QuoteRow }
 
 const STATUS_BADGE: Record<string, string> = {
   draft: 'bg-zinc-800 text-zinc-400',
@@ -46,9 +27,14 @@ function fmtDate(d: string) {
   return new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
-// Server-rendered quotes list: drafts are editable and deletable, every quote
-// links to its client-facing page, and status moves via explicit buttons
-// (send/accept automation comes with the acceptance-page slice).
+// The quotes list: drafts are editable and deletable, every quote links to
+// its client-facing page, and status moves via explicit buttons.
+//
+// Adding and deleting a draft are done here in the browser rather than by
+// revalidating: this list sits inside the course page, and a page-wide
+// re-render to put one row on the end of a list took seconds. Everything that
+// changes what the rest of the page says — marking sent, accepted, declined,
+// saving edits — still goes through the server and still refreshes it.
 export default function QuotesSection({
   instanceId,
   refNumber,
@@ -79,14 +65,48 @@ export default function QuotesSection({
       you do not know applies until you have already sent one. */
   heroPicker?: React.ReactNode
 }) {
+  // Rows this browser has added or dropped since the page was rendered. They
+  // are merged with the server's list rather than replacing it, so whenever
+  // the page does re-render for its own reasons the server's copy wins: an
+  // added row drops out of `added` the moment the real one arrives under the
+  // same id, and a deleted one is already gone from what came back.
+  const [added, setAdded] = useState<QuoteRow[]>([])
+  const [deleted, setDeleted] = useState<string[]>([])
+  const [error, setError] = useState<string | null>(null)
+  const [pending, start] = useTransition()
+  const [source, setSource] = useState(estimates[0]?.id ?? '')
+
+  const serverIds = new Set(quotes.map((q) => q.id))
+  const allQuotes = [...added.filter((q) => !serverIds.has(q.id)), ...quotes].filter(
+    (q) => !deleted.includes(q.id),
+  )
+
+  function addQuote() {
+    setError(null)
+    start(async () => {
+      const res = await createQuote(instanceId, estimates.length > 1 ? source : estimates[0]?.id ?? '')
+      if (res.ok) setAdded((rows) => [res.quote, ...rows])
+      else setError(res.error)
+    })
+  }
+
+  function removeQuote(quoteId: string) {
+    setError(null)
+    start(async () => {
+      const res = await deleteQuote(instanceId, quoteId)
+      if (res.ok) setDeleted((ids) => [...ids, quoteId])
+      else setError(res.error)
+    })
+  }
+
   // Current price of every COA on the course, for the "update from estimate"
   // buttons on draft quotes.
   const coaPrices = Object.fromEntries(estimates.map((e) => [e.id, e.price]))
   // Quotes whose every COA has been set aside. They keep their numbers, their
   // status and their client-facing page — they just stop competing for
   // attention with the quote that is actually in play.
-  const liveQuotes = quotes.filter((q) => !q.archived_at)
-  const asideQuotes = quotes.filter((q) => q.archived_at)
+  const liveQuotes = allQuotes.filter((q) => !q.archived_at)
+  const asideQuotes = allQuotes.filter((q) => q.archived_at)
   const sourceTitles = (q: QuoteRow) =>
     [...new Set([q.estimate_id, ...(q.options ?? []).map((o) => o.estimate_id ?? null)])]
       .filter((id): id is string => Boolean(id))
@@ -97,22 +117,30 @@ export default function QuotesSection({
     <div>
       {/* The way in sits above the list: with no quotes yet it's the only thing
           to do here, and the empty box shouldn't stand between you and it. */}
-      <form action={createQuote.bind(null, instanceId)} className="mb-3 flex items-center gap-2 flex-wrap">
-        {estimates.length > 1 ? (
-          <select name="estimate_id" className="bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm">
+      <div className="mb-3 flex items-center gap-2 flex-wrap">
+        {estimates.length > 1 && (
+          <select
+            value={source}
+            onChange={(e) => setSource(e.target.value)}
+            className="bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm"
+          >
             {estimates.map((e) => (
               <option key={e.id} value={e.id}>{e.title} — {fmtMoney(e.price)}</option>
             ))}
             <option value="__all__">All COAs as options — client picks</option>
           </select>
-        ) : (
-          estimates[0] && <input type="hidden" name="estimate_id" value={estimates[0].id} />
         )}
-        <button className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded text-sm font-medium transition-colors">
-          New quote from {estimates.length > 1 ? 'selection' : 'estimate'}
+        <button
+          type="button"
+          onClick={addQuote}
+          disabled={pending}
+          className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded text-sm font-medium transition-colors disabled:opacity-50"
+        >
+          {pending ? 'Working…' : `New quote from ${estimates.length > 1 ? 'selection' : 'estimate'}`}
         </button>
         {heroPicker && <div className="ml-auto">{heroPicker}</div>}
-      </form>
+      </div>
+      {error && <p className="mb-3 text-sm text-red-400">{error}</p>}
 
       <div className="space-y-3">
         {liveQuotes.map((q) => (
@@ -241,14 +269,19 @@ export default function QuotesSection({
                     Mark sent
                   </button>
                 </form>
-                <form action={deleteQuote.bind(null, instanceId, q.id)} className="ml-auto">
-                  <button className="text-xs text-zinc-500 hover:text-pr-red-light transition-colors">Delete</button>
-                </form>
+                <button
+                  type="button"
+                  onClick={() => removeQuote(q.id)}
+                  disabled={pending}
+                  className="ml-auto text-xs text-zinc-500 hover:text-pr-red-light transition-colors disabled:opacity-50"
+                >
+                  Delete
+                </button>
               </div>
             )}
           </div>
         ))}
-        {quotes.length === 0 && (
+        {allQuotes.length === 0 && (
           <p className="py-6 text-center text-sm text-zinc-500 border border-zinc-800 rounded-lg">
             No quotes yet.
           </p>

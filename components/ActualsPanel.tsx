@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { fmtMoney, fmtDateRange, round2 } from '@/lib/expenses'
@@ -23,6 +23,7 @@ import {
   saveActualsHeader,
   saveCostItem,
   savePayItem,
+  seedActualsFromEstimate,
   setActualsClosed,
   setExpenseItemAccount,
 } from '@/app/admin/courses/actuals-actions'
@@ -65,6 +66,7 @@ export default function ActualsPanel({
   actuals: loaded,
   people,
   suggestion,
+  seed,
   acceptedQuote,
 }: {
   instanceId: string
@@ -74,6 +76,17 @@ export default function ActualsPanel({
   /** The staffed crew, for attributing a pay line to a person. */
   people: { id: string; name: string }[]
   suggestion: { lines: { description: string; amount: number }[]; total: number; assumptions: string } | null
+  /** The estimate, ready to be written in as the starting point — present
+      only on a course that has a COA and has never been seeded or typed in.
+      Written on open rather than offered behind a button: what the COA lists
+      is what the course is about to spend money on, so the reconciliation
+      begins as a list to correct rather than a blank one to remember. */
+  seed: {
+    /** Which COA it came from, so the note can say so. */
+    from: string
+    pay: { description: string; amount: number }[]
+    costs: { account_id: string | null; description: string; amount: number }[]
+  } | null
   /** Where the conversation landed. Offered as a starting point for what we
       invoiced, never as the value — gear bought for the client, an invoice
       split in two, or a renegotiation all move the real number. */
@@ -117,6 +130,49 @@ export default function ActualsPanel({
   // id cannot be read off state here: a save fired while the previous one is
   // still in flight would see the id state had before it landed.
   const ids = useRef(new Map<string, string>())
+
+  // ── The estimate, written in as the starting point ────────────────────────
+  //
+  // On open rather than behind a button: the COA is a list of what this
+  // course is about to spend money on, and beginning the reconciliation from
+  // an empty screen meant retyping it from memory. The lines arrive as
+  // ordinary rows — correct them, delete the ones that never happened.
+  //
+  // Once, ever. The ref stops React's second run in development and a fold
+  // reopened in this session; the check that actually counts is the server's,
+  // which claims the seed with one conditional update, so a second tab open
+  // on the same course comes back empty-handed rather than doubling the list.
+  const seeding = useRef(false)
+  const [seededFrom, setSeededFrom] = useState<string | null>(null)
+  useEffect(() => {
+    if (!seed || seeding.current) return
+    if (!pay.every(payIsBlank) || !costs.every(costIsBlank)) return
+    seeding.current = true
+    void (async () => {
+      try {
+        const made = await seedActualsFromEstimate(instanceId, { pay: seed.pay, costs: seed.costs })
+        if (!made) return
+        setPay((rows) =>
+          withBlankPay([
+            ...rows.filter((r) => !payIsBlank(r)),
+            ...made.pay.map((l) => ({ key: l.id, id: l.id, profile_id: null, work_date: null, description: l.description, amount: l.amount })),
+          ])
+        )
+        setCosts((rows) =>
+          withBlankCost([
+            ...rows.filter((r) => !costIsBlank(r)),
+            ...made.costs.map((l) => ({ key: l.id, id: l.id, account_id: l.account_id, spend_date: null, description: l.description, amount: l.amount })),
+          ])
+        )
+        setSeededFrom(seed.from)
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Could not start this from the estimate')
+      }
+    })()
+    // Mount only: the seed is a starting point, not something that follows
+    // the estimate as it changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // One debounce per thing being edited, keyed so typing in two rows does not
   // make one cancel the other's save — and one queue per key behind it, so a
@@ -284,6 +340,17 @@ export default function ActualsPanel({
     <div className="space-y-6">
       {error && (
         <p className="text-xs text-pr-red-light">{error} — the last change may not have been kept.</p>
+      )}
+
+      {/* Said once, on the screen it just filled in. Every number below came
+          from the estimate at cost, which is a guess about a course that has
+          already happened — so the note names where it came from and invites
+          the correction rather than sitting there looking authoritative. */}
+      {seededFrom && (
+        <p className="text-xs text-zinc-500">
+          Started from <span className="text-zinc-300">{seededFrom}</span> — the estimate&rsquo;s lines at cost, and
+          pay at what we pay. All guesses: correct them, or delete what never happened.
+        </p>
       )}
 
       {/* ── What we billed ───────────────────────────────────────────────── */}

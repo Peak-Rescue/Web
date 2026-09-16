@@ -2,6 +2,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { courseShortName, courseDayCounts } from '@/lib/courses'
 import { coaPrice, guessSeedQty, DEFAULT_MARGIN } from '@/lib/estimates'
 import { HERO_CHOICES } from '@/lib/quote-heroes'
+import { QUOTE_ROW_COLUMNS } from '@/lib/quotes'
 import { primaryContactEmail, ccEmailOptions, billingContact, type CoursePOC } from '@/lib/contacts'
 import EstimatePanel, { type PricingRate } from '@/components/EstimatePanel'
 import { EstimateReviewBanner, EstimateReviewRequest, type EstimateReviewRow } from './EstimateReviewBar'
@@ -14,7 +15,7 @@ import BillingSection from './BillingSection'
 import { type InvoiceRequest } from '@/lib/billing'
 import ActualsPanel from '@/components/ActualsPanel'
 import PricingFold from '@/components/PricingFold'
-import { actualsAreLive, payRatesFrom, paySuggestion } from '@/lib/actuals'
+import { actualsAreLive, estimateCostSeed, payRatesFrom, paySuggestion } from '@/lib/actuals'
 import { loadActuals } from '@/lib/actuals-data'
 import { courseZone, todayIn } from '@/lib/course-clock'
 import { fmtMoney } from '@/lib/expenses'
@@ -74,7 +75,7 @@ export default async function CoursePricingEditor({
       .eq('instance_id', instanceId).order('created_at'),
     admin.from('pricing_rates').select('id, label, unit, rate, pay_rate, default_line').eq('active', true).order('sort_order'),
     admin.from('course_quotes')
-      .select('id, accept_token, estimate_id, archived_at, prepared_by, prepared_by_name, quote_seq, status, issue_date, valid_until, total, options, unit_rate_note, scope_bullets, course_blurb, sent_at, accepted_at, accepted_name')
+      .select(QUOTE_ROW_COLUMNS)
       .eq('instance_id', instanceId).order('quote_seq', { ascending: false }),
     admin.from('profiles').select('id, first_name, last_name, email').eq('role', 'admin').order('first_name'),
     admin.from('gallery_images').select('url, caption, categories').order('created_at', { ascending: false }),
@@ -286,6 +287,46 @@ export default async function CoursePricingEditor({
     payRatesFrom((pricingRateRows ?? []) as { label: string; pay_rate?: number | string | null }[])
   )
 
+  // ── What the actuals start as ─────────────────────────────────────────────
+  //
+  // An empty actuals list meant retyping the COA from memory, two folds up
+  // the page. So the first time anybody opens the section on a course that
+  // has a COA, that COA's lines are written in as costs and the pay
+  // suggestion beside them — a guess to correct, every row deletable. The
+  // panel does the writing (and the seeding only ever happens once); the
+  // numbers are worked out here, where the COA, the rates and the chart of
+  // accounts are already loaded.
+  //
+  // Which COA: the one the client actually accepted, else the one the latest
+  // quote was priced from, else the first live one. A course with two live
+  // COAs and no quote has no right answer, and the first is the working one.
+  const seedCoa = (() => {
+    const live = estimatePanels.filter((e) => e.id)
+    if (live.length === 0) return null
+    const named = (id: string | null | undefined) => (id ? live.find((e) => e.id === id) : undefined)
+    return named(accepted?.estimate_id) ?? named(quotes[0]?.estimate_id) ?? live[0]
+  })()
+
+  // A rate that carries a pay figure is somebody's time, quoted at a padded
+  // number on purpose — those lines are left to the pay suggestion, which
+  // uses the rate we actually pay.
+  const payRateIds = new Set(
+    (pricingRateRows ?? []).filter((r) => r.pay_rate !== null && r.pay_rate !== undefined).map((r) => r.id as string)
+  )
+
+  const actualsSeed =
+    seedCoa && !actuals.seededAt && actuals.payLines.length === 0 && actuals.costLines.length === 0
+      ? {
+          from: seedCoa.title,
+          pay: suggestion?.lines ?? [],
+          costs: estimateCostSeed(
+            seedCoa.items.map((i) => ({ label: i.label, qty: i.qty, rate: i.rate, rate_id: i.rate_id })),
+            actuals.accounts,
+            payRateIds
+          ),
+        }
+      : null
+
   // What each folded section says while shut, so folding one away costs
   // nothing at a glance.
   const liveCoaPrices = estimatePanels.map((e) =>
@@ -406,6 +447,7 @@ export default async function CoursePricingEditor({
           actuals={actuals}
           people={payPeople}
           suggestion={suggestion}
+          seed={actualsSeed}
           acceptedQuote={acceptedQuote}
         />
       </PricingFold>

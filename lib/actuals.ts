@@ -337,3 +337,93 @@ export function actualsAreLive(
   if (course.status === 'cancelled') return false
   return Boolean(course.starts_at && course.starts_at <= today)
 }
+
+// ─── Starting the actuals from the estimate ──────────────────────────────────
+//
+// The COA already lists what the course is going to spend money on: lodging,
+// a vehicle, flights, food, permits. Beginning the actuals from an empty list
+// meant typing that list a second time, from memory, off a screen two folds
+// up the page. So every estimate line arrives as a cost line — a guess to
+// correct, not a number to trust, and deletable one row at a time.
+//
+// Two things the estimate says are deliberately not copied:
+//
+//   · the margin. It is what we keep, not what we spend, so a line seeds at
+//     cost — qty × rate — and never at the price the client was quoted.
+//   · our own time. An instructor day is quoted at a padded rate on purpose
+//     (see pay_rate on pricing_rates), so copying it in would book a cost
+//     nobody pays; pay comes in beside it from paySuggestion at the real
+//     rate. An admin day is the same thing with no cash behind it at all.
+
+export type EstimateSeedLine = {
+  label: string
+  qty: number | null
+  rate: number
+  rate_id: string | null
+}
+
+/** Whether an estimate line is somebody on the team, rather than money going
+    out of the door. Known pay rates first — the library is the authority, and
+    a renamed rate keeps its pay_rate — then the words, for a line typed by
+    hand or a rate that carries no pay figure. "EMT / medical" is deliberately
+    not caught: that is a contractor we actually pay. */
+export function isOurOwnTime(line: { label: string; rate_id: string | null }, payRateIds: Set<string>): boolean {
+  if (line.rate_id && payRateIds.has(line.rate_id)) return true
+  return /instructor|admin/i.test(line.label)
+}
+
+/** The expense-report category an estimate line would have arrived under, had
+    somebody expensed it instead of putting it on the company card. It is the
+    bridge to the chart of accounts: cost categories say which expense types
+    they claim, so answering this answers where the line is filed without a
+    second, separate map to keep in step. Null where the estimator's line has
+    no expense-report equivalent — SWAG, permits, a venue. */
+export function expenseCategoryForEstimateLine(label: string): string | null {
+  const l = label.toLowerCase()
+  if (/lodging|hotel|lodge/.test(l)) return 'lodging'
+  if (/flight|air\b|airfare/.test(l)) return 'air_fare'
+  if (/vehicle|rental|\bcar\b|truck|van/.test(l)) return 'auto_rental'
+  if (/mileage|personal auto/.test(l)) return 'personal_auto'
+  if (/fuel|gas\b|parking|toll|shuttle|transport/.test(l)) return 'transport'
+  if (/meal|food|per diem/.test(l)) return 'per_diem'
+  return null
+}
+
+/** Which cost category a seeded line is filed under. A category named after
+    the line wins — a "SWAG" line and a SWAG category are the same thing said
+    twice, and no expense-report category joins them — and otherwise the line
+    follows its expense category into whichever category claims it.
+
+    Null is a real answer: it leaves the line asking for a category on screen,
+    which is the honest state for a cost nobody has told the books about. */
+export function accountForEstimateLine(label: string, accounts: CostAccount[]): string | null {
+  const l = label.trim().toLowerCase()
+  const named = accounts.find((a) => a.label.trim().toLowerCase() === l)
+  if (named) return named.id
+  const category = expenseCategoryForEstimateLine(label)
+  if (!category) return null
+  return accounts.find((a) => a.categories.includes(category))?.id ?? null
+}
+
+export type CostSeedLine = { account_id: string | null; description: string; amount: number }
+
+/** The estimate's lines as cost lines. At cost, our own time left out, in the
+    estimate's own order — so the two lists can be read side by side while the
+    real numbers replace the guessed ones.
+
+    A line the estimator never got a quantity for (miles driven, days of admin
+    burden) seeds at zero rather than being dropped: it is a heading saying
+    money is expected here, and a zero changes no total. */
+export function estimateCostSeed(
+  items: EstimateSeedLine[],
+  accounts: CostAccount[],
+  payRateIds: Set<string>
+): CostSeedLine[] {
+  return items
+    .filter((i) => !isOurOwnTime(i, payRateIds))
+    .map((i) => ({
+      account_id: accountForEstimateLine(i.label, accounts),
+      description: i.label,
+      amount: round2((Number(i.qty) || 0) * (Number(i.rate) || 0)),
+    }))
+}
