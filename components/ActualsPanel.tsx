@@ -60,12 +60,6 @@ const NEW_CATEGORY = '__new__'
 // How the offered quote describes itself. A draft is worth offering — it is
 // still the only number anybody has written down for this course — but it has
 // to say that it is one, or the box beside it reads as agreed.
-const QUOTE_STATUS_PHRASE: Record<string, string> = {
-  accepted: 'was accepted at',
-  sent: 'was sent at',
-  draft: 'is a draft at',
-}
-
 /** `amountText` is what is in the box while it is being typed. Without it a
     row shows the parsed number back, so "0.5" loses its zero the moment it
     is typed — the number is 0 until the 5 arrives. */
@@ -78,7 +72,7 @@ export default function ActualsPanel({
   people,
   suggestion,
   seed,
-  quoteSuggestion,
+  invoicedSuggestion,
 }: {
   instanceId: string
   /** Everything as the shared loader assembled it — the same shape the
@@ -98,15 +92,19 @@ export default function ActualsPanel({
     pay: { description: string; amount: number }[]
     costs: { account_id: string | null; description: string; amount: number }[]
   } | null
-  /** Where the conversation landed. Offered as a starting point for what we
-      invoiced, never as the value — gear bought for the client, an invoice
-      split in two, or a renegotiation all move the real number.
+  /** What the page already knows we billed, offered as a starting point and
+      never as the value.
 
-      An accepted quote is the answer when there is one, but a quote that was
-      sent and agreed on the phone is the number we billed just as often, and
-      offering nothing there only means retyping a figure the page already
-      holds. So the status rides along and the line says which it is. */
-  quoteSuggestion: { seq: number; total: number; status: string } | null
+      It comes from the billing handoff now, not from the quote. The chain is
+      estimate → quote → billing → invoiced, and each link suggests the last
+      one's number and lets you override it: a quote is what we offered, the
+      handoff is what we actually asked Harken to invoice, and this is what we
+      billed. Reading back past the handoff to the quote skipped the one step
+      where the number most often changes. The quote still stands in on a
+      course that has never been handed over, because a number the page holds
+      beats retyping one. `text` says which it is, in words, so the line is
+      never a figure of unknown parentage. */
+  invoicedSuggestion: { total: number; text: string } | null
   /** The active billing recipients, by name — who the send button sends to.
       Empty means there is nobody to send to, and the button says so rather
       than disappearing. */
@@ -407,7 +405,7 @@ export default function ActualsPanel({
       <div>
         <div className="flex items-baseline gap-2 mb-2">
           <h4 className="text-sm font-semibold text-zinc-200">Invoiced</h4>
-          <InfoHint text="What we actually billed, which is not always the quote they accepted." />
+          <InfoHint text="What we actually billed. It starts from what was handed to Harken — which itself started from the quote, which started from the estimate — and every one of those steps can be overridden, this one included." />
         </div>
         <div className="flex items-center gap-3 flex-wrap">
           <div className="flex items-center gap-1.5">
@@ -423,15 +421,14 @@ export default function ActualsPanel({
               className={`${input} w-32 text-right`}
             />
           </div>
-          {quoteSuggestion && (
+          {invoicedSuggestion && (
             <span className="text-xs text-zinc-500">
-              Quote {quoteSuggestion.seq} {QUOTE_STATUS_PHRASE[quoteSuggestion.status] ?? 'stands at'}{' '}
-              {fmtMoney(quoteSuggestion.total)}
-              {Math.abs(actuals.invoiced - quoteSuggestion.total) > 0.005 && (
+              {invoicedSuggestion.text} {fmtMoney(invoicedSuggestion.total)}
+              {Math.abs(actuals.invoiced - invoicedSuggestion.total) > 0.005 && (
                 <button
                   onClick={() => {
-                    setInvoiced(String(quoteSuggestion.total))
-                    saveHeader({ invoiced: String(quoteSuggestion.total) })
+                    setInvoiced(String(invoicedSuggestion.total))
+                    saveHeader({ invoiced: String(invoicedSuggestion.total) })
                   }}
                   className="ml-2 text-zinc-400 hover:text-white underline underline-offset-2 transition-colors"
                 >

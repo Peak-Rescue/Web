@@ -19,7 +19,7 @@ import PricingFold from '@/components/PricingFold'
 import { actualsAreLive, estimateCostSeed, payRatesFrom, paySuggestion } from '@/lib/actuals'
 import { loadActuals } from '@/lib/actuals-data'
 import { courseZone, todayIn } from '@/lib/course-clock'
-import { fmtMoney } from '@/lib/expenses'
+import { fmtMoney, round2 } from '@/lib/expenses'
 
 // What a course costs and what we told the client it costs.
 //
@@ -272,9 +272,6 @@ export default async function CoursePricingEditor({
     (q) => !q.archived_at && ['accepted', 'sent', 'draft'].includes(q.status) && q.total > 0
   )
   const suggested = accepted ?? offerable ?? null
-  const quoteSuggestion = suggested
-    ? { seq: suggested.quote_seq as number, total: suggested.total, status: suggested.status }
-    : null
 
   // The handoff to Harken. The payee is the POC tagged billing in Details, or
   // the course's own contact when nobody is tagged —
@@ -299,6 +296,39 @@ export default async function CoursePricingEditor({
     const paid = live.filter((r) => r.status === 'paid')
     if (paid.length === live.length) return 'paid'
     return live.some((r) => r.status === 'invoiced') ? 'invoiced' : 'with Harken'
+  })()
+
+  // What the actuals offer as "invoiced".
+  //
+  // One chain, four links: the estimate prices the course, the quote is
+  // offered from the estimate, the handoff is offered from the quote, and
+  // what we billed is offered from the handoff. Every link can be overridden
+  // at its own step, and each one reads from the step before rather than
+  // reaching past it — which is what reading the quote here was doing, and
+  // the handoff is precisely where the number most often changes: a deposit,
+  // a cut day, a renegotiation nobody went back to re-quote.
+  //
+  // Requests are summed because two invoices are two invoices; a withdrawn
+  // one is not money we billed.
+  const invoicedSuggestion = (() => {
+    const live = invoiceRequests.filter((r) => r.status !== 'cancelled')
+    if (live.length > 0) {
+      const total = round2(live.reduce((t, r) => t + r.amount, 0))
+      return {
+        total,
+        text: live.length === 1 ? 'Harken was asked to invoice' : `${live.length} invoices went to Harken totalling`,
+      }
+    }
+    // Never handed over — a course billed outside the portal, or one nobody
+    // has got to yet. The quote is the best the page can do, and it says so.
+    if (!suggested) return null
+    const phrase =
+      suggested.status === 'accepted'
+        ? 'Quote accepted at'
+        : suggested.status === 'sent'
+          ? 'Quote sent at'
+          : 'Draft quote stands at'
+    return { total: suggested.total, text: `${phrase.replace('Quote', `Quote ${suggested.quote_seq}`)}` }
   })()
 
   const actualsLive = actualsAreLive(
@@ -486,7 +516,7 @@ export default async function CoursePricingEditor({
           people={payPeople}
           suggestion={suggestion}
           seed={actualsSeed}
-          quoteSuggestion={quoteSuggestion}
+          invoicedSuggestion={invoicedSuggestion}
         />
       </PricingFold>
     </div>
