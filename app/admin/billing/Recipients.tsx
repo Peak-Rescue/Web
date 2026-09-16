@@ -64,6 +64,13 @@ export default function Recipients({
 
   return (
     <div>
+      {/* Said once, because "Copy link" does not say what the link is. It is
+          an address rather than an account: no sign-in, unguessable, and the
+          whole of what lets somebody at Harken work the queue. */}
+      <p className="text-xs text-zinc-500 mb-3">
+        Each biller has their own sign-in-free address into the queue — hand it over once and they bookmark it.
+        The link is the credential, so what is done there is recorded as them.
+      </p>
       <ul className="space-y-2">
         {active.map((r) => (
           <li key={r.id} className="border border-zinc-800 rounded p-3 flex flex-wrap items-center gap-x-4 gap-y-2">
@@ -98,6 +105,20 @@ export default function Recipients({
               <button type="button" className={smallBtn} onClick={() => copy(r.token)}>
                 {copied === r.token ? 'Copied' : 'Copy link'}
               </button>
+              {/* Their page, exactly as they see it. Worth being able to look
+                  at before handing the address over — but the link is the
+                  credential, so anything done there is recorded as them. The
+                  same two milestones are on the course's own Billing section,
+                  where they are recorded as us. */}
+              <a
+                href={`${siteUrl}/billing/${r.token}`}
+                target="_blank"
+                rel="noreferrer"
+                title={`Open ${r.name}'s page as they see it. Marking anything there records it as them — use the course's Billing section to record it as you.`}
+                className={smallBtn}
+              >
+                View
+              </a>
               <button type="button" className={smallBtn} onClick={() => setEditing(r.id)}>
                 Edit
               </button>
