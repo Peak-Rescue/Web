@@ -260,7 +260,9 @@ async function handBackLink(admin: Admin, id: string) {
   for (const table of ['course_maps', 'course_resources'] as const) {
     const { error } = await admin
       .from(table)
-      .update({ library_item_id: null, url, label: item.title })
+      // audience stays as it was — it is the answer this course gave, and the
+      // override flag goes with the library entry it was overriding.
+      .update({ library_item_id: null, url, label: item.title, ...(table === 'course_maps' ? { audience_overridden: false } : {}) })
       .eq('library_item_id', id)
     if (error) throw new Error(error.message)
   }

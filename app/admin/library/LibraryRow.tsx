@@ -71,7 +71,11 @@ export default function LibraryRow({ item, venues, hideProvenance = false }: { i
       setBusy(false)
     }
 
-    if (!confirm(deletePrompt(uses))) return
+    // A template use, or an item with no link to hand back, is refused — and
+    // the action's own refusal explains it better than a confirm could, so let
+    // it do the talking rather than asking permission for a no.
+    const blocked = uses.templates.length > 0 || (uses.maps + uses.resources + uses.items > 0 && !uses.hasLink)
+    if (!blocked && !confirm(deletePrompt(uses))) return
     await run(() => deleteLibraryItem(item.id))
   }
 
@@ -256,18 +260,12 @@ export default function LibraryRow({ item, venues, hideProvenance = false }: { i
   )
 }
 
-// What the delete is about to do, said before it is agreed to. A template use
-// or a linkless item is refused by the action itself; the prompt names it here
-// too, so the answer is not "yes" to something that then says no.
+// What the delete is about to do, said before it is agreed to. Only the cases
+// that will actually go through are worded here; the ones that get refused are
+// worded once, in the action.
 function deletePrompt(uses: LibraryItemUses): string {
-  if (uses.templates.length > 0) {
-    return `Used by ${uses.templates.length === 1 ? 'the template' : `${uses.templates.length} templates`}: ${uses.templates.join(', ')}.\n\nDeleting it would empty that section, so this will be refused — archive it instead. Continue anyway?`
-  }
   const attached = uses.maps + uses.resources + uses.items
   if (attached === 0) return 'Nothing is using this item. Delete it permanently?'
-  if (!uses.hasLink) {
-    return `${attached === 1 ? 'A course row is' : `${attached} course rows are`} pointing at this item and it has no link to hand back, so this will be refused — archive it instead. Continue anyway?`
-  }
   const where = [
     uses.maps && `${uses.maps} map${uses.maps === 1 ? '' : 's'}`,
     uses.resources && `${uses.resources} resource${uses.resources === 1 ? '' : 's'}`,

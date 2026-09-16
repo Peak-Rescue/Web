@@ -3,10 +3,10 @@
 import { useState, useTransition } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { fmtMoney } from '@/lib/expenses'
 import { type ChainLink, type InvoiceRequest } from '@/lib/billing'
 import InfoHint from '@/components/InfoHint'
 import InvoiceRequestCard from '@/components/InvoiceRequestCard'
+import SuggestedNumber from '@/components/SuggestedNumber'
 import { sendInvoiceRequest } from './billing-actions'
 
 // Handing this course to Harken, and what came back.
@@ -173,22 +173,11 @@ export default function BillingSection({
               placeholder="0.00"
               className={`${box} w-32 text-right`}
             />
-            {/* Where the figure came from, in words — and a way back to it
-                once it has been typed over. An estimate offered as a bare
-                number would read as an agreed price; saying "COA 1 prices
-                this at" makes it the starting point it actually is. */}
-            {suggested &&
-              (Math.abs(Number(amount.replace(/[$,\s]/g, '')) - suggested.total) > 0.005 ? (
-                <button
-                  type="button"
-                  onClick={() => setAmount(String(suggested.total))}
-                  className="text-xs text-zinc-500 hover:text-zinc-300 underline underline-offset-2 transition-colors"
-                >
-                  {suggested.text} {fmtMoney(suggested.total)}
-                </button>
-              ) : (
-                <span className="text-xs text-zinc-600">{suggested.text} this</span>
-              ))}
+            <SuggestedNumber
+              link={suggested}
+              current={Number(amount.replace(/[$,\s]/g, '')) || 0}
+              onUse={(total) => setAmount(String(total))}
+            />
           </Field>
 
           <Field label="Bill to">

@@ -14,6 +14,7 @@ import {
   type TypedCostLine,
 } from '@/lib/actuals'
 import { type LoadedActuals } from '@/lib/actuals-data'
+import { type ChainLink } from '@/lib/billing'
 import {
   addCostAccount,
   setActualsShared,
@@ -31,6 +32,7 @@ import {
 } from '@/app/admin/courses/actuals-actions'
 import TrashIcon from '@/components/TrashIcon'
 import InfoHint from '@/components/InfoHint'
+import SuggestedNumber from '@/components/SuggestedNumber'
 
 // What the course actually cost, next to what we actually billed.
 //
@@ -104,10 +106,7 @@ export default function ActualsPanel({
       course that has never been handed over, because a number the page holds
       beats retyping one. `text` says which it is, in words, so the line is
       never a figure of unknown parentage. */
-  invoicedSuggestion: { total: number; text: string } | null
-  /** The active billing recipients, by name — who the send button sends to.
-      Empty means there is nobody to send to, and the button says so rather
-      than disappearing. */
+  invoicedSuggestion: ChainLink | null
 }) {
   const router = useRouter()
   const { expenseLines } = loaded
@@ -421,22 +420,14 @@ export default function ActualsPanel({
               className={`${input} w-32 text-right`}
             />
           </div>
-          {invoicedSuggestion && (
-            <span className="text-xs text-zinc-500">
-              {invoicedSuggestion.text} {fmtMoney(invoicedSuggestion.total)}
-              {Math.abs(actuals.invoiced - invoicedSuggestion.total) > 0.005 && (
-                <button
-                  onClick={() => {
-                    setInvoiced(String(invoicedSuggestion.total))
-                    saveHeader({ invoiced: String(invoicedSuggestion.total) })
-                  }}
-                  className="ml-2 text-zinc-400 hover:text-white underline underline-offset-2 transition-colors"
-                >
-                  use it
-                </button>
-              )}
-            </span>
-          )}
+          <SuggestedNumber
+            link={invoicedSuggestion}
+            current={actuals.invoiced}
+            onUse={(total) => {
+              setInvoiced(String(total))
+              saveHeader({ invoiced: String(total) })
+            }}
+          />
         </div>
       </div>
 

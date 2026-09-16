@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, type ComponentProps, type ReactNode } from 'react'
+import SharedPencil from '@/components/PencilIcon'
 
 // The marks and boxes a schedule day is written with. Shared, because a day is
 // now edited in two places — laid out in order by the full editor, and on its
@@ -70,13 +71,9 @@ export function PinIcon() {
   )
 }
 
+// The site's pencil, kept at the 10px these captions are set in.
 export function PencilIcon() {
-  return (
-    <svg {...glyph} width={10} height={10} aria-hidden>
-      <path d="M12 20h9" />
-      <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
-    </svg>
-  )
+  return <SharedPencil className="w-2.5 h-2.5" />
 }
 
 // Where to stand, as opposed to the pin's where the day happens.

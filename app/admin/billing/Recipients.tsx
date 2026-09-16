@@ -3,6 +3,9 @@
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import type { BillingRecipient } from '@/lib/billing'
+import PencilIcon from '@/components/PencilIcon'
+import TrashIcon from '@/components/TrashIcon'
+import NewTabIcon from '@/components/NewTabIcon'
 import {
   addBillingRecipient,
   setBillingRecipientActive,
@@ -15,6 +18,11 @@ const inputCls =
   'w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500'
 const smallBtn =
   'text-xs px-2 py-1 rounded border border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500 transition-colors disabled:opacity-50'
+// Same button at the width of its mark. Six words in a row read as a sentence
+// to skim rather than controls to use, so the three that the site already has
+// a mark for — open, edit, delete — are shown as marks, and only the two that
+// cut somebody's access off are still spelled out.
+const iconBtn = `${smallBtn} inline-flex items-center justify-center w-7 h-[26px] px-0`
 
 // Who at Harken raises our invoices.
 //
@@ -64,106 +72,122 @@ export default function Recipients({
 
   return (
     <div>
-      {/* Said once, because "Copy link" does not say what the link is. It is
-          an address rather than an account: no sign-in, unguessable, and the
-          whole of what lets somebody at Harken work the queue. */}
-      <p className="text-xs text-zinc-500 mb-3">
-        Each biller has their own sign-in-free address into the queue — hand it over once and they bookmark it.
-        The link is the credential, so what is done there is recorded as them.
-      </p>
       <ul className="space-y-2">
         {active.map((r) => (
-          <li key={r.id} className="border border-zinc-800 rounded p-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+          <li key={r.id} className="border border-zinc-800 rounded p-3">
             {/* Editable in place. Fixing a surname or following an address
                 change used to mean deactivating somebody and building them
                 again, which is a lot of ceremony for a typo — and left a
                 retired row behind that nobody could explain a year later. */}
             {editing === r.id ? (
-              <form
-                action={(fd) => run(() => updateBillingRecipient(r.id, fd))}
-                className="flex flex-wrap items-center gap-2 flex-1 min-w-0"
-              >
-                <input name="name" defaultValue={r.name} className={`${inputCls} w-44`} />
-                <input name="email" type="email" defaultValue={r.email} className={`${inputCls} w-64`} />
-                <button type="submit" disabled={pending} className={smallBtn}>
-                  Save
-                </button>
-                <button type="button" onClick={() => setEditing(null)} className={smallBtn}>
-                  Cancel
-                </button>
-                <span className="text-xs text-zinc-600">Their link is unchanged — Rotate cuts the old one.</span>
-              </form>
+              <div className="space-y-3">
+                <form
+                  action={(fd) => run(() => updateBillingRecipient(r.id, fd))}
+                  className="flex flex-wrap items-center gap-2"
+                >
+                  <input name="name" defaultValue={r.name} className={`${inputCls} w-44`} />
+                  <input name="email" type="email" defaultValue={r.email} className={`${inputCls} w-64`} />
+                  <button type="submit" disabled={pending} className={smallBtn}>
+                    Save
+                  </button>
+                  <button type="button" onClick={() => setEditing(null)} className={smallBtn}>
+                    Cancel
+                  </button>
+                </form>
+                {/* The three that change what somebody can still reach, kept
+                    behind the pencil rather than a hover away on a row you
+                    were only reading. Opening this row is already deliberate
+                    and only one opens at a time, so this is where they can be
+                    spelled out — and read next to the address they act on. */}
+                <div className="border-t border-zinc-800 pt-3 flex flex-wrap items-center gap-2">
+                  <span className="text-xs text-zinc-600 mr-1">Their access</span>
+                  <button
+                    type="button"
+                    className={smallBtn}
+                    disabled={pending}
+                    title="Give them a new address and cut the old one"
+                    onClick={() => {
+                      if (confirm(`Rotate ${r.name}'s link? The old one stops working immediately.`)) {
+                        run(() => rotateBillingToken(r.id))
+                      }
+                    }}
+                  >
+                    Rotate link
+                  </button>
+                  <button
+                    type="button"
+                    className={smallBtn}
+                    disabled={pending}
+                    onClick={() => {
+                      if (confirm(`Deactivate ${r.name}? Their link stops working; their history stays.`)) {
+                        run(() => setBillingRecipientActive(r.id, false))
+                      }
+                    }}
+                  >
+                    Deactivate
+                  </button>
+                  {/* Offered to everyone and refused by the server for anyone
+                      who has marked an invoice: their name is on those
+                      invoices, and a request that says somebody raised it with
+                      nobody able to say who is worse than a row nobody uses.
+                      The refusal names Deactivate, so it is a question rather
+                      than a trap. */}
+                  <button
+                    type="button"
+                    className={`${iconBtn} hover:text-red-400 hover:border-red-900`}
+                    disabled={pending}
+                    aria-label={`Remove ${r.name}`}
+                    title={`Remove ${r.name} completely — only possible while they have never marked an invoice`}
+                    onClick={() => {
+                      if (confirm(`Remove ${r.name} completely? Only possible while they have never marked an invoice.`)) {
+                        run(() => deleteBillingRecipient(r.id))
+                      }
+                    }}
+                  >
+                    <TrashIcon />
+                  </button>
+                  <span className="text-xs text-zinc-600">Saving a name or address leaves their link alone.</span>
+                </div>
+              </div>
             ) : (
-              <div className="min-w-0 flex-1">
-                <p className="text-sm text-zinc-200">
-                  {r.name} <span className="text-zinc-500">· {r.org}</span>
-                </p>
-                <p className="text-xs text-zinc-500 truncate">{r.email}</p>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm text-zinc-200">
+                    {r.name} <span className="text-zinc-500">· {r.org}</span>
+                  </p>
+                  <p className="text-xs text-zinc-500 truncate">{r.email}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button type="button" className={smallBtn} onClick={() => copy(r.token)}>
+                    {copied === r.token ? 'Copied' : 'Copy link'}
+                  </button>
+                  {/* Their page, exactly as they see it. Worth being able to
+                      look at before handing the address over — but the link is
+                      the credential, so anything done there is recorded as
+                      them. The same two milestones are on the course's own
+                      Billing section, where they are recorded as us. */}
+                  <a
+                    href={`${siteUrl}/billing/${r.token}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    aria-label={`Open ${r.name}'s page`}
+                    title={`Open ${r.name}'s page as they see it. Marking anything there records it as them — use the course's Billing section to record it as you.`}
+                    className={iconBtn}
+                  >
+                    <NewTabIcon />
+                  </a>
+                  <button
+                    type="button"
+                    className={iconBtn}
+                    aria-label={`Edit ${r.name}`}
+                    title={`Edit ${r.name}'s name or email, or change what they can reach`}
+                    onClick={() => setEditing(r.id)}
+                  >
+                    <PencilIcon />
+                  </button>
+                </div>
               </div>
             )}
-            <div className={`flex items-center gap-2 ${editing === r.id ? 'hidden' : ''}`}>
-              <button type="button" className={smallBtn} onClick={() => copy(r.token)}>
-                {copied === r.token ? 'Copied' : 'Copy link'}
-              </button>
-              {/* Their page, exactly as they see it. Worth being able to look
-                  at before handing the address over — but the link is the
-                  credential, so anything done there is recorded as them. The
-                  same two milestones are on the course's own Billing section,
-                  where they are recorded as us. */}
-              <a
-                href={`${siteUrl}/billing/${r.token}`}
-                target="_blank"
-                rel="noreferrer"
-                title={`Open ${r.name}'s page as they see it. Marking anything there records it as them — use the course's Billing section to record it as you.`}
-                className={smallBtn}
-              >
-                View
-              </a>
-              <button type="button" className={smallBtn} onClick={() => setEditing(r.id)}>
-                Edit
-              </button>
-              <button
-                type="button"
-                className={smallBtn}
-                disabled={pending}
-                onClick={() => {
-                  if (confirm(`Rotate ${r.name}'s link? The old one stops working immediately.`)) {
-                    run(() => rotateBillingToken(r.id))
-                  }
-                }}
-              >
-                Rotate
-              </button>
-              <button
-                type="button"
-                className={smallBtn}
-                disabled={pending}
-                onClick={() => {
-                  if (confirm(`Deactivate ${r.name}? Their link stops working; their history stays.`)) {
-                    run(() => setBillingRecipientActive(r.id, false))
-                  }
-                }}
-              >
-                Deactivate
-              </button>
-              {/* Offered to everyone and refused by the server for anyone who
-                  has marked an invoice: their name is on those invoices, and
-                  a request that says somebody raised it with nobody able to
-                  say who is worse than a row nobody uses. The refusal names
-                  Deactivate, so the button is a question rather than a trap. */}
-              <button
-                type="button"
-                className={smallBtn}
-                disabled={pending}
-                onClick={() => {
-                  if (confirm(`Remove ${r.name} completely? Only possible while they have never marked an invoice.`)) {
-                    run(() => deleteBillingRecipient(r.id))
-                  }
-                }}
-              >
-                Remove
-              </button>
-            </div>
           </li>
         ))}
       </ul>
@@ -220,15 +244,17 @@ export default function Recipients({
                   </button>
                   <button
                     type="button"
-                    className={smallBtn}
+                    className={`${iconBtn} hover:text-red-400 hover:border-red-900`}
                     disabled={pending}
+                    aria-label={`Remove ${r.name}`}
+                    title={`Remove ${r.name} completely — only possible while they have never marked an invoice`}
                     onClick={() => {
                       if (confirm(`Remove ${r.name} completely? Only possible while they have never marked an invoice.`)) {
                         run(() => deleteBillingRecipient(r.id))
                       }
                     }}
                   >
-                    Remove
+                    <TrashIcon />
                   </button>
                 </div>
               </li>

@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { fmtMoney } from '@/lib/expenses'
 import { isOpen, type BillingRecipient, type InvoiceRequest } from '@/lib/billing'
+import InfoHint from '@/components/InfoHint'
 import Recipients from './Recipients'
 import RequestList from './RequestList'
 
@@ -49,7 +50,17 @@ export default async function BillingAdminPage() {
         </div>
 
         <section className="mb-10">
-          <h2 className="text-sm font-semibold text-zinc-300 mb-3">Billers at Harken</h2>
+          {/* What the link is, kept behind the icon. It is an address rather
+              than an account — no sign-in, unguessable, and the whole of what
+              lets somebody at Harken work the queue — which is worth knowing
+              once and nothing to re-read on every visit. */}
+          <h2 className="text-sm font-semibold text-zinc-300 mb-3 flex items-center gap-1.5">
+            Billers at Harken
+            <InfoHint
+              below
+              text="Each biller has their own sign-in-free address into the queue — hand it over once and they bookmark it. The link is the credential, so what is done there is recorded as them."
+            />
+          </h2>
           <Recipients
             recipients={recipients}
             siteUrl={process.env.NEXT_PUBLIC_SITE_URL || 'https://peak-rescue.com'}
