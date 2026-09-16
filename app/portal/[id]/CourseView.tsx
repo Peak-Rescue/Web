@@ -31,7 +31,7 @@ import { unseenSections, lastPushToStudents, behindOnPush, type Push } from '@/l
 import { GEAR_ENTRIES_SELECT, KIT_LABEL } from '@/lib/gear'
 import { courseCapabilityCategories } from '@/lib/capabilities'
 import { GEAR_ENTRY_COLUMNS, gearLabel, gearQuantity, isChoice, placeSets, productName } from '@/lib/gear'
-import { courseDisplayName, computeBlocks, courseDates, dayShift, courseEventTitle } from '@/lib/courses'
+import { courseDisplayName, computeBlocks, courseDates, courseEventTitle } from '@/lib/courses'
 import CourseTasksPanel, { type CourseTask, type TaskPerson } from '@/components/CourseTasksPanel'
 import PdfLink from '@/components/PdfLink'
 import { ForPill } from '@/components/AudiencePills'
@@ -1293,7 +1293,6 @@ export default async function CourseView({
   // block that folds a day *ahead* only ever hides a plan someone came to
   // read. One fold per day, on the day, and what is still ahead stays open.
   const todayISO = todayIn(courseZone(inst.region))
-  const tomorrowISO = dayShift(todayISO, 1)
 
 
   // An admin sees the section whether or not a waiver is set — choosing one
@@ -1344,13 +1343,23 @@ export default async function CourseView({
   const BUILD: SectionKey[] = ['details', 'pricing', 'prep', 'schedule']
   const TEACH: SectionKey[] = ['details', 'updates', 'prep', 'schedule']
 
-  // The course's own dates decide which job you are probably here for, so the
-  // switch is usually already right and pressing it is a correction.
+  // Which job you are probably here for, so the switch is usually already
+  // right and pressing it is a correction.
+  //
+  // Dates alone are not enough. An admin who is not on the crew is never
+  // teaching this course, whatever week it is — they are looking at it, which
+  // is build work — and being dropped into Teach on a course somebody else is
+  // running hides the half of the page they came for. So it takes both: your
+  // name on the crew, and today being one of the days.
+  //
+  // Strictly one of the days: the evening before is still preparation, and the
+  // morning after is already next time.
+  const onCrew = Boolean(userId && staffedProfileIds.has(userId))
   const runningNow = Boolean(
     inst.starts_at && (inst.ends_at ?? inst.starts_at) >= todayISO &&
-    (inst.starts_at as string) <= tomorrowISO
+    (inst.starts_at as string) <= todayISO
   )
-  const mode: 'build' | 'teach' = viewer.mode ?? (runningNow ? 'teach' : 'build')
+  const mode: 'build' | 'teach' = viewer.mode ?? (onCrew && runningNow ? 'teach' : 'build')
 
   // A door has to lead somewhere. While these were jump links a mismatch here
   // was a link to an anchor that wasn't on the page — bad, but survivable.
