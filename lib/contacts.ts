@@ -1,8 +1,17 @@
 // Course POCs live in course_instances.contacts (jsonb): an ordered list of
 // people, each with any number of phones and emails. The first POC's first
 // email is the primary address (quotes are sent there).
+//
+// One POC can be marked `billing`: the person who gets invoiced, who is often
+// not the person who booked the course. It is a tag rather than a column
+// because the billing contact is usually already on the list — marking the
+// person you typed once beats retyping them into a second field and letting
+// the two drift. A tag also lifts out cleanly the day the billing contact
+// becomes a fact about the client rather than about the course.
 
-export type CoursePOC = { name: string; phones: string[]; emails: string[] }
+export type ContactRole = 'billing'
+
+export type CoursePOC = { name: string; phones: string[]; emails: string[]; role?: ContactRole }
 
 const str = (v: unknown) => (typeof v === 'string' ? v.trim() : '')
 const strList = (v: unknown) => (Array.isArray(v) ? v.map(str).filter(Boolean) : [])
@@ -12,7 +21,9 @@ export function parseContacts(raw: unknown): CoursePOC[] {
   return raw
     .map((c) => {
       const rec = c && typeof c === 'object' ? (c as Record<string, unknown>) : {}
-      return { name: str(rec.name), phones: strList(rec.phones), emails: strList(rec.emails) }
+      const poc: CoursePOC = { name: str(rec.name), phones: strList(rec.phones), emails: strList(rec.emails) }
+      if (str(rec.role) === 'billing') poc.role = 'billing'
+      return poc
     })
     .filter((c) => c.name || c.phones.length || c.emails.length)
 }
@@ -26,9 +37,23 @@ export function contactsFromForm(value: FormDataEntryValue | null): CoursePOC[] 
   }
 }
 
-export const primaryContactEmail = (contacts: CoursePOC[]) => contacts[0]?.emails[0] ?? null
+// The quote goes to whoever is deciding, which is never accounts payable.
+// So the billing POC is skipped when picking the primary — tagging someone
+// must never quietly re-route a quote — and the fallback keeps the old
+// behaviour for the courses where every POC happens to be tagged.
+export const primaryContactEmail = (contacts: CoursePOC[]) =>
+  contacts.find((c) => c.role !== 'billing' && c.emails.length > 0)?.emails[0] ??
+  contacts[0]?.emails[0] ??
+  null
+
+// Who to invoice. Null is the normal state early on: it is filled in by the
+// time the quote is accepted, not by the time the course is created.
+export const billingContact = (contacts: CoursePOC[]) =>
+  contacts.find((c) => c.role === 'billing') ?? null
 
 // Every other email on file — offered as opt-in CCs when sending a quote.
+// The billing POC is in here: copying them on the quote is a choice worth
+// offering, just not one worth making for you.
 export function ccEmailOptions(contacts: CoursePOC[]): string[] {
   const primary = primaryContactEmail(contacts)
   return [...new Set(contacts.flatMap((c) => c.emails))].filter((e) => e !== primary)

@@ -2,7 +2,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { courseShortName, courseDayCounts } from '@/lib/courses'
 import { coaPrice, guessSeedQty, DEFAULT_MARGIN } from '@/lib/estimates'
 import { HERO_CHOICES } from '@/lib/quote-heroes'
-import { primaryContactEmail, ccEmailOptions, type CoursePOC } from '@/lib/contacts'
+import { primaryContactEmail, ccEmailOptions, billingContact, type CoursePOC } from '@/lib/contacts'
 import EstimatePanel, { type PricingRate } from '@/components/EstimatePanel'
 import { EstimateReviewBanner, EstimateReviewRequest, type EstimateReviewRow } from './EstimateReviewBar'
 import CoaComparison from './CoaComparison'
@@ -10,6 +10,8 @@ import ArchivedCoas from './ArchivedCoas'
 import NewCoaMenu, { type CopySource } from './NewCoaMenu'
 import QuoteHeroPicker from './QuoteHeroPicker'
 import QuotesSection, { type QuoteRow } from './QuotesSection'
+import BillingSection from './BillingSection'
+import { type InvoiceRequest } from '@/lib/billing'
 import ActualsPanel from '@/components/ActualsPanel'
 import PricingFold from '@/components/PricingFold'
 import { actualsAreLive, payRatesFrom, paySuggestion } from '@/lib/actuals'
@@ -65,6 +67,7 @@ export default async function CoursePricingEditor({
     { data: adminRows }, { data: galleryImageRows }, { data: estimateReviewRows },
     { data: sourceRows }, { data: offDayRows },
     actuals, { data: rosterRows },
+    { data: invoiceRows }, { data: billerRows },
   ] = await Promise.all([
     admin.from('course_estimates')
       .select('id, title, margin, price_override, created_at, archived_at, estimate_items(label, qty, rate, notes, qty_factors, rate_id, drift_ack, sort_order)')
@@ -102,6 +105,8 @@ export default async function CoursePricingEditor({
     // rides in this page's existing round trip.
     loadActuals(admin, instanceId),
     admin.from('instance_instructors').select('instructors(name, profile_id)').eq('instance_id', instanceId),
+    admin.from('invoice_requests').select('*').eq('instance_id', instanceId).order('created_at', { ascending: false }),
+    admin.from('billing_recipients').select('name').eq('active', true).order('name'),
   ])
 
   const quotePeople = (adminRows ?? [])
@@ -255,6 +260,23 @@ export default async function CoursePricingEditor({
   const accepted = quotes.find((q) => q.status === 'accepted' && !q.archived_at)
   const acceptedQuote = accepted ? { seq: accepted.quote_seq as number, total: accepted.total } : null
 
+  // The handoff to Harken. `billTo` is the POC tagged billing in Details —
+  // read here rather than in the client component so the section can say which
+  // of the two prerequisites is missing before anyone clicks anything.
+  const billTo = billingContact(contacts)
+  const invoiceRequests: InvoiceRequest[] = (invoiceRows ?? []).map((r) => ({
+    ...r,
+    amount: Number(r.amount ?? 0),
+    amount_received: r.amount_received === null || r.amount_received === undefined ? null : Number(r.amount_received),
+  })) as InvoiceRequest[]
+  const billingSummary = (() => {
+    const live = invoiceRequests.filter((r) => r.status !== 'cancelled')
+    if (live.length === 0) return acceptedQuote ? 'not sent' : undefined
+    const paid = live.filter((r) => r.status === 'paid')
+    if (paid.length === live.length) return 'paid'
+    return live.some((r) => r.status === 'invoiced') ? 'invoiced' : 'with Harken'
+  })()
+
   const actualsLive = actualsAreLive(
     { starts_at: course.starts_at, status: course.status ?? null },
     todayIn(courseZone(course.region))
@@ -356,6 +378,21 @@ export default async function CoursePricingEditor({
             title: e.title,
             price: coaPrice({ margin: e.margin, price_override: e.priceOverride, items: e.items }),
           }))}
+      />
+      </PricingFold>
+
+      {/* Between the quote and the actuals, because that is where it happens:
+          the number has been agreed and the money has not arrived yet. */}
+      <PricingFold title="Billing" summary={billingSummary} defaultOpen={false}>
+      <p className="text-xs text-zinc-500 mb-4">
+        Hands the agreed price and the billing contact to Harken, who raise the invoice and record payment.
+      </p>
+      <BillingSection
+        instanceId={instanceId}
+        requests={invoiceRequests}
+        billTo={billTo ? { name: billTo.name, email: billTo.emails[0] ?? null } : null}
+        acceptedTotal={acceptedQuote ? acceptedQuote.total : null}
+        recipientNames={(billerRows ?? []).map((r) => r.name as string)}
       />
       </PricingFold>
 

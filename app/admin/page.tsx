@@ -304,6 +304,17 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       ),
     },
     {
+      title: 'Billing',
+      desc: 'Hand a course to Harken to invoice, and see what has been paid',
+      href: '/admin/billing',
+      section: 'admin',
+      icon: (
+        <svg {...svgProps}>
+          <rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/><path d="M6 15h4"/>
+        </svg>
+      ),
+    },
+    {
       // Under Your tools rather than Administration: instructors read the
       // library too, and this was two cards sitting in different sections of
       // the same page with the same list of nouns under each.

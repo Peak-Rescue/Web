@@ -50,8 +50,24 @@ function ListField({
   )
 }
 
+// The billing contact is named, not numbered: "POC 3" tells you where someone
+// sits in a list, which is the one thing about them that does not matter.
+// Numbering counts only the ordinary POCs, so removing the billing row never
+// renumbers the people above it.
+function labelFor(pocs: CoursePOC[], i: number) {
+  if (pocs[i].role === 'billing') return 'Billing contact'
+  const nth = pocs.slice(0, i).filter((p) => p.role !== 'billing').length
+  return nth === 0 ? 'Point of contact' : `POC ${nth + 1}`
+}
+
 // Editable POC list for a course form. Renders one POC (name/phone/email) by
 // default; "+" buttons reveal extra phone/email lines or a whole extra POC.
+//
+// One of them can be the billing contact — the person invoiced, who is
+// usually not the person who booked. It is the same row with a different
+// label, so marking a POC you already typed is a click rather than a retype.
+// "+ Billing" hides itself once there is one, which is the whole of the "if
+// different" condition: the button is only there while it can still be true.
 // State is serialized into a hidden contacts_json input, so it works in both
 // the plain create form and AutoSaveForm (typing bubbles input events; line
 // removals dispatch one manually so the auto-save notices).
@@ -64,12 +80,14 @@ export default function CourseContactsEditor({ initial }: { initial: CoursePOC[]
     }))
   )
   const hiddenRef = useRef<HTMLInputElement>(null)
+  const hasBilling = pocs.some((p) => p.role === 'billing')
 
   const cleaned = pocs
     .map((p) => ({
       name: p.name.trim(),
       phones: p.phones.map((s) => s.trim()).filter(Boolean),
       emails: p.emails.map((s) => s.trim()).filter(Boolean),
+      ...(p.role ? { role: p.role } : {}),
     }))
     .filter((p) => p.name || p.phones.length || p.emails.length)
 
@@ -92,14 +110,12 @@ export default function CourseContactsEditor({ initial }: { initial: CoursePOC[]
         <div key={i} className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-start">
           <div>
             <div className="flex items-center justify-between mb-1">
-              <label className="block text-xs text-zinc-400">
-                {i === 0 ? 'Point of contact' : `POC ${i + 1}`}
-              </label>
+              <label className="block text-xs text-zinc-400">{labelFor(pocs, i)}</label>
               <span className="flex items-center gap-1.5">
-                {i > 0 && (
+                {(i > 0 || p.role === 'billing') && (
                   <button
                     type="button"
-                    title="Remove this POC"
+                    title={p.role === 'billing' ? 'Remove the billing contact' : 'Remove this POC'}
                     onClick={() => update((n) => void n.splice(i, 1), { notify: true })}
                     className={removeBtnCls}
                   >
@@ -107,14 +123,36 @@ export default function CourseContactsEditor({ initial }: { initial: CoursePOC[]
                   </button>
                 )}
                 {i === pocs.length - 1 && (
-                  <button
-                    type="button"
-                    title="Add another POC"
-                    onClick={() => update((n) => void n.push({ name: '', phones: [''], emails: [''] }))}
-                    className={miniBtnCls}
-                  >
-                    + POC
-                  </button>
+                  <>
+                    <button
+                      type="button"
+                      title="Add another POC"
+                      // Inserted above the billing contact, which stays last:
+                      // it is the end of the list in the same sense that it is
+                      // the end of the job.
+                      onClick={() =>
+                        update((n) => {
+                          const at = n.findIndex((c) => c.role === 'billing')
+                          n.splice(at === -1 ? n.length : at, 0, { name: '', phones: [''], emails: [''] })
+                        })
+                      }
+                      className={miniBtnCls}
+                    >
+                      + POC
+                    </button>
+                    {!hasBilling && (
+                      <button
+                        type="button"
+                        title="The person to invoice, if that is not the POC above"
+                        onClick={() =>
+                          update((n) => void n.push({ name: '', phones: [''], emails: [''], role: 'billing' }))
+                        }
+                        className={miniBtnCls}
+                      >
+                        + Billing
+                      </button>
+                    )}
+                  </>
                 )}
               </span>
             </div>

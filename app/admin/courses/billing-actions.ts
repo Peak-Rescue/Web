@@ -1,0 +1,152 @@
+'use server'
+
+import { revalidatePath } from 'next/cache'
+import { after } from 'next/server'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { requireAdminUser } from '@/lib/course-access'
+import { parseContacts, billingContact } from '@/lib/contacts'
+import { courseShortName } from '@/lib/courses'
+import { describeForBiller } from '@/lib/billing'
+import { quoteNumber } from '@/lib/quotes'
+import { fmtMoney } from '@/lib/expenses'
+import { sendMail } from '@/lib/mailer'
+
+type Result = { ok: true } | { ok: false; error: string }
+
+const siteUrl = () => process.env.NEXT_PUBLIC_SITE_URL || 'https://peak-rescue.com'
+
+// Hand a course to Harken to be billed.
+//
+// Everything the biller needs is copied onto the request here and never read
+// live again. A request is the thing Harken acted on: it has to read a year
+// from now exactly as it read the day it was sent, and a POC corrected next
+// week must not silently change an invoice already raised against it.
+//
+// Which is also what happens when the number moves afterwards. A cut day or a
+// renegotiation is a second request, not an edit of the first.
+export async function sendInvoiceRequest(instanceId: string, adminNote: string): Promise<Result> {
+  const { user, admin } = await requireAdminUser()
+
+  const [{ data: inst }, { data: quotes }, { data: recipients }] = await Promise.all([
+    admin
+      .from('course_instances')
+      .select('ref_number, course_type, custom_title, client_name, starts_at, ends_at, contacts')
+      .eq('id', instanceId)
+      .maybeSingle(),
+    admin
+      .from('course_quotes')
+      .select('id, quote_seq, total, status, archived_at')
+      .eq('instance_id', instanceId)
+      .eq('status', 'accepted')
+      .order('quote_seq', { ascending: false }),
+    admin.from('billing_recipients').select('id, name, email, token').eq('active', true),
+  ])
+  if (!inst) return { ok: false, error: 'Course not found' }
+
+  // The two guards that stop a useless request going out. A row with a blank
+  // payee or a number nobody agreed to is worse than no row: the biller has to
+  // come back to us to find out what it means, which is the whole of what this
+  // was meant to save.
+  const billTo = billingContact(parseContacts(inst.contacts))
+  if (!billTo) return { ok: false, error: 'Add a billing contact in Details first' }
+
+  const accepted = (quotes ?? []).find((q) => !q.archived_at)
+  if (!accepted) return { ok: false, error: 'No accepted quote on this course yet' }
+
+  const to = (recipients ?? []).map((r) => r.email).filter(Boolean)
+  if (to.length === 0) return { ok: false, error: 'No active billing recipient — add one first' }
+
+  const courseName = courseShortName(inst.course_type, inst.custom_title)
+  const description = describeForBiller({
+    refNumber: inst.ref_number,
+    courseName,
+    clientName: inst.client_name,
+    startsAt: inst.starts_at,
+    endsAt: inst.ends_at,
+  })
+  const amount = Number(accepted.total)
+  // The number on the document the client actually received — what they will
+  // reconcile the invoice against, and what tells a re-quote's request apart
+  // from the first one.
+  const qNum = quoteNumber(inst.ref_number, accepted.quote_seq as number)
+
+  const { error } = await admin.from('invoice_requests').insert({
+    instance_id: instanceId,
+    quote_id: accepted.id,
+    quote_number: qNum,
+    amount,
+    description,
+    bill_to_org: inst.client_name,
+    bill_to_name: billTo.name || null,
+    bill_to_email: billTo.emails[0] ?? null,
+    bill_to_phone: billTo.phones[0] ?? null,
+    admin_note: adminNote.trim().slice(0, 2000) || null,
+    status: 'sent',
+    sent_at: new Date().toISOString(),
+    sent_by: user.id,
+  })
+  if (error) return { ok: false, error: 'Could not create the request — please try again' }
+
+  // Every active recipient is told, and each gets their own link: the queue is
+  // shared, the address into it is not.
+  if (process.env.RESEND_API_KEY) {
+    after(async () => {
+      for (const r of recipients ?? []) {
+        try {
+          await sendMail({
+            from: 'Peak Rescue Portal <noreply@peak-rescue.com>',
+            to: [r.email],
+            subject: `Please invoice ${qNum} — ${description}`,
+            text: [
+              `Hi ${r.name.split(' ')[0]},`,
+              '',
+              `Please raise an invoice for ${fmtMoney(amount)}.`,
+              '',
+              description,
+              `Our quote: ${qNum}`,
+              '',
+              'Bill to:',
+              [billTo.name, inst.client_name].filter(Boolean).join(' · '),
+              ...(billTo.emails[0] ? [billTo.emails[0]] : []),
+              ...(billTo.phones[0] ? [billTo.phones[0]] : []),
+              ...(adminNote.trim() ? ['', adminNote.trim()] : []),
+              '',
+              `Mark it invoiced and record payment here: ${siteUrl()}/billing/${r.token}`,
+              '',
+              'Thank you,',
+              'Peak Rescue',
+            ].join('\n'),
+          })
+        } catch (e) {
+          console.error('Invoice request mail failed:', e)
+        }
+      }
+    })
+  }
+
+  revalidatePath(`/portal/${instanceId}`)
+  revalidatePath('/admin/billing')
+  return { ok: true }
+}
+
+// Withdrawn rather than deleted: "we asked and then said never mind" is worth
+// keeping, and a row that vanishes takes the reason with it.
+export async function cancelInvoiceRequest(requestId: string): Promise<Result> {
+  const { admin } = await requireAdminUser()
+  const { data: req } = await admin
+    .from('invoice_requests')
+    .select('id, instance_id, status')
+    .eq('id', requestId)
+    .maybeSingle()
+  if (!req) return { ok: false, error: 'Not found' }
+  // A paid request is a record of money that moved. Nothing here gets to say
+  // it did not.
+  if (req.status === 'paid') return { ok: false, error: 'This one has been paid — it cannot be cancelled' }
+
+  const { error } = await admin.from('invoice_requests').update({ status: 'cancelled' }).eq('id', req.id)
+  if (error) return { ok: false, error: 'Could not cancel — please try again' }
+
+  revalidatePath(`/portal/${req.instance_id}`)
+  revalidatePath('/admin/billing')
+  return { ok: true }
+}

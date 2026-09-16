@@ -98,6 +98,13 @@ export async function acceptQuote(
             '',
             `Course: ${courseName}${inst.client_name ? ` · ${inst.client_name}` : ''}`,
             `The course status has been moved to Confirmed.`,
+            '',
+            // Said here because this is the mail somebody actually reads on
+            // the day it happens, and the handoff is the next thing that has
+            // to occur. Never sent automatically: at the moment a quote is
+            // accepted the billing contact is usually still unknown, and a
+            // request with a blank payee is worse for the biller than none.
+            `Next: send it to Harken to be invoiced — Billing, on the course's Pricing section.`,
           ].join('\n'),
         })
       }

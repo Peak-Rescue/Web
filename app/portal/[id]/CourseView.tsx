@@ -1532,6 +1532,13 @@ export default async function CourseView({
                       <div className="grid grid-cols-[repeat(auto-fit,minmax(210px,1fr))] gap-x-6 gap-y-4">
                         {coursePocs.map((c, i) => (
                           <div key={i} className="text-sm min-w-0">
+                            {/* Named, not numbered. The billing contact is the
+                                one card here you might reach for on purpose
+                                rather than read past, and without the label
+                                it is indistinguishable from a second POC. */}
+                            {c.role === 'billing' && (
+                              <p className="text-[11px] uppercase tracking-wide text-zinc-500">Billing</p>
+                            )}
                             {c.name && <p className="text-zinc-200 truncate">{c.name}</p>}
                             {c.emails.map((em) => (
                               <a
