@@ -219,6 +219,9 @@ export default function MyTasksList({ tasks, done = [] }: { tasks: MyOpenTask[];
 
           {openId === t.id && (
             <div className="mt-2 ml-7 mr-1">
+              {t.assignedByName && (
+                <p className="text-xs text-zinc-500 mb-2">Assigned by {t.assignedByName}</p>
+              )}
               <div className="flex items-center flex-wrap gap-2 mb-2">
                 {t.documents.map((d) => (
                   <TaskDocChip

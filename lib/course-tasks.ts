@@ -57,6 +57,8 @@ export type MyOpenTask = {
   notes: string | null
   /** When it was ticked, on the ones that have been. */
   completedAt?: string | null
+  /** Who put it on your plate, when that was somebody other than you. */
+  assignedByName: string | null
   courseName: string | null
   courseStatus: string | null
   clientName: string | null
@@ -75,7 +77,7 @@ export async function loadMyOpenTasks(
 ): Promise<MyOpenTask[]> {
   const { data } = await admin
     .from('course_tasks')
-    .select('id, instance_id, title, notes, created_at, completed_at, course_instances(course_type, custom_title, status, client_name, location, starts_at, ends_at), course_task_documents(id, path, filename, url)')
+    .select('id, instance_id, title, notes, assigned_by, created_at, completed_at, course_instances(course_type, custom_title, status, client_name, location, starts_at, ends_at), course_task_documents(id, path, filename, url)')
     .eq('assigned_to', userId)
     .eq('status', 'open')
     .order('created_at', { ascending: true })
@@ -101,7 +103,7 @@ export async function loadMyOpenTasks(
         (a.created_at as string).localeCompare(b.created_at as string)
       )
     })
-  return shapeMyTasks(admin, rows)
+  return shapeMyTasks(admin, rows, userId)
 }
 
 // Rows to tasks: course name flattened out of the join, and every attachment
@@ -109,7 +111,9 @@ export async function loadMyOpenTasks(
 // exactly what an open one does — which is the point of keeping them.
 async function shapeMyTasks(
   admin: ReturnType<typeof createAdminClient>,
-  rows: Record<string, unknown>[]
+  rows: Record<string, unknown>[],
+  /** Whose list this is — so a task you assigned yourself isn't attributed. */
+  userId: string
 ): Promise<MyOpenTask[]> {
   type InstRow = {
     course_type: string
@@ -124,10 +128,32 @@ async function shapeMyTasks(
   const allPaths = rows.flatMap((r) =>
     ((r.course_task_documents ?? []) as DocRow[]).map((d) => d.path).filter((p): p is string => Boolean(p))
   )
-  const { data: signed } = allPaths.length
-    ? await admin.storage.from('task-documents').createSignedUrls(allPaths, 3600)
-    : { data: [] }
+  // Who assigned each one. Your own name is not the answer to "who put this on
+  // my plate", so a task you assigned yourself reads as unattributed — the same
+  // as one from before the column existed, which is most of the old ones.
+  const assignerIds = [...new Set(
+    rows
+      .map((r) => r.assigned_by as string | null)
+      .filter((id): id is string => Boolean(id) && id !== userId)
+  )]
+  // Asked together: the names have nothing to do with the signing and no
+  // reason to wait behind it.
+  const [{ data: signed }, { data: assigners }] = await Promise.all([
+    allPaths.length
+      ? admin.storage.from('task-documents').createSignedUrls(allPaths, 3600)
+      : Promise.resolve({ data: [] }),
+    assignerIds.length
+      ? admin.from('profiles').select('id, first_name, last_name').in('id', assignerIds)
+      : Promise.resolve({ data: [] }),
+  ])
   const urlByPath = new Map((signed ?? []).map((s) => [s.path, s.signedUrl]))
+  type AssignerRow = { id: string; first_name: string | null; last_name: string | null }
+  const assignerName = new Map(
+    ((assigners ?? []) as AssignerRow[]).map((p) => [
+      p.id,
+      [p.first_name, p.last_name].filter(Boolean).join(' ').trim() || null,
+    ])
+  )
 
   const { courseShortName } = await import('@/lib/courses')
   return rows.map((r) => {
@@ -138,6 +164,7 @@ async function shapeMyTasks(
       title: r.title as string,
       notes: (r.notes as string | null) ?? null,
       completedAt: (r.completed_at as string | null) ?? null,
+      assignedByName: assignerName.get(r.assigned_by as string) ?? null,
       courseName: inst ? courseShortName(inst.course_type, inst.custom_title) : null,
       courseStatus: inst?.status ?? null,
       clientName: inst?.client_name ?? null,
@@ -173,7 +200,7 @@ export async function loadMyDoneTasks(
 ): Promise<MyOpenTask[]> {
   const { data } = await admin
     .from('course_tasks')
-    .select('id, instance_id, title, notes, created_at, completed_at, course_instances(course_type, custom_title, status, client_name, location, starts_at, ends_at), course_task_documents(id, path, filename, url)')
+    .select('id, instance_id, title, notes, assigned_by, created_at, completed_at, course_instances(course_type, custom_title, status, client_name, location, starts_at, ends_at), course_task_documents(id, path, filename, url)')
     .eq('assigned_to', userId)
     .eq('status', 'done')
     .order('completed_at', { ascending: false, nullsFirst: false })
@@ -185,5 +212,5 @@ export async function loadMyDoneTasks(
   return shapeMyTasks(admin, (data ?? []).filter((r) => {
     const inst = r.course_instances as unknown as { status: string; ends_at: string | null } | null
     return inst && inst.status !== 'cancelled' && (!inst.ends_at || inst.ends_at >= today)
-  }).slice(0, DONE_LIMIT))
+  }).slice(0, DONE_LIMIT), userId)
 }

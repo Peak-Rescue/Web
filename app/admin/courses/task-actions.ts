@@ -54,19 +54,27 @@ async function notifyAssignee(
 ) {
   if (assigneeId === actorId || !process.env.RESEND_API_KEY) return
   try {
-    const [{ data: assignee }, { data: inst }] = await Promise.all([
+    const [{ data: assignee }, { data: actor }, { data: inst }] = await Promise.all([
       admin.from('profiles').select('email, first_name').eq('id', assigneeId).single(),
+      admin.from('profiles').select('first_name, last_name').eq('id', actorId).single(),
       admin.from('course_instances').select('course_type, custom_title, client_name, starts_at').eq('id', instanceId).single(),
     ])
     if (!assignee?.email || !inst) return
     const courseName = courseShortName(inst.course_type, inst.custom_title)
+    const actorName = [actor?.first_name, actor?.last_name].filter(Boolean).join(' ').trim()
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://peak-rescue.com'
     await sendMail({
       from: 'Peak Rescue Portal <noreply@peak-rescue.com>',
       to: [assignee.email],
       subject: `Task assigned — ${courseName}: ${taskTitle}`,
       text: [
-        `${assignee.first_name ?? 'Hi'}, you've been assigned a task in the portal.`,
+        // Named rather than passive: the first question a task raises is who
+        // wants it, and this mail is where most of them are first read. Falls
+        // back to the old wording rather than to "someone", which is worse
+        // than not saying.
+        actorName
+          ? `${assignee.first_name ?? 'Hi'}, ${actorName} assigned you a task in the portal.`
+          : `${assignee.first_name ?? 'Hi'}, you've been assigned a task in the portal.`,
         '',
         `Course: ${courseName}${inst.client_name ? ` · ${inst.client_name}` : ''}${inst.starts_at ? ` · starts ${inst.starts_at}` : ''}`,
         `Task: ${taskTitle}`,
