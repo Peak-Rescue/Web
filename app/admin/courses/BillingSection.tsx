@@ -39,17 +39,22 @@ export default function BillingSection({
   // open boxes on one list is how the wrong row gets the number.
   const [recording, setRecording] = useState<{ id: string; kind: 'invoiced' | 'paid' } | null>(null)
   const [entry, setEntry] = useState('')
+  // The agreed figure, typed, for a course with no accepted quote behind it.
+  const [amount, setAmount] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [pending, start] = useTransition()
   const router = useRouter()
 
+  // What actually stops a request going out: nobody to bill, or nobody to
+  // send it to. A missing accepted quote is not one of them — plenty of
+  // courses are booked against a PO or agreed on a call, and a course that
+  // has already run cannot be held hostage to paperwork that took a different
+  // route. It asks for the number instead.
   const blocker = !billTo
     ? 'Add a point of contact in Details before handing this to Harken.'
-    : acceptedTotal === null
-      ? 'No accepted quote yet — there is no agreed number to bill.'
-      : recipientNames.length === 0
-        ? 'No active billing recipient. Add one in Portal → Billing.'
-        : null
+    : recipientNames.length === 0
+      ? 'No active billing recipient. Add one in Portal → Billing.'
+      : null
 
   // A second request is a real thing (a cut day, a renegotiation) but never
   // an accident. Sending again asks first.
@@ -59,9 +64,10 @@ export default function BillingSection({
     if (alreadySent && !confirm('This course has already been sent to Harken. Send a second request?')) return
     setError(null)
     start(async () => {
-      const res = await sendInvoiceRequest(instanceId, note)
+      const res = await sendInvoiceRequest(instanceId, note, amount)
       if (res.ok) {
         setNote('')
+        setAmount('')
         router.refresh()
       } else setError(res.error)
     })
@@ -192,7 +198,7 @@ export default function BillingSection({
       ) : (
         <>
           <p className="text-xs text-zinc-500 mb-3">
-            Sends {fmtMoney(acceptedTotal!)} and {billTo!.name}
+            Sends {acceptedTotal === null ? 'the amount below' : fmtMoney(acceptedTotal)} and {billTo!.name}
             {billTo!.email ? ` (${billTo!.email})` : ''} to {recipientNames.join(', ')}. What goes out is a copy —
             later edits to the contact or the quote will not change it.
             {/* Said out loud, because billing the person who booked the course
@@ -202,6 +208,24 @@ export default function BillingSection({
               <> The bill goes to the course contact — mark someone the billing contact in Details if it should not.</>
             )}
           </p>
+          {/* No quote went out through the portal, so the number has to come
+              from the person who knows it. Asked for here rather than by
+              sending them off to invent a quote nobody will ever look at. */}
+          {acceptedTotal === null && (
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-zinc-500 text-sm">$</span>
+              <input
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                inputMode="decimal"
+                placeholder="0.00"
+                className="w-32 bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm text-right focus:outline-none focus:border-zinc-500"
+              />
+              <span className="text-xs text-zinc-500">
+                No accepted quote on this course — the agreed amount.
+              </span>
+            </div>
+          )}
           <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-3 items-start">
             <input
               value={note}
@@ -212,7 +236,7 @@ export default function BillingSection({
             <button
               type="button"
               onClick={send}
-              disabled={pending}
+              disabled={pending || (acceptedTotal === null && amount.trim() === '')}
               className="px-3 py-2 text-sm rounded bg-pr-red/90 hover:bg-pr-red text-white transition-colors disabled:opacity-50 whitespace-nowrap"
             >
               {pending ? 'Sending…' : alreadySent ? 'Send again' : 'Send to Harken'}

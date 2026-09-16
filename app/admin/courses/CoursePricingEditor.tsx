@@ -291,7 +291,10 @@ export default async function CoursePricingEditor({
   const handedToHarken = invoiceRequests.some((r) => r.status !== 'cancelled')
   const billingSummary = (() => {
     const live = invoiceRequests.filter((r) => r.status !== 'cancelled')
-    if (live.length === 0) return acceptedQuote ? 'not sent' : undefined
+    // "not sent" whether or not a quote was accepted: a course can be billed
+    // against a typed figure, so a missing quote is no longer a reason for
+    // the folded section to say nothing at all.
+    if (live.length === 0) return 'not sent'
     const paid = live.filter((r) => r.status === 'paid')
     if (paid.length === live.length) return 'paid'
     return live.some((r) => r.status === 'invoiced') ? 'invoiced' : 'with Harken'

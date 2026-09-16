@@ -23,7 +23,17 @@ const siteUrl = () => process.env.NEXT_PUBLIC_SITE_URL || 'https://peak-rescue.c
 //
 // Which is also what happens when the number moves afterwards. A cut day or a
 // renegotiation is a second request, not an edit of the first.
-export async function sendInvoiceRequest(instanceId: string, adminNote: string): Promise<Result> {
+export async function sendInvoiceRequest(
+  instanceId: string,
+  adminNote: string,
+  /** The agreed figure, for a course that has no accepted quote in the portal
+      — booked against a PO, agreed on a call, or run on a standing rate. The
+      handoff needs a number somebody agreed to, not a quote specifically, and
+      refusing to bill a course that has already run because the paperwork
+      took a different route is the portal getting in the way of the work.
+      Ignored when there is an accepted quote: that number is the agreed one. */
+  amountEntered?: string
+): Promise<Result> {
   const { user, admin } = await requireAdminUser()
 
   const [{ data: inst }, { data: quotes }, { data: recipients }] = await Promise.all([
@@ -54,7 +64,10 @@ export async function sendInvoiceRequest(instanceId: string, adminNote: string):
   if (!payee) return { ok: false, error: 'Add a point of contact in Details first' }
 
   const accepted = (quotes ?? []).find((q) => !q.archived_at)
-  if (!accepted) return { ok: false, error: 'No accepted quote on this course yet' }
+  const typedAmount = accepted ? null : parseMoney(amountEntered ?? '')
+  if (!accepted && (typedAmount === null || typedAmount <= 0)) {
+    return { ok: false, error: 'Enter the amount to bill' }
+  }
 
   const to = (recipients ?? []).map((r) => r.email).filter(Boolean)
   if (to.length === 0) return { ok: false, error: 'No active billing recipient — add one first' }
@@ -67,15 +80,16 @@ export async function sendInvoiceRequest(instanceId: string, adminNote: string):
     startsAt: inst.starts_at,
     endsAt: inst.ends_at,
   })
-  const amount = Number(accepted.total)
+  const amount = accepted ? Number(accepted.total) : (typedAmount as number)
   // The number on the document the client actually received — what they will
   // reconcile the invoice against, and what tells a re-quote's request apart
-  // from the first one.
-  const qNum = quoteNumber(inst.ref_number, accepted.quote_seq as number)
+  // from the first one. Null when no quote went out through the portal, which
+  // the biller's row reads as "no quote number" rather than inventing one.
+  const qNum = accepted ? quoteNumber(inst.ref_number, accepted.quote_seq as number) : null
 
   const { error } = await admin.from('invoice_requests').insert({
     instance_id: instanceId,
-    quote_id: accepted.id,
+    quote_id: accepted?.id ?? null,
     quote_number: qNum,
     amount,
     description,
@@ -99,14 +113,14 @@ export async function sendInvoiceRequest(instanceId: string, adminNote: string):
           await sendMail({
             from: 'Peak Rescue Portal <noreply@peak-rescue.com>',
             to: [r.email],
-            subject: `Please invoice ${qNum} — ${description}`,
+            subject: qNum ? `Please invoice ${qNum} — ${description}` : `Please invoice — ${description}`,
             text: [
               `Hi ${r.name.split(' ')[0]},`,
               '',
               `Please raise an invoice for ${fmtMoney(amount)}.`,
               '',
               description,
-              `Our quote: ${qNum}`,
+              ...(qNum ? [`Our quote: ${qNum}`] : []),
               '',
               'Bill to:',
               [payee.contact.name, inst.client_name].filter(Boolean).join(' · '),
