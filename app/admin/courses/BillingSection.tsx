@@ -24,8 +24,11 @@ export default function BillingSection({
 }: {
   instanceId: string
   requests: InvoiceRequest[]
-  /** The POC tagged billing in Details, or null. */
-  billTo: { name: string; email: string | null } | null
+  /** Who the invoice goes to: the POC tagged billing in Details, or the
+      course's own contact when nobody is tagged. `tagged` says which, so the
+      screen can name the fallback rather than quietly billing whoever is
+      first on the list. */
+  billTo: { name: string; email: string | null; tagged: boolean } | null
   /** The accepted quote's total, or null if nothing has been accepted. */
   acceptedTotal: number | null
   recipientNames: string[]
@@ -41,7 +44,7 @@ export default function BillingSection({
   const router = useRouter()
 
   const blocker = !billTo
-    ? 'Add a billing contact in Details before handing this to Harken.'
+    ? 'Add a point of contact in Details before handing this to Harken.'
     : acceptedTotal === null
       ? 'No accepted quote yet — there is no agreed number to bill.'
       : recipientNames.length === 0
@@ -192,6 +195,12 @@ export default function BillingSection({
             Sends {fmtMoney(acceptedTotal!)} and {billTo!.name}
             {billTo!.email ? ` (${billTo!.email})` : ''} to {recipientNames.join(', ')}. What goes out is a copy —
             later edits to the contact or the quote will not change it.
+            {/* Said out loud, because billing the person who booked the course
+                is right nearly every time and wrong in a way nobody would
+                catch: the invoice simply arrives at the wrong desk. */}
+            {!billTo!.tagged && (
+              <> The bill goes to the course contact — mark someone the billing contact in Details if it should not.</>
+            )}
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-3 items-start">
             <input

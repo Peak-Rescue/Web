@@ -3,7 +3,7 @@ import { courseShortName, courseDayCounts } from '@/lib/courses'
 import { coaPrice, guessSeedQty, DEFAULT_MARGIN } from '@/lib/estimates'
 import { HERO_CHOICES } from '@/lib/quote-heroes'
 import { QUOTE_ROW_COLUMNS } from '@/lib/quotes'
-import { primaryContactEmail, ccEmailOptions, billingContact, type CoursePOC } from '@/lib/contacts'
+import { primaryContactEmail, ccEmailOptions, billTo, type CoursePOC } from '@/lib/contacts'
 import EstimatePanel, { type PricingRate } from '@/components/EstimatePanel'
 import { EstimateReviewBanner, EstimateReviewRequest, type EstimateReviewRow } from './EstimateReviewBar'
 import CoaComparison from './CoaComparison'
@@ -275,10 +275,11 @@ export default async function CoursePricingEditor({
     ? { seq: suggested.quote_seq as number, total: suggested.total, status: suggested.status }
     : null
 
-  // The handoff to Harken. `billTo` is the POC tagged billing in Details —
+  // The handoff to Harken. The payee is the POC tagged billing in Details, or
+  // the course's own contact when nobody is tagged —
   // read here rather than in the client component so the section can say which
   // of the two prerequisites is missing before anyone clicks anything.
-  const billTo = billingContact(contacts)
+  const payee = billTo(contacts)
   const invoiceRequests: InvoiceRequest[] = (invoiceRows ?? []).map((r) => ({
     ...r,
     amount: Number(r.amount ?? 0),
@@ -456,7 +457,11 @@ export default async function CoursePricingEditor({
       <BillingSection
         instanceId={instanceId}
         requests={invoiceRequests}
-        billTo={billTo ? { name: billTo.name, email: billTo.emails[0] ?? null } : null}
+        billTo={
+          payee
+            ? { name: payee.contact.name, email: payee.contact.emails[0] ?? null, tagged: payee.tagged }
+            : null
+        }
         acceptedTotal={acceptedQuote ? acceptedQuote.total : null}
         recipientNames={(billerRows ?? []).map((r) => r.name as string)}
       />

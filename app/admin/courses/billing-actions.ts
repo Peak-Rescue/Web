@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { after } from 'next/server'
 import { requireAdminUser } from '@/lib/course-access'
-import { parseContacts, billingContact } from '@/lib/contacts'
+import { parseContacts, billTo } from '@/lib/contacts'
 import { courseShortName } from '@/lib/courses'
 import { describeForBiller, parseMoney } from '@/lib/billing'
 import { quoteNumber } from '@/lib/quotes'
@@ -46,8 +46,12 @@ export async function sendInvoiceRequest(instanceId: string, adminNote: string):
   // payee or a number nobody agreed to is worse than no row: the biller has to
   // come back to us to find out what it means, which is the whole of what this
   // was meant to save.
-  const billTo = billingContact(parseContacts(inst.contacts))
-  if (!billTo) return { ok: false, error: 'Add a billing contact in Details first' }
+  //
+  // The payee is the course's own contact unless a POC is tagged billing. On
+  // nearly every course the person who booked it is the person invoiced, and
+  // demanding the tag anyway blocked the handover on re-stating the obvious.
+  const payee = billTo(parseContacts(inst.contacts))
+  if (!payee) return { ok: false, error: 'Add a point of contact in Details first' }
 
   const accepted = (quotes ?? []).find((q) => !q.archived_at)
   if (!accepted) return { ok: false, error: 'No accepted quote on this course yet' }
@@ -76,9 +80,9 @@ export async function sendInvoiceRequest(instanceId: string, adminNote: string):
     amount,
     description,
     bill_to_org: inst.client_name,
-    bill_to_name: billTo.name || null,
-    bill_to_email: billTo.emails[0] ?? null,
-    bill_to_phone: billTo.phones[0] ?? null,
+    bill_to_name: payee.contact.name || null,
+    bill_to_email: payee.contact.emails[0] ?? null,
+    bill_to_phone: payee.contact.phones[0] ?? null,
     admin_note: adminNote.trim().slice(0, 2000) || null,
     status: 'sent',
     sent_at: new Date().toISOString(),
@@ -105,9 +109,9 @@ export async function sendInvoiceRequest(instanceId: string, adminNote: string):
               `Our quote: ${qNum}`,
               '',
               'Bill to:',
-              [billTo.name, inst.client_name].filter(Boolean).join(' · '),
-              ...(billTo.emails[0] ? [billTo.emails[0]] : []),
-              ...(billTo.phones[0] ? [billTo.phones[0]] : []),
+              [payee.contact.name, inst.client_name].filter(Boolean).join(' · '),
+              ...(payee.contact.emails[0] ? [payee.contact.emails[0]] : []),
+              ...(payee.contact.phones[0] ? [payee.contact.phones[0]] : []),
               ...(adminNote.trim() ? ['', adminNote.trim()] : []),
               '',
               `Mark it invoiced and record payment here: ${siteUrl()}/billing/${r.token}`,

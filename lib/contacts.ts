@@ -46,10 +46,30 @@ export const primaryContactEmail = (contacts: CoursePOC[]) =>
   contacts[0]?.emails[0] ??
   null
 
-// Who to invoice. Null is the normal state early on: it is filled in by the
-// time the quote is accepted, not by the time the course is created.
+// The POC somebody has explicitly said is the one to invoice. Usually nobody
+// has, which is not a gap — see billTo.
 export const billingContact = (contacts: CoursePOC[]) =>
   contacts.find((c) => c.role === 'billing') ?? null
+
+/** Who the bill goes to, which a course almost always already knows.
+ 
+    The person who booked the course is the person invoiced, unless somebody
+    says otherwise — that is how it works on nearly every course, and treating
+    the tag as required meant a course with a perfectly good contact refused to
+    be handed to Harken until somebody re-stated the obvious. So the tag is an
+    exception now, not a prerequisite: tag a POC when accounts payable is a
+    different human, and otherwise the first contact stands.
+ 
+    `tagged` says which of the two it is, so a screen can name the fallback out
+    loud rather than quietly billing whoever happens to be first. */
+export function billTo(contacts: CoursePOC[]): { contact: CoursePOC; tagged: boolean } | null {
+  const marked = billingContact(contacts)
+  if (marked) return { contact: marked, tagged: true }
+  // Someone with nothing but a name is still who to bill: the biller has a
+  // phone and a client, and an empty row is not a contact at all.
+  const first = contacts.find((c) => c.name || c.emails.length > 0)
+  return first ? { contact: first, tagged: false } : null
+}
 
 // Every other email on file — offered as opt-in CCs when sending a quote.
 // The billing POC is in here: copying them on the quote is a choice worth

@@ -123,36 +123,22 @@ export default function CourseContactsEditor({ initial }: { initial: CoursePOC[]
                   </button>
                 )}
                 {i === pocs.length - 1 && (
-                  <>
-                    <button
-                      type="button"
-                      title="Add another POC"
-                      // Inserted above the billing contact, which stays last:
-                      // it is the end of the list in the same sense that it is
-                      // the end of the job.
-                      onClick={() =>
-                        update((n) => {
-                          const at = n.findIndex((c) => c.role === 'billing')
-                          n.splice(at === -1 ? n.length : at, 0, { name: '', phones: [''], emails: [''] })
-                        })
-                      }
-                      className={miniBtnCls}
-                    >
-                      + POC
-                    </button>
-                    {!hasBilling && (
-                      <button
-                        type="button"
-                        title="The person to invoice, if that is not the POC above"
-                        onClick={() =>
-                          update((n) => void n.push({ name: '', phones: [''], emails: [''], role: 'billing' }))
-                        }
-                        className={miniBtnCls}
-                      >
-                        + Billing
-                      </button>
-                    )}
-                  </>
+                  <button
+                    type="button"
+                    title="Add another POC"
+                    // Inserted above the billing contact, which stays last:
+                    // it is the end of the list in the same sense that it is
+                    // the end of the job.
+                    onClick={() =>
+                      update((n) => {
+                        const at = n.findIndex((c) => c.role === 'billing')
+                        n.splice(at === -1 ? n.length : at, 0, { name: '', phones: [''], emails: [''] })
+                      })
+                    }
+                    className={miniBtnCls}
+                  >
+                    + POC
+                  </button>
                 )}
               </span>
             </div>
@@ -181,6 +167,28 @@ export default function CourseContactsEditor({ initial }: { initial: CoursePOC[]
           />
         </div>
       ))}
+
+      {/* The rule stated where the list is, rather than discovered at the
+          handover. Invoices follow the point of contact, which is right on
+          nearly every course; the exception is a real one — accounts payable
+          is often a different human — and it is one sentence and one click
+          away instead of a button abbreviated to "+ Billing" in a row of
+          icons. Once there is a billing contact the row above says so in its
+          own label, so the sentence retires rather than repeating itself. */}
+      {!hasBilling && (
+        <p className="text-xs text-zinc-500">
+          Invoices go to the point of contact.{' '}
+          <button
+            type="button"
+            onClick={() =>
+              update((n) => void n.push({ name: '', phones: [''], emails: [''], role: 'billing' }), { notify: true })
+            }
+            className="underline underline-offset-2 decoration-zinc-600 hover:text-zinc-300 transition-colors"
+          >
+            Someone else pays?
+          </button>
+        </p>
+      )}
     </div>
   )
 }
