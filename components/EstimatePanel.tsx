@@ -654,7 +654,7 @@ export default function EstimatePanel({
                     type="number"
                     value={r.rate}
                     min="0"
-                    step="0.01"
+                    step="10"
                     onChange={(e) => updateRow(r.key, { rate: e.target.value })}
                     className={`${inputCls} w-24 text-right`}
                     title={rateUnit(r) ? `Dollars ${rateUnit(r)}` : 'Dollar rate'}
@@ -823,7 +823,7 @@ export default function EstimatePanel({
               <input
                 type="number"
                 min="0"
-                step="0.01"
+                step="10"
                 value={override}
                 onChange={(e) => schedule(rows, margin, undefined, e.target.value)}
                 placeholder={String(calculated)}
