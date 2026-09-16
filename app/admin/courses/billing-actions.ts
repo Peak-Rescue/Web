@@ -161,6 +161,35 @@ export async function sendInvoiceRequest(
   return { ok: true }
 }
 
+/** Throws a withdrawn request away for good.
+ 
+    Withdrawing keeps the record on purpose — "we asked and then said never
+    mind" is worth knowing, and a row that vanishes takes its reason with it.
+    But a test send, or a request raised against the wrong course, is not a
+    fact about the business; it is a mistake, and leaving it struck through on
+    the course forever makes the section harder to read for no gain.
+ 
+    Only a withdrawn one, and only ever a withdrawn one. Anything Harken has
+    acted on is a record of money, and nothing here deletes those. */
+export async function deleteInvoiceRequest(requestId: string): Promise<Result> {
+  const { admin } = await requireAdminUser()
+  const { data: req } = await admin
+    .from('invoice_requests')
+    .select('id, instance_id, status')
+    .eq('id', requestId)
+    .maybeSingle()
+  if (!req) return { ok: false, error: 'Not found' }
+  if (req.status !== 'cancelled') {
+    return { ok: false, error: 'Withdraw it first — only a withdrawn request can be thrown away' }
+  }
+  const { error } = await admin.from('invoice_requests').delete().eq('id', req.id).eq('status', 'cancelled')
+  if (error) return { ok: false, error: 'Could not remove it — please try again' }
+
+  revalidatePath(`/portal/${req.instance_id}`)
+  revalidatePath('/admin/billing')
+  return { ok: true }
+}
+
 // ─── Recording a milestone from our side ─────────────────────────────────────
 //
 // The biller marks her own work on her own page, and that stays the ordinary

@@ -87,7 +87,9 @@ export default function BillingSection({
 
   // A second request is a real thing (a cut day, a renegotiation) but never
   // an accident. Sending again asks first.
-  const alreadySent = requests.some((r) => r.status !== 'cancelled')
+  const live = requests.filter((r) => r.status !== 'cancelled')
+  const withdrawn = requests.filter((r) => r.status === 'cancelled')
+  const alreadySent = live.length > 0
 
   function send() {
     if (alreadySent && !confirm('This course has already been sent to Harken. Send a second request?')) return
@@ -116,14 +118,35 @@ export default function BillingSection({
 
   return (
     <div>
-      {requests.length > 0 && (
+      {live.length > 0 && (
         <ul className="space-y-2 mb-4">
-          {requests.map((r) => (
+          {live.map((r) => (
             <li key={r.id}>
               <InvoiceRequestCard request={r} onChanged={() => router.refresh()} />
             </li>
           ))}
         </ul>
+      )}
+
+      {/* Withdrawn ones are kept — "we asked and then said never mind" is
+          worth knowing — but not at full size on the section you use to send
+          the next one. Folded away behind a count, the way a set-aside COA
+          is, and deletable from inside for the ones that were only ever a
+          test. */}
+      {withdrawn.length > 0 && (
+        <details className="mb-4 group">
+          <summary className="flex items-center gap-2 text-xs text-zinc-600 hover:text-zinc-400 transition-colors cursor-pointer list-none">
+            <span className="transition-transform group-open:rotate-90">›</span>
+            {withdrawn.length} withdrawn
+          </summary>
+          <ul className="space-y-2 mt-2">
+            {withdrawn.map((r) => (
+              <li key={r.id}>
+                <InvoiceRequestCard request={r} onChanged={() => router.refresh()} />
+              </li>
+            ))}
+          </ul>
+        </details>
       )}
 
       {blocker ? (

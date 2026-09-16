@@ -4,7 +4,12 @@ import { useState, useTransition } from 'react'
 import Link from 'next/link'
 import { fmtMoney } from '@/lib/expenses'
 import { INVOICE_STATUS_LABEL, type InvoiceRequest } from '@/lib/billing'
-import { recordInvoiced, recordPaid, cancelInvoiceRequest } from '@/app/admin/courses/billing-actions'
+import {
+  recordInvoiced,
+  recordPaid,
+  cancelInvoiceRequest,
+  deleteInvoiceRequest,
+} from '@/app/admin/courses/billing-actions'
 
 // One request to Harken, wherever it is being looked at.
 //
@@ -76,7 +81,7 @@ export default function InvoiceRequestCard({
             </Link>
           )}
         </span>
-        <span className={`px-2 py-0.5 text-[11px] font-medium rounded ${STATUS_STYLE[r.status] ?? STATUS_STYLE.pending}`}>
+        <span className={`shrink-0 px-2 py-0.5 text-[11px] font-medium rounded ${STATUS_STYLE[r.status] ?? STATUS_STYLE.pending}`}>
           {INVOICE_STATUS_LABEL[r.status]}
           {r.status === 'invoiced' && r.invoice_number ? ` · ${r.invoice_number}` : ''}
           {r.status === 'paid' && r.amount_received != null && r.amount_received !== r.amount
@@ -185,6 +190,27 @@ export default function InvoiceRequestCard({
           </button>
           <button type="button" className={ACTION} onClick={() => setRecording(null)}>
             Cancel
+          </button>
+        </div>
+      )}
+
+      {/* A withdrawn request is kept because "we asked and then said never
+          mind" is worth knowing — but a test send is not a fact about the
+          business, and leaving it struck through on the course forever is
+          just noise. Only ever offered on a withdrawn one. */}
+      {done && (
+        <div className="mt-3">
+          <button
+            type="button"
+            disabled={pending}
+            className="text-xs px-2.5 py-1.5 rounded border border-transparent text-zinc-600 hover:text-red-400 hover:border-zinc-800 transition-colors disabled:opacity-40"
+            onClick={() => {
+              if (confirm('Throw this withdrawn request away? Nothing about it is kept.')) {
+                act(() => deleteInvoiceRequest(r.id))
+              }
+            }}
+          >
+            Delete
           </button>
         </div>
       )}

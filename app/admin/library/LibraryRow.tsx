@@ -2,7 +2,8 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { updateLibraryItem, deleteLibraryItem } from './actions'
+import { updateLibraryItem, deleteLibraryItem, libraryItemUses, type LibraryItemUses } from './actions'
+import { errorFrom, type ActionResult } from '@/lib/action-result'
 import { KIND_META, LIBRARY_KINDS, AUDIENCE_META, BUCKET_META, BUCKET_ORDER, type LibraryBucket, type LibraryItem, type Venue } from '@/lib/library'
 import { AudiencePills } from '@/components/AudiencePills'
 import { CAPABILITY_META, CAPABILITY_ORDER } from '@/lib/capabilities'
@@ -18,6 +19,7 @@ export default function LibraryRow({ item, venues, hideProvenance = false }: { i
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [form, setForm] = useState({
     title: item.title,
     url: item.url ?? '',
@@ -35,9 +37,42 @@ export default function LibraryRow({ item, venues, hideProvenance = false }: { i
   const venue = venues.find((v) => v.id === item.venue_id)
   const pending = item.status === 'pending'
 
-  async function run(fn: () => Promise<void>) {
+  // An expected refusal comes back as a value and is shown as it was written;
+  // anything thrown is a fault, and errorFrom keeps its digest.
+  async function run(fn: () => Promise<ActionResult>) {
     setBusy(true)
-    try { await fn(); router.refresh() } finally { setBusy(false) }
+    setError(null)
+    try {
+      const result = await fn()
+      router.refresh()
+      if (result?.error) setError(result.error)
+    } catch (e) {
+      setError(errorFrom(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  // Ask what is pointing at this item before asking whether to delete it. The
+  // courses keep their own copy of the link either way — the point of saying so
+  // is that "permanently" was true of the shelf copy and read as true of
+  // everything, which is how a map disappeared off a course that had promoted
+  // it.
+  async function confirmDelete() {
+    setBusy(true)
+    setError(null)
+    let uses: LibraryItemUses
+    try {
+      uses = await libraryItemUses(item.id)
+    } catch (e) {
+      setError(errorFrom(e, 'Could not check what is using this item.'))
+      return
+    } finally {
+      setBusy(false)
+    }
+
+    if (!confirm(deletePrompt(uses))) return
+    await run(() => deleteLibraryItem(item.id))
   }
 
   const save = () => run(async () => {
@@ -207,15 +242,36 @@ export default function LibraryRow({ item, venues, hideProvenance = false }: { i
               </button>
             )}
             <button
-              onClick={() => { if (confirm('Delete this item permanently?')) run(() => deleteLibraryItem(item.id)) }}
+              onClick={confirmDelete}
               disabled={busy}
               className="text-xs text-zinc-600 hover:text-red-400 transition-colors ml-auto"
             >
               Delete
             </button>
           </div>
+          {error && <p className="sm:col-span-2 text-xs text-pr-red">{error}</p>}
         </div>
       )}
     </div>
   )
+}
+
+// What the delete is about to do, said before it is agreed to. A template use
+// or a linkless item is refused by the action itself; the prompt names it here
+// too, so the answer is not "yes" to something that then says no.
+function deletePrompt(uses: LibraryItemUses): string {
+  if (uses.templates.length > 0) {
+    return `Used by ${uses.templates.length === 1 ? 'the template' : `${uses.templates.length} templates`}: ${uses.templates.join(', ')}.\n\nDeleting it would empty that section, so this will be refused — archive it instead. Continue anyway?`
+  }
+  const attached = uses.maps + uses.resources + uses.items
+  if (attached === 0) return 'Nothing is using this item. Delete it permanently?'
+  if (!uses.hasLink) {
+    return `${attached === 1 ? 'A course row is' : `${attached} course rows are`} pointing at this item and it has no link to hand back, so this will be refused — archive it instead. Continue anyway?`
+  }
+  const where = [
+    uses.maps && `${uses.maps} map${uses.maps === 1 ? '' : 's'}`,
+    uses.resources && `${uses.resources} resource${uses.resources === 1 ? '' : 's'}`,
+    uses.items && `${uses.items} curriculum item${uses.items === 1 ? '' : 's'}`,
+  ].filter(Boolean).join(', ')
+  return `On ${uses.courses} course${uses.courses === 1 ? '' : 's'} (${where}).\n\nDeleting removes it from the library. Those courses keep the link as their own one-off copy, so nothing disappears off a course — but edits here will no longer reach them.\n\nDelete it permanently?`
 }

@@ -6,6 +6,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { LIBRARY_KINDS, BUCKET_ORDER } from '@/lib/library'
 import { isValidRegion } from '@/lib/regions'
 import { CAPABILITY_ORDER } from '@/lib/capabilities'
+import { refuse, type ActionResult } from '@/lib/action-result'
 
 async function requireAdmin() {
   const supabase = await createClient()
@@ -131,11 +132,148 @@ export async function createLibraryItem(formData: FormData) {
   revalidate()
 }
 
-export async function deleteLibraryItem(id: string) {
+// ─── Deleting an item that courses are pointing at ──────────────────────────
+//
+// Every table that references a library item cascades off it, so a delete used
+// to take the reference with it — and a map promoted from a course owns no copy
+// of its own link any more (map-actions' promoteToLibrary hands the url over as
+// the item id goes on). Deleting the shelf copy therefore deleted the map off
+// the course that put it there, silently, behind a confirm that said only
+// "permanently".
+//
+// So a delete hands the link back first. A course row that was pointing at the
+// item becomes the one-off it was before it was promoted — same row, same
+// place in the list, its own url again — and only the shelf copy goes. What
+// this does not do is guess: a row there is no standalone shape for stops the
+// delete rather than being quietly dropped.
+
+/** Where an item is in use, and what a delete would do about each. */
+export type LibraryItemUses = {
+  /** Course rows that would be handed the link back, by table. */
+  maps: number
+  resources: number
+  items: number
+  /** Distinct courses affected — the number worth putting in a sentence. */
+  courses: number
+  /** Templates using it, by name. These block the delete. */
+  templates: string[]
+  /** False when there is no link to hand back, which also blocks the delete. */
+  hasLink: boolean
+}
+
+type Admin = ReturnType<typeof createAdminClient>
+
+async function usesOf(admin: Admin, id: string): Promise<LibraryItemUses> {
+  const [{ data: item }, { data: links }, { data: maps }, { data: resources }, { data: items }, { data: templates }] =
+    await Promise.all([
+      admin.from('library_items').select('url').eq('id', id).maybeSingle(),
+      admin.from('library_item_links').select('url, access').eq('item_id', id),
+      admin.from('course_maps').select('id, instance_id').eq('library_item_id', id),
+      admin.from('course_resources').select('id, instance_id').eq('library_item_id', id),
+      admin.from('course_items').select('id, course_modules!inner(instance_id)').eq('library_item_id', id),
+      admin
+        .from('course_template_items')
+        .select('id, course_template_sections!inner(course_templates!inner(name))')
+        .eq('item_id', id),
+    ])
+
+  const courses = new Set<string>()
+  for (const r of maps ?? []) courses.add(r.instance_id)
+  for (const r of resources ?? []) courses.add(r.instance_id)
+  for (const r of items ?? []) {
+    const m = r.course_modules as unknown as { instance_id: string } | null
+    if (m) courses.add(m.instance_id)
+  }
+
+  const names = new Set<string>()
+  for (const r of templates ?? []) {
+    const section = r.course_template_sections as unknown as { course_templates: { name: string } | null } | null
+    if (section?.course_templates?.name) names.add(section.course_templates.name)
+  }
+
+  return {
+    maps: (maps ?? []).length,
+    resources: (resources ?? []).length,
+    items: (items ?? []).length,
+    courses: courses.size,
+    templates: [...names].sort(),
+    hasLink: Boolean(item?.url || readableLink(links ?? [])),
+  }
+}
+
+// A map keeps its links in their own table and the item's url is the read one,
+// so either is a fine thing to hand back; prefer read, since a course row that
+// may reach students must not be handed the editable copy.
+function readableLink(links: { url: string; access: string }[]): string | null {
+  return links.find((l) => l.access === 'read')?.url ?? links.find((l) => l.access === 'edit')?.url ?? null
+}
+
+/** What a delete would do, for the confirm that asks about it. */
+export async function libraryItemUses(id: string): Promise<LibraryItemUses> {
   const admin = await requireAdmin()
+  return usesOf(admin, id)
+}
+
+export async function deleteLibraryItem(id: string): Promise<ActionResult> {
+  const admin = await requireAdmin()
+  const uses = await usesOf(admin, id)
+
+  // A template item is nothing but a reference — no title, no url of its own —
+  // so there is no row to hand the link back to, only a row to lose. Archiving
+  // is the move that leaves the templates working, which is why it is named.
+  if (uses.templates.length > 0) {
+    return refuse(
+      `${uses.templates.length === 1 ? 'The template' : 'Templates'} ${uses.templates
+        .map((n) => `“${n}”`)
+        .join(', ')} ${uses.templates.length === 1 ? 'uses' : 'use'} this item, and a template holds only a reference to it — deleting it would empty that section. Archive it instead: it disappears from the pickers and every template keeps working.`
+    )
+  }
+
+  const attached = uses.maps + uses.resources + uses.items
+  if (attached > 0 && !uses.hasLink) {
+    return refuse(
+      `${attached === 1 ? 'A course is' : `${attached} course rows are`} pointing at this item and it has no link to hand back, so deleting it would lose ${attached === 1 ? 'that row' : 'them'}. Archive it instead.`
+    )
+  }
+
+  if (attached > 0) await handBackLink(admin, id)
+
   const { error } = await admin.from('library_items').delete().eq('id', id)
   if (error) throw new Error(error.message)
   revalidate()
+}
+
+// Turn every course row pointing at this item back into the one-off it was
+// before promotion. Done before the delete, so a failure here leaves both the
+// item and its references intact rather than half a delete.
+async function handBackLink(admin: Admin, id: string) {
+  const [{ data: item }, { data: links }] = await Promise.all([
+    admin.from('library_items').select('title, url').eq('id', id).single(),
+    admin.from('library_item_links').select('url, access').eq('item_id', id),
+  ])
+  const url = item?.url ?? readableLink(links ?? [])
+  if (!item || !url) throw new Error('No link to hand back')
+
+  // course_maps and course_resources both carry the label/url pair a one-off
+  // row is made of, and the same check constraint saying it is that or an item
+  // id, never both — so the three columns move together.
+  for (const table of ['course_maps', 'course_resources'] as const) {
+    const { error } = await admin
+      .from(table)
+      .update({ library_item_id: null, url, label: item.title })
+      .eq('library_item_id', id)
+    if (error) throw new Error(error.message)
+  }
+
+  // A curriculum row already denormalises the title (it shares a NOT NULL
+  // column with the free-typed rows), so only the link has to arrive. `type`
+  // stays null, as it is on every row there has ever been — materialKind reads
+  // the link instead.
+  const { error } = await admin
+    .from('course_items')
+    .update({ library_item_id: null, url })
+    .eq('library_item_id', id)
+  if (error) throw new Error(error.message)
 }
 
 // Bulk operations for the review queue — approve or re-audience a whole
