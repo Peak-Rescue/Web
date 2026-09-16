@@ -101,6 +101,18 @@ export default function TemplatePicker({
       <p className="text-xs text-zinc-500 mb-2 flex items-center gap-1.5">
         <span className="text-zinc-300 font-medium">Start with a standard setup.</span>
         <InfoHint text="Adds the sections and material this kind of course normally uses — change anything afterwards." />
+        {/* Which setups reach this course is a fact about the setups, set on
+            the shelf. Naming that without a way to it is how a second one
+            gets built here instead. Its own tab: you are mid-build on this
+            course. */}
+        <a
+          href="/admin/library?bucket=setup"
+          target="_blank"
+          rel="noreferrer"
+          className="ml-auto text-[11px] text-zinc-500 hover:text-zinc-200 transition-colors"
+        >
+          Manage setups ↗
+        </a>
       </p>
       <div className="flex flex-wrap gap-2">
         {shown.map((t) => (

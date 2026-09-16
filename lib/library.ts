@@ -27,7 +27,7 @@ export const BUCKET_ORDER: LibraryBucket[] = ['teaching', 'resource', 'map', 'in
 // they can't be library_items. What they share with the rest of the library is
 // the vocabulary — a name, what it's for, disciplines, topics — and one place
 // to find them.
-export type TemplateShelf = 'gear' | 'schedule'
+export type TemplateShelf = 'gear' | 'schedule' | 'setup'
 export type LibraryShelf = LibraryBucket | TemplateShelf
 
 export const TEMPLATE_SHELF_META: Record<TemplateShelf, { label: string; hint: string; noun: string }> = {
@@ -41,9 +41,14 @@ export const TEMPLATE_SHELF_META: Record<TemplateShelf, { label: string; hint: s
     hint: 'Reusable running orders — days and topics, copied onto a course',
     noun: 'schedule',
   },
+  setup: {
+    label: 'Course setups',
+    hint: 'The sections and material a kind of course normally starts with',
+    noun: 'course setup',
+  },
 }
 
-export const TEMPLATE_SHELF_ORDER: TemplateShelf[] = ['gear', 'schedule']
+export const TEMPLATE_SHELF_ORDER: TemplateShelf[] = ['gear', 'schedule', 'setup']
 export const SHELF_ORDER: LibraryShelf[] = [...BUCKET_ORDER, ...TEMPLATE_SHELF_ORDER]
 
 export function shelfLabel(v: LibraryShelf): string {
@@ -55,7 +60,7 @@ export function shelfHint(v: LibraryShelf): string {
 }
 
 export function isTemplateShelf(v: string | undefined): v is TemplateShelf {
-  return v === 'gear' || v === 'schedule'
+  return v === 'gear' || v === 'schedule' || v === 'setup'
 }
 
 // The way back to a template from wherever it is being used. A template saved

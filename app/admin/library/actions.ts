@@ -261,3 +261,30 @@ export async function removeMapLink(linkId: string): Promise<void> {
   if (error) throw new Error(error.message)
   revalidate()
 }
+
+// ─── Course setups ───────────────────────────────────────────────────────────
+
+/** The curriculum shelf's tags. A setup is a fixed shape imported from
+    Classroom — its sections and the material in them are built elsewhere — so
+    the only thing editable here is what it says about itself, which is what a
+    course page matches on. Renaming it is allowed for the same reason: an
+    imported class name ("Copy of Rope 2") is not a sentence anyone chose. */
+export async function updateCourseSetup(
+  id: string,
+  patch: { name?: string; description?: string | null; courseType?: string | null; disciplines?: string[] }
+) {
+  const admin = await requireAdmin()
+
+  const update: Record<string, unknown> = {}
+  if (patch.name !== undefined) update.name = patch.name.trim().slice(0, 120) || 'Untitled setup'
+  if (patch.description !== undefined) update.description = patch.description?.trim() || null
+  if (patch.courseType !== undefined) update.course_type = patch.courseType || null
+  if (patch.disciplines !== undefined) {
+    update.disciplines = patch.disciplines.filter((d) => VALID_DISCIPLINES.has(d))
+  }
+  update.updated_at = new Date().toISOString()
+
+  const { error } = await admin.from('course_templates').update(update).eq('id', id)
+  if (error) throw new Error(error.message)
+  revalidate()
+}

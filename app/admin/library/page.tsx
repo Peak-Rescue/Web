@@ -18,6 +18,8 @@ import ReviewQueue from './ReviewQueue'
 import AddLibraryItem from './AddLibraryItem'
 import ItemRow from './ItemRow'
 import TemplateReadOnly from './TemplateReadOnly'
+import CourseSetupRow from './CourseSetupRow'
+import CourseSetupReadOnly from './CourseSetupReadOnly'
 import InfoHint from '@/components/InfoHint'
 import { CAPABILITY_META, CAPABILITY_ORDER, type CapabilityCategory } from '@/lib/capabilities'
 import { readViewAs } from '@/lib/view-as'
@@ -112,7 +114,7 @@ export default async function LibraryPage({
   // Templates take the same search box and discipline tags the documents use.
   // They have no review status, so the status tabs pass them by — there's
   // nothing to approve about a kit list you wrote yourself.
-  const [{ data: itemRows }, { data: venueRows }, { data: siteRows }, gearRes, scheduleRes, catalogRes, { count: pendingCount }, shelfCounts] = await Promise.all([
+  const [{ data: itemRows }, { data: venueRows }, { data: siteRows }, gearRes, scheduleRes, setupRes, catalogRes, { count: pendingCount }, shelfCounts] = await Promise.all([
     showDocs ? query : Promise.resolve({ data: [] }),
     admin.from('venues').select('id, name, region, region_code, client_name, notes, active').order('name'),
     // A per-region template pins its canyons here, so the courses started from
@@ -140,6 +142,20 @@ export default async function LibraryPage({
           return s
         })()
       : Promise.resolve({ data: [] }),
+    // The curriculum shelf. Its rows are read-only shapes — sections holding
+    // references to library material — so what comes back is enough to say
+    // what one would put on a course, and no more.
+    showTemplates && shelves.includes('setup')
+      ? (() => {
+          let c = admin.from('course_templates')
+            .select('id, name, description, course_type, disciplines, course_template_sections(title, sort_order, course_template_items(sort_order, library_items(title)))')
+            .eq('active', true)
+            .order('name')
+          if (q) c = c.ilike('name', `%${q}%`)
+          if (discipline) c = c.contains('disciplines', [discipline])
+          return c
+        })()
+      : Promise.resolve({ data: [] }),
     // Editing a kit list on its shelf needs the same catalog the course page
     // gives the editor, or every line loses the type it points at.
     showTemplates && shelves.includes('gear')
@@ -161,6 +177,8 @@ export default async function LibraryPage({
             .then((r) => ['gear', r.count ?? 0] as [LibraryShelf, number]),
           admin.from('course_schedules').select('id', { count: 'exact', head: true }).eq('is_template', true)
             .then((r) => ['schedule', r.count ?? 0] as [LibraryShelf, number]),
+          admin.from('course_templates').select('id', { count: 'exact', head: true }).eq('active', true)
+            .then((r) => ['setup', r.count ?? 0] as [LibraryShelf, number]),
         ])
       : Promise.resolve([] as [LibraryShelf, number][]),
   ])
@@ -184,6 +202,28 @@ export default async function LibraryPage({
   }
   const gearTemplates = (gearRes.data ?? []) as unknown as GearTemplate[]
   const scheduleTemplates = (scheduleRes.data ?? []) as unknown as ScheduleTemplate[]
+  const courseSetups = ((setupRes.data ?? []) as unknown as {
+    id: string; name: string; description: string | null; course_type: string | null
+    disciplines: string[] | null
+    course_template_sections: {
+      title: string; sort_order: number
+      course_template_items: { sort_order: number; library_items: { title: string } | null }[]
+    }[]
+  }[]).map((t) => ({
+    id: t.id,
+    name: t.name,
+    description: t.description,
+    course_type: t.course_type,
+    disciplines: t.disciplines ?? [],
+    sections: [...(t.course_template_sections ?? [])]
+      .sort((a, b) => a.sort_order - b.sort_order)
+      .map((sec) => ({
+        title: sec.title,
+        items: [...(sec.course_template_items ?? [])]
+          .sort((a, b) => a.sort_order - b.sort_order)
+          .map((i) => i.library_items?.title ?? 'material since deleted'),
+      })),
+  }))
   const catalog = (catalogRes.data ?? []) as unknown as GearItem[]
 
   const summarize = (
@@ -195,7 +235,7 @@ export default async function LibraryPage({
     disciplines: t.disciplines ?? [], topics: t.topics ?? [], count, audience,
   })
 
-  const shelfCount = gearTemplates.length + scheduleTemplates.length
+  const shelfCount = gearTemplates.length + scheduleTemplates.length + courseSetups.length
   const countByShelf = new Map<LibraryShelf, number>(shelfCounts)
   const venueName = new Map(venues.map((v) => [v.id, v.name]))
 
@@ -379,7 +419,7 @@ export default async function LibraryPage({
 
         {/* The same place on a shelf whose rows are built here rather than
             filed here — a gear list or a running order. */}
-        {isAdmin && onShelf && isTemplateShelf(bucket) && (
+        {isAdmin && onShelf && isTemplateShelf(bucket) && bucket !== 'setup' && (
           <div className="mb-6">
             <AddTemplate shelf={bucket} />
           </div>
@@ -476,7 +516,7 @@ export default async function LibraryPage({
             itself. Every course keeps its own copy, so a fix here changes what
             the *next* course starts from, never a course already running. */}
         {showTemplates && shelves.map((shelf) => {
-          const rows = shelf === 'gear' ? gearTemplates : scheduleTemplates
+          const rows = shelf === 'gear' ? gearTemplates : shelf === 'schedule' ? scheduleTemplates : courseSetups
           return (
             <section key={shelf} className={showDocs ? 'mt-10 pt-8 border-t border-zinc-800' : ''}>
               {/* Named here only when there is more than one shelf on the
@@ -489,7 +529,9 @@ export default async function LibraryPage({
                     text={`${TEMPLATE_SHELF_META[shelf].hint}. Editing one here changes what the next course starts from — courses already using it keep their own copy.`}
                   />
                 </h2>
-                {isAdmin && <AddTemplate shelf={shelf} />}
+                {/* A setup is a shape imported from Classroom, not something
+                    started blank here — there is nothing to add it from. */}
+                {isAdmin && shelf !== 'setup' && <AddTemplate shelf={shelf} />}
               </div>
               <div className="space-y-2">
                 {shelf === 'gear' && gearTemplates.map((t) => (
@@ -531,11 +573,18 @@ export default async function LibraryPage({
                     />
                   )
                 ))}
+                {shelf === 'setup' && courseSetups.map((t) => (
+                  isAdmin
+                    ? <CourseSetupRow key={t.id} setup={t} />
+                    : <CourseSetupReadOnly key={t.id} setup={t} />
+                ))}
                 {rows.length === 0 && (
                   <p className="text-sm text-zinc-500">
                     {q || discipline
                       ? 'Nothing on this shelf matches.'
-                      : `No ${TEMPLATE_SHELF_META[shelf].noun}s yet — start one blank, or save one from a course.`}
+                      : shelf === 'setup'
+                        ? 'No course setups — these come from the Classroom import.'
+                        : `No ${TEMPLATE_SHELF_META[shelf].noun}s yet — start one blank, or save one from a course.`}
                   </p>
                 )}
               </div>

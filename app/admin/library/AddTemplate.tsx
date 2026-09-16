@@ -9,7 +9,7 @@ import { TEMPLATE_SHELF_META, type TemplateShelf } from '@/lib/library'
 // Start a template here rather than having to run a course to get one. Both
 // shelves were only ever fed by "save this course's list as a template", which
 // meant a kit list you wanted to write up front had nowhere to live.
-export default function AddTemplate({ shelf }: { shelf: TemplateShelf }) {
+export default function AddTemplate({ shelf }: { shelf: Exclude<TemplateShelf, 'setup'> }) {
   const router = useRouter()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)

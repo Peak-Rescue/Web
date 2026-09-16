@@ -247,7 +247,7 @@ export default async function CourseView({
   const curriculumSetupPromise = keep(showTasks
     ? Promise.all([
         admin.from('course_templates')
-          .select('id, name, description, course_type, is_default, course_template_sections(id, course_template_items(id))')
+          .select('id, name, description, course_type, disciplines, is_default, course_template_sections(id, course_template_items(id))')
           .eq('active', true)
           .order('name'),
         admin.from('course_modules').select('title'),
@@ -733,6 +733,7 @@ export default async function CourseView({
 
   const curriculumTemplates = ((curriculumTplRows ?? []) as unknown as {
     id: string; name: string; description: string | null; course_type: string | null
+    disciplines: string[] | null
     course_template_sections: { id: string; course_template_items: { id: string }[] }[]
   }[])
     .map((t) => ({
