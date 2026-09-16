@@ -25,14 +25,20 @@ const siteUrl = () => process.env.NEXT_PUBLIC_SITE_URL || 'https://peak-rescue.c
 // renegotiation is a second request, not an edit of the first.
 export async function sendInvoiceRequest(
   instanceId: string,
-  adminNote: string,
-  /** The agreed figure, for a course that has no accepted quote in the portal
-      — booked against a PO, agreed on a call, or run on a standing rate. The
-      handoff needs a number somebody agreed to, not a quote specifically, and
-      refusing to bill a course that has already run because the paperwork
-      took a different route is the portal getting in the way of the work.
-      Ignored when there is an accepted quote: that number is the agreed one. */
-  amountEntered?: string
+  /** Exactly what is about to be told to Harken, as the person sending it
+      corrected it on screen. The request is a snapshot of that conversation —
+      a deposit rather than the whole price, accounts payable rather than the
+      person who booked, the name the client's PO uses — so these are taken as
+      given rather than re-derived here. What is not negotiable is that they
+      are present: the guards below still refuse a request with no payee or no
+      number. */
+  input: {
+    note: string
+    amount: string
+    billToName: string
+    billToEmail: string
+    description: string
+  }
 ): Promise<Result> {
   const { user, admin } = await requireAdminUser()
 
@@ -52,35 +58,33 @@ export async function sendInvoiceRequest(
   ])
   if (!inst) return { ok: false, error: 'Course not found' }
 
-  // The two guards that stop a useless request going out. A row with a blank
-  // payee or a number nobody agreed to is worse than no row: the biller has to
-  // come back to us to find out what it means, which is the whole of what this
-  // was meant to save.
-  //
-  // The payee is the course's own contact unless a POC is tagged billing. On
-  // nearly every course the person who booked it is the person invoiced, and
-  // demanding the tag anyway blocked the handover on re-stating the obvious.
-  const payee = billTo(parseContacts(inst.contacts))
-  if (!payee) return { ok: false, error: 'Add a point of contact in Details first' }
+  // The guards that stop a useless request going out. A row with a blank payee
+  // or a number nobody agreed to is worse than no row: the biller has to come
+  // back to us to find out what it means, which is the whole of what this was
+  // meant to save.
+  const payeeName = input.billToName.trim()
+  if (!payeeName) return { ok: false, error: 'Say who the invoice goes to' }
 
-  const accepted = (quotes ?? []).find((q) => !q.archived_at)
-  const typedAmount = accepted ? null : parseMoney(amountEntered ?? '')
-  if (!accepted && (typedAmount === null || typedAmount <= 0)) {
-    return { ok: false, error: 'Enter the amount to bill' }
-  }
+  const amount = parseMoney(input.amount)
+  if (amount === null || amount <= 0) return { ok: false, error: 'Enter the amount to bill' }
 
   const to = (recipients ?? []).map((r) => r.email).filter(Boolean)
   if (to.length === 0) return { ok: false, error: 'No active billing recipient — add one first' }
 
+  // The phone is not on the form — nobody retypes a phone number to send an
+  // invoice — so it still comes off the contact the payee was seeded from.
+  const payee = billTo(parseContacts(inst.contacts))
   const courseName = courseShortName(inst.course_type, inst.custom_title)
-  const description = describeForBiller({
-    refNumber: inst.ref_number,
-    courseName,
-    clientName: inst.client_name,
-    startsAt: inst.starts_at,
-    endsAt: inst.ends_at,
-  })
-  const amount = accepted ? Number(accepted.total) : (typedAmount as number)
+  const description =
+    input.description.trim().slice(0, 300) ||
+    describeForBiller({
+      refNumber: inst.ref_number,
+      courseName,
+      clientName: inst.client_name,
+      startsAt: inst.starts_at,
+      endsAt: inst.ends_at,
+    })
+  const accepted = (quotes ?? []).find((q) => !q.archived_at)
   // The number on the document the client actually received — what they will
   // reconcile the invoice against, and what tells a re-quote's request apart
   // from the first one. Null when no quote went out through the portal, which
@@ -94,10 +98,10 @@ export async function sendInvoiceRequest(
     amount,
     description,
     bill_to_org: inst.client_name,
-    bill_to_name: payee.contact.name || null,
-    bill_to_email: payee.contact.emails[0] ?? null,
-    bill_to_phone: payee.contact.phones[0] ?? null,
-    admin_note: adminNote.trim().slice(0, 2000) || null,
+    bill_to_name: payeeName.slice(0, 200),
+    bill_to_email: input.billToEmail.trim().slice(0, 200) || null,
+    bill_to_phone: payee?.contact.phones[0] ?? null,
+    admin_note: input.note.trim().slice(0, 2000) || null,
     status: 'sent',
     sent_at: new Date().toISOString(),
     sent_by: user.id,
@@ -123,10 +127,10 @@ export async function sendInvoiceRequest(
               ...(qNum ? [`Our quote: ${qNum}`] : []),
               '',
               'Bill to:',
-              [payee.contact.name, inst.client_name].filter(Boolean).join(' · '),
-              ...(payee.contact.emails[0] ? [payee.contact.emails[0]] : []),
-              ...(payee.contact.phones[0] ? [payee.contact.phones[0]] : []),
-              ...(adminNote.trim() ? ['', adminNote.trim()] : []),
+              [payeeName, inst.client_name].filter(Boolean).join(' · '),
+              ...(input.billToEmail.trim() ? [input.billToEmail.trim()] : []),
+              ...(payee?.contact.phones[0] ? [payee.contact.phones[0]] : []),
+              ...(input.note.trim() ? ['', input.note.trim()] : []),
               '',
               `Mark it invoiced and record payment here: ${siteUrl()}/billing/${r.token}`,
               '',

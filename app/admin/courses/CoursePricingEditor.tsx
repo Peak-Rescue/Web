@@ -1,6 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { courseShortName, courseDayCounts } from '@/lib/courses'
 import { coaPrice, guessSeedQty, DEFAULT_MARGIN } from '@/lib/estimates'
+import { describeForBiller } from '@/lib/billing'
 import { HERO_CHOICES } from '@/lib/quote-heroes'
 import { QUOTE_ROW_COLUMNS } from '@/lib/quotes'
 import { primaryContactEmail, ccEmailOptions, billTo, type CoursePOC } from '@/lib/contacts'
@@ -454,9 +455,6 @@ export default async function CoursePricingEditor({
           it is the first half of the job. It shuts once a request exists,
           and the summary then says where the money has got to. */}
       <PricingFold title="Billing" summary={billingSummary} defaultOpen={!handedToHarken}>
-      <p className="text-xs text-zinc-500 mb-4">
-        Hands the agreed price and the billing contact to Harken, who raise the invoice and record payment.
-      </p>
       <BillingSection
         instanceId={instanceId}
         requests={invoiceRequests}
@@ -466,6 +464,13 @@ export default async function CoursePricingEditor({
             : null
         }
         acceptedTotal={acceptedQuote ? acceptedQuote.total : null}
+        forWhat={describeForBiller({
+          refNumber: course.ref_number,
+          courseName: courseShortName(course.course_type ?? 'custom', null),
+          clientName: course.client_name,
+          startsAt: course.starts_at,
+          endsAt: course.ends_at,
+        })}
         recipientNames={(billerRows ?? []).map((r) => r.name as string)}
       />
       </PricingFold>

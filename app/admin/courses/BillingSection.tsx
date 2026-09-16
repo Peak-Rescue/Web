@@ -1,9 +1,11 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { fmtMoney } from '@/lib/expenses'
 import { INVOICE_STATUS_LABEL, type InvoiceRequest } from '@/lib/billing'
+import InfoHint from '@/components/InfoHint'
 import { sendInvoiceRequest, cancelInvoiceRequest, recordInvoiced, recordPaid } from './billing-actions'
 
 // Handing this course to Harken, and what came back.
@@ -11,6 +13,20 @@ import { sendInvoiceRequest, cancelInvoiceRequest, recordInvoiced, recordPaid } 
 // The button is guarded rather than hopeful: without a billing contact or an
 // accepted quote it says which one is missing instead of sending a request the
 // biller would only have to chase us about.
+
+// One row of the send form: a label narrow enough to read down, and whatever
+// the field is beside it. Wraps rather than truncating on a phone, because
+// every one of these is a thing somebody has to be able to correct.
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-2 flex-wrap">
+      <span className="text-xs text-zinc-500 w-16 shrink-0">{label}</span>
+      {children}
+    </div>
+  )
+}
+
+const box = 'bg-zinc-800 border border-zinc-700 rounded px-2.5 py-1.5 text-sm text-white focus:outline-none focus:border-zinc-500'
 
 const shortDate = (iso: string | null) =>
   iso ? new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''
@@ -20,6 +36,7 @@ export default function BillingSection({
   requests,
   billTo,
   acceptedTotal,
+  forWhat,
   recipientNames,
 }: {
   instanceId: string
@@ -31,6 +48,10 @@ export default function BillingSection({
   billTo: { name: string; email: string | null; tagged: boolean } | null
   /** The accepted quote's total, or null if nothing has been accepted. */
   acceptedTotal: number | null
+  /** The course as a biller reads it — ref, name, client, dates. Offered as
+      what the invoice is for, and editable, because the client's PO calls it
+      something else often enough to matter. */
+  forWhat: string
   recipientNames: string[]
 }) {
   const [note, setNote] = useState('')
@@ -39,8 +60,13 @@ export default function BillingSection({
   // open boxes on one list is how the wrong row gets the number.
   const [recording, setRecording] = useState<{ id: string; kind: 'invoiced' | 'paid' } | null>(null)
   const [entry, setEntry] = useState('')
-  // The agreed figure, typed, for a course with no accepted quote behind it.
-  const [amount, setAmount] = useState('')
+  // What is about to be sent, all of it editable. Seeded from the course and
+  // then owned by this form: the request is a snapshot of what Harken was
+  // told, so the moment to correct any of it is before it goes.
+  const [amount, setAmount] = useState(acceptedTotal === null ? '' : String(acceptedTotal))
+  const [name, setName] = useState(billTo?.name ?? '')
+  const [email, setEmail] = useState(billTo?.email ?? '')
+  const [description, setDescription] = useState(forWhat)
   const [error, setError] = useState<string | null>(null)
   const [pending, start] = useTransition()
   const router = useRouter()
@@ -64,7 +90,13 @@ export default function BillingSection({
     if (alreadySent && !confirm('This course has already been sent to Harken. Send a second request?')) return
     setError(null)
     start(async () => {
-      const res = await sendInvoiceRequest(instanceId, note, amount)
+      const res = await sendInvoiceRequest(instanceId, {
+        note,
+        amount,
+        billToName: name,
+        billToEmail: email,
+        description,
+      })
       if (res.ok) {
         setNote('')
         setAmount('')
@@ -196,53 +228,98 @@ export default function BillingSection({
       {blocker ? (
         <p className="text-sm text-zinc-500">{blocker}</p>
       ) : (
-        <>
-          <p className="text-xs text-zinc-500 mb-3">
-            Sends {acceptedTotal === null ? 'the amount below' : fmtMoney(acceptedTotal)} and {billTo!.name}
-            {billTo!.email ? ` (${billTo!.email})` : ''} to {recipientNames.join(', ')}. What goes out is a copy —
-            later edits to the contact or the quote will not change it.
-            {/* Said out loud, because billing the person who booked the course
-                is right nearly every time and wrong in a way nobody would
-                catch: the invoice simply arrives at the wrong desk. */}
-            {!billTo!.tagged && (
-              <> The bill goes to the course contact — mark someone the billing contact in Details if it should not.</>
+        /* Four facts and a button: how much, who it goes to, what it is for,
+           and anything the biller needs to know. Every one of them editable,
+           because every one of them is occasionally wrong — a deposit rather
+           than the whole price, accounts payable rather than the person who
+           booked, a course the client calls something else on their PO. What
+           is sent is a copy, so correcting it here changes what Harken is
+           told and nothing else about the course.
+
+           It read as two paragraphs of prose with one box under them. The
+           sentences were all true and none of them were the thing you came
+           here to do. */
+        <div className="space-y-2.5">
+          <Field label="Amount">
+            <span className="text-zinc-500 text-sm">$</span>
+            <input
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              inputMode="decimal"
+              placeholder="0.00"
+              className={`${box} w-32 text-right`}
+            />
+            {acceptedTotal !== null && Math.abs(Number(amount.replace(/[$,\s]/g, '')) - acceptedTotal) > 0.005 && (
+              <button
+                type="button"
+                onClick={() => setAmount(String(acceptedTotal))}
+                className="text-xs text-zinc-500 hover:text-zinc-300 underline underline-offset-2 transition-colors"
+              >
+                accepted quote was {fmtMoney(acceptedTotal)}
+              </button>
             )}
-          </p>
-          {/* No quote went out through the portal, so the number has to come
-              from the person who knows it. Asked for here rather than by
-              sending them off to invent a quote nobody will ever look at. */}
-          {acceptedTotal === null && (
-            <div className="flex items-center gap-2 mb-3">
-              <span className="text-zinc-500 text-sm">$</span>
-              <input
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                inputMode="decimal"
-                placeholder="0.00"
-                className="w-32 bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm text-right focus:outline-none focus:border-zinc-500"
-              />
-              <span className="text-xs text-zinc-500">
-                No accepted quote on this course — the agreed amount.
-              </span>
-            </div>
-          )}
-          <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-3 items-start">
+          </Field>
+
+          <Field label="Bill to">
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Name"
+              className={`${box} w-44`}
+            />
+            <input
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="Email"
+              className={`${box} w-56`}
+            />
+            {billTo!.tagged ? null : (
+              <InfoHint text="Nobody is marked the billing contact in Details, so this is the course's point of contact. Change it here for this invoice, or mark someone in Details to change it for good." />
+            )}
+          </Field>
+
+          <Field label="For">
+            <input
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              className={`${box} flex-1 min-w-64`}
+            />
+          </Field>
+
+          <Field label="Notes">
             <input
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              placeholder="Anything the biller needs — PO number, terms, where to submit"
-              className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500"
+              placeholder="PO number, terms, where to submit"
+              className={`${box} flex-1 min-w-64`}
             />
+          </Field>
+
+          <div className="flex items-center gap-3 pt-1 sm:pl-[4.5rem]">
             <button
               type="button"
               onClick={send}
-              disabled={pending || (acceptedTotal === null && amount.trim() === '')}
+              disabled={pending || amount.trim() === '' || name.trim() === ''}
               className="px-3 py-2 text-sm rounded bg-pr-red/90 hover:bg-pr-red text-white transition-colors disabled:opacity-50 whitespace-nowrap"
             >
               {pending ? 'Sending…' : alreadySent ? 'Send again' : 'Send to Harken'}
             </button>
+            {/* Who at Harken, named where the sending happens — and changeable
+                from here, because realising it should go to somebody else is
+                something that happens with a finger over the button, not on
+                the settings page you would otherwise have to go hunting for. */}
+            <span className="text-xs text-zinc-600">
+              to {recipientNames.join(', ')}
+              {' · '}
+              <Link
+                href="/admin/billing"
+                className="underline underline-offset-2 decoration-zinc-700 hover:text-zinc-300 transition-colors"
+              >
+                change
+              </Link>
+            </span>
           </div>
-        </>
+        </div>
       )}
       {error && <p className="text-sm text-red-400 mt-2">{error}</p>}
     </div>
