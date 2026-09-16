@@ -849,16 +849,17 @@ export default function ActualsPanel({
         </div>
       </div>
 
-      {/* ── Sending it out ───────────────────────────────────────────────── */}
-      {/* Below the rule with the notes: these are things you do with the
-          numbers, not part of working them out.
- 
-          Deliberately not a button that emails anybody. This page is the
-          course's profit and loss — pay, margin, what we kept — and the one
-          outside party who gets a link from this system is Harken's biller,
-          who must not be reading it. Billing is its own section above, with
-          its own address carrying only what an invoice needs. Making a link
-          here is for us: Micah, an accountant, whoever is asking. */}
+      {/* ── Taking the numbers away with you ─────────────────────────────── */}
+      {/* A PDF, and nothing else. There was a link you could mint here, from
+          when the biller was expected to read these; the biller reads the
+          Billing section's own address instead, which carries what an invoice
+          needs and no margin. That left a sign-in-free URL to the course's
+          profit and loss with no one to send it to, which is a thing to
+          forward by accident rather than a feature.
+
+          A link minted before that decision still works, so the revoke stays
+          on any course that has one — the way out has to outlive the way in.
+          Nothing offers a new one. */}
       <div className={`${sectionRule} flex items-center gap-3 flex-wrap text-xs`}>
         <a
           href={`/api/actuals/${instanceId}/pdf`}
@@ -868,8 +869,9 @@ export default function ActualsPanel({
         >
           Download PDF
         </a>
-        {shareToken ? (
+        {shareToken && (
           <>
+            <span className="text-amber-400/80">An old share link is still live:</span>
             <input
               readOnly
               value={shareUrl(shareToken)}
@@ -891,28 +893,11 @@ export default function ActualsPanel({
               }}
               className="text-zinc-500 hover:text-pr-red-light transition-colors"
             >
-              Revoke link
+              Revoke it
             </button>
           </>
-        ) : (
-          <button
-            disabled={busy}
-            onClick={async () => {
-              setBusy(true)
-              try {
-                setShareToken(await setActualsShared(instanceId, true))
-              } catch (e) {
-                setError(e instanceof Error ? e.message : 'Could not make a link')
-              } finally {
-                setBusy(false)
-              }
-            }}
-            className="px-2.5 py-1 bg-zinc-800 hover:bg-zinc-700 rounded font-medium text-zinc-200 transition-colors disabled:opacity-50"
-          >
-            Make a link to send
-          </button>
         )}
-        <InfoHint text="Anyone with the link can read these numbers — pay and margin included — without signing in, so it is for us rather than for a client or a biller. Handing a course to Harken to invoice is the Billing section above. Revoking is immediate and cuts every copy at once." />
+        <InfoHint text="These numbers stay inside the portal. Handing a course to Harken to invoice is the Billing section above, which sends only what an invoice needs — never pay or margin." />
       </div>
 
       <div>

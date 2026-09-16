@@ -284,6 +284,10 @@ export default async function CoursePricingEditor({
     amount: Number(r.amount ?? 0),
     amount_received: r.amount_received === null || r.amount_received === undefined ? null : Number(r.amount_received),
   })) as InvoiceRequest[]
+  // Whether anybody at Harken has been asked for an invoice on this course.
+  // A withdrawn request does not count: withdrawing is how we say the ask was
+  // a mistake, and a mistake is not a handover.
+  const handedToHarken = invoiceRequests.some((r) => r.status !== 'cancelled')
   const billingSummary = (() => {
     const live = invoiceRequests.filter((r) => r.status !== 'cancelled')
     if (live.length === 0) return acceptedQuote ? 'not sent' : undefined
@@ -440,12 +444,12 @@ export default async function CoursePricingEditor({
 
       {/* Between the quote and the actuals, because that is where it happens:
           the number has been agreed and the money has not arrived yet. */}
-      {/* Open while it is the live question. A course with an agreed number
-          and nothing sent is a course somebody still has to hand to Harken,
-          and a fold shut over that was how the P&L link came to be mailed
-          out in its place. Once a request is with Harken the fold closes and
-          its summary carries where the money has got to. */}
-      <PricingFold title="Billing" summary={billingSummary} defaultOpen={billingSummary === 'not sent'}>
+      {/* Open until the course has actually been handed over. Anything else
+          is a fold shut over work still to do — including the case where
+          there is no accepted quote yet, which is not "nothing to see here",
+          it is the first half of the job. It shuts once a request exists,
+          and the summary then says where the money has got to. */}
+      <PricingFold title="Billing" summary={billingSummary} defaultOpen={!handedToHarken}>
       <p className="text-xs text-zinc-500 mb-4">
         Hands the agreed price and the billing contact to Harken, who raise the invoice and record payment.
       </p>
