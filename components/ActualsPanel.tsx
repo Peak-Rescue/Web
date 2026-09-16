@@ -16,7 +16,6 @@ import {
 import { type LoadedActuals } from '@/lib/actuals-data'
 import {
   addCostAccount,
-  emailActualsToBiller,
   setActualsShared,
   addSuggestedPayLines,
   deleteCostItem,
@@ -80,7 +79,6 @@ export default function ActualsPanel({
   suggestion,
   seed,
   quoteSuggestion,
-  billers,
 }: {
   instanceId: string
   /** Everything as the shared loader assembled it — the same shape the
@@ -112,7 +110,6 @@ export default function ActualsPanel({
   /** The active billing recipients, by name — who the send button sends to.
       Empty means there is nobody to send to, and the button says so rather
       than disappearing. */
-  billers: string[]
 }) {
   const router = useRouter()
   const { expenseLines } = loaded
@@ -131,7 +128,6 @@ export default function ActualsPanel({
   const [notes, setNotes] = useState(loaded.notes ?? '')
   const [closed, setClosed] = useState(Boolean(loaded.closedAt))
   const [shareToken, setShareToken] = useState(loaded.shareToken)
-  const [shareSentAt, setShareSentAt] = useState(loaded.shareSentAt)
 
   // Both lists end in an empty row, always. Entering a cost was a click to
   // expand, a click to add and then the typing; this is a spreadsheet, which
@@ -855,7 +851,14 @@ export default function ActualsPanel({
 
       {/* ── Sending it out ───────────────────────────────────────────────── */}
       {/* Below the rule with the notes: these are things you do with the
-          numbers, not part of working them out. */}
+          numbers, not part of working them out.
+ 
+          Deliberately not a button that emails anybody. This page is the
+          course's profit and loss — pay, margin, what we kept — and the one
+          outside party who gets a link from this system is Harken's biller,
+          who must not be reading it. Billing is its own section above, with
+          its own address carrying only what an invoice needs. Making a link
+          here is for us: Micah, an accountant, whoever is asking. */}
       <div className={`${sectionRule} flex items-center gap-3 flex-wrap text-xs`}>
         <a
           href={`/api/actuals/${instanceId}/pdf`}
@@ -865,35 +868,6 @@ export default function ActualsPanel({
         >
           Download PDF
         </a>
-        {/* Sending it is the ordinary case, so it is the button — making a
-            link you then carry to your own mail client is the fallback for
-            everyone who is not the biller. Both mint the same address. */}
-        {billers.length > 0 && (
-          <button
-            disabled={busy}
-            onClick={async () => {
-              setBusy(true)
-              setError(null)
-              try {
-                const res = await emailActualsToBiller(instanceId)
-                if (res.ok) {
-                  setShareToken(res.token)
-                  setShareSentAt(res.sentAt)
-                } else setError(res.error)
-              } catch (e) {
-                setError(e instanceof Error ? e.message : 'Could not send that email')
-              } finally {
-                setBusy(false)
-              }
-            }}
-            className="px-2.5 py-1 bg-zinc-800 hover:bg-zinc-700 rounded font-medium text-zinc-200 transition-colors disabled:opacity-50"
-          >
-            {shareSentAt ? 'Send again to' : 'Email to'} {billers.join(', ')}
-          </button>
-        )}
-        {shareSentAt && (
-          <span className="text-zinc-500">Sent {sentDate(shareSentAt)}</span>
-        )}
         {shareToken ? (
           <>
             <input
@@ -909,9 +883,6 @@ export default function ActualsPanel({
                 try {
                   await setActualsShared(instanceId, false)
                   setShareToken(null)
-                  // The stamp goes with the link: "sent Tuesday" beside no
-                  // address is a claim about an address nobody can reach.
-                  setShareSentAt(null)
                 } catch (e) {
                   setError(e instanceof Error ? e.message : 'Could not revoke the link')
                 } finally {
@@ -941,7 +912,7 @@ export default function ActualsPanel({
             Make a link to send
           </button>
         )}
-        <InfoHint text="Anyone with the link can read these numbers — pay and margin included — without signing in. Revoking it is immediate, and cuts every copy of it at once." />
+        <InfoHint text="Anyone with the link can read these numbers — pay and margin included — without signing in, so it is for us rather than for a client or a biller. Handing a course to Harken to invoice is the Billing section above. Revoking is immediate and cuts every copy at once." />
       </div>
 
       <div>
@@ -1094,12 +1065,6 @@ function countOf(lines: TypedCostLine[], source: 'typed' | 'card'): string {
 
 function round1(n: number): number {
   return Math.round(n * 10) / 10
-}
-
-// A timestamp read as a day: when the biller was last sent these numbers is a
-// date, and the hour it went out has never been the question.
-function sentDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
 // Absolute, because the point of it is to be pasted into an email. Read off

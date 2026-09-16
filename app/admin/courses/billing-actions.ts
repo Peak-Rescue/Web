@@ -2,11 +2,10 @@
 
 import { revalidatePath } from 'next/cache'
 import { after } from 'next/server'
-import { createAdminClient } from '@/lib/supabase/admin'
 import { requireAdminUser } from '@/lib/course-access'
 import { parseContacts, billingContact } from '@/lib/contacts'
 import { courseShortName } from '@/lib/courses'
-import { describeForBiller } from '@/lib/billing'
+import { describeForBiller, parseMoney } from '@/lib/billing'
 import { quoteNumber } from '@/lib/quotes'
 import { fmtMoney } from '@/lib/expenses'
 import { sendMail } from '@/lib/mailer'
@@ -125,6 +124,88 @@ export async function sendInvoiceRequest(instanceId: string, adminNote: string):
   }
 
   revalidatePath(`/portal/${instanceId}`)
+  revalidatePath('/admin/billing')
+  return { ok: true }
+}
+
+// ─── Recording a milestone from our side ─────────────────────────────────────
+//
+// The biller marks her own work on her own page, and that stays the ordinary
+// route. These are for when it happens anywhere else: a number confirmed in a
+// reply, a payment mentioned on a call. Without them the portal goes on
+// saying "with Harken" about a course that was invoiced and paid months ago,
+// and the only remedy was asking her to click something about work she had
+// already finished.
+//
+// Deliberately the same two milestones and nothing more. The amount, who to
+// bill and which course are what we asked for, and a request has to keep
+// reading as what we asked for.
+
+export async function recordInvoiced(
+  requestId: string,
+  input: { invoiceNumber: string; note: string }
+): Promise<Result> {
+  const { user, admin } = await requireAdminUser()
+  const { data: req } = await admin
+    .from('invoice_requests')
+    .select('id, instance_id, status, invoiced_at')
+    .eq('id', requestId)
+    .maybeSingle()
+  if (!req) return { ok: false, error: 'Not found' }
+  if (req.status === 'cancelled') return { ok: false, error: 'This request was withdrawn' }
+
+  const { error } = await admin
+    .from('invoice_requests')
+    .update({
+      // A paid request stays paid: learning its invoice number afterwards is
+      // new information about it, not a step backwards through the statuses.
+      status: req.status === 'paid' ? 'paid' : 'invoiced',
+      // Kept from the first time, so correcting a number does not restate
+      // when the invoice was actually raised.
+      invoiced_at: req.invoiced_at ?? new Date().toISOString(),
+      invoice_number: input.invoiceNumber.trim().slice(0, 120) || null,
+      invoiced_by_admin: user.id,
+      admin_note: input.note.trim().slice(0, 2000) || undefined,
+    })
+    .eq('id', req.id)
+  if (error) return { ok: false, error: 'Could not record that — please try again' }
+
+  revalidatePath(`/portal/${req.instance_id}`)
+  revalidatePath('/admin/billing')
+  return { ok: true }
+}
+
+export async function recordPaid(
+  requestId: string,
+  input: { amountReceived: string; note: string }
+): Promise<Result> {
+  const { user, admin } = await requireAdminUser()
+  const { data: req } = await admin
+    .from('invoice_requests')
+    .select('id, instance_id, status, paid_at')
+    .eq('id', requestId)
+    .maybeSingle()
+  if (!req) return { ok: false, error: 'Not found' }
+  if (req.status === 'cancelled') return { ok: false, error: 'This request was withdrawn' }
+
+  // What arrived, not what was asked for. The two are kept apart because a
+  // short payment is exactly the thing this has to be able to say.
+  const received = parseMoney(input.amountReceived)
+  if (received === null) return { ok: false, error: 'Enter the amount received' }
+
+  const { error } = await admin
+    .from('invoice_requests')
+    .update({
+      status: 'paid',
+      paid_at: req.paid_at ?? new Date().toISOString(),
+      amount_received: received,
+      paid_by_admin: user.id,
+      admin_note: input.note.trim().slice(0, 2000) || undefined,
+    })
+    .eq('id', req.id)
+  if (error) return { ok: false, error: 'Could not record that — please try again' }
+
+  revalidatePath(`/portal/${req.instance_id}`)
   revalidatePath('/admin/billing')
   return { ok: true }
 }

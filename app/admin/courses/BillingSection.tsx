@@ -4,7 +4,7 @@ import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { fmtMoney } from '@/lib/expenses'
 import { INVOICE_STATUS_LABEL, type InvoiceRequest } from '@/lib/billing'
-import { sendInvoiceRequest, cancelInvoiceRequest } from './billing-actions'
+import { sendInvoiceRequest, cancelInvoiceRequest, recordInvoiced, recordPaid } from './billing-actions'
 
 // Handing this course to Harken, and what came back.
 //
@@ -31,6 +31,11 @@ export default function BillingSection({
   recipientNames: string[]
 }) {
   const [note, setNote] = useState('')
+  // Which request is being recorded against, and which of the two milestones.
+  // One at a time: this is a correction to a record, not data entry, and two
+  // open boxes on one list is how the wrong row gets the number.
+  const [recording, setRecording] = useState<{ id: string; kind: 'invoiced' | 'paid' } | null>(null)
+  const [entry, setEntry] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [pending, start] = useTransition()
   const router = useRouter()
@@ -54,6 +59,23 @@ export default function BillingSection({
       const res = await sendInvoiceRequest(instanceId, note)
       if (res.ok) {
         setNote('')
+        router.refresh()
+      } else setError(res.error)
+    })
+  }
+
+  function record(r: InvoiceRequest) {
+    if (!recording) return
+    const kind = recording.kind
+    setError(null)
+    start(async () => {
+      const res =
+        kind === 'invoiced'
+          ? await recordInvoiced(r.id, { invoiceNumber: entry, note: '' })
+          : await recordPaid(r.id, { amountReceived: entry.trim() || String(r.amount), note: '' })
+      if (res.ok) {
+        setRecording(null)
+        setEntry('')
         router.refresh()
       } else setError(res.error)
     })
@@ -98,15 +120,64 @@ export default function BillingSection({
                   .join(' · ')}
               </p>
               {r.biller_note && <p className="text-xs text-zinc-400 mt-1 whitespace-pre-wrap">{r.biller_note}</p>}
-              {r.status !== 'paid' && r.status !== 'cancelled' && (
-                <button
-                  type="button"
-                  onClick={() => cancel(r.id)}
-                  disabled={pending}
-                  className="text-xs text-zinc-600 hover:text-red-400 transition-colors mt-2"
-                >
-                  Withdraw
-                </button>
+              {(r.invoiced_by_admin || r.paid_by_admin) && (
+                <p className="text-xs text-zinc-600 mt-1">Recorded here, not by Harken.</p>
+              )}
+
+              {/* The biller marks her own work on her own page, and that stays
+                  the ordinary route. These are for when it happens anywhere
+                  else — a number confirmed in a reply, a payment mentioned on
+                  a call — because otherwise this says "with Harken" about a
+                  course that was invoiced and paid months ago. */}
+              {r.status !== 'cancelled' && (
+                <div className="flex flex-wrap items-center gap-3 mt-2">
+                  {r.status !== 'paid' && (
+                    <button
+                      type="button"
+                      onClick={() => setRecording(recording?.id === r.id && recording.kind === 'invoiced' ? null : { id: r.id, kind: 'invoiced' })}
+                      className="text-xs text-zinc-500 hover:text-zinc-200 transition-colors"
+                    >
+                      {r.invoiced_at ? 'Invoice number' : 'Mark invoiced'}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setRecording(recording?.id === r.id && recording.kind === 'paid' ? null : { id: r.id, kind: 'paid' })}
+                    className="text-xs text-zinc-500 hover:text-zinc-200 transition-colors"
+                  >
+                    {r.status === 'paid' ? 'Correct the payment' : 'Record payment'}
+                  </button>
+                  {r.status !== 'paid' && (
+                    <button
+                      type="button"
+                      onClick={() => cancel(r.id)}
+                      disabled={pending}
+                      className="text-xs text-zinc-600 hover:text-red-400 transition-colors"
+                    >
+                      Withdraw
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {recording?.id === r.id && (
+                <div className="flex flex-wrap items-center gap-2 mt-2">
+                  <input
+                    value={entry}
+                    onChange={(e) => setEntry(e.target.value)}
+                    placeholder={recording.kind === 'invoiced' ? 'Their invoice number' : `Amount received (${fmtMoney(r.amount)})`}
+                    inputMode={recording.kind === 'paid' ? 'decimal' : 'text'}
+                    className="bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-xs focus:outline-none focus:border-zinc-500 w-44"
+                  />
+                  <button
+                    type="button"
+                    disabled={pending}
+                    onClick={() => record(r)}
+                    className="px-2.5 py-1 text-xs rounded bg-zinc-100 text-zinc-900 hover:bg-white transition-colors disabled:opacity-50"
+                  >
+                    Save
+                  </button>
+                </div>
               )}
             </li>
           ))}

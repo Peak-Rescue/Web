@@ -24,6 +24,12 @@ export type InvoiceRequest = {
   invoiced_at: string | null
   invoice_number: string | null
   paid_at: string | null
+  /** Set when one of us recorded a milestone rather than the biller marking
+      it on her own page. Kept apart from the biller's own hand, because "we
+      were told it is invoiced" and "Harken says it is invoiced" are not the
+      same claim. */
+  invoiced_by_admin: string | null
+  paid_by_admin: string | null
   amount_received: number | null
   biller_note: string | null
   admin_note: string | null

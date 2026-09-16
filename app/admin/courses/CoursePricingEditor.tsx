@@ -440,7 +440,12 @@ export default async function CoursePricingEditor({
 
       {/* Between the quote and the actuals, because that is where it happens:
           the number has been agreed and the money has not arrived yet. */}
-      <PricingFold title="Billing" summary={billingSummary} defaultOpen={false}>
+      {/* Open while it is the live question. A course with an agreed number
+          and nothing sent is a course somebody still has to hand to Harken,
+          and a fold shut over that was how the P&L link came to be mailed
+          out in its place. Once a request is with Harken the fold closes and
+          its summary carries where the money has got to. */}
+      <PricingFold title="Billing" summary={billingSummary} defaultOpen={billingSummary === 'not sent'}>
       <p className="text-xs text-zinc-500 mb-4">
         Hands the agreed price and the billing contact to Harken, who raise the invoice and record payment.
       </p>
@@ -465,7 +470,6 @@ export default async function CoursePricingEditor({
           suggestion={suggestion}
           seed={actualsSeed}
           quoteSuggestion={quoteSuggestion}
-          billers={(billerRows ?? []).map((r) => r.name as string)}
         />
       </PricingFold>
     </div>

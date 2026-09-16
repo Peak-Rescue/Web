@@ -55,7 +55,6 @@ function loaded(over: Partial<LoadedActuals> = {}): LoadedActuals {
     closedAt: null,
     seededAt: null,
     shareToken: null,
-    shareSentAt: null,
     accounts: ACCOUNTS,
     expenseLines,
     expenseAccounts: [],
