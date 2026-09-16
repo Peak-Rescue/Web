@@ -269,6 +269,36 @@ export default function QuotesSection({
                     Mark sent
                   </button>
                 </form>
+                {/* Agreed without this quote ever leaving the portal — a price
+                    settled on a call, a PO against a number given by email.
+                    Marking it sent first to be allowed to mark it accepted
+                    recorded a send that never happened, and it is the
+                    accepted quote that everything downstream reads: the
+                    course becomes confirmed by it and Billing draws its
+                    number from it. Asks first, because nothing here takes an
+                    acceptance back. */}
+                <form
+                  action={setQuoteStatus.bind(null, instanceId, q.id, 'accepted')}
+                  onSubmit={(e) => {
+                    if (!confirm('Mark this quote accepted without sending it from here? Use this when the client agreed to it some other way.')) {
+                      e.preventDefault()
+                    }
+                  }}
+                  className="flex items-center gap-2.5 flex-wrap"
+                >
+                  {(q.options ?? []).map((o, i) => (
+                    <label key={i} className="flex items-center gap-1.5 text-xs text-zinc-400 cursor-pointer" title={fmtMoney(Number(o.total))}>
+                      <input type="checkbox" name="chosen_opt" value={i} className="accent-pr-red size-3.5" />
+                      {o.title}
+                    </label>
+                  ))}
+                  <button
+                    title="They have already agreed to this price"
+                    className="text-xs px-2.5 py-1 text-teal-300/90 hover:text-teal-200 transition-colors"
+                  >
+                    Already accepted
+                  </button>
+                </form>
                 <button
                   type="button"
                   onClick={() => removeQuote(q.id)}
