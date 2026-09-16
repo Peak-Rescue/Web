@@ -36,6 +36,9 @@ export type LoadedActuals = {
       come back the next time the panel is opened. */
   seededAt: string | null
   shareToken: string | null
+  /** When the link was last emailed to the billing recipients, or null if it
+      has only ever been copied by hand. */
+  shareSentAt: string | null
   accounts: CostAccount[]
   expenseLines: ActualExpenseLine[]
   expenseAccounts: [string, string][]
@@ -60,7 +63,7 @@ export async function loadActuals(admin: Admin, instanceId: string): Promise<Loa
   ] = await Promise.all([
     admin
       .from('course_actuals')
-      .select('invoiced, payroll_load_pct, notes, closed_at, seeded_at, share_token')
+      .select('invoiced, payroll_load_pct, notes, closed_at, seeded_at, share_token, share_sent_at')
       .eq('instance_id', instanceId)
       .maybeSingle(),
     admin.from('cost_accounts').select('id, label, categories, sort_order').eq('active', true).order('sort_order'),
@@ -182,6 +185,7 @@ export async function loadActuals(admin: Admin, instanceId: string): Promise<Loa
     closedAt: row?.closed_at ?? null,
     seededAt: (row?.seeded_at as string | null) ?? null,
     shareToken: (row?.share_token as string | null) ?? null,
+    shareSentAt: (row?.share_sent_at as string | null) ?? null,
     accounts,
     expenseLines,
     expenseAccounts,

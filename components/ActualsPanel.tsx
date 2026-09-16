@@ -16,6 +16,7 @@ import {
 import { type LoadedActuals } from '@/lib/actuals-data'
 import {
   addCostAccount,
+  emailActualsToBiller,
   setActualsShared,
   addSuggestedPayLines,
   deleteCostItem,
@@ -55,6 +56,15 @@ const DEBOUNCE_MS = 800
 // on screen for something done twice a year.
 const NEW_CATEGORY = '__new__'
 
+// How the offered quote describes itself. A draft is worth offering — it is
+// still the only number anybody has written down for this course — but it has
+// to say that it is one, or the box beside it reads as agreed.
+const QUOTE_STATUS_PHRASE: Record<string, string> = {
+  accepted: 'was accepted at',
+  sent: 'was sent at',
+  draft: 'is a draft at',
+}
+
 /** `amountText` is what is in the box while it is being typed. Without it a
     row shows the parsed number back, so "0.5" loses its zero the moment it
     is typed — the number is 0 until the 5 arrives. */
@@ -67,7 +77,8 @@ export default function ActualsPanel({
   people,
   suggestion,
   seed,
-  acceptedQuote,
+  quoteSuggestion,
+  billers,
 }: {
   instanceId: string
   /** Everything as the shared loader assembled it — the same shape the
@@ -89,8 +100,17 @@ export default function ActualsPanel({
   } | null
   /** Where the conversation landed. Offered as a starting point for what we
       invoiced, never as the value — gear bought for the client, an invoice
-      split in two, or a renegotiation all move the real number. */
-  acceptedQuote: { seq: number; total: number } | null
+      split in two, or a renegotiation all move the real number.
+
+      An accepted quote is the answer when there is one, but a quote that was
+      sent and agreed on the phone is the number we billed just as often, and
+      offering nothing there only means retyping a figure the page already
+      holds. So the status rides along and the line says which it is. */
+  quoteSuggestion: { seq: number; total: number; status: string } | null
+  /** The active billing recipients, by name — who the send button sends to.
+      Empty means there is nobody to send to, and the button says so rather
+      than disappearing. */
+  billers: string[]
 }) {
   const router = useRouter()
   const { expenseLines } = loaded
@@ -109,6 +129,7 @@ export default function ActualsPanel({
   const [notes, setNotes] = useState(loaded.notes ?? '')
   const [closed, setClosed] = useState(Boolean(loaded.closedAt))
   const [shareToken, setShareToken] = useState(loaded.shareToken)
+  const [shareSentAt, setShareSentAt] = useState(loaded.shareSentAt)
 
   // Both lists end in an empty row, always. Entering a cost was a click to
   // expand, a click to add and then the typing; this is a spreadsheet, which
@@ -151,7 +172,10 @@ export default function ActualsPanel({
     void (async () => {
       try {
         const made = await seedActualsFromEstimate(instanceId, { pay: seed.pay, costs: seed.costs })
-        if (!made) return
+        // Nothing to say when nothing was written — a course whose whole
+        // estimate is travel has no seedable cost at all, and a note about
+        // lines that are not there would send somebody looking for them.
+        if (!made || (made.pay.length === 0 && made.costs.length === 0)) return
         setPay((rows) =>
           withBlankPay([
             ...rows.filter((r) => !payIsBlank(r)),
@@ -348,8 +372,9 @@ export default function ActualsPanel({
           the correction rather than sitting there looking authoritative. */}
       {seededFrom && (
         <p className="text-xs text-zinc-500">
-          Started from <span className="text-zinc-300">{seededFrom}</span> — the estimate&rsquo;s lines at cost, and
-          pay at what we pay. All guesses: correct them, or delete what never happened.
+          Started from <span className="text-zinc-300">{seededFrom}</span> &mdash; the estimate&rsquo;s lines at cost and
+          pay at what we pay, leaving out anything an expense report will bring in on its own. All guesses: correct
+          them, or delete what never happened.
         </p>
       )}
 
@@ -373,14 +398,15 @@ export default function ActualsPanel({
               className={`${input} w-32 text-right`}
             />
           </div>
-          {acceptedQuote && (
+          {quoteSuggestion && (
             <span className="text-xs text-zinc-500">
-              Quote {acceptedQuote.seq} was accepted at {fmtMoney(acceptedQuote.total)}
-              {Math.abs(actuals.invoiced - acceptedQuote.total) > 0.005 && (
+              Quote {quoteSuggestion.seq} {QUOTE_STATUS_PHRASE[quoteSuggestion.status] ?? 'stands at'}{' '}
+              {fmtMoney(quoteSuggestion.total)}
+              {Math.abs(actuals.invoiced - quoteSuggestion.total) > 0.005 && (
                 <button
                   onClick={() => {
-                    setInvoiced(String(acceptedQuote.total))
-                    saveHeader({ invoiced: String(acceptedQuote.total) })
+                    setInvoiced(String(quoteSuggestion.total))
+                    saveHeader({ invoiced: String(quoteSuggestion.total) })
                   }}
                   className="ml-2 text-zinc-400 hover:text-white underline underline-offset-2 transition-colors"
                 >
@@ -747,6 +773,35 @@ export default function ActualsPanel({
         >
           Download PDF
         </a>
+        {/* Sending it is the ordinary case, so it is the button — making a
+            link you then carry to your own mail client is the fallback for
+            everyone who is not the biller. Both mint the same address. */}
+        {billers.length > 0 && (
+          <button
+            disabled={busy}
+            onClick={async () => {
+              setBusy(true)
+              setError(null)
+              try {
+                const res = await emailActualsToBiller(instanceId)
+                if (res.ok) {
+                  setShareToken(res.token)
+                  setShareSentAt(res.sentAt)
+                } else setError(res.error)
+              } catch (e) {
+                setError(e instanceof Error ? e.message : 'Could not send that email')
+              } finally {
+                setBusy(false)
+              }
+            }}
+            className="px-2.5 py-1 bg-zinc-800 hover:bg-zinc-700 rounded font-medium text-zinc-200 transition-colors disabled:opacity-50"
+          >
+            {shareSentAt ? 'Send again to' : 'Email to'} {billers.join(', ')}
+          </button>
+        )}
+        {shareSentAt && (
+          <span className="text-zinc-500">Sent {sentDate(shareSentAt)}</span>
+        )}
         {shareToken ? (
           <>
             <input
@@ -762,6 +817,9 @@ export default function ActualsPanel({
                 try {
                   await setActualsShared(instanceId, false)
                   setShareToken(null)
+                  // The stamp goes with the link: "sent Tuesday" beside no
+                  // address is a claim about an address nobody can reach.
+                  setShareSentAt(null)
                 } catch (e) {
                   setError(e instanceof Error ? e.message : 'Could not revoke the link')
                 } finally {
@@ -791,7 +849,7 @@ export default function ActualsPanel({
             Make a link to send
           </button>
         )}
-        <InfoHint text="Anyone with the link can read these numbers without signing in. Revoking it is immediate." />
+        <InfoHint text="Anyone with the link can read these numbers — pay and margin included — without signing in. Revoking it is immediate, and cuts every copy of it at once." />
       </div>
 
       <div>
@@ -909,6 +967,12 @@ function CostRowFields({
 
 function round1(n: number): number {
   return Math.round(n * 10) / 10
+}
+
+// A timestamp read as a day: when the biller was last sent these numbers is a
+// date, and the hour it went out has never been the question.
+function sentDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
 // Absolute, because the point of it is to be pasted into an email. Read off

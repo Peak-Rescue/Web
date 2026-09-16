@@ -261,6 +261,20 @@ export default async function CoursePricingEditor({
   const accepted = quotes.find((q) => q.status === 'accepted' && !q.archived_at)
   const acceptedQuote = accepted ? { seq: accepted.quote_seq as number, total: accepted.total } : null
 
+  // What the invoiced box offers. An accepted quote first, and failing that
+  // the newest live quote that names a figure — plenty of courses are billed
+  // off a quote that was agreed on the phone and never marked, and offering
+  // nothing there only means retyping a number this page is already holding.
+  // A declined or expired one is not offered: that number was refused.
+  // Nor is an options quote nobody has picked from, whose total is still 0.
+  const offerable = quotes.find(
+    (q) => !q.archived_at && ['accepted', 'sent', 'draft'].includes(q.status) && q.total > 0
+  )
+  const suggested = accepted ?? offerable ?? null
+  const quoteSuggestion = suggested
+    ? { seq: suggested.quote_seq as number, total: suggested.total, status: suggested.status }
+    : null
+
   // The handoff to Harken. `billTo` is the POC tagged billing in Details —
   // read here rather than in the client component so the section can say which
   // of the two prerequisites is missing before anyone clicks anything.
@@ -291,11 +305,13 @@ export default async function CoursePricingEditor({
   //
   // An empty actuals list meant retyping the COA from memory, two folds up
   // the page. So the first time anybody opens the section on a course that
-  // has a COA, that COA's lines are written in as costs and the pay
-  // suggestion beside them — a guess to correct, every row deletable. The
-  // panel does the writing (and the seeding only ever happens once); the
-  // numbers are worked out here, where the COA, the rates and the chart of
-  // accounts are already loaded.
+  // has a COA, its lines are written in as costs and the pay suggestion
+  // beside them — a guess to correct, every row deletable. Not the whole COA:
+  // estimateCostSeed leaves out our own time and everything an expense report
+  // is going to bring in by itself, which is the difference between a starting
+  // point and a double count. The panel does the writing (and the seeding only
+  // ever happens once); the numbers are worked out here, where the COA, the
+  // rates and the chart of accounts are already loaded.
   //
   // Which COA: the one the client actually accepted, else the one the latest
   // quote was priced from, else the first live one. A course with two live
@@ -448,7 +464,8 @@ export default async function CoursePricingEditor({
           people={payPeople}
           suggestion={suggestion}
           seed={actualsSeed}
-          acceptedQuote={acceptedQuote}
+          quoteSuggestion={quoteSuggestion}
+          billers={(billerRows ?? []).map((r) => r.name as string)}
         />
       </PricingFold>
     </div>

@@ -371,28 +371,42 @@ describe('the actuals starting from the estimate', () => {
     { label: 'Instructor travel day', qty: 4, rate: 300, rate_id: 'travel-day' },
     { label: 'Admin day', qty: 2, rate: 700, rate_id: 'admin-day' },
     { label: 'Lodging', qty: 14, rate: 150, rate_id: 'lodging' },
-    { label: 'SWAG', qty: 8, rate: 30, rate_id: 'swag' },
+    { label: 'Meals', qty: 20, rate: 68, rate_id: 'meals' },
+    { label: 'Vehicle rental', qty: 7, rate: 215, rate_id: 'vehicle' },
     { label: 'Mileage', qty: null, rate: 0.73, rate_id: 'mileage' },
+    { label: 'SWAG', qty: 8, rate: 30, rate_id: 'swag' },
+    { label: 'Permits', qty: 8, rate: 15, rate_id: 'permits' },
   ]
 
-  it('copies what we spend and leaves out what we keep and what we are', () => {
+  it('copies only the money no expense report will ever bring in', () => {
     const seeded = estimateCostSeed(items, ACCOUNTS, PAY_RATES)
-    expect(seeded.map((l) => l.description)).toEqual(['Lodging', 'SWAG', 'Mileage'])
-    // At cost: the margin is what we keep, not what the course costs.
-    expect(seeded[0].amount).toBe(2100)
+    // Lodging, meals, the vehicle and the mileage are all claimed back — on a
+    // report of somebody's or off the company card — and those reports are
+    // read live. Seeding them too would put the receipt and the guess in the
+    // same total.
+    expect(seeded.map((l) => l.description)).toEqual(['SWAG', 'Permits'])
+  })
+
+  it('leaves out our own time, whatever the estimator called it', () => {
+    const seeded = estimateCostSeed(items, ACCOUNTS, PAY_RATES)
+    expect(seeded.some((l) => /instructor|admin/i.test(l.description))).toBe(false)
+  })
+
+  it('seeds at cost, because the margin is what we keep', () => {
+    const swag = estimateCostSeed(items, ACCOUNTS, PAY_RATES).find((l) => l.description === 'SWAG')
+    expect(swag?.amount).toBe(240)
   })
 
   it('keeps a line the estimator could not put a number on, at zero', () => {
-    const mileage = estimateCostSeed(items, ACCOUNTS, PAY_RATES).find((l) => l.description === 'Mileage')
-    expect(mileage?.amount).toBe(0)
+    const seeded = estimateCostSeed(
+      [{ label: 'Gear shipping', qty: null, rate: 90, rate_id: 'shipping' }],
+      ACCOUNTS,
+      PAY_RATES
+    )
+    expect(seeded).toEqual([{ account_id: null, description: 'Gear shipping', amount: 0 }])
   })
 
-  it('files a line where its expense category would have landed', () => {
-    expect(accountForEstimateLine('Lodging', ACCOUNTS)).toBe('travel')
-    expect(accountForEstimateLine('Fuel', ACCOUNTS)).toBe('travel')
-  })
-
-  it('lets a category named after the line claim it, expense categories or not', () => {
+  it('lets a category named after the line claim it', () => {
     expect(accountForEstimateLine('SWAG', ACCOUNTS)).toBe('swag')
   })
 

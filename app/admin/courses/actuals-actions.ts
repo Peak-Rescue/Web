@@ -5,11 +5,16 @@ import { revalidatePath } from 'next/cache'
 import { requireAdminUser } from '@/lib/course-access'
 import { round2 } from '@/lib/expenses'
 import { routeReassignments } from '@/lib/actuals'
+import { describeForBiller } from '@/lib/billing'
+import { courseShortName } from '@/lib/courses'
+import { sendMail } from '@/lib/mailer'
 
 // Writes for the course's actuals — what it really cost and what we really
 // billed. Admin-only, like the whole of the pricing page: requireAdminUser
 // gates every one of these, because a server action is callable directly and
 // the page's own gate protects nothing.
+
+const siteUrl = () => process.env.NEXT_PUBLIC_SITE_URL || 'https://peak-rescue.com'
 
 function revalidateCourse(instanceId: string) {
   revalidatePath(`/portal/${instanceId}`)
@@ -474,6 +479,95 @@ export async function setActualsShared(instanceId: string, shared: boolean): Pro
   if (error) throw new Error(error.message)
   revalidateCourse(instanceId)
   return token
+}
+
+/** Emails the read-only actuals link to whoever is billing for us.
+    
+    The link and the sending of it used to be two jobs: the portal minted an
+    address and you went to your own mail client to carry it across. The
+    address it sends is the same one the panel shows — minted here if it does
+    not exist yet, kept if it does — so a link already in an inbox goes on
+    working, and revoking still cuts every copy at once.
+
+    It goes to the active billing recipients and nowhere else. These are the
+    course's pay and its margin: the list of who may see them is a decision
+    made once, on the billing page, not retyped into an address box each time.
+
+    Reports back rather than revalidating — the panel holds the link and the
+    stamp itself, and this is not worth re-rendering the course for. */
+export async function emailActualsToBiller(
+  instanceId: string
+): Promise<
+  | { ok: true; token: string; sentAt: string; sentTo: string[] }
+  | { ok: false; error: string }
+> {
+  const { admin } = await ensureActuals(instanceId)
+
+  const [{ data: row }, { data: inst }, { data: recipients }] = await Promise.all([
+    admin.from('course_actuals').select('share_token').eq('instance_id', instanceId).maybeSingle(),
+    admin
+      .from('course_instances')
+      .select('ref_number, course_type, custom_title, client_name, starts_at, ends_at')
+      .eq('id', instanceId)
+      .maybeSingle(),
+    admin.from('billing_recipients').select('name, email').eq('active', true).order('name'),
+  ])
+  if (!inst) return { ok: false, error: 'Course not found' }
+  if ((recipients ?? []).length === 0) {
+    return { ok: false, error: 'No active billing recipient. Add one in Portal → Billing.' }
+  }
+  if (!process.env.RESEND_API_KEY) return { ok: false, error: 'Email is not configured on this server' }
+
+  // Same address every time: the point of the link is that it keeps working.
+  let token = (row?.share_token as string | null) ?? null
+  if (!token) {
+    token = randomUUID()
+    const { error } = await admin
+      .from('course_actuals')
+      .update({ share_token: token, share_created_at: new Date().toISOString() })
+      .eq('instance_id', instanceId)
+    if (error) return { ok: false, error: error.message }
+  }
+
+  const description = describeForBiller({
+    refNumber: inst.ref_number as number,
+    courseName: courseShortName(inst.course_type, inst.custom_title),
+    clientName: inst.client_name as string | null,
+    startsAt: inst.starts_at as string | null,
+    endsAt: inst.ends_at as string | null,
+  })
+  const url = `${siteUrl()}/actuals/${token}`
+
+  // Sent one at a time, because a failure to reach one recipient is not a
+  // reason to tell the admin nobody got it.
+  const sentTo: string[] = []
+  for (const r of recipients ?? []) {
+    const { error } = await sendMail({
+      from: 'Peak Rescue Portal <noreply@peak-rescue.com>',
+      to: [r.email as string],
+      subject: `Course numbers — ${description}`,
+      text: [
+        `Hi ${String(r.name).split(' ')[0]},`,
+        '',
+        'Here are the numbers for this course — what we billed, what we paid out and what it cost.',
+        '',
+        description,
+        '',
+        url,
+        '',
+        'The link needs no sign-in, and it stays current: anything corrected on our side shows up there.',
+        '',
+        'Thank you,',
+        'Peak Rescue',
+      ].join('\n'),
+    })
+    if (!error) sentTo.push(String(r.name))
+  }
+  if (sentTo.length === 0) return { ok: false, error: 'Could not send that email — please try again' }
+
+  const sentAt = new Date().toISOString()
+  await admin.from('course_actuals').update({ share_sent_at: sentAt }).eq('instance_id', instanceId)
+  return { ok: true, token, sentAt, sentTo }
 }
 
 // ─── Org-wide numbers ────────────────────────────────────────────────────────

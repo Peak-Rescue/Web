@@ -343,10 +343,10 @@ export function actualsAreLive(
 // The COA already lists what the course is going to spend money on: lodging,
 // a vehicle, flights, food, permits. Beginning the actuals from an empty list
 // meant typing that list a second time, from memory, off a screen two folds
-// up the page. So every estimate line arrives as a cost line — a guess to
+// up the page. So the estimate's lines arrive as cost lines — a guess to
 // correct, not a number to trust, and deletable one row at a time.
 //
-// Two things the estimate says are deliberately not copied:
+// Three things the estimate says are deliberately not copied:
 //
 //   · the margin. It is what we keep, not what we spend, so a line seeds at
 //     cost — qty × rate — and never at the price the client was quoted.
@@ -354,6 +354,16 @@ export function actualsAreLive(
 //     (see pay_rate on pricing_rates), so copying it in would book a cost
 //     nobody pays; pay comes in beside it from paySuggestion at the real
 //     rate. An admin day is the same thing with no cash behind it at all.
+//   · anything that arrives on an expense report. Lodging, flights, the
+//     vehicle, fuel and food are claimed back — by an instructor or off the
+//     company card, which is still a report line — and those reports are read
+//     live into this screen. Seeding them too would count the same night, the
+//     same flight, twice: once as a guess nobody went back to delete and once
+//     as the receipt. A missing line is a gap somebody fills in; a doubled
+//     one is a net that is quietly wrong.
+//
+// What is left is the money no report will ever carry: SWAG, permits, a
+// venue, gear shipping, a contractor's invoice.
 
 export type EstimateSeedLine = {
   label: string
@@ -372,12 +382,13 @@ export function isOurOwnTime(line: { label: string; rate_id: string | null }, pa
   return /instructor|admin/i.test(line.label)
 }
 
-/** The expense-report category an estimate line would have arrived under, had
-    somebody expensed it instead of putting it on the company card. It is the
-    bridge to the chart of accounts: cost categories say which expense types
-    they claim, so answering this answers where the line is filed without a
-    second, separate map to keep in step. Null where the estimator's line has
-    no expense-report equivalent — SWAG, permits, a venue. */
+/** The expense-report category an estimate line will come back in under, if
+    it comes back at all. Naming one is what disqualifies a line from being
+    seeded: that money is read live off the reports, so writing a guess for it
+    here would have the receipt and the guess both in the total.
+
+    Null is the seedable answer — the estimator's line has no expense-report
+    equivalent, so nothing else is ever going to bring it in. */
 export function expenseCategoryForEstimateLine(label: string): string | null {
   const l = label.toLowerCase()
   if (/lodging|hotel|lodge/.test(l)) return 'lodging'
@@ -389,31 +400,28 @@ export function expenseCategoryForEstimateLine(label: string): string | null {
   return null
 }
 
-/** Which cost category a seeded line is filed under. A category named after
-    the line wins — a "SWAG" line and a SWAG category are the same thing said
-    twice, and no expense-report category joins them — and otherwise the line
-    follows its expense category into whichever category claims it.
+/** Which cost category a seeded line is filed under. By name only: a seeded
+    line is by definition one no expense category claims (those are left to
+    the reports), so a "SWAG" line and a SWAG category being the same thing
+    said twice is the whole of what can be matched on.
 
     Null is a real answer: it leaves the line asking for a category on screen,
     which is the honest state for a cost nobody has told the books about. */
 export function accountForEstimateLine(label: string, accounts: CostAccount[]): string | null {
   const l = label.trim().toLowerCase()
-  const named = accounts.find((a) => a.label.trim().toLowerCase() === l)
-  if (named) return named.id
-  const category = expenseCategoryForEstimateLine(label)
-  if (!category) return null
-  return accounts.find((a) => a.categories.includes(category))?.id ?? null
+  return accounts.find((a) => a.label.trim().toLowerCase() === l)?.id ?? null
 }
 
 export type CostSeedLine = { account_id: string | null; description: string; amount: number }
 
-/** The estimate's lines as cost lines. At cost, our own time left out, in the
-    estimate's own order — so the two lists can be read side by side while the
-    real numbers replace the guessed ones.
+/** The estimate's lines as cost lines. At cost, our own time and anything an
+    expense report will bring in left out, in the estimate's own order — so
+    the two lists can be read side by side while the real numbers replace the
+    guessed ones.
 
-    A line the estimator never got a quantity for (miles driven, days of admin
-    burden) seeds at zero rather than being dropped: it is a heading saying
-    money is expected here, and a zero changes no total. */
+    A line the estimator never got a quantity for seeds at zero rather than
+    being dropped: it is a heading saying money is expected here, and a zero
+    changes no total. */
 export function estimateCostSeed(
   items: EstimateSeedLine[],
   accounts: CostAccount[],
@@ -421,6 +429,7 @@ export function estimateCostSeed(
 ): CostSeedLine[] {
   return items
     .filter((i) => !isOurOwnTime(i, payRateIds))
+    .filter((i) => expenseCategoryForEstimateLine(i.label) === null)
     .map((i) => ({
       account_id: accountForEstimateLine(i.label, accounts),
       description: i.label,
