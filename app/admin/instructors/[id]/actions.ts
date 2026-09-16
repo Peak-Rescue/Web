@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { linkStaffAccount } from '@/lib/staff-link'
 import { createClient as createAnonClient } from '@supabase/supabase-js'
 import { type CertType } from '@/lib/certs'
 import { type CapabilityCategory, type CapabilityRole } from '@/lib/capabilities'
@@ -314,11 +315,11 @@ export async function adminSendInvite(instructorId: string) {
     })
     if (linkError || !linkData?.user?.id) throw new Error(linkError?.message ?? 'Could not resolve existing user')
 
-    await Promise.all([
-      admin.from('instructors').update({ profile_id: linkData.user.id, invite_sent_at: new Date().toISOString() }).eq('id', instructorId),
-      // Never demote an admin who is also being linked as an instructor.
-      admin.from('profiles').update({ role: 'instructor' }).eq('id', linkData.user.id).neq('role', 'admin'),
-    ])
+    await admin
+      .from('instructors')
+      .update({ profile_id: linkData.user.id, invite_sent_at: new Date().toISOString() })
+      .eq('id', instructorId)
+    await linkStaffAccount(admin, linkData.user.id, instructor.email)
 
     const sendError = await sendOtp()
 

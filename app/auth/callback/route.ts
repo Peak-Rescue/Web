@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { type EmailOtpType } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { ilikeExact } from '@/lib/email'
+import { linkStaffAccount } from '@/lib/staff-link'
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url)
@@ -32,26 +32,7 @@ export async function GET(request: Request) {
           { onConflict: 'id', ignoreDuplicates: false }
         )
 
-      // Link instructor record if this email was invited as an instructor
-      if (data.user.email) {
-        const { data: instructor } = await admin
-          .from('instructors')
-          .select('id, profile_id')
-          .ilike('email', ilikeExact(data.user.email))
-          .maybeSingle()
-
-        if (instructor) {
-          await Promise.all([
-            // Link profile_id if not already set
-            ...(!instructor.profile_id ? [
-              admin.from('instructors').update({ profile_id: data.user.id }).eq('id', instructor.id),
-            ] : []),
-            // Ensure instructors have the instructor role — but never demote an
-            // admin (e.g. an operator who is also listed as an instructor).
-            admin.from('profiles').update({ role: 'instructor' }).eq('id', data.user.id).neq('role', 'admin'),
-          ])
-        }
-      }
+      await linkStaffAccount(admin, data.user.id, data.user.email)
 
       return NextResponse.redirect(`${origin}${next}`)
     }

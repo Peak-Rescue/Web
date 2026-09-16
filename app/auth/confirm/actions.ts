@@ -2,7 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { ilikeExact } from '@/lib/email'
+import { linkStaffAccount } from '@/lib/staff-link'
 
 export async function linkInstructorProfile(firstName?: string, lastName?: string) {
   const supabase = await createClient()
@@ -16,19 +16,5 @@ export async function linkInstructorProfile(firstName?: string, lastName?: strin
     { onConflict: 'id', ignoreDuplicates: false }
   )
 
-  const { data: instructor } = await admin
-    .from('instructors')
-    .select('id, profile_id')
-    .ilike('email', ilikeExact(user.email))
-    .maybeSingle()
-
-  if (instructor) {
-    await Promise.all([
-      ...(!instructor.profile_id
-        ? [admin.from('instructors').update({ profile_id: user.id }).eq('id', instructor.id)]
-        : []),
-      // Never demote an admin who is also listed as an instructor.
-      admin.from('profiles').update({ role: 'instructor' }).eq('id', user.id).neq('role', 'admin'),
-    ])
-  }
+  await linkStaffAccount(admin, user.id, user.email)
 }

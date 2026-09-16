@@ -13,9 +13,10 @@
 // The code itself comes from generateLink, which mints the token without
 // sending anything; we deliver it ourselves through Resend.
 
-import { type createAdminClient } from '@/lib/supabase/admin'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { ilikeExact } from '@/lib/email'
+import { linkStaffAccount } from '@/lib/staff-link'
 import { sendMail } from '@/lib/mailer'
 import { withTimeout } from '@/lib/timeout'
 
@@ -109,9 +110,24 @@ export async function sendSignInCode(admin: Admin, email: string): Promise<strin
 // on this response. Returns an error message, or null on success.
 export async function redeemSignInCode(email: string, code: string): Promise<string | null> {
   const supabase = await createClient()
-  const { error } = await supabase.auth.verifyOtp({ email, token: code, type: 'magiclink' })
+  const { data, error } = await supabase.auth.verifyOtp({ email, token: code, type: 'magiclink' })
   if (error) {
     return 'That code is not right, or it has expired. Request a new one.'
   }
+
+  // The link-clicking routes have always done this on their way through. This
+  // is the door everyone actually uses now, so it has to do it too, or an
+  // instructor signs in and lands on the student empty state.
+  //
+  // Never allowed to break signing in: a session that works is worth more than
+  // a role that is right, and the next sign-in gets another go at it.
+  if (data.user) {
+    try {
+      await linkStaffAccount(createAdminClient(), data.user.id, data.user.email)
+    } catch (err) {
+      console.error('Linking staff account failed for', email, err)
+    }
+  }
+
   return null
 }
