@@ -7,6 +7,7 @@ import { workEmail } from '@/lib/contacts'
 import CertGrid from '@/app/instructor/CertGrid'
 import ProfileForm from '@/app/instructor/ProfileForm'
 import AvatarEditor from '@/components/AvatarEditor'
+import InfoHint from '@/components/InfoHint'
 import SaveButton from '@/components/SaveButton'
 import CapabilityPanel from '@/app/admin/instructors/CapabilityPanel'
 import SectorPanel from '@/app/admin/instructors/SectorPanel'
@@ -50,7 +51,7 @@ export default async function AdminInstructorDetailPage({ params }: { params: Pr
   // Look up by instructors.id (the URL param)
   const { data: instructor } = await admin
     .from('instructors')
-    .select('id, name, email, slug, profile_id, invite_sent_at, show_on_team_page, show_email, show_phone, bio, avatar, avatar_position, avatar_scale, sectors, calendar_invites, course_alert_muted_disciplines, course_alert_muted_sectors, instructor_capabilities(category, role)')
+    .select('id, name, email, sign_in_emails, slug, profile_id, invite_sent_at, show_on_team_page, show_email, show_phone, bio, avatar, avatar_position, avatar_scale, sectors, calendar_invites, course_alert_muted_disciplines, course_alert_muted_sectors, instructor_capabilities(category, role)')
     .eq('id', id)
     .single()
 
@@ -163,9 +164,12 @@ export default async function AdminInstructorDetailPage({ params }: { params: Pr
         {/* Email — separate form so it can't be nested */}
         <section className="mb-10">
           <h2 className="text-lg font-semibold mb-4">Portal Email</h2>
-          <form action={adminUpdateInstructorEmail.bind(null, instructor.id)} className="flex gap-2 items-end p-6 bg-zinc-900 rounded-lg border border-zinc-800">
-            <div className="flex-1">
-              <label className="block text-xs text-zinc-400 mb-1">Invite / portal email</label>
+          <form action={adminUpdateInstructorEmail.bind(null, instructor.id)} className="p-6 bg-zinc-900 rounded-lg border border-zinc-800 space-y-4">
+            <div>
+              <label className="block text-xs text-zinc-400 mb-1">
+                Invite / portal email
+                <InfoHint text="The one address we send to — invites, course alerts, calendar invites, staffing requests all go here." />
+              </label>
               <input
                 type="email"
                 name="email"
@@ -174,7 +178,19 @@ export default async function AdminInstructorDetailPage({ params }: { params: Pr
                 className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500"
               />
             </div>
-            <SaveButton className="px-3 py-2 bg-pr-red hover:bg-pr-red-dark text-white rounded text-sm font-medium transition-colors shrink-0">
+            <div>
+              <label className="block text-xs text-zinc-400 mb-1">
+                Also signs in as
+                <InfoHint text="Other addresses this person might sign in under. Whichever one they use, we recognize them as staff. Nothing is ever sent to these — only the address above. Separate several with commas." />
+              </label>
+              <input
+                type="text"
+                name="sign_in_emails"
+                defaultValue={(instructor.sign_in_emails ?? []).join(', ')}
+                className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500"
+              />
+            </div>
+            <SaveButton className="px-3 py-2 bg-pr-red hover:bg-pr-red-dark text-white rounded text-sm font-medium transition-colors">
               Save
             </SaveButton>
           </form>

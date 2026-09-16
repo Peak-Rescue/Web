@@ -196,9 +196,22 @@ export async function adminUpdateInstructorEmail(instructorId: string, formData:
   await requireAdmin()
   const email = normalizeEmail(formData.get('email') as string) || null
 
+  // Anything they might sign in under instead. Typed as a list, so accept
+  // whichever separator the person pasting them happened to use. The address
+  // above is dropped if it turns up here too — it already matches on its own,
+  // and a duplicate would only read as a contradiction later.
+  const sign_in_emails = [
+    ...new Set(
+      ((formData.get('sign_in_emails') as string) ?? '')
+        .split(/[\s,;]+/)
+        .map(normalizeEmail)
+        .filter((a) => a.includes('@') && a !== email)
+    ),
+  ]
+
   const { error } = await createAdminClient()
     .from('instructors')
-    .update({ email })
+    .update({ email, sign_in_emails })
     .eq('id', instructorId)
 
   if (error) throw new Error(error.message)

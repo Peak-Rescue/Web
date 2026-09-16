@@ -14,9 +14,11 @@
 // signed in that way stayed a student. Erica Pacal reported it in Sept 2026;
 // three others were sitting in the same loop without saying so.
 //
-// Matching is by profile_id first and email second: two instructors are listed
-// under a work address but signed up with a personal one, so email alone finds
-// neither of them again.
+// Matching is by profile_id first, then by any address on the record: two
+// instructors are listed under a work address but signed up with a personal
+// one, so the listed email alone finds neither of them again. The extras live
+// in sign_in_emails and are for recognition only — instructors.email is still
+// the one address anything gets SENT to.
 
 import { type createAdminClient } from '@/lib/supabase/admin'
 import { ilikeExact, normalizeEmail } from '@/lib/email'
@@ -37,12 +39,24 @@ export async function linkStaffAccount(
   let instructor = byProfile?.[0]
 
   if (!instructor && email) {
+    const address = normalizeEmail(email)
     const { data: byEmail } = await admin
       .from('instructors')
       .select('id, profile_id')
-      .ilike('email', ilikeExact(normalizeEmail(email)))
+      .ilike('email', ilikeExact(address))
       .limit(1)
     instructor = byEmail?.[0]
+
+    // Then the other addresses they told us they might arrive under. Stored
+    // normalized, so this is a plain containment check.
+    if (!instructor) {
+      const { data: byAlias } = await admin
+        .from('instructors')
+        .select('id, profile_id')
+        .contains('sign_in_emails', [address])
+        .limit(1)
+      instructor = byAlias?.[0]
+    }
   }
 
   // Not staff. A student signing in is the common case, and it ends here.
