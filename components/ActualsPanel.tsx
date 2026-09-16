@@ -126,19 +126,20 @@ export default function ActualsPanel({
   const [closed, setClosed] = useState(Boolean(loaded.closedAt))
   const [shareToken, setShareToken] = useState(loaded.shareToken)
 
-  // Both lists end in an empty row, always. Entering a cost was a click to
-  // expand, a click to add and then the typing; this is a spreadsheet, which
-  // is what it replaced and what the person doing it already has open. An
-  // untouched blank never reaches the server — the save fires on change — so
-  // the row costs nothing to keep on screen.
+  // Exactly the lines that exist, and a button to add one.
   //
-  // It is drawn dimmed, and says "Add a cost" rather than "What it was",
-  // because the lists fill themselves now — seeded from the COA, fed by the
-  // card and by expense reports — and an identical-looking empty row at the
-  // bottom of populated ones read as a stuck line somebody had failed to
-  // delete rather than as the place to type the next one.
-  const [pay, setPay] = useState<PayRow[]>(withBlankPay(loaded.payLines.map((l) => ({ ...l, key: l.id }))))
-  const [costs, setCosts] = useState<CostRow[]>(withBlankCost(loaded.costLines.map((l) => ({ ...l, key: l.id }))))
+  // These lists used to end in a standing blank row, so that typing a cost
+  // cost no click at all. That was right when they started empty; they fill
+  // themselves now — seeded from the COA, fed by the card and by expense
+  // reports — and an empty row under populated ones read as a line somebody
+  // had failed to delete, made worse by having no bin of its own. A row you
+  // asked for is a row you can also remove, and the list above the button is
+  // all data.
+  //
+  // A row added and left untouched still never reaches the server: the save
+  // fires on change, so an empty one costs nothing but the space it takes.
+  const [pay, setPay] = useState<PayRow[]>(loaded.payLines.map((l) => ({ ...l, key: l.id })))
+  const [costs, setCosts] = useState<CostRow[]>(loaded.costLines.map((l) => ({ ...l, key: l.id })))
   // Card charges are the statement's, not this screen's: the only things that
   // can change about one here are which category it sits in and whether it
   // belongs to this course at all. Held in state so both answers show
@@ -182,18 +183,14 @@ export default function ActualsPanel({
         // estimate is travel has no seedable cost at all, and a note about
         // lines that are not there would send somebody looking for them.
         if (!made || (made.pay.length === 0 && made.costs.length === 0)) return
-        setPay((rows) =>
-          withBlankPay([
-            ...rows.filter((r) => !payIsBlank(r)),
-            ...made.pay.map((l) => ({ key: l.id, id: l.id, profile_id: null, work_date: null, description: l.description, amount: l.amount })),
-          ])
-        )
-        setCosts((rows) =>
-          withBlankCost([
-            ...rows.filter((r) => !costIsBlank(r)),
-            ...made.costs.map((l) => ({ key: l.id, id: l.id, account_id: l.account_id, spend_date: null, description: l.description, amount: l.amount })),
-          ])
-        )
+        setPay((rows) => [
+          ...rows.filter((r) => !payIsBlank(r)),
+          ...made.pay.map((l) => ({ key: l.id, id: l.id, profile_id: null, work_date: null, description: l.description, amount: l.amount })),
+        ])
+        setCosts((rows) => [
+          ...rows.filter((r) => !costIsBlank(r)),
+          ...made.costs.map((l) => ({ key: l.id, id: l.id, account_id: l.account_id, spend_date: null, description: l.description, amount: l.amount })),
+        ])
         setSeededFrom(seed.from)
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Could not start this from the estimate')
@@ -249,9 +246,17 @@ export default function ActualsPanel({
     schedule('header', () => saveActualsHeader(instanceId, payload))
   }
 
+  function addPay() {
+    setPay((rs) => [...rs, { key: newKey(), id: '', profile_id: null, work_date: null, description: null, amount: 0 }])
+  }
+
+  function addCost() {
+    setCosts((rs) => [...rs, { key: newKey(), id: '', account_id: null, spend_date: null, description: null, amount: 0 }])
+  }
+
   function updatePay(key: string, patch: Partial<PayRow>) {
     setPay((rows) => {
-      const next = withBlankPay(rows.map((r) => (r.key === key ? { ...r, ...patch } : r)))
+      const next = rows.map((r) => (r.key === key ? { ...r, ...patch } : r))
       const row = next.find((r) => r.key === key)!
       schedule(`pay:${key}`, async () => {
         const known = row.id || ids.current.get(key) || null
@@ -272,7 +277,7 @@ export default function ActualsPanel({
 
   function updateCost(key: string, patch: Partial<CostRow>) {
     setCosts((rows) => {
-      const next = withBlankCost(rows.map((r) => (r.key === key ? { ...r, ...patch } : r)))
+      const next = rows.map((r) => (r.key === key ? { ...r, ...patch } : r))
       const row = next.find((r) => r.key === key)!
       schedule(`cost:${key}`, async () => {
         const known = row.id || ids.current.get(key) || null
@@ -304,14 +309,14 @@ export default function ActualsPanel({
   }
 
   async function removePay(row: PayRow) {
-    setPay((rs) => withBlankPay(rs.filter((r) => r.key !== row.key)))
+    setPay((rs) => rs.filter((r) => r.key !== row.key))
     await settle(`pay:${row.key}`)
     const id = row.id || ids.current.get(row.key)
     if (id) await deletePayItem(instanceId, id).catch(() => router.refresh())
   }
 
   async function removeCost(row: CostRow) {
-    setCosts((rs) => withBlankCost(rs.filter((r) => r.key !== row.key)))
+    setCosts((rs) => rs.filter((r) => r.key !== row.key))
     await settle(`cost:${row.key}`)
     const id = row.id || ids.current.get(row.key)
     if (id) await deleteCostItem(instanceId, id).catch(() => router.refresh())
@@ -386,6 +391,7 @@ export default function ActualsPanel({
   const libraryLink = 'text-xs text-zinc-500 hover:text-zinc-300 underline underline-offset-2 decoration-zinc-700 transition-colors'
 
   const input = 'bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-zinc-500'
+  const addLine = 'text-xs text-zinc-500 hover:text-zinc-200 transition-colors'
   const cell = 'text-sm text-zinc-300'
 
   return (
@@ -463,19 +469,17 @@ export default function ActualsPanel({
                 setBusy(true)
                 try {
                   const created = await addSuggestedPayLines(instanceId, suggestion.lines)
-                  setPay((rows) =>
-                    withBlankPay([
-                      ...rows.filter((r) => !payIsBlank(r)),
-                      ...created.map((c) => ({
-                        key: c.id,
-                        id: c.id,
-                        profile_id: null,
-                        work_date: null,
-                        description: c.description,
-                        amount: c.amount,
-                      })),
-                    ])
-                  )
+                  setPay((rows) => [
+                    ...rows.filter((r) => !payIsBlank(r)),
+                    ...created.map((c) => ({
+                      key: c.id,
+                      id: c.id,
+                      profile_id: null,
+                      work_date: null,
+                      description: c.description,
+                      amount: c.amount,
+                    })),
+                  ])
                 } catch (e) {
                   setError(e instanceof Error ? e.message : 'Could not add those lines')
                 } finally {
@@ -491,12 +495,7 @@ export default function ActualsPanel({
 
         <div className="space-y-1.5">
           {pay.map((row) => (
-            <div
-              key={row.key}
-              className={`flex items-center gap-2 flex-wrap transition-opacity ${
-                payIsBlank(row) ? 'opacity-50 focus-within:opacity-100' : ''
-              }`}
-            >
+            <div key={row.key} className="flex items-center gap-2 flex-wrap">
               <select
                 value={row.profile_id ?? ''}
                 onChange={(e) => updatePay(row.key, { profile_id: e.target.value || null })}
@@ -516,7 +515,7 @@ export default function ActualsPanel({
               <input
                 value={row.description ?? ''}
                 onChange={(e) => updatePay(row.key, { description: e.target.value })}
-                placeholder={payIsBlank(row) ? 'Add a pay line' : 'What for'}
+                placeholder="What for"
                 className={`${input} flex-1 min-w-40`}
               />
               <input
@@ -526,21 +525,21 @@ export default function ActualsPanel({
                 placeholder="0.00"
                 className={`${input} w-24 text-right placeholder-zinc-600`}
               />
-              {/* Nothing to remove from a row nobody has typed in yet — a
-                  plus where the bin would be, so the gap reads as "next one
-                  here" rather than as a delete that has gone missing. */}
-              {payIsBlank(row) ? (
-                <span className="w-4 text-center text-zinc-700 select-none" title="Start typing and a new blank row appears under it">
-                  +
-                </span>
-              ) : (
-                <button onClick={() => void removePay(row)} className="text-zinc-600 hover:text-pr-red-light transition-colors" title="Remove">
-                  <TrashIcon className="w-4 h-4" />
-                </button>
-              )}
+              {/* Every row, blank ones included: a row you asked for is a
+                  row you can take back. */}
+              <button onClick={() => void removePay(row)} className="text-zinc-600 hover:text-pr-red-light transition-colors" title="Remove">
+                <TrashIcon className="w-4 h-4" />
+              </button>
             </div>
           ))}
         </div>
+
+        {/* The way a line gets here. Asked for rather than always waiting:
+            these lists arrive with pay in them now, and a standing empty row
+            under those read as something stuck. */}
+        <button onClick={addPay} className={`${addLine} mt-2`}>
+          + Add a pay line
+        </button>
 
         <div className="mt-3 space-y-1 text-sm">
           {/* Sums the rows above it, so the rule sits over the numbers rather
@@ -619,13 +618,16 @@ export default function ActualsPanel({
               row={row}
               accounts={accounts}
               input={input}
-              blank={costIsBlank(row)}
               onNewCategory={createCategory}
               onChange={(p) => updateCost(row.key, p)}
               onRemove={() => void removeCost(row)}
             />
           ))}
         </div>
+
+        <button onClick={addCost} className={`${addLine} mt-2`}>
+          + Add a cost
+        </button>
 
         {/* ── From the card ────────────────────────────────────────────────
             The statement's rows, tagged to this course on the card screen and
@@ -948,7 +950,6 @@ function CostRowFields({
   row,
   accounts,
   input,
-  blank,
   onNewCategory,
   onChange,
   onRemove,
@@ -956,19 +957,13 @@ function CostRowFields({
   row: CostRow & { key: string }
   accounts: CostAccount[]
   input: string
-  /** Nothing typed yet, so nothing to remove. */
-  blank?: boolean
   /** Invents a category and returns its id, for the row that needed one. */
   onNewCategory: () => Promise<string | null>
   onChange: (patch: Partial<CostRow>) => void
   onRemove: () => void
 }) {
   return (
-    <div
-      className={`flex items-center gap-2 flex-wrap transition-opacity ${
-        blank ? 'opacity-50 focus-within:opacity-100' : ''
-      }`}
-    >
+    <div className="flex items-center gap-2 flex-wrap">
       <input
         type="date"
         value={row.spend_date ?? ''}
@@ -978,7 +973,7 @@ function CostRowFields({
       <input
         value={row.description ?? ''}
         onChange={(e) => onChange({ description: e.target.value })}
-        placeholder={blank ? 'Add a cost' : 'What it was'}
+        placeholder="What it was"
         className={`${input} flex-1 min-w-32`}
       />
       {/* The whole chart, plus a way to add to it. Inventing a category is
@@ -1033,18 +1028,11 @@ function CostRowFields({
           className={`${input} w-24 placeholder-zinc-600`}
         />
       )}
-      {/* Nothing to remove from a row nobody has typed in yet — and a plus
-          where the bin would be, so the gap reads as "next one here" instead
-          of as a row whose delete has gone missing. */}
-      {blank ? (
-        <span className="w-4 text-center text-zinc-700 select-none" title="Start typing and a new blank row appears under it">
-          +
-        </span>
-      ) : (
-        <button onClick={onRemove} className="text-zinc-600 hover:text-pr-red-light transition-colors" title="Remove">
-          <TrashIcon className="w-4 h-4" />
-        </button>
-      )}
+      {/* Every row, blank ones included: a row you asked for is a row you
+          can take back. */}
+      <button onClick={onRemove} className="text-zinc-600 hover:text-pr-red-light transition-colors" title="Remove">
+        <TrashIcon className="w-4 h-4" />
+      </button>
     </div>
   )
 }
@@ -1101,15 +1089,7 @@ function parseAmount(text: string): number {
   return Number(text.replace(/[$,\s]/g, '')) || 0
 }
 
-function withBlankPay(rows: PayRow[]): PayRow[] {
-  if (rows.some(payIsBlank)) return rows
-  return [...rows, { key: newKey(), id: '', profile_id: null, work_date: null, description: null, amount: 0 }]
-}
 
-function withBlankCost(rows: CostRow[]): CostRow[] {
-  if (rows.some(costIsBlank)) return rows
-  return [...rows, { key: newKey(), id: '', account_id: null, spend_date: null, description: null, amount: 0 }]
-}
 
 // A row's identity before the server has given it one. Only has to be unique
 // within this panel for as long as it is open.
