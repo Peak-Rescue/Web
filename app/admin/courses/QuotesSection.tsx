@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react'
 import SaveButton from '@/components/SaveButton'
 import QuoteSendForm from './QuoteSendForm'
-import { createQuote, updateQuote, setQuoteStatus, deleteQuote, sendQuote } from './finance-actions'
+import { createQuote, updateQuote, setQuoteStatus, deleteQuote, sendQuote, reopenQuote } from './finance-actions'
 import QuoteTotalFields from './QuoteTotalFields'
 import { quoteNumber, type QuoteOption, type QuoteRow } from '@/lib/quotes'
 import { fmtMoney } from '@/lib/expenses'
@@ -87,6 +87,23 @@ export default function QuotesSection({
       const res = await createQuote(instanceId, estimates.length > 1 ? source : estimates[0]?.id ?? '')
       if (res.ok) setAdded((rows) => [res.quote, ...rows])
       else setError(res.error)
+    })
+  }
+
+  function reopen(id: string, status: string) {
+    if (
+      !confirm(
+        status === 'accepted'
+          ? 'Take back this acceptance? The course goes back to unconfirmed unless another quote is accepted.'
+          : 'Reopen this declined quote?'
+      )
+    ) {
+      return
+    }
+    setError(null)
+    start(async () => {
+      const res = await reopenQuote(instanceId, id)
+      if (!res.ok) setError(res.error)
     })
   }
 
@@ -181,6 +198,23 @@ export default function QuotesSection({
                 >
                   View page
                 </a>
+                {/* The way back from a one-click outcome. Accepting is a
+                    button on a row of buttons and everything downstream
+                    believes it immediately — the course confirms, Billing
+                    unlocks — so the click has to be undoable by the person
+                    who made it rather than by a hand fix in the database.
+                    The quote returns to sent if it ever went out, and to
+                    draft if it never did. */}
+                {(q.status === 'accepted' || q.status === 'declined') && (
+                  <button
+                    type="button"
+                    disabled={pending}
+                    onClick={() => reopen(q.id, q.status)}
+                    className="text-xs text-zinc-600 hover:text-zinc-300 transition-colors disabled:opacity-50"
+                  >
+                    Not {q.status}
+                  </button>
+                )}
                 {q.status === 'sent' && (
                   <>
                     <form action={setQuoteStatus.bind(null, instanceId, q.id, 'accepted')} className="flex items-center gap-2.5 flex-wrap">

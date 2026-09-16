@@ -720,6 +720,92 @@ export async function setQuoteStatus(instanceId: string, quoteId: string, status
   revalidatePath('/admin')
 }
 
+/** Takes back an acceptance — or a decline — and puts the quote back where
+    it was before somebody clicked.
+
+    It exists because accepting is one click on a row of one-click buttons,
+    and everything downstream believes it at once: the course becomes
+    confirmed, the actuals offer its total as what we invoiced, Billing
+    unlocks. A wrong click that can only be undone by hand in the database is
+    not a wrong click, it is an incident.
+
+    Back to sent if it ever was sent, and to draft if it was accepted straight
+    off the page without going out — the quote returns to the state it was
+    actually in, not to a state it never reached.
+
+    Refused once the course has been handed to Harken against this quote:
+    somebody outside is acting on the number, and the honest order is to
+    withdraw that request first. */
+export async function reopenQuote(
+  instanceId: string,
+  quoteId: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const admin = await requireAdmin()
+
+  const { data: quote } = await admin
+    .from('course_quotes')
+    .select('id, status, sent_at, options')
+    .eq('id', quoteId)
+    .eq('instance_id', instanceId)
+    .maybeSingle()
+  if (!quote) return { ok: false, error: 'Quote not found' }
+  if (!['accepted', 'declined'].includes(quote.status as string)) {
+    return { ok: false, error: 'Only an accepted or declined quote can be reopened' }
+  }
+
+  const { count: billed } = await admin
+    .from('invoice_requests')
+    .select('id', { count: 'exact', head: true })
+    .eq('quote_id', quoteId)
+    .neq('status', 'cancelled')
+  if ((billed ?? 0) > 0) {
+    return { ok: false, error: 'Harken has been asked to invoice against this quote — withdraw that request first' }
+  }
+
+  const options = (quote.options ?? null) as { title: string; total: number; chosen?: boolean }[] | null
+  const { error } = await admin
+    .from('course_quotes')
+    .update({
+      status: quote.sent_at ? 'sent' : 'draft',
+      accepted_at: null,
+      accepted_name: null,
+      declined_at: null,
+      // Which options they took was part of the acceptance, so it goes with
+      // it. The total is left alone: re-accepting recomputes it from whatever
+      // is ticked then, and a number nobody chose is worse than a stale one.
+      options: options ? options.map((o) => ({ ...o, chosen: false })) : null,
+    })
+    .eq('id', quoteId)
+    .eq('instance_id', instanceId)
+  if (error) return { ok: false, error: error.message }
+
+  // The course was confirmed by an acceptance, so it cannot stay confirmed on
+  // the strength of one that has been taken back — unless another quote is
+  // still accepted, which is the whole reason this is a count and not a flag.
+  const [{ data: inst }, { count: stillAccepted }] = await Promise.all([
+    admin.from('course_instances').select('status').eq('id', instanceId).single(),
+    admin
+      .from('course_quotes')
+      .select('id', { count: 'exact', head: true })
+      .eq('instance_id', instanceId)
+      .eq('status', 'accepted')
+      .is('archived_at', null),
+  ])
+  if (inst?.status === 'confirmed' && (stillAccepted ?? 0) === 0) {
+    await admin
+      .from('course_instances')
+      .update({ status: quote.sent_at ? 'quoted' : 'tentative' })
+      .eq('id', instanceId)
+    after(() => syncCourseCalendar(admin, instanceId))
+  }
+
+  revalidatePath(`/admin/courses/${instanceId}`)
+  revalidatePath(`/portal/${instanceId}`)
+  revalidatePath('/admin/courses')
+  revalidatePath('/admin')
+  return { ok: true }
+}
+
 // Like createQuote, this reports back instead of revalidating: the list drops
 // the row itself, and a draft nothing else on the page reads is not worth a
 // re-render of the whole course.
