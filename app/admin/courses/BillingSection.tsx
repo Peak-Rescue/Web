@@ -4,7 +4,7 @@ import { useState, useTransition } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { fmtMoney } from '@/lib/expenses'
-import { INVOICE_STATUS_LABEL, type InvoiceRequest } from '@/lib/billing'
+import { INVOICE_STATUS_LABEL, type ChainLink, type InvoiceRequest } from '@/lib/billing'
 import InfoHint from '@/components/InfoHint'
 import { sendInvoiceRequest, cancelInvoiceRequest, recordInvoiced, recordPaid } from './billing-actions'
 
@@ -35,9 +35,9 @@ export default function BillingSection({
   instanceId,
   requests,
   billTo,
-  acceptedTotal,
+  suggested,
   forWhat,
-  recipientNames,
+  recipients,
 }: {
   instanceId: string
   requests: InvoiceRequest[]
@@ -46,13 +46,19 @@ export default function BillingSection({
       screen can name the fallback rather than quietly billing whoever is
       first on the list. */
   billTo: { name: string; email: string | null; tagged: boolean } | null
-  /** The accepted quote's total, or null if nothing has been accepted. */
-  acceptedTotal: number | null
+  /** The number the chain has reached so far — what the client accepted,
+      else what was quoted, else what the COA prices this at — with the words
+      that say which. Never an answer, always a starting point: it is the same
+      figure the page is already showing one fold up, and retyping it by hand
+      is how the two come to disagree. */
+  suggested: ChainLink | null
   /** The course as a biller reads it — ref, name, client, dates. Offered as
       what the invoice is for, and editable, because the client's PO calls it
       something else often enough to matter. */
   forWhat: string
-  recipientNames: string[]
+  /** The active billers, who the request is mailed to. More than one and the
+      send says which of them — all of them unless somebody says otherwise. */
+  recipients: { id: string; name: string }[]
 }) {
   const [note, setNote] = useState('')
   // Which request is being recorded against, and which of the two milestones.
@@ -63,10 +69,14 @@ export default function BillingSection({
   // What is about to be sent, all of it editable. Seeded from the course and
   // then owned by this form: the request is a snapshot of what Harken was
   // told, so the moment to correct any of it is before it goes.
-  const [amount, setAmount] = useState(acceptedTotal === null ? '' : String(acceptedTotal))
+  const [amount, setAmount] = useState(suggested === null ? '' : String(suggested.total))
   const [name, setName] = useState(billTo?.name ?? '')
   const [email, setEmail] = useState(billTo?.email ?? '')
   const [description, setDescription] = useState(forWhat)
+  // Everybody, until somebody is unticked. Two billers at Harken is two people
+  // who can raise this invoice, not two people who both need telling every
+  // time — but which of them is a judgment, so the default is to tell them all.
+  const [sendTo, setSendTo] = useState<string[]>(() => recipients.map((r) => r.id))
   const [error, setError] = useState<string | null>(null)
   const [pending, start] = useTransition()
   const router = useRouter()
@@ -78,7 +88,7 @@ export default function BillingSection({
   // route. It asks for the number instead.
   const blocker = !billTo
     ? 'Add a point of contact in Details before handing this to Harken.'
-    : recipientNames.length === 0
+    : recipients.length === 0
       ? 'No active billing recipient. Add one in Portal → Billing.'
       : null
 
@@ -96,6 +106,7 @@ export default function BillingSection({
         billToName: name,
         billToEmail: email,
         description,
+        recipientIds: sendTo,
       })
       if (res.ok) {
         setNote('')
@@ -249,15 +260,22 @@ export default function BillingSection({
               placeholder="0.00"
               className={`${box} w-32 text-right`}
             />
-            {acceptedTotal !== null && Math.abs(Number(amount.replace(/[$,\s]/g, '')) - acceptedTotal) > 0.005 && (
-              <button
-                type="button"
-                onClick={() => setAmount(String(acceptedTotal))}
-                className="text-xs text-zinc-500 hover:text-zinc-300 underline underline-offset-2 transition-colors"
-              >
-                accepted quote was {fmtMoney(acceptedTotal)}
-              </button>
-            )}
+            {/* Where the figure came from, in words — and a way back to it
+                once it has been typed over. An estimate offered as a bare
+                number would read as an agreed price; saying "COA 1 prices
+                this at" makes it the starting point it actually is. */}
+            {suggested &&
+              (Math.abs(Number(amount.replace(/[$,\s]/g, '')) - suggested.total) > 0.005 ? (
+                <button
+                  type="button"
+                  onClick={() => setAmount(String(suggested.total))}
+                  className="text-xs text-zinc-500 hover:text-zinc-300 underline underline-offset-2 transition-colors"
+                >
+                  {suggested.text} {fmtMoney(suggested.total)}
+                </button>
+              ) : (
+                <span className="text-xs text-zinc-600">{suggested.text} this</span>
+              ))}
           </Field>
 
           <Field label="Bill to">
@@ -299,7 +317,7 @@ export default function BillingSection({
             <button
               type="button"
               onClick={send}
-              disabled={pending || amount.trim() === '' || name.trim() === ''}
+              disabled={pending || amount.trim() === '' || name.trim() === '' || sendTo.length === 0}
               className="px-3 py-2 text-sm rounded bg-pr-red/90 hover:bg-pr-red text-white transition-colors disabled:opacity-50 whitespace-nowrap"
             >
               {pending ? 'Sending…' : alreadySent ? 'Send again' : 'Send to Harken'}
@@ -308,9 +326,32 @@ export default function BillingSection({
                 from here, because realising it should go to somebody else is
                 something that happens with a finger over the button, not on
                 the settings page you would otherwise have to go hunting for. */}
+            {/* Who at Harken, named where the sending happens. With one biller
+                it is a sentence; with two it is a choice, because telling the
+                wrong half of a firm is how an invoice gets raised twice or
+                not at all. Ticked by default either way — the queue is shared
+                regardless, so this decides who is told, not who can see it. */}
+            {recipients.length === 1 ? (
+              <span className="text-xs text-zinc-600">to {recipients[0].name}</span>
+            ) : (
+              <span className="flex items-center gap-3 flex-wrap text-xs text-zinc-600">
+                to
+                {recipients.map((r) => (
+                  <label key={r.id} className="flex items-center gap-1.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={sendTo.includes(r.id)}
+                      onChange={(e) =>
+                        setSendTo((ids) => (e.target.checked ? [...ids, r.id] : ids.filter((i) => i !== r.id)))
+                      }
+                      className="accent-pr-red"
+                    />
+                    {r.name}
+                  </label>
+                ))}
+              </span>
+            )}
             <span className="text-xs text-zinc-600">
-              to {recipientNames.join(', ')}
-              {' · '}
               <Link
                 href="/admin/billing"
                 className="underline underline-offset-2 decoration-zinc-700 hover:text-zinc-300 transition-colors"

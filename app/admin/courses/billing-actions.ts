@@ -5,7 +5,7 @@ import { after } from 'next/server'
 import { requireAdminUser } from '@/lib/course-access'
 import { parseContacts, billTo } from '@/lib/contacts'
 import { courseShortName } from '@/lib/courses'
-import { describeForBiller, parseMoney } from '@/lib/billing'
+import { chooseRecipients, describeForBiller, parseMoney } from '@/lib/billing'
 import { quoteNumber } from '@/lib/quotes'
 import { fmtMoney } from '@/lib/expenses'
 import { sendMail } from '@/lib/mailer'
@@ -38,6 +38,11 @@ export async function sendInvoiceRequest(
     billToName: string
     billToEmail: string
     description: string
+    /** Which billers get the email. Absent or empty means everyone active,
+        which is what one biller has always meant. The queue itself is shared
+        — it is a list of what Harken has to do, not a per-person inbox — so
+        this decides who is told, not who can see it. */
+    recipientIds?: string[]
   }
 ): Promise<Result> {
   const { user, admin } = await requireAdminUser()
@@ -68,8 +73,11 @@ export async function sendInvoiceRequest(
   const amount = parseMoney(input.amount)
   if (amount === null || amount <= 0) return { ok: false, error: 'Enter the amount to bill' }
 
-  const to = (recipients ?? []).map((r) => r.email).filter(Boolean)
-  if (to.length === 0) return { ok: false, error: 'No active billing recipient — add one first' }
+  const chosen = chooseRecipients(
+    (recipients ?? []).map((r) => ({ id: r.id as string, name: r.name as string, email: r.email as string, token: r.token as string })),
+    input.recipientIds
+  )
+  if (chosen.length === 0) return { ok: false, error: 'Nobody to send it to — choose a biller' }
 
   // The phone is not on the form — nobody retypes a phone number to send an
   // invoice — so it still comes off the contact the payee was seeded from.
@@ -112,7 +120,7 @@ export async function sendInvoiceRequest(
   // shared, the address into it is not.
   if (process.env.RESEND_API_KEY) {
     after(async () => {
-      for (const r of recipients ?? []) {
+      for (const r of chosen) {
         try {
           await sendMail({
             from: 'Peak Rescue Portal <noreply@peak-rescue.com>',

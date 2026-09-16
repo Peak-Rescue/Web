@@ -1,7 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { courseShortName, courseDayCounts } from '@/lib/courses'
 import { coaPrice, guessSeedQty, DEFAULT_MARGIN } from '@/lib/estimates'
-import { describeForBiller } from '@/lib/billing'
+import { describeForBiller, numberSoFar } from '@/lib/billing'
 import { HERO_CHOICES } from '@/lib/quote-heroes'
 import { QUOTE_ROW_COLUMNS } from '@/lib/quotes'
 import { primaryContactEmail, ccEmailOptions, billTo, type CoursePOC } from '@/lib/contacts'
@@ -108,7 +108,7 @@ export default async function CoursePricingEditor({
     loadActuals(admin, instanceId),
     admin.from('instance_instructors').select('instructors(name, profile_id)').eq('instance_id', instanceId),
     admin.from('invoice_requests').select('*').eq('instance_id', instanceId).order('created_at', { ascending: false }),
-    admin.from('billing_recipients').select('name').eq('active', true).order('name'),
+    admin.from('billing_recipients').select('id, name').eq('active', true).order('name'),
   ])
 
   const quotePeople = (adminRows ?? [])
@@ -298,48 +298,6 @@ export default async function CoursePricingEditor({
     return live.some((r) => r.status === 'invoiced') ? 'invoiced' : 'with Harken'
   })()
 
-  // What the actuals offer as "invoiced".
-  //
-  // One chain, four links: the estimate prices the course, the quote is
-  // offered from the estimate, the handoff is offered from the quote, and
-  // what we billed is offered from the handoff. Every link can be overridden
-  // at its own step, and each one reads from the step before rather than
-  // reaching past it — which is what reading the quote here was doing, and
-  // the handoff is precisely where the number most often changes: a deposit,
-  // a cut day, a renegotiation nobody went back to re-quote.
-  //
-  // Requests are summed because two invoices are two invoices; a withdrawn
-  // one is not money we billed.
-  const invoicedSuggestion = (() => {
-    const live = invoiceRequests.filter((r) => r.status !== 'cancelled')
-    if (live.length > 0) {
-      const total = round2(live.reduce((t, r) => t + r.amount, 0))
-      return {
-        total,
-        text: live.length === 1 ? 'Harken was asked to invoice' : `${live.length} invoices went to Harken totalling`,
-      }
-    }
-    // Never handed over — a course billed outside the portal, or one nobody
-    // has got to yet. The quote is the best the page can do, and it says so.
-    if (!suggested) return null
-    const phrase =
-      suggested.status === 'accepted'
-        ? 'Quote accepted at'
-        : suggested.status === 'sent'
-          ? 'Quote sent at'
-          : 'Draft quote stands at'
-    return { total: suggested.total, text: `${phrase.replace('Quote', `Quote ${suggested.quote_seq}`)}` }
-  })()
-
-  const actualsLive = actualsAreLive(
-    { starts_at: course.starts_at, status: course.status ?? null },
-    todayIn(courseZone(course.region))
-  )
-  const suggestion = paySuggestion(
-    { instructors: instructorCount, days: lengths.days },
-    payRatesFrom((pricingRateRows ?? []) as { label: string; pay_rate?: number | string | null }[])
-  )
-
   // ── What the actuals start as ─────────────────────────────────────────────
   //
   // An empty actuals list meant retyping the COA from memory, two folds up
@@ -361,6 +319,48 @@ export default async function CoursePricingEditor({
     const named = (id: string | null | undefined) => (id ? live.find((e) => e.id === id) : undefined)
     return named(accepted?.estimate_id) ?? named(quotes[0]?.estimate_id) ?? live[0]
   })()
+
+  // What each of the last two steps offers as its number.
+  //
+  // Both read the same chain — billed ← quote ← estimate — and take the
+  // furthest link down that exists, rather than only the step immediately
+  // above. A course booked against a PO has no quote and a course handed over
+  // early has no estimate, and a step that only looks one row up finds
+  // nothing on those and leaves somebody retyping a figure the page is
+  // already holding. The answer names its own source, which is what keeps an
+  // estimate from reading as an agreed price.
+  const billedLink = (() => {
+    const live = invoiceRequests.filter((r) => r.status !== 'cancelled')
+    return live.length > 0
+      ? { total: round2(live.reduce((t, r) => t + r.amount, 0)), count: live.length }
+      : null
+  })()
+  const quoteLink = suggested
+    ? { seq: suggested.quote_seq as number, total: suggested.total, status: suggested.status }
+    : null
+  // The COA this course would be billed from, priced as it stands. The same
+  // one the actuals seed their costs from — whichever the client accepted,
+  // else the latest quoted, else the first live one.
+  const estimateLink = seedCoa
+    ? {
+        title: seedCoa.title,
+        total: coaPrice({ margin: seedCoa.margin, price_override: seedCoa.priceOverride, items: seedCoa.items }),
+      }
+    : null
+
+  const invoicedSuggestion = numberSoFar({ billed: billedLink, quote: quoteLink, estimate: estimateLink })
+  // The handoff is the step being taken, so it never suggests itself — it
+  // reads the quote, and the estimate behind it.
+  const billingSuggestion = numberSoFar({ quote: quoteLink, estimate: estimateLink })
+
+  const actualsLive = actualsAreLive(
+    { starts_at: course.starts_at, status: course.status ?? null },
+    todayIn(courseZone(course.region))
+  )
+  const suggestion = paySuggestion(
+    { instructors: instructorCount, days: lengths.days },
+    payRatesFrom((pricingRateRows ?? []) as { label: string; pay_rate?: number | string | null }[])
+  )
 
   // A rate that carries a pay figure is somebody's time, quoted at a padded
   // number on purpose — those lines are left to the pay suggestion, which
@@ -493,7 +493,7 @@ export default async function CoursePricingEditor({
             ? { name: payee.contact.name, email: payee.contact.emails[0] ?? null, tagged: payee.tagged }
             : null
         }
-        acceptedTotal={acceptedQuote ? acceptedQuote.total : null}
+        suggested={billingSuggestion}
         forWhat={describeForBiller({
           refNumber: course.ref_number,
           courseName: courseShortName(course.course_type ?? 'custom', null),
@@ -501,7 +501,7 @@ export default async function CoursePricingEditor({
           startsAt: course.starts_at,
           endsAt: course.ends_at,
         })}
-        recipientNames={(billerRows ?? []).map((r) => r.name as string)}
+        recipients={(billerRows ?? []).map((r) => ({ id: r.id as string, name: r.name as string }))}
       />
       </PricingFold>
 
