@@ -153,30 +153,6 @@ export default function QuotesSection({
                 >
                   View page
                 </a>
-                {q.status === 'draft' && (
-                  <>
-                    {contactEmail ? (
-                      <QuoteSendForm
-                        action={sendQuote.bind(null, instanceId, q.id)}
-                        contactEmail={contactEmail}
-                        ccOptions={ccOptions}
-                        adminCcOptions={adminCcOptions}
-                      />
-                    ) : (
-                      <span className="text-xs text-zinc-600" title="Add a point-of-contact email in Details to send from here">
-                        no POC email
-                      </span>
-                    )}
-                    <form action={setQuoteStatus.bind(null, instanceId, q.id, 'sent')}>
-                      <button className="text-xs px-2.5 py-1 bg-zinc-700 hover:bg-zinc-600 text-white rounded transition-colors">
-                        Mark sent
-                      </button>
-                    </form>
-                    <form action={deleteQuote.bind(null, instanceId, q.id)}>
-                      <button className="text-xs text-zinc-500 hover:text-pr-red-light transition-colors">Delete</button>
-                    </form>
-                  </>
-                )}
                 {q.status === 'sent' && (
                   <>
                     <form action={setQuoteStatus.bind(null, instanceId, q.id, 'accepted')} className="flex items-center gap-2.5 flex-wrap">
@@ -239,6 +215,36 @@ export default function QuotesSection({
                   </SaveButton>
                 </div>
               </form>
+            )}
+
+            {/* Sending is the last thing you do to a draft, so it sits last:
+                under the fields you just checked and the Save you just
+                pressed, not up in the header where it was reachable before
+                you had read a word of the quote. The addresses ride with it —
+                who it goes to is part of the send, not of the title bar. */}
+            {q.status === 'draft' && (
+              <div className="px-4 py-3 border-t border-zinc-800 flex items-center gap-3 flex-wrap">
+                {contactEmail ? (
+                  <QuoteSendForm
+                    action={sendQuote.bind(null, instanceId, q.id)}
+                    contactEmail={contactEmail}
+                    ccOptions={ccOptions}
+                    adminCcOptions={adminCcOptions}
+                  />
+                ) : (
+                  <span className="text-xs text-zinc-600" title="Add a point-of-contact email in Details to send from here">
+                    no POC email
+                  </span>
+                )}
+                <form action={setQuoteStatus.bind(null, instanceId, q.id, 'sent')}>
+                  <button className="text-xs px-2.5 py-1 bg-zinc-700 hover:bg-zinc-600 text-white rounded transition-colors">
+                    Mark sent
+                  </button>
+                </form>
+                <form action={deleteQuote.bind(null, instanceId, q.id)} className="ml-auto">
+                  <button className="text-xs text-zinc-500 hover:text-pr-red-light transition-colors">Delete</button>
+                </form>
+              </div>
             )}
           </div>
         ))}
