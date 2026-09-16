@@ -4,10 +4,12 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { signCertDocs } from '@/lib/cert-docs'
 import { workEmail } from '@/lib/contacts'
+import { signInAddresses } from '@/lib/sign-in-address'
 import CertGrid from '@/app/instructor/CertGrid'
 import ProfileForm from '@/app/instructor/ProfileForm'
 import AvatarEditor from '@/components/AvatarEditor'
 import InfoHint from '@/components/InfoHint'
+import SignInAddressPicker from '@/components/SignInAddressPicker'
 import SaveButton from '@/components/SaveButton'
 import CapabilityPanel from '@/app/admin/instructors/CapabilityPanel'
 import SectorPanel from '@/app/admin/instructors/SectorPanel'
@@ -26,6 +28,7 @@ import {
   adminUpdateProfile,
   adminUpdateInstructorProfile,
   adminUpdateInstructorEmail,
+  adminSetSignInAddress,
   adminSendInvite,
 } from './actions'
 
@@ -65,6 +68,12 @@ export default async function AdminInstructorDetailPage({ params }: { params: Pr
         .eq('id', instructor.profile_id)
         .single()).data
     : null
+
+  // The addresses this account could answer to. Only meaningful once there is
+  // an account: an unlinked record has nothing to move.
+  const signInOptions = instructor.profile_id
+    ? await signInAddresses(admin, instructor.profile_id)
+    : []
 
   // Get certs if profile is linked
   const { data: certs } = profile
@@ -163,12 +172,15 @@ export default async function AdminInstructorDetailPage({ params }: { params: Pr
 
         {/* Email — separate form so it can't be nested */}
         <section className="mb-10">
-          <h2 className="text-lg font-semibold mb-4">Portal Email</h2>
+          <h2 className="text-lg font-semibold mb-4 inline-flex items-center gap-1.5">
+            Email &amp; sign-in
+            <InfoHint below text="Three different jobs. One address receives what the portal sends them, one signs them in, and their personal contact address is set on their own profile." />
+          </h2>
           <form action={adminUpdateInstructorEmail.bind(null, instructor.id)} className="p-6 bg-zinc-900 rounded-lg border border-zinc-800 space-y-4">
             <div>
               <label className="block text-xs text-zinc-400 mb-1">
-                Invite / portal email
-                <InfoHint text="The one address we send to — invites, course alerts, calendar invites, staffing requests all go here." />
+                Where we email them
+                <InfoHint text="The staff record's address: invites, course alerts, calendar invites and staffing requests all go here. It does not decide how they sign in." />
               </label>
               <input
                 type="email"
@@ -180,8 +192,8 @@ export default async function AdminInstructorDetailPage({ params }: { params: Pr
             </div>
             <div>
               <label className="block text-xs text-zinc-400 mb-1">
-                Also signs in as
-                <InfoHint text="Other addresses this person might sign in under. Whichever one they use, we recognize them as staff. Nothing is ever sent to these — only the address above. Separate several with commas." />
+                Other accounts they hold
+                <InfoHint text="Addresses this person already has a separate account under. Arriving on one of those, they are still recognized as staff. Nothing is ever sent to them — only the address above. Separate several with commas." />
               </label>
               <input
                 type="text"
@@ -194,6 +206,20 @@ export default async function AdminInstructorDetailPage({ params }: { params: Pr
               Save
             </SaveButton>
           </form>
+
+          {instructor.profile_id && signInOptions.length > 0 && (
+            <div className="mt-4 p-6 bg-zinc-900 rounded-lg border border-zinc-800">
+              <h3 className="text-sm font-medium text-zinc-300 mb-3 inline-flex items-center gap-1.5">
+                What they sign in with
+                <InfoHint text="The address they type on the login page, and where their code is sent. Changing it moves the account — their old address stops working, so tell them before you do it." />
+              </h3>
+              <SignInAddressPicker
+                options={signInOptions}
+                onChoose={adminSetSignInAddress.bind(null, instructor.profile_id)}
+                subject={instructor.name.trim().split(/\s+/)[0] || 'They'}
+              />
+            </div>
+          )}
         </section>
 
         {/* What reaches them, and how. Both rows are theirs to set on their own
@@ -241,7 +267,10 @@ export default async function AdminInstructorDetailPage({ params }: { params: Pr
         {profile ? (
           <>
             <section className="mb-10">
-              <h2 className="text-lg font-semibold mb-4">Contact Info</h2>
+              <h2 className="text-lg font-semibold mb-4 inline-flex items-center gap-1.5">
+                Contact Info
+                <InfoHint text="Theirs to set on their own profile. Where we reach them personally — their expense report copies, messages from the crew. Not what they sign in with." />
+              </h2>
               <ProfileForm
                 initialEmail={profile.email ?? null}
                 initialPhone={profile.phone ?? null}

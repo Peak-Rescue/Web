@@ -5,11 +5,13 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { signCertDocs } from '@/lib/cert-docs'
 import CertGrid from './CertGrid'
 import ProfileForm from './ProfileForm'
+import SignInAddressPicker from '@/components/SignInAddressPicker'
 import AvatarEditor from '@/components/AvatarEditor'
 import InfoHint from '@/components/InfoHint'
 import SaveButton from '@/components/SaveButton'
-import { upsertCert, deleteCert, addCertDocument, deleteCertDocument, updateProfile, updateInstructorProfile, updateCalendarInvites, updateCourseAlerts, updateStudentContact } from './actions'
+import { upsertCert, deleteCert, addCertDocument, deleteCertDocument, updateProfile, updateInstructorProfile, updateCalendarInvites, updateCourseAlerts, updateStudentContact, setMySignInAddress } from './actions'
 import { workEmail } from '@/lib/contacts'
+import { signInAddresses } from '@/lib/sign-in-address'
 import CourseAlertsForm from './CourseAlertsForm'
 import { signOut } from '@/app/actions'
 import { CAPABILITY_META, CAPABILITY_ORDER } from '@/lib/capabilities'
@@ -21,9 +23,10 @@ export default async function InstructorPage() {
 
   const admin = createAdminClient()
 
-  const [{ data: profile }, { data: instructor }] = await Promise.all([
+  const [{ data: profile }, { data: instructor }, signInOptions] = await Promise.all([
     admin.from('profiles').select('role, first_name, last_name, email, phone, emergency_name, emergency_relationship, emergency_phone').eq('id', user.id).single(),
     admin.from('instructors').select('id, name, email, bio, avatar, avatar_position, avatar_scale, calendar_invites, show_email, show_phone, course_alert_muted_disciplines, course_alert_muted_sectors, instructor_capabilities(category, role)').eq('profile_id', user.id).maybeSingle(),
+    signInAddresses(admin, user.id),
   ])
 
   if (!instructor) redirect('/dashboard')
@@ -88,9 +91,23 @@ export default async function InstructorPage() {
           </form>
         </section>
 
+        {/* How you sign in — the one address on this account that nothing on
+            any other screen could change, which is exactly why it needed a
+            screen of its own. */}
+        <section className="mb-10">
+          <h2 className="text-lg font-semibold mb-4 inline-flex items-center gap-1.5">
+            How you sign in
+            <InfoHint text="The address you type on the login page, and where your sign-in code is sent. Changing it here changes the account itself — the old address stops working. The other addresses below are for reaching you, and none of them sign you in." />
+          </h2>
+          <SignInAddressPicker options={signInOptions} onChoose={setMySignInAddress} />
+        </section>
+
         {/* Contact info */}
         <section className="mb-10">
-          <h2 className="text-lg font-semibold mb-4">Contact Info</h2>
+          <h2 className="text-lg font-semibold mb-4 inline-flex items-center gap-1.5">
+            Contact Info
+            <InfoHint text="Where we reach you personally — the copy of your expense report, messages from the crew on your courses. Not what you sign in with." />
+          </h2>
           <ProfileForm
             initialEmail={profile?.email ?? null}
             initialPhone={profile?.phone ?? null}

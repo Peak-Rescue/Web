@@ -1,3 +1,7 @@
+// The personal half of somebody's contact details. Deliberately NOT the
+// address they sign in with — that one lives on the account itself and is
+// chosen through SignInAddressPicker. Naming this field "Email" was most of
+// why the two were confused for each other.
 'use client'
 
 import { useState } from 'react'
@@ -64,7 +68,7 @@ export default function ProfileForm({
     <form onSubmit={handleSubmit} className="space-y-6 max-w-sm">
       <div className="space-y-3">
         <div>
-          <label className="block text-sm text-zinc-400 mb-1">Email</label>
+          <label className="block text-sm text-zinc-400 mb-1">Personal email</label>
           <input
             type="email"
             value={email}

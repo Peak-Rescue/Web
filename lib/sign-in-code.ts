@@ -15,7 +15,6 @@
 
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
-import { ilikeExact } from '@/lib/email'
 import { linkStaffAccount } from '@/lib/staff-link'
 import { sendMail } from '@/lib/mailer'
 import { withTimeout } from '@/lib/timeout'
@@ -27,21 +26,25 @@ const FROM = 'Peak Rescue Portal <noreply@peak-rescue.com>'
 // generateLink CREATES the account when the address is unknown, which would
 // turn the public login form into an open sign-up endpoint. Every caller must
 // confirm the person already exists first.
+//
+// Asked of auth, and only of auth. This used to check profiles.email first —
+// the contact field, which the person edits themselves and which nothing syncs
+// back to auth. An address that lived only there passed the guard, and the
+// mint then created the very account the guard exists to prevent: a second,
+// empty one, landing them on "signed in, but not enrolled on a course yet".
+//
+// Fails closed. A lookup that errors returns null, and the caller sends
+// nothing — better a code that did not arrive than an account nobody asked for.
 export async function findUserIdByEmail(admin: Admin, email: string): Promise<string | null> {
-  const { data: profile } = await withTimeout(
-    'profile lookup',
-    admin.from('profiles').select('id').ilike('email', ilikeExact(email)).maybeSingle()
-  )
-  if (profile) return profile.id
-
-  // profiles.email is only populated from signup onward (migration 068), so
-  // fall back to the auth list for anyone who predates it.
   const { data, error } = await withTimeout(
-    'auth user list',
-    admin.auth.admin.listUsers({ page: 1, perPage: 1000 })
+    'auth user lookup',
+    admin.rpc('auth_user_id_by_email', { addr: email })
   )
-  if (error) return null
-  return data.users.find((u) => u.email?.toLowerCase() === email)?.id ?? null
+  if (error) {
+    console.error('auth user lookup failed:', error.message)
+    return null
+  }
+  return (data as string | null) ?? null
 }
 
 // Returns an error message, or null when there is nothing for the caller to

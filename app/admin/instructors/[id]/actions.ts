@@ -4,6 +4,8 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { linkStaffAccount } from '@/lib/staff-link'
+import { setSignInAddress } from '@/lib/sign-in-address'
+import { type ActionRefusal } from '@/lib/action-result'
 import { createClient as createAnonClient } from '@supabase/supabase-js'
 import { type CertType } from '@/lib/certs'
 import { type CapabilityCategory, type CapabilityRole } from '@/lib/capabilities'
@@ -259,6 +261,19 @@ export async function adminUpdateInstructorProfile(instructorId: string, formDat
 
   if (error) throw new Error(error.message)
   await revalidateInstructor(instructorId)
+}
+
+/** The same choice, made for somebody else — an admin sorting out an account
+    whose owner cannot get in to sort it out themselves. */
+export async function adminSetSignInAddress(
+  profileId: string,
+  address: string
+): Promise<ActionRefusal | void> {
+  await requireAdmin()
+
+  const refusal = await setSignInAddress(createAdminClient(), profileId, address)
+  if (refusal) return refusal
+  await revalidateByProfileId(profileId)
 }
 
 export async function adminSendInvite(instructorId: string) {

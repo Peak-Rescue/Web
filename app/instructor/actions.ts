@@ -6,6 +6,8 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { certDocPath, CERT_BUCKET } from '@/lib/cert-docs'
 import { type CertType } from '@/lib/certs'
 import { normalizePhone } from '@/lib/phone'
+import { setSignInAddress } from '@/lib/sign-in-address'
+import { type ActionRefusal } from '@/lib/action-result'
 import { CAPABILITY_ORDER } from '@/lib/capabilities'
 
 // The sectors an alert can be filtered by — courseSector() only ever answers
@@ -148,6 +150,19 @@ export async function updateProfile({
     .eq('id', user.id)
 
   if (error) throw new Error(error.message)
+  revalidatePath('/instructor')
+}
+
+/** The address you sign in with, chosen from the ones already on your record.
+    Moving it moves the account: the next code goes to the new address and the
+    old one stops working. */
+export async function setMySignInAddress(address: string): Promise<ActionRefusal | void> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Not authenticated')
+
+  const refusal = await setSignInAddress(createAdminClient(), user.id, address)
+  if (refusal) return refusal
   revalidatePath('/instructor')
 }
 
