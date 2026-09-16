@@ -45,7 +45,7 @@ export default async function BillingAdminPage() {
         <div className="mb-8">
           <h1 className="text-2xl font-bold">Billing</h1>
           <p className="text-sm text-zinc-500 mt-1">
-            What we have asked Harken to invoice, and what has come back.
+            Tracking Harken billing and payments received.
           </p>
         </div>
 

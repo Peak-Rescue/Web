@@ -131,6 +131,12 @@ export default function ActualsPanel({
   // is what it replaced and what the person doing it already has open. An
   // untouched blank never reaches the server — the save fires on change — so
   // the row costs nothing to keep on screen.
+  //
+  // It is drawn dimmed, and says "Add a cost" rather than "What it was",
+  // because the lists fill themselves now — seeded from the COA, fed by the
+  // card and by expense reports — and an identical-looking empty row at the
+  // bottom of populated ones read as a stuck line somebody had failed to
+  // delete rather than as the place to type the next one.
   const [pay, setPay] = useState<PayRow[]>(withBlankPay(loaded.payLines.map((l) => ({ ...l, key: l.id }))))
   const [costs, setCosts] = useState<CostRow[]>(withBlankCost(loaded.costLines.map((l) => ({ ...l, key: l.id }))))
   // Card charges are the statement's, not this screen's: the only things that
@@ -485,7 +491,12 @@ export default function ActualsPanel({
 
         <div className="space-y-1.5">
           {pay.map((row) => (
-            <div key={row.key} className="flex items-center gap-2 flex-wrap">
+            <div
+              key={row.key}
+              className={`flex items-center gap-2 flex-wrap transition-opacity ${
+                payIsBlank(row) ? 'opacity-50 focus-within:opacity-100' : ''
+              }`}
+            >
               <select
                 value={row.profile_id ?? ''}
                 onChange={(e) => updatePay(row.key, { profile_id: e.target.value || null })}
@@ -505,7 +516,7 @@ export default function ActualsPanel({
               <input
                 value={row.description ?? ''}
                 onChange={(e) => updatePay(row.key, { description: e.target.value })}
-                placeholder="What for"
+                placeholder={payIsBlank(row) ? 'Add a pay line' : 'What for'}
                 className={`${input} flex-1 min-w-40`}
               />
               <input
@@ -515,9 +526,13 @@ export default function ActualsPanel({
                 placeholder="0.00"
                 className={`${input} w-24 text-right placeholder-zinc-600`}
               />
-              {/* Nothing to remove from a row nobody has typed in yet. */}
+              {/* Nothing to remove from a row nobody has typed in yet — a
+                  plus where the bin would be, so the gap reads as "next one
+                  here" rather than as a delete that has gone missing. */}
               {payIsBlank(row) ? (
-                <span className="w-4" />
+                <span className="w-4 text-center text-zinc-700 select-none" title="Start typing and a new blank row appears under it">
+                  +
+                </span>
               ) : (
                 <button onClick={() => void removePay(row)} className="text-zinc-600 hover:text-pr-red-light transition-colors" title="Remove">
                   <TrashIcon className="w-4 h-4" />
@@ -949,7 +964,11 @@ function CostRowFields({
   onRemove: () => void
 }) {
   return (
-    <div className="flex items-center gap-2 flex-wrap">
+    <div
+      className={`flex items-center gap-2 flex-wrap transition-opacity ${
+        blank ? 'opacity-50 focus-within:opacity-100' : ''
+      }`}
+    >
       <input
         type="date"
         value={row.spend_date ?? ''}
@@ -959,7 +978,7 @@ function CostRowFields({
       <input
         value={row.description ?? ''}
         onChange={(e) => onChange({ description: e.target.value })}
-        placeholder="What it was"
+        placeholder={blank ? 'Add a cost' : 'What it was'}
         className={`${input} flex-1 min-w-32`}
       />
       {/* The whole chart, plus a way to add to it. Inventing a category is
@@ -1014,8 +1033,13 @@ function CostRowFields({
           className={`${input} w-24 placeholder-zinc-600`}
         />
       )}
+      {/* Nothing to remove from a row nobody has typed in yet — and a plus
+          where the bin would be, so the gap reads as "next one here" instead
+          of as a row whose delete has gone missing. */}
       {blank ? (
-        <span className="w-4" />
+        <span className="w-4 text-center text-zinc-700 select-none" title="Start typing and a new blank row appears under it">
+          +
+        </span>
       ) : (
         <button onClick={onRemove} className="text-zinc-600 hover:text-pr-red-light transition-colors" title="Remove">
           <TrashIcon className="w-4 h-4" />
