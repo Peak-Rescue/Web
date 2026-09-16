@@ -1,10 +1,10 @@
 import { redirect } from 'next/navigation'
-import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { fmtMoney } from '@/lib/expenses'
-import { INVOICE_STATUS_LABEL, isOpen, type BillingRecipient, type InvoiceRequest } from '@/lib/billing'
+import { isOpen, type BillingRecipient, type InvoiceRequest } from '@/lib/billing'
 import Recipients from './Recipients'
+import RequestList from './RequestList'
 
 // Our side of the Harken handoff: who bills for us, and everything we have
 // asked them to bill.
@@ -13,9 +13,6 @@ import Recipients from './Recipients'
 // sending them through her token would attribute their actions to her and turn
 // a credential into something that gets passed around. Same rows, different
 // door.
-
-const shortDate = (iso: string | null) =>
-  iso ? new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—'
 
 export default async function BillingAdminPage() {
   const supabase = await createClient()
@@ -40,25 +37,6 @@ export default async function BillingAdminPage() {
   const open = requests.filter(isOpen)
   const closed = requests.filter((r) => !isOpen(r))
   const outstanding = open.reduce((s, r) => s + r.amount, 0)
-
-  const Row = ({ r }: { r: InvoiceRequest }) => (
-    <li className="border-b border-zinc-900 py-2.5 flex flex-wrap items-baseline gap-x-4 gap-y-1">
-      <Link href={`/portal/${r.instance_id}`} className="text-sm text-zinc-300 hover:text-white transition-colors min-w-0 flex-1">
-        {r.description ?? 'Course'}
-        {r.quote_number ? <span className="text-zinc-600"> · {r.quote_number}</span> : null}
-      </Link>
-      <span className="text-sm text-zinc-400 tabular-nums">{fmtMoney(r.amount)}</span>
-      <span className="text-xs text-zinc-500 w-28 text-right">
-        {INVOICE_STATUS_LABEL[r.status]}
-        {r.status === 'paid' && r.amount_received != null && r.amount_received !== r.amount
-          ? ` ${fmtMoney(r.amount_received)}`
-          : ''}
-      </span>
-      <span className="text-xs text-zinc-600 w-20 text-right">
-        {shortDate(r.paid_at ?? r.invoiced_at ?? r.sent_at)}
-      </span>
-    </li>
-  )
 
   return (
     <main className="min-h-screen bg-zinc-950 text-white pt-16 md:pt-20">
@@ -86,14 +64,14 @@ export default async function BillingAdminPage() {
           {open.length === 0 ? (
             <p className="text-sm text-zinc-600">Nothing outstanding.</p>
           ) : (
-            <ul>{open.map((r) => <Row key={r.id} r={r} />)}</ul>
+            <RequestList requests={open} />
           )}
         </section>
 
         {closed.length > 0 && (
           <section>
             <h2 className="text-sm font-semibold text-zinc-300 mb-2">Settled</h2>
-            <ul>{closed.map((r) => <Row key={r.id} r={r} />)}</ul>
+            <RequestList requests={closed} />
           </section>
         )}
       </div>

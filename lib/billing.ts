@@ -21,6 +21,9 @@ export type InvoiceRequest = {
   bill_to_note: string | null
   status: InvoiceStatus
   sent_at: string | null
+  /** The billers it was emailed to, named as they were named then. Null on
+      requests sent before anybody could choose — those went to everybody. */
+  sent_to: string[] | null
   invoiced_at: string | null
   invoice_number: string | null
   paid_at: string | null

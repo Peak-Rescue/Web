@@ -4,9 +4,10 @@ import { useState, useTransition } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { fmtMoney } from '@/lib/expenses'
-import { INVOICE_STATUS_LABEL, type ChainLink, type InvoiceRequest } from '@/lib/billing'
+import { type ChainLink, type InvoiceRequest } from '@/lib/billing'
 import InfoHint from '@/components/InfoHint'
-import { sendInvoiceRequest, cancelInvoiceRequest, recordInvoiced, recordPaid } from './billing-actions'
+import InvoiceRequestCard from '@/components/InvoiceRequestCard'
+import { sendInvoiceRequest } from './billing-actions'
 
 // Handing this course to Harken, and what came back.
 //
@@ -27,9 +28,6 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 const box = 'bg-zinc-800 border border-zinc-700 rounded px-2.5 py-1.5 text-sm text-white focus:outline-none focus:border-zinc-500'
-
-const shortDate = (iso: string | null) =>
-  iso ? new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''
 
 export default function BillingSection({
   instanceId,
@@ -61,11 +59,6 @@ export default function BillingSection({
   recipients: { id: string; name: string }[]
 }) {
   const [note, setNote] = useState('')
-  // Which request is being recorded against, and which of the two milestones.
-  // One at a time: this is a correction to a record, not data entry, and two
-  // open boxes on one list is how the wrong row gets the number.
-  const [recording, setRecording] = useState<{ id: string; kind: 'invoiced' | 'paid' } | null>(null)
-  const [entry, setEntry] = useState('')
   // What is about to be sent, all of it editable. Seeded from the course and
   // then owned by this form: the request is a snapshot of what Harken was
   // told, so the moment to correct any of it is before it goes.
@@ -110,127 +103,24 @@ export default function BillingSection({
       })
       if (res.ok) {
         setNote('')
-        setAmount('')
+        // Back to what the chain suggests, not to blank. A second request is
+        // usually the same course for a different slice of the same money,
+        // and an empty box reads as though the first send lost the figure.
+        setAmount(suggested === null ? '' : String(suggested.total))
         router.refresh()
       } else setError(res.error)
     })
   }
 
-  function record(r: InvoiceRequest) {
-    if (!recording) return
-    const kind = recording.kind
-    setError(null)
-    start(async () => {
-      const res =
-        kind === 'invoiced'
-          ? await recordInvoiced(r.id, { invoiceNumber: entry, note: '' })
-          : await recordPaid(r.id, { amountReceived: entry.trim() || String(r.amount), note: '' })
-      if (res.ok) {
-        setRecording(null)
-        setEntry('')
-        router.refresh()
-      } else setError(res.error)
-    })
-  }
 
-  function cancel(id: string) {
-    if (!confirm('Withdraw this request? Harken will still see it until you tell them.')) return
-    start(async () => {
-      const res = await cancelInvoiceRequest(id)
-      if (res.ok) router.refresh()
-      else setError(res.error)
-    })
-  }
 
   return (
     <div>
       {requests.length > 0 && (
         <ul className="space-y-2 mb-4">
           {requests.map((r) => (
-            <li key={r.id} className="border border-zinc-800 rounded p-3">
-              <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-                <span className="text-sm text-zinc-200 tabular-nums">
-                  {fmtMoney(r.amount)}
-                  {r.quote_number ? <span className="text-zinc-500 font-normal"> · {r.quote_number}</span> : null}
-                </span>
-                <span className="text-xs text-zinc-400">
-                  {INVOICE_STATUS_LABEL[r.status]}
-                  {r.status === 'invoiced' && r.invoice_number ? ` · ${r.invoice_number}` : ''}
-                  {r.status === 'paid' && r.amount_received != null && r.amount_received !== r.amount
-                    ? ` · ${fmtMoney(r.amount_received)} received`
-                    : ''}
-                </span>
-              </div>
-              <p className="text-xs text-zinc-500 mt-1">
-                {[
-                  r.sent_at ? `Sent ${shortDate(r.sent_at)}` : null,
-                  r.invoiced_at ? `invoiced ${shortDate(r.invoiced_at)}` : null,
-                  r.paid_at ? `paid ${shortDate(r.paid_at)}` : null,
-                  r.bill_to_name ? `to ${r.bill_to_name}` : null,
-                ]
-                  .filter(Boolean)
-                  .join(' · ')}
-              </p>
-              {r.biller_note && <p className="text-xs text-zinc-400 mt-1 whitespace-pre-wrap">{r.biller_note}</p>}
-              {(r.invoiced_by_admin || r.paid_by_admin) && (
-                <p className="text-xs text-zinc-600 mt-1">Recorded here, not by Harken.</p>
-              )}
-
-              {/* The biller marks her own work on her own page, and that stays
-                  the ordinary route. These are for when it happens anywhere
-                  else — a number confirmed in a reply, a payment mentioned on
-                  a call — because otherwise this says "with Harken" about a
-                  course that was invoiced and paid months ago. */}
-              {r.status !== 'cancelled' && (
-                <div className="flex flex-wrap items-center gap-3 mt-2">
-                  {r.status !== 'paid' && (
-                    <button
-                      type="button"
-                      onClick={() => setRecording(recording?.id === r.id && recording.kind === 'invoiced' ? null : { id: r.id, kind: 'invoiced' })}
-                      className="text-xs text-zinc-500 hover:text-zinc-200 transition-colors"
-                    >
-                      {r.invoiced_at ? 'Invoice number' : 'Mark invoiced'}
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => setRecording(recording?.id === r.id && recording.kind === 'paid' ? null : { id: r.id, kind: 'paid' })}
-                    className="text-xs text-zinc-500 hover:text-zinc-200 transition-colors"
-                  >
-                    {r.status === 'paid' ? 'Correct the payment' : 'Record payment'}
-                  </button>
-                  {r.status !== 'paid' && (
-                    <button
-                      type="button"
-                      onClick={() => cancel(r.id)}
-                      disabled={pending}
-                      className="text-xs text-zinc-600 hover:text-red-400 transition-colors"
-                    >
-                      Withdraw
-                    </button>
-                  )}
-                </div>
-              )}
-
-              {recording?.id === r.id && (
-                <div className="flex flex-wrap items-center gap-2 mt-2">
-                  <input
-                    value={entry}
-                    onChange={(e) => setEntry(e.target.value)}
-                    placeholder={recording.kind === 'invoiced' ? 'Their invoice number' : `Amount received (${fmtMoney(r.amount)})`}
-                    inputMode={recording.kind === 'paid' ? 'decimal' : 'text'}
-                    className="bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-xs focus:outline-none focus:border-zinc-500 w-44"
-                  />
-                  <button
-                    type="button"
-                    disabled={pending}
-                    onClick={() => record(r)}
-                    className="px-2.5 py-1 text-xs rounded bg-zinc-100 text-zinc-900 hover:bg-white transition-colors disabled:opacity-50"
-                  >
-                    Save
-                  </button>
-                </div>
-              )}
+            <li key={r.id}>
+              <InvoiceRequestCard request={r} onChanged={() => router.refresh()} />
             </li>
           ))}
         </ul>

@@ -113,6 +113,9 @@ export async function sendInvoiceRequest(
     status: 'sent',
     sent_at: new Date().toISOString(),
     sent_by: user.id,
+    // Who at Harken was told, by name and at the time. The first question
+    // asked of a request that has gone quiet is who has it.
+    sent_to: chosen.map((r) => r.name),
   })
   if (error) return { ok: false, error: 'Could not create the request — please try again' }
 
