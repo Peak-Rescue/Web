@@ -305,7 +305,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     },
     {
       title: 'Billing',
-      desc: 'Hand a course to Harken to invoice, and see what has been paid',
+      desc: 'Hand a course to Harken to invoice, see what has been paid, and say who hears about it',
       href: '/admin/billing',
       section: 'admin',
       icon: (
