@@ -2,7 +2,6 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { courseShortName, courseDayCounts } from '@/lib/courses'
 import { coaPrice, guessSeedQty, DEFAULT_MARGIN } from '@/lib/estimates'
 import { describeForBiller, numberSoFar } from '@/lib/billing'
-import { HERO_CHOICES } from '@/lib/quote-heroes'
 import { QUOTE_ROW_COLUMNS } from '@/lib/quotes'
 import { primaryContactEmail, ccEmailOptions, billTo, type CoursePOC } from '@/lib/contacts'
 import EstimatePanel, { type PricingRate } from '@/components/EstimatePanel'
@@ -10,7 +9,6 @@ import { EstimateReviewBanner, EstimateReviewRequest, type EstimateReviewRow } f
 import CoaComparison from './CoaComparison'
 import ArchivedCoas from './ArchivedCoas'
 import NewCoaMenu, { type CopySource } from './NewCoaMenu'
-import QuoteHeroPicker from './QuoteHeroPicker'
 import QuotesSection, { type QuoteRow } from './QuotesSection'
 import BillingSection from './BillingSection'
 import { type InvoiceRequest } from '@/lib/billing'
@@ -20,6 +18,7 @@ import { actualsAreLive, estimateCostSeed, payRatesFrom, paySuggestion } from '@
 import { loadActuals } from '@/lib/actuals-data'
 import { courseZone, todayIn } from '@/lib/course-clock'
 import { fmtMoney, round2 } from '@/lib/expenses'
+import { sectionRule, sectionTitle } from '@/lib/ui'
 
 // What a course costs and what we told the client it costs.
 //
@@ -66,7 +65,7 @@ export default async function CoursePricingEditor({
   const admin = createAdminClient()
   const [
     { data: estimateRows }, { data: pricingRateRows }, { data: quoteRows },
-    { data: adminRows }, { data: galleryImageRows }, { data: estimateReviewRows },
+    { data: adminRows }, { data: estimateReviewRows },
     { data: sourceRows }, { data: offDayRows },
     actuals, { data: rosterRows },
     { data: invoiceRows }, { data: billerRows }, { data: readerRows },
@@ -79,7 +78,6 @@ export default async function CoursePricingEditor({
       .select(QUOTE_ROW_COLUMNS)
       .eq('instance_id', instanceId).order('quote_seq', { ascending: false }),
     admin.from('profiles').select('id, first_name, last_name, email').eq('role', 'admin').order('first_name'),
-    admin.from('gallery_images').select('url, caption, categories').order('created_at', { ascending: false }),
     admin.from('estimate_reviews')
       .select('id, created_at, requested_by, reviewer_id, note, responded_at, approved, response_note, subject')
       .eq('instance_id', instanceId).order('created_at', { ascending: false }).limit(16),
@@ -210,15 +208,6 @@ export default async function CoursePricingEditor({
   }))
 
 
-  // Quote-hero photo pool: the curated static shots plus every gallery upload,
-  // each carrying the category tags the picker filters by.
-  const heroChoices = [
-    ...HERO_CHOICES,
-    ...(galleryImageRows ?? [])
-      .filter((g) => !HERO_CHOICES.some((c) => c.value === g.url))
-      .map((g) => ({ value: g.url, label: g.caption || 'Gallery photo', categories: g.categories ?? [] })),
-  ]
-
   // No estimates yet: show a virtual first COA pre-populated with the
   // always-recurring lines, quantities guessed from the course (nothing
   // saves until touched).
@@ -261,7 +250,6 @@ export default async function CoursePricingEditor({
   // starting point. The highest-numbered accepted quote wins — quotes come
   // back newest first, and a re-quote that was also accepted supersedes.
   const accepted = quotes.find((q) => q.status === 'accepted' && !q.archived_at)
-  const acceptedQuote = accepted ? { seq: accepted.quote_seq as number, total: accepted.total } : null
 
   // What the invoiced box offers. An accepted quote first, and failing that
   // the newest live quote that names a figure — plenty of courses are billed
@@ -414,6 +402,11 @@ export default async function CoursePricingEditor({
           course: before it runs the question is what to charge, and from the
           first day the question is what it cost. Defaults only — a course
           that already ran still gets its estimate argued about. */}
+      {/* Each part of the fold is separated the same way and named the same
+          way — the rhythm was four different gaps (space-y-8 between COAs,
+          mt-6 for the comparison, mt-4 for the menu, mt-5 for the review
+          bar), which reads as four unrelated things stacked rather than one
+          section with parts. */}
       <PricingFold title="Cost" summary={costSummary} defaultOpen={!actualsLive}>
       <div className="space-y-8">
         {estimatePanels.map((e) => (
@@ -433,7 +426,12 @@ export default async function CoursePricingEditor({
           />
         ))}
       </div>
-      {estimatePanels.length > 1 && <CoaComparison coas={estimatePanels} />}
+      {estimatePanels.length > 1 && (
+        <div className={`${sectionRule} mt-6`}>
+          <h4 className={`${sectionTitle} mb-3`}>Side by side</h4>
+          <CoaComparison coas={estimatePanels} />
+        </div>
+      )}
       {archivedCoas.length > 0 && (
         <ArchivedCoas
           instanceId={instanceId}
@@ -445,7 +443,8 @@ export default async function CoursePricingEditor({
           }))}
         />
       )}
-      <div className="mt-4">
+      <div className={`${sectionRule} mt-6`}>
+        <h4 className={`${sectionTitle} mb-3`}>Another option</h4>
         <NewCoaMenu
           instanceId={instanceId}
           coas={persistedCoas.map((e) => ({ id: e.id!, title: e.title }))}
@@ -456,9 +455,6 @@ export default async function CoursePricingEditor({
       </PricingFold>
 
       <PricingFold title="Quotes" summary={quoteSummary} defaultOpen={!actualsLive}>
-      <p className="text-xs text-zinc-500 mb-4">
-        Marking a quote sent or accepted moves the course to Quoted or Confirmed.
-      </p>
       <QuotesSection
         instanceId={instanceId}
         refNumber={course.ref_number}

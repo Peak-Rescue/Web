@@ -34,6 +34,7 @@ import {
 import TrashIcon from '@/components/TrashIcon'
 import InfoHint from '@/components/InfoHint'
 import SuggestedNumber from '@/components/SuggestedNumber'
+import { btn, sectionRule, sectionTitle } from '@/lib/ui'
 
 // What the course actually cost, next to what we actually billed.
 //
@@ -403,8 +404,8 @@ export default function ActualsPanel({
   // section and which its parts. They are quieter than the fold's own title
   // now, and identical to each other — a heading's job here is to say where
   // you are, not to compete.
-  const sectionRule = 'pt-6 border-t border-zinc-800'
-  const sectionTitle = 'text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500'
+  // Both from lib/ui, so the pricing page has one answer to "what separates
+  // a section" rather than one per panel.
 
   // Where a number comes from, when it does not come from this screen.
   const libraryLink = 'text-xs text-zinc-500 hover:text-zinc-300 underline underline-offset-2 decoration-zinc-700 transition-colors'
@@ -888,7 +889,7 @@ export default function ActualsPanel({
       <div className={sectionRule}>
         <div className="flex items-baseline gap-2 mb-2">
           <h4 className={sectionTitle}>Notes</h4>
-          <InfoHint text="Kept with the course, printed on the PDF, shown on the page anyone is sent, and included in the email that sends it. This is where a number that needs explaining gets explained." />
+          <InfoHint text="Kept with the course, printed on the PDF, and shown on the page anyone is sent — which stays current, so a correction here reaches them without sending again." />
         </div>
         <textarea
           value={notes}
@@ -897,7 +898,7 @@ export default function ActualsPanel({
             saveHeader({ notes: e.target.value })
           }}
           rows={3}
-          placeholder="Why the margin came in where it did, what is still to land, anything a reader would ask about"
+          placeholder="Anything that needs explaining"
           className={`${input} w-full`}
         />
       </div>
@@ -915,7 +916,7 @@ export default function ActualsPanel({
             href={`/api/actuals/${instanceId}/pdf`}
             target="_blank"
             rel="noreferrer"
-            className="px-3 py-2 text-sm rounded bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 transition-colors"
+            className={btn.secondaryLg}
           >
             Download PDF
           </a>
@@ -941,7 +942,7 @@ export default function ActualsPanel({
                 setBusy(false)
               }
             }}
-            className="px-3 py-2 text-sm rounded bg-pr-red/90 hover:bg-pr-red text-white transition-colors disabled:opacity-50 whitespace-nowrap"
+            className={`${btn.primaryLg} whitespace-nowrap`}
           >
             {busy ? 'Sending…' : shareSentAt ? 'Send the numbers again' : 'Send the numbers'}
           </button>
@@ -997,11 +998,7 @@ export default function ActualsPanel({
                 setClosedAt(next ? new Date().toISOString() : null)
                 await setActualsClosed(instanceId, next).catch(() => router.refresh())
               }}
-              className={`px-3 py-2 text-sm rounded border transition-colors disabled:opacity-50 ${
-                closed
-                  ? 'border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500'
-                  : 'border-zinc-700 bg-zinc-800 text-zinc-200 hover:bg-zinc-700'
-              }`}
+              className={btn.secondaryLg}
             >
               {closed ? 'Reopen the books' : 'Close the books'}
             </button>
@@ -1009,11 +1006,14 @@ export default function ActualsPanel({
           </span>
         </div>
 
+        {/* A date, and who. What the send does — notes ride along, the page
+            stays current — is behind the mark on the Notes heading, where
+            somebody can go looking for it once rather than read it every
+            time they glance at this row. */}
         {shareSentAt && (
           <p className="text-xs text-zinc-500">
             Last sent {sentDate(shareSentAt)}
-            {sent && sent.length > 0 ? ` to ${sent.join(' and ')}` : ''}. The notes above go with it, and the page
-            stays current — anything corrected here shows up there.
+            {sent && sent.length > 0 ? ` to ${sent.join(' and ')}` : ''}
           </p>
         )}
 

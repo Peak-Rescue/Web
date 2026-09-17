@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from 'react'
 import { createEstimateCoa, duplicateEstimateCoa, duplicateCurrentEstimate, copyEstimatesFrom, copyEstimateCoaFrom } from './finance-actions'
+import { btn } from '@/lib/ui'
 
 // The one entry point for adding a COA, with its three starting points:
 // seeded default lines, a copy of an existing COA on this course, or a COA
@@ -98,7 +99,7 @@ export default function NewCoaMenu({
         type="button"
         onClick={() => setOpen((o) => !o)}
         disabled={pending}
-        className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded text-sm font-medium transition-colors disabled:opacity-50"
+        className={btn.secondaryLg}
       >
         {pending ? 'Adding…' : '+ New COA'}
       </button>

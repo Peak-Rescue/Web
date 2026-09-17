@@ -10,6 +10,7 @@ import { CalculatorIcon, NotesIcon } from '@/components/TaskIcons'
 import { useUnsavedGuard, withSaveTimeout } from '@/components/useUnsavedGuard'
 import TrashIcon from '@/components/TrashIcon'
 import InfoHint from '@/components/InfoHint'
+import { btn, card } from '@/lib/ui'
 
 export type PricingRate = { id: string; label: string; unit: string | null; rate: number }
 
@@ -468,11 +469,14 @@ export default function EstimatePanel({
   return (
     <div ref={rootRef} className={highlight ? 'ring-1 ring-pr-red-light rounded' : undefined}>
       <div className="flex items-center justify-between gap-3 mb-2">
+        {/* The COA's name is a heading you can type in, and the only thing
+            that said so was a border appearing on hover. A dotted underline
+            says it standing still. */}
         <input
           value={solo && title === 'COA 1' ? '' : title}
           onChange={(e) => schedule(rows, margin, e.target.value)}
           placeholder={solo ? 'Estimate name (optional)' : ''}
-          className="bg-transparent border-b border-transparent hover:border-zinc-700 focus:border-zinc-500 focus:outline-none text-sm font-semibold flex-1 min-w-0 max-w-md placeholder:text-zinc-600 placeholder:font-normal"
+          className="bg-transparent border-b border-dashed border-zinc-800 hover:border-zinc-600 focus:border-solid focus:border-zinc-500 focus:outline-none text-sm font-semibold flex-1 min-w-0 max-w-md placeholder:text-zinc-600 placeholder:font-normal"
           title="Name this COA (e.g. 'Drive team', 'Fly-in option')"
         />
         <div className="flex items-center gap-3">
@@ -500,7 +504,7 @@ export default function EstimatePanel({
                 }
               }}
               disabled={archiving}
-              className="text-xs text-zinc-600 hover:text-zinc-300 transition-colors disabled:opacity-50"
+              className={btn.quiet}
               title="Collapse this COA out of the comparison — it keeps its lines and can be brought back"
             >
               Set aside
@@ -519,7 +523,7 @@ export default function EstimatePanel({
                 }
               }}
               disabled={deleting}
-              className="text-xs text-zinc-600 hover:text-pr-red-light transition-colors disabled:opacity-50"
+              className={btn.danger}
             >
               Delete COA
             </button>
@@ -591,7 +595,7 @@ export default function EstimatePanel({
         </div>
       )}
 
-      <div className="bg-zinc-900 rounded-lg border border-zinc-800">
+      <div className={card}>
         <div className="divide-y divide-zinc-800">
           {rows.map((r) => (
             <div key={r.key} className="px-3 py-2">
@@ -749,6 +753,10 @@ export default function EstimatePanel({
           )}
         </div>
 
+        {/* One row for the ways a line gets here. It was three strips stacked
+            on each other — a select, a text button and an underlined link,
+            three affordances for one job — which made the bottom of every COA
+            look like the bottom of three. */}
         <div className="px-3 py-2.5 border-t border-zinc-800 flex items-center gap-2 flex-wrap">
           <select
             value=""
@@ -762,19 +770,12 @@ export default function EstimatePanel({
               </option>
             ))}
           </select>
-          <a
-            href="/admin/expenses/rates"
-            target="_blank"
-            className="ml-auto text-xs text-zinc-500 hover:text-zinc-300 underline transition-colors"
-          >
-            Edit library rates →
-          </a>
-        </div>
-
-        <div className="px-3 py-2.5 border-t border-zinc-800">
-          <button onClick={addCustom} className="text-sm text-zinc-400 hover:text-white transition-colors">
+          <button onClick={addCustom} className={btn.secondary}>
             + Custom item
           </button>
+          <a href="/admin/expenses/rates" target="_blank" className={`ml-auto ${btn.quiet}`}>
+            Rates library ↗
+          </a>
         </div>
 
         <div className="px-4 py-3 border-t border-zinc-800 flex items-end justify-between gap-4 flex-wrap">
@@ -806,33 +807,49 @@ export default function EstimatePanel({
               <span className="text-xs text-zinc-500">%</span>
             </div>
           </div>
-          <div className="text-right text-sm space-y-0.5">
-            <p className="text-zinc-400">
-              Cost: {fmtMoney(subtotal)}
-              {unsetRows.length > 0 && (
-                <span className="text-amber-500/80"> + {unsetRows.length} unpriced</span>
-              )}
-            </p>
-            <p className="text-zinc-400">Margin ({Math.round(margin * 100)}%): {fmtMoney(marginAmount)}</p>
-            <p className={overridden ? 'text-zinc-500' : 'text-base font-semibold'}>
-              Calculated: {fmtMoney(calculated)}
-            </p>
-            <div className="flex items-center justify-end gap-1.5 pt-0.5">
-              <span className="text-xs text-zinc-400">Quote price</span>
-              <span className="text-zinc-600 text-xs">$</span>
-              <input
-                type="number"
-                min="0"
-                step="10"
-                value={override}
-                onChange={(e) => schedule(rows, margin, undefined, e.target.value)}
-                placeholder={String(calculated)}
-                title="Set the price by hand — leave empty to quote the calculated number"
-                className={`${inputCls} w-28 text-right ${overridden ? 'font-semibold' : 'placeholder:text-zinc-500'}`}
-              />
+          {/* The most-read four lines on the panel, and they were four
+              right-aligned sentences in four weights. Label on the left,
+              number on the right, the arithmetic in the order it happens, and
+              the one figure that leaves this page — the quote price — last
+              and heaviest. */}
+          <div className="text-sm space-y-1 min-w-56">
+            <div className="flex items-baseline justify-between gap-6">
+              <span className="text-zinc-500">Cost</span>
+              <span className="text-zinc-300 tabular-nums">
+                {fmtMoney(subtotal)}
+                {unsetRows.length > 0 && (
+                  <span className="text-amber-500/80"> + {unsetRows.length} unpriced</span>
+                )}
+              </span>
+            </div>
+            <div className="flex items-baseline justify-between gap-6">
+              <span className="text-zinc-500">Margin {Math.round(margin * 100)}%</span>
+              <span className="text-zinc-300 tabular-nums">{fmtMoney(marginAmount)}</span>
+            </div>
+            <div className="flex items-baseline justify-between gap-6 pt-1 border-t border-zinc-800">
+              <span className="text-zinc-500">Calculated</span>
+              <span className={`tabular-nums ${overridden ? 'text-zinc-500' : 'text-zinc-200 font-medium'}`}>
+                {fmtMoney(calculated)}
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-6 pt-0.5">
+              <span className="text-zinc-300">Quote price</span>
+              <span className="flex items-center gap-1.5">
+                <span className="text-zinc-600 text-xs">$</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="10"
+                  value={override}
+                  onChange={(e) => schedule(rows, margin, undefined, e.target.value)}
+                  placeholder={String(calculated)}
+                  title="Set the price by hand — leave empty to quote the calculated number"
+                  className={`${inputCls} w-28 text-right tabular-nums ${overridden ? 'font-semibold' : 'placeholder:text-zinc-500'}`}
+                />
+              </span>
             </div>
             {overridden && (
-              <p className="text-[10px] text-zinc-500">
+              <p className="text-[10px] text-zinc-500 text-right">
                 set by hand{realMargin !== null ? ` · ${Math.round(realMargin * 100)}% margin` : ''}
               </p>
             )}

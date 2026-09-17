@@ -1,4 +1,5 @@
 import { requestEstimateReview, respondEstimateReview } from './finance-actions'
+import { btn, sectionRule, sectionTitle } from '@/lib/ui'
 
 // Server-rendered pieces of the estimate review loop: a banner the assigned
 // reviewer answers from, and the request form + history for everyone else.
@@ -70,14 +71,14 @@ export function EstimateReviewBanner({
             <button
               name="approved"
               value="true"
-              className="px-4 py-2 bg-teal-800 hover:bg-teal-700 text-white rounded text-sm font-medium transition-colors"
+              className={btn.agreeLg}
             >
               Looks good ✓
             </button>
             <button
               name="approved"
               value="false"
-              className="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 text-white rounded text-sm font-medium transition-colors"
+              className={btn.secondaryLg}
             >
               Send notes
             </button>
@@ -108,7 +109,8 @@ export function EstimateReviewRequest({
     .filter((r) => r.responded_at || r.reviewer_id !== currentUserId)
     .slice(0, 4)
   return (
-    <div className="mt-5 pt-4 border-t border-zinc-800/60">
+    <div className={`${sectionRule} mt-6`}>
+      <h4 className={`${sectionTitle} mb-3`}>Another pair of eyes</h4>
       {history.length > 0 && (
         <div className="space-y-1 mb-3">
           {history.map((r) => (
@@ -145,7 +147,7 @@ export function EstimateReviewRequest({
           </select>
           <input name="note" placeholder="Note for them (optional)" className={`${inputCls} flex-1 min-w-48`} />
           <button
-            className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded text-sm font-medium transition-colors group-has-[select:invalid]:opacity-40 group-has-[select:invalid]:pointer-events-none"
+            className={`${btn.secondaryLg} group-has-[select:invalid]:opacity-40 group-has-[select:invalid]:pointer-events-none`}
             title="Emails them a link straight to this section"
           >
             Request {SUBJECT_NOUN[subject]} review

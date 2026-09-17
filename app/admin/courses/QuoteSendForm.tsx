@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import AdminCcPicker from '@/components/AdminCcPicker'
+import { btn } from '@/lib/ui'
 
 /** Sending a quote, with whoever else is being copied on it.
  *
@@ -52,7 +53,7 @@ export default function QuoteSendForm({
             ? `Sends the quote to ${contactEmail}`
             : `Sends the quote to ${contactEmail}, copying ${copies} other ${copies === 1 ? 'address' : 'addresses'}`
         }
-        className="text-xs px-2.5 py-1 bg-pr-red hover:bg-pr-red-dark text-white rounded transition-colors"
+        className={btn.primary}
       >
         Send to {contactEmail}
         {copies > 0 && <span className="text-white/75"> + {copies} cc</span>}

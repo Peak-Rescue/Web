@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { type ChainLink, type InvoiceRequest } from '@/lib/billing'
 import InfoHint from '@/components/InfoHint'
 import InvoiceRequestCard from '@/components/InvoiceRequestCard'
+import { btn } from '@/lib/ui'
 import SuggestedNumber from '@/components/SuggestedNumber'
 import { sendInvoiceRequest } from './billing-actions'
 
@@ -220,7 +221,7 @@ export default function BillingSection({
               type="button"
               onClick={send}
               disabled={pending || amount.trim() === '' || name.trim() === '' || sendTo.length === 0}
-              className="px-3 py-2 text-sm rounded bg-pr-red/90 hover:bg-pr-red text-white transition-colors disabled:opacity-50 whitespace-nowrap"
+              className={`${btn.primaryLg} whitespace-nowrap`}
             >
               {pending ? 'Sending…' : alreadySent ? 'Send again' : 'Send to Harken'}
             </button>

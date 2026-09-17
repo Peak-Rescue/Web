@@ -7,18 +7,13 @@ import { createQuote, updateQuote, setQuoteStatus, deleteQuote, sendQuote, reope
 import QuoteTotalFields from './QuoteTotalFields'
 import { quoteNumber, type QuoteOption, type QuoteRow } from '@/lib/quotes'
 import { fmtMoney } from '@/lib/expenses'
+import StatusChip, { QUOTE_STATUS } from '@/components/StatusChip'
+import InfoHint from '@/components/InfoHint'
+import { btn, card } from '@/lib/ui'
 
 export type QuotePerson = { id: string; name: string; email: string | null }
 
 export type { QuoteOption, QuoteRow }
-
-const STATUS_BADGE: Record<string, string> = {
-  draft: 'bg-zinc-800 text-zinc-400',
-  sent: 'bg-blue-900/60 text-blue-300',
-  accepted: 'bg-teal-900/60 text-teal-300',
-  declined: 'bg-red-900/50 text-red-300',
-  expired: 'bg-yellow-900/50 text-yellow-300',
-}
 
 const inputCls = 'w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500'
 const labelCls = 'block text-xs text-zinc-400 mb-1'
@@ -45,7 +40,6 @@ export default function QuotesSection({
   people,
   estimates,
   coaTitles,
-  heroPicker,
 }: {
   instanceId: string
   refNumber: number
@@ -63,7 +57,6 @@ export default function QuotesSection({
   /** The photo the quote page will use. It sits on this row because that is
       the row that makes a quote — a picture chosen somewhere else is a setting
       you do not know applies until you have already sent one. */
-  heroPicker?: React.ReactNode
 }) {
   // Rows this browser has added or dropped since the page was rendered. They
   // are merged with the server's list rather than replacing it, so whenever
@@ -151,23 +144,23 @@ export default function QuotesSection({
           type="button"
           onClick={addQuote}
           disabled={pending}
-          className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded text-sm font-medium transition-colors disabled:opacity-50"
+          className={btn.secondaryLg}
         >
           {pending ? 'Working…' : `New quote from ${estimates.length > 1 ? 'selection' : 'estimate'}`}
         </button>
-        {heroPicker && <div className="ml-auto">{heroPicker}</div>}
+        <InfoHint text="Marking a quote sent or accepted moves the course itself to Quoted or Confirmed." />
       </div>
       {error && <p className="mb-3 text-sm text-red-400">{error}</p>}
 
       <div className="space-y-3">
         {liveQuotes.map((q) => (
-          <div key={q.id} className="bg-zinc-900 rounded-lg border border-zinc-800">
+          <div key={q.id} className={card}>
             <div className="px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
               <div className="flex items-center gap-3">
                 <span className="font-mono text-sm">{quoteNumber(refNumber, q.quote_seq)}</span>
-                <span className={`px-1.5 py-0.5 text-[10px] font-medium rounded ${STATUS_BADGE[q.status] ?? STATUS_BADGE.draft}`}>
-                  {q.status}
-                </span>
+                <StatusChip tone={QUOTE_STATUS[q.status]?.tone ?? 'idle'}>
+                  {QUOTE_STATUS[q.status]?.label ?? q.status}
+                </StatusChip>
                 {q.options ? (
                   q.options.some((o) => o.chosen) ? (
                     <span className="text-sm font-medium">
@@ -210,7 +203,7 @@ export default function QuotesSection({
                     type="button"
                     disabled={pending}
                     onClick={() => reopen(q.id, q.status)}
-                    className="text-xs text-zinc-600 hover:text-zinc-300 transition-colors disabled:opacity-50"
+                    className={btn.quiet}
                   >
                     Not {q.status}
                   </button>
@@ -226,12 +219,10 @@ export default function QuotesSection({
                           {o.title}
                         </label>
                       ))}
-                      <button className="text-xs px-2.5 py-1 bg-teal-800 hover:bg-teal-700 text-white rounded transition-colors">
-                        Mark accepted
-                      </button>
+                      <button className={btn.agree}>Mark accepted</button>
                     </form>
                     <form action={setQuoteStatus.bind(null, instanceId, q.id, 'declined')}>
-                      <button className="text-xs text-zinc-500 hover:text-pr-red-light transition-colors">Declined</button>
+                      <button className={btn.danger}>Declined</button>
                     </form>
                   </>
                 )}
@@ -272,9 +263,9 @@ export default function QuotesSection({
                   <textarea name="course_blurb" rows={4} defaultValue={q.course_blurb ?? ''} className={`${inputCls} resize-y`} />
                 </div>
                 <div className="sm:col-span-3">
-                  <SaveButton className="px-4 py-2 bg-pr-red hover:bg-pr-red-dark text-white rounded text-sm font-medium transition-colors">
-                    Save quote
-                  </SaveButton>
+                  {/* Saving a draft changes nothing outside this page, so it
+                      is ordinary work — the red belongs to the send below. */}
+                  <SaveButton className={btn.secondaryLg}>Save quote</SaveButton>
                 </div>
               </form>
             )}
@@ -299,9 +290,7 @@ export default function QuotesSection({
                   </span>
                 )}
                 <form action={setQuoteStatus.bind(null, instanceId, q.id, 'sent')}>
-                  <button className="text-xs px-2.5 py-1 bg-zinc-700 hover:bg-zinc-600 text-white rounded transition-colors">
-                    Mark sent
-                  </button>
+                  <button className={btn.secondary}>Mark sent</button>
                 </form>
                 {/* Agreed without this quote ever leaving the portal — a price
                     settled on a call, a PO against a number given by email.
@@ -326,10 +315,7 @@ export default function QuotesSection({
                       {o.title}
                     </label>
                   ))}
-                  <button
-                    title="They have already agreed to this price"
-                    className="text-xs px-2.5 py-1 text-teal-300/90 hover:text-teal-200 transition-colors"
-                  >
+                  <button title="They have already agreed to this price" className={btn.agree}>
                     Already accepted
                   </button>
                 </form>
@@ -337,7 +323,7 @@ export default function QuotesSection({
                   type="button"
                   onClick={() => removeQuote(q.id)}
                   disabled={pending}
-                  className="ml-auto text-xs text-zinc-500 hover:text-pr-red-light transition-colors disabled:opacity-50"
+                  className={`ml-auto ${btn.danger}`}
                 >
                   Delete
                 </button>
@@ -371,9 +357,9 @@ export default function QuotesSection({
               <li key={q.id} className="flex items-center justify-between gap-3 text-sm">
                 <span className="min-w-0 flex items-center gap-2.5">
                   <span className="font-mono text-xs text-zinc-400">{quoteNumber(refNumber, q.quote_seq)}</span>
-                  <span className={`px-1.5 py-0.5 text-[10px] font-medium rounded ${STATUS_BADGE[q.status] ?? STATUS_BADGE.draft}`}>
-                    {q.status}
-                  </span>
+                  <StatusChip tone={QUOTE_STATUS[q.status]?.tone ?? 'idle'}>
+                    {QUOTE_STATUS[q.status]?.label ?? q.status}
+                  </StatusChip>
                   <span className="text-xs text-zinc-600 min-w-0 truncate">{sourceTitles(q) || 'COA deleted'}</span>
                 </span>
                 <span className="shrink-0 flex items-center gap-3 text-xs">

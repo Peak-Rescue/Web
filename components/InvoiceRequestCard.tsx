@@ -4,12 +4,22 @@ import { useState, useTransition } from 'react'
 import Link from 'next/link'
 import { fmtMoney } from '@/lib/expenses'
 import { INVOICE_STATUS_LABEL, type InvoiceRequest } from '@/lib/billing'
+import StatusChip, { type ChipTone } from '@/components/StatusChip'
+import { btn } from '@/lib/ui'
 import {
   recordInvoiced,
   recordPaid,
   cancelInvoiceRequest,
   deleteInvoiceRequest,
 } from '@/app/admin/courses/billing-actions'
+
+const REQUEST_TONE: Record<string, ChipTone> = {
+  pending: 'idle',
+  sent: 'waiting',
+  invoiced: 'agreed',
+  paid: 'paid',
+  cancelled: 'gone',
+}
 
 // One request to Harken, wherever it is being looked at.
 //
@@ -22,17 +32,6 @@ import {
 // people actually ask for (who we billed, who at Harken has it), then what can
 // be done. The doing is buttons, not underlined grey words — a row of small
 // grey text reads as a footnote, and these are the whole point of the card.
-
-const STATUS_STYLE: Record<string, string> = {
-  pending: 'bg-zinc-800 text-zinc-400',
-  sent: 'bg-blue-900/60 text-blue-300',
-  invoiced: 'bg-teal-900/60 text-teal-300',
-  paid: 'bg-emerald-900/50 text-emerald-300',
-  cancelled: 'bg-zinc-900 text-zinc-600',
-}
-
-const ACTION =
-  'text-xs px-2.5 py-1.5 rounded border border-zinc-700 text-zinc-300 hover:text-white hover:border-zinc-500 hover:bg-zinc-800 transition-colors disabled:opacity-40'
 
 const shortDate = (iso: string | null) =>
   iso ? new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''
@@ -81,13 +80,13 @@ export default function InvoiceRequestCard({
             </Link>
           )}
         </span>
-        <span className={`shrink-0 px-2 py-0.5 text-[11px] font-medium rounded ${STATUS_STYLE[r.status] ?? STATUS_STYLE.pending}`}>
+        <StatusChip tone={REQUEST_TONE[r.status] ?? 'idle'}>
           {INVOICE_STATUS_LABEL[r.status]}
           {r.status === 'invoiced' && r.invoice_number ? ` · ${r.invoice_number}` : ''}
           {r.status === 'paid' && r.amount_received != null && r.amount_received !== r.amount
             ? ` · ${fmtMoney(r.amount_received)} in`
             : ''}
-        </span>
+        </StatusChip>
       </div>
 
       {/* The two people a request is about, told apart in words. "to Bobbi
@@ -140,18 +139,18 @@ export default function InvoiceRequestCard({
       {!done && (
         <div className="mt-3 flex flex-wrap items-center gap-2">
           {r.status !== 'paid' && (
-            <button type="button" className={ACTION} onClick={() => setRecording(recording === 'invoiced' ? null : 'invoiced')}>
+            <button type="button" className={btn.secondary} onClick={() => setRecording(recording === 'invoiced' ? null : 'invoiced')}>
               {r.invoiced_at ? 'Invoice number' : 'Mark invoiced'}
             </button>
           )}
-          <button type="button" className={ACTION} onClick={() => setRecording(recording === 'paid' ? null : 'paid')}>
+          <button type="button" className={btn.secondary} onClick={() => setRecording(recording === 'paid' ? null : 'paid')}>
             {r.status === 'paid' ? 'Correct the payment' : 'Record payment'}
           </button>
           {r.status !== 'paid' && (
             <button
               type="button"
               disabled={pending}
-              className="text-xs px-2.5 py-1.5 rounded border border-transparent text-zinc-600 hover:text-red-400 hover:border-zinc-800 transition-colors disabled:opacity-40"
+              className={btn.danger}
               onClick={() => {
                 if (confirm('Withdraw this request? Harken will still see it until you tell them.')) {
                   act(() => cancelInvoiceRequest(r.id))
@@ -188,7 +187,7 @@ export default function InvoiceRequestCard({
           >
             Save
           </button>
-          <button type="button" className={ACTION} onClick={() => setRecording(null)}>
+          <button type="button" className={btn.secondary} onClick={() => setRecording(null)}>
             Cancel
           </button>
         </div>
@@ -203,7 +202,7 @@ export default function InvoiceRequestCard({
           <button
             type="button"
             disabled={pending}
-            className="text-xs px-2.5 py-1.5 rounded border border-transparent text-zinc-600 hover:text-red-400 hover:border-zinc-800 transition-colors disabled:opacity-40"
+            className={btn.danger}
             onClick={() => {
               if (confirm('Throw this withdrawn request away? Nothing about it is kept.')) {
                 act(() => deleteInvoiceRequest(r.id))
