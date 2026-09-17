@@ -6,7 +6,6 @@ import { isOpen, type BillingRecipient, type InvoiceRequest, type ReportRecipien
 import InfoHint from '@/components/InfoHint'
 import Recipients from './Recipients'
 import ReportRecipients from './ReportRecipients'
-import InfoHint from '@/components/InfoHint'
 import RequestList from './RequestList'
 
 // Our side of the Harken handoff: who bills for us, and everything we have
@@ -77,10 +76,13 @@ export default async function BillingAdminPage() {
             course's numbers this quarter, and the overlap is not reliable
             enough to be a tick on one row. */}
         <section className="mb-10">
-          <div className="flex items-baseline gap-2 mb-3">
-            <h2 className="text-sm font-semibold text-zinc-300">P&amp;L reporting list</h2>
-            <InfoHint text="Who is offered in the send on a course's actuals, one course at a time. Being on this list is not access to anything: the link goes out with the email, belongs to that course, and is revoked there." />
-          </div>
+          <h2 className="text-sm font-semibold text-zinc-300 mb-3 flex items-center gap-1.5">
+            P&amp;L reporting list
+            <InfoHint
+              below
+              text="Who is offered in the send on a course's actuals, one course at a time. Being on this list is not access to anything: the link goes out with the email, belongs to that course, and is revoked there."
+            />
+          </h2>
           <ReportRecipients recipients={readers} />
         </section>
 
