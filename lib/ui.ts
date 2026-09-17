@@ -49,6 +49,14 @@ export const btn = {
 /** One box for a thing in a list: a quote, a request, a COA. */
 export const card = 'border border-zinc-800 rounded-lg bg-zinc-900'
 
+/** A panel: a box around a whole list, with its name banded across the top.
+    For a page holding two lists that do different jobs — where a heading and
+    a gap leave the reader to work out where one ends and the next begins. */
+export const panel = 'border border-zinc-800 rounded-lg overflow-hidden'
+export const panelHead = 'px-4 py-3 bg-zinc-900/70 border-b border-zinc-800 flex items-baseline gap-2 flex-wrap'
+export const panelTitle = 'text-sm font-semibold text-zinc-100'
+export const panelBody = 'p-4'
+
 /** A section's name inside a fold — quieter than the fold's own title, and
     identical everywhere, because a heading's job is to say where you are
     rather than to compete with the one above it. */

@@ -6,6 +6,7 @@ import { isOpen, type BillingRecipient, type InvoiceRequest, type ReportRecipien
 import InfoHint from '@/components/InfoHint'
 import Recipients from './Recipients'
 import ReportRecipients from './ReportRecipients'
+import { panel, panelBody, panelHead, panelTitle, sectionTitle } from '@/lib/ui'
 import RequestList from './RequestList'
 
 // Our side of the Harken handoff: who bills for us, and everything we have
@@ -54,41 +55,8 @@ export default async function BillingAdminPage() {
         </div>
 
         <section className="mb-10">
-          {/* What the link is, kept behind the icon. It is an address rather
-              than an account — no sign-in, unguessable, and the whole of what
-              lets somebody at Harken work the queue — which is worth knowing
-              once and nothing to re-read on every visit. */}
-          <h2 className="text-sm font-semibold text-zinc-300 mb-3 flex items-center gap-1.5">
-            Billers at Harken
-            <InfoHint
-              below
-              text="Each biller has their own sign-in-free address into the queue — hand it over once and they bookmark it. The link is the credential, so what is done there is recorded as them."
-            />
-          </h2>
-          <Recipients
-            recipients={recipients}
-            siteUrl={process.env.NEXT_PUBLIC_SITE_URL || 'https://peak-rescue.com'}
-          />
-        </section>
-
-        {/* Two lists, because they are two sets of people. The billers are a
-            firm's staff working a queue; these are whoever is asking about a
-            course's numbers this quarter, and the overlap is not reliable
-            enough to be a tick on one row. */}
-        <section className="mb-10">
-          <h2 className="text-sm font-semibold text-zinc-300 mb-3 flex items-center gap-1.5">
-            P&amp;L reporting list
-            <InfoHint
-              below
-              text="Who is offered in the send on a course's actuals, one course at a time. Being on this list is not access to anything: the link goes out with the email, belongs to that course, and is revoked there."
-            />
-          </h2>
-          <ReportRecipients recipients={readers} />
-        </section>
-
-        <section className="mb-10">
           <div className="flex items-baseline justify-between gap-4 mb-2">
-            <h2 className="text-sm font-semibold text-zinc-300">Open</h2>
+            <h2 className={panelTitle}>Open</h2>
             <span className="text-sm text-zinc-400 tabular-nums">{fmtMoney(outstanding)} outstanding</span>
           </div>
           {open.length === 0 ? (
@@ -99,11 +67,59 @@ export default async function BillingAdminPage() {
         </section>
 
         {closed.length > 0 && (
-          <section>
-            <h2 className="text-sm font-semibold text-zinc-300 mb-2">Settled</h2>
+          <section className="mb-10">
+            <h2 className={`${panelTitle} mb-2`}>Settled</h2>
             <RequestList requests={closed} />
           </section>
         )}
+
+        {/* The lists that decide who any of the above reaches. Below the
+            invoices rather than above them: this page is opened to find out
+            where an invoice has got to, and an address book at the top of it
+            was furniture in front of the door. */}
+        <div className="pt-8 border-t border-zinc-800">
+          <h2 className={`${sectionTitle} mb-4`}>Who we write to</h2>
+          {/* Two lists that do different jobs, so two boxes rather than two
+              headings and a gap. Stacked as bare sections they read as one long
+              list of people with a label halfway down it — and getting them
+              confused is not a cosmetic mistake: one of these lists carries
+              pay and margin. Each is banded with its own name, and says under
+              it in a line what being on it means. */}
+          <section className={`${panel} mb-6`}>
+            <div className={panelHead}>
+              <h2 className={panelTitle}>Billers at Harken</h2>
+              {/* What the link is, kept behind the icon. It is an address rather
+                  than an account — no sign-in, unguessable, and the whole of
+                  what lets somebody at Harken work the queue — worth knowing
+                  once and nothing to re-read on every visit. */}
+              <InfoHint
+                below
+                text="Each biller has their own sign-in-free address into the queue — hand it over once and they bookmark it. The link is the credential, so what is done there is recorded as them."
+              />
+              <span className="text-xs text-zinc-500 ml-auto">Raise our invoices · hold a queue link</span>
+            </div>
+            <div className={panelBody}>
+              <Recipients
+                recipients={recipients}
+                siteUrl={process.env.NEXT_PUBLIC_SITE_URL || 'https://peak-rescue.com'}
+              />
+            </div>
+          </section>
+
+          <section className={`${panel} mb-10`}>
+            <div className={panelHead}>
+              <h2 className={panelTitle}>P&amp;L reporting list</h2>
+              <InfoHint
+                below
+                text="Who is offered in the send on a course's actuals, one course at a time. Being on this list is not access to anything: the link goes out with the email, belongs to that course, and is revoked there."
+              />
+              <span className="text-xs text-zinc-500 ml-auto">Read a course&rsquo;s numbers · hold nothing</span>
+            </div>
+            <div className={panelBody}>
+              <ReportRecipients recipients={readers} />
+            </div>
+          </section>
+        </div>
       </div>
     </main>
   )
