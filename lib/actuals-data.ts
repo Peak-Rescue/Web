@@ -35,6 +35,8 @@ export type LoadedActuals = {
       was. Once set, it stays set — a seeded line somebody deleted must not
       come back the next time the panel is opened. */
   seededAt: string | null
+  /** When these numbers were last emailed out, or null if never. */
+  shareSentAt: string | null
   shareToken: string | null
   accounts: CostAccount[]
   expenseLines: ActualExpenseLine[]
@@ -66,7 +68,7 @@ export async function loadActuals(admin: Admin, instanceId: string): Promise<Loa
   ] = await Promise.all([
     admin
       .from('course_actuals')
-      .select('invoiced, payroll_load_pct, notes, closed_at, seeded_at, share_token')
+      .select('invoiced, payroll_load_pct, notes, closed_at, seeded_at, share_token, share_sent_at')
       .eq('instance_id', instanceId)
       .maybeSingle(),
     admin.from('cost_accounts').select('id, label, categories, sort_order').eq('active', true).order('sort_order'),
@@ -205,6 +207,7 @@ export async function loadActuals(admin: Admin, instanceId: string): Promise<Loa
     notes: row?.notes ?? null,
     closedAt: row?.closed_at ?? null,
     seededAt: (row?.seeded_at as string | null) ?? null,
+    shareSentAt: (row?.share_sent_at as string | null) ?? null,
     shareToken: (row?.share_token as string | null) ?? null,
     accounts,
     expenseLines,

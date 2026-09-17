@@ -25,6 +25,7 @@ import {
   saveCostItem,
   savePayItem,
   seedActualsFromEstimate,
+  emailActuals,
   setActualsClosed,
   setCardChargeAccount,
   setExpenseItemAccount,
@@ -75,6 +76,7 @@ export default function ActualsPanel({
   suggestion,
   seed,
   invoicedSuggestion,
+  readers,
 }: {
   instanceId: string
   /** Everything as the shared loader assembled it — the same shape the
@@ -107,6 +109,10 @@ export default function ActualsPanel({
       beats retyping one. `text` says which it is, in words, so the line is
       never a figure of unknown parentage. */
   invoicedSuggestion: ChainLink | null
+  /** The people ticked for a course's numbers in Portal → Billing. Empty
+      means nobody is, and the block says so rather than offering a send with
+      no addresses behind it. */
+  readers: { id: string; name: string }[]
 }) {
   const router = useRouter()
   const { expenseLines } = loaded
@@ -125,6 +131,13 @@ export default function ActualsPanel({
   const [notes, setNotes] = useState(loaded.notes ?? '')
   const [closed, setClosed] = useState(Boolean(loaded.closedAt))
   const [shareToken, setShareToken] = useState(loaded.shareToken)
+  const [shareSentAt, setShareSentAt] = useState(loaded.shareSentAt)
+  // Who this send goes to, and what is said with it. Everybody ticked, the
+  // same as the billing handoff — and a note, because a P&L landing on its
+  // own invites the question it does not answer.
+  const [sendTo, setSendTo] = useState<string[]>(() => readers.map((r) => r.id))
+  const [sendNote, setSendNote] = useState('')
+  const [sent, setSent] = useState<string[] | null>(null)
 
   // Exactly the lines that exist, and a button to add one.
   //
@@ -854,29 +867,112 @@ export default function ActualsPanel({
         </div>
       </div>
 
-      {/* ── Taking the numbers away with you ─────────────────────────────── */}
-      {/* A PDF, and nothing else. There was a link you could mint here, from
-          when the biller was expected to read these; the biller reads the
-          Billing section's own address instead, which carries what an invoice
-          needs and no margin. That left a sign-in-free URL to the course's
-          profit and loss with no one to send it to, which is a thing to
-          forward by accident rather than a feature.
+      {/* ── Sending the numbers out ──────────────────────────────────────── */}
+      {/* A PDF for us, and an email for the people entitled to read these.
+          Not the billing handoff and never confusable with it: a different
+          list (ticked "Course numbers" in Portal → Billing), a different
+          page, and a different question. Harken's biller is shown what an
+          invoice needs; this is pay, margin and what we kept.
 
-          A link minted before that decision still works, so the revoke stays
-          on any course that has one — the way out has to outlive the way in.
-          Nothing offers a new one. */}
-      <div className={`${sectionRule} flex items-center gap-3 flex-wrap text-xs`}>
-        <a
-          href={`/api/actuals/${instanceId}/pdf`}
-          target="_blank"
-          rel="noreferrer"
-          className="px-2.5 py-1 bg-zinc-800 hover:bg-zinc-700 rounded font-medium text-zinc-200 transition-colors"
-        >
-          Download PDF
-        </a>
+          The note is why this is a send rather than a link to copy. A P&L
+          arriving on its own invites the question it does not answer — why
+          the course came in where it did — and the answer is a sentence
+          somebody types while looking at it. */}
+      <div className={`${sectionRule} space-y-3`}>
+        <div className="flex items-center gap-3 flex-wrap text-xs">
+          <a
+            href={`/api/actuals/${instanceId}/pdf`}
+            target="_blank"
+            rel="noreferrer"
+            className="px-2.5 py-1 bg-zinc-800 hover:bg-zinc-700 rounded font-medium text-zinc-200 transition-colors"
+          >
+            Download PDF
+          </a>
+          {shareSentAt && (
+            <span className="text-zinc-500">
+              Last sent {sentDate(shareSentAt)}
+              {sent && sent.length > 0 ? ` to ${sent.join(' and ')}` : ''}
+            </span>
+          )}
+          <InfoHint text="Anyone with the link can read these numbers — pay and margin included — without signing in, so only the people ticked for a course's numbers are offered here. Revoking is immediate and cuts every copy at once." />
+        </div>
+
+        {readers.length === 0 ? (
+          <p className="text-xs text-zinc-600">
+            Nobody is set to receive a course&rsquo;s numbers.{' '}
+            <Link href="/admin/billing" className={libraryLink}>
+              Tick somebody in Billing
+            </Link>
+            .
+          </p>
+        ) : (
+          <div className="space-y-2">
+            <textarea
+              value={sendNote}
+              onChange={(e) => setSendNote(e.target.value)}
+              rows={2}
+              placeholder="Anything to say with it — why the margin came in where it did, what is still to land"
+              className={`${input} w-full`}
+            />
+            <div className="flex items-center gap-3 flex-wrap text-xs">
+              <button
+                disabled={busy || sendTo.length === 0}
+                onClick={async () => {
+                  setBusy(true)
+                  setError(null)
+                  try {
+                    const res = await emailActuals(instanceId, { note: sendNote, recipientIds: sendTo })
+                    if (res.ok) {
+                      setShareToken(res.token)
+                      setShareSentAt(res.sentAt)
+                      setSent(res.sentTo)
+                      setSendNote('')
+                    } else setError(res.error)
+                  } catch (e) {
+                    setError(e instanceof Error ? e.message : 'Could not send that email')
+                  } finally {
+                    setBusy(false)
+                  }
+                }}
+                className="px-2.5 py-1 bg-zinc-800 hover:bg-zinc-700 rounded font-medium text-zinc-200 transition-colors disabled:opacity-50"
+              >
+                {shareSentAt ? 'Send again' : 'Email these numbers'}
+              </button>
+              {/* One reader is a sentence; several is a choice, ticked by
+                  default — the same shape as the billing handoff, because it
+                  is the same question asked about a different list. */}
+              {readers.length === 1 ? (
+                <span className="text-zinc-600">to {readers[0].name}</span>
+              ) : (
+                <span className="flex items-center gap-3 flex-wrap text-zinc-600">
+                  to
+                  {readers.map((r) => (
+                    <label key={r.id} className="flex items-center gap-1.5 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={sendTo.includes(r.id)}
+                        onChange={(e) =>
+                          setSendTo((ids) => (e.target.checked ? [...ids, r.id] : ids.filter((i) => i !== r.id)))
+                        }
+                        className="accent-pr-red"
+                      />
+                      {r.name}
+                    </label>
+                  ))}
+                </span>
+              )}
+              <Link href="/admin/billing" className={libraryLink}>
+                change
+              </Link>
+            </div>
+          </div>
+        )}
+
+        {/* The address they were sent, and the way to cut it. Minted by the
+            send rather than offered on its own: a link nobody was given is a
+            sign-in-free P&L with no reader and no reason. */}
         {shareToken && (
-          <>
-            <span className="text-amber-400/80">An old share link is still live:</span>
+          <div className="flex items-center gap-3 flex-wrap text-xs">
             <input
               readOnly
               value={shareUrl(shareToken)}
@@ -890,6 +986,10 @@ export default function ActualsPanel({
                 try {
                   await setActualsShared(instanceId, false)
                   setShareToken(null)
+                  // The stamp goes with the link: "sent Tuesday" beside no
+                  // address is a claim about an address nobody can reach.
+                  setShareSentAt(null)
+                  setSent(null)
                 } catch (e) {
                   setError(e instanceof Error ? e.message : 'Could not revoke the link')
                 } finally {
@@ -898,11 +998,10 @@ export default function ActualsPanel({
               }}
               className="text-zinc-500 hover:text-pr-red-light transition-colors"
             >
-              Revoke it
+              Revoke link
             </button>
-          </>
+          </div>
         )}
-        <InfoHint text="These numbers stay inside the portal. Handing a course to Harken to invoice is the Billing section above, which sends only what an invoice needs — never pay or margin." />
       </div>
 
       <div>
@@ -1046,6 +1145,12 @@ function countOf(lines: TypedCostLine[], source: 'typed' | 'card'): string {
   return source === 'card'
     ? `${total} on ${mine.length} card ${mine.length === 1 ? 'charge' : 'charges'}`
     : `${total} typed on ${mine.length} ${mine.length === 1 ? 'line' : 'lines'}`
+}
+
+// A timestamp read as a day: when these numbers were last sent is a date,
+// and the hour it went out has never been the question.
+function sentDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
 function round1(n: number): number {

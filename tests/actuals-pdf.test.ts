@@ -54,6 +54,7 @@ function loaded(over: Partial<LoadedActuals> = {}): LoadedActuals {
     notes: 'Client added a day on site. Invoiced above the quote by agreement.',
     closedAt: null,
     seededAt: null,
+    shareSentAt: null,
     shareToken: null,
     accounts: ACCOUNTS,
     expenseLines,

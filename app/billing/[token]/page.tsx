@@ -30,12 +30,14 @@ export default async function BillingPage({ params }: { params: Promise<{ token:
   const admin = createAdminClient()
   const { data: recipient } = await admin
     .from('billing_recipients')
-    .select('id, name, org, active')
+    .select('id, name, org, active, bills')
     .eq('token', token)
     .maybeSingle()
   // A deactivated recipient is a revoked link, and says so by being no page at
-  // all rather than an empty one.
-  if (!recipient || !recipient.active) notFound()
+  // all rather than an empty one. So is somebody who is on the list only to be
+  // sent a course's numbers: this queue is for whoever raises the invoices,
+  // and a P&L reader holding a token has no business in it.
+  if (!recipient || !recipient.active || !recipient.bills) notFound()
 
   const [{ data: openRows }, { data: doneRows }] = await Promise.all([
     admin

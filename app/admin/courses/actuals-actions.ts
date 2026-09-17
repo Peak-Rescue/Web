@@ -5,6 +5,11 @@ import { revalidatePath } from 'next/cache'
 import { requireAdminUser } from '@/lib/course-access'
 import { round2 } from '@/lib/expenses'
 import { routeReassignments } from '@/lib/actuals'
+import { chooseRecipients, describeForBiller } from '@/lib/billing'
+import { courseShortName } from '@/lib/courses'
+import { sendMail } from '@/lib/mailer'
+
+const siteUrl = () => process.env.NEXT_PUBLIC_SITE_URL || 'https://peak-rescue.com'
 
 // Writes for the course's actuals — what it really cost and what we really
 // billed. Admin-only, like the whole of the pricing page: requireAdminUser
@@ -519,6 +524,105 @@ export async function setActualsShared(instanceId: string, shared: boolean): Pro
   if (error) throw new Error(error.message)
   revalidateCourse(instanceId)
   return token
+}
+
+// ─── Sending the numbers to somebody outside ─────────────────────────────────
+
+/** Emails the read-only actuals page to the people ticked for a course's
+    numbers, with a note from whoever sent it.
+
+    Separate from the billing handoff on purpose and in every respect: a
+    different list (see billing_recipients.reads_pnl), a different page, and a
+    different thing being asked. Harken's biller is shown what an invoice
+    needs; these are the numbers with pay and margin in them, sent to whoever
+    is entitled to read them.
+
+    The note is the reason this is a send and not a link to copy. A P&L
+    arriving on its own invites the question it does not answer — why the
+    course came in where it did — and the answer is a sentence somebody types
+    while they are looking at it, not a document.
+
+    Reports back rather than revalidating: the panel holds the link and the
+    stamp, and this is not worth re-rendering the course for. */
+export async function emailActuals(
+  instanceId: string,
+  input: { note: string; recipientIds: string[] }
+): Promise<{ ok: true; token: string; sentAt: string; sentTo: string[] } | { ok: false; error: string }> {
+  const { admin } = await ensureActuals(instanceId)
+
+  const [{ data: row }, { data: inst }, { data: readers }] = await Promise.all([
+    admin.from('course_actuals').select('share_token').eq('instance_id', instanceId).maybeSingle(),
+    admin
+      .from('course_instances')
+      .select('ref_number, course_type, custom_title, client_name, starts_at, ends_at')
+      .eq('id', instanceId)
+      .maybeSingle(),
+    admin.from('billing_recipients').select('id, name, email').eq('active', true).eq('reads_pnl', true).order('name'),
+  ])
+  if (!inst) return { ok: false, error: 'Course not found' }
+
+  const chosen = chooseRecipients(
+    (readers ?? []).map((r) => ({ id: r.id as string, name: r.name as string, email: r.email as string })),
+    input.recipientIds
+  )
+  if (chosen.length === 0) {
+    return { ok: false, error: 'Nobody is set to receive a course\'s numbers — tick somebody in Portal → Billing' }
+  }
+  if (!process.env.RESEND_API_KEY) return { ok: false, error: 'Email is not configured on this server' }
+
+  // The same address every time: the point of the link is that it keeps
+  // working, and a second send to the same person must not strand the first.
+  let token = (row?.share_token as string | null) ?? null
+  if (!token) {
+    token = randomUUID()
+    const { error } = await admin
+      .from('course_actuals')
+      .update({ share_token: token, share_created_at: new Date().toISOString() })
+      .eq('instance_id', instanceId)
+    if (error) return { ok: false, error: error.message }
+  }
+
+  const description = describeForBiller({
+    refNumber: inst.ref_number as number,
+    courseName: courseShortName(inst.course_type as string, inst.custom_title as string | null),
+    clientName: inst.client_name as string | null,
+    startsAt: inst.starts_at as string | null,
+    endsAt: inst.ends_at as string | null,
+  })
+  const url = `${siteUrl()}/actuals/${token}`
+  const note = input.note.trim()
+
+  // One at a time, because a failure to reach one person is not a reason to
+  // tell the sender that nobody got it.
+  const sentTo: string[] = []
+  for (const r of chosen) {
+    const { error } = await sendMail({
+      from: 'Peak Rescue Portal <noreply@peak-rescue.com>',
+      to: [r.email],
+      subject: `Course numbers — ${description}`,
+      text: [
+        `Hi ${r.name.split(' ')[0]},`,
+        '',
+        'Here are the numbers for this course — what we billed, what we paid out and what it cost.',
+        '',
+        description,
+        ...(note ? ['', note] : []),
+        '',
+        url,
+        '',
+        'The link needs no sign-in, and it stays current: anything corrected on our side shows up there.',
+        '',
+        'Thank you,',
+        'Peak Rescue',
+      ].join('\n'),
+    })
+    if (!error) sentTo.push(r.name)
+  }
+  if (sentTo.length === 0) return { ok: false, error: 'Could not send that email — please try again' }
+
+  const sentAt = new Date().toISOString()
+  await admin.from('course_actuals').update({ share_sent_at: sentAt }).eq('instance_id', instanceId)
+  return { ok: true, token, sentAt, sentTo }
 }
 
 // ─── Org-wide numbers ────────────────────────────────────────────────────────
