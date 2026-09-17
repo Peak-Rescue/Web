@@ -130,13 +130,13 @@ export default function ActualsPanel({
   )
   const [notes, setNotes] = useState(loaded.notes ?? '')
   const [closed, setClosed] = useState(Boolean(loaded.closedAt))
+  const [closedAt, setClosedAt] = useState<string | null>(loaded.closedAt)
   const [shareToken, setShareToken] = useState(loaded.shareToken)
   const [shareSentAt, setShareSentAt] = useState(loaded.shareSentAt)
   // Who this send goes to, and what is said with it. Everybody ticked, the
   // same as the billing handoff — and a note, because a P&L landing on its
   // own invites the question it does not answer.
   const [sendTo, setSendTo] = useState<string[]>(() => readers.map((r) => r.id))
-  const [sendNote, setSendNote] = useState('')
   const [sent, setSent] = useState<string[] | null>(null)
 
   // Exactly the lines that exist, and a button to add one.
@@ -397,8 +397,14 @@ export default function ActualsPanel({
     actuals.unfiled.amount - actuals.unfiled.lines.reduce((t, l) => t + l.amount, 0)
   )
 
-  // What separates one segment of the panel from the next.
+  // What separates one segment of the panel from the next, and what names
+  // one. The names were the same weight as "Actuals" itself, so a reader
+  // scanning saw six titles of equal standing and no telling which was the
+  // section and which its parts. They are quieter than the fold's own title
+  // now, and identical to each other — a heading's job here is to say where
+  // you are, not to compete.
   const sectionRule = 'pt-6 border-t border-zinc-800'
+  const sectionTitle = 'text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500'
 
   // Where a number comes from, when it does not come from this screen.
   const libraryLink = 'text-xs text-zinc-500 hover:text-zinc-300 underline underline-offset-2 decoration-zinc-700 transition-colors'
@@ -428,7 +434,7 @@ export default function ActualsPanel({
       {/* ── What we billed ───────────────────────────────────────────────── */}
       <div>
         <div className="flex items-baseline gap-2 mb-2">
-          <h4 className="text-sm font-semibold text-zinc-200">Invoiced</h4>
+          <h4 className={sectionTitle}>Invoiced</h4>
           <InfoHint text="What we actually billed. It starts from what was handed to Harken — which itself started from the quote, which started from the estimate — and every one of those steps can be overridden, this one included." />
         </div>
         <div className="flex items-center gap-3 flex-wrap">
@@ -457,13 +463,14 @@ export default function ActualsPanel({
       </div>
 
       {/* ── Pay ──────────────────────────────────────────────────────────── */}
-      {/* Full-width rules divide the four segments — billed, pay, costs, and
-          what it left. Inside a segment, a rule means "the sum of the rows
-          above", and those are short ones over the amount column only.
-          A full rule doing both jobs read as a division in the wrong place. */}
+      {/* Full-width rules divide the sections — invoiced, pay, costs,
+          totals, notes, and what you can do with it all. Inside a section a
+          rule means "the sum of the rows above", and those are short ones
+          over the amount column only. A full rule doing both jobs read as a
+          division in the wrong place. */}
       <div className={sectionRule}>
         <div className="flex items-baseline gap-2 mb-2">
-          <h4 className="text-sm font-semibold text-zinc-200">Pay</h4>
+          <h4 className={sectionTitle}>Pay</h4>
           <InfoHint text="Hours live in ADP, not here, so pay is typed. Any suggestion comes from the course's length and the library's pay rates." />
           <Link href="/admin/expenses/rates#pay-rates" className={libraryLink}>
             Pay rates
@@ -617,7 +624,7 @@ export default function ActualsPanel({
           not keeping a ledger. */}
       <div className={sectionRule}>
         <div className="flex items-baseline gap-2 mb-2">
-          <h4 className="text-sm font-semibold text-zinc-200">Costs</h4>
+          <h4 className={sectionTitle}>Costs</h4>
           <InfoHint text="Type what no feed will bring in on its own — a check, an ACH, an invoice paid from the bank. Card charges and submitted expense reports arrive by themselves. Categories are shared by every course." />
           <Link href="/admin/expenses/rates#cost-categories" className={libraryLink}>
             Categories
@@ -653,7 +660,7 @@ export default function ActualsPanel({
         {cards.length > 0 && (
           <div className="mt-5">
             <div className="flex items-baseline gap-2 mb-2">
-              <h5 className="text-xs uppercase tracking-wide text-zinc-500">From the card</h5>
+              <h5 className="text-xs text-zinc-500">From the card</h5>
               <InfoHint text="Statement rows tagged to this course. Read live from the card screen, so re-tagging one there moves the money here." />
               <Link href="/admin/expenses/card" className={libraryLink}>
                 Statement
@@ -852,8 +859,13 @@ export default function ActualsPanel({
         )}
       </div>
 
-      {/* ── What it left ─────────────────────────────────────────────────── */}
+      {/* ── Totals ───────────────────────────────────────────────────────── */}
+      {/* Three lines that are all sums of the sections above, which is why
+          they needed a name: unlabelled, "Invoiced" here read as a second box
+          to fill in rather than as the number from the top of the panel
+          arriving at the bottom of it. */}
       <div className={`${sectionRule} space-y-1`}>
+        <h4 className={`${sectionTitle} mb-2`}>Totals</h4>
         <Row label="Invoiced" value={fmtMoney(actuals.invoiced)} />
         <Row label="Costs" value={fmtMoney(actuals.costsTotal)} />
         <div className="flex items-center justify-between gap-4 pt-1">
@@ -867,110 +879,145 @@ export default function ActualsPanel({
         </div>
       </div>
 
-      {/* ── Sending the numbers out ──────────────────────────────────────── */}
-      {/* A PDF for us, and an email for the people entitled to read these.
-          Not the billing handoff and never confusable with it: a different
-          list (its own, in Portal → Billing), a different page, and a
-          different question. Harken's biller is shown what an
-          invoice needs; this is pay, margin and what we kept.
+      {/* ── Notes ────────────────────────────────────────────────────────── */}
+      {/* One box, not two. There was a second free-text field in the send
+          block for "anything to say with it", which is the same sentence
+          typed about the same numbers — and the notes already travel: they
+          are printed on the PDF and shown on the page a reader opens. Two
+          boxes only asked which one the reader would see. */}
+      <div className={sectionRule}>
+        <div className="flex items-baseline gap-2 mb-2">
+          <h4 className={sectionTitle}>Notes</h4>
+          <InfoHint text="Kept with the course, printed on the PDF, shown on the page anyone is sent, and included in the email that sends it. This is where a number that needs explaining gets explained." />
+        </div>
+        <textarea
+          value={notes}
+          onChange={(e) => {
+            setNotes(e.target.value)
+            saveHeader({ notes: e.target.value })
+          }}
+          rows={3}
+          placeholder="Why the margin came in where it did, what is still to land, anything a reader would ask about"
+          className={`${input} w-full`}
+        />
+      </div>
 
-          The note is why this is a send rather than a link to copy. A P&L
-          arriving on its own invites the question it does not answer — why
-          the course came in where it did — and the answer is a sentence
-          somebody types while looking at it. */}
+      {/* ── What you can do with all this ────────────────────────────────── */}
+      {/* Every action in one place and in one style, because they were
+          scattered: a PDF link in one block, a send in another, and closing
+          the books as a tick box in a footnote under a text area. Taking the
+          numbers away, sending them, and saying they are final are three
+          things a person does when they are finished — so they are together,
+          at the end, where finishing happens. */}
       <div className={`${sectionRule} space-y-3`}>
-        <div className="flex items-center gap-3 flex-wrap text-xs">
+        <div className="flex items-center gap-2 flex-wrap">
           <a
             href={`/api/actuals/${instanceId}/pdf`}
             target="_blank"
             rel="noreferrer"
-            className="px-2.5 py-1 bg-zinc-800 hover:bg-zinc-700 rounded font-medium text-zinc-200 transition-colors"
+            className="px-3 py-2 text-sm rounded bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 transition-colors"
           >
             Download PDF
           </a>
-          {shareSentAt && (
-            <span className="text-zinc-500">
-              Last sent {sentDate(shareSentAt)}
-              {sent && sent.length > 0 ? ` to ${sent.join(' and ')}` : ''}
-            </span>
-          )}
-          <InfoHint text="Anyone with the link can read these numbers — pay and margin included — without signing in, so only the people ticked for a course's numbers are offered here. Revoking is immediate and cuts every copy at once." />
-        </div>
+          {/* The same button as "Send to Harken" one fold up, because it is
+              the same kind of act — handing this course's numbers to somebody
+              outside — and two send buttons styled differently on one page
+              read as two different weights of decision. */}
+          <button
+            disabled={busy || readers.length === 0 || sendTo.length === 0}
+            onClick={async () => {
+              setBusy(true)
+              setError(null)
+              try {
+                const res = await emailActuals(instanceId, { note: notes, recipientIds: sendTo })
+                if (res.ok) {
+                  setShareToken(res.token)
+                  setShareSentAt(res.sentAt)
+                  setSent(res.sentTo)
+                } else setError(res.error)
+              } catch (e) {
+                setError(e instanceof Error ? e.message : 'Could not send that email')
+              } finally {
+                setBusy(false)
+              }
+            }}
+            className="px-3 py-2 text-sm rounded bg-pr-red/90 hover:bg-pr-red text-white transition-colors disabled:opacity-50 whitespace-nowrap"
+          >
+            {busy ? 'Sending…' : shareSentAt ? 'Send the numbers again' : 'Send the numbers'}
+          </button>
 
-        {readers.length === 0 ? (
-          <p className="text-xs text-zinc-600">
-            Nobody is on the list for a course&rsquo;s numbers.{' '}
-            <Link href="/admin/billing" className={libraryLink}>
-              Add somebody in Billing
-            </Link>
-            .
-          </p>
-        ) : (
-          <div className="space-y-2">
-            <textarea
-              value={sendNote}
-              onChange={(e) => setSendNote(e.target.value)}
-              rows={2}
-              placeholder="Anything to say with it — why the margin came in where it did, what is still to land"
-              className={`${input} w-full`}
-            />
-            <div className="flex items-center gap-3 flex-wrap text-xs">
-              <button
-                disabled={busy || sendTo.length === 0}
-                onClick={async () => {
-                  setBusy(true)
-                  setError(null)
-                  try {
-                    const res = await emailActuals(instanceId, { note: sendNote, recipientIds: sendTo })
-                    if (res.ok) {
-                      setShareToken(res.token)
-                      setShareSentAt(res.sentAt)
-                      setSent(res.sentTo)
-                      setSendNote('')
-                    } else setError(res.error)
-                  } catch (e) {
-                    setError(e instanceof Error ? e.message : 'Could not send that email')
-                  } finally {
-                    setBusy(false)
-                  }
-                }}
-                className="px-2.5 py-1 bg-zinc-800 hover:bg-zinc-700 rounded font-medium text-zinc-200 transition-colors disabled:opacity-50"
-              >
-                {shareSentAt ? 'Send again' : 'Email these numbers'}
-              </button>
-              {/* One reader is a sentence; several is a choice, ticked by
-                  default — the same shape as the billing handoff, because it
-                  is the same question asked about a different list. */}
-              {readers.length === 1 ? (
-                <span className="text-zinc-600">to {readers[0].name}</span>
-              ) : (
-                <span className="flex items-center gap-3 flex-wrap text-zinc-600">
-                  to
-                  {readers.map((r) => (
-                    <label key={r.id} className="flex items-center gap-1.5 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={sendTo.includes(r.id)}
-                        onChange={(e) =>
-                          setSendTo((ids) => (e.target.checked ? [...ids, r.id] : ids.filter((i) => i !== r.id)))
-                        }
-                        className="accent-pr-red"
-                      />
-                      {r.name}
-                    </label>
-                  ))}
-                </span>
-              )}
+          {readers.length === 0 ? (
+            <span className="text-xs text-zinc-600">
+              Nobody on the P&amp;L reporting list —{' '}
+              <Link href="/admin/billing" className={libraryLink}>
+                add somebody
+              </Link>
+            </span>
+          ) : readers.length === 1 ? (
+            <span className="text-xs text-zinc-600">
+              to {readers[0].name}
+              {' · '}
               <Link href="/admin/billing" className={libraryLink}>
                 change
               </Link>
-            </div>
-          </div>
+            </span>
+          ) : (
+            <span className="flex items-center gap-3 flex-wrap text-xs text-zinc-600">
+              to
+              {readers.map((r) => (
+                <label key={r.id} className="flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={sendTo.includes(r.id)}
+                    onChange={(e) =>
+                      setSendTo((ids) => (e.target.checked ? [...ids, r.id] : ids.filter((i) => i !== r.id)))
+                    }
+                    className="accent-pr-red"
+                  />
+                  {r.name}
+                </label>
+              ))}
+              <Link href="/admin/billing" className={libraryLink}>
+                change
+              </Link>
+            </span>
+          )}
+
+          {/* Saying the books are done is a decision, not a preference, and it
+              was a tick box in the smallest text on the panel. It sits with
+              the other things you do when you are finished, and says when it
+              happened once it has. */}
+          <span className="ml-auto flex items-center gap-2">
+            {closed && closedAt && <span className="text-xs text-emerald-400/80">Closed {sentDate(closedAt)}</span>}
+            <button
+              disabled={busy}
+              onClick={async () => {
+                const next = !closed
+                setClosed(next)
+                setClosedAt(next ? new Date().toISOString() : null)
+                await setActualsClosed(instanceId, next).catch(() => router.refresh())
+              }}
+              className={`px-3 py-2 text-sm rounded border transition-colors disabled:opacity-50 ${
+                closed
+                  ? 'border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500'
+                  : 'border-zinc-700 bg-zinc-800 text-zinc-200 hover:bg-zinc-700'
+              }`}
+            >
+              {closed ? 'Reopen the books' : 'Close the books'}
+            </button>
+            <InfoHint text="Closing locks nothing — a number that turns out wrong is still fixable. It tells the year's totals which courses have stopped moving." />
+          </span>
+        </div>
+
+        {shareSentAt && (
+          <p className="text-xs text-zinc-500">
+            Last sent {sentDate(shareSentAt)}
+            {sent && sent.length > 0 ? ` to ${sent.join(' and ')}` : ''}. The notes above go with it, and the page
+            stays current — anything corrected here shows up there.
+          </p>
         )}
 
-        {/* The address they were sent, and the way to cut it. Minted by the
-            send rather than offered on its own: a link nobody was given is a
-            sign-in-free P&L with no reader and no reason. */}
+        {/* The address that went out, and the way to cut it. */}
         {shareToken && (
           <div className="flex items-center gap-3 flex-wrap text-xs">
             <input
@@ -1000,35 +1047,11 @@ export default function ActualsPanel({
             >
               Revoke link
             </button>
+            <InfoHint text="Anyone with this address can read these numbers — pay and margin included — without signing in. Revoking is immediate and cuts every copy at once." />
           </div>
         )}
       </div>
 
-      <div>
-        <textarea
-          value={notes}
-          onChange={(e) => {
-            setNotes(e.target.value)
-            saveHeader({ notes: e.target.value })
-          }}
-          rows={2}
-          placeholder="Notes on this course's numbers"
-          className={`${input} w-full`}
-        />
-        <label className="flex items-center gap-2 mt-2 text-xs text-zinc-400">
-          <input
-            type="checkbox"
-            checked={closed}
-            onChange={async (e) => {
-              setClosed(e.target.checked)
-              await setActualsClosed(instanceId, e.target.checked).catch(() => router.refresh())
-            }}
-            className="accent-red-600"
-          />
-          The books on this course are done
-          <InfoHint text="Locks nothing — it tells the year's totals which courses have stopped moving." />
-        </label>
-      </div>
     </div>
   )
 }
