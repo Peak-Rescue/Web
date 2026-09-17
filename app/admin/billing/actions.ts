@@ -18,14 +18,8 @@ export async function addBillingRecipient(formData: FormData): Promise<Result> {
   const name = String(formData.get('name') ?? '').trim()
   const email = String(formData.get('email') ?? '').trim().toLowerCase()
   const org = String(formData.get('org') ?? '').trim() || 'Harken'
-  // Both jobs are asked for at the point of adding somebody. Billing is
-  // ticked by default because that is what this list has always been for;
-  // the numbers are not, because they carry pay and margin.
-  const bills = formData.get('bills') !== null
-  const readsPnl = formData.get('reads_pnl') !== null
   if (!name) return { ok: false, error: 'Name is required' }
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return { ok: false, error: 'A valid email is required' }
-  if (!bills && !readsPnl) return { ok: false, error: 'Say what they are here for — invoices, the numbers, or both' }
 
   const { data: existing } = await admin
     .from('billing_recipients')
@@ -36,17 +30,12 @@ export async function addBillingRecipient(formData: FormData): Promise<Result> {
   // duplicate of them — and deliberately reuses their old token, because the
   // link they bookmarked is the thing they will reach for.
   if (existing) {
-    await admin
-      .from('billing_recipients')
-      .update({ name, org, active: true, bills, reads_pnl: readsPnl })
-      .eq('id', existing.id)
+    await admin.from('billing_recipients').update({ name, org, active: true }).eq('id', existing.id)
     revalidate()
     return { ok: true }
   }
 
-  const { error } = await admin
-    .from('billing_recipients')
-    .insert({ name, email, org, bills, reads_pnl: readsPnl })
+  const { error } = await admin.from('billing_recipients').insert({ name, email, org })
   if (error) return { ok: false, error: 'Could not add them — please try again' }
   revalidate()
   return { ok: true }
@@ -66,11 +55,8 @@ export async function updateBillingRecipient(id: string, formData: FormData): Pr
   const name = String(formData.get('name') ?? '').trim()
   const email = String(formData.get('email') ?? '').trim().toLowerCase()
   const org = String(formData.get('org') ?? '').trim() || 'Harken'
-  const bills = formData.get('bills') !== null
-  const readsPnl = formData.get('reads_pnl') !== null
   if (!name) return { ok: false, error: 'Name is required' }
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return { ok: false, error: 'A valid email is required' }
-  if (!bills && !readsPnl) return { ok: false, error: 'Say what they are here for — invoices, the numbers, or both' }
 
   // Two rows with one address would make "add them again" ambiguous and send
   // every request twice.
@@ -82,10 +68,7 @@ export async function updateBillingRecipient(id: string, formData: FormData): Pr
     .maybeSingle()
   if (clash) return { ok: false, error: 'Somebody else here already has that address' }
 
-  const { error } = await admin
-    .from('billing_recipients')
-    .update({ name, email, org, bills, reads_pnl: readsPnl })
-    .eq('id', id)
+  const { error } = await admin.from('billing_recipients').update({ name, email, org }).eq('id', id)
   if (error) return { ok: false, error: 'Could not save — please try again' }
   revalidate()
   return { ok: true }

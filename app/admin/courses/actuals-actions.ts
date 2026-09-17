@@ -532,7 +532,8 @@ export async function setActualsShared(instanceId: string, shared: boolean): Pro
     numbers, with a note from whoever sent it.
 
     Separate from the billing handoff on purpose and in every respect: a
-    different list (see billing_recipients.reads_pnl), a different page, and a
+    different list (report_recipients, which holds no tokens), a different
+    page, and a
     different thing being asked. Harken's biller is shown what an invoice
     needs; these are the numbers with pay and margin in them, sent to whoever
     is entitled to read them.
@@ -557,7 +558,7 @@ export async function emailActuals(
       .select('ref_number, course_type, custom_title, client_name, starts_at, ends_at')
       .eq('id', instanceId)
       .maybeSingle(),
-    admin.from('billing_recipients').select('id, name, email').eq('active', true).eq('reads_pnl', true).order('name'),
+    admin.from('report_recipients').select('id, name, email').eq('active', true).order('name'),
   ])
   if (!inst) return { ok: false, error: 'Course not found' }
 
@@ -566,7 +567,7 @@ export async function emailActuals(
     input.recipientIds
   )
   if (chosen.length === 0) {
-    return { ok: false, error: 'Nobody is set to receive a course\'s numbers — tick somebody in Portal → Billing' }
+    return { ok: false, error: 'Nobody is on the list for a course\'s numbers — add somebody in Portal → Billing' }
   }
   if (!process.env.RESEND_API_KEY) return { ok: false, error: 'Email is not configured on this server' }
 

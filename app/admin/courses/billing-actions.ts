@@ -59,7 +59,7 @@ export async function sendInvoiceRequest(
       .eq('instance_id', instanceId)
       .eq('status', 'accepted')
       .order('quote_seq', { ascending: false }),
-    admin.from('billing_recipients').select('id, name, email, token').eq('active', true).eq('bills', true),
+    admin.from('billing_recipients').select('id, name, email, token').eq('active', true),
   ])
   if (!inst) return { ok: false, error: 'Course not found' }
 

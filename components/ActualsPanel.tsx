@@ -109,8 +109,8 @@ export default function ActualsPanel({
       beats retyping one. `text` says which it is, in words, so the line is
       never a figure of unknown parentage. */
   invoicedSuggestion: ChainLink | null
-  /** The people ticked for a course's numbers in Portal → Billing. Empty
-      means nobody is, and the block says so rather than offering a send with
+  /** The people on the course-numbers list in Portal → Billing. Empty means
+      nobody is on it, and the block says so rather than offering a send with
       no addresses behind it. */
   readers: { id: string; name: string }[]
 }) {
@@ -870,8 +870,8 @@ export default function ActualsPanel({
       {/* ── Sending the numbers out ──────────────────────────────────────── */}
       {/* A PDF for us, and an email for the people entitled to read these.
           Not the billing handoff and never confusable with it: a different
-          list (ticked "Course numbers" in Portal → Billing), a different
-          page, and a different question. Harken's biller is shown what an
+          list (its own, in Portal → Billing), a different page, and a
+          different question. Harken's biller is shown what an
           invoice needs; this is pay, margin and what we kept.
 
           The note is why this is a send rather than a link to copy. A P&L
@@ -899,9 +899,9 @@ export default function ActualsPanel({
 
         {readers.length === 0 ? (
           <p className="text-xs text-zinc-600">
-            Nobody is set to receive a course&rsquo;s numbers.{' '}
+            Nobody is on the list for a course&rsquo;s numbers.{' '}
             <Link href="/admin/billing" className={libraryLink}>
-              Tick somebody in Billing
+              Add somebody in Billing
             </Link>
             .
           </p>

@@ -23,12 +23,10 @@ async function recipientFor(token: string) {
   const admin = createAdminClient()
   const { data } = await admin
     .from('billing_recipients')
-    .select('id, name, email, active, bills')
+    .select('id, name, email, active')
     .eq('token', token)
     .maybeSingle()
-  // Active, and actually one of the people who raise our invoices — a token
-  // held by somebody on the list only for a course's numbers writes nothing.
-  return data && data.active && data.bills ? { admin, recipient: data } : null
+  return data && data.active ? { admin, recipient: data } : null
 }
 
 // Best-effort, deferred: the biller's click must not wait on a mail provider,

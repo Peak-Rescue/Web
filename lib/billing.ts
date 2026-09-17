@@ -46,13 +46,18 @@ export type BillingRecipient = {
   org: string
   token: string
   active: boolean
-  /** Raises our invoices: gets the handoff email and the tokenised queue. */
-  bills: boolean
-  /** Gets a course's numbers when we send them — costs, pay, margin, net.
-      Opt-in, and deliberately not the same tick as billing: the biller is
-      shown what an invoice needs and nothing else, and somebody who reads the
-      P&L has no business raising invoices unless they also do that. */
-  reads_pnl: boolean
+  notes: string | null
+}
+
+/** Somebody we send a course's actuals to. A different list from the billers
+    and a different kind of thing: no token, because the link they are sent
+    belongs to the course rather than to them. */
+export type ReportRecipient = {
+  id: string
+  name: string
+  email: string
+  org: string | null
+  active: boolean
   notes: string | null
 }
 

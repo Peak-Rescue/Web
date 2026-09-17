@@ -69,7 +69,7 @@ export default async function CoursePricingEditor({
     { data: adminRows }, { data: galleryImageRows }, { data: estimateReviewRows },
     { data: sourceRows }, { data: offDayRows },
     actuals, { data: rosterRows },
-    { data: invoiceRows }, { data: billerRows },
+    { data: invoiceRows }, { data: billerRows }, { data: readerRows },
   ] = await Promise.all([
     admin.from('course_estimates')
       .select('id, title, margin, price_override, created_at, archived_at, estimate_items(label, qty, rate, notes, qty_factors, rate_id, drift_ack, sort_order)')
@@ -108,7 +108,8 @@ export default async function CoursePricingEditor({
     loadActuals(admin, instanceId),
     admin.from('instance_instructors').select('instructors(name, profile_id)').eq('instance_id', instanceId),
     admin.from('invoice_requests').select('*').eq('instance_id', instanceId).order('created_at', { ascending: false }),
-    admin.from('billing_recipients').select('id, name, bills, reads_pnl').eq('active', true).order('name'),
+    admin.from('billing_recipients').select('id, name').eq('active', true).order('name'),
+    admin.from('report_recipients').select('id, name').eq('active', true).order('name'),
   ])
 
   const quotePeople = (adminRows ?? [])
@@ -501,9 +502,7 @@ export default async function CoursePricingEditor({
           startsAt: course.starts_at,
           endsAt: course.ends_at,
         })}
-        recipients={(billerRows ?? [])
-          .filter((r) => r.bills)
-          .map((r) => ({ id: r.id as string, name: r.name as string }))}
+        recipients={(billerRows ?? []).map((r) => ({ id: r.id as string, name: r.name as string }))}
       />
       </PricingFold>
 
@@ -519,9 +518,7 @@ export default async function CoursePricingEditor({
           suggestion={suggestion}
           seed={actualsSeed}
           invoicedSuggestion={invoicedSuggestion}
-          readers={(billerRows ?? [])
-            .filter((r) => r.reads_pnl)
-            .map((r) => ({ id: r.id as string, name: r.name as string }))}
+          readers={(readerRows ?? []).map((r) => ({ id: r.id as string, name: r.name as string }))}
         />
       </PricingFold>
     </div>

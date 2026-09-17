@@ -2,9 +2,10 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { fmtMoney } from '@/lib/expenses'
-import { isOpen, type BillingRecipient, type InvoiceRequest } from '@/lib/billing'
+import { isOpen, type BillingRecipient, type InvoiceRequest, type ReportRecipient } from '@/lib/billing'
 import InfoHint from '@/components/InfoHint'
 import Recipients from './Recipients'
+import ReportRecipients from './ReportRecipients'
 import RequestList from './RequestList'
 
 // Our side of the Harken handoff: who bills for us, and everything we have
@@ -23,12 +24,14 @@ export default async function BillingAdminPage() {
   const { data: profile } = await admin.from('profiles').select('role').eq('id', user.id).single()
   if (profile?.role !== 'admin') redirect('/dashboard')
 
-  const [{ data: recipientRows }, { data: requestRows }] = await Promise.all([
+  const [{ data: recipientRows }, { data: readerRows }, { data: requestRows }] = await Promise.all([
     admin.from('billing_recipients').select('*').order('active', { ascending: false }).order('name'),
+    admin.from('report_recipients').select('*').order('active', { ascending: false }).order('name'),
     admin.from('invoice_requests').select('*').order('created_at', { ascending: false }).limit(200),
   ])
 
   const recipients = (recipientRows ?? []) as BillingRecipient[]
+  const readers = (readerRows ?? []) as ReportRecipient[]
   const requests = (requestRows ?? []).map((r) => ({
     ...r,
     amount: Number(r.amount ?? 0),
@@ -66,6 +69,15 @@ export default async function BillingAdminPage() {
             recipients={recipients}
             siteUrl={process.env.NEXT_PUBLIC_SITE_URL || 'https://peak-rescue.com'}
           />
+        </section>
+
+        {/* Two lists, because they are two sets of people. The billers are a
+            firm's staff working a queue; these are whoever is asking about a
+            course's numbers this quarter, and the overlap is not reliable
+            enough to be a tick on one row. */}
+        <section className="mb-10">
+          <h2 className="text-sm font-semibold text-zinc-300 mb-3">Who gets a course&rsquo;s numbers</h2>
+          <ReportRecipients recipients={readers} />
         </section>
 
         <section className="mb-10">
