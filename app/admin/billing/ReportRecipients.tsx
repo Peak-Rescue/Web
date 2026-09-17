@@ -48,11 +48,6 @@ export default function ReportRecipients({ recipients }: { recipients: ReportRec
 
   return (
     <div>
-      <p className="text-xs text-zinc-500 mb-3">
-        Offered in the send on a course&rsquo;s actuals, one course at a time. Being here is not access to anything:
-        the link goes out with the email, belongs to that course, and is revoked there.
-      </p>
-
       <ul className="space-y-2">
         {active.map((r) => (
           <li key={r.id} className="border border-zinc-800 rounded p-3">
@@ -123,9 +118,7 @@ export default function ReportRecipients({ recipients }: { recipients: ReportRec
       </ul>
 
       {active.length === 0 && (
-        <p className="text-sm text-zinc-600">
-          Nobody yet — a course&rsquo;s numbers can still be downloaded as a PDF, they just cannot be emailed from here.
-        </p>
+        <p className="text-sm text-zinc-600">Nobody yet.</p>
       )}
 
       <form
