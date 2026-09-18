@@ -13,6 +13,8 @@ import CourseContactsEditor from '@/components/CourseContactsEditor'
 import CourseList, { type Instance } from './CourseList'
 import CourseLocationFields from '@/components/CourseLocationFields'
 import { todayHere } from '@/lib/course-clock'
+import { loadCourseExtras, loadBooksSettleDays, showsSteps, coursePhase } from '@/lib/course-readiness'
+import { loadCourseOwners } from '@/lib/course-owner'
 
 function firstStartDate(inst: Instance): string | null {
   return inst.starts_at ?? null
@@ -36,7 +38,7 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
     admin
       .from('course_instances')
       .select(`
-        id, ref_number, slug, course_type, course_category, custom_title, status, location, client_name, starts_at, ends_at, max_students, internal,
+        id, ref_number, slug, course_type, course_category, custom_title, status, location, client_name, contacts, owner_id, starts_at, ends_at, max_students, instructor_slots, internal,
         instance_instructors(count),
         crew:instance_instructors(role, instructors(name)),
         enrollments(count),
@@ -44,6 +46,10 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
       `),
     admin.from('venues').select('id, name, region_code').eq('active', true).order('name'),
   ])
+
+  // Who could be driving a course, for the pill on every row and the filter
+  // that asks which of them are yours.
+  const owners = await loadCourseOwners(admin)
 
   const instances = (raw ?? []) as unknown as Instance[]
 
@@ -86,6 +92,21 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
       const bDate = firstStartDate(b) ?? ''
       return bDate.localeCompare(aDate) // most recent first
     })
+
+  // What each course still owes.
+  //
+  // Two lists, because two kinds of course are shown. The full chain and the
+  // build track under it are drawn only for courses still ahead of us or
+  // running — a course that has already happened is not waiting on a gear
+  // list. Every non-cancelled course still gets its money and its books, past
+  // ones included: an unsent invoice on a course that ran last month is
+  // exactly the thing this page exists to surface.
+  const shown = [...upcoming, ...past].filter((i) => showsSteps(i.status))
+  const chainIds = shown.filter((i) => coursePhase(i, today) !== 'over').map((i) => i.id)
+  const [extras, settleDays] = await Promise.all([
+    loadCourseExtras(admin, chainIds, shown.map((i) => i.id)),
+    loadBooksSettleDays(admin),
+  ])
 
   return (
     <main className="min-h-screen bg-zinc-950 text-white pt-16 md:pt-20">
@@ -206,7 +227,7 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
         </details>
 
         {/* ── Course list with filters ─────────────────────────────── */}
-        <CourseList upcoming={upcoming} past={past} />
+        <CourseList upcoming={upcoming} past={past} extras={extras} today={today} settleDays={settleDays} owners={owners} />
       </div>
     </main>
   )

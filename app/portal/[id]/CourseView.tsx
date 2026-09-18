@@ -258,6 +258,13 @@ export default async function CourseView({
     ? admin.from('venues').select('id, name, region, region_code, client_name, notes, active').order('name')
     : Promise.resolve({ data: null }))
 
+  // Who this course can be pinned on. Admins only, and only for an admin —
+  // an instructor cannot hand a course to somebody, so they are not shown a
+  // picker that would not save.
+  const ownersPromise = keep(showAsAdmin
+    ? (async () => (await import('@/lib/course-owner')).loadCourseOwners(admin))()
+    : Promise.resolve([]))
+
   // What else is on the books, for the overlay the date painter can put behind
   // this course's window — "is that week free" is asked while the dates are
   // being set, not afterwards. Same round as the venues, and the same gate:
@@ -320,7 +327,7 @@ export default async function CourseView({
   const [{ data: inst }, { data: offDays }, { data: modules }, { data: instructors }, taskRows, { data: peopleRows }, { data: templateRows }, { data: courseDocRows }, { data: taskDocRows }, { data: mapRows }, { data: resourceRows }, { data: linkRows }, { data: updateRows }, { data: enrollmentRows }, { data: messageRows }] =
     await Promise.all([
       admin.from('course_instances')
-        .select('course_type, custom_title, status, location, client_name, notes, ref_number, starts_at, ends_at, meeting_date, meeting_announced_dates, meeting_point, meeting_time, meeting_links, meeting_attachments, intro, custom_categories, contacts, max_students, instructor_slots, course_category, internal, invite_token, invite_expires_at, hero_image, hero_position, hero_scale, venue_id, region, waiver_template_id, waiver_token, waiver_token_expires_at, breaks_paid')
+        .select('course_type, custom_title, status, location, client_name, notes, ref_number, starts_at, ends_at, meeting_date, meeting_announced_dates, meeting_point, meeting_time, meeting_links, meeting_attachments, intro, custom_categories, contacts, max_students, instructor_slots, course_category, internal, invite_token, invite_expires_at, hero_image, hero_position, hero_scale, venue_id, region, waiver_template_id, waiver_token, waiver_token_expires_at, breaks_paid, owner_id')
         .eq('id', id)
         .single(),
       admin.from('instance_off_days')
@@ -1519,6 +1526,7 @@ export default async function CourseView({
                       offDays={(offDays ?? []) as unknown as React.ComponentProps<typeof CourseDetailsEditor>['offDays']}
                       others={otherCourses}
                       internal={Boolean(inst.internal)}
+                      owners={await ownersPromise}
                     />
                   }
                 >

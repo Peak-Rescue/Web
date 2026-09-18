@@ -12,6 +12,7 @@ import { computeBlocks } from '@/lib/courses'
     id, because the list next to it removes them. */
 export type CourseOffDay = { id: string; off_date: string; end_date: string | null }
 import { type CoursePOC } from '@/lib/contacts'
+import { type CourseOwner } from '@/lib/course-owner'
 import { type Venue } from '@/lib/library'
 
 function fmt(d: string) {
@@ -33,6 +34,7 @@ export type CourseDetailsRow = {
   starts_at: string | null
   ends_at: string | null
   breaks_paid?: boolean | null
+  owner_id?: string | null
 }
 
 // What a course *is*, as opposed to how it runs: the offering, who asked, who
@@ -50,6 +52,7 @@ export default function CourseDetailsEditor({
   offDays,
   others,
   internal,
+  owners = [],
   kind = 'course',
 }: {
   instanceId: string
@@ -60,6 +63,10 @@ export default function CourseDetailsEditor({
   /** Everything else on the books, for the painter's overlay. */
   others?: OtherCourse[]
   internal: boolean
+  /** Everyone who could be put on the hook for this course. Empty for anybody
+      who cannot set it, which leaves the field out rather than showing a
+      picker that would not save. */
+  owners?: CourseOwner[]
   /** Work we are hired to do rather than to teach — a standby shift, a set to
       keep safe. It has no students, so it is not asked for a headcount. */
   kind?: 'course' | 'job'
@@ -114,6 +121,26 @@ export default function CourseDetailsEditor({
           <div>
             <label className="block text-xs text-zinc-400 mb-1">Max students</label>
             <input name="max_students" type="number" min="1" defaultValue={course.max_students ?? ''} className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
+          </div>
+        )}
+        {/* Whose job it is to move this along — get it staffed, get the quote
+            out, get it billed, close its books. Not the crew: the crew runs
+            the course, this is who chases it. A course with nobody here is
+            the one everybody assumes somebody else is driving, so the courses
+            list draws the empty state as an alarm rather than as a blank. */}
+        {owners.length > 0 && (
+          <div>
+            <label className="block text-xs text-zinc-400 mb-1">Owner</label>
+            <select
+              name="owner_id"
+              defaultValue={course.owner_id ?? ''}
+              className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500"
+            >
+              <option value="">Nobody yet</option>
+              {owners.map((o) => (
+                <option key={o.id} value={o.id}>{o.name}</option>
+              ))}
+            </select>
           </div>
         )}
         <div>

@@ -6,25 +6,7 @@ import { assignInstructor } from './actions'
 import { sendInterestInvites, deleteInterestInvite } from './staffing-actions'
 import TrashIcon from '@/components/TrashIcon'
 import type { StaffingConflicts } from '@/lib/courses'
-
-export type InterestCandidate = {
-  id: string
-  name: string
-  hasEmail: boolean
-  qualified: boolean
-  leadQualified: boolean
-}
-
-export type InterestInviteRow = {
-  id: string
-  instructorId: string
-  name: string
-  sentAt: string | null
-  respondedAt: string | null
-  interested: boolean | null
-  note: string | null
-  assigned: boolean
-}
+import type { InterestCandidate, InterestInviteRow } from '@/lib/staffing-panel'
 
 // Lead and Assist are disjoint bands mirroring the badge on each row, so the
 // filter and the list use one vocabulary; All leads as the master box over the

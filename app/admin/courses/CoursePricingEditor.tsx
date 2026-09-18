@@ -2,6 +2,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { courseShortName, courseDayCounts } from '@/lib/courses'
 import { coaPrice, guessSeedQty, DEFAULT_MARGIN } from '@/lib/estimates'
 import { describeForBiller, numberSoFar } from '@/lib/billing'
+import { billingState, pickBillableQuote, pickSeedCoa } from '@/lib/billing-handoff'
 import { QUOTE_ROW_COLUMNS } from '@/lib/quotes'
 import { primaryContactEmail, ccEmailOptions, billTo, type CoursePOC } from '@/lib/contacts'
 import EstimatePanel, { type PricingRate } from '@/components/EstimatePanel'
@@ -240,20 +241,10 @@ export default async function CoursePricingEditor({
   // ── Actuals ───────────────────────────────────────────────────────────────
 
   // Where the conversation landed, offered to the invoiced field as a
-  // starting point. The highest-numbered accepted quote wins — quotes come
-  // back newest first, and a re-quote that was also accepted supersedes.
+  // starting point. Shared with the courses list, which offers the same
+  // handoff from a drawer under the row — see lib/billing-handoff.
   const accepted = quotes.find((q) => q.status === 'accepted' && !q.archived_at)
-
-  // What the invoiced box offers. An accepted quote first, and failing that
-  // the newest live quote that names a figure — plenty of courses are billed
-  // off a quote that was agreed on the phone and never marked, and offering
-  // nothing there only means retyping a number this page is already holding.
-  // A declined or expired one is not offered: that number was refused.
-  // Nor is an options quote nobody has picked from, whose total is still 0.
-  const offerable = quotes.find(
-    (q) => !q.archived_at && ['accepted', 'sent', 'draft'].includes(q.status) && q.total > 0
-  )
-  const suggested = accepted ?? offerable ?? null
+  const suggested = pickBillableQuote(quotes)
 
   // The handoff to Harken. The payee is the POC tagged billing in Details, or
   // the course's own contact when nobody is tagged —
@@ -265,20 +256,13 @@ export default async function CoursePricingEditor({
     amount: Number(r.amount ?? 0),
     amount_received: r.amount_received === null || r.amount_received === undefined ? null : Number(r.amount_received),
   })) as InvoiceRequest[]
-  // Whether anybody at Harken has been asked for an invoice on this course.
-  // A withdrawn request does not count: withdrawing is how we say the ask was
-  // a mistake, and a mistake is not a handover.
-  const handedToHarken = invoiceRequests.some((r) => r.status !== 'cancelled')
-  const billingSummary = (() => {
-    const live = invoiceRequests.filter((r) => r.status !== 'cancelled')
-    // "not sent" whether or not a quote was accepted: a course can be billed
-    // against a typed figure, so a missing quote is no longer a reason for
-    // the folded section to say nothing at all.
-    if (live.length === 0) return 'not sent'
-    const paid = live.filter((r) => r.status === 'paid')
-    if (paid.length === live.length) return 'paid'
-    return live.some((r) => r.status === 'invoiced') ? 'invoiced' : 'with Harken'
-  })()
+  // How far this course has got with Harken. "not sent" whether or not a quote
+  // was accepted: a course can be billed against a typed figure, so a missing
+  // quote is no longer a reason for the folded section to say nothing at all.
+  const handedToHarken = billingState(invoiceRequests) !== 'not-sent'
+  const billingSummary = {
+    'not-sent': 'not sent', 'with-harken': 'with Harken', invoiced: 'invoiced', paid: 'paid',
+  }[billingState(invoiceRequests)]
 
   // ── What the actuals start as ─────────────────────────────────────────────
   //
@@ -295,12 +279,7 @@ export default async function CoursePricingEditor({
   // Which COA: the one the client actually accepted, else the one the latest
   // quote was priced from, else the first live one. A course with two live
   // COAs and no quote has no right answer, and the first is the working one.
-  const seedCoa = (() => {
-    const live = estimatePanels.filter((e) => e.id)
-    if (live.length === 0) return null
-    const named = (id: string | null | undefined) => (id ? live.find((e) => e.id === id) : undefined)
-    return named(accepted?.estimate_id) ?? named(quotes[0]?.estimate_id) ?? live[0]
-  })()
+  const seedCoa = pickSeedCoa(estimatePanels, accepted?.estimate_id, quotes[0]?.estimate_id)
 
   // What each of the last two steps offers as its number.
   //

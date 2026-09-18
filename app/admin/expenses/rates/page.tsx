@@ -357,8 +357,10 @@ export default async function AdminExpenseRatesPage() {
           <div className="mt-10 scroll-mt-24" id="org-wide">
             <h2 className="text-sm font-semibold text-zinc-200 mb-1">Org-wide numbers</h2>
             <p className="text-xs text-zinc-500 mb-3">
-              Where a course starts. Each one takes these when its actuals are first opened and keeps them, so
-              changing a figure here moves nothing already reconciled.
+              Numbers that belong to the company rather than to any one course. Most are where a course
+              <em> starts</em> — taken once when its actuals are first opened and kept, so changing a figure here
+              moves nothing already reconciled. The exception says so in its own note: a threshold the screens
+              read live has to move every course at once, or changing it would only reach courses made afterwards.
             </p>
             <div className="bg-zinc-900 rounded-lg border border-zinc-800 divide-y divide-zinc-800">
               {otherOrgRows.map((o) => (

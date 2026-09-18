@@ -252,7 +252,12 @@ export async function createInstance(formData: FormData) {
 
   const { data, error } = await admin
     .from('course_instances')
-    .insert({ course_category, course_type, custom_title, custom_categories, status, internal, starts_at, ends_at, location, region, venue_id, client_name, contacts, notes, max_students, instructor_slots, slug })
+    // Whoever took the call owns it until somebody says otherwise. A default
+    // rather than a rule: it is right nearly every time, it is one dropdown to
+    // change in Details, and the alternative — every new course landing
+    // unassigned — makes the state that means "nobody is driving this" so
+    // common that it stops being read.
+    .insert({ course_category, course_type, custom_title, custom_categories, status, internal, starts_at, ends_at, location, region, venue_id, client_name, contacts, notes, max_students, instructor_slots, slug, owner_id: creator.id })
     .select('id')
     .single()
 
@@ -307,6 +312,8 @@ export async function updateInstanceDetails(id: string, formData: FormData) {
   const notes            = (formData.get('notes') as string) || null
   const max_students     = formData.get('max_students') ? Number(formData.get('max_students')) : null
   const instructor_slots = formData.get('instructor_slots') ? Number(formData.get('instructor_slots')) : null
+  // Empty means nobody, which is a real answer and not a missing one.
+  const owner_id = (formData.get('owner_id') as string) || null
 
   const { error } = await admin
     .from('course_instances')
@@ -328,6 +335,7 @@ export async function updateInstanceDetails(id: string, formData: FormData) {
       ...(formData.has('notes') ? { notes } : {}),
       ...(formData.has('max_students') ? { max_students } : {}),
       ...(formData.has('instructor_slots') ? { instructor_slots } : {}),
+      ...(formData.has('owner_id') ? { owner_id } : {}),
       ...(contactsRaw !== null ? { contacts: contactsFromForm(contactsRaw) } : {}),
     })
     .eq('id', id)
@@ -354,6 +362,52 @@ export async function updateInstanceDetails(id: string, formData: FormData) {
         client_name,
         location,
         when: dateRange(dates?.starts_at ?? null, dates?.ends_at ?? null),
+      })
+    })
+  }
+
+  after(() => syncCourseCalendar(admin, id))
+
+  revalidatePath(`/admin/courses/${id}`)
+  revalidatePath('/admin/courses')
+  revalidatePath(`/portal/${id}`)
+  revalidatePath('/admin')
+}
+
+// Moving a course along, from the list, without opening the details form.
+//
+// Its own action rather than a one-field post to `updateInstanceDetails`:
+// that one writes `status` and `internal` together, so a form carrying only a
+// status would quietly mark every internal course a client course on the way
+// past. The cancellation note and the calendar re-sync are the same ones the
+// details form pays — a course cancelled from the list is cancelled.
+export async function setInstanceStatus(id: string, status: string) {
+  await requireAdmin()
+  const admin = createAdminClient()
+
+  if (!['tentative', 'quoted', 'confirmed', 'completed', 'cancelled'].includes(status)) {
+    throw new Error('Unknown status')
+  }
+
+  const { data: before } = await admin
+    .from('course_instances')
+    .select('status, course_type, custom_title, client_name, location, starts_at, ends_at')
+    .eq('id', id)
+    .single()
+  if (!before) throw new Error('Course not found')
+  if (before.status === status) return
+
+  const { error } = await admin.from('course_instances').update({ status }).eq('id', id)
+  if (error) throw new Error(error.message)
+
+  if (status === 'cancelled' && announcesChanges(before.status)) {
+    after(async () => {
+      const { courseShortName } = await import('@/lib/courses')
+      await emailCourseOff(await assignedEmails(admin, id), {
+        courseName: courseShortName(before.course_type, before.custom_title),
+        client_name: before.client_name,
+        location: before.location,
+        when: dateRange(before.starts_at, before.ends_at),
       })
     })
   }
@@ -1085,6 +1139,7 @@ export async function assignInstructor(instanceId: string, formData: FormData) {
   after(() => syncCourseCalendar(admin, instanceId))
 
   revalidatePath(`/admin/courses/${instanceId}`)
+  revalidatePath('/admin/courses')
   revalidatePath(`/portal/${instanceId}`)
   revalidatePath('/admin')
 }
@@ -1104,6 +1159,11 @@ export async function removeInstructor(instanceId: string, instructorId: string)
   after(() => syncCourseCalendar(admin, instanceId))
 
   revalidatePath(`/admin/courses/${instanceId}`)
+  // The list draws the crew count and the staffing chip now, so it is one of
+  // the pages this changes.
+  revalidatePath('/admin/courses')
+  revalidatePath(`/portal/${instanceId}`)
+  revalidatePath('/admin')
 }
 
 // Deletes a course instance. Enrollments, instructor assignments, date
