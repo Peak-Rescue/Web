@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createInstance } from './actions'
 import CreateCourseButton from './CreateCourseButton'
+import CancelNewCourseButton from './CancelNewCourseButton'
 import { CourseTypeSelect } from './CourseTypeSelect'
 import { courseShortName, courseEventTitle, crewFirstNames } from '@/lib/courses'
 import CourseCalendar, { type CalendarCourse } from '@/components/CourseCalendar'
@@ -153,8 +154,12 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
               <textarea name="notes" rows={3} placeholder="What they asked for, rough timing, budget signals, follow-ups…" className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm resize-y focus:outline-none focus:border-zinc-500" />
             </div>
 
-            <div className="sm:col-span-2">
+            {/* A way out, beside the way in. The form opens from a summary
+                that scrolls off the top once it is filled in, and from the +
+                on the calendar, where there was no summary to click back. */}
+            <div className="sm:col-span-2 flex items-center gap-2">
               <CreateCourseButton />
+              <CancelNewCourseButton />
             </div>
           </form>
         </details>

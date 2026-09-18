@@ -16,6 +16,7 @@ import {
   type CostAccount,
 } from '@/lib/actuals'
 import { itemIsUnclassified } from '@/lib/expenses'
+import { isJob, workNoun, WorkNoun } from '@/lib/courses'
 
 const TRAVEL: CostAccount = { id: 'travel', label: 'Travel expenses', categories: ['lodging', 'transport'], sort_order: 10 }
 const MISC: CostAccount = { id: 'misc', label: 'Misc', categories: ['other'], sort_order: 80 }
@@ -385,5 +386,22 @@ describe('the actuals starting from the estimate', () => {
   it('treats a renamed pay rate as our own time, by its id', () => {
     const renamed = [{ label: 'Guide day (2027 rate)', qty: 6, rate: 800, rate_id: 'field-day' }]
     expect(estimateCostSeed(renamed, ACCOUNTS, PAY_RATES)).toEqual([])
+  })
+})
+
+describe('work we are hired to do rather than to teach', () => {
+  it('knows a standby shift and a set from a course', () => {
+    expect(isJob('standby-rescue')).toBe(true)
+    expect(isJob('tv-rigging-safety')).toBe(true)
+    expect(isJob('rope-rescue')).toBe(false)
+    // A custom event has nothing to read it off, so it stays a course and the
+    // parts nobody fills in simply stay empty.
+    expect(isJob('custom')).toBe(false)
+    expect(isJob(null)).toBe(false)
+  })
+
+  it('has a word of its own for the page to use', () => {
+    expect([workNoun('standby-rescue'), WorkNoun('standby-rescue')]).toEqual(['job', 'Job'])
+    expect([workNoun('rope-rescue'), WorkNoun('rope-rescue')]).toEqual(['course', 'Course'])
   })
 })

@@ -216,6 +216,39 @@ export const COURSE_TYPE_OPTIONS = [
   })),
 ]
 
+// ─── Work we are hired to do, rather than to teach ──────────────────────────
+//
+// Most offerings are courses: somebody enrols, there is a curriculum, a gear
+// list and a day-by-day plan. Two are not. A standby rescue is a crew on a
+// site for a shift, and TV rigging safety is the same thing on a set — no
+// students, nothing to teach, and no kit list to send anybody, because the
+// crew brings its own and always has.
+//
+// Held here as a list of offerings rather than a column on the instance,
+// because it is a fact about the kind of work and not about the booking: a
+// standby job is never accidentally a course, and adding the next one is a
+// line in this array. A custom event is never a job — there is nothing to
+// read it off — so it keeps the full course page and the parts nobody fills
+// in stay empty, which is the same thing it did before.
+export const JOB_OFFERINGS = ['standby-rescue', 'tv-rigging-safety']
+
+/** Whether this is work we are hired to do rather than a course we teach. */
+export function isJob(course_type: string | null | undefined): boolean {
+  return Boolean(course_type && JOB_OFFERINGS.includes(course_type))
+}
+
+/** What to call one of these on screen. Everything on the course page says
+    "course" somewhere, and a standby crew reading about their "course
+    details" is being told the page is about something else. */
+export function workNoun(course_type: string | null | undefined): 'course' | 'job' {
+  return isJob(course_type) ? 'job' : 'course'
+}
+
+/** The same word to start a sentence with. */
+export function WorkNoun(course_type: string | null | undefined): 'Course' | 'Job' {
+  return isJob(course_type) ? 'Job' : 'Course'
+}
+
 export function courseDisplayName(course_type: string, custom_title: string | null): string {
   if (course_type === 'custom') return custom_title ?? 'Custom Course'
   return services.find(s => s.slug === course_type)?.title ?? custom_title ?? course_type

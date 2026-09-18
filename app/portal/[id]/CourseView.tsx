@@ -31,7 +31,7 @@ import { unseenSections, lastPushToStudents, behindOnPush, type Push } from '@/l
 import { GEAR_ENTRIES_SELECT, KIT_LABEL } from '@/lib/gear'
 import { courseCapabilityCategories } from '@/lib/capabilities'
 import { GEAR_ENTRY_COLUMNS, gearLabel, gearQuantity, isChoice, placeSets, productName } from '@/lib/gear'
-import { courseDisplayName, computeBlocks, courseDates, courseEventTitle } from '@/lib/courses'
+import { courseDisplayName, computeBlocks, courseDates, courseEventTitle, isJob, workNoun, WorkNoun } from '@/lib/courses'
 import CourseTasksPanel, { type CourseTask, type TaskPerson } from '@/components/CourseTasksPanel'
 import PdfLink from '@/components/PdfLink'
 import { ForPill } from '@/components/AudiencePills'
@@ -388,6 +388,16 @@ export default async function CourseView({
     ])
 
   if (!inst) notFound()
+
+  // Work we are hired to do rather than to teach — a standby shift, a set to
+  // keep safe. No students, nothing to teach, no kit list to send: what is
+  // left is who is on it, where to be, and what it paid. Everything this
+  // switches off is switched off because filling it in would be a question
+  // nobody on a job has an answer to.
+  const jobNotCourse = isJob(inst.course_type as string)
+  // And the word for one, for the copy that has to name it.
+  const noun = workNoun(inst.course_type as string)
+  const Noun = WorkNoun(inst.course_type as string)
 
   // Every attachment on the course — task documents (even from completed
   // tasks, where they'd otherwise be folded away) plus general course files —
@@ -1015,7 +1025,11 @@ export default async function CourseView({
   // Staff get this block whether or not anything is in it. An unset meeting
   // point is the thing they most need to notice, and hiding it hides the only
   // place they can fix it.
-  const hasSchedule = Boolean(sched && schedDays.length > 0)
+  // A job has no day-by-day plan: a standby crew is on site for a shift, and
+  // a running order for it would be a page of one line. The door stays, for
+  // the maps and the meeting point — knowing which gate to arrive at is the
+  // part of this section a standby shift needs most.
+  const hasSchedule = Boolean(sched && schedDays.length > 0) && !jobNotCourse
   // Staff see the section whether or not there is a schedule in it: a course
   // created this morning is exactly the one that needs a running order, and it
   // was the one course you could not start one for from here.
@@ -1027,7 +1041,10 @@ export default async function CourseView({
   // Staff get it whether or not anything is in it: this is where the first
   // section gets added, and a section that appears only once it has contents
   // is one nobody can put contents into.
-  const hasCurriculum = orderedModules.length > 0 || showTasks
+  // Nothing to teach on a job, so no curriculum and no gear list: the crew
+  // brings its own kit and always has, and an empty list of either is a
+  // question somebody feels they have to answer.
+  const hasCurriculum = (orderedModules.length > 0 || showTasks) && !jobNotCourse
 
   // What is behind each half of Prep, said on the line you decide by.
   //
@@ -1076,7 +1093,7 @@ export default async function CourseView({
   // one is made. Same trap the schedule and the waiver had: a course created
   // this morning has none of these, and a section that only appears once it
   // has contents is one nobody can put contents into.
-  const showGear = hasGear || showTasks
+  const showGear = (hasGear || showTasks) && !jobNotCourse
   // Staff get the section whether or not anything is in it: it is where the
   // first resource and the first file get added, and a section that appears
   // only once it has contents is one nobody can put contents into.
@@ -1264,7 +1281,11 @@ export default async function CourseView({
   // exception is an internal course, where the attendees are the crew already
   // named at the top of the page — unless somebody did enroll, in which case
   // hiding them would be hiding the truth.
-  const hasRoster = showTasks && (!inst.internal || roster.length > 0 || waiverOnCourse)
+  // No students on a job — it is a staff job, and the client's own people are
+  // not on a roster. A waiver still brings the block back if one was somehow
+  // attached, because a signature that exists has to be visible.
+  const hasRoster =
+    showTasks && (!inst.internal || roster.length > 0 || waiverOnCourse) && (!jobNotCourse || roster.length > 0 || waiverOnCourse)
   // Notes moved to Details, so the Tasks section stands or falls on tasks —
   // it no longer appears because somebody wrote a note.
   const hasTasks = showTasks && (tasks.length > 0 || canManageTasks)
@@ -1380,7 +1401,10 @@ export default async function CourseView({
       .filter((k) => present[k])
       .map((id) => ({
         id,
-        label: SECTION_LABEL[id],
+        // A job's Schedule door holds only the maps and the meeting point, so
+        // it says so: a door named for days that has no days behind it is a
+        // door people open once.
+        label: jobNotCourse && id === 'schedule' ? 'Site' : SECTION_LABEL[id],
         // The whole notification: something was sent behind this door and you
         // have not been back since. Opening it is how you find out what.
         unread: unseen.has(id) || (id === 'updates' && unreadUpdates > 0),
@@ -1484,11 +1508,12 @@ export default async function CourseView({
               {showAsAdmin && (
                 <EditInPlace
                   label="Edit details"
-                  title="Course details"
+                  title={`${Noun} details`}
                   editor={
                     <CourseDetailsEditor
                       instanceId={id}
                       course={inst as unknown as React.ComponentProps<typeof CourseDetailsEditor>['course']}
+                      kind={jobNotCourse ? 'job' : 'course'}
                       contacts={coursePocs}
                       venues={(venueRows ?? []) as unknown as React.ComponentProps<typeof CourseDetailsEditor>['venues']}
                       offDays={(offDays ?? []) as unknown as React.ComponentProps<typeof CourseDetailsEditor>['offDays']}
@@ -1519,8 +1544,11 @@ export default async function CourseView({
                   <dl className="grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-x-6 gap-y-4 text-sm">
                     {([
                       ['Client', inst.client_name as string | null],
-                      ['Students', inst.max_students ? String(inst.max_students) : null],
-                      ['Instructor slots', inst.instructor_slots ? String(inst.instructor_slots) : null],
+                      // A job has no students. A headcount left over from
+                      // whoever set it up is not a fact about it.
+                      ['Students', !jobNotCourse && inst.max_students ? String(inst.max_students) : null],
+                      ['Crew', jobNotCourse && inst.instructor_slots ? String(inst.instructor_slots) : null],
+                      ['Instructor slots', !jobNotCourse && inst.instructor_slots ? String(inst.instructor_slots) : null],
                     ] as const).map(([k, v]) => v && (
                       <div key={k}>
                         <dt className="text-[11px] uppercase tracking-wide text-zinc-500 mb-0.5">{k}</dt>
@@ -1798,7 +1826,7 @@ export default async function CourseView({
                 <div className={BETWEEN_BLOCKS}>
                   <SubHead
                     title="Waiver"
-                    note={waiver ? (waiver.signed ? 'Signed' : 'Read and sign before the course starts') : undefined}
+                    note={waiver ? (waiver.signed ? 'Signed' : `Read and sign before the ${noun} starts`) : undefined}
                   />
                   {/* Spaced by the parent rather than by each child. A margin
                       on every one of them is also a margin under the last one,
@@ -2341,7 +2369,8 @@ export default async function CourseView({
           <NavPanel id="schedule">
           <Section
             id="schedule"
-            action={sched ? <PdfLink href={`/api/schedules/${sched.id}/pdf`} /> : undefined}
+            title={jobNotCourse ? 'Site' : undefined}
+            action={sched && !jobNotCourse ? <PdfLink href={`/api/schedules/${sched.id}/pdf`} /> : undefined}
           >
             {/* The map is the one piece of reference you open standing
                 somewhere, so it sits above the days and costs a chip of
@@ -2412,8 +2441,13 @@ export default async function CourseView({
             )}
             </EditInPlace>
 
-            <div className={BETWEEN_BLOCKS}>
-            {!hasSchedule ? (
+            {/* The running order, and the rule above it. A job has no days to
+                plan: what it needs from this section is the map and the gate,
+                which are above. An empty rule with a "start a schedule"
+                button under it would be this page asking for a page of one
+                line. */}
+            <div className={jobNotCourse ? '' : BETWEEN_BLOCKS}>
+            {jobNotCourse ? null : !hasSchedule ? (
               <CreateSchedule
                 instanceId={id}
                 courseType={inst.course_type as string | null}
@@ -2918,7 +2952,7 @@ export default async function CourseView({
             {/* Staff with nothing here still get the way in — an empty section
                 is otherwise indistinguishable from one you cannot add to. */}
             {resources.length === 0 && showTasks && (
-              <p className="text-xs text-zinc-600">No reference material on this course yet.</p>
+              <p className="text-xs text-zinc-600">{`No reference material on this ${noun} yet.`}</p>
             )}
             </EditInPlace>
             </div>
@@ -3003,7 +3037,7 @@ export default async function CourseView({
         </CourseModeProvider>
 
         {teachSections.length === 0 && !buildSections?.length && (
-          <p className="text-zinc-500 text-sm">Nothing has been added to this course yet.</p>
+          <p className="text-zinc-500 text-sm">{`Nothing has been added to this ${noun} yet.`}</p>
         )}
       </div>
     </main>

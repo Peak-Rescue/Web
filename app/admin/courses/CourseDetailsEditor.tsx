@@ -50,6 +50,7 @@ export default function CourseDetailsEditor({
   offDays,
   others,
   internal,
+  kind = 'course',
 }: {
   instanceId: string
   course: CourseDetailsRow
@@ -59,6 +60,9 @@ export default function CourseDetailsEditor({
   /** Everything else on the books, for the painter's overlay. */
   others?: OtherCourse[]
   internal: boolean
+  /** Work we are hired to do rather than to teach — a standby shift, a set to
+      keep safe. It has no students, so it is not asked for a headcount. */
+  kind?: 'course' | 'job'
 }) {
   const updateDetails = updateInstanceDetails.bind(null, instanceId)
   const addOffDayHere = addOffDay.bind(null, instanceId)
@@ -102,12 +106,18 @@ export default function CourseDetailsEditor({
           <input name="client_name" defaultValue={course.client_name ?? ''} className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
         </div>
         <CourseContactsEditor initial={contacts} />
+        {/* Nobody enrols on a job, so there is no headcount to set. Left in
+            the data where it was already set, because a gear list built for
+            ten before somebody changed the type should not quietly re-price
+            itself. */}
+        {kind === 'course' && (
+          <div>
+            <label className="block text-xs text-zinc-400 mb-1">Max students</label>
+            <input name="max_students" type="number" min="1" defaultValue={course.max_students ?? ''} className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
+          </div>
+        )}
         <div>
-          <label className="block text-xs text-zinc-400 mb-1">Max students</label>
-          <input name="max_students" type="number" min="1" defaultValue={course.max_students ?? ''} className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
-        </div>
-        <div>
-          <label className="block text-xs text-zinc-400 mb-1">Instructor slots</label>
+          <label className="block text-xs text-zinc-400 mb-1">{kind === 'job' ? 'Crew' : 'Instructor slots'}</label>
           <input name="instructor_slots" type="number" min="1" defaultValue={course.instructor_slots ?? ''} className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
         </div>
       </AutoSaveForm>
