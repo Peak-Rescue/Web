@@ -207,6 +207,19 @@ export default function ActualsPanel({
     (p) => p.lines.length > 0 && !pay.some((r) => r.instructor_id === p.person.id && r.hours != null)
   )
 
+  // Once everybody's pay is written and every rate is known, the calculator
+  // has said all it has to say — and it goes on saying it at full height,
+  // above the lines it wrote, which repeat the same numbers. So it folds to a
+  // line. Not away: it is still the only place a rate, a person's own dates
+  // or the length of their day can be changed, and changing one rewrites the
+  // lines below (see reterm). Folded, it says what it would reprice.
+  //
+  // It opens itself whenever there is something to do — somebody's pay not
+  // written, somebody with no hourly checked — because that is the state it
+  // exists for.
+  const settled = Boolean(plan) && unwritten.length === 0 && (plan?.missingRates.length ?? 0) === 0
+  const [ratesOpen, setRatesOpen] = useState(false)
+
   /** One person's terms changed — in practice their rate, which is the only
       one of them this screen asks for. Priced again here, saved, and, if
       their pay is already in the list below, rewritten there by the same
@@ -676,7 +689,21 @@ export default function ActualsPanel({
 
             Accept it when it reads right, and come back to it later — the
             rows stay, and changing one rewrites the lines it wrote. */}
-        {plan && (
+        {plan && settled && !ratesOpen && (
+          <button
+            onClick={() => setRatesOpen(true)}
+            className="mb-3 w-full flex items-baseline justify-between gap-3 rounded border border-zinc-800 bg-zinc-900/60 px-3 py-2 text-left hover:border-zinc-700 transition-colors"
+          >
+            <span className="text-xs text-zinc-500">
+              {plan.assumptions}
+            </span>
+            <span className="text-xs text-zinc-400 shrink-0">
+              Rates &amp; days <span className="text-zinc-600">›</span>
+            </span>
+          </button>
+        )}
+
+        {plan && (!settled || ratesOpen) && (
           <div className="mb-3 rounded border border-zinc-800 bg-zinc-900/60">
             <div className={`hidden md:flex items-center gap-2 px-3 pt-2 ${colHead}`}>
               <span className="flex-1 min-w-32">Who</span>
@@ -774,8 +801,15 @@ export default function ActualsPanel({
 
             <div className="flex items-baseline justify-between gap-3 flex-wrap border-t border-zinc-800 px-3 py-2">
               <p className="text-xs text-zinc-500">{plan.assumptions}</p>
-              <p className="text-xs text-zinc-400">
-                By the hour <span className="text-zinc-200 font-medium">{fmtMoney(plan.total)}</span>
+              <p className="text-xs text-zinc-400 flex items-baseline gap-3">
+                <span>
+                  By the hour <span className="text-zinc-200 font-medium">{fmtMoney(plan.total)}</span>
+                </span>
+                {settled && (
+                  <button onClick={() => setRatesOpen(false)} className={btn.quiet}>
+                    Hide
+                  </button>
+                )}
               </p>
             </div>
 
