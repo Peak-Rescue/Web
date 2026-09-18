@@ -80,8 +80,7 @@ function InstanceCard({
   /** Everyone it could be handed to, so the pill can hand it over in place. */
   owners: CourseOwner[]
 }) {
-  const instructorCount = inst.instance_instructors?.[0]?.count ?? 0
-  const studentCount    = inst.enrollments?.[0]?.count ?? 0
+  const studentCount = inst.enrollments?.[0]?.count ?? 0
   const displayName = courseShortName(inst.course_type, inst.custom_title)
 
   // Read from the row rather than loaded: the token is already on the course.
@@ -523,30 +522,6 @@ export default function CourseList({
             ))}
           </div>
         </div>
-      </div>
-
-      {/* ── What needs doing, before a single row is read ──────────────
-          Most mornings this is the whole answer, and nobody scrolls. */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-6">
-        {NEEDS.filter(n => n.headline).map(n => {
-          const count = needCounts[n.id] ?? 0
-          const on = needs.has(n.id)
-          const hot = n.id !== 'clear' && count > 0
-          return (
-            <button
-              key={n.id}
-              onClick={() => toggleNeed(n.id)}
-              className={`text-left px-3 py-2.5 rounded-lg border transition-colors ${
-                count === 0 ? 'border-zinc-800/70 bg-zinc-900/40 text-zinc-600'
-                  : hot ? 'border-amber-600/60 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20'
-                  : 'border-zinc-800 bg-zinc-900 text-teal-300 hover:border-zinc-600'
-              } ${on ? 'ring-1 ring-zinc-400' : ''}`}
-            >
-              <span className="block text-xl font-semibold leading-none tabular-nums">{count}</span>
-              <span className="block text-[11.5px] mt-1 leading-tight">{n.summary}</span>
-            </button>
-          )
-        })}
       </div>
 
       {/* ── The two jobs this page does ────────────────────────────────
