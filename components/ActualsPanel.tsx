@@ -1057,7 +1057,6 @@ export default function ActualsPanel({
             the only thing identifying it, and the label did not fit. */}
         {costs.length > 0 && (
           <div className={`hidden md:flex items-center gap-2 mb-1 ${colHead}`}>
-            <span className="w-36">Date</span>
             <span className="flex-1 min-w-32">What it was</span>
             <span className="w-36">Category</span>
             <span className="w-24 text-right">Amount</span>
@@ -1521,12 +1520,6 @@ function CostRowFields({
   return (
     <div className="flex items-center gap-2 flex-wrap">
       <input
-        type="date"
-        value={row.spend_date ?? ''}
-        onChange={(e) => onChange({ spend_date: e.target.value || null })}
-        className={`${input} w-36`}
-      />
-      <input
         value={row.description ?? ''}
         onChange={(e) => onChange({ description: e.target.value })}
         placeholder="What it was"
@@ -1582,13 +1575,29 @@ function CostRowFields({
         <option value="card">Card</option>
         <option value="other">Other</option>
       </select>
-      {(row.payment_method === 'check' || row.payment_method === 'ach') && (
-        <input
-          value={row.payment_ref ?? ''}
-          onChange={(e) => onChange({ payment_ref: e.target.value })}
-          placeholder={row.payment_method === 'check' ? 'Check no.' : 'Reference'}
-          className={`${input} w-24 placeholder-zinc-600`}
-        />
+      {/* The date and the reference show up together, and only where they are
+          read: a check or an ACH is the row somebody matches against a bank
+          statement months later. Every other typed cost had a date box in its
+          first column that nothing downstream ever displayed — not the PDF,
+          not the page a reader opens, not a total. A row that already carries
+          a date keeps showing it, whatever it was paid by, because hiding a
+          number somebody typed is worse than a box they did not need. */}
+      {(row.payment_method === 'check' || row.payment_method === 'ach' || row.spend_date) && (
+        <>
+          <input
+            type="date"
+            value={row.spend_date ?? ''}
+            onChange={(e) => onChange({ spend_date: e.target.value || null })}
+            title="When it went out"
+            className={`${input} w-36`}
+          />
+          <input
+            value={row.payment_ref ?? ''}
+            onChange={(e) => onChange({ payment_ref: e.target.value })}
+            placeholder={row.payment_method === 'ach' ? 'Reference' : 'Check no.'}
+            className={`${input} w-24 placeholder-zinc-600`}
+          />
+        </>
       )}
       {/* Every row, blank ones included: a row you asked for is a row you
           can take back. */}
