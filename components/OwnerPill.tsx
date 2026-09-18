@@ -8,7 +8,7 @@ import { type CourseOwner } from '@/lib/course-owner'
 // inventing a second way to draw a person is how two screens stop agreeing
 // about who somebody is.
 //
-// Unassigned is drawn, never blanked. A course nobody has taken on is the one
+// No owner is drawn, never blanked. A course nobody has taken on is the one
 // that stalls, so it gets a dashed amber outline and says so.
 export default function OwnerPill({
   owner,
@@ -23,7 +23,7 @@ export default function OwnerPill({
         className={`inline-flex items-center gap-2 pl-1 pr-2.5 py-0.5 rounded-full border border-dashed border-amber-600/70 bg-amber-500/10 text-amber-300 text-xs ${className}`}
       >
         <span className="grid place-items-center w-5 h-5 rounded-full bg-amber-500/20 text-[9px] font-bold">?</span>
-        Unassigned
+        No owner
       </span>
     )
   }

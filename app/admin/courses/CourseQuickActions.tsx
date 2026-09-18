@@ -3,7 +3,7 @@
 import { useEffect, useState, useTransition } from 'react'
 import Link from 'next/link'
 import { staffingData, quoteData, billingData, booksData } from './quick-actions'
-import { setInstanceStatus } from './actions'
+import { setInstanceStatus, setInstanceOwner } from './actions'
 import StaffingPanel from './StaffingPanel'
 import QuoteQuickSend from './QuoteQuickSend'
 import BooksQuickClose from './BooksQuickClose'
@@ -17,6 +17,8 @@ import {
 import type { StaffingPanelData } from '@/lib/staffing-panel'
 import type { BillingPanelData } from '@/lib/billing-handoff'
 import type { QuoteQuickData, BooksQuickData } from './quick-actions'
+import OwnerPill from '@/components/OwnerPill'
+import { type CourseOwner } from '@/lib/course-owner'
 
 // The list's quick actions: where a course has got to, and the things you can
 // settle from here without opening it.
@@ -46,7 +48,7 @@ import type { QuoteQuickData, BooksQuickData } from './quick-actions'
 // not, never amber — nobody writes a curriculum from a list, and a loud mark
 // on every unbuilt one would drown the money above it.
 
-export type Panel = StepPanel | 'status'
+export type Panel = StepPanel | 'status' | 'owner'
 
 /** Where each step is built, for the marks that only point at it. */
 const STEP_SECTION: Record<StepKey, string> = {
@@ -307,6 +309,8 @@ export default function CourseQuickActions({
   extras,
   crew,
   slots,
+  owner,
+  owners,
   hasBillingContact,
   /** Changes whenever anything the marks count changes. An open panel came
       from a server call rather than from this page's render, so it cannot
@@ -323,6 +327,9 @@ export default function CourseQuickActions({
       world, and not a thing the step list carries in a countable form. */
   crew: { role: string }[]
   slots: number | null | undefined
+  /** Who is running comms on this one, and everyone it could be handed to. */
+  owner: CourseOwner | undefined
+  owners: CourseOwner[]
   hasBillingContact: boolean
   version: string
 }) {
@@ -336,6 +343,20 @@ export default function CourseQuickActions({
   return (
     <div className="mt-3">
       <div className="flex items-start gap-3 flex-wrap">
+        <div className="shrink-0">
+          <span className="block text-[9.5px] font-semibold uppercase tracking-[0.14em] text-zinc-600 border-b border-zinc-800 pb-1">
+            Owner
+          </span>
+          <button
+            type="button"
+            onClick={() => toggle('owner')}
+            title={owner ? `${owner.name} is running comms on this — click to hand it over` : 'Nobody is running comms on this — click to put a name on it'}
+            className={`mt-2 block transition-opacity hover:opacity-80 ${open === 'owner' ? 'ring-1 ring-zinc-400 rounded-full' : ''}`}
+          >
+            <OwnerPill owner={owner ?? null} />
+          </button>
+        </div>
+
         <div className="shrink-0">
           <span className="block text-[9.5px] font-semibold uppercase tracking-[0.14em] text-zinc-600 border-b border-zinc-800 pb-1">
             Status
@@ -371,7 +392,9 @@ export default function CourseQuickActions({
 
       {open && (
         <div className="mt-3 pt-3 border-t border-zinc-800">
-          {open === 'status' ? (
+          {open === 'owner' ? (
+            <OwnerPicker instanceId={instanceId} owner={owner} owners={owners} onDone={() => setOpen(null)} />
+          ) : open === 'status' ? (
             <StatusPicker instanceId={instanceId} status={status} onDone={() => setOpen(null)} />
           ) : (
             // Keyed by which panel: switching between them is a different
@@ -381,6 +404,73 @@ export default function CourseQuickActions({
           )}
         </div>
       )}
+    </div>
+  )
+}
+
+// Handing a course over, from the row it is on.
+//
+// No fetch: the list already knows every admin, because it draws the filter
+// row from the same list. Opening this asks the server nothing.
+function OwnerPicker({
+  instanceId,
+  owner,
+  owners,
+  onDone,
+}: {
+  instanceId: string
+  owner: CourseOwner | undefined
+  owners: CourseOwner[]
+  onDone: () => void
+}) {
+  const [pending, start] = useTransition()
+  const [error, setError] = useState<string | null>(null)
+
+  const hand = (to: string | null) => {
+    if ((owner?.id ?? null) === to) return onDone()
+    setError(null)
+    start(async () => {
+      try {
+        await setInstanceOwner(instanceId, to)
+        onDone()
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Could not change the owner')
+      }
+    })
+  }
+
+  return (
+    <div>
+      <p className="text-xs text-zinc-500 mb-2.5">
+        Who is running comms on this course — chasing the staffing, the quote, the invoice and the books.
+        Not the crew: the crew runs the course, the owner runs the course&apos;s paperwork.
+      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        {owners.map((o) => (
+          <button
+            key={o.id}
+            type="button"
+            disabled={pending}
+            onClick={() => hand(o.id)}
+            className={`rounded-full transition-opacity disabled:opacity-50 hover:opacity-80 ${
+              o.id === owner?.id ? 'ring-1 ring-teal-400' : ''
+            }`}
+          >
+            <OwnerPill owner={o} />
+          </button>
+        ))}
+        {owner && (
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() => hand(null)}
+            className="text-xs text-zinc-500 hover:text-red-400 transition-colors disabled:opacity-50 ml-1"
+          >
+            Take the name off
+          </button>
+        )}
+      </div>
+      {error && <p className="mt-2 text-xs text-red-400">{error}</p>}
     </div>
   )
 }

@@ -420,6 +420,31 @@ export async function setInstanceStatus(id: string, status: string) {
   revalidatePath('/admin')
 }
 
+// Handing a course to somebody, from the list.
+//
+// Its own action rather than a one-field post to `updateInstanceDetails`: the
+// list has no details form to post, and the pill that opens this is a pill on
+// a row, not a form field. Same reasoning as the status menu beside it.
+export async function setInstanceOwner(id: string, ownerId: string | null) {
+  await requireAdmin()
+  const admin = createAdminClient()
+
+  // Only an admin can be put on the hook: owning a course means being able to
+  // do every step on it, and the list's whole promise is that the name on a
+  // row is somebody who can act.
+  if (ownerId) {
+    const { data: who } = await admin.from('profiles').select('role').eq('id', ownerId).maybeSingle()
+    if (who?.role !== 'admin') throw new Error('A course can only be owned by an admin')
+  }
+
+  const { error } = await admin.from('course_instances').update({ owner_id: ownerId }).eq('id', id)
+  if (error) throw new Error(error.message)
+
+  revalidatePath('/admin/courses')
+  revalidatePath(`/portal/${id}`)
+  revalidatePath('/admin')
+}
+
 // Quote-page hero override: only photos from the curated pool or the gallery;
 // framing (position/scale) only alongside a photo, in the avatar-editor format.
 export async function updateQuoteHero(id: string, formData: FormData) {

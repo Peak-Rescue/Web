@@ -11,7 +11,6 @@ import {
 import { billTo, parseContacts } from '@/lib/contacts'
 import { NEEDS, matchesNeeds } from '@/lib/course-needs'
 import { type CourseOwner } from '@/lib/course-owner'
-import OwnerPill from '@/components/OwnerPill'
 import CourseQuickActions from './CourseQuickActions'
 
 const STATUS_OPTIONS = COURSE_STATUSES
@@ -67,12 +66,15 @@ function InstanceCard({
   today,
   settleDays,
   owner,
+  owners,
 }: {
   inst: Instance
   extras: CourseExtras | undefined
   today: string
   settleDays: number
   owner: CourseOwner | undefined
+  /** Everyone it could be handed to, so the pill can hand it over in place. */
+  owners: CourseOwner[]
 }) {
   const instructorCount = inst.instance_instructors?.[0]?.count ?? 0
   const studentCount    = inst.enrollments?.[0]?.count ?? 0
@@ -123,12 +125,9 @@ function InstanceCard({
             {inst.client_name && <span>{inst.client_name}</span>}
           </div>
         </Link>
-        <div className="flex flex-col items-end gap-1.5 shrink-0">
-          <OwnerPill owner={owner ?? null} />
-          <div className="text-xs text-zinc-500 whitespace-nowrap text-right">
-            {instructorCount > 0 && <div>{instructorCount} instructor{instructorCount !== 1 ? 's' : ''}</div>}
-            {inst.max_students && <div>{studentCount}/{inst.max_students} students</div>}
-          </div>
+        <div className="text-xs text-zinc-500 whitespace-nowrap text-right shrink-0">
+          {instructorCount > 0 && <div>{instructorCount} instructor{instructorCount !== 1 ? 's' : ''}</div>}
+          {inst.max_students && <div>{studentCount}/{inst.max_students} students</div>}
         </div>
       </div>
 
@@ -142,6 +141,8 @@ function InstanceCard({
           extras={x}
           crew={step.crew}
           slots={inst.instructor_slots}
+          owner={owner}
+          owners={owners}
           hasBillingContact={billTo(parseContacts(inst.contacts)) !== null}
           version={version}
         />
@@ -173,6 +174,7 @@ function Section({
   today: string
   settleDays: number
   ownerById: Map<string, CourseOwner>
+  owners: CourseOwner[]
 }) {
   return (
     <section className="mb-10">
@@ -201,6 +203,7 @@ function Section({
               today={card.today}
               settleDays={card.settleDays}
               owner={inst.owner_id ? card.ownerById.get(inst.owner_id) : undefined}
+              owners={card.owners}
             />
           ))}
         </div>
@@ -321,7 +324,7 @@ export default function CourseList({
     ) return false
     if (statuses.size > 0 && !statuses.has(inst.status)) return false
     if (!matchesNeeds(stepsOf.get(inst.id) ?? [], needs)) return false
-    // Unassigned is a pick like anybody else's name: it is the set of courses
+    // "No owner" is a pick like anybody else's name: it is the set of courses
     // nobody has taken on, which is the set worth looking at first.
     if (whose.size > 0 && !whose.has(inst.owner_id ?? 'none')) return false
     const q = query.trim().toLowerCase()
@@ -356,7 +359,7 @@ export default function CourseList({
   const archiveYears = [...new Set(archive.map(i => i.ends_at?.slice(0, 4)).filter(Boolean))].sort().reverse() as string[]
   const archiveShown = year ? archive.filter(i => i.ends_at?.startsWith(year)) : archive
 
-  const cardProps = { extras, today, settleDays, ownerById }
+  const cardProps = { extras, today, settleDays, ownerById, owners }
 
   return (
     <>
@@ -469,7 +472,7 @@ export default function CourseList({
             <span className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider w-24 shrink-0">Owner</span>
             <span className="self-stretch w-px bg-zinc-700 shrink-0" aria-hidden="true" />
             <div className="flex flex-wrap gap-2">
-              {[...owners.map(o => ({ id: o.id, label: o.name })), { id: 'none', label: 'Unassigned' }].map(o => (
+              {[...owners.map(o => ({ id: o.id, label: o.name })), { id: 'none', label: 'No owner' }].map(o => (
                 <button
                   key={o.id}
                   onClick={() => toggleWhose(o.id)}
@@ -614,6 +617,7 @@ export default function CourseList({
                       today={today}
                       settleDays={settleDays}
                       owner={inst.owner_id ? ownerById.get(inst.owner_id) : undefined}
+                      owners={owners}
                     />
                   ))}
             </div>
