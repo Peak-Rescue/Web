@@ -425,7 +425,6 @@ export async function deletePayItem(instanceId: string, itemId: string) {
 
 export type CostItemInput = {
   account_id: string | null
-  spend_date: string | null
   description: string | null
   amount: string
   /** How it went out, for money no feed will ever announce — a check, an ACH,
@@ -444,7 +443,6 @@ export async function saveCostItem(instanceId: string, itemId: string | null, in
   const row = {
     instance_id: instanceId,
     account_id: input.account_id || null,
-    spend_date: input.spend_date || null,
     description: input.description?.trim() || null,
     amount: money(input.amount) ?? 0,
     payment_method: method,

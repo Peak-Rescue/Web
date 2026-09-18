@@ -61,7 +61,11 @@ export function expenseLineLabel(line: {
 export type TypedCostLine = {
   id: string
   account_id: string | null
-  spend_date: string | null
+  /** When it went out, for the lines that come from somewhere with a date of
+      its own — a card charge's posting date, which the statement is the
+      authority on. A line typed onto a course has none: nothing downstream
+      reads it, and the box only taught people they owed it an answer. */
+  spend_date?: string | null
   description: string | null
   amount: number
   /** Where the line came from. Typed straight onto the course, or a row of

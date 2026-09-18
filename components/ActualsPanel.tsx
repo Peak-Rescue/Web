@@ -296,7 +296,7 @@ export default function ActualsPanel({
         ])
         setCosts((rows) => [
           ...rows.filter((r) => !costIsBlank(r)),
-          ...made.costs.map((l) => ({ key: l.id, id: l.id, account_id: l.account_id, spend_date: null, description: l.description, amount: l.amount })),
+          ...made.costs.map((l) => ({ key: l.id, id: l.id, account_id: l.account_id, description: l.description, amount: l.amount })),
         ])
         setSeededFrom(seed.from)
       } catch (e) {
@@ -450,7 +450,7 @@ export default function ActualsPanel({
   }
 
   function addCost() {
-    setCosts((rs) => [...rs, { key: newKey(), id: '', account_id: null, spend_date: null, description: null, amount: 0 }])
+    setCosts((rs) => [...rs, { key: newKey(), id: '', account_id: null, description: null, amount: 0 }])
   }
 
   function updatePay(key: string, rawPatch: Partial<PayRow>) {
@@ -491,7 +491,6 @@ export default function ActualsPanel({
         const known = row.id || ids.current.get(key) || null
         const saved = await saveCostItem(instanceId, known, {
           account_id: row.account_id,
-          spend_date: row.spend_date,
           description: row.description,
           amount: String(row.amount),
           payment_method: row.payment_method ?? null,
@@ -1575,29 +1574,18 @@ function CostRowFields({
         <option value="card">Card</option>
         <option value="other">Other</option>
       </select>
-      {/* The date and the reference show up together, and only where they are
-          read: a check or an ACH is the row somebody matches against a bank
-          statement months later. Every other typed cost had a date box in its
-          first column that nothing downstream ever displayed — not the PDF,
-          not the page a reader opens, not a total. A row that already carries
-          a date keeps showing it, whatever it was paid by, because hiding a
-          number somebody typed is worse than a box they did not need. */}
-      {(row.payment_method === 'check' || row.payment_method === 'ach' || row.spend_date) && (
-        <>
-          <input
-            type="date"
-            value={row.spend_date ?? ''}
-            onChange={(e) => onChange({ spend_date: e.target.value || null })}
-            title="When it went out"
-            className={`${input} w-36`}
-          />
-          <input
-            value={row.payment_ref ?? ''}
-            onChange={(e) => onChange({ payment_ref: e.target.value })}
-            placeholder={row.payment_method === 'ach' ? 'Reference' : 'Check no.'}
-            className={`${input} w-24 placeholder-zinc-600`}
-          />
-        </>
+      {/* A reference on the rows that have one to give: a check number, an
+          ACH reference. Its date used to sit beside it and before that in
+          every row's first column, and nothing downstream ever read either —
+          not the PDF, not the page a reader opens, not a total. People filled
+          it in because a box was there. */}
+      {(row.payment_method === 'check' || row.payment_method === 'ach') && (
+        <input
+          value={row.payment_ref ?? ''}
+          onChange={(e) => onChange({ payment_ref: e.target.value })}
+          placeholder={row.payment_method === 'ach' ? 'Reference' : 'Check no.'}
+          className={`${input} w-24 placeholder-zinc-600`}
+        />
       )}
       {/* Every row, blank ones included: a row you asked for is a row you
           can take back. */}
@@ -1675,8 +1663,7 @@ function costIsBlank(r: CostRow): boolean {
   // trailing row saves it, so a row that still called itself blank would have
   // no way to be deleted and no new blank row under it.
   return (
-    !r.id && !r.description?.trim() && !r.amount && !r.amountText?.trim() && !r.account_id && !r.spend_date &&
-    !r.payment_method
+    !r.id && !r.description?.trim() && !r.amount && !r.amountText?.trim() && !r.account_id && !r.payment_method
   )
 }
 

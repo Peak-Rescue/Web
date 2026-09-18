@@ -125,7 +125,7 @@ describe('money with no home', () => {
   it('counts a typed cost that names no account', () => {
     const actuals = roll({
       invoiced: 1000,
-      typedLines: [{ id: 't1', account_id: null, spend_date: null, description: 'Card charge', amount: 75 }],
+      typedLines: [{ id: 't1', account_id: null, description: 'Card charge', amount: 75 }],
     })
     expect(actuals.unfiled.amount).toBe(75)
     expect(actuals.costsTotal).toBe(75)
@@ -285,13 +285,13 @@ describe('which categories the summary draws', () => {
   })
 
   it('draws one holding a typed cost', () => {
-    const typed = { id: 't1', account_id: 'travel', spend_date: null, description: 'Patches', amount: 240 }
+    const typed = { id: 't1', account_id: 'travel', description: 'Patches', amount: 240 }
     expect(accountsWorthShowing([rollup({ typedLines: [typed], total: 240 })])).toHaveLength(1)
   })
 
   it('still draws one whose costs cancel out — somebody used it', () => {
-    const a = { id: 'a', account_id: 'travel', spend_date: null, description: 'Charge', amount: 100 }
-    const b = { id: 'b', account_id: 'travel', spend_date: null, description: 'Refund', amount: -100 }
+    const a = { id: 'a', account_id: 'travel', description: 'Charge', amount: 100 }
+    const b = { id: 'b', account_id: 'travel', description: 'Refund', amount: -100 }
     expect(accountsWorthShowing([rollup({ typedLines: [a, b], total: 0 })])).toHaveLength(1)
   })
 })

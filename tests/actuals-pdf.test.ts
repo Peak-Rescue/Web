@@ -40,7 +40,7 @@ function loaded(over: Partial<LoadedActuals> = {}): LoadedActuals {
     { id: 'p3', profile_id: null, description: 'Jake Shultz — Travel — 20 h @ $20/h', amount: 400, hours: 20, hourly_rate: 20 },
   ]
   const costLines = over.costLines ?? [
-    { id: 'c1', account_id: 'swag', spend_date: '2026-05-20', description: 'Patches', amount: 240 },
+    { id: 'c1', account_id: 'swag', description: 'Patches', amount: 240 },
   ]
   // Company-card money reaches the books the same way typed money does, so
   // the PDF has to add it in without being told which is which.
@@ -115,7 +115,7 @@ describe('the actuals PDF', () => {
     const bytes = await pdf(
       loaded({
         notes: 'Client’s “extra” day — 30° morning, café receipts attached. Béla drove.',
-        costLines: [{ id: 'c9', account_id: 'misc', spend_date: null, description: 'Café — crew ☕', amount: 42 }],
+        costLines: [{ id: 'c9', account_id: 'misc', description: 'Café — crew ☕', amount: 42 }],
       })
     )
     expect(new TextDecoder().decode(bytes.slice(0, 5))).toBe('%PDF-')

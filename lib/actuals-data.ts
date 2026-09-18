@@ -98,7 +98,7 @@ export async function loadActuals(admin: Admin, instanceId: string): Promise<Loa
       .order('created_at'),
     admin
       .from('course_cost_items')
-      .select('id, account_id, spend_date, description, amount, payment_method, payment_ref')
+      .select('id, account_id, description, amount, payment_method, payment_ref')
       .eq('instance_id', instanceId)
       .order('sort_order')
       .order('created_at'),
@@ -204,7 +204,6 @@ export async function loadActuals(admin: Admin, instanceId: string): Promise<Loa
   const costLines: TypedCostLine[] = (costItemRows ?? []).map((l) => ({
     id: l.id as string,
     account_id: (l.account_id as string | null) ?? null,
-    spend_date: (l.spend_date as string | null) ?? null,
     description: (l.description as string | null) ?? null,
     amount: Number(l.amount),
     source: 'typed' as const,
