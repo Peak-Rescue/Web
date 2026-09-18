@@ -1051,6 +1051,21 @@ export default function ActualsPanel({
           </Link>
         </div>
 
+        {/* Named columns, like the pay rows above. Without them every box was
+            a guess from its own contents, and the narrowest of them — how it
+            was paid — was guessed wrong by being skipped: its own label was
+            the only thing identifying it, and the label did not fit. */}
+        {costs.length > 0 && (
+          <div className={`hidden md:flex items-center gap-2 mb-1 ${colHead}`}>
+            <span className="w-36">Date</span>
+            <span className="flex-1 min-w-32">What it was</span>
+            <span className="w-36">Category</span>
+            <span className="w-24 text-right">Amount</span>
+            <span className="w-28">Paid by</span>
+            <span className="w-4" />
+          </div>
+        )}
+
         <div className="space-y-1.5">
           {costs.map((row) => (
             <CostRowFields
@@ -1530,9 +1545,10 @@ function CostRowFields({
           const id = await onNewCategory()
           if (id) onChange({ account_id: id })
         }}
-        className={`${input} w-36`}
+        className={`${input} w-36 ${row.account_id ? '' : 'text-zinc-500'}`}
       >
-        <option value="">— category —</option>
+        {/* Its column says "Category", so the box does not have to. */}
+        <option value="">Category…</option>
         {accounts.map((a) => (
           <option key={a.id} value={a.id}>{a.label}</option>
         ))}
@@ -1548,14 +1564,19 @@ function CostRowFields({
       {/* How it went out. Blank for most lines and that is fine — it earns its
           place on the ones no feed will ever announce: a check to a venue, an
           ACH to a permit office. Those are the costs that go missing, and the
-          number beside them is what the books are asked for later. */}
+          number beside them is what the books are asked for later.
+
+          It was a 24-wide box whose own placeholder read "— paid b", which is
+          how a field gets skipped: the only thing saying what it was did not
+          fit in it. The column above says it now, and the box is wide enough
+          for the longest thing it can hold. */}
       <select
         value={row.payment_method ?? ''}
         onChange={(e) => onChange({ payment_method: (e.target.value || null) as CostRow['payment_method'] })}
-        title="How it was paid"
-        className={`${input} w-24`}
+        title="How it was paid — a check, an ACH, the company card"
+        className={`${input} w-28 ${row.payment_method ? '' : 'text-zinc-500'}`}
       >
-        <option value="">— paid by —</option>
+        <option value="">Paid by…</option>
         <option value="check">Check</option>
         <option value="ach">ACH</option>
         <option value="card">Card</option>
