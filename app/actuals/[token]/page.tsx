@@ -2,7 +2,7 @@ import { notFound } from 'next/navigation'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { courseShortName } from '@/lib/courses'
 import { loadActuals } from '@/lib/actuals-data'
-import { expenseLineLabel, payLineName } from '@/lib/actuals'
+import { accountsWithMoney, carriesMoney, expenseLineLabel, payLineName } from '@/lib/actuals'
 import { fmtMoney, fmtDateRange } from '@/lib/expenses'
 import { dateAtOffice, longDate } from '@/lib/course-clock'
 
@@ -45,6 +45,9 @@ export default async function SharedActualsPage({ params }: { params: Promise<{ 
   if (!inst) notFound()
 
   const { rolled } = actuals
+  // Only what carries money. A $0 row is somebody's placeholder on the panel
+  // this came from, and nothing at all to a reader.
+  const payLines = actuals.payLines.filter(carriesMoney)
   const accepted = (quoteRows ?? []).find((q) => q.status === 'accepted' && !q.archived_at)
   const dates = inst.starts_at
     ? `${inst.starts_at}${inst.ends_at && inst.ends_at !== inst.starts_at ? ` – ${inst.ends_at}` : ''}`
@@ -86,8 +89,8 @@ export default async function SharedActualsPage({ params }: { params: Promise<{ 
 
         {/* ── Pay ──────────────────────────────────────────────────────── */}
         <Section title="Pay">
-          {actuals.payLines.length === 0 && <p className="text-sm text-zinc-500">No pay recorded.</p>}
-          {actuals.payLines.map((l) => (
+          {payLines.length === 0 && <p className="text-sm text-zinc-500">No pay recorded.</p>}
+          {payLines.map((l) => (
             <Line
               key={l.id}
               indent
@@ -107,11 +110,10 @@ export default async function SharedActualsPage({ params }: { params: Promise<{ 
 
         {/* ── Costs ────────────────────────────────────────────────────── */}
         <Section title="Costs">
-          {rolled.accounts.map((r) => (
+          {accountsWithMoney(rolled.accounts).map((r) => (
             <Line
               key={r.account.id}
               indent
-              muted={r.total === 0}
               label={r.account.label}
               note={
                 r.fromExpenses > 0
@@ -159,14 +161,14 @@ export default async function SharedActualsPage({ params }: { params: Promise<{ 
         {/* The lines behind the totals. Somebody always asks what the travel
             was, and the answer living in another document is how a page like
             this gets queried by email instead of read. */}
-        {rolled.accounts.some((a) => a.expenseLines.length > 0) && (
+        {rolled.accounts.some((a) => a.expenseLines.some(carriesMoney)) && (
           <Section title="Expense-report lines behind those totals">
             {rolled.accounts
-              .filter((a) => a.expenseLines.length > 0)
+              .filter((a) => a.expenseLines.some(carriesMoney))
               .map((r) => (
                 <div key={r.account.id} className="mb-4">
                   <p className="text-[11px] uppercase tracking-widest text-zinc-500 mb-1.5">{r.account.label}</p>
-                  {r.expenseLines.map((l) => (
+                  {r.expenseLines.filter(carriesMoney).map((l) => (
                     <Line
                       key={l.id}
                       indent

@@ -9,7 +9,7 @@ import { type RGB } from 'pdf-lib'
 import { CONTENT_W, FAINT, HAIRLINE, INK, MARGIN, MUTED, PdfBuilder, RED } from '@/lib/pdf-layout'
 import { fmtMoney, fmtDateRange } from '@/lib/expenses'
 import { dateAtOffice, longDate } from '@/lib/course-clock'
-import { expenseLineLabel, payLineName } from '@/lib/actuals'
+import { accountsWithMoney, carriesMoney, expenseLineLabel, payLineName } from '@/lib/actuals'
 import { type LoadedActuals } from '@/lib/actuals-data'
 
 export type ActualsPdf = {
@@ -90,10 +90,11 @@ export async function generateActualsPdf(data: ActualsPdf): Promise<Uint8Array> 
   // ── Pay ────────────────────────────────────────────────────────────────────
 
   b.sectionHeading('Pay')
-  if (actuals.payLines.length === 0) {
+  const payLines = actuals.payLines.filter(carriesMoney)
+  if (payLines.length === 0) {
     b.paragraph('No pay recorded.', { size: 9.5, color: MUTED })
   }
-  for (const l of actuals.payLines) {
+  for (const l of payLines) {
     const who = payLineName(l, actuals.peopleById)
     const label = [who, l.description].filter(Boolean).join(' — ') || 'Pay'
     line(label, l.amount, { size: 9.5, indent: 10 })
@@ -109,10 +110,12 @@ export async function generateActualsPdf(data: ActualsPdf): Promise<Uint8Array> 
   // ── Costs ──────────────────────────────────────────────────────────────────
 
   b.sectionHeading('Costs')
-  for (const r of rolled.accounts) {
-    // Accounts with nothing in them still print. The chart is the point:
-    // a reader checking whether marketing was charged to this course needs to
-    // see the zero, not fail to find the row.
+  // Only the accounts with money in them. The chart used to print in full,
+  // zeros and all, on the theory that a reader checking whether marketing was
+  // charged needs to see the zero — but a printed page of "$0.00" rows is a
+  // table of contents for an empty book, and the reader's real question is
+  // what this course cost.
+  for (const r of accountsWithMoney(rolled.accounts)) {
     line(r.account.label, r.total, {
       size: 9.5,
       indent: 10,
@@ -164,15 +167,15 @@ export async function generateActualsPdf(data: ActualsPdf): Promise<Uint8Array> 
   // always asks what the $600 of travel was, and the answer being a different
   // document is how these get queried by email instead of read.
 
-  const submitted = actuals.expenseLines.filter((l) => l.submitted)
+  const submitted = actuals.expenseLines.filter((l) => l.submitted && carriesMoney(l))
   if (submitted.length > 0) {
     b.y -= 12
     b.sectionHeading('Expense-report lines behind those totals')
-    for (const r of rolled.accounts.filter((a) => a.expenseLines.length > 0)) {
+    for (const r of rolled.accounts.filter((a) => a.expenseLines.some(carriesMoney))) {
       b.ensure(30)
       b.text(r.account.label.toUpperCase(), { size: 7.5, color: FAINT })
       b.y -= 13
-      for (const l of r.expenseLines) {
+      for (const l of r.expenseLines.filter(carriesMoney)) {
         const when = fmtDateRange(l.start_date, null)
         const what = expenseLineLabel(l)
         const who = [l.personName, l.paid_by === 'company_card' ? 'company card' : null].filter(Boolean).join(', ')

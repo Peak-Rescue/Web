@@ -199,6 +199,23 @@ export function accountsWorthShowing(rollups: AccountRollup[]): AccountRollup[] 
   )
 }
 
+/** What a page sent outside shows: the lines that carry money.
+ 
+    The panel is the opposite — a $0 line there is somebody's placeholder,
+    a category they are about to file something into, a seeded guess waiting
+    for its number — and all of that is work in progress that belongs on the
+    screen where the work happens. Printed on a PDF or handed to a reader, the
+    same rows are noise at best: a page of "Marketing $0.00" tells a reader
+    nothing except that we have a category called Marketing.
+ 
+    A negative total counts as money: a refund against a course is part of
+    what that course cost. */
+export const carriesMoney = (l: { amount: number }) => l.amount !== 0
+
+export function accountsWithMoney(rollups: AccountRollup[]): AccountRollup[] {
+  return rollups.filter((r) => r.total !== 0)
+}
+
 export type Actuals = {
   accounts: AccountRollup[]
   /** Submitted expense money whose account no longer exists. Counted in the

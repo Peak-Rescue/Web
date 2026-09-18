@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest'
 import { amountValue } from '@/components/ActualsPanel'
 import {
   accountsWorthShowing,
+  accountsWithMoney,
+  carriesMoney,
   accountForExpense,
   groupByReport,
   expenseLineLabel,
@@ -403,5 +405,25 @@ describe('work we are hired to do rather than to teach', () => {
   it('has a word of its own for the page to use', () => {
     expect([workNoun('standby-rescue'), WorkNoun('standby-rescue')]).toEqual(['job', 'Job'])
     expect([workNoun('rope-rescue'), WorkNoun('rope-rescue')]).toEqual(['course', 'Course'])
+  })
+})
+
+describe('what a page sent outside shows', () => {
+  it('drops a line nobody spent anything on', () => {
+    // A $0 row is somebody's placeholder on the panel it came from — a
+    // category about to be filled, a seeded guess waiting for its number.
+    expect([{ amount: 240 }, { amount: 0 }].filter(carriesMoney)).toEqual([{ amount: 240 }])
+  })
+
+  it('keeps a refund, which is money that moved', () => {
+    expect(carriesMoney({ amount: -80 })).toBe(true)
+  })
+
+  it('drops a category that came to nothing, however many lines it holds', () => {
+    const rollups = [
+      { account: TRAVEL, fromExpenses: 0, typed: 0, total: 0, expenseLines: [], typedLines: [] },
+      { account: SWAG, fromExpenses: 0, typed: 240, total: 240, expenseLines: [], typedLines: [] },
+    ] as AccountRollup[]
+    expect(accountsWithMoney(rollups).map((r) => r.account.id)).toEqual(['swag'])
   })
 })
