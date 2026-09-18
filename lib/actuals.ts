@@ -89,10 +89,36 @@ export type TypedCostLine = {
 
 export type PayLine = {
   id: string
+  /** Which of the staffed crew this pays, account or not — the roster is what
+      gets staffed, and pay has to be able to find one person's lines again to
+      re-price them. Null on a line typed for the whole crew. */
+  instructor_id?: string | null
   profile_id: string | null
+  /** The days the line covers. A calculated line knows both — three days
+      straight and two at the premium are two lines with two spans. */
   work_date: string | null
+  end_date?: string | null
   description: string | null
   amount: number
+  /** The hours and the rate behind the amount, where the line was worked out
+      from hours rather than typed as a total. The roll-up only ever adds
+      `amount` — these are here so a line can be checked, and so payroll can
+      be handed hours. Null on a line somebody typed a figure into, which is
+      still a legitimate line. */
+  hours?: number | null
+  hourly_rate?: number | null
+}
+
+/** Whose pay a line is, by name. The roster id first — it is set on
+    everything the hourly calculator writes, account or not — then the account
+    id, for the lines written before the roster one existed. Null when nobody
+    was named, which is a line somebody typed for the whole crew. */
+export function payLineName(
+  line: { instructor_id?: string | null; profile_id: string | null },
+  names: Record<string, string>
+): string | null {
+  const id = line.instructor_id ?? line.profile_id
+  return (id ? names[id] : null) ?? null
 }
 
 /** Where an expense line is filed: its own override if it has one, otherwise
@@ -280,71 +306,11 @@ function sum(ns: number[]): number {
   return round2(ns.reduce((s, n) => s + (Number(n) || 0), 0))
 }
 
-/** Pay rates as the library holds them: what a person is actually paid for a
-    day, which is not what the estimator quotes a day at. */
-export type PayRates = { fieldDay: number | null; travelDay: number | null }
+/** Pay used to be worked out here, from a rate per day in the library. It is
+    hourly now, per person, with overtime past 40 hours in a Sunday-to-
+    Saturday week — see lib/pay.ts, which needs the course's dates and the
+    crew's own rates rather than a count of days. */
 
-/** The library's pay rates, found by what a line means rather than by an
-    exact label — renaming "Instructor field day" in the library must not
-    silently stop the suggestion working, the same rule the estimator's factor
-    names follow. Null where the library carries no pay rate for that kind of
-    day, which is how a fresh install says "nobody has told me what we pay".*/
-export function payRatesFrom(
-  rates: { label: string; pay_rate?: number | string | null }[]
-): PayRates {
-  const priced = rates.filter((r) => r.pay_rate !== null && r.pay_rate !== undefined)
-  const rate = (match: (label: string) => boolean) => {
-    const hit = priced.find((r) => match(r.label))
-    return hit ? Number(hit.pay_rate) : null
-  }
-  // Travel is tested first and excluded from the field test, because a day of
-  // somebody's time is spelled "... day" either way: a lone /instructor.*day/
-  // happily claims "Instructor travel day" and pays a field day at the travel
-  // rate, which is the kind of wrong that looks like a number somebody chose.
-  const isTravel = (label: string) => /travel/i.test(label)
-  return {
-    travelDay: rate((l) => isTravel(l) && /instructor|day/i.test(l)),
-    fieldDay: rate((l) => !isTravel(l) && /instructor/i.test(l) && /field|day/i.test(l)),
-  }
-}
-
-export type PaySuggestionLine = { description: string; amount: number }
-
-/** What the course's own shape says pay should come to — offered, never
-    applied. The crew that actually worked it is the authority: somebody
-    shadowed a day, somebody drove instead of flying, a day ran long. So this
-    produces lines you can accept and then edit, and says out loud what it
-    assumed.
-    Travel is two days, out and back, matching what the estimator prefills. */
-export function paySuggestion(
-  counts: { instructors: number; days: number | null },
-  rates: PayRates
-): { lines: PaySuggestionLine[]; total: number; assumptions: string } | null {
-  const { instructors, days } = counts
-  if (!days || instructors < 1) return null
-  if (rates.fieldDay === null && rates.travelDay === null) return null
-
-  const lines: PaySuggestionLine[] = []
-  if (rates.fieldDay !== null) {
-    lines.push({
-      description: `Field days — ${instructors} × ${days} day${days === 1 ? '' : 's'} @ ${rates.fieldDay}`,
-      amount: round2(instructors * days * rates.fieldDay),
-    })
-  }
-  if (rates.travelDay !== null) {
-    lines.push({
-      description: `Travel days — ${instructors} × 2 days @ ${rates.travelDay}`,
-      amount: round2(instructors * 2 * rates.travelDay),
-    })
-  }
-  return {
-    lines,
-    total: sum(lines.map((l) => l.amount)),
-    assumptions: `${instructors} instructor${instructors === 1 ? '' : 's'}, ${days} field day${days === 1 ? '' : 's'}, 2 travel days each`,
-  }
-}
-
-export const TRAVEL_DAYS_EACH_WAY = 2
 
 /** Whether the course has reached the point where actuals are the live
     question and the estimate is history. The first day, not the last: costs
@@ -372,9 +338,10 @@ export function actualsAreLive(
 //   · the margin. It is what we keep, not what we spend, so a line seeds at
 //     cost — qty × rate — and never at the price the client was quoted.
 //   · our own time. An instructor day is quoted at a padded rate on purpose
-//     (see pay_rate on pricing_rates), so copying it in would book a cost
-//     nobody pays; pay comes in beside it from paySuggestion at the real
-//     rate. An admin day is the same thing with no cash behind it at all.
+//     (see own_time on pricing_rates), so copying it in would book a cost
+//     nobody pays; pay comes in beside it from lib/pay.ts at the hourly rates
+//     people are actually on. An admin day is the same thing with no cash
+//     behind it at all.
 //   · anything that arrives on an expense report. Lodging, flights, the
 //     vehicle, fuel and food are claimed back — by an instructor or off the
 //     company card, which is still a report line — and those reports are read
@@ -394,12 +361,12 @@ export type EstimateSeedLine = {
 }
 
 /** Whether an estimate line is somebody on the team, rather than money going
-    out of the door. Known pay rates first — the library is the authority, and
-    a renamed rate keeps its pay_rate — then the words, for a line typed by
-    hand or a rate that carries no pay figure. "EMT / medical" is deliberately
-    not caught: that is a contractor we actually pay. */
-export function isOurOwnTime(line: { label: string; rate_id: string | null }, payRateIds: Set<string>): boolean {
-  if (line.rate_id && payRateIds.has(line.rate_id)) return true
+    out of the door. The library's own flag first — a rate marked own_time
+    keeps the mark through a rename — then the words, for a line typed by hand
+    or a rate nobody has flagged. "EMT / medical" is deliberately not caught:
+    that is a contractor we actually pay. */
+export function isOurOwnTime(line: { label: string; rate_id: string | null }, ownTimeRateIds: Set<string>): boolean {
+  if (line.rate_id && ownTimeRateIds.has(line.rate_id)) return true
   return /instructor|admin/i.test(line.label)
 }
 
@@ -446,10 +413,10 @@ export type CostSeedLine = { account_id: string | null; description: string; amo
 export function estimateCostSeed(
   items: EstimateSeedLine[],
   accounts: CostAccount[],
-  payRateIds: Set<string>
+  ownTimeRateIds: Set<string>
 ): CostSeedLine[] {
   return items
-    .filter((i) => !isOurOwnTime(i, payRateIds))
+    .filter((i) => !isOurOwnTime(i, ownTimeRateIds))
     .filter((i) => expenseCategoryForEstimateLine(i.label) === null)
     .map((i) => ({
       account_id: accountForEstimateLine(i.label, accounts),

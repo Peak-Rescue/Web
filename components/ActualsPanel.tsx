@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { fmtMoney, fmtDateRange, round2 } from '@/lib/expenses'
@@ -14,6 +14,15 @@ import {
   type TypedCostLine,
 } from '@/lib/actuals'
 import { type LoadedActuals } from '@/lib/actuals-data'
+import {
+  fmtHours,
+  fmtRate,
+  payForPerson,
+  payPlan,
+  TRAVEL_DAYS,
+  type PayPerson,
+  type PayTerms,
+} from '@/lib/pay'
 import { type ChainLink } from '@/lib/billing'
 import {
   addCostAccount,
@@ -24,6 +33,7 @@ import {
   saveActualsHeader,
   saveCostItem,
   savePayItem,
+  savePersonPayTerms,
   seedActualsFromEstimate,
   emailActuals,
   setActualsClosed,
@@ -67,14 +77,19 @@ const NEW_CATEGORY = '__new__'
 /** `amountText` is what is in the box while it is being typed. Without it a
     row shows the parsed number back, so "0.5" loses its zero the moment it
     is typed — the number is 0 until the 5 arrives. */
-type PayRow = PayLine & { key: string; amountText?: string }
+type PayRow = PayLine & {
+  key: string
+  amountText?: string
+  hoursText?: string
+  daysText?: string
+  rateText?: string
+}
 type CostRow = TypedCostLine & { key: string; amountText?: string }
 
 export default function ActualsPanel({
   instanceId,
   actuals: loaded,
-  people,
-  suggestion,
+  fieldDates,
   seed,
   invoicedSuggestion,
   readers,
@@ -83,9 +98,13 @@ export default function ActualsPanel({
   /** Everything as the shared loader assembled it — the same shape the
       emailed page and the PDF read, so the three cannot drift. */
   actuals: LoadedActuals
-  /** The staffed crew, for attributing a pay line to a person. */
-  people: { id: string; name: string }[]
-  suggestion: { lines: { description: string; amount: number }[]; total: number; assumptions: string } | null
+  /** The days the course runs, in order, breaks already handled. Each
+      person's own row trims them and adds their travel, and pay is computed
+      from that here rather than handed over as a total: the rate, the dates
+      and the hours are all edited on this screen, and every edit has to
+      re-price on the spot — including the overtime, which moves when a day
+      moves into another week. */
+  fieldDates: string[]
   /** The estimate, ready to be written in as the starting point — present
       only on a course that has a COA and has never been seeded or typed in.
       Written on open rather than offered behind a button: what the COA lists
@@ -94,7 +113,7 @@ export default function ActualsPanel({
   seed: {
     /** Which COA it came from, so the note can say so. */
     from: string
-    pay: { description: string; amount: number }[]
+    pay: { profile_id?: string | null; description: string; amount: number; hours?: number | null; hourly_rate?: number | null }[]
     costs: { account_id: string | null; description: string; amount: number }[]
   } | null
   /** What the page already knows we billed, offered as a starting point and
@@ -153,6 +172,67 @@ export default function ActualsPanel({
   // A row added and left untouched still never reaches the server: the save
   // fires on change, so an empty one costs nothing but the space it takes.
   const [pay, setPay] = useState<PayRow[]>(loaded.payLines.map((l) => ({ ...l, key: l.id })))
+
+  // Each person's terms for this course — their rate, their own first and
+  // last day, how many travel days and how long a day is. Held here because
+  // every one of them re-prices the whole row on the spot: overtime belongs
+  // to the week, so moving somebody's start date by a day can move ten hours
+  // of premium, and finding that out through a page load would make editing
+  // four people feel like four page loads.
+  const [terms, setTerms] = useState<Record<string, PayTerms>>(() =>
+    Object.fromEntries(loaded.payPeople.map((p) => [p.id, p.terms]))
+  )
+  const crew: PayPerson[] = loaded.payPeople.map((p) => ({ ...p, terms: terms[p.id] ?? p.terms }))
+  const plan = useMemo(
+    () => payPlan(crew, fieldDates, loaded.paySettings),
+    // crew is rebuilt every render; the terms behind it are what change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [terms, fieldDates, loaded.payPeople, loaded.paySettings]
+  )
+
+  // The library's rates, plus any rate somebody on this course is already on
+  // that the library has since retired — a retired rate must not vanish out
+  // from under the person on it and read as "no hourly".
+  const rateChoices = [
+    ...new Set([
+      ...loaded.fieldRateChoices,
+      ...crew.map((p) => p.terms.fieldHourly).filter((r): r is number => r !== null),
+    ]),
+  ].sort((a, b) => b - a)
+
+  // Crew whose pay this calculator has not written yet. Terms with nothing in
+  // the list are the normal state before anybody reconciles; terms changed
+  // after the fact re-price instead (see reterm).
+  const unwritten = (plan?.people ?? []).filter(
+    (p) => p.lines.length > 0 && !pay.some((r) => r.instructor_id === p.person.id && r.hours != null)
+  )
+
+  /** One person's terms changed — in practice their rate, which is the only
+      one of them this screen asks for. Priced again here, saved, and, if
+      their pay is already in the list below, rewritten there by the same
+      library this row previews with, so the two cannot disagree about the
+      same week. A line somebody typed a figure into has no hours and is left
+      alone.
+
+      The rest of the terms — their own dates, travel days, the length of a
+      day — are still honoured if a row carries them, and are corrected on the
+      lines themselves rather than answered in advance up here. */
+  function reterm(personId: string, patch: Partial<PayTerms>) {
+    const person = loaded.payPeople.find((p) => p.id === personId)
+    if (!person) return
+    const next = { ...(terms[personId] ?? person.terms), ...patch }
+    setTerms((t) => ({ ...t, [personId]: next }))
+    const repriced = payForPerson({ ...person, terms: next }, fieldDates, loaded.paySettings)
+    schedule(`terms:${personId}`, async () => {
+      const { removed, added } = await savePersonPayTerms(instanceId, personId, next, repriced.lines)
+      if (removed.length === 0 && added.length === 0) return
+      setPay((rows) => [
+        ...rows.filter((r) => !removed.includes(r.id)),
+        ...added.map((l) => ({ ...l, key: l.id })),
+      ])
+    })
+  }
+
   const [costs, setCosts] = useState<CostRow[]>(loaded.costLines.map((l) => ({ ...l, key: l.id })))
   // Card charges are the statement's, not this screen's: the only things that
   // can change about one here are which category it sits in and whether it
@@ -199,7 +279,7 @@ export default function ActualsPanel({
         if (!made || (made.pay.length === 0 && made.costs.length === 0)) return
         setPay((rows) => [
           ...rows.filter((r) => !payIsBlank(r)),
-          ...made.pay.map((l) => ({ key: l.id, id: l.id, profile_id: null, work_date: null, description: l.description, amount: l.amount })),
+          ...made.pay.map((l) => ({ ...l, key: l.id })),
         ])
         setCosts((rows) => [
           ...rows.filter((r) => !costIsBlank(r)),
@@ -260,25 +340,130 @@ export default function ActualsPanel({
     schedule('header', () => saveActualsHeader(instanceId, payload))
   }
 
+  // What is in a count box while it is being typed. Without it, clearing one
+  // to type a new figure puts the standing number back under the cursor
+  // between keystrokes, because these boxes show the count in force rather
+  // than an empty placeholder.
+  const [countDrafts, setCountDrafts] = useState<Record<string, { field?: string; travel?: string }>>({})
+  function draftCount(id: string, field: 'field' | 'travel', text: string | undefined) {
+    setCountDrafts((d) => ({ ...d, [id]: { ...d[id], [field]: text } }))
+  }
+
+  /** How many of the course's days were theirs, as a number of days rather
+      than a pair of dates. Counted from their first day, so five becomes four
+      by dropping the last one — somebody leaving after the practical, which
+      is what nearly every correction here is. A date pair says more, and said
+      it in two boxes nobody wanted to fill in; the dates are still what gets
+      stored, and still what decides which week an hour falls in. */
+  function setFieldDays(personId: string, firstDay: string | null, count: number) {
+    const from = Math.max(fieldDates.indexOf(firstDay ?? fieldDates[0]), 0)
+    // Their own days can be fewer than the course's, never more: a day the
+    // course did not run is not a day anybody worked on it.
+    const days = Math.min(Math.max(Math.round(count), 1), fieldDates.length - from)
+    const last = fieldDates[from + days - 1]
+    reterm(personId, { endsAt: last === fieldDates[fieldDates.length - 1] ? null : last })
+  }
+
+  /** The pay lines gathered under the person they pay, in the order the crew
+      is listed, with anything unattributed last — that group is the only one
+      that still asks who, and it is where a hand-added line starts. */
+  const payGroups: { id: string | null; name: string | null; rows: PayRow[] }[] = (() => {
+    const order = [...loaded.payPeople.map((p) => p.id), null]
+    const groups = order.map((id) => ({
+      id,
+      name: id === null ? null : loaded.payPeople.find((p) => p.id === id)?.name ?? 'Unknown',
+      rows: byDate(pay.filter((r) => (r.instructor_id ?? null) === id)),
+    }))
+    // A line attributed to somebody who has since left the roster still has
+    // to be visible, under their name if we have it.
+    const known = new Set(order)
+    for (const row of pay) {
+      const id = row.instructor_id ?? null
+      if (known.has(id)) continue
+      known.add(id)
+      groups.push({
+        id,
+        name: loaded.peopleById[id as string] ?? 'No longer staffed',
+        rows: byDate(pay.filter((r) => r.instructor_id === id)),
+      })
+    }
+    return groups.filter((g) => g.rows.length > 0)
+  })()
+
   function addPay() {
-    setPay((rs) => [...rs, { key: newKey(), id: '', profile_id: null, work_date: null, description: null, amount: 0 }])
+    setPay((rs) => [
+      ...rs,
+      {
+        key: newKey(),
+        id: '',
+        instructor_id: null,
+        profile_id: null,
+        work_date: null,
+        end_date: null,
+        description: null,
+        amount: 0,
+      },
+    ])
+  }
+
+  /** A row's fields after an edit, with the arithmetic kept true.
+      Hours × rate is the amount — edit either and the total follows, which is
+      the point of having the columns. Edit the amount itself and the hours go:
+      the line stops being a calculation and becomes a figure somebody chose,
+      and a row still claiming "50 h @ $50" beside $2,000 would be a lie that
+      reads like a receipt. */
+  function payArithmetic(row: PayRow, patch: Partial<PayRow>): Partial<PayRow> {
+    if ('amountText' in patch) {
+      return { ...patch, hours: null, hourly_rate: null, hoursText: undefined, daysText: undefined, rateText: undefined }
+    }
+    if (!('hoursText' in patch) && !('rateText' in patch) && !('daysText' in patch)) return patch
+    const hours = patch.hours ?? row.hours
+    const rate = patch.hourly_rate ?? row.hourly_rate
+    if (hours === null || hours === undefined || rate === null || rate === undefined) return patch
+    // Hours and days are one number in two units, so whichever was not typed
+    // is cleared and re-read from the hours.
+    const drafts = 'hoursText' in patch ? { daysText: undefined } : 'daysText' in patch ? { hoursText: undefined } : {}
+    return { ...patch, ...drafts, amount: round2(hours * rate), amountText: undefined }
+  }
+
+  /** Who this line pays. The staffed crew, whether or not they have a portal
+      account — the roster is what gets staffed, and pay used to fall back to
+      one unattributed "whole crew" line for anybody without a login, which
+      made the commonest crew member on a page of accounts nobody in
+      particular. Both ids are written: the roster's, which every crew member
+      has, and the account's where there is one, because that is what the
+      emailed page and the PDF read a name from. */
+  function attribute(key: string, instructorId: string | null) {
+    const person = loaded.payPeople.find((p) => p.id === instructorId)
+    updatePay(key, { instructor_id: instructorId, profile_id: person?.profileId ?? null })
   }
 
   function addCost() {
     setCosts((rs) => [...rs, { key: newKey(), id: '', account_id: null, spend_date: null, description: null, amount: 0 }])
   }
 
-  function updatePay(key: string, patch: Partial<PayRow>) {
+  function updatePay(key: string, rawPatch: Partial<PayRow>) {
     setPay((rows) => {
+      const before = rows.find((r) => r.key === key)
+      const patch = before ? payArithmetic(before, rawPatch) : rawPatch
       const next = rows.map((r) => (r.key === key ? { ...r, ...patch } : r))
       const row = next.find((r) => r.key === key)!
       schedule(`pay:${key}`, async () => {
         const known = row.id || ids.current.get(key) || null
         const saved = await savePayItem(instanceId, known, {
+          // Whose line it is survives an edit, so a later rate change can
+          // still find it.
+          instructor_id: row.instructor_id ?? null,
           profile_id: row.profile_id,
           work_date: row.work_date,
+          end_date: row.end_date ?? null,
           description: row.description,
           amount: String(row.amount),
+          // Sent so a line that was worked out keeps saying so. The server
+          // drops them the moment they stop multiplying out to the amount,
+          // which is what editing the figure by hand means.
+          hours: row.hours ?? null,
+          hourly_rate: row.hourly_rate ?? null,
         })
         if (!known) {
           ids.current.set(key, saved.id)
@@ -412,6 +597,10 @@ export default function ActualsPanel({
 
   const input = 'bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-zinc-500'
   const addLine = 'text-xs text-zinc-500 hover:text-zinc-200 transition-colors'
+  // Column names for the pay rows, so five boxes in a row do not each need a
+  // label of their own. Hidden below md, where the rows wrap and a header
+  // could not line up with anything.
+  const colHead = 'text-[10px] uppercase tracking-wide text-zinc-500'
   const cell = 'text-sm text-zinc-300'
 
   return (
@@ -472,85 +661,285 @@ export default function ActualsPanel({
       <div className={sectionRule}>
         <div className="flex items-baseline gap-2 mb-2">
           <h4 className={sectionTitle}>Pay</h4>
-          <InfoHint text="Hours live in ADP, not here, so pay is typed. Any suggestion comes from the course's length and the library's pay rates." />
-          <Link href="/admin/expenses/rates#pay-rates" className={libraryLink}>
+          <InfoHint text="Worked out from the course's dates: 10-hour field and travel days at each person's own hourly, with time and a half past 40 hours in a Sunday-to-Saturday week for anyone not exempt. It cannot see hours worked off this course, so a back-to-back week needs editing by hand." />
+          <Link href="/admin/expenses/rates#pay-by-the-hour" className={libraryLink}>
             Pay rates
           </Link>
         </div>
 
-        {suggestion && pay.every(payIsBlank) && (
-          <div className="mb-3 p-3 rounded border border-zinc-800 bg-zinc-900/60">
-            <p className="text-xs text-zinc-400">
-              Suggested <span className="text-zinc-200 font-medium">{fmtMoney(suggestion.total)}</span>
-              {' · '}{suggestion.assumptions}
-            </p>
-            <button
-              disabled={busy}
-              onClick={async () => {
-                setBusy(true)
-                try {
-                  const created = await addSuggestedPayLines(instanceId, suggestion.lines)
-                  setPay((rows) => [
-                    ...rows.filter((r) => !payIsBlank(r)),
-                    ...created.map((c) => ({
-                      key: c.id,
-                      id: c.id,
-                      profile_id: null,
-                      work_date: null,
-                      description: c.description,
-                      amount: c.amount,
-                    })),
-                  ])
-                } catch (e) {
-                  setError(e instanceof Error ? e.message : 'Could not add those lines')
-                } finally {
-                  setBusy(false)
-                }
-              }}
-              className="mt-2 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 rounded text-xs font-medium transition-colors disabled:opacity-50"
-            >
-              Add as pay lines
-            </button>
+        {/* ── The crew, by the hour ───────────────────────────────────── */}
+        {/* The whole of pay in one row each, and every part of it editable
+            here: what they earn an hour, which of the course's days were
+            actually theirs, how many travel days, and how long a day was.
+            Ten hours unless somebody says otherwise, their dates from the
+            calendar unless somebody says otherwise — and somebody says
+            otherwise often enough that it has to be a box and not a story
+            told afterwards. Arriving on the Tuesday is not four days instead
+            of five: it moves two of their days into a week with room under
+            the forty, and the premium moves with them.
+
+            Accept it when it reads right, and come back to it later — the
+            rows stay, and changing one rewrites the lines it wrote. */}
+        {plan && (
+          <div className="mb-3 rounded border border-zinc-800 bg-zinc-900/60">
+            <div className={`hidden md:flex items-center gap-2 px-3 pt-2 ${colHead}`}>
+              <span className="flex-1 min-w-32">Who</span>
+              <span className="w-24">Rate</span>
+              <span className="w-20 text-right">Field d</span>
+              <span className="w-20 text-right">Travel d</span>
+              <span className="flex-1 min-w-32" />
+              <span className="w-24 text-right">Pay</span>
+            </div>
+            <div className="divide-y divide-zinc-800/80">
+              {plan.people.map((p) => {
+                const t = p.person.terms
+                const rate = t.fieldHourly
+                const paid = p.person.paidForDays
+                return (
+                  <div key={p.person.id} className="flex items-center gap-2 flex-wrap px-3 py-2">
+                    <span className="text-sm text-zinc-300 flex-1 min-w-32">{p.person.name}</span>
+
+                    {/* Their days are not paid on top, so there is no rate to
+                        check and nothing to add. Asking would invite an
+                        answer, and the answer would be money the course never
+                        spent. */}
+                    {!paid ? (
+                      <span className={`${input} w-24 text-center text-zinc-500 border-dashed`}>no day pay</span>
+                    ) : (
+                      <select
+                        value={rate ?? ''}
+                        onChange={(e) => reterm(p.person.id, { fieldHourly: e.target.value === '' ? null : Number(e.target.value) })}
+                        title="What this course pays them an hour in the field"
+                        className={`${input} w-24 ${rate === null ? 'border-amber-700/70 text-amber-200' : ''}`}
+                      >
+                        <option value="">— rate —</option>
+                        {rateChoices.map((r) => (
+                          <option key={r} value={r}>{fmtRate(r)}/h</option>
+                        ))}
+                      </select>
+                    )}
+
+                    {/* The day counts, editable here because they are the
+                        thing that is actually wrong sometimes and the thing
+                        somebody checks first — somebody drove instead of
+                        flying, somebody left after the practical. Counts
+                        rather than dates: two date boxes asked for more
+                        precision than anybody had at this point, and the
+                        dates are still what gets stored underneath, because
+                        which week a day falls in is what decides the
+                        premium. */}
+                    <input
+                      value={countDrafts[p.person.id]?.field ?? String(p.fieldDays)}
+                      onChange={(e) => {
+                        draftCount(p.person.id, 'field', e.target.value)
+                        if (e.target.value.trim() === '') return
+                        setFieldDays(p.person.id, p.firstDay, parseAmount(e.target.value))
+                      }}
+                      onBlur={() => draftCount(p.person.id, 'field', undefined)}
+                      inputMode="numeric"
+                      title={`Field days they worked — the course runs ${fieldDates.length}, counted from their first day.`}
+                      className={`${input} w-20 text-right`}
+                    />
+                    <input
+                      value={countDrafts[p.person.id]?.travel ?? String(p.travelDayCount)}
+                      onChange={(e) => {
+                        draftCount(p.person.id, 'travel', e.target.value)
+                        if (e.target.value.trim() === '') return
+                        const n = Math.max(Math.round(parseAmount(e.target.value)), 0)
+                        reterm(p.person.id, { travelDays: n === TRAVEL_DAYS ? null : n })
+                      }}
+                      onBlur={(e) => {
+                        draftCount(p.person.id, 'travel', undefined)
+                        if (e.target.value.trim() === '') reterm(p.person.id, { travelDays: null })
+                      }}
+                      inputMode="numeric"
+                      title={`Days paid for travel — ${TRAVEL_DAYS} unless this course was different, one each way.`}
+                      className={`${input} w-20 text-right`}
+                    />
+                    <span className="text-xs text-zinc-500 flex-1 min-w-32">
+                      {fmtHours(p.fieldHours)} field
+                      {p.travelHours > 0 && ` · ${fmtHours(p.travelHours)} travel`}
+                      {paid && p.overtimeHours > 0 && (
+                        <span className="text-amber-300/70"> · {fmtHours(p.overtimeHours)} OT</span>
+                      )}
+                    </span>
+
+                    {/* No "added yet" marker: the button below names exactly
+                        who is not in the list, and a column of dashes beside
+                        the money said the same thing in a way that read as a
+                        missing figure. */}
+                    <span className={`text-sm w-24 text-right ${paid ? 'text-zinc-300' : 'text-zinc-600'}`}>
+                      {fmtMoney(p.total)}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+
+            <div className="flex items-baseline justify-between gap-3 flex-wrap border-t border-zinc-800 px-3 py-2">
+              <p className="text-xs text-zinc-500">{plan.assumptions}</p>
+              <p className="text-xs text-zinc-400">
+                By the hour <span className="text-zinc-200 font-medium">{fmtMoney(plan.total)}</span>
+              </p>
+            </div>
+
+            {(unwritten.length > 0 || plan.missingRates.length > 0) && (
+              <div className="border-t border-zinc-800 px-3 py-2">
+                {plan.missingRates.length > 0 && (
+                  <p className="text-xs text-amber-300/90">
+                    {listNames(plan.missingRates.map((p) => p.name))}{' '}
+                    {plan.missingRates.length === 1 ? 'has' : 'have'} no hourly checked yet, so their field days are
+                    not in that figure.
+                  </p>
+                )}
+                {unwritten.length > 0 && (
+                  <button
+                    disabled={busy}
+                    onClick={async () => {
+                      setBusy(true)
+                      try {
+                        const created = await addSuggestedPayLines(
+                          instanceId,
+                          unwritten.flatMap((p) => p.lines)
+                        )
+                        setPay((rows) => [
+                          ...rows.filter((r) => !payIsBlank(r)),
+                          ...created.map((l) => ({ ...l, key: l.id })),
+                        ])
+                      } catch (e) {
+                        setError(e instanceof Error ? e.message : 'Could not add those lines')
+                      } finally {
+                        setBusy(false)
+                      }
+                    }}
+                    className="mt-2 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 rounded text-xs font-medium transition-colors disabled:opacity-50"
+                  >
+                    {unwritten.length === plan.people.length
+                      ? 'Add as pay lines'
+                      : `Add pay lines for ${listNames(unwritten.map((p) => p.person.name))}`}
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         )}
 
-        <div className="space-y-1.5">
-          {pay.map((row) => (
-            <div key={row.key} className="flex items-center gap-2 flex-wrap">
-              <select
-                value={row.profile_id ?? ''}
-                onChange={(e) => updatePay(row.key, { profile_id: e.target.value || null })}
-                className={`${input} w-40`}
-              >
-                <option value="">— whole crew —</option>
-                {people.map((p) => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
+        {/* One line per kind of time, each with its own hours: a long
+            international travel day, a day somebody shadowed, a week where
+            the crew drove instead of flying — all of those are a number of
+            hours to correct on one line, and none of them should mean
+            unpicking a person's whole week from a single total.
+
+            Grouped under the person, with their name said once. Four lines
+            each repeating "Eric Christensen" in a dropdown was the name
+            shouting over the only thing that differs between them, and the
+            dropdown itself was a chance to mis-file a line as somebody
+            else's. A line arrives unattributed only if somebody adds it by
+            hand, and that is the one place the question still gets asked.
+
+            Hours × rate is the amount. Edit either and the total follows;
+            edit the total and the line admits it is a figure somebody chose
+            rather than a calculation. */}
+        <div className="space-y-3">
+          {payGroups.map((group) => (
+            <div key={group.id ?? 'unattributed'}>
+              <div className="flex items-baseline justify-between gap-3">
+                <p className="text-xs font-medium text-zinc-300">
+                  {group.name ?? 'Not attributed'}
+                </p>
+                <p className="text-xs text-zinc-500">
+                  {fmtMoney(sumRows(group.rows))}
+                </p>
+              </div>
+              <div className={`hidden md:flex items-center gap-2 mt-1 ${colHead}`}>
+                {group.id === null && <span className="w-40">Who</span>}
+                <span className="flex-1 min-w-40">What for</span>
+                <span className="w-16 text-right">Hours</span>
+                <span className="w-16 text-right">Days</span>
+                <span className="w-20 text-right">Rate</span>
+                <span className="w-24 text-right">Total</span>
+                <span className="w-4" />
+              </div>
+              <div className="space-y-1.5 mt-1">
+                {group.rows.map((row) => (
+                  <div key={row.key} className="flex items-center gap-2 flex-wrap">
+                    {/* Only where nobody has said: picking a name moves the
+                        row up into that person's group. */}
+                    {group.id === null && (
+                      <select
+                        value={row.instructor_id ?? ''}
+                        onChange={(e) => attribute(row.key, e.target.value || null)}
+                        className={`${input} w-40`}
+                      >
+                        <option value="">— who —</option>
+                        {loaded.payPeople.map((p) => (
+                          <option key={p.id} value={p.id}>{p.name}</option>
+                        ))}
+                      </select>
+                    )}
+                    <input
+                      value={row.description ?? ''}
+                      onChange={(e) => updatePay(row.key, { description: e.target.value })}
+                      placeholder="What for"
+                      className={`${input} flex-1 min-w-40`}
+                    />
+                    <input
+                      value={row.hoursText ?? (row.hours === null || row.hours === undefined ? '' : String(row.hours))}
+                      onChange={(e) =>
+                        updatePay(row.key, { hoursText: e.target.value, hours: e.target.value.trim() === '' ? null : parseAmount(e.target.value) })
+                      }
+                      inputMode="decimal"
+                      placeholder="h"
+                      title="Hours on this line. The total follows it."
+                      className={`${input} w-16 text-right placeholder-zinc-600`}
+                    />
+                    {/* The same hours, said the way a course is actually
+                        discussed. Days are not stored: they are hours divided
+                        by the length of a day, so the two boxes can never
+                        drift — type in either and the other follows, and a
+                        day that ran long shows as the 1.6 days it was paid
+                        as. */}
+                    <input
+                      value={row.daysText ?? daysOf(row, loaded.paySettings.hoursPerDay)}
+                      onChange={(e) => {
+                        const days = e.target.value.trim() === '' ? null : parseAmount(e.target.value)
+                        updatePay(row.key, {
+                          daysText: e.target.value,
+                          hours: days === null ? null : round2(days * loaded.paySettings.hoursPerDay),
+                        })
+                      }}
+                      onBlur={() => updatePay(row.key, { daysText: undefined })}
+                      inputMode="decimal"
+                      placeholder="d"
+                      title={`Days on this line, at ${fmtHours(loaded.paySettings.hoursPerDay)} each. Sets the hours.`}
+                      className={`${input} w-16 text-right placeholder-zinc-600`}
+                    />
+                    <input
+                      value={row.rateText ?? (row.hourly_rate === null || row.hourly_rate === undefined ? '' : String(row.hourly_rate))}
+                      onChange={(e) =>
+                        updatePay(row.key, { rateText: e.target.value, hourly_rate: e.target.value.trim() === '' ? null : parseAmount(e.target.value) })
+                      }
+                      inputMode="decimal"
+                      placeholder="rate"
+                      title="What those hours pay, an hour — the overtime premium already in it"
+                      className={`${input} w-20 text-right placeholder-zinc-600`}
+                    />
+                    <input
+                      value={amountValue(row)}
+                      onChange={(e) => updatePay(row.key, { amountText: e.target.value, amount: parseAmount(e.target.value) })}
+                      inputMode="decimal"
+                      placeholder="0.00"
+                      title="Typing here makes the line a total of its own, and its hours are dropped"
+                      className={`${input} w-24 text-right placeholder-zinc-600`}
+                    />
+                    {/* Every row, blank ones included: a row you asked for is
+                        a row you can take back. */}
+                    <button onClick={() => void removePay(row)} className="text-zinc-600 hover:text-pr-red-light transition-colors" title="Remove">
+                      <TrashIcon className="w-4 h-4" />
+                    </button>
+                  </div>
                 ))}
-              </select>
-              <input
-                type="date"
-                value={row.work_date ?? ''}
-                onChange={(e) => updatePay(row.key, { work_date: e.target.value || null })}
-                className={`${input} w-36`}
-              />
-              <input
-                value={row.description ?? ''}
-                onChange={(e) => updatePay(row.key, { description: e.target.value })}
-                placeholder="What for"
-                className={`${input} flex-1 min-w-40`}
-              />
-              <input
-                value={amountValue(row)}
-                onChange={(e) => updatePay(row.key, { amountText: e.target.value, amount: parseAmount(e.target.value) })}
-                inputMode="decimal"
-                placeholder="0.00"
-                className={`${input} w-24 text-right placeholder-zinc-600`}
-              />
-              {/* Every row, blank ones included: a row you asked for is a
-                  row you can take back. */}
-              <button onClick={() => void removePay(row)} className="text-zinc-600 hover:text-pr-red-light transition-colors" title="Remove">
-                <TrashIcon className="w-4 h-4" />
-              </button>
+              </div>
             </div>
           ))}
         </div>
@@ -580,7 +969,7 @@ export default function ActualsPanel({
                 }}
                 inputMode="decimal"
                 placeholder={String(round1(loaded.orgPayrollLoad * 100))}
-                title="Blank follows the org-wide number"
+                title="What this course loaded pay at. Taken from the org-wide number when the actuals were started, and this course's own from then on — putting the org figure up later cannot move a net you have already read."
                 className={`${input} w-14 text-right placeholder-zinc-500`}
               />
               %
@@ -596,7 +985,7 @@ export default function ActualsPanel({
                   }}
                   className="text-xs text-zinc-500 hover:text-zinc-300 underline underline-offset-2 transition-colors"
                 >
-                  use the org-wide {round1(loaded.orgPayrollLoad * 100)}%
+                  use today&rsquo;s org-wide {round1(loaded.orgPayrollLoad * 100)}%
                 </button>
               )}
             </span>
@@ -1191,8 +1580,43 @@ function shareUrl(token: string): string {
 // An untouched row: nothing typed, nothing saved, nothing to lose by keeping
 // it on screen. One of these always sits at the end of each list so entering
 // the next line is typing rather than clicking.
+/** A line's hours as days, for the box beside them. Blank when there are no
+    hours: a typed total is not a number of days. */
+function daysOf(row: PayRow, hoursPerDay: number): string {
+  if (row.hours === null || row.hours === undefined || hoursPerDay <= 0) return ''
+  const days = Math.round((row.hours / hoursPerDay) * 100) / 100
+  return String(days)
+}
+
+/** Pay rows in the order the days happened. A line nobody dated goes last
+    rather than first: an undated row is one somebody typed, and it has no
+    claim on a position among the days that are known. */
+function byDate(rows: PayRow[]): PayRow[] {
+  return [...rows].sort((a, b) => (a.work_date ?? '9999').localeCompare(b.work_date ?? '9999'))
+}
+
+/** What a group of rows comes to. */
+function sumRows(rows: PayRow[]): number {
+  return round2(rows.reduce((t, r) => t + (Number(r.amount) || 0), 0))
+}
+
+/** Names in a sentence: "Sam", "Sam and Ana", "Sam, Ana and Wes". */
+function listNames(names: string[]): string {
+  if (names.length <= 1) return names[0] ?? ''
+  return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
+}
+
 function payIsBlank(r: PayRow): boolean {
-  return !r.id && !r.description?.trim() && !r.amount && !r.amountText?.trim() && !r.profile_id && !r.work_date
+  return (
+    !r.id &&
+    !r.description?.trim() &&
+    !r.amount &&
+    !r.amountText?.trim() &&
+    !r.instructor_id &&
+    !r.hours &&
+    !r.work_date &&
+    !r.end_date
+  )
 }
 
 function costIsBlank(r: CostRow): boolean {

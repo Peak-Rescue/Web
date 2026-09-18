@@ -5,10 +5,9 @@ import {
   accountForExpense,
   groupByReport,
   expenseLineLabel,
-  payRatesFrom,
+  payLineName,
   routeReassignments,
   actualsAreLive,
-  paySuggestion,
   estimateCostSeed,
   accountForEstimateLine,
   rollUpActuals,
@@ -144,24 +143,19 @@ describe('net as a percentage', () => {
   })
 })
 
-describe('the pay suggestion', () => {
-  it('prices field days and two travel days per instructor', () => {
-    const s = paySuggestion({ instructors: 2, days: 5 }, { fieldDay: 500, travelDay: 200 })
-    expect(s?.total).toBe(5800)
-    expect(s?.lines.map((l) => l.amount)).toEqual([5000, 800])
+describe('whose pay a line is', () => {
+  const names = { i1: 'Eric Christensen', u1: 'Eric C' }
+
+  it('reads the roster first, because half the crew has no account', () => {
+    expect(payLineName({ instructor_id: 'i1', profile_id: null }, names)).toBe('Eric Christensen')
   })
 
-  it('says what it assumed, because the crew is the authority', () => {
-    expect(paySuggestion({ instructors: 1, days: 1 }, { fieldDay: 500, travelDay: 200 })?.assumptions)
-      .toBe('1 instructor, 1 field day, 2 travel days each')
+  it('still names a line written before the roster id existed', () => {
+    expect(payLineName({ profile_id: 'u1' }, names)).toBe('Eric C')
   })
 
-  it('has nothing to offer a course with no dates', () => {
-    expect(paySuggestion({ instructors: 2, days: null }, { fieldDay: 500, travelDay: 200 })).toBeNull()
-  })
-
-  it('has nothing to offer when the library carries no pay rates', () => {
-    expect(paySuggestion({ instructors: 2, days: 5 }, { fieldDay: null, travelDay: null })).toBeNull()
+  it('is nobody on a line typed for the whole crew', () => {
+    expect(payLineName({ instructor_id: null, profile_id: null }, names)).toBeNull()
   })
 })
 
@@ -191,32 +185,6 @@ describe('an expense line that never said what it was for', () => {
 
   it('is fine once somebody says it belongs to nobody', () => {
     expect(itemIsUnclassified({ instance_id: null, non_course: true }, null)).toBe(false)
-  })
-})
-
-describe('finding the pay rates in the library', () => {
-  const LIBRARY = [
-    { label: 'Instructor field day', pay_rate: 500 },
-    { label: 'Instructor travel day', pay_rate: 200 },
-    { label: 'Lodging', pay_rate: null },
-  ]
-
-  it('reads what we pay, not what we quote', () => {
-    expect(payRatesFrom(LIBRARY)).toEqual({ fieldDay: 500, travelDay: 200 })
-  })
-
-  it('does not mistake the travel line for the field line', () => {
-    // "Instructor travel day" matches a loose /instructor.*day/ too, so the
-    // travel rate is claimed first and the field lookup cannot swallow it.
-    expect(payRatesFrom([...LIBRARY].reverse()).fieldDay).toBe(500)
-  })
-
-  it('survives a rename, because it tests meaning and not spelling', () => {
-    expect(payRatesFrom([{ label: 'Instructor day in the field', pay_rate: 550 }]).fieldDay).toBe(550)
-  })
-
-  it('has no rate to offer when the library carries none', () => {
-    expect(payRatesFrom([{ label: 'Lodging', pay_rate: null }])).toEqual({ fieldDay: null, travelDay: null })
   })
 })
 

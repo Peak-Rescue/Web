@@ -14,7 +14,8 @@ import BillingSection from './BillingSection'
 import { type InvoiceRequest } from '@/lib/billing'
 import ActualsPanel from '@/components/ActualsPanel'
 import PricingFold from '@/components/PricingFold'
-import { actualsAreLive, estimateCostSeed, payRatesFrom, paySuggestion } from '@/lib/actuals'
+import { actualsAreLive, estimateCostSeed } from '@/lib/actuals'
+import { courseFieldDates, payPlan } from '@/lib/pay'
 import { loadActuals } from '@/lib/actuals-data'
 import { courseZone, todayIn } from '@/lib/course-clock'
 import { fmtMoney, round2 } from '@/lib/expenses'
@@ -67,13 +68,13 @@ export default async function CoursePricingEditor({
     { data: estimateRows }, { data: pricingRateRows }, { data: quoteRows },
     { data: adminRows }, { data: estimateReviewRows },
     { data: sourceRows }, { data: offDayRows },
-    actuals, { data: rosterRows },
+    actuals,
     { data: invoiceRows }, { data: billerRows }, { data: readerRows },
   ] = await Promise.all([
     admin.from('course_estimates')
       .select('id, title, margin, price_override, created_at, archived_at, estimate_items(label, qty, rate, notes, qty_factors, rate_id, drift_ack, sort_order)')
       .eq('instance_id', instanceId).order('created_at'),
-    admin.from('pricing_rates').select('id, label, unit, rate, pay_rate, default_line').eq('active', true).order('sort_order'),
+    admin.from('pricing_rates').select('id, label, unit, rate, pay_rate, own_time, default_line').eq('active', true).order('sort_order'),
     admin.from('course_quotes')
       .select(QUOTE_ROW_COLUMNS)
       .eq('instance_id', instanceId).order('quote_seq', { ascending: false }),
@@ -104,7 +105,6 @@ export default async function CoursePricingEditor({
     // page and the PDF also go through — as a single entry here so it still
     // rides in this page's existing round trip.
     loadActuals(admin, instanceId),
-    admin.from('instance_instructors').select('instructors(name, profile_id)').eq('instance_id', instanceId),
     admin.from('invoice_requests').select('*').eq('instance_id', instanceId).order('created_at', { ascending: false }),
     admin.from('billing_recipients').select('id, name').eq('active', true).order('name'),
     admin.from('report_recipients').select('id, name').eq('active', true).order('name'),
@@ -239,13 +239,6 @@ export default async function CoursePricingEditor({
 
   // ── Actuals ───────────────────────────────────────────────────────────────
 
-  // Only the crew with a portal account can carry a pay line; everyone else's
-  // time goes on an unattributed one, which is how the paper version did it.
-  const payPeople = (rosterRows ?? [])
-    .map((r) => r.instructors as unknown as { name: string | null; profile_id: string | null } | null)
-    .filter((i): i is { name: string; profile_id: string } => Boolean(i?.profile_id && i?.name))
-    .map((i) => ({ id: i.profile_id, name: i.name }))
-
   // Where the conversation landed, offered to the invoiced field as a
   // starting point. The highest-numbered accepted quote wins — quotes come
   // back newest first, and a re-quote that was also accepted supersedes.
@@ -346,27 +339,39 @@ export default async function CoursePricingEditor({
     { starts_at: course.starts_at, status: course.status ?? null },
     todayIn(courseZone(course.region))
   )
-  const suggestion = paySuggestion(
-    { instructors: instructorCount, days: lengths.days },
-    payRatesFrom((pricingRateRows ?? []) as { label: string; pay_rate?: number | string | null }[])
+  // What the crew is owed, worked out from the course's own dates rather than
+  // from a count of days: pay is hourly, the hourly differs per person, and
+  // overtime past 40 hours belongs to a Sunday-to-Saturday week — so which
+  // week each day falls in decides the money. Offered, never applied.
+  // The days the course itself runs, which each person's own row then trims
+  // or extends: somebody arrived late, somebody left after the practical.
+  const fieldDates = courseFieldDates(
+    { starts_at: course.starts_at, ends_at: course.ends_at, breaks_paid: course.breaks_paid },
+    offDayRows ?? []
   )
+  const plan = payPlan(actuals.payPeople, fieldDates, actuals.paySettings)
 
-  // A rate that carries a pay figure is somebody's time, quoted at a padded
-  // number on purpose — those lines are left to the pay suggestion, which
-  // uses the rate we actually pay.
-  const payRateIds = new Set(
-    (pricingRateRows ?? []).filter((r) => r.pay_rate !== null && r.pay_rate !== undefined).map((r) => r.id as string)
+  // A rate marked as somebody's time is quoted at a padded number on purpose
+  // — those lines are left to the pay section, which prices the same time at
+  // the hourly rates people are actually on.
+  const ownTimeRateIds = new Set(
+    (pricingRateRows ?? []).filter((r) => r.own_time).map((r) => r.id as string)
   )
 
   const actualsSeed =
     seedCoa && !actuals.seededAt && actuals.payLines.length === 0 && actuals.costLines.length === 0
       ? {
           from: seedCoa.title,
-          pay: suggestion?.lines ?? [],
+          // Pay is seeded only when every person staffed has an hourly. A
+          // plan missing somebody's field days would be written in as though
+          // it were the answer, and the panel would then hide the box that
+          // asks for the rate — so an incomplete plan is left to be picked
+          // over on screen instead.
+          pay: plan && plan.missingRates.length === 0 ? plan.lines : [],
           costs: estimateCostSeed(
             seedCoa.items.map((i) => ({ label: i.label, qty: i.qty, rate: i.rate, rate_id: i.rate_id })),
             actuals.accounts,
-            payRateIds
+            ownTimeRateIds
           ),
         }
       : null
@@ -510,8 +515,7 @@ export default async function CoursePricingEditor({
         <ActualsPanel
           instanceId={instanceId}
           actuals={actuals}
-          people={payPeople}
-          suggestion={suggestion}
+          fieldDates={fieldDates}
           seed={actualsSeed}
           invoicedSuggestion={invoicedSuggestion}
           readers={(readerRows ?? []).map((r) => ({ id: r.id as string, name: r.name as string }))}

@@ -4,7 +4,9 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import SaveButton from '@/components/SaveButton'
 import { addPricingRate, updatePricingRate } from '@/app/admin/courses/finance-actions'
-import { updateOrgSetting, addCostAccountToLibrary } from '@/app/admin/courses/actuals-actions'
+import { updateOrgSetting, addCostAccountToLibrary, addPayFieldRate } from '@/app/admin/courses/actuals-actions'
+import RetirePayRateButton from './RetirePayRateButton'
+import { fmtRate } from '@/lib/pay'
 import CostCategoryRow from './CostCategoryRow'
 import { CATEGORY_LABELS, categoriesFor, type ExpenseCategory } from '@/lib/expenses'
 import DeletePricingRateButton from './DeletePricingRateButton'
@@ -55,6 +57,53 @@ function ReimbursementLock() {
   )
 }
 
+/** An org-wide number as it is typed and read. A percentage is stored as the
+    fraction it multiplies by, so it is shown ×100 and saved ÷100; every other
+    unit — dollars an hour, hours in a day, a multiplier — is stored as typed.
+    The row says which, because this table stopped being all percentages the
+    moment pay went hourly. */
+type OrgSetting = {
+  key: string
+  value: number | string
+  label: string
+  unit: string | null
+  notes: string | null
+  format: string | null
+}
+
+function settingValue(o: OrgSetting): number {
+  const n = Number(o.value)
+  return (o.format ?? 'percent') === 'percent' ? Math.round(n * 10000) / 100 : n
+}
+
+function OrgSettingRow({ setting }: { setting: OrgSetting }) {
+  return (
+    <form
+      action={updateOrgSetting.bind(null, setting.key)}
+      className="flex items-center justify-between gap-4 px-4 py-3 flex-wrap"
+    >
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-medium text-zinc-200">{setting.label}</p>
+        {setting.notes && <p className="text-xs text-zinc-500 mt-0.5">{setting.notes}</p>}
+      </div>
+      <div className="flex items-center gap-2 shrink-0">
+        <input
+          type="number"
+          name="value"
+          step="0.01"
+          min="0"
+          defaultValue={settingValue(setting)}
+          className="w-20 bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-right focus:outline-none focus:border-zinc-500"
+        />
+        <span className="text-xs text-zinc-500 w-28">{setting.unit}</span>
+        <SaveButton className="px-2.5 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-white rounded text-xs font-medium transition-colors">
+          Save
+        </SaveButton>
+      </div>
+    </form>
+  )
+}
+
 export default async function AdminExpenseRatesPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -72,12 +121,27 @@ export default async function AdminExpenseRatesPage() {
 
   const { data: orgRows } = await admin
     .from('org_settings')
-    .select('key, value, label, unit, notes')
+    .select('key, value, label, unit, notes, format')
     .order('label')
+
+  // The hourly rates somebody can be put on. Descending, because the top of
+  // the scale is the common one and the list is read as a scale.
+  const { data: payRateRows } = await admin
+    .from('pay_field_rates')
+    .select('hourly')
+    .eq('active', true)
+    .order('hourly', { ascending: false })
+
+  // Pay's own numbers are shown with pay, not in the general org-wide list:
+  // read together they are one rule — ten-hour days, $20 travel hours, time
+  // and a half past forty — and read apart they are four loose figures.
+  const payKeys = ['pay_travel_hourly', 'pay_hours_per_day', 'pay_ot_weekly_hours', 'pay_ot_multiplier']
+  const paySettingRows = (orgRows ?? []).filter((o) => payKeys.includes(o.key as string))
+  const otherOrgRows = (orgRows ?? []).filter((o) => !payKeys.includes(o.key as string))
 
   const { data: pricingRateRows } = await admin
     .from('pricing_rates')
-    .select('id, label, unit, rate, pay_rate, default_line, reimb_type')
+    .select('id, label, unit, rate, pay_rate, own_time, default_line, reimb_type')
     .eq('active', true)
     .order('sort_order')
   const pricingRates = (pricingRateRows ?? []).map((r) => ({
@@ -161,16 +225,31 @@ export default async function AdminExpenseRatesPage() {
                   title="What we quote this at"
                   className={`${BOX} text-sm text-right`}
                 />
-                <input
-                  type="number"
-                  name="pay_rate"
-                  step="0.01"
-                  min="0"
-                  defaultValue={r.pay_rate ?? ''}
-                  placeholder="pay"
-                  title="What we actually pay. Blank if this isn't somebody's time."
-                  className={`${BOX} text-sm text-right text-zinc-400 placeholder-zinc-600`}
-                />
+                {/* Our own time has no pay figure to type any more: it is
+                    paid by the hour, at a rate that differs per person and
+                    earns overtime past forty hours in the week. So the cell
+                    points at where that is set rather than holding a number
+                    that nothing would read. */}
+                {r.own_time ? (
+                  <a
+                    href="#pay-by-the-hour"
+                    title="Paid by the hour, per person — set below"
+                    className="text-xs text-zinc-500 hover:text-zinc-300 underline underline-offset-2 decoration-zinc-700 transition-colors md:text-right"
+                  >
+                    by the hour
+                  </a>
+                ) : (
+                  <input
+                    type="number"
+                    name="pay_rate"
+                    step="0.01"
+                    min="0"
+                    defaultValue={r.pay_rate ?? ''}
+                    placeholder="pay"
+                    title="What we actually pay, where that is a flat figure — a contractor's day. Blank if this isn't somebody's time."
+                    className={`${BOX} text-sm text-right text-zinc-400 placeholder-zinc-600`}
+                  />
+                )}
                 {/* Inside the form only to sit in the right column. Its box
                     carries no name, so it is absent from the submitted data
                     and from what Save watches for changes — it fires its own
@@ -217,41 +296,73 @@ export default async function AdminExpenseRatesPage() {
           </SaveButton>
         </form>
 
+        {/* What we actually pay for somebody's time. Separate from the rates
+            above because those are prices with a margin in them: an
+            instructor day is quoted padded on purpose, and this is the money
+            that leaves. */}
+        <div className="mt-10 scroll-mt-24" id="pay-by-the-hour">
+          <h2 className="text-sm font-semibold text-zinc-200 mb-1">Pay by the hour</h2>
+          <p className="text-xs text-zinc-500 mb-3">
+            A field day and a travel day are both hours at a rate, not a flat figure — which is what makes
+            overtime countable. Course actuals work pay out from these and the course&rsquo;s own dates.
+          </p>
+
+          <div className="bg-zinc-900 rounded-lg border border-zinc-800 divide-y divide-zinc-800">
+            {paySettingRows.map((o) => (
+              <OrgSettingRow key={o.key as string} setting={o as OrgSetting} />
+            ))}
+          </div>
+
+          <h3 className="text-xs uppercase tracking-wide text-zinc-500 mt-6 mb-1">Field hourly rates</h3>
+          <p className="text-xs text-zinc-500 mb-3">
+            The rates somebody can be put on. Who is on which is set on their instructor page, and a course
+            can override it for that course.
+          </p>
+          <div className="bg-zinc-900 rounded-lg border border-zinc-800 divide-y divide-zinc-800">
+            {(payRateRows ?? []).map((r) => (
+              <div key={String(r.hourly)} className="flex items-center justify-between gap-4 px-4 py-2.5">
+                <p className="text-sm font-medium text-zinc-200">{fmtRate(Number(r.hourly))} / hour</p>
+                <RetirePayRateButton hourly={Number(r.hourly)} />
+              </div>
+            ))}
+            {(payRateRows ?? []).length === 0 && (
+              <p className="px-4 py-3 text-sm text-zinc-500">
+                No hourly rates yet, so no course can work its pay out.
+              </p>
+            )}
+          </div>
+          <form action={addPayFieldRate} className="mt-3 flex items-end gap-2 flex-wrap">
+            <div>
+              <label className="block text-xs text-zinc-400 mb-1">New hourly rate</label>
+              <input
+                name="hourly"
+                type="number"
+                step="0.01"
+                min="0"
+                required
+                placeholder="45"
+                className="w-28 bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500"
+              />
+            </div>
+            <SaveButton className="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 text-white rounded text-sm font-medium transition-colors">
+              Add rate
+            </SaveButton>
+          </form>
+        </div>
+
         {/* Numbers that apply to everything, which is why they are not in the
             list above: nothing here is multiplied by a quantity, and a rate in
             that list is also an estimate line waiting to be added. */}
-        {(orgRows ?? []).length > 0 && (
+        {otherOrgRows.length > 0 && (
           <div className="mt-10 scroll-mt-24" id="org-wide">
             <h2 className="text-sm font-semibold text-zinc-200 mb-1">Org-wide numbers</h2>
             <p className="text-xs text-zinc-500 mb-3">
-              One value, every course — a course can override it on its actuals.
+              Where a course starts. Each one takes these when its actuals are first opened and keeps them, so
+              changing a figure here moves nothing already reconciled.
             </p>
             <div className="bg-zinc-900 rounded-lg border border-zinc-800 divide-y divide-zinc-800">
-              {(orgRows ?? []).map((o) => (
-                <form
-                  key={o.key}
-                  action={updateOrgSetting.bind(null, o.key as string)}
-                  className="flex items-center justify-between gap-4 px-4 py-3 flex-wrap"
-                >
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-zinc-200">{o.label}</p>
-                    {o.notes && <p className="text-xs text-zinc-500 mt-0.5">{o.notes}</p>}
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <input
-                      type="number"
-                      name="value"
-                      step="0.01"
-                      min="0"
-                      defaultValue={Math.round(Number(o.value) * 10000) / 100}
-                      className="w-20 bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-right focus:outline-none focus:border-zinc-500"
-                    />
-                    <span className="text-xs text-zinc-500 w-28">{o.unit}</span>
-                    <SaveButton className="px-2.5 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-white rounded text-xs font-medium transition-colors">
-                      Save
-                    </SaveButton>
-                  </div>
-                </form>
+              {otherOrgRows.map((o) => (
+                <OrgSettingRow key={o.key as string} setting={o as OrgSetting} />
               ))}
             </div>
           </div>

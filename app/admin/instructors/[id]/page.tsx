@@ -17,6 +17,7 @@ import TeamPageToggle from '@/app/admin/instructors/TeamPageToggle'
 import StudentContactToggles from '@/app/admin/instructors/StudentContactToggles'
 import CalendarInviteStatus from '@/app/admin/instructors/CalendarInviteStatus'
 import CourseAlertsForm from '@/app/instructor/CourseAlertsForm'
+import EmploymentPanel from '@/app/admin/instructors/EmploymentPanel'
 import ExemptToggle from '@/app/admin/instructors/ExemptToggle'
 import DeleteInstructorButton from '@/app/admin/instructors/DeleteInstructorButton'
 import { InviteButton } from '@/app/admin/instructors/InviteButton'
@@ -54,7 +55,7 @@ export default async function AdminInstructorDetailPage({ params }: { params: Pr
   // Look up by instructors.id (the URL param)
   const { data: instructor } = await admin
     .from('instructors')
-    .select('id, name, email, sign_in_emails, slug, profile_id, invite_sent_at, show_on_team_page, show_email, show_phone, bio, avatar, avatar_position, avatar_scale, sectors, calendar_invites, course_alert_muted_disciplines, course_alert_muted_sectors, instructor_capabilities(category, role)')
+    .select('id, name, email, sign_in_emails, slug, profile_id, invite_sent_at, show_on_team_page, show_email, show_phone, bio, avatar, avatar_position, avatar_scale, sectors, salaried, annual_salary, paid_for_days, calendar_invites, course_alert_muted_disciplines, course_alert_muted_sectors, instructor_capabilities(category, role)')
     .eq('id', id)
     .single()
 
@@ -318,12 +319,29 @@ export default async function AdminInstructorDetailPage({ params }: { params: Pr
           />
         </section>
 
-        {profile && (
-          <section className="mb-10">
-            <h2 className="text-lg font-semibold mb-4">Employment</h2>
-            <ExemptToggle profileId={profile.id} initialValue={profile.is_exempt ?? false} />
-          </section>
-        )}
+        {/* How they are paid, not what they are paid: the rate depends on
+            their role and the course type, so it is checked on each course's
+            pay rows rather than carried around with them. Three questions,
+            none derived from another: the crew answers them in every
+            combination there is — salaried and paid for days and earning
+            overtime, salaried and paid for days and exempt from it, salaried
+            and not paid for days at all. */}
+        <section className="mb-10">
+          <h2 className="text-lg font-semibold mb-4">Employment</h2>
+          <EmploymentPanel
+            instructorId={instructor.id}
+            salaried={Boolean(instructor.salaried)}
+            annualSalary={
+              instructor.annual_salary === null || instructor.annual_salary === undefined
+                ? null
+                : Number(instructor.annual_salary)
+            }
+            paidForDays={instructor.paid_for_days !== false}
+            exemptToggle={
+              profile ? <ExemptToggle profileId={profile.id} initialValue={profile.is_exempt ?? false} /> : null
+            }
+          />
+        </section>
 
         <section className="mb-10">
           <h2 className="text-lg font-semibold mb-1">Sector</h2>

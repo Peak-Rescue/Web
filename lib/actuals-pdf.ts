@@ -9,7 +9,7 @@ import { type RGB } from 'pdf-lib'
 import { CONTENT_W, FAINT, HAIRLINE, INK, MARGIN, MUTED, PdfBuilder, RED } from '@/lib/pdf-layout'
 import { fmtMoney, fmtDateRange } from '@/lib/expenses'
 import { dateAtOffice, longDate } from '@/lib/course-clock'
-import { expenseLineLabel } from '@/lib/actuals'
+import { expenseLineLabel, payLineName } from '@/lib/actuals'
 import { type LoadedActuals } from '@/lib/actuals-data'
 
 export type ActualsPdf = {
@@ -94,7 +94,7 @@ export async function generateActualsPdf(data: ActualsPdf): Promise<Uint8Array> 
     b.paragraph('No pay recorded.', { size: 9.5, color: MUTED })
   }
   for (const l of actuals.payLines) {
-    const who = l.profile_id ? actuals.peopleById[l.profile_id] : null
+    const who = payLineName(l, actuals.peopleById)
     const label = [who, l.description].filter(Boolean).join(' — ') || 'Pay'
     line(label, l.amount, {
       size: 9.5,

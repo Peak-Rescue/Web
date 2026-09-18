@@ -4,7 +4,8 @@ import { randomUUID } from 'crypto'
 import { revalidatePath } from 'next/cache'
 import { requireAdminUser } from '@/lib/course-access'
 import { round2 } from '@/lib/expenses'
-import { routeReassignments } from '@/lib/actuals'
+import { routeReassignments, DEFAULT_PAYROLL_LOAD } from '@/lib/actuals'
+import { type PayTerms } from '@/lib/pay'
 import { chooseRecipients, describeForBiller } from '@/lib/billing'
 import { courseShortName } from '@/lib/courses'
 import { sendMail } from '@/lib/mailer'
@@ -34,9 +35,22 @@ async function ensureActuals(instanceId: string) {
     .maybeSingle()
   if (existing) return { admin, id: existing.id as string }
 
+  // The payroll load is stamped on, not followed. The org-wide figure is
+  // where a course starts; from here it is this course's own, so putting the
+  // org number up next season cannot move a net that has already been read
+  // and closed against. Re-adopting today's figure is one click in the panel.
+  const { data: orgLoad } = await admin
+    .from('org_settings')
+    .select('value')
+    .eq('key', 'payroll_load_pct')
+    .maybeSingle()
+
   const { data, error } = await admin
     .from('course_actuals')
-    .insert({ instance_id: instanceId })
+    .insert({
+      instance_id: instanceId,
+      payroll_load_pct: orgLoad ? Number(orgLoad.value) : DEFAULT_PAYROLL_LOAD,
+    })
     .select('id')
     .single()
   if (error || !data) throw new Error(error?.message ?? 'Could not start the actuals for this course')
@@ -92,20 +106,66 @@ export async function setActualsClosed(instanceId: string, closed: boolean) {
 // ─── Pay ─────────────────────────────────────────────────────────────────────
 
 export type PayItemInput = {
+  instructor_id?: string | null
   profile_id: string | null
   work_date: string | null
+  end_date?: string | null
   description: string | null
   amount: string
+  /** The hours and the rate behind the amount, on a line that was worked out
+      rather than typed. Kept only while they still explain the figure: edit
+      the amount by hand and they are dropped, because a line claiming 50 h @
+      $50 beside $2,000 is worse than one that admits it is just a total. */
+  hours?: number | null
+  hourly_rate?: number | null
+}
+
+/** A pay line as the hourly calculator hands it over. `amount` is what the
+    books add; hours and the rate ride along so the line can be checked and so
+    payroll can be given hours. */
+export type PayLineWrite = {
+  /** Which of the staffed crew it pays. Set on everything the hourly
+      calculator writes, so one person's lines can be found again when their
+      rate for this course changes. */
+  instructor_id?: string | null
+  profile_id?: string | null
+  /** The days the line covers. The calculator knows them; a line with none is
+      one somebody typed. */
+  work_date?: string | null
+  end_date?: string | null
+  description: string
+  amount: number
+  hours?: number | null
+  hourly_rate?: number | null
+}
+
+/** Hours and a rate, kept only if they still multiply out to the amount —
+    within a cent, because both sides are rounded money. */
+function reconciledHours(
+  amount: number,
+  hours: number | null | undefined,
+  rate: number | null | undefined
+): { hours: number | null; hourly_rate: number | null } {
+  if (hours === null || hours === undefined || rate === null || rate === undefined) {
+    return { hours: null, hourly_rate: null }
+  }
+  return Math.abs(round2(hours * rate) - amount) <= 0.01
+    ? { hours: round2(hours), hourly_rate: round2(rate) }
+    : { hours: null, hourly_rate: null }
 }
 
 export async function savePayItem(instanceId: string, itemId: string | null, input: PayItemInput) {
   const { admin } = await ensureActuals(instanceId)
+  const amount = money(input.amount) ?? 0
   const row = {
     instance_id: instanceId,
+    instructor_id: input.instructor_id || null,
     profile_id: input.profile_id || null,
     work_date: input.work_date || null,
+    end_date: input.end_date || null,
     description: input.description?.trim() || null,
-    amount: money(input.amount) ?? 0,
+    amount,
+    ...reconciledHours(amount, input.hours, input.hourly_rate),
   }
   if (itemId) {
     const { error } = await admin.from('course_pay_items').update(row).eq('id', itemId).eq('instance_id', instanceId)
@@ -128,30 +188,161 @@ export async function savePayItem(instanceId: string, itemId: string | null, inp
     asking the page to reload instead meant re-running every query the course
     page has, and the panel's own state would not have picked the new lines up
     anyway — so they landed in the database and appeared nowhere. */
+const PAY_ITEM_COLUMNS = 'id, instructor_id, profile_id, work_date, end_date, description, amount, hours, hourly_rate'
+
+export type SavedPayLine = {
+  id: string
+  instructor_id: string | null
+  profile_id: string | null
+  work_date: string | null
+  end_date: string | null
+  description: string | null
+  amount: number
+  hours: number | null
+  hourly_rate: number | null
+}
+
+function savedPayLine(r: Record<string, unknown>): SavedPayLine {
+  return {
+    id: r.id as string,
+    instructor_id: (r.instructor_id as string | null) ?? null,
+    profile_id: (r.profile_id as string | null) ?? null,
+    work_date: (r.work_date as string | null) ?? null,
+    end_date: (r.end_date as string | null) ?? null,
+    description: (r.description as string | null) ?? null,
+    amount: Number(r.amount),
+    hours: r.hours === null || r.hours === undefined ? null : Number(r.hours),
+    hourly_rate: r.hourly_rate === null || r.hourly_rate === undefined ? null : Number(r.hourly_rate),
+  }
+}
+
 export async function addSuggestedPayLines(
   instanceId: string,
-  lines: { description: string; amount: number }[]
-): Promise<{ id: string; description: string | null; amount: number }[]> {
+  lines: PayLineWrite[]
+): Promise<SavedPayLine[]> {
   const { admin } = await ensureActuals(instanceId)
   if (lines.length === 0) return []
   const { data, error } = await admin
     .from('course_pay_items')
-    .insert(
-      lines.map((l, i) => ({
-        instance_id: instanceId,
-        description: l.description.slice(0, 200),
-        amount: round2(l.amount),
-        sort_order: i,
-      }))
-    )
-    .select('id, description, amount')
+    .insert(lines.map((l, i) => ({ instance_id: instanceId, sort_order: i, ...payRow(l) })))
+    .select(PAY_ITEM_COLUMNS)
   if (error || !data) throw new Error(error?.message ?? 'Could not add those lines')
   revalidateCourse(instanceId)
-  return data.map((r) => ({
-    id: r.id as string,
-    description: (r.description as string | null) ?? null,
-    amount: Number(r.amount),
-  }))
+  return data.map(savedPayLine)
+}
+
+/** One written pay line, from a calculated one. Whose it is comes along: the
+    hourly calculator knows the person, and a line that lands unattributed is
+    one somebody has to match back to a name by reading it. */
+function payRow(l: PayLineWrite) {
+  const amount = round2(l.amount)
+  return {
+    instructor_id: l.instructor_id ?? null,
+    profile_id: l.profile_id ?? null,
+    work_date: l.work_date ?? null,
+    end_date: l.end_date ?? null,
+    description: l.description.slice(0, 200),
+    amount,
+    ...reconciledHours(amount, l.hours, l.hourly_rate),
+  }
+}
+
+/** What this course pays somebody, and for which days — the only place those
+    answers live. The rate follows the role and the course type, and the dates
+    are whose week it actually was, so there is nothing standing to inherit
+    and nothing here is an override of a person.
+
+    Re-prices what is already in the list. Terms checked before anybody
+    accepted anything only change the preview; changed afterwards they have to
+    move the lines too, or the figure on screen and the figure in the books
+    would disagree about the same week. Only the lines this calculator wrote
+    are touched — a line somebody typed a total into has no hours on it, and
+    stays exactly as they left it.
+
+    `lines` is that person's pay, recomputed from the new terms by the same
+    library the screen previews with.
+
+    Returns which rows went and which arrived, so the panel can swap them
+    without reloading the course page. */
+export async function savePersonPayTerms(
+  instanceId: string,
+  instructorId: string,
+  terms: PayTerms,
+  lines: PayLineWrite[]
+): Promise<{ removed: string[]; added: SavedPayLine[] }> {
+  const { admin } = await ensureActuals(instanceId)
+
+  const hourly = terms.fieldHourly
+  if (hourly !== null && (!Number.isFinite(hourly) || hourly <= 0)) throw new Error('That is not an hourly rate')
+  if (terms.travelDays !== null && (!Number.isInteger(terms.travelDays) || terms.travelDays < 0 || terms.travelDays > 10)) {
+    throw new Error('That is not a number of travel days')
+  }
+  if (terms.hoursPerDay !== null && (!Number.isFinite(terms.hoursPerDay) || terms.hoursPerDay <= 0 || terms.hoursPerDay > 24)) {
+    throw new Error('A day cannot be that many hours')
+  }
+  if (terms.startsAt && terms.endsAt && terms.endsAt < terms.startsAt) {
+    throw new Error('Those dates are the wrong way round')
+  }
+
+  // Nothing said is no row: the terms are stored as exceptions, so a person
+  // who worked the course as it stands carries nothing at all.
+  const said =
+    hourly !== null || terms.startsAt || terms.endsAt || terms.travelDays !== null || terms.hoursPerDay !== null
+  if (!said) {
+    const { error } = await admin
+      .from('course_pay_rates')
+      .delete()
+      .eq('instance_id', instanceId)
+      .eq('instructor_id', instructorId)
+    if (error) throw new Error(error.message)
+  } else {
+    const { error } = await admin.from('course_pay_rates').upsert(
+      {
+        instance_id: instanceId,
+        instructor_id: instructorId,
+        field_hourly: hourly,
+        starts_at: terms.startsAt,
+        ends_at: terms.endsAt,
+        travel_days: terms.travelDays,
+        hours_per_day: terms.hoursPerDay,
+      },
+      { onConflict: 'instance_id,instructor_id' }
+    )
+    if (error) throw new Error(error.message)
+  }
+
+  // Their calculated lines, if any. Nothing in the list means nothing to
+  // re-price: the terms are saved, and the preview says the rest.
+  const { data: existing, error: findError } = await admin
+    .from('course_pay_items')
+    .select('id')
+    .eq('instance_id', instanceId)
+    .eq('instructor_id', instructorId)
+    .not('hours', 'is', null)
+  if (findError) throw new Error(findError.message)
+  const removed = (existing ?? []).map((r) => r.id as string)
+  if (removed.length === 0) {
+    revalidateCourse(instanceId)
+    return { removed: [], added: [] }
+  }
+
+  // Written first, so a failure between the two leaves the old lines rather
+  // than none: money missing from a page of accounts is the worse of the two
+  // ways to be wrong, and a duplicate is visible.
+  const { data: added, error: insertError } =
+    lines.length === 0
+      ? { data: [] as Record<string, unknown>[], error: null }
+      : await admin
+          .from('course_pay_items')
+          .insert(lines.map((l, i) => ({ instance_id: instanceId, sort_order: i, ...payRow(l) })))
+          .select(PAY_ITEM_COLUMNS)
+  if (insertError) throw new Error(insertError.message)
+
+  const { error: deleteError } = await admin.from('course_pay_items').delete().in('id', removed)
+  if (deleteError) throw new Error(deleteError.message)
+
+  revalidateCourse(instanceId)
+  return { removed, added: (added ?? []).map(savedPayLine) }
 }
 
 /** Writes the estimate in as the actuals' starting point: its lines as costs
@@ -171,11 +362,11 @@ export async function addSuggestedPayLines(
 export async function seedActualsFromEstimate(
   instanceId: string,
   seed: {
-    pay: { description: string; amount: number }[]
+    pay: PayLineWrite[]
     costs: { account_id: string | null; description: string; amount: number }[]
   }
 ): Promise<{
-  pay: { id: string; description: string | null; amount: number }[]
+  pay: SavedPayLine[]
   costs: { id: string; account_id: string | null; description: string | null; amount: number }[]
 } | null> {
   const { admin } = await ensureActuals(instanceId)
@@ -204,18 +395,11 @@ export async function seedActualsFromEstimate(
 
   const [payRows, costRows] = await Promise.all([
     seed.pay.length === 0
-      ? Promise.resolve({ data: [] as { id: string; description: string | null; amount: number }[] })
+      ? Promise.resolve({ data: [] as Record<string, unknown>[] })
       : admin
           .from('course_pay_items')
-          .insert(
-            seed.pay.map((l, i) => ({
-              instance_id: instanceId,
-              description: l.description.slice(0, 200),
-              amount: round2(l.amount),
-              sort_order: i,
-            }))
-          )
-          .select('id, description, amount'),
+          .insert(seed.pay.map((l, i) => ({ instance_id: instanceId, sort_order: i, ...payRow(l) })))
+          .select(PAY_ITEM_COLUMNS),
     seed.costs.length === 0
       ? Promise.resolve({ data: [] as { id: string; account_id: string | null; description: string | null; amount: number }[] })
       : admin
@@ -234,11 +418,7 @@ export async function seedActualsFromEstimate(
 
   revalidateCourse(instanceId)
   return {
-    pay: (payRows.data ?? []).map((r) => ({
-      id: r.id as string,
-      description: (r.description as string | null) ?? null,
-      amount: Number(r.amount),
-    })),
+    pay: (payRows.data ?? []).map(savedPayLine),
     costs: (costRows.data ?? []).map((r) => ({
       id: r.id as string,
       account_id: (r.account_id as string | null) ?? null,
@@ -632,16 +812,52 @@ export async function emailActuals(
 export async function updateOrgSetting(key: string, formData: FormData) {
   const { admin } = await requireAdminUser()
   const raw = String(formData.get('value') ?? '').trim()
-  const percent = Number(raw)
-  if (raw === '' || !Number.isFinite(percent) || percent < 0 || percent >= 1000) {
-    throw new Error('That is not a percentage')
+  const typed = Number(raw)
+  if (raw === '' || !Number.isFinite(typed) || typed < 0 || typed >= 100000) {
+    throw new Error('That is not a number')
   }
+
+  // A percentage is stored as the fraction it multiplies by; everything else
+  // — dollars an hour, hours in a day, the overtime multiplier — is stored as
+  // typed. The row itself says which, because the table stopped holding only
+  // percentages the moment pay went hourly.
+  const { data: row } = await admin.from('org_settings').select('format').eq('key', key).maybeSingle()
+  const value = (row?.format ?? 'percent') === 'percent' ? typed / 100 : typed
+
   const { error } = await admin
     .from('org_settings')
-    .update({ value: percent / 100, updated_at: new Date().toISOString() })
+    .update({ value, updated_at: new Date().toISOString() })
     .eq('key', key)
   if (error) throw new Error(error.message)
   revalidatePath('/admin/expenses/rates')
   // Every course's actuals read this number, and any of them may be on screen.
+  revalidatePath('/portal', 'layout')
+}
+
+// ─── The hourly rates people can be on ──────────────────────────────────────
+// A library of a few numbers, because a raise is a row. The rate is its own
+// key: two rows both saying $40 would be one rate entered twice.
+
+export async function addPayFieldRate(formData: FormData) {
+  const { admin } = await requireAdminUser()
+  const hourly = Number(String(formData.get('hourly') ?? '').trim())
+  if (!Number.isFinite(hourly) || hourly <= 0 || hourly > 10000) throw new Error('That is not an hourly rate')
+  // Re-adding a retired rate brings it back rather than failing on the key.
+  const { error } = await admin
+    .from('pay_field_rates')
+    .upsert({ hourly: round2(hourly), active: true }, { onConflict: 'hourly' })
+  if (error) throw new Error(error.message)
+  revalidatePath('/admin/expenses/rates')
+  revalidatePath('/portal', 'layout')
+}
+
+/** Retires a rate rather than deleting it. Somebody is on it, or was on a
+    course last season that is still being read, and the number in those lines
+    must not depend on this library still listing it. */
+export async function retirePayFieldRate(hourly: number) {
+  const { admin } = await requireAdminUser()
+  const { error } = await admin.from('pay_field_rates').update({ active: false }).eq('hourly', hourly)
+  if (error) throw new Error(error.message)
+  revalidatePath('/admin/expenses/rates')
   revalidatePath('/portal', 'layout')
 }

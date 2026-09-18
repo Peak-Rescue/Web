@@ -16,6 +16,7 @@ import {
   type PayLine,
   type TypedCostLine,
 } from '@/lib/actuals'
+import { paySettingsFrom, NO_TERMS, type PayPerson, type PaySettings, type PayTerms } from '@/lib/pay'
 
 type Admin = ReturnType<typeof createAdminClient>
 
@@ -48,9 +49,23 @@ export type LoadedActuals = {
       screen moves the money rather than leaving a stale copy here. Rolled up
       alongside the typed lines, because to the books they are the same thing. */
   cardLines: TypedCostLine[]
-  /** Names for pay lines attributed to a person, so the PDF and the shared
-      page can say who was paid without a second lookup. */
+  /** Names for pay lines, by both ids a line can name somebody with: the
+      roster row and the portal account. Keyed together because a reader wants
+      one lookup and the two id spaces cannot collide — and because half the
+      crew has no account, so accounts alone would leave real people unnamed
+      on an emailed page of accounts. */
   peopleById: Record<string, string>
+  /** The staffed crew as pay is worked out for them: who they are, whether
+      overtime is theirs, and what this course pays them an hour. Everybody on
+      the roster, account or not — somebody can work a course before they ever
+      log in, and they still have to be paid. In roster order, which is the
+      order their pay rows appear in. */
+  payPeople: PayPerson[]
+  /** The shared constants behind every hour: the travel rate, the length of a
+      day, and the overtime rule. */
+  paySettings: PaySettings
+  /** The hourly rates somebody can be put on, for the per-person picker. */
+  fieldRateChoices: number[]
   rolled: Actuals
 }
 
@@ -63,8 +78,11 @@ export async function loadActuals(admin: Admin, instanceId: string): Promise<Loa
     { data: cardChargeRows },
     { data: expenseLineRows },
     { data: expenseAccountRows },
-    { data: orgRow },
+    { data: orgRows },
     { data: profileRows },
+    { data: rosterRows },
+    { data: fieldRateRows },
+    { data: coursePayRateRows },
   ] = await Promise.all([
     admin
       .from('course_actuals')
@@ -74,7 +92,7 @@ export async function loadActuals(admin: Admin, instanceId: string): Promise<Loa
     admin.from('cost_accounts').select('id, label, categories, sort_order').eq('active', true).order('sort_order'),
     admin
       .from('course_pay_items')
-      .select('id, profile_id, work_date, description, amount')
+      .select('id, instructor_id, profile_id, work_date, end_date, description, amount, hours, hourly_rate')
       .eq('instance_id', instanceId)
       .order('sort_order')
       .order('created_at'),
@@ -116,8 +134,24 @@ export async function loadActuals(admin: Admin, instanceId: string): Promise<Loa
     // narrowing it to this course would mean running the two-way join above a
     // second time just to know which item ids to ask about.
     admin.from('expense_item_accounts').select('expense_item_id, account_id'),
-    admin.from('org_settings').select('value').eq('key', 'payroll_load_pct').maybeSingle(),
+    // Every org-wide number in one read. It was the payroll load alone; pay
+    // by the hour added four more, and five single-key queries would be five
+    // round trips for one small table.
+    admin.from('org_settings').select('key, value'),
     admin.from('profiles').select('id, first_name, last_name'),
+    // The crew, with the two facts that travel with a person: whether the
+    // premium is theirs (the account's FLSA flag, 039) and whether their
+    // course days are paid at all. What they earn an hour does not travel
+    // with them — it is checked on this course, below.
+    admin
+      .from('instance_instructors')
+      .select('instructors(id, name, profile_id, paid_for_days, profiles(is_exempt))')
+      .eq('instance_id', instanceId),
+    admin.from('pay_field_rates').select('hourly').eq('active', true).order('hourly', { ascending: false }),
+    admin
+      .from('course_pay_rates')
+      .select('instructor_id, field_hourly, starts_at, ends_at, travel_days, hours_per_day')
+      .eq('instance_id', instanceId),
   ])
 
   const accounts: CostAccount[] = (accountRows ?? []).map((a) => ({
@@ -159,10 +193,14 @@ export async function loadActuals(admin: Admin, instanceId: string): Promise<Loa
 
   const payLines: PayLine[] = (payItemRows ?? []).map((l) => ({
     id: l.id as string,
+    instructor_id: (l.instructor_id as string | null) ?? null,
     profile_id: (l.profile_id as string | null) ?? null,
     work_date: (l.work_date as string | null) ?? null,
+    end_date: (l.end_date as string | null) ?? null,
     description: (l.description as string | null) ?? null,
     amount: Number(l.amount),
+    hours: l.hours === null || l.hours === undefined ? null : Number(l.hours),
+    hourly_rate: l.hourly_rate === null || l.hourly_rate === undefined ? null : Number(l.hourly_rate),
   }))
 
   const costLines: TypedCostLine[] = (costItemRows ?? []).map((l) => ({
@@ -192,7 +230,51 @@ export async function loadActuals(admin: Admin, instanceId: string): Promise<Loa
     .filter((r) => expenseLines.some((l) => l.id === r.expense_item_id))
     .map((r) => [r.expense_item_id as string, r.account_id as string])
 
-  const orgPayrollLoad = orgRow ? Number(orgRow.value) : DEFAULT_PAYROLL_LOAD
+  const orgSettings = (orgRows ?? []).map((o) => ({ key: o.key as string, value: o.value as number }))
+  const loadRow = orgSettings.find((o) => o.key === 'payroll_load_pct')
+  const orgPayrollLoad = loadRow ? Number(loadRow.value) : DEFAULT_PAYROLL_LOAD
+  const paySettings = paySettingsFrom(orgSettings)
+
+  // What this course pays each person an hour. Only this course says: the
+  // rate follows the role and the course type, so there is nothing to
+  // inherit. Missing stays missing, because a rate nobody has checked is a
+  // question for a human and not a zero to multiply by.
+  const num = (v: unknown) => (v === null || v === undefined ? null : Number(v))
+  const payTerms: Record<string, PayTerms> = Object.fromEntries(
+    (coursePayRateRows ?? []).map((r) => [
+      r.instructor_id as string,
+      {
+        fieldHourly: num(r.field_hourly),
+        startsAt: (r.starts_at as string | null) ?? null,
+        endsAt: (r.ends_at as string | null) ?? null,
+        travelDays: num(r.travel_days),
+        hoursPerDay: num(r.hours_per_day),
+      },
+    ])
+  )
+  type RosterRow = {
+    id: string
+    name: string | null
+    profile_id: string | null
+    paid_for_days: boolean | null
+    profiles: { is_exempt: boolean | null } | null
+  }
+  const payPeople: PayPerson[] = ((rosterRows ?? [])
+    .map((r) => r.instructors as unknown as RosterRow | null)
+    .filter((i): i is RosterRow => Boolean(i?.id && i?.name)))
+    .map((i) => ({
+      id: i.id,
+      profileId: i.profile_id ?? null,
+      name: i.name as string,
+      // Unlinked crew count as non-exempt: the law's default, and the safer
+      // of the two errors.
+      exempt: Boolean(i.profiles?.is_exempt),
+      // Absent counts as paid, which is what everybody but Micah is.
+      paidForDays: i.paid_for_days !== false,
+      terms: payTerms[i.id] ?? NO_TERMS,
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name))
+
   const payrollLoadOverride =
     row?.payroll_load_pct === null || row?.payroll_load_pct === undefined ? null : Number(row.payroll_load_pct)
   const payrollLoadPct = payrollLoadOverride ?? orgPayrollLoad
@@ -215,12 +297,16 @@ export async function loadActuals(admin: Admin, instanceId: string): Promise<Loa
     payLines,
     costLines,
     cardLines,
-    peopleById: Object.fromEntries(
-      (profileRows ?? []).map((p) => [
+    payPeople,
+    paySettings,
+    fieldRateChoices: (fieldRateRows ?? []).map((r) => Number(r.hourly)),
+    peopleById: Object.fromEntries([
+      ...(profileRows ?? []).map((p) => [
         p.id as string,
         [p.first_name, p.last_name].filter(Boolean).join(' ') || 'Unknown',
-      ])
-    ),
+      ]),
+      ...payPeople.map((p) => [p.id, p.name]),
+    ]),
     rolled: rollUpActuals({
       accounts,
       expenseLines,

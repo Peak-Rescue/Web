@@ -2,7 +2,7 @@ import { notFound } from 'next/navigation'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { courseShortName } from '@/lib/courses'
 import { loadActuals } from '@/lib/actuals-data'
-import { expenseLineLabel } from '@/lib/actuals'
+import { expenseLineLabel, payLineName } from '@/lib/actuals'
 import { fmtMoney, fmtDateRange } from '@/lib/expenses'
 import { dateAtOffice, longDate } from '@/lib/course-clock'
 
@@ -92,7 +92,7 @@ export default async function SharedActualsPage({ params }: { params: Promise<{ 
               key={l.id}
               indent
               label={
-                [l.profile_id ? actuals.peopleById[l.profile_id] : null, l.description].filter(Boolean).join(' — ') ||
+                [payLineName(l, actuals.peopleById), l.description].filter(Boolean).join(' — ') ||
                 'Pay'
               }
               note={l.work_date ? fmtDateRange(l.work_date, null) : null}

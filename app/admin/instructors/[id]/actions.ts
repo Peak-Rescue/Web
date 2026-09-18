@@ -558,7 +558,32 @@ export async function adminDeleteInstructor(instructorId: string): Promise<void>
   if (instructor.slug) revalidatePath(`/team/${instructor.slug}`)
 }
 
-// FLSA exemption controls per-diem eligibility on expense reports.
+// ─── How somebody is paid ───────────────────────────────────────────────────
+// On the roster row rather than the account, because somebody can be staffed
+// before they ever log in and every course's pay still has to know. What they
+// are paid an hour is not here: that depends on the role and the course type,
+// so it is checked on each course's own pay rows.
+
+async function updateInstructor(instructorId: string, patch: Record<string, unknown>) {
+  await requireAdmin()
+  const { error } = await createAdminClient().from('instructors').update(patch).eq('id', instructorId)
+  if (error) throw new Error(error.message)
+  revalidatePath(`/admin/instructors/${instructorId}`)
+  // Every course they are staffed on prices their days from these.
+  revalidatePath('/portal', 'layout')
+}
+
+/** Whether there is a salary. Independent of the other two: a salaried
+    person can still be paid for course days (adminSetPaidForDays) and can
+    still earn the overtime premium (adminSetExempt) — three of the salaried
+    crew do both. */
+export async function adminSetSalaried(instructorId: string, salaried: boolean) {
+  await updateInstructor(instructorId, { salaried })
+}
+
+/** FLSA exempt: no overtime premium on their course hours, and covered meals
+    claimable without receipts. On the account, because that is where expense
+    reports read per diem from. */
 export async function adminSetExempt(profileId: string, isExempt: boolean) {
   await requireAdmin()
 
@@ -571,4 +596,23 @@ export async function adminSetExempt(profileId: string, isExempt: boolean) {
 
   await revalidateByProfileId(profileId)
   revalidatePath('/instructor/expenses')
+  // Every course they are staffed on prices their overtime from it.
+  revalidatePath('/portal', 'layout')
+}
+
+/** What the salary is. Overhead: no course's actuals read it, and it is kept
+    so the org's own profit and loss has a figure to read. Null means nobody
+    has said. */
+export async function adminSetAnnualSalary(instructorId: string, amount: number | null) {
+  if (amount !== null && (!Number.isFinite(amount) || amount < 0 || amount > 100_000_000)) {
+    throw new Error('That is not a salary')
+  }
+  await updateInstructor(instructorId, { annual_salary: amount === null ? null : Math.round(amount * 100) / 100 })
+}
+
+/** Whether the field and travel days they work are paid on top. False makes
+    their course pay nothing and stops the panel asking for an hourly; their
+    hours are still counted and shown. */
+export async function adminSetPaidForDays(instructorId: string, paidForDays: boolean) {
+  await updateInstructor(instructorId, { paid_for_days: paidForDays })
 }

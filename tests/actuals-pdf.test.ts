@@ -3,6 +3,7 @@ import { PDFDocument } from 'pdf-lib'
 import { generateActualsPdf } from '@/lib/actuals-pdf'
 import { rollUpActuals, type CostAccount } from '@/lib/actuals'
 import { type LoadedActuals } from '@/lib/actuals-data'
+import { DEFAULT_PAY_SETTINGS, NO_TERMS } from '@/lib/pay'
 
 // A smoke test with teeth: the drawing code measures text, wraps it and breaks
 // pages, none of which typecheck. What it catches is the class of failure that
@@ -34,8 +35,9 @@ function loaded(over: Partial<LoadedActuals> = {}): LoadedActuals {
     },
   ]
   const payLines = over.payLines ?? [
-    { id: 'p1', profile_id: 'u1', work_date: '2026-06-02', description: 'Field days — 2 × 5 days @ 500', amount: 5000 },
-    { id: 'p2', profile_id: null, work_date: null, description: 'Travel days — 2 × 2 days @ 200', amount: 800 },
+    { id: 'p1', profile_id: 'u1', work_date: null, description: 'Field — 30 h @ $50/h', amount: 1500, hours: 30, hourly_rate: 50 },
+    { id: 'p2', profile_id: 'u1', work_date: null, description: 'Field overtime — 20 h @ $75/h', amount: 1500, hours: 20, hourly_rate: 75 },
+    { id: 'p3', profile_id: null, work_date: null, description: 'Jake Shultz — Travel — 20 h @ $20/h', amount: 400, hours: 20, hourly_rate: 20 },
   ]
   const costLines = over.costLines ?? [
     { id: 'c1', account_id: 'swag', spend_date: '2026-05-20', description: 'Patches', amount: 240 },
@@ -63,6 +65,12 @@ function loaded(over: Partial<LoadedActuals> = {}): LoadedActuals {
     costLines,
     cardLines,
     peopleById: { u1: 'Nadav Oakes' },
+    payPeople: [
+      { id: 'i1', profileId: 'u1', name: 'Nadav Oakes', exempt: true, paidForDays: true, terms: { ...NO_TERMS, fieldHourly: 50 } },
+      { id: 'i2', profileId: null, name: 'Jake Shultz', exempt: false, paidForDays: true, terms: { ...NO_TERMS, fieldHourly: 40 } },
+    ],
+    paySettings: DEFAULT_PAY_SETTINGS,
+    fieldRateChoices: [50, 40, 25],
     rolled: rollUpActuals({
       accounts: ACCOUNTS,
       expenseLines,
