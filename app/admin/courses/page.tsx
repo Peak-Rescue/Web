@@ -38,7 +38,7 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
     admin
       .from('course_instances')
       .select(`
-        id, ref_number, slug, course_type, course_category, custom_title, status, location, client_name, contacts, owner_id, starts_at, ends_at, max_students, instructor_slots, internal,
+        id, ref_number, slug, course_type, course_category, custom_title, status, location, client_name, contacts, owner_id, invite_token, invite_expires_at, starts_at, ends_at, max_students, instructor_slots, internal,
         instance_instructors(count),
         crew:instance_instructors(role, instructors(name)),
         enrollments(count),

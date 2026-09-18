@@ -72,6 +72,10 @@ export type CourseExtras = {
   billing: BillingState
   /** Whether somebody has said our own costs on this course are final. */
   booksClosed: boolean
+  /** Whether a usable join link exists. Students reach a course through the
+      invite token and nothing else, so a course with no live link is one
+      nobody can join — worth reporting even though it is never urgent. */
+  inviteLink: 'none' | 'live' | 'expired'
 }
 
 export const NO_EXTRAS: CourseExtras = {
@@ -83,6 +87,7 @@ export const NO_EXTRAS: CourseExtras = {
   quote: 'none',
   billing: 'not-sent',
   booksClosed: false,
+  inviteLink: 'none',
 }
 
 /** A course as the step list needs to read it — the list's own row, narrowed. */

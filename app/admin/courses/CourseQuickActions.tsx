@@ -236,6 +236,61 @@ function CrewMeter({
   )
 }
 
+// ── Students ─────────────────────────────────────────────────────────────────
+//
+// The count sat on its own at the right of the row, the only bare number on a
+// page of shapes, saying the same thing about instructors that the crew meter
+// says better. The instructor half is gone; the roster half moved here, beside
+// the crew, because both answer "who is on this course".
+//
+// The join link comes with it. Students reach a course through that token and
+// nothing else, so a course with nobody on it and no live link is not waiting
+// on students — it is waiting on somebody to open the door. Reported, never
+// amber: we cannot see whether the link was actually sent, only that it was
+// made, and a mark that nags about something it cannot verify is a mark people
+// learn to ignore.
+function Students({
+  instanceId,
+  students,
+  link,
+}: {
+  instanceId: string
+  students: { enrolled: number; max: number | null }
+  link: CourseExtras['inviteLink']
+}) {
+  const said = {
+    live: { text: 'Link made', cls: 'text-teal-400/80', dot: 'bg-teal-400 border-teal-400' },
+    expired: { text: 'Link expired', cls: 'text-zinc-500', dot: 'border-zinc-600 bg-zinc-950' },
+    none: { text: 'No link yet', cls: 'text-zinc-600', dot: 'border-zinc-700 bg-zinc-950' },
+  }[link]
+
+  return (
+    <div className="shrink-0">
+      <span className="block text-[9.5px] font-semibold uppercase tracking-[0.14em] text-zinc-600 border-b border-zinc-800 pb-1">
+        Students
+      </span>
+      <Link
+        href={`/portal/${instanceId}?open=details`}
+        prefetch={false}
+        title={
+          link === 'live' ? 'A join link has been made for this course — open the roster'
+          : link === 'expired' ? 'The join link has expired, so nobody can join on it — open the roster'
+          : 'No join link has been made, so there is no way to join yet — open the roster'
+        }
+        className="mt-2 flex items-center gap-2 group/st"
+      >
+        <span className="text-[11px] text-zinc-400 tabular-nums group-hover/st:text-zinc-200 transition-colors">
+          {students.max ? `${students.enrolled} of ${students.max}` : `${students.enrolled} enrolled`}
+        </span>
+        <span className={`inline-flex items-center gap-1.5 text-[10.5px] ${said.cls}`}>
+          <span className={`w-2 h-2 rounded-full border-[1.5px] ${said.dot}`} aria-hidden />
+          {said.text}
+        </span>
+      </Link>
+    </div>
+  )
+}
+
 // ── The books ────────────────────────────────────────────────────────────────
 
 const BOOKS_CLS: Record<string, string> = {
@@ -311,6 +366,7 @@ export default function CourseQuickActions({
   slots,
   owner,
   owners,
+  students,
   hasBillingContact,
   /** Changes whenever anything the marks count changes. An open panel came
       from a server call rather than from this page's render, so it cannot
@@ -330,6 +386,8 @@ export default function CourseQuickActions({
   /** Who is running comms on this one, and everyone it could be handed to. */
   owner: CourseOwner | undefined
   owners: CourseOwner[]
+  /** How the roster is filling, or null on a course that has no roster. */
+  students: { enrolled: number; max: number | null } | null
   hasBillingContact: boolean
   version: string
 }) {
@@ -381,6 +439,10 @@ export default function CourseQuickActions({
             awaiting={extras.invitesSent - extras.invitesAnswered}
             onOpen={() => toggle('staffing')}
           />
+        )}
+
+        {phase !== 'over' && students && (
+          <Students instanceId={instanceId} students={students} link={extras.inviteLink} />
         )}
 
         <MoneyTrack stops={pipe.stops} frontier={pipe.frontier} onOpen={(p) => toggle(p)} />

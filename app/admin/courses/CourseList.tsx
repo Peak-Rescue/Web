@@ -39,6 +39,10 @@ export type Instance = {
   contacts?: unknown
   /** The admin whose job it is to move this one along. */
   owner_id?: string | null
+  /** The join link, which is how students reach a course and the only way
+      they do. Read here so the row can say whether one was ever made. */
+  invite_token?: string | null
+  invite_expires_at?: string | null
   internal?: boolean | null
   instance_instructors: { count: number }[]
   crew?: { role: string; instructors: { name: string } | null }[] | null
@@ -80,7 +84,15 @@ function InstanceCard({
   const studentCount    = inst.enrollments?.[0]?.count ?? 0
   const displayName = courseShortName(inst.course_type, inst.custom_title)
 
-  const x = extras ?? NO_EXTRAS
+  // Read from the row rather than loaded: the token is already on the course.
+  const x = {
+    ...(extras ?? NO_EXTRAS),
+    inviteLink: !inst.invite_token
+      ? 'none' as const
+      : inst.invite_expires_at && new Date(inst.invite_expires_at) < new Date()
+        ? 'expired' as const
+        : 'live' as const,
+  }
   const step = asStepInput(inst)
   const steps = courseSteps(step, x, today, settleDays)
   // What an open panel watches to know it has gone stale. Every number in it
@@ -125,10 +137,6 @@ function InstanceCard({
             {inst.client_name && <span>{inst.client_name}</span>}
           </div>
         </Link>
-        <div className="text-xs text-zinc-500 whitespace-nowrap text-right shrink-0">
-          {instructorCount > 0 && <div>{instructorCount} instructor{instructorCount !== 1 ? 's' : ''}</div>}
-          {inst.max_students && <div>{studentCount}/{inst.max_students} students</div>}
-        </div>
       </div>
 
       {showsSteps(inst.status) && (
@@ -143,6 +151,7 @@ function InstanceCard({
           slots={inst.instructor_slots}
           owner={owner}
           owners={owners}
+          students={inst.internal ? null : { enrolled: studentCount, max: inst.max_students }}
           hasBillingContact={billTo(parseContacts(inst.contacts)) !== null}
           version={version}
         />
