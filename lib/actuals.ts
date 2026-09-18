@@ -94,10 +94,6 @@ export type PayLine = {
       re-price them. Null on a line typed for the whole crew. */
   instructor_id?: string | null
   profile_id: string | null
-  /** The days the line covers. A calculated line knows both — three days
-      straight and two at the premium are two lines with two spans. */
-  work_date: string | null
-  end_date?: string | null
   description: string | null
   amount: number
   /** The hours and the rate behind the amount, where the line was worked out

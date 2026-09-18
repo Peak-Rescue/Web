@@ -92,7 +92,7 @@ export async function loadActuals(admin: Admin, instanceId: string): Promise<Loa
     admin.from('cost_accounts').select('id, label, categories, sort_order').eq('active', true).order('sort_order'),
     admin
       .from('course_pay_items')
-      .select('id, instructor_id, profile_id, work_date, end_date, description, amount, hours, hourly_rate')
+      .select('id, instructor_id, profile_id, description, amount, hours, hourly_rate')
       .eq('instance_id', instanceId)
       .order('sort_order')
       .order('created_at'),
@@ -195,8 +195,6 @@ export async function loadActuals(admin: Admin, instanceId: string): Promise<Loa
     id: l.id as string,
     instructor_id: (l.instructor_id as string | null) ?? null,
     profile_id: (l.profile_id as string | null) ?? null,
-    work_date: (l.work_date as string | null) ?? null,
-    end_date: (l.end_date as string | null) ?? null,
     description: (l.description as string | null) ?? null,
     amount: Number(l.amount),
     hours: l.hours === null || l.hours === undefined ? null : Number(l.hours),

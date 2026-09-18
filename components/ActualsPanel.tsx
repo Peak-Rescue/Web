@@ -372,7 +372,7 @@ export default function ActualsPanel({
     const groups = order.map((id) => ({
       id,
       name: id === null ? null : loaded.payPeople.find((p) => p.id === id)?.name ?? 'Unknown',
-      rows: byDate(pay.filter((r) => (r.instructor_id ?? null) === id)),
+      rows: pay.filter((r) => (r.instructor_id ?? null) === id),
     }))
     // A line attributed to somebody who has since left the roster still has
     // to be visible, under their name if we have it.
@@ -384,7 +384,7 @@ export default function ActualsPanel({
       groups.push({
         id,
         name: loaded.peopleById[id as string] ?? 'No longer staffed',
-        rows: byDate(pay.filter((r) => r.instructor_id === id)),
+        rows: pay.filter((r) => r.instructor_id === id),
       })
     }
     return groups.filter((g) => g.rows.length > 0)
@@ -398,8 +398,6 @@ export default function ActualsPanel({
         id: '',
         instructor_id: null,
         profile_id: null,
-        work_date: null,
-        end_date: null,
         description: null,
         amount: 0,
       },
@@ -455,8 +453,6 @@ export default function ActualsPanel({
           // still find it.
           instructor_id: row.instructor_id ?? null,
           profile_id: row.profile_id,
-          work_date: row.work_date,
-          end_date: row.end_date ?? null,
           description: row.description,
           amount: String(row.amount),
           // Sent so a line that was worked out keeps saying so. The server
@@ -1588,13 +1584,6 @@ function daysOf(row: PayRow, hoursPerDay: number): string {
   return String(days)
 }
 
-/** Pay rows in the order the days happened. A line nobody dated goes last
-    rather than first: an undated row is one somebody typed, and it has no
-    claim on a position among the days that are known. */
-function byDate(rows: PayRow[]): PayRow[] {
-  return [...rows].sort((a, b) => (a.work_date ?? '9999').localeCompare(b.work_date ?? '9999'))
-}
-
 /** What a group of rows comes to. */
 function sumRows(rows: PayRow[]): number {
   return round2(rows.reduce((t, r) => t + (Number(r.amount) || 0), 0))
@@ -1613,9 +1602,7 @@ function payIsBlank(r: PayRow): boolean {
     !r.amount &&
     !r.amountText?.trim() &&
     !r.instructor_id &&
-    !r.hours &&
-    !r.work_date &&
-    !r.end_date
+    !r.hours
   )
 }
 

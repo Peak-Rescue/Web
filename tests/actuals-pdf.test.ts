@@ -35,9 +35,9 @@ function loaded(over: Partial<LoadedActuals> = {}): LoadedActuals {
     },
   ]
   const payLines = over.payLines ?? [
-    { id: 'p1', profile_id: 'u1', work_date: null, description: 'Field — 30 h @ $50/h', amount: 1500, hours: 30, hourly_rate: 50 },
-    { id: 'p2', profile_id: 'u1', work_date: null, description: 'Field overtime — 20 h @ $75/h', amount: 1500, hours: 20, hourly_rate: 75 },
-    { id: 'p3', profile_id: null, work_date: null, description: 'Jake Shultz — Travel — 20 h @ $20/h', amount: 400, hours: 20, hourly_rate: 20 },
+    { id: 'p1', profile_id: 'u1', description: 'Field — 30 h @ $50/h', amount: 1500, hours: 30, hourly_rate: 50 },
+    { id: 'p2', profile_id: 'u1', description: 'Field overtime — 20 h @ $75/h', amount: 1500, hours: 20, hourly_rate: 75 },
+    { id: 'p3', profile_id: null, description: 'Jake Shultz — Travel — 20 h @ $20/h', amount: 400, hours: 20, hourly_rate: 20 },
   ]
   const costLines = over.costLines ?? [
     { id: 'c1', account_id: 'swag', spend_date: '2026-05-20', description: 'Patches', amount: 240 },

@@ -218,12 +218,6 @@ export type PayLineDraft = {
   profileId: string | null
   kind: DayKind
   overtime: boolean
-  /** The days this line covers — first and last. The calculator knows them
-      exactly: which day an hour fell on is what decided whether it was
-      premium, so a line that could not say which days it was for would be
-      hiding the working from the only reader who might question it. */
-  work_date: string | null
-  end_date: string | null
   hours: number
   /** The premium is already in this, so hours × rate = amount, always. Named
       as the column it is written to, like instructor_id: a draft is handed
@@ -309,30 +303,33 @@ export function payForPerson(person: PayPerson, fieldDates: string[], settings: 
     spentByWeek.set(week, spent + day.hours)
   }
 
-  const lines: PayLineDraft[] = []
+  // Each line beside the first day it covers. The dates are not kept on the
+  // line — a line is a kind of time and a number of hours, and which day each
+  // hour fell on is the calculator's working, not something the books read —
+  // but they are still what puts the lines in the order the week happened.
+  const drafted: { line: PayLineDraft; firstDay: string }[] = []
   const push = (kind: DayKind, overtime: boolean, h: number) => {
     const base = rateFor(kind)
     if (h <= 0 || base === null) return
     const hourlyRate = round2(overtime ? base * settings.otMultiplier : base)
     const covered = (dates[`${kind}:${overtime}`] ?? []).sort()
-    lines.push({
-      instructor_id: person.id,
-      profileId: person.profileId,
-      kind,
-      overtime,
-      work_date: covered[0] ?? null,
-      // Only when it really is more than one day: a single-day line saying
-      // the same date twice is a range nobody needed.
-      end_date: covered.length > 1 ? covered[covered.length - 1] : null,
-      hours: round2(h),
-      hourly_rate: hourlyRate,
-      amount: round2(h * hourlyRate),
-      // Just what kind of time it is. The line says whose it is in its own
-      // column and shows its hours and rate in theirs, so repeating the
-      // arithmetic here would be a second copy of it to keep true.
-      description: kind === 'field'
-        ? overtime ? 'Field overtime' : 'Field days'
-        : overtime ? 'Travel overtime' : 'Travel days',
+    drafted.push({
+      firstDay: covered[0] ?? '',
+      line: {
+        instructor_id: person.id,
+        profileId: person.profileId,
+        kind,
+        overtime,
+        hours: round2(h),
+        hourly_rate: hourlyRate,
+        amount: round2(h * hourlyRate),
+        // Just what kind of time it is. The line says whose it is in its own
+        // column and shows its hours and rate in theirs, so repeating the
+        // arithmetic here would be a second copy of it to keep true.
+        description: kind === 'field'
+          ? overtime ? 'Field overtime' : 'Field days'
+          : overtime ? 'Travel overtime' : 'Travel days',
+      },
     })
   }
   push('field', false, hours.field.straight)
@@ -344,7 +341,8 @@ export function payForPerson(person: PayPerson, fieldDates: string[], settings: 
   // the order the premium arrives in: the drive out, the field days, the days
   // that ran past forty, the drive home. Built by kind because that is how the
   // hours are counted; shown by date because that is how it is checked.
-  lines.sort((a, b) => (a.work_date ?? '').localeCompare(b.work_date ?? '') || Number(a.overtime) - Number(b.overtime))
+  drafted.sort((a, b) => a.firstDay.localeCompare(b.firstDay) || Number(a.line.overtime) - Number(b.line.overtime))
+  const lines = drafted.map((d) => d.line)
 
   const fieldHours = round2(hours.field.straight + hours.field.overtime)
   const travelHours = round2(hours.travel.straight + hours.travel.overtime)

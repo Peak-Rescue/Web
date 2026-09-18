@@ -96,11 +96,7 @@ export async function generateActualsPdf(data: ActualsPdf): Promise<Uint8Array> 
   for (const l of actuals.payLines) {
     const who = payLineName(l, actuals.peopleById)
     const label = [who, l.description].filter(Boolean).join(' — ') || 'Pay'
-    line(label, l.amount, {
-      size: 9.5,
-      indent: 10,
-      note: l.work_date ? shortDate(l.work_date) : undefined,
-    })
+    line(label, l.amount, { size: 9.5, indent: 10 })
   }
   b.y -= 2
   b.hairline({ x: MARGIN + CONTENT_W - 220, width: 220 })
@@ -193,12 +189,3 @@ function round1(n: number): number {
   return Math.round(n * 10) / 10
 }
 
-// A stored yyyy-mm-dd has no timezone and needs none, so UTC is the right
-// reading of it — the wrong one is formatting an *instant* this way.
-function shortDate(day: string): string {
-  return new Date(day + 'T00:00:00Z').toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    timeZone: 'UTC',
-  })
-}

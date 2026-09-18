@@ -108,8 +108,6 @@ export async function setActualsClosed(instanceId: string, closed: boolean) {
 export type PayItemInput = {
   instructor_id?: string | null
   profile_id: string | null
-  work_date: string | null
-  end_date?: string | null
   description: string | null
   amount: string
   /** The hours and the rate behind the amount, on a line that was worked out
@@ -129,10 +127,6 @@ export type PayLineWrite = {
       rate for this course changes. */
   instructor_id?: string | null
   profile_id?: string | null
-  /** The days the line covers. The calculator knows them; a line with none is
-      one somebody typed. */
-  work_date?: string | null
-  end_date?: string | null
   description: string
   amount: number
   hours?: number | null
@@ -161,8 +155,6 @@ export async function savePayItem(instanceId: string, itemId: string | null, inp
     instance_id: instanceId,
     instructor_id: input.instructor_id || null,
     profile_id: input.profile_id || null,
-    work_date: input.work_date || null,
-    end_date: input.end_date || null,
     description: input.description?.trim() || null,
     amount,
     ...reconciledHours(amount, input.hours, input.hourly_rate),
@@ -188,14 +180,12 @@ export async function savePayItem(instanceId: string, itemId: string | null, inp
     asking the page to reload instead meant re-running every query the course
     page has, and the panel's own state would not have picked the new lines up
     anyway — so they landed in the database and appeared nowhere. */
-const PAY_ITEM_COLUMNS = 'id, instructor_id, profile_id, work_date, end_date, description, amount, hours, hourly_rate'
+const PAY_ITEM_COLUMNS = 'id, instructor_id, profile_id, description, amount, hours, hourly_rate'
 
 export type SavedPayLine = {
   id: string
   instructor_id: string | null
   profile_id: string | null
-  work_date: string | null
-  end_date: string | null
   description: string | null
   amount: number
   hours: number | null
@@ -207,8 +197,6 @@ function savedPayLine(r: Record<string, unknown>): SavedPayLine {
     id: r.id as string,
     instructor_id: (r.instructor_id as string | null) ?? null,
     profile_id: (r.profile_id as string | null) ?? null,
-    work_date: (r.work_date as string | null) ?? null,
-    end_date: (r.end_date as string | null) ?? null,
     description: (r.description as string | null) ?? null,
     amount: Number(r.amount),
     hours: r.hours === null || r.hours === undefined ? null : Number(r.hours),
@@ -239,8 +227,6 @@ function payRow(l: PayLineWrite) {
   return {
     instructor_id: l.instructor_id ?? null,
     profile_id: l.profile_id ?? null,
-    work_date: l.work_date ?? null,
-    end_date: l.end_date ?? null,
     description: l.description.slice(0, 200),
     amount,
     ...reconciledHours(amount, l.hours, l.hourly_rate),

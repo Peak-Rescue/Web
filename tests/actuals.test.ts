@@ -74,7 +74,7 @@ describe('the spreadsheet this replaces', () => {
   // load, $600 of travel, $50,587.50 left, 91.98%.
   const actuals = roll({
     invoiced: 55000,
-    payLines: [{ id: 'p1', profile_id: null, work_date: null, description: 'Team Pay', amount: 3050 }],
+    payLines: [{ id: 'p1', profile_id: null, description: 'Team Pay', amount: 3050 }],
     expenseLines: [line({ amount: 600, category: 'transport' })],
   })
 
@@ -138,7 +138,7 @@ describe('company-card expenses', () => {
 
 describe('net as a percentage', () => {
   it('is not a number until something was invoiced', () => {
-    expect(roll({ payLines: [{ id: 'p', profile_id: null, work_date: null, description: null, amount: 500 }] }).netPct)
+    expect(roll({ payLines: [{ id: 'p', profile_id: null, description: null, amount: 500 }] }).netPct)
       .toBeNull()
   })
 })

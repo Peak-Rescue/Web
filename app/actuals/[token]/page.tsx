@@ -95,7 +95,6 @@ export default async function SharedActualsPage({ params }: { params: Promise<{ 
                 [payLineName(l, actuals.peopleById), l.description].filter(Boolean).join(' — ') ||
                 'Pay'
               }
-              note={l.work_date ? fmtDateRange(l.work_date, null) : null}
               amount={l.amount}
             />
           ))}

@@ -233,15 +233,15 @@ describe('the plan for the whole crew', () => {
     expect(plan?.hours).toBe(280)
   })
 
-  it('dates every line, and puts them in the order the days happened', () => {
+  it('puts the lines in the order the days happened', () => {
     // The drive out, the field days, the two that ran past forty, the drive
-    // home — each line saying which days it is for, because which day an hour
-    // fell on is what made it premium.
-    expect(plan?.people[0].lines.map((l) => [l.description, l.work_date, l.end_date])).toEqual([
-      ['Travel days', '2026-09-13', null],
-      ['Field days', '2026-09-14', '2026-09-16'],
-      ['Field overtime', '2026-09-17', '2026-09-18'],
-      ['Travel overtime', '2026-09-19', null],
+    // home. The dates are not on the lines — which day an hour fell on is the
+    // calculator's working — but they are still what decides the order.
+    expect(plan?.people[0].lines.map((l) => l.description)).toEqual([
+      'Travel days',
+      'Field days',
+      'Field overtime',
+      'Travel overtime',
     ])
   })
 
