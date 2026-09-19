@@ -3,7 +3,14 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import ExpenseReportEditor, { type EditorItem, type CourseOption } from './ExpenseReportEditor'
-import { fmtMoney, computeTotals, CATEGORY_LABELS, fmtDateRange, type ExpenseCategory } from '@/lib/expenses'
+import {
+  fmtMoney,
+  computeTotals,
+  groupItemsByCourse,
+  CATEGORY_LABELS,
+  fmtDateRange,
+  type ExpenseCategory,
+} from '@/lib/expenses'
 import { loadCurrentRates } from '@/lib/expense-report-data'
 import { instanceLabel } from '@/lib/courses'
 
@@ -128,8 +135,57 @@ export default async function ExpenseReportPage({ params }: { params: Promise<{ 
   }
 
   // ── Submitted: read-only summary ────────────────────────────────────────────
+  /** One filed line. `inGroup` says a course heading already stands over it. */
+  function itemRow(item: EditorItem, inGroup: boolean) {
+    return (
+              <div key={item.id} className="px-4 py-3">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium truncate">
+                      {CATEGORY_LABELS[item.category as ExpenseCategory]}
+                      {item.description ? ` — ${item.description}` : ''}
+                    </p>
+                    <p className="text-xs text-zinc-500 mt-0.5">
+                      {fmtDateRange(item.start_date, item.end_date)}
+                      {item.paid_by === 'company_card' ? ' · company card' : ''}
+                      {!inGroup && item.instance_id && courseMap.has(item.instance_id)
+                        ? ` · ${courseMap.get(item.instance_id)}`
+                        : ''}
+                    </p>
+                  </div>
+                  <span className="text-sm font-medium shrink-0">{fmtMoney(item.amount)}</span>
+                </div>
+                {/* Receipts read as chips, the same shape the editor shows them in —
+                    checking your own work after submitting is the main reason to
+                    open a filed report at all. */}
+                {item.receipts.length > 0 && (
+                  <div className="flex items-center flex-wrap gap-2 mt-2">
+                    {item.receipts.map((r) => (
+                      <a
+                        key={r.id}
+                        href={r.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1.5 px-2 py-1 bg-zinc-800 hover:bg-zinc-700 rounded text-xs text-zinc-300 hover:text-white transition-colors"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+                        </svg>
+                        <span className="max-w-40 truncate">{r.filename}</span>
+                      </a>
+                    ))}
+                  </div>
+                )}
+              </div>
+    )
+  }
+
   const totals = computeTotals(items)
   const courseMap = new Map(courses.map((c) => [c.id, c.label]))
+  // Read back the same way the draft was written: split by what each line was
+  // for, with a subtotal each. A single-course report has nothing to split, so
+  // it stays the flat list it always was.
+  const groups = groupItemsByCourse(items, report.default_instance_id, (iid) => courseMap.get(iid))
 
   return (
     <main className="min-h-screen bg-zinc-950 text-white pt-16 md:pt-20">
@@ -154,45 +210,20 @@ export default async function ExpenseReportPage({ params }: { params: Promise<{ 
         </p>
 
         <div className="bg-zinc-900 rounded-lg border border-zinc-800 divide-y divide-zinc-800 mb-6">
-          {items.map((item) => (
-            <div key={item.id} className="px-4 py-3">
-              <div className="flex items-center justify-between gap-4">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium truncate">
-                    {CATEGORY_LABELS[item.category as ExpenseCategory]}
-                    {item.description ? ` — ${item.description}` : ''}
-                  </p>
-                  <p className="text-xs text-zinc-500 mt-0.5">
-                    {fmtDateRange(item.start_date, item.end_date)}
-                    {item.paid_by === 'company_card' ? ' · company card' : ''}
-                    {item.instance_id && courseMap.has(item.instance_id) ? ` · ${courseMap.get(item.instance_id)}` : ''}
-                  </p>
+          {groups.length > 1
+            ? groups.map((g) => (
+                <div key={g.key} className="divide-y divide-zinc-800">
+                  <div className="px-4 py-2 flex items-center justify-between gap-3 bg-zinc-950/40">
+                    <p className="text-xs font-medium text-zinc-300 truncate">{g.label}</p>
+                    <p className="text-xs text-zinc-500 shrink-0">
+                      {g.items.length} line{g.items.length === 1 ? '' : 's'} ·{' '}
+                      <span className="font-medium text-zinc-200">{fmtMoney(g.total)}</span>
+                    </p>
+                  </div>
+                  {g.items.map((item) => itemRow(item, true))}
                 </div>
-                <span className="text-sm font-medium shrink-0">{fmtMoney(item.amount)}</span>
-              </div>
-              {/* Receipts read as chips, the same shape the editor shows them in —
-                  checking your own work after submitting is the main reason to
-                  open a filed report at all. */}
-              {item.receipts.length > 0 && (
-                <div className="flex items-center flex-wrap gap-2 mt-2">
-                  {item.receipts.map((r) => (
-                    <a
-                      key={r.id}
-                      href={r.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-center gap-1.5 px-2 py-1 bg-zinc-800 hover:bg-zinc-700 rounded text-xs text-zinc-300 hover:text-white transition-colors"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
-                      </svg>
-                      <span className="max-w-40 truncate">{r.filename}</span>
-                    </a>
-                  ))}
-                </div>
-              )}
-            </div>
-          ))}
+              ))
+            : items.map((item) => itemRow(item, false))}
         </div>
 
         <div className="flex justify-end gap-8 text-sm px-4">

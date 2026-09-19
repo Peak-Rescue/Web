@@ -193,3 +193,65 @@ export const DESCRIPTION_SUGGESTIONS: Partial<Record<ExpenseCategory, string[]>>
     'Gear repair',
   ],
 }
+
+// ─── Grouping a report's lines by what they were for ──────────────────────────
+
+/** One course's worth of lines out of a single report, with its own subtotal.
+    `instanceId` is null for the two non-course groups, which is why the group
+    carries a separate `key` — a Map and a React list both need one. */
+export type CourseGroup<T> = {
+  key: string
+  instanceId: string | null
+  label: string
+  items: T[]
+  total: number
+}
+
+type GroupableItem = {
+  instance_id: string | null
+  non_course: boolean
+  amount: number
+  start_date: string
+}
+
+/** A report's lines split by the course they were spent on, in the order the
+    trips happened (earliest line first), with overhead and then anything that
+    still names nothing at the end.
+ *
+ *  A line's own course wins; the report's default stands in where it names
+ *  none, because that is what the books do with it — so a single-course report
+ *  comes back as exactly one group, and callers can leave the list flat rather
+ *  than dressing one group in headers and a subtotal that only repeats the
+ *  report total. One report still goes to the approver as one claim; this is
+ *  only about being able to read what was spent where. */
+export function groupItemsByCourse<T extends GroupableItem>(
+  items: T[],
+  reportDefaultInstanceId: string | null,
+  labelForInstance: (instanceId: string) => string | undefined
+): CourseGroup<T>[] {
+  const groups = new Map<string, CourseGroup<T>>()
+
+  for (const item of items) {
+    const instanceId = item.non_course ? null : item.instance_id ?? reportDefaultInstanceId
+    const key = item.non_course ? 'overhead' : instanceId ?? 'unclassified'
+    const label = item.non_course
+      ? 'Overhead'
+      : instanceId
+        ? labelForInstance(instanceId) ?? 'Another course'
+        : 'No course yet'
+
+    const existing = groups.get(key)
+    if (existing) {
+      existing.items.push(item)
+      existing.total = round2(existing.total + item.amount)
+    } else {
+      groups.set(key, { key, instanceId, label, items: [item], total: round2(item.amount) })
+    }
+  }
+
+  // Courses in trip order; the two groups that are not a course sit after them,
+  // with the unanswered one last because it is the one still asking something.
+  const rank = (g: CourseGroup<T>) => (g.key === 'unclassified' ? 2 : g.key === 'overhead' ? 1 : 0)
+  const earliest = (g: CourseGroup<T>) => g.items.reduce((min, i) => (i.start_date < min ? i.start_date : min), g.items[0].start_date)
+  return [...groups.values()].sort((a, b) => rank(a) - rank(b) || (earliest(a) < earliest(b) ? -1 : 1))
+}

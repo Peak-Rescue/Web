@@ -18,6 +18,7 @@ import {
   daysInRange,
   fmtDateRange,
   fmtMoney,
+  groupItemsByCourse,
   itemIsUnclassified,
   itemNeedsReceipt,
   itemsMissingReceipts,
@@ -580,6 +581,26 @@ export default function ExpenseReportEditor({
   // asked once, in the review, and answered on purpose.
   const missingReceipts = itemsMissingReceipts(localItems)
 
+  // The lines split by what they were for, with a subtotal each. One group
+  // means one course (or a report that is all overhead), and the list stays
+  // flat: a heading and a subtotal that only repeat the report's own are
+  // chrome. Two or more and the separation is worth drawing — this is still one
+  // report, one PDF, one claim to the approver; only the reading of it splits.
+  const visibleItems = localItems.filter((i) => i.id !== editingId)
+  const itemGroups = groupItemsByCourse(
+    visibleItems,
+    defaultCourse || null,
+    (id) => courses.find((c) => c.id === id)?.label
+  )
+  const itemsAreGrouped = itemGroups.length > 1
+  // The review shows every line, the one open in the form included, so it
+  // groups the whole list rather than the visible part of it.
+  const reviewGroups = groupItemsByCourse(
+    localItems,
+    defaultCourse || null,
+    (id) => courses.find((c) => c.id === id)?.label
+  )
+
   /** What a line says it was for, in words, for the review — where there is no
       form to open and read the answer out of. The report's default stands in
       where the line names no course of its own, because that is what the books
@@ -589,6 +610,125 @@ export default function ExpenseReportEditor({
     const id = item.instance_id ?? defaultCourse
     if (!id) return 'No course'
     return courses.find((c) => c.id === id)?.label ?? 'Another course'
+  }
+
+  /** One line of the expenses list. `inGroup` says a course heading is already
+      standing over this row, so the row does not repeat what it was for. */
+  function itemRow(item: EditorItem, inGroup: boolean) {
+    return (
+                <div key={item.id} className="px-4 py-3">
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate">
+                        {CATEGORY_LABELS[item.category]}
+                        {itemLabel(item) ? ` — ${itemLabel(item)}` : ''}
+                      </p>
+                      <p className="text-xs text-zinc-500 mt-0.5">
+                        {fmtDateRange(item.start_date, item.end_date)}
+                        {item.category === 'personal_auto' && item.miles ? ` · ${item.miles} mi` : ''}
+                        {item.category === 'per_diem' && item.meal_count
+                          ? ` · ${daysInRange(item.start_date, item.end_date)} day${daysInRange(item.start_date, item.end_date) === 1 ? '' : 's'} · ${item.meal_count} meals`
+                          : ''}
+                        {item.paid_by === 'company_card' ? ' · company card' : ''}
+                        {!inGroup && item.non_course ? ' · overhead' : ''}
+                        {!inGroup && !item.non_course && item.instance_id && item.instance_id !== defaultCourse
+                          ? ` · ${courses.find((c) => c.id === item.instance_id)?.label ?? 'another course'}`
+                          : ''}
+                      </p>
+                      {/* Findable from the list, not only from the submit
+                          dialog: the fix is inside this line's form. */}
+                      {itemIsUnclassified(item, defaultCourse || null) && (
+                        <p className="text-xs text-pr-red-light mt-0.5">Needs a course</p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <span className="text-sm font-medium">{fmtMoney(item.amount)}</span>
+                      <button onClick={() => void openEdit(item)} className="text-xs text-zinc-400 hover:text-white transition-colors">
+                        Edit
+                      </button>
+                      <button onClick={() => void removeItem(item.id)} className="text-xs text-zinc-500 hover:text-pr-red-light transition-colors">
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flex items-center flex-wrap gap-2 mt-2">
+                    {item.receipts.map((r) => (
+                      <span key={r.id} className="inline-flex items-center gap-1.5 px-2 py-1 bg-zinc-800 rounded text-xs">
+                        <a href={r.url} target="_blank" rel="noreferrer" className="text-zinc-300 hover:text-white max-w-40 truncate">
+                          {r.filename}
+                        </a>
+                        <button onClick={() => void removeReceipt(r.id)} className="text-zinc-500 hover:text-pr-red-light"><TrashIcon /></button>
+                      </span>
+                    ))}
+                    {/* Said on the line rather than only in the review, and
+                        right beside the button that answers it: by the time the
+                        review is open, the phone with the receipt on it may no
+                        longer be the thing in your hand. Only the absence is
+                        worth words here — a receipt that is attached is already
+                        sitting there with its name on it, and a line that could
+                        not have one, mileage or per diem, says nothing at all
+                        because there is nothing to say. */}
+                    {itemNeedsReceipt(item) && item.receipts.length === 0 && (
+                      <span className="text-xs text-amber-400">No receipt</span>
+                    )}
+                    <button
+                      onClick={() => pickReceipts(item.id)}
+                      disabled={uploadingFor === item.id}
+                      className="inline-flex items-center gap-1 px-2 py-1 border border-dashed border-zinc-700 hover:border-zinc-500 text-zinc-400 hover:text-zinc-200 rounded text-xs transition-colors disabled:opacity-50"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+                      </svg>
+                      {uploadingFor === item.id ? 'Uploading…' : 'Add receipt'}
+                    </button>
+                  </div>
+                </div>
+    )
+  }
+
+  /** One line in the review, as the approver's PDF will carry it.
+      `inGroup` says a course heading already stands over it. */
+  function reviewRow(item: EditorItem, inGroup: boolean) {
+    return (
+                    <div key={item.id} className="px-3 py-2 flex items-center justify-between gap-3 text-sm">
+                      <div className="min-w-0">
+                        <p className="truncate">
+                          {CATEGORY_LABELS[item.category]}
+                          {itemLabel(item) ? ` — ${itemLabel(item)}` : ''}
+                        </p>
+                        <p className="text-xs text-zinc-500">
+                          {fmtDateRange(item.start_date, item.end_date)}
+                          {item.category === 'personal_auto' && item.miles ? ` · ${item.miles} mi` : ''}
+                          {item.category === 'per_diem' && item.meal_count
+                          ? ` · ${daysInRange(item.start_date, item.end_date)} day${daysInRange(item.start_date, item.end_date) === 1 ? '' : 's'} · ${item.meal_count} meals`
+                          : ''}
+                          {item.paid_by === 'company_card' ? ' · company card' : ''}
+                        </p>
+                        {/* The two questions asked of every line, on a line of
+                            their own so they can be read straight down the
+                            list rather than hunted for at the end of a run of
+                            dates and dots. What it was for is the answer the
+                            books need — the report's default counts, so this
+                            says the course either way rather than only when a
+                            line disagrees with it — and whether the receipt is
+                            here is the one thing that cannot be fixed after
+                            submitting. */}
+                        <p className="text-xs mt-0.5 flex flex-wrap items-center gap-x-2">
+                          {!inGroup && <span className="text-zinc-400">{courseOf(item)}</span>}
+                          {!itemNeedsReceipt(item) ? (
+                            <span className="text-zinc-600">no receipt needed</span>
+                          ) : item.receipts.length > 0 ? (
+                            <span className="text-teal-400">
+                              {item.receipts.length === 1 ? 'Receipt ✓' : `${item.receipts.length} receipts ✓`}
+                            </span>
+                          ) : (
+                            <span className="text-amber-400">No receipt</span>
+                          )}
+                        </p>
+                      </div>
+                      <span className="font-medium shrink-0">{fmtMoney(item.amount)}</span>
+                    </div>
+    )
   }
 
   const statusText: Record<SaveStatus, string> = {
@@ -654,77 +794,24 @@ export default function ExpenseReportEditor({
             </button>
           </div>
 
-          {localItems.filter((i) => i.id !== editingId).length > 0 && (
+          {visibleItems.length > 0 && (
             <div className="bg-zinc-900 rounded-lg border border-zinc-800 divide-y divide-zinc-800 mb-4">
-              {localItems.filter((i) => i.id !== editingId).map((item) => (
-                <div key={item.id} className="px-4 py-3">
-                  <div className="flex items-center justify-between gap-4">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium truncate">
-                        {CATEGORY_LABELS[item.category]}
-                        {itemLabel(item) ? ` — ${itemLabel(item)}` : ''}
-                      </p>
-                      <p className="text-xs text-zinc-500 mt-0.5">
-                        {fmtDateRange(item.start_date, item.end_date)}
-                        {item.category === 'personal_auto' && item.miles ? ` · ${item.miles} mi` : ''}
-                        {item.category === 'per_diem' && item.meal_count
-                          ? ` · ${daysInRange(item.start_date, item.end_date)} day${daysInRange(item.start_date, item.end_date) === 1 ? '' : 's'} · ${item.meal_count} meals`
-                          : ''}
-                        {item.paid_by === 'company_card' ? ' · company card' : ''}
-                        {item.non_course ? ' · overhead' : ''}
-                        {!item.non_course && item.instance_id && item.instance_id !== defaultCourse
-                          ? ` · ${courses.find((c) => c.id === item.instance_id)?.label ?? 'another course'}`
-                          : ''}
-                      </p>
-                      {/* Findable from the list, not only from the submit
-                          dialog: the fix is inside this line's form. */}
-                      {itemIsUnclassified(item, defaultCourse || null) && (
-                        <p className="text-xs text-pr-red-light mt-0.5">Needs a course</p>
-                      )}
+              {itemsAreGrouped
+                ? itemGroups.map((g) => (
+                    <div key={g.key} className="divide-y divide-zinc-800">
+                      <div className="px-4 py-2 flex items-center justify-between gap-3 bg-zinc-950/40">
+                        <p className={`text-xs font-medium truncate ${g.key === 'unclassified' ? 'text-pr-red-light' : 'text-zinc-300'}`}>
+                          {g.label}
+                        </p>
+                        <p className="text-xs text-zinc-500 shrink-0">
+                          {g.items.length} line{g.items.length === 1 ? '' : 's'} ·{' '}
+                          <span className="font-medium text-zinc-200">{fmtMoney(g.total)}</span>
+                        </p>
+                      </div>
+                      {g.items.map((item) => itemRow(item, true))}
                     </div>
-                    <div className="flex items-center gap-3 shrink-0">
-                      <span className="text-sm font-medium">{fmtMoney(item.amount)}</span>
-                      <button onClick={() => void openEdit(item)} className="text-xs text-zinc-400 hover:text-white transition-colors">
-                        Edit
-                      </button>
-                      <button onClick={() => void removeItem(item.id)} className="text-xs text-zinc-500 hover:text-pr-red-light transition-colors">
-                        Delete
-                      </button>
-                    </div>
-                  </div>
-                  <div className="flex items-center flex-wrap gap-2 mt-2">
-                    {item.receipts.map((r) => (
-                      <span key={r.id} className="inline-flex items-center gap-1.5 px-2 py-1 bg-zinc-800 rounded text-xs">
-                        <a href={r.url} target="_blank" rel="noreferrer" className="text-zinc-300 hover:text-white max-w-40 truncate">
-                          {r.filename}
-                        </a>
-                        <button onClick={() => void removeReceipt(r.id)} className="text-zinc-500 hover:text-pr-red-light"><TrashIcon /></button>
-                      </span>
-                    ))}
-                    {/* Said on the line rather than only in the review, and
-                        right beside the button that answers it: by the time the
-                        review is open, the phone with the receipt on it may no
-                        longer be the thing in your hand. Only the absence is
-                        worth words here — a receipt that is attached is already
-                        sitting there with its name on it, and a line that could
-                        not have one, mileage or per diem, says nothing at all
-                        because there is nothing to say. */}
-                    {itemNeedsReceipt(item) && item.receipts.length === 0 && (
-                      <span className="text-xs text-amber-400">No receipt</span>
-                    )}
-                    <button
-                      onClick={() => pickReceipts(item.id)}
-                      disabled={uploadingFor === item.id}
-                      className="inline-flex items-center gap-1 px-2 py-1 border border-dashed border-zinc-700 hover:border-zinc-500 text-zinc-400 hover:text-zinc-200 rounded text-xs transition-colors disabled:opacity-50"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
-                      </svg>
-                      {uploadingFor === item.id ? 'Uploading…' : 'Add receipt'}
-                    </button>
-                  </div>
-                </div>
-              ))}
+                  ))
+                : visibleItems.map((item) => itemRow(item, false))}
             </div>
           )}
           {localItems.length === 0 && !form && (
@@ -1041,46 +1128,19 @@ export default function ExpenseReportEditor({
               {/* The line items exactly as they'll appear on the report. */}
               {localItems.length > 0 && (
                 <div className="border border-zinc-800 rounded-lg divide-y divide-zinc-800 mb-3">
-                  {localItems.map((item) => (
-                    <div key={item.id} className="px-3 py-2 flex items-center justify-between gap-3 text-sm">
-                      <div className="min-w-0">
-                        <p className="truncate">
-                          {CATEGORY_LABELS[item.category]}
-                          {itemLabel(item) ? ` — ${itemLabel(item)}` : ''}
-                        </p>
-                        <p className="text-xs text-zinc-500">
-                          {fmtDateRange(item.start_date, item.end_date)}
-                          {item.category === 'personal_auto' && item.miles ? ` · ${item.miles} mi` : ''}
-                          {item.category === 'per_diem' && item.meal_count
-                          ? ` · ${daysInRange(item.start_date, item.end_date)} day${daysInRange(item.start_date, item.end_date) === 1 ? '' : 's'} · ${item.meal_count} meals`
-                          : ''}
-                          {item.paid_by === 'company_card' ? ' · company card' : ''}
-                        </p>
-                        {/* The two questions asked of every line, on a line of
-                            their own so they can be read straight down the
-                            list rather than hunted for at the end of a run of
-                            dates and dots. What it was for is the answer the
-                            books need — the report's default counts, so this
-                            says the course either way rather than only when a
-                            line disagrees with it — and whether the receipt is
-                            here is the one thing that cannot be fixed after
-                            submitting. */}
-                        <p className="text-xs mt-0.5 flex flex-wrap items-center gap-x-2">
-                          <span className="text-zinc-400">{courseOf(item)}</span>
-                          {!itemNeedsReceipt(item) ? (
-                            <span className="text-zinc-600">no receipt needed</span>
-                          ) : item.receipts.length > 0 ? (
-                            <span className="text-teal-400">
-                              {item.receipts.length === 1 ? 'Receipt ✓' : `${item.receipts.length} receipts ✓`}
+                  {reviewGroups.length > 1
+                    ? reviewGroups.map((g) => (
+                        <div key={g.key} className="divide-y divide-zinc-800">
+                          <div className="px-3 py-1.5 flex items-center justify-between gap-3 text-xs bg-zinc-950/40">
+                            <span className={`truncate ${g.key === 'unclassified' ? 'text-pr-red-light' : 'text-zinc-300'}`}>
+                              {g.label}
                             </span>
-                          ) : (
-                            <span className="text-amber-400">No receipt</span>
-                          )}
-                        </p>
-                      </div>
-                      <span className="font-medium shrink-0">{fmtMoney(item.amount)}</span>
-                    </div>
-                  ))}
+                            <span className="text-zinc-400 shrink-0">{fmtMoney(g.total)}</span>
+                          </div>
+                          {g.items.map((item) => reviewRow(item, true))}
+                        </div>
+                      ))
+                    : localItems.map((item) => reviewRow(item, false))}
                   <div className="px-3 py-2 flex items-center justify-between text-sm bg-zinc-950/40">
                     <span className="text-zinc-400">
                       Total · {fmtMoney(totals.personal)} reimbursed to you

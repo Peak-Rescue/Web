@@ -94,7 +94,7 @@ export default async function ExpenseReportsPage() {
               </span>
             </p>
             <p className="text-xs text-zinc-500 mt-0.5">
-              Based on what you've marked reimbursed — the portal can't see Harken's books.
+              Based on what you&apos;ve marked reimbursed — the portal can&apos;t see Harken&apos;s books.
             </p>
           </div>
         )}
