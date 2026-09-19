@@ -10,6 +10,19 @@ import { createClient } from '@/lib/supabase/server'
 
 export type CourseAccess = { allowed: boolean; isStaff: boolean }
 
+/** Whether a link handed out for a course has run out of time.
+ *
+ *  A null expiry is a link that never expires, which is what "no date" has
+ *  always meant at every call site. Lives here rather than being written out
+ *  at each of them: the invite page, the join action behind it and the waiver
+ *  link all ask the same question, and a page asking it inline is a component
+ *  reading the clock mid-render, which React now flags — the answer depends on
+ *  when you ask, so it does not belong in a render body. */
+export function courseTokenHasExpired(expiresAt: string | null | undefined): boolean {
+  if (!expiresAt) return false
+  return new Date(expiresAt).getTime() < Date.now()
+}
+
 export async function courseAccess(
   admin: SupabaseClient,
   userId: string,

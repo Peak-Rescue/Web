@@ -108,8 +108,11 @@ export default function CoursePicker({
   const flat = useMemo(() => [{ id: '', label: noneLabel } as CourseOption, ...groups.flatMap((g) => g.items)], [groups, noneLabel])
   const hidden = !query.trim() && !showAll ? courses.length - (flat.length - 1) : 0
 
-  useEffect(() => setCursor(0), [query, showAll, open])
-
+  // The cursor is reset by the three things that change the rows under it —
+  // opening, typing, and asking for every course — each in the handler that
+  // does it. Resetting from an effect instead renders the old position against
+  // the new rows and corrects it a frame later, which is the cascade React now
+  // flags.
   const pick = (id: string) => {
     onChange(id)
     setOpen(false)
@@ -142,7 +145,7 @@ export default function CoursePicker({
     <div ref={rootRef} className="relative">
       <button
         type="button"
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => { setCursor(0); setOpen((o) => !o) }}
         disabled={disabled}
         className={`${className ?? ''} text-left flex items-center justify-between gap-2 disabled:opacity-50 disabled:cursor-not-allowed`}
       >
@@ -155,7 +158,7 @@ export default function CoursePicker({
           <input
             ref={inputRef}
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => { setCursor(0); setQuery(e.target.value) }}
             onKeyDown={onInputKey}
             placeholder="Search all courses…"
             className="w-full mb-1 px-3 py-1.5 bg-zinc-950 border border-zinc-700 rounded text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500"
@@ -201,7 +204,7 @@ export default function CoursePicker({
           {hidden > 0 && (
             <button
               type="button"
-              onClick={() => setShowAll(true)}
+              onClick={() => { setCursor(0); setShowAll(true) }}
               className="w-full mt-1 px-3 py-1.5 text-left text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
             >
               Show all {courses.length} courses

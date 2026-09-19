@@ -11,27 +11,43 @@ function ConfirmInner() {
   const [failed, setFailed] = useState(false)
 
   useEffect(() => {
-    const hash = window.location.hash.substring(1)
-    const params = new URLSearchParams(hash)
-    const access_token = params.get('access_token')
-    const refresh_token = params.get('refresh_token')
+    // The tokens arrive in the URL fragment, which the server never sees, so
+    // this can only be worked out once the page is in a browser. Every exit
+    // goes through the same async path, including the one where the fragment
+    // carries no tokens at all: a setState run straight down the body of an
+    // effect re-renders on top of the render that just finished, which is what
+    // React now flags. `live` is the ordinary guard for a page whose whole job
+    // is to navigate away — nothing should be set, or redirected, after it is
+    // already gone.
+    let live = true
 
-    if (!access_token || !refresh_token) {
-      setFailed(true)
-      return
-    }
+    void (async () => {
+      const params = new URLSearchParams(window.location.hash.substring(1))
+      const access_token = params.get('access_token')
+      const refresh_token = params.get('refresh_token')
 
-    const supabase = createClient()
+      if (!access_token || !refresh_token) {
+        if (live) setFailed(true)
+        return
+      }
 
-    supabase.auth.setSession({ access_token, refresh_token }).then(async ({ error }) => {
-      if (error) { setFailed(true); return }
+      const supabase = createClient()
+      const { error } = await supabase.auth.setSession({ access_token, refresh_token })
+      if (error) {
+        if (live) setFailed(true)
+        return
+      }
 
       const firstName = searchParams.get('first_name') ?? undefined
       const lastName = searchParams.get('last_name') ?? undefined
       await linkInstructorProfile(firstName, lastName)
 
-      router.replace('/dashboard')
-    })
+      if (live) router.replace('/dashboard')
+    })()
+
+    return () => {
+      live = false
+    }
   }, [router, searchParams])
 
   if (failed) {

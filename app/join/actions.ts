@@ -7,6 +7,7 @@ import { ilikeExact, normalizeEmail } from '@/lib/email'
 import { claimWaiversForEmail } from '@/lib/waiver-data'
 import { findUserIdByEmail, sendSignInCode } from '@/lib/sign-in-code'
 import { courseDisplayName } from '@/lib/courses'
+import { courseTokenHasExpired } from '@/lib/course-access'
 import { sendMail } from '@/lib/mailer'
 
 // `signedIn: true` means the session cookies are already set and the caller
@@ -48,7 +49,7 @@ async function openInvite(
   if (!inst) {
     return { ok: false, error: 'This invite link is not valid. It may have been revoked — check with your course organizer.' }
   }
-  if (inst.invite_expires_at && new Date(inst.invite_expires_at).getTime() < Date.now()) {
+  if (courseTokenHasExpired(inst.invite_expires_at)) {
     return { ok: false, error: 'This invite link has expired. Contact your course organizer for a new one.' }
   }
   if (inst.max_students) {

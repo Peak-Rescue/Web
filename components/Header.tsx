@@ -52,7 +52,14 @@ export default function Header() {
     return () => window.removeEventListener('scroll', handleScroll)
   }, [])
 
+  // Navigating closes the mobile menu. This is the one reset that cannot move
+  // into the handler that causes it: back and forward buttons change the path
+  // with no click of ours to hang it off, and deriving it from the path the
+  // menu was opened on reopens the menu when you go Back to that page. So the
+  // rule is answered honestly rather than worked around — the cost is one
+  // extra render of a menu that is on its way closed.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMenuOpen(false)
   }, [pathname])
 

@@ -33,8 +33,8 @@ export default function ContactCTA() {
               <span className="text-pr-red">what you need?</span>
             </h2>
             <p className="mt-6 text-pr-muted text-lg leading-relaxed max-w-xl">
-              Every program we run is designed around your team's mission profile, current
-              capabilities, and operating environment. We don't teach generic courses — we build
+              Every program we run is designed around your team&apos;s mission profile, current
+              capabilities, and operating environment. We don&apos;t teach generic courses — we build
               the right training.
             </p>
           </motion.div>

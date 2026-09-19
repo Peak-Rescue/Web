@@ -1,5 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin'
-import { courseSubtitle } from '@/lib/course-access'
+import { courseSubtitle, courseTokenHasExpired } from '@/lib/course-access'
 import { courseDisplayName } from '@/lib/courses'
 import type { WaiverPdfData } from '@/lib/waiver-pdf'
 import { matchSignature, type MatchCandidate, type WaiverBody, type WaiverPrefill, type SignedWaiver } from '@/lib/waiver'
@@ -481,10 +481,7 @@ export async function resolvePublicWaiverToken(
     .maybeSingle()
   if (!course) return { ok: false, reason: 'unknown' }
 
-  if (
-    course.waiver_token_expires_at &&
-    new Date(course.waiver_token_expires_at).getTime() < Date.now()
-  ) {
+  if (courseTokenHasExpired(course.waiver_token_expires_at)) {
     return { ok: false, reason: 'expired' }
   }
 

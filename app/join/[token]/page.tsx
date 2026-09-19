@@ -1,6 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { courseDisplayName } from '@/lib/courses'
+import { courseTokenHasExpired } from '@/lib/course-access'
 import JoinForm from './JoinForm'
 import JoinAsSelf from './JoinAsSelf'
 
@@ -38,7 +39,7 @@ export default async function JoinPage({ params }: { params: Promise<{ token: st
   if (!inst) {
     return <Notice title="Invalid invite link" body="This invite link is not valid. It may have been revoked — check with your course organizer." />
   }
-  if (inst.invite_expires_at && new Date(inst.invite_expires_at).getTime() < Date.now()) {
+  if (courseTokenHasExpired(inst.invite_expires_at)) {
     return <Notice title="Invite link expired" body="This invite link has expired. Contact your course organizer for a new one." />
   }
 

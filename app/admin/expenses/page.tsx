@@ -109,7 +109,7 @@ export default async function AdminExpensesPage() {
             </Link>
           </div>
         </div>
-        <p className="text-zinc-400 mb-10">Everyone's expense reports, the company card, rates, and per-course spending</p>
+        <p className="text-zinc-400 mb-10">Everyone&apos;s expense reports, the company card, rates, and per-course spending</p>
 
         {/* ── Submitted reports ── */}
         <section className="mb-12">
