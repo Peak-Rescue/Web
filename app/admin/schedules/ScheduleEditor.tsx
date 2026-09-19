@@ -112,12 +112,21 @@ export default function ScheduleEditor({
         />
       </div>
 
-      {days.map((day) => (
+      {days.map((day, i) => (
         <ScheduleDayCard
           key={day.id}
           day={day}
           sites={sites}
           venueId={venueId}
+          // The card offers reordering only where something can say which day
+          // sits where, and this screen lays them out in order, so it can. It
+          // went without for as long as the arrows were a portal-only control:
+          // which left a template's day order fixed at the moment it was built,
+          // a template having no course page to edit it from. The index is the
+          // one on screen — a day removed a moment ago is already out of this
+          // list, and the arrows have to agree with what is in front of you.
+          isFirst={i === 0}
+          isLast={i === days.length - 1}
           onRemoving={(id) => setRemoved((r) => [...r, id])}
           onRemoveFailed={(id) => setRemoved((r) => r.filter((x) => x !== id))}
           onError={setError}
