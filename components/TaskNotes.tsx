@@ -113,17 +113,28 @@ export function TaskNotesField({
   }
 
   // Applies to every line the selection touches, so a pasted block becomes a
-  // list in one go.
+  // list in one go. On an empty line it lays the marker down and leaves the
+  // caret after it — you click the button and start typing the first item,
+  // rather than having to write the line before you can mark it.
   function applyMarker(kind: 'bullet' | 'check') {
     const el = innerRef.current
     if (!el) return
     const start = value.lastIndexOf('\n', el.selectionStart - 1) + 1
     const endIdx = value.indexOf('\n', el.selectionEnd)
     const end = endIdx === -1 ? value.length : endIdx
-    const block = value
-      .slice(start, end)
-      .split('\n')
-      .map((l) => (l.trim() ? withMarker(l, kind) : l))
+    const lines = value.slice(start, end).split('\n')
+    const marker = kind === 'check' ? '- [ ] ' : '- '
+
+    if (lines.length === 1 && !lines[0].trim()) {
+      edit(value.slice(0, start) + marker + value.slice(end), start + marker.length)
+      return
+    }
+
+    // Pressing the button a second time on the same lines takes the list off.
+    const written = lines.filter((l) => l.trim())
+    const already = written.every((l) => parseLine(l).kind === kind)
+    const block = lines
+      .map((l) => (!l.trim() ? l : already ? stripMarker(l) : withMarker(l, kind)))
       .join('\n')
     const next = value.slice(0, start) + block + value.slice(end)
     edit(next, start + block.length)
