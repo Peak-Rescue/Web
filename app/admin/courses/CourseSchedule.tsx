@@ -54,7 +54,7 @@ export default function CourseSchedule({
             Delete schedule
           </button>
         </div>
-        <ScheduleEditor schedule={schedule} courseType={courseType} templates={templates} sites={sites} venueId={venueId} />
+        <ScheduleEditor schedule={schedule} courseType={courseType} templates={templates} sites={sites} venueId={venueId} canTemplate />
       </div>
     )
   }

@@ -267,7 +267,15 @@ export default function TemplateRow(props: Props) {
           <div className="px-3 pt-4 mt-3 border-t border-zinc-800">
             {props.shelf === 'gear'
               ? <GearListEditor list={props.list} catalog={props.catalog} courseType={summary.course_type} />
-              : <ScheduleEditor schedule={props.schedule} courseType={summary.course_type} sites={props.sites} />}
+              : <ScheduleEditor
+                  schedule={props.schedule}
+                  courseType={summary.course_type}
+                  sites={props.sites}
+                  // This is the shelf. There is nowhere to save it to from
+                  // here — it is already the thing other schedules get saved
+                  // into.
+                  canTemplate={false}
+                />}
           </div>
 
           <div className="px-3 py-3 mt-3 border-t border-zinc-800 flex justify-end">

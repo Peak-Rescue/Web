@@ -2679,8 +2679,7 @@ export default async function CourseView({
                             day={editableDay}
                             sites={schedSites}
                             venueId={inst.venue_id}
-                            isFirst={di === 0}
-                            isLast={di === schedDays.length - 1}
+                            order={{ isFirst: di === 0, isLast: di === schedDays.length - 1 }}
                           />
                         ) : null
                       }

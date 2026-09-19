@@ -23,8 +23,7 @@ export default function ScheduleDayCard({
   day,
   sites = [],
   venueId = null,
-  isFirst,
-  isLast,
+  order,
   onRemoving,
   onRemoveFailed,
   onError,
@@ -32,10 +31,13 @@ export default function ScheduleDayCard({
   day: ScheduleDay
   sites?: SiteOption[]
   venueId?: string | null
-  /** Where this day sits in the running order. Both absent → no reordering
-      offered, for a list that has no order to speak of. */
-  isFirst?: boolean
-  isLast?: boolean
+  /** Where this day sits in the running order, so the card can offer to move
+      it. Required, and `'unordered'` is the deliberate no: these were two
+      optional booleans, and a caller that passed neither got a card with no
+      reordering on it and no complaint from anywhere — which is how the full
+      editor laid days out in order for months with no way to change it. A list
+      with no order to speak of now has to say so out loud. */
+  order: { isFirst: boolean; isLast: boolean } | 'unordered'
   /** The list, if there is one, takes the day off screen on the click rather
       than on the round trip — and puts it back if the server disagreed. */
   onRemoving?: (id: string) => void
@@ -112,11 +114,11 @@ export default function ScheduleDayCard({
             thing they do is a direction. They keep the press's worth of
             padding the words had rather than shrinking to the glyph, and say
             their names to a screen reader and on hover. */}
-        {(isFirst !== undefined || isLast !== undefined) && (
+        {order !== 'unordered' && (
           <span className="ml-auto flex shrink-0 items-center gap-1.5">
             {([
-              ['up', 'Move earlier', isFirst, 'M12 19V5', 'm5 12 7-7 7 7'],
-              ['down', 'Move later', isLast, 'M12 5v14', 'm19 12-7 7-7-7'],
+              ['up', 'Move earlier', order.isFirst, 'M12 19V5', 'm5 12 7-7 7 7'],
+              ['down', 'Move later', order.isLast, 'M12 5v14', 'm19 12-7 7-7-7'],
             ] as const).map(([direction, label, atEnd, stem, head]) => (
               <button
                 key={direction}

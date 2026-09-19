@@ -21,7 +21,7 @@ export default function ScheduleEditor({
   schedule,
   courseType,
   templates,
-  canTemplate = true,
+  canTemplate,
   sites = [],
   venueId = null,
 }: {
@@ -33,9 +33,10 @@ export default function ScheduleEditor({
   // Whether the shelf is this person's to write to at all. Both ways onto it —
   // a new template and over an existing one — reach every course built from it
   // afterwards, which is a blast radius that doesn't come with a course
-  // assignment. Default true: the admin screens are the ones that had this
-  // before it was a question.
-  canTemplate?: boolean
+  // assignment. Required, and said at every call site: it used to default to
+  // true, so a screen that rendered this editor without thinking about it
+  // handed out the shelf, and the build had nothing to say about that.
+  canTemplate: boolean
   // Canyons and crags with beta already written. A day picks one instead of
   // retyping what the place is like.
   sites?: SiteOption[]
@@ -125,8 +126,7 @@ export default function ScheduleEditor({
           // a template having no course page to edit it from. The index is the
           // one on screen — a day removed a moment ago is already out of this
           // list, and the arrows have to agree with what is in front of you.
-          isFirst={i === 0}
-          isLast={i === days.length - 1}
+          order={{ isFirst: i === 0, isLast: i === days.length - 1 }}
           onRemoving={(id) => setRemoved((r) => [...r, id])}
           onRemoveFailed={(id) => setRemoved((r) => r.filter((x) => x !== id))}
           onError={setError}
