@@ -2,10 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import {
-  updateSchedule, addScheduleDay, updateScheduleDay, removeScheduleDay,
-  copySchedule, saveScheduleIntoTemplate,
-} from './actions'
+import { updateSchedule, addScheduleDay } from './actions'
 import ScheduleDayCard from './ScheduleDayCard'
 import SaveToShelf from './SaveToShelf'
 export type {

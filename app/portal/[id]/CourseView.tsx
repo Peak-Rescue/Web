@@ -880,7 +880,6 @@ export default async function CourseView({
     }))
     .filter((p) => p.name)
 
-  const fmtLong = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'long', day: 'numeric', year: 'numeric' })
   // "Wed Sep 3" — what a running order needs beside a day number, and no more.
   // No year: the course's own span says it once at the top of the page.
   const fmtDay = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })

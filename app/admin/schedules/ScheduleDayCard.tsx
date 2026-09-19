@@ -4,8 +4,8 @@ import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { updateScheduleDay, removeScheduleDay, moveScheduleDay } from './actions'
 import DayOutline from './DayOutline'
-import { Grows, Marked, PinIcon, RouteIcon, FlagIcon, NoteIcon, TargetIcon, PencilIcon } from './fields'
-import type { ScheduleDay, SiteOption, MeetingPointOption } from './types'
+import { Grows, Marked, PinIcon, RouteIcon, NoteIcon, TargetIcon, PencilIcon } from './fields'
+import type { ScheduleDay, SiteOption } from './types'
 import { useTrackedSaves } from '@/components/PendingSaves'
 
 // One day of a running order, as a thing you can edit wherever you meet it.

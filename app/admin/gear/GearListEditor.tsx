@@ -475,7 +475,7 @@ export default function GearListEditor({
 
     const moved = { ...dragged, group_type: t.gt, section: t.section, joined_above: joinedAbove }
     const next = [...rest.slice(0, at), moved, ...rest.slice(at)]
-      .map(({ r: _r, ...e }, i) => ({ ...e, sort_order: i })) // eslint-disable-line @typescript-eslint/no-unused-vars
+      .map(({ r: _r, ...e }, i) => ({ ...e, sort_order: i }))
       // The row it used to sit above is joined to a neighbour that has moved
       // away, so that seam goes rather than re-pointing at whoever slides up.
       .map((e) => (e.id === orphanedSeam(dragged.id) ? { ...e, joined_above: null } : e))
@@ -510,7 +510,7 @@ export default function GearListEditor({
     }
     const orphan = orphanedSeam(draggedId)
     const next = [...rest.slice(0, at), moved, ...rest.slice(at)]
-      .map(({ r: _r, ...e }, i) => ({ ...e, sort_order: i })) // eslint-disable-line @typescript-eslint/no-unused-vars
+      .map(({ r: _r, ...e }, i) => ({ ...e, sort_order: i }))
       .map((e) => (e.id === orphan ? { ...e, joined_above: null } : e))
 
     apply(() => next, async () => {

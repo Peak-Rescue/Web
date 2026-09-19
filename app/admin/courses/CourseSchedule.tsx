@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import ScheduleEditor, { type Schedule, type SiteOption, type MeetingPointOption } from '@/app/admin/schedules/ScheduleEditor'
+import ScheduleEditor, { type Schedule, type SiteOption } from '@/app/admin/schedules/ScheduleEditor'
 import { createSchedule, copySchedule, deleteSchedule } from '@/app/admin/schedules/actions'
 import TemplatePicker, { type TemplateChoice } from '@/components/TemplatePicker'
 

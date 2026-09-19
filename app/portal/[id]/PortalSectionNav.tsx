@@ -52,7 +52,7 @@ export default function PortalSectionNav({
         {/* The bar is also the key: where you are is accented rather than
             grey-on-grey, team blocks are amber wherever they appear, and a dot
             marks the one section with something new in it. */}
-        {sections.map((s, i) => (
+        {sections.map((s) => (
           <Fragment key={s.id}>
           <a
             href={`#${s.id}`}

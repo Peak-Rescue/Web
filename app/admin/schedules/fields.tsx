@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, type ComponentProps, type ReactNode } from 'react'
+import { type ComponentProps, type ReactNode } from 'react'
 import SharedPencil from '@/components/PencilIcon'
 
 // The marks and boxes a schedule day is written with. Shared, because a day is

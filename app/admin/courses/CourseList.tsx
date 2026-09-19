@@ -229,6 +229,24 @@ const CATEGORY_SHORT: Record<string, string> = {
   specialty: 'Specialty',
 }
 
+// Actions default a missing category to tactical, so filters treat null the
+// same way.
+function instCategory(i: Instance) {
+  return i.course_category ?? 'tactical'
+}
+
+// Every custom course shares course_type === 'custom', so key custom courses
+// by category (custom:tactical, custom:industrial, …) — otherwise the
+// "Custom" chip in one category row would select custom courses in every row.
+//
+// Both of these are answers about one course and nothing else, so they live out
+// here: declared inside the component they were new functions on every render,
+// which a memo that uses them cannot list as a dependency without giving up
+// being a memo.
+function typeKey(i: Instance) {
+  return i.course_type === 'custom' ? `custom:${instCategory(i)}` : i.course_type
+}
+
 export default function CourseList({
   upcoming,
   past,
@@ -291,15 +309,6 @@ export default function CourseList({
     }
     return out
   }, [upcoming, past, stepsOf])
-
-  // Actions default a missing category to tactical, so filters treat null the
-  // same way.
-  const instCategory = (i: Instance) => i.course_category ?? 'tactical'
-
-  // Every custom course shares course_type === 'custom', so key custom courses
-  // by category (custom:tactical, custom:industrial, …) — otherwise the
-  // "Custom" chip in one category row would select custom courses in every row.
-  const typeKey = (i: Instance) => i.course_type === 'custom' ? `custom:${instCategory(i)}` : i.course_type
 
   // Course types present in the data, grouped by category — the same
   // category → type structure used when a course is created.
