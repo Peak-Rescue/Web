@@ -15,6 +15,7 @@ import {
 } from '@/app/admin/courses/task-actions'
 import { type MyOpenTask } from '@/lib/course-tasks'
 import { NotesIcon, PaperclipIcon, taskIconClass } from '@/components/TaskIcons'
+import { TaskNotesField } from '@/components/TaskNotes'
 import TaskDocChip from '@/components/TaskDocChip'
 import UploadNameDialog from '@/components/UploadNameDialog'
 import AddLinkDialog from '@/components/AddLinkDialog'
@@ -253,13 +254,12 @@ export default function MyTasksList({ tasks, done = [] }: { tasks: MyOpenTask[];
                   Open course →
                 </Link>
               </div>
-              <textarea
+              <TaskNotesField
                 ref={notesFieldRef}
                 value={notesDraft}
-                onChange={(e) => scheduleNotes(t.instance_id, t.id, e.target.value)}
-                rows={2}
+                onChange={(next) => scheduleNotes(t.instance_id, t.id, next)}
+                rows={3}
                 placeholder="Notes — status, phone numbers, confirmation codes…"
-                className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500 resize-y"
               />
               <div className="flex items-center gap-3 mt-1.5">
                 <span className={`text-xs ${notesStatus === 'error' ? 'text-pr-red-light' : notesStatus === 'saved' ? 'text-teal-400' : 'text-zinc-500'}`}>

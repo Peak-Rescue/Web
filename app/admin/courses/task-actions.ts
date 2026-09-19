@@ -98,20 +98,27 @@ export async function addTask(instanceId: string, input: TaskInput) {
   const title = input.title.trim()
   if (!title) throw new Error('Task title is required')
 
-  const { error } = await admin.from('course_tasks').insert({
-    instance_id: instanceId,
-    title,
-    notes: input.notes?.trim() || null,
-    assigned_to: input.assigned_to || null,
-    assigned_by: input.assigned_to ? user.id : null,
-    created_by: user.id,
-    sort_order: 1000, // custom tasks after the template checklist
-  })
+  // The id comes back because attachments chosen while writing the task can
+  // only be filed once the row they hang off exists.
+  const { data: created, error } = await admin
+    .from('course_tasks')
+    .insert({
+      instance_id: instanceId,
+      title,
+      notes: input.notes?.trim() || null,
+      assigned_to: input.assigned_to || null,
+      assigned_by: input.assigned_to ? user.id : null,
+      created_by: user.id,
+      sort_order: 1000, // custom tasks after the template checklist
+    })
+    .select('id')
+    .single()
   if (error) throw new Error(error.message)
 
   const assignee = input.assigned_to
   if (assignee) after(() => notifyAssignee(admin, title, instanceId, assignee, user.id))
   revalidateTaskViews(instanceId)
+  return created.id as string
 }
 
 // Bulk add from the suggestions picker. Template sort_order keeps the

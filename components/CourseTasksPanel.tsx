@@ -18,6 +18,7 @@ import {
 } from '@/app/admin/courses/task-actions'
 
 import { NotesIcon, PaperclipIcon, taskIconClass } from '@/components/TaskIcons'
+import { TaskNotesField, TaskNotesView } from '@/components/TaskNotes'
 import TaskDocChip from '@/components/TaskDocChip'
 import UploadNameDialog from '@/components/UploadNameDialog'
 import AddLinkDialog from '@/components/AddLinkDialog'
@@ -70,6 +71,10 @@ export default function CourseTasksPanel({
   const [newTitle, setNewTitle] = useState('')
   const [newAssignee, setNewAssignee] = useState('')
   const [newNotes, setNewNotes] = useState('')
+  // Attachments chosen on the creation form, held until there is a task id.
+  const [newDocs, setNewDocs] = useState<{ file: File; name: string }[]>([])
+  const [newLinks, setNewLinks] = useState<{ url: string; name: string }[]>([])
+  const [creatingTask, setCreatingTask] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [openDetailsId, setOpenDetailsId] = useState<string | null>(null)
   const [notesDraft, setNotesDraft] = useState('')
@@ -152,6 +157,8 @@ export default function CourseTasksPanel({
   // Assignee dropdowns default to the course team; picking the sentinel
   // expands every dropdown in the panel to the full instructor list.
   const SHOW_ALL = '__show_all__'
+  // Stands in for the task id while the creation form is open.
+  const NEW_TASK = '__new__'
   const [showAllPeople, setShowAllPeople] = useState(false)
   const hasMorePeople = people.some((p) => !p.onCourse)
   const assigneeOptions = (currentId?: string | null) => {
@@ -193,27 +200,39 @@ export default function CourseTasksPanel({
     setPendingDocs({ taskId, files })
   }
 
+  async function uploadDocs(taskId: string, items: { file: File; name: string }[]) {
+    const targets = await createTaskDocUploadTargets(
+      instanceId,
+      taskId,
+      items.map((i) => ({ name: i.file.name, size: i.file.size }))
+    )
+    const supabase = createClient()
+    const uploads: { path: string; filename: string }[] = []
+    for (let i = 0; i < items.length; i++) {
+      const { error: upErr } = await supabase.storage
+        .from('task-documents')
+        .uploadToSignedUrl(targets[i].path, targets[i].token, items[i].file, { contentType: items[i].file.type })
+      if (upErr) throw new Error(`Upload failed for "${items[i].file.name}": ${upErr.message}`)
+      uploads.push({ path: targets[i].path, filename: items[i].name.trim() || items[i].file.name })
+    }
+    await finalizeTaskDocs(instanceId, taskId, uploads)
+  }
+
   async function uploadNamedDocs(names: string[]) {
     if (!pendingDocs) return
     const { taskId, files } = pendingDocs
+    const items = files.map((file, i) => ({ file, name: names[i] ?? file.name }))
+    // Files picked while writing a new task have nowhere to go yet — they
+    // wait on the form and upload the moment the task exists.
+    if (taskId === NEW_TASK) {
+      setNewDocs((prev) => [...prev, ...items])
+      setPendingDocs(null)
+      return
+    }
     setUploadingDocsFor(taskId)
     setError(null)
     try {
-      const targets = await createTaskDocUploadTargets(
-        instanceId,
-        taskId,
-        files.map((f) => ({ name: f.name, size: f.size }))
-      )
-      const supabase = createClient()
-      const uploads: { path: string; filename: string }[] = []
-      for (let i = 0; i < files.length; i++) {
-        const { error: upErr } = await supabase.storage
-          .from('task-documents')
-          .uploadToSignedUrl(targets[i].path, targets[i].token, files[i], { contentType: files[i].type })
-        if (upErr) throw new Error(`Upload failed for "${files[i].name}": ${upErr.message}`)
-        uploads.push({ path: targets[i].path, filename: names[i]?.trim() || files[i].name })
-      }
-      await finalizeTaskDocs(instanceId, taskId, uploads)
+      await uploadDocs(taskId, items)
       setPendingDocs(null)
       router.refresh()
     } catch (err) {
@@ -226,6 +245,11 @@ export default function CourseTasksPanel({
   async function addLink(name: string, url: string) {
     const taskId = linkTaskId
     if (!taskId) return
+    if (taskId === NEW_TASK) {
+      setNewLinks((prev) => [...prev, { url, name }])
+      setLinkTaskId(null)
+      return
+    }
     setLinkBusy(true)
     setError(null)
     try {
@@ -236,6 +260,35 @@ export default function CourseTasksPanel({
       setError(err instanceof Error ? err.message : 'Could not add link')
     } finally {
       setLinkBusy(false)
+    }
+  }
+
+  // Create, then file what was chosen alongside it. The task is saved before
+  // the attachments, so a failed upload leaves the task rather than losing it.
+  async function createTask() {
+    const title = newTitle.trim()
+    if (!title) return
+    setCreatingTask(true)
+    setError(null)
+    try {
+      const taskId = await addTask(instanceId, {
+        title,
+        assigned_to: newAssignee || null,
+        notes: newNotes || null,
+      })
+      if (newDocs.length > 0) await uploadDocs(taskId, newDocs)
+      for (const l of newLinks) await addTaskDocLink(instanceId, taskId, l.url, l.name)
+      setNewTitle('')
+      setNewAssignee('')
+      setNewNotes('')
+      setNewDocs([])
+      setNewLinks([])
+      setAdding(false)
+      router.refresh()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not add the task')
+    } finally {
+      setCreatingTask(false)
     }
   }
 
@@ -379,15 +432,13 @@ export default function CourseTasksPanel({
           </div>
           {canEditNotes ? (
             <div>
-              <textarea
+              <TaskNotesField
                 ref={notesFieldRef}
                 value={notesDraft}
-                onChange={(e) => scheduleNotes(instanceId, t.id, e.target.value)}
-                rows={2}
+                onChange={(next) => scheduleNotes(instanceId, t.id, next)}
+                rows={3}
+                highlight={notesHighlight}
                 placeholder="Notes — status, phone numbers, confirmation codes…"
-                className={`w-full bg-zinc-800 border rounded px-3 py-2 text-sm focus:outline-none resize-y ${
-                  notesHighlight ? 'border-pr-red-light ring-1 ring-pr-red-light' : 'border-zinc-700 focus:border-zinc-500'
-                }`}
               />
               <div className="flex items-center gap-3 mt-1.5">
                 <span className={`text-xs ${notesStatus === 'error' ? 'text-pr-red-light' : notesStatus === 'saved' ? 'text-teal-400' : 'text-zinc-500'}`}>
@@ -404,7 +455,7 @@ export default function CourseTasksPanel({
               </div>
             </div>
           ) : (
-            <p className="text-sm text-zinc-400 whitespace-pre-wrap">{t.notes || 'No notes.'}</p>
+            t.notes ? <TaskNotesView text={t.notes} /> : <p className="text-sm text-zinc-500">No notes.</p>
           )}
         </div>
       )}
@@ -477,28 +528,75 @@ export default function CourseTasksPanel({
               </div>
               <div className="w-full">
                 <label className="block text-xs text-zinc-500 mb-1">Notes (optional)</label>
-                <input
+                <TaskNotesField
                   value={newNotes}
-                  onChange={(e) => setNewNotes(e.target.value)}
+                  onChange={setNewNotes}
+                  rows={3}
                   placeholder="Any context the assignee needs"
-                  className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500"
                 />
               </div>
+              {/* Attachments belong to the moment you are writing the task —
+                  the contract you are looking at right now is the reason the
+                  task exists. They upload as soon as the task is saved. */}
+              <div className="w-full flex items-center flex-wrap gap-2">
+                {newDocs.map((d, i) => (
+                  <span key={`f${i}`} className="inline-flex items-center gap-1.5 px-2 py-1 bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-300">
+                    {d.name}
+                    <button
+                      onClick={() => setNewDocs((prev) => prev.filter((_, j) => j !== i))}
+                      className="text-zinc-500 hover:text-pr-red-light"
+                      title="Remove"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+                {newLinks.map((l, i) => (
+                  <span key={`l${i}`} className="inline-flex items-center gap-1.5 px-2 py-1 bg-zinc-800 border border-zinc-700 rounded text-xs text-teal-300">
+                    {l.name || l.url}
+                    <button
+                      onClick={() => setNewLinks((prev) => prev.filter((_, j) => j !== i))}
+                      className="text-zinc-500 hover:text-pr-red-light"
+                      title="Remove"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+                <button
+                  onClick={() => {
+                    docTaskRef.current = NEW_TASK
+                    docInputRef.current?.click()
+                  }}
+                  disabled={creatingTask}
+                  className="inline-flex items-center gap-1 px-2 py-1 border border-dashed border-zinc-700 hover:border-zinc-500 text-zinc-400 hover:text-zinc-200 rounded text-xs transition-colors disabled:opacity-50"
+                >
+                  + Attach document
+                </button>
+                <button
+                  onClick={() => setLinkTaskId(NEW_TASK)}
+                  disabled={creatingTask}
+                  className="inline-flex items-center gap-1 px-2 py-1 border border-dashed border-zinc-700 hover:border-zinc-500 text-zinc-400 hover:text-zinc-200 rounded text-xs transition-colors disabled:opacity-50"
+                >
+                  + Add link
+                </button>
+              </div>
               <button
-                onClick={() => {
-                  if (!newTitle.trim()) return
-                  run(() => addTask(instanceId, { title: newTitle, assigned_to: newAssignee || null, notes: newNotes || null }))
-                  setNewTitle('')
-                  setNewAssignee('')
-                  setNewNotes('')
-                  setAdding(false)
-                }}
-                disabled={isPending || !newTitle.trim()}
+                onClick={() => void createTask()}
+                disabled={creatingTask || isPending || !newTitle.trim()}
                 className="px-4 py-2 bg-pr-red hover:bg-pr-red-dark text-white rounded text-sm font-medium transition-colors disabled:opacity-50"
               >
-                Add
+                {creatingTask ? 'Adding…' : 'Add'}
               </button>
-              <button onClick={() => setAdding(false)} className="px-3 py-2 text-zinc-400 hover:text-zinc-200 text-sm">
+              <button
+                onClick={() => {
+                  setAdding(false)
+                  setNewDocs([])
+                  setNewLinks([])
+                }}
+                disabled={creatingTask}
+                className="px-3 py-2 text-zinc-400 hover:text-zinc-200 text-sm disabled:opacity-50"
+              >
                 Cancel
               </button>
             </div>
