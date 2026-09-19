@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import { Linkified } from '@/lib/linkify'
 
 // Task notes are plain text in the database, but the text people actually
@@ -56,10 +56,11 @@ function withMarker(line: string, marker: 'bullet' | 'check'): string {
   return marker === 'check' ? `- [ ] ${body}` : `- ${body}`
 }
 
-/** A notes editor: multi-line, with list continuation on Enter, buttons for
-    bullets and tick boxes, and a preview where the boxes can be ticked. Used
-    both where a task is created and where it is edited, so what you type in
-    one place reads the same in the other. */
+/** A notes editor that shows the notes, not their markup: tick boxes are
+    real boxes you can tick, bullets are bullets, and clicking the text opens
+    the plain-text box to type in. It grows with what is in it — notes are a
+    running list, and a three-line window onto a nine-line list hides the
+    half you have not done. */
 export function TaskNotesField({
   value,
   onChange,
@@ -77,13 +78,37 @@ export function TaskNotesField({
   highlight?: boolean
   ref?: React.Ref<HTMLTextAreaElement>
 }) {
-  const [previewing, setPreviewing] = useState(false)
+  const [editing, setEditing] = useState(false)
   const innerRef = useRef<HTMLTextAreaElement>(null)
+
+  // Nothing written yet has nothing to render, so the box is the only view.
+  const typing = (editing || !value.trim()) && !disabled
+
+  // Height follows the text: no inner scrollbar, no list cut off at line
+  // three. Reset to auto first or it can only ever grow.
+  useLayoutEffect(() => {
+    const el = innerRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${el.scrollHeight}px`
+  }, [value, typing])
 
   // The parent owns the value, so the caret has to be put back by hand after
   // every edit we make on its behalf.
   function edit(next: string, caret: number) {
     onChange(next)
+    requestAnimationFrame(() => {
+      const el = innerRef.current
+      if (!el) return
+      el.focus()
+      el.setSelectionRange(caret, caret)
+    })
+  }
+
+  // Opens the text box at a given point — clicking a line puts you on that
+  // line rather than at the end of everything.
+  function startTyping(caret = value.length) {
+    setEditing(true)
     requestAnimationFrame(() => {
       const el = innerRef.current
       if (!el) return
@@ -118,7 +143,7 @@ export function TaskNotesField({
   // rather than having to write the line before you can mark it.
   function applyMarker(kind: 'bullet' | 'check') {
     const el = innerRef.current
-    if (!el) return
+    if (!el) return startTyping()
     const start = value.lastIndexOf('\n', el.selectionStart - 1) + 1
     const endIdx = value.indexOf('\n', el.selectionEnd)
     const end = endIdx === -1 ? value.length : endIdx
@@ -145,24 +170,36 @@ export function TaskNotesField({
 
   return (
     <div>
-      <div className="flex items-center gap-1 mb-1">
-        <button type="button" onClick={() => applyMarker('bullet')} disabled={disabled || previewing} className={btn} title="Bullet list">
-          • List
-        </button>
-        <button type="button" onClick={() => applyMarker('check')} disabled={disabled || previewing} className={btn} title="Checklist">
-          ☐ Checklist
-        </button>
-        {value.trim() && (
-          <button type="button" onClick={() => setPreviewing((p) => !p)} className={`${btn} ml-auto`}>
-            {previewing ? 'Edit' : 'Preview'}
+      {!disabled && (
+        <div className="flex items-center gap-1 mb-1">
+          {/* mousedown is where focus leaves the box; holding it here keeps
+              the caret where the marker is about to land. */}
+          <button
+            type="button"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => applyMarker('bullet')}
+            className={btn}
+            title="Bullet list"
+          >
+            • List
           </button>
-        )}
-      </div>
-      {previewing ? (
-        <div className="min-h-16 bg-zinc-800/40 border border-zinc-800 rounded px-3 py-2">
-          <TaskNotesView text={value} onToggle={disabled ? undefined : onChange} />
+          <button
+            type="button"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => applyMarker('check')}
+            className={btn}
+            title="Checklist"
+          >
+            ☐ Checklist
+          </button>
+          {typing && value.trim() && (
+            <button type="button" onClick={() => setEditing(false)} className={`${btn} ml-auto`}>
+              Done
+            </button>
+          )}
         </div>
-      ) : (
+      )}
+      {typing ? (
         <textarea
           ref={(el) => {
             innerRef.current = el
@@ -170,18 +207,44 @@ export function TaskNotesField({
             else if (ref) (ref as React.RefObject<HTMLTextAreaElement | null>).current = el
           }}
           value={value}
-          disabled={disabled}
           rows={rows}
+          // A floor, not a ceiling: an empty field still looks like somewhere
+          // to write, and the effect above takes it up from there.
+          style={{ minHeight: `${rows * 1.5}rem` }}
           placeholder={placeholder}
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={onKeyDown}
-          className={`w-full bg-zinc-800 border rounded px-3 py-2 text-sm focus:outline-none resize-y disabled:opacity-50 ${
+          onBlur={() => setEditing(false)}
+          className={`w-full bg-zinc-800 border rounded px-3 py-2 text-sm focus:outline-none resize-none overflow-hidden ${
             highlight ? 'border-pr-red-light ring-1 ring-pr-red-light' : 'border-zinc-700 focus:border-zinc-500'
           }`}
         />
+      ) : (
+        <div
+          className={`w-full bg-zinc-800/40 border rounded px-3 py-2 ${
+            disabled ? 'border-zinc-800' : 'border-zinc-700 hover:border-zinc-600 cursor-text'
+          } ${highlight ? 'border-pr-red-light ring-1 ring-pr-red-light' : ''}`}
+          onClick={(e) => {
+            // A tick box is an answer, not an invitation to retype the line —
+            // only clicking the words opens the editor.
+            if (disabled) return
+            if ((e.target as HTMLElement).closest('input, a')) return
+            const line = (e.target as HTMLElement).closest('[data-line]')
+            const index = line ? Number((line as HTMLElement).dataset.line) : null
+            startTyping(index === null ? value.length : caretAtEndOfLine(value, index))
+          }}
+        >
+          <TaskNotesView text={value} onToggle={disabled ? undefined : onChange} />
+        </div>
       )}
     </div>
   )
+}
+
+/** Where the caret goes when you click line `index` — the end of that line. */
+function caretAtEndOfLine(text: string, index: number): number {
+  const lines = text.split('\n')
+  return lines.slice(0, index + 1).join('\n').length
 }
 
 /** Notes as everyone else sees them: bullets indented, tick boxes drawn, URLs
@@ -207,6 +270,7 @@ export function TaskNotesView({ text, onToggle }: { text: string; onToggle?: (ne
           return (
             <label
               key={i}
+              data-line={i}
               className={`flex items-start gap-2 ${onToggle ? 'cursor-pointer' : ''}`}
               style={{ paddingLeft: line.indent.length * 8 }}
             >
@@ -225,7 +289,7 @@ export function TaskNotesView({ text, onToggle }: { text: string; onToggle?: (ne
         }
         if (line.kind === 'bullet' || line.kind === 'number') {
           return (
-            <div key={i} className="flex items-start gap-2" style={{ paddingLeft: line.indent.length * 8 }}>
+            <div key={i} data-line={i} className="flex items-start gap-2" style={{ paddingLeft: line.indent.length * 8 }}>
               <span className="text-zinc-500 shrink-0">{line.kind === 'bullet' ? '•' : `${line.n}.`}</span>
               <span>
                 <Linkified text={line.text} />
@@ -234,9 +298,9 @@ export function TaskNotesView({ text, onToggle }: { text: string; onToggle?: (ne
           )
         }
         // A blank line is spacing the writer asked for; keep it visible.
-        if (!line.text.trim()) return <div key={i} className="h-2" />
+        if (!line.text.trim()) return <div key={i} data-line={i} className="h-2" />
         return (
-          <p key={i} className="whitespace-pre-wrap">
+          <p key={i} data-line={i} className="whitespace-pre-wrap">
             <Linkified text={line.text} />
           </p>
         )
