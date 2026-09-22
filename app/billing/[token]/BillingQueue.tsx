@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { fmtMoney } from '@/lib/expenses'
+import { phoneHref } from '@/lib/phone'
 import type { InvoiceRequest } from '@/lib/billing'
 import { markInvoiced, markPaid } from './actions'
 
@@ -27,9 +28,11 @@ function BillTo({ r }: { r: InvoiceRequest }) {
         </a>
       )}
       {r.bill_to_phone && (
-        <a href={`tel:${r.bill_to_phone}`} className="block text-zinc-400 hover:text-white transition-colors">
-          {r.bill_to_phone}
-        </a>
+        phoneHref(r.bill_to_phone)
+          ? <a href={phoneHref(r.bill_to_phone)!} className="block text-zinc-400 hover:text-white transition-colors">
+              {r.bill_to_phone}
+            </a>
+          : <p className="text-zinc-400">{r.bill_to_phone}</p>
       )}
       {r.bill_to_note && <p className="text-zinc-500 mt-1 whitespace-pre-wrap">{r.bill_to_note}</p>}
     </div>

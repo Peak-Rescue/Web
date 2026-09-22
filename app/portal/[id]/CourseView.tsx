@@ -26,7 +26,7 @@ import CourseWaiverSection from '@/app/admin/courses/CourseWaiverSection'
 import { listWaiverTemplates } from '@/app/admin/courses/waiver-actions'
 import { plannedInstructorCount } from '@/lib/estimates'
 import { parseContacts, studentEmail } from '@/lib/contacts'
-import { formatPhone } from '@/lib/phone'
+import { formatPhone, phoneHref } from '@/lib/phone'
 import { unseenSections, lastPushToStudents, behindOnPush, type Push } from '@/lib/course-pushes'
 import { GEAR_ENTRIES_SELECT, KIT_LABEL } from '@/lib/gear'
 import { courseCapabilityCategories } from '@/lib/capabilities'
@@ -1606,15 +1606,20 @@ export default async function CourseView({
                                 {em}
                               </a>
                             ))}
-                            {c.phones.map((ph) => (
-                              <a
-                                key={ph}
-                                href={`tel:${ph}`}
-                                className="block text-zinc-400 hover:text-zinc-100 transition-colors tabular-nums"
-                              >
-                                {formatPhone(ph)}
-                              </a>
-                            ))}
+                            {c.phones.map((ph) => {
+                              const href = phoneHref(ph)
+                              return href ? (
+                                <a
+                                  key={ph}
+                                  href={href}
+                                  className="block text-zinc-400 hover:text-zinc-100 transition-colors tabular-nums"
+                                >
+                                  {formatPhone(ph)}
+                                </a>
+                              ) : (
+                                <p key={ph} className="text-zinc-400 tabular-nums">{formatPhone(ph)}</p>
+                              )
+                            })}
                           </div>
                         ))}
                       </div>
