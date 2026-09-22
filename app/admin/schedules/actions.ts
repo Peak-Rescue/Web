@@ -328,48 +328,51 @@ type DayRow = { id: string; title: string; location: string | null; site_id: str
 
 // Lay one schedule's days onto another. Shared by "start from a template" and
 // "save back into a template" so the two carry the same thing.
+//
+// Two writes, whatever the size of the schedule. It used to be one insert per
+// day and then one per block, each awaited before the next was sent — a
+// five-day template with forty-five lines on it was fifty round trips to the
+// database, in series, while the person who clicked watched nothing happen.
+//
+// What forced that shape was needing each new row's id back before anything
+// could point at it: a block's parent_id has to be the *copy* of its parent,
+// so the blocks were copied a level at a time, each level waiting on the ids
+// the level above had just been given. Minting the ids here instead settles
+// every parent_id before a single row is sent, which collapses the levels and
+// the per-row waiting together.
 async function copyDaysInto(admin: Admin, source: { schedule_days?: unknown }, scheduleId: string) {
   const days = ((source.schedule_days ?? []) as unknown as DayRow[]).sort((a, b) => a.sort_order - b.sort_order)
+  if (!days.length) return 0
 
-  for (const d of days) {
-    const { data: newDay, error } = await admin
-      .from('schedule_days')
-      .insert({
-        schedule_id: scheduleId, title: d.title, location: d.location, site_id: d.site_id,
-        notes: d.notes, objectives: d.objectives ?? [], sort_order: d.sort_order,
-      })
-      .select('id').single()
-    if (error) throw new Error(error.message)
+  const dayRows = days.map((d) => ({
+    id: crypto.randomUUID(),
+    schedule_id: scheduleId, title: d.title, location: d.location, site_id: d.site_id,
+    notes: d.notes, objectives: d.objectives ?? [], sort_order: d.sort_order,
+  }))
 
-    // Parents before children, however deep it goes: a pass copies everything
-    // whose parent already has a new id, and the next pass picks up what that
-    // just made copyable. Two fixed passes were enough when a sub-topic was the
-    // bottom of the outline; a level below that could otherwise be inserted
-    // before its own parent.
-    const blocks = (d.schedule_blocks ?? []).sort((a, b) => a.sort_order - b.sort_order)
-    const idMap = new Map<string, string>()
-    let waiting = blocks
-    while (waiting.length) {
-      const ready = waiting.filter((b) => !b.parent_id || idMap.has(b.parent_id))
-      // A line whose parent didn't come with it would leave this loop spinning.
-      // It lands as a topic instead — the same thing a stray sub-topic does
-      // everywhere else in the schedule.
-      const pass = ready.length ? ready : waiting.map((b) => ({ ...b, parent_id: null }))
-      for (const b of pass) {
-        const { data: nb, error: e2 } = await admin
-          .from('schedule_blocks')
-          .insert({
-            day_id: newDay.id,
-            parent_id: b.parent_id ? idMap.get(b.parent_id) ?? null : null,
-            title: b.title, time_label: b.time_label, location: b.location, sort_order: b.sort_order,
-          })
-          .select('id').single()
-        if (e2) throw new Error(e2.message)
-        idMap.set(b.id, nb.id)
-      }
-      waiting = waiting.filter((b) => !idMap.has(b.id))
-    }
+  const blockRows = days.flatMap((d, i) => {
+    const blocks = [...(d.schedule_blocks ?? [])].sort((a, b) => a.sort_order - b.sort_order)
+    // Scoped to the day, because that is as far as a parent_id ever reaches.
+    // A line whose parent didn't come with it lands as a topic instead — the
+    // same thing a stray sub-topic does everywhere else in the schedule.
+    const idFor = new Map(blocks.map((b) => [b.id, crypto.randomUUID()]))
+    return blocks.map((b) => ({
+      id: idFor.get(b.id)!,
+      day_id: dayRows[i].id,
+      parent_id: b.parent_id ? idFor.get(b.parent_id) ?? null : null,
+      title: b.title, time_label: b.time_label, location: b.location, sort_order: b.sort_order,
+    }))
+  })
+
+  // Days first: a block's day_id has to have somewhere to land.
+  const { error } = await admin.from('schedule_days').insert(dayRows)
+  if (error) throw new Error(error.message)
+
+  if (blockRows.length) {
+    const { error: e2 } = await admin.from('schedule_blocks').insert(blockRows)
+    if (e2) throw new Error(e2.message)
   }
+
   return days.length
 }
 
