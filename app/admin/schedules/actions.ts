@@ -75,6 +75,33 @@ async function instanceOfDay(admin: Admin, dayId: string) {
 
 // ─── Schedules ──────────────────────────────────────────────────────────────
 
+// A course has one running order, and until now nothing said so.
+//
+// Both ways of starting one — blank, and from a template — inserted a row
+// without ever asking whether the course already had one, and the course page
+// then read a single schedule back without saying which. So a second schedule
+// was invisible: the copy landed, the page went on rendering the first, and
+// the only thing the click appeared to do was nothing. Clicked again, it
+// silently made a third.
+//
+// Returns the id of an existing schedule to fill rather than duplicate — one
+// that exists but has no days is a shell, and filling it is what the click
+// meant. A schedule with days in it is somebody's work, so this refuses
+// instead, and says what to do about it.
+async function scheduleSlotFor(admin: Admin, instanceId: string | null | undefined) {
+  if (!instanceId) return null
+  const { data } = await admin
+    .from('course_schedules')
+    .select('id, schedule_days(id)')
+    .eq('instance_id', instanceId)
+  const rows = (data ?? []) as unknown as { id: string; schedule_days: { id: string }[] }[]
+  const filled = rows.find((r) => r.schedule_days.length > 0)
+  if (filled) {
+    throw new Error('This course already has a schedule. Delete it first if you want to start over.')
+  }
+  return rows[0]?.id ?? null
+}
+
 export async function createSchedule(input: {
   name?: string
   instanceId?: string | null
@@ -86,16 +113,19 @@ export async function createSchedule(input: {
   // A template is nobody's course, so asking for one asks for admin.
   await mayEdit(asker, input.isTemplate ? null : input.instanceId ?? null)
   const admin = asker.admin
-  const { data, error } = await admin
-    .from('course_schedules')
-    .insert({
-      name: input.name?.trim().slice(0, 120) || 'Schedule',
-      instance_id: input.instanceId ?? null,
-      course_type: input.isTemplate ? templateOffering(input.courseType) : input.courseType ?? null,
-      is_template: input.isTemplate ?? false,
-    })
-    .select('id')
-    .single()
+  const shell = input.isTemplate ? null : await scheduleSlotFor(admin, input.instanceId)
+  const { data, error } = shell
+    ? await admin.from('course_schedules').select('id').eq('id', shell).single()
+    : await admin
+      .from('course_schedules')
+      .insert({
+        name: input.name?.trim().slice(0, 120) || 'Schedule',
+        instance_id: input.instanceId ?? null,
+        course_type: input.isTemplate ? templateOffering(input.courseType) : input.courseType ?? null,
+        is_template: input.isTemplate ?? false,
+      })
+      .select('id')
+      .single()
   if (error) throw new Error(error.message)
 
   // A schedule with no days is a dead end — seed the days the course runs so
@@ -366,17 +396,26 @@ export async function copySchedule(
   // worth leaving lying around either.
   if (!src.is_template) await mayEdit(asker, src.instance_id as string | null)
 
-  const { data: created, error } = await admin
-    .from('course_schedules')
-    .insert({
-      name: target.name?.trim() || src.name,
-      overview: src.overview,
-      objectives: src.objectives ?? [],
-      instance_id: target.instanceId ?? null,
-      is_template: target.isTemplate ?? false,
-      course_type: target.isTemplate ? templateOffering(target.courseType) : target.courseType ?? null,
-    })
-    .select('id').single()
+  // Onto a course that already has an empty schedule, this fills that one.
+  // Onto a course with a real one, it refuses rather than quietly stacking a
+  // second underneath it.
+  const shell = target.isTemplate ? null : await scheduleSlotFor(admin, target.instanceId)
+  const fields = {
+    name: target.name?.trim() || src.name,
+    overview: src.overview,
+    objectives: src.objectives ?? [],
+  }
+  const { data: created, error } = shell
+    ? await admin.from('course_schedules').update(fields).eq('id', shell).select('id').single()
+    : await admin
+      .from('course_schedules')
+      .insert({
+        ...fields,
+        instance_id: target.instanceId ?? null,
+        is_template: target.isTemplate ?? false,
+        course_type: target.isTemplate ? templateOffering(target.courseType) : target.courseType ?? null,
+      })
+      .select('id').single()
   if (error) throw new Error(error.message)
 
   const days = await copyDaysInto(admin, src, created.id)

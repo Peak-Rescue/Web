@@ -301,11 +301,20 @@ export default async function CourseView({
     .select(`id, name, audience, intro, students, updated_at, review_requested_at, review_requested_by, reviewed_at, review_note, reviewed_by, review_flagged_at, review_flagged_by, gear_list_entries(id, ${GEAR_ENTRY_COLUMNS}, gear_items(name, brand, url, category), gear_entry_options(sort_order, gear_items(name, brand)))`)
     .eq('instance_id', id))
 
+  // Every schedule this course has, not "one of them". A course is meant to
+  // have exactly one, but nothing enforced it, and this read asked for a
+  // single row without saying which — so Postgres was free to hand back
+  // whichever it liked. A course carrying a stray empty schedule alongside a
+  // full one rendered the empty one, which reads on the page as no schedule
+  // at all: the template you just applied landed, and the page said "no
+  // schedule yet" and offered to apply it again. Ordering alone wouldn't do
+  // it either — the fullest schedule is the one that is real, whenever it was
+  // made. Picking it here also means the courses already in that state come
+  // right on the next load rather than needing a hand.
   const schedRowsPromise = keep(admin
     .from('course_schedules')
-    .select('id, name, overview, objectives, schedule_days(id, title, location, site_id, notes, objectives, meeting_point, meeting_point_id, meeting_time, meeting_links, meeting_attachments, sort_order, meeting_points(id, name, directions, coords, links), sites(id, name, beta, usual_meeting_time, coords, links, meeting_points(id, name, directions, coords, links)), schedule_blocks(id, parent_id, title, time_label, location, sort_order))')
-    .eq('instance_id', id)
-    .limit(1))
+    .select('id, name, overview, objectives, created_at, schedule_days(id, title, location, site_id, notes, objectives, meeting_point, meeting_point_id, meeting_time, meeting_links, meeting_attachments, sort_order, meeting_points(id, name, directions, coords, links), sites(id, name, beta, usual_meeting_time, coords, links, meeting_points(id, name, directions, coords, links)), schedule_blocks(id, parent_id, title, time_label, location, sort_order))')
+    .eq('instance_id', id))
 
   // What has been sent to this course, for the dot on the door it is behind.
   const pushesPromise = keep(admin
@@ -427,8 +436,12 @@ export default async function CourseView({
   type SchedSite = { id: string; name: string; beta: string | null; usual_meeting_time: string | null; coords: string | null; links: { url: string; label: string }[] | null; meeting_points: SchedMeetup | null }
   type SchedDay = { id: string; title: string; location: string | null; site_id: string | null; sites: SchedSite | null; notes: string | null; objectives: string[] | null; meeting_point: string | null; meeting_point_id: string | null; meeting_points: SchedMeetup | null; meeting_time: string | null; meeting_links: { url: string; label: string }[] | null; meeting_attachments: { path: string; filename: string }[] | null; sort_order: number; schedule_blocks: SchedBlock[] }
   const sched = ((schedRows ?? []) as unknown as {
-    id: string; name: string; overview: string | null; objectives: string[]; schedule_days: SchedDay[]
-  }[])[0]
+    id: string; name: string; overview: string | null; objectives: string[]; created_at: string; schedule_days: SchedDay[]
+  }[])
+    .slice()
+    .sort((a, b) =>
+      b.schedule_days.length - a.schedule_days.length ||
+      Date.parse(b.created_at) - Date.parse(a.created_at))[0]
   const schedDays = [...(sched?.schedule_days ?? [])].sort((a, b) => a.sort_order - b.sort_order)
 
   type UpdateRow = {
