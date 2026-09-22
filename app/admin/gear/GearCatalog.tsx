@@ -672,7 +672,10 @@ function AddItem({
   const [name, setName] = useState('')
   const [brand, setBrand] = useState('')
   const [parentId, setParentId] = useState('')
-  const [category, setCategory] = useState<string>(GEAR_CATEGORIES[0])
+  // Unanswered, not "Rope and cord". Seeding it with the first category meant
+  // every item added without a glance at this field filed itself under rope,
+  // and the form gave no sign it had answered on your behalf.
+  const [category, setCategory] = useState<string>('')
   // A generic item named here rather than picked. The category dropdown can
   // invent one; this one could not, so adding the first product of something
   // new meant adding the generic item, then starting the form again.
@@ -698,6 +701,7 @@ function AddItem({
         <CategorySelect
           value={category}
           options={categories}
+          emptyLabel="— category —"
           // The type picked is one of this category's, so changing category
           // un-picks it rather than leaving a product filed against a type
           // that is no longer on offer.
@@ -705,29 +709,39 @@ function AddItem({
           className={`${input} w-44`}
         />
       </div>
+      {/* Both halves of this field are about the *parent*, never about the row
+          being added — which the old wording hid. "Generic item" over a list
+          holding "none, this is a generic item" and "+ New generic item" read
+          as three answers to "what are you adding?", and the two that mention
+          a new generic sound like the same answer twice. They aren't: the
+          empty one says this row has no parent, and the "+" one names a parent
+          that doesn't exist yet and files this row under it. So the field asks
+          what it actually asks. */}
       <div>
-        <label className="block text-[11px] text-zinc-500 mb-1">Generic item</label>
+        <label className="block text-[11px] text-zinc-500 mb-1">Files under</label>
         {newType !== null ? (
           <input
             autoFocus
             value={newType}
             onChange={(e) => setNewType(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Escape') setNewType(null) }}
-            placeholder="New generic item"
+            placeholder="Name the generic item"
             className={`${input} w-44`}
           />
         ) : (
           <select
             value={parentId}
+            disabled={!category}
             onChange={(e) => {
               if (e.target.value === NEW_TYPE) { setNewType(''); setParentId('') }
               else setParentId(e.target.value)
             }}
-            className={`${input} w-44`}
+            title={category ? undefined : 'Pick a category first'}
+            className={`${input} w-44 disabled:opacity-40`}
           >
-            <option value="">— none, this is a generic item —</option>
+            <option value="">— nothing: this is itself a generic item —</option>
             {inCategory.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-            <option value={NEW_TYPE}>+ New generic item…</option>
+            <option value={NEW_TYPE}>+ A generic item not in the catalog yet…</option>
           </select>
         )}
       </div>
@@ -742,7 +756,7 @@ function AddItem({
         </div>
       )}
       <button
-        onClick={() => name.trim() && run(async () => {
+        onClick={() => name.trim() && category && run(async () => {
           // A named generic item is created first, in this category, and the
           // product is filed under it — two writes for what reads as one.
           let parent = parentId
@@ -758,7 +772,8 @@ function AddItem({
           }))
           setName(''); setBrand(''); setParentId(''); setNewType(null); onDone()
         })}
-        disabled={busy || !name.trim()}
+        disabled={busy || !name.trim() || !category}
+        title={category ? undefined : 'Pick a category first'}
         className="px-3 py-1.5 rounded bg-pr-red hover:bg-pr-red-dark text-white text-sm font-medium transition-colors disabled:opacity-40"
       >
         Add
