@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { courseShortName } from '@/lib/courses'
 import { syncCourseCalendar } from '@/lib/google-calendar'
-import { sendMail } from '@/lib/mailer'
+import { MAX_BATCH, sendMail, sendMailBatch } from '@/lib/mailer'
 
 async function requireAdmin() {
   const supabase = await createClient()
@@ -80,39 +80,85 @@ export async function sendInterestInvites(
       : `This course is currently ${inst.status} — dates and details may still shift.`
 
 
-  let sent = 0
-  for (const instructor of withEmail) {
-    const invite = inviteByInstructor.get(instructor.id)
-    if (!invite) continue
-    try {
-      await sendMail({
-        from: 'Peak Rescue Portal <noreply@peak-rescue.com>',
+  // The letter, once per instructor. Same text, different name and token.
+  const letterFor = (instructor: { name: string }, token: string) => ({
+    from: 'Peak Rescue Portal <noreply@peak-rescue.com>',
+    subject: `Interested in working ${courseName}? (${dates})`,
+    text: [
+      `${instructor.name}, we're staffing an upcoming course and want to check your availability.`,
+      '',
+      `Course: ${courseName}${inst.client_name ? ` · ${inst.client_name}` : ''}`,
+      `Dates: ${dates}`,
+      inst.location ? `Location: ${inst.location}` : null,
+      statusLine,
+      '',
+      `Let us know either way (you can add a note too):`,
+      `${siteUrl}/staffing/${token}`,
+      '',
+      `Expressing interest isn't a commitment — final staffing is confirmed separately.`,
+    ].filter((l): l is string => l !== null).join('\n'),
+  })
+
+  const addressed = withEmail
+    .map((instructor) => ({ instructor, invite: inviteByInstructor.get(instructor.id) }))
+    .filter((x): x is { instructor: (typeof withEmail)[number]; invite: NonNullable<typeof x.invite> } => Boolean(x.invite))
+
+  const delivered: typeof addressed = []
+
+  // The whole room in one request. This used to be a send per instructor,
+  // awaited in turn, so calling for twenty was twenty round trips in series
+  // while somebody watched a spinner — and Resend takes a hundred letters at
+  // a time.
+  //
+  // A strict batch is all-or-nothing: one address it won't accept and nobody
+  // gets theirs. That is the wrong trade for a call-out, and losing the
+  // per-person report with it would be worse — knowing who didn't get one is
+  // the point of `skipped`. So a batch that comes back refused falls to the
+  // old way, which finds out one at a time who the problem was.
+  for (let i = 0; i < addressed.length; i += MAX_BATCH) {
+    const chunk = addressed.slice(i, i + MAX_BATCH)
+    const { error } = await sendMailBatch(
+      chunk.map(({ instructor, invite }) => ({
+        ...letterFor(instructor, invite.token),
         to: [instructor.email!],
-        subject: `Interested in working ${courseName}? (${dates})`,
-        text: [
-          `${instructor.name}, we're staffing an upcoming course and want to check your availability.`,
-          '',
-          `Course: ${courseName}${inst.client_name ? ` · ${inst.client_name}` : ''}`,
-          `Dates: ${dates}`,
-          inst.location ? `Location: ${inst.location}` : null,
-          statusLine,
-          '',
-          `Let us know either way (you can add a note too):`,
-          `${siteUrl}/staffing/${invite.token}`,
-          '',
-          `Expressing interest isn't a commitment — final staffing is confirmed separately.`,
-        ].filter((l): l is string => l !== null).join('\n'),
-      })
-      sent++
-      await admin
-        .from('course_interest_invites')
-        .update({ sent_at: new Date().toISOString(), sent_count: invite.sent_count + 1 })
-        .eq('id', invite.id)
-    } catch (e) {
-      console.error(`Interest invite email to ${instructor.name} failed:`, e)
-      skipped.push(instructor.name)
+      }))
+    )
+    if (!error) { delivered.push(...chunk); continue }
+
+    console.error('Interest invite batch failed, falling back to one at a time:', error.message)
+    for (const one of chunk) {
+      try {
+        const { error: e } = await sendMail({
+          ...letterFor(one.instructor, one.invite.token),
+          to: [one.instructor.email!],
+        })
+        if (e) throw new Error(e.message)
+        delivered.push(one)
+      } catch (e) {
+        console.error(`Interest invite email to ${one.instructor.name} failed:`, e)
+        skipped.push(one.instructor.name)
+      }
     }
   }
+
+  // One update per distinct send count rather than one per instructor: the
+  // only thing that differs row to row is the number being stepped, and most
+  // of the time every row is on the same one.
+  const now = new Date().toISOString()
+  const byCount = new Map<number, string[]>()
+  for (const { invite } of delivered) {
+    const n = invite.sent_count as number
+    byCount.set(n, [...(byCount.get(n) ?? []), invite.id])
+  }
+  for (const [count, ids] of byCount) {
+    const { error } = await admin
+      .from('course_interest_invites')
+      .update({ sent_at: now, sent_count: count + 1 })
+      .in('id', ids)
+    if (error) console.error('Recording interest invite sends failed:', error.message)
+  }
+
+  const sent = delivered.length
 
   revalidatePath(`/admin/courses/${instanceId}`)
   return { sent, skipped }

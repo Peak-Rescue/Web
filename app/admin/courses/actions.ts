@@ -996,60 +996,91 @@ export async function applyLibrarySelection(
   const byTitle = new Map((existingModules ?? []).map((m) => [m.title.toLowerCase(), m]))
   let nextOrder = Math.max(-1, ...(existingModules ?? []).map((m) => m.order as number)) + 1
 
-  let items = 0
-  let sections = 0
+  // Four writes for the whole selection, however many sections it spans. This
+  // used to walk the sections one at a time, and each one cost three round
+  // trips of its own — look up the library rows, look up what the section
+  // already holds, insert the rest — so applying a five-section suggestion
+  // was fifteen trips in series behind a single click.
+  //
+  // Nothing in a section depended on the section before it, which is what
+  // made the walk pointless: the library lookup is one question about every
+  // id at once, the sections that need making can be made together, and the
+  // rows can all go in at the end. Module ids are minted here so the items
+  // know where they belong before the modules have been written.
+  const { data: lib } = await admin
+    .from('library_items')
+    .select('id, title')
+    .in('id', [...new Set(wanted.flatMap((g) => g.items.map((i) => i.id)))])
+    .eq('status', 'published')
+  const libById = new Map((lib ?? []).map((l) => [l.id as string, l.title as string]))
 
+  const newModules: { id: string; instance_id: string; title: string; audience: string; order: number }[] = []
+  const moduleFor = new Map<(typeof wanted)[number], string>()
   for (const g of wanted) {
-    let moduleId = byTitle.get(g.title.toLowerCase())?.id
-    if (!moduleId) {
-      const { data, error } = await admin
-        .from('course_modules')
-        .insert({
-          instance_id: instanceId,
-          title: g.title.slice(0, 120),
-          audience: g.audience === 'internal' ? 'instructor' : 'both',
-          order: nextOrder++,
-        })
-        .select('id')
-        .single()
-      if (error) throw new Error(error.message)
-      moduleId = data.id
-      sections++
-    }
-
-    const { data: lib } = await admin
-      .from('library_items')
-      .select('id, title')
-      .in('id', g.items.map((i) => i.id))
-      .eq('status', 'published')
-    const overrideById = new Map(g.items.map((i) => [i.id, i.audience]))
-
-    // The duplicate guard is a partial unique index, which PostgREST can't use
-    // for ON CONFLICT inference — so skip existing rows explicitly.
-    const { data: current } = await admin
-      .from('course_items')
-      .select('order, library_item_id')
-      .eq('module_id', moduleId)
-    const have = new Set((current ?? []).map((c) => c.library_item_id).filter(Boolean))
-    let order = Math.max(-1, ...(current ?? []).map((c) => c.order as number)) + 1
-
-    const rows = (lib ?? []).filter((l) => !have.has(l.id)).map((l) => {
-      const own = overrideById.get(l.id)
-      return {
-        module_id: moduleId!,
-        library_item_id: l.id,
-        title: l.title,
-        // Only store an override when it differs from the section's level.
-        audience: own && own !== g.audience ? own : null,
-        order: order++,
-      }
+    const existing = byTitle.get(g.title.toLowerCase())?.id
+    if (existing) { moduleFor.set(g, existing); continue }
+    const id = crypto.randomUUID()
+    newModules.push({
+      id,
+      instance_id: instanceId,
+      title: g.title.slice(0, 120),
+      audience: g.audience === 'internal' ? 'instructor' : 'both',
+      order: nextOrder++,
     })
-    if (rows.length === 0) continue
+    moduleFor.set(g, id)
+  }
+  if (newModules.length) {
+    const { error } = await admin.from('course_modules').insert(newModules)
+    if (error) throw new Error(error.message)
+  }
 
+  // Only the sections that already existed can be holding anything, and the
+  // duplicate guard is a partial unique index — which PostgREST can't use for
+  // ON CONFLICT inference — so the rows already there are skipped explicitly.
+  const existingIds = [...moduleFor.values()].filter((id) => !newModules.some((m) => m.id === id))
+  const { data: current } = existingIds.length
+    ? await admin.from('course_items').select('module_id, "order", library_item_id').in('module_id', existingIds)
+    : { data: [] }
+  const heldBy = new Map<string, Set<string>>()
+  const nextItemOrder = new Map<string, number>()
+  for (const c of current ?? []) {
+    const mod = c.module_id as string
+    if (c.library_item_id) heldBy.set(mod, (heldBy.get(mod) ?? new Set()).add(c.library_item_id as string))
+    nextItemOrder.set(mod, Math.max(nextItemOrder.get(mod) ?? 0, (c.order as number) + 1))
+  }
+
+  const rows: {
+    module_id: string; library_item_id: string; title: string
+    audience: 'internal' | 'shared' | null; order: number
+  }[] = []
+  for (const g of wanted) {
+    const moduleId = moduleFor.get(g)!
+    // A copy, because two groups can name the same section, and the second
+    // must not re-add what the first has already queued.
+    const have = new Set(heldBy.get(moduleId) ?? [])
+    let order = nextItemOrder.get(moduleId) ?? 0
+    for (const i of g.items) {
+      const title = libById.get(i.id)
+      if (!title || have.has(i.id)) continue
+      have.add(i.id)
+      rows.push({
+        module_id: moduleId,
+        library_item_id: i.id,
+        title,
+        // Only store an override when it differs from the section's level.
+        audience: i.audience && i.audience !== g.audience ? i.audience : null,
+        order: order++,
+      })
+    }
+  }
+
+  if (rows.length) {
     const { error } = await admin.from('course_items').insert(rows)
     if (error) throw new Error(error.message)
-    items += rows.length
   }
+
+  const sections = newModules.length
+  const items = rows.length
 
   revalidatePath(`/admin/courses/${instanceId}`)
   revalidatePath(`/portal/${instanceId}`)

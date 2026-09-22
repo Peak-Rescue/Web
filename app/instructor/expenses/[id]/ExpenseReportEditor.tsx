@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
@@ -180,6 +180,12 @@ export default function ExpenseReportEditor({
   const [formError, setFormError] = useState<string | null>(null)
   const formRef = useRef<FormState | null>(null)
   const editingIdRef = useRef<string | null>(null)
+  // The form opens below the whole list, which on a long report is off the
+  // bottom of the screen: the button is pressed, nothing visibly happens.
+  // Opening a line asks for the scroll; the effect does it once the panel is
+  // actually on the page. The offset clears the fixed header.
+  const formPanelRef = useRef<HTMLDivElement>(null)
+  const wantFormScroll = useRef(false)
   const itemTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const itemSaving = useRef(false)
   const itemRerun = useRef(false)
@@ -200,6 +206,14 @@ export default function ExpenseReportEditor({
   const sigRef = useRef<SignaturePadHandle>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const uploadItemRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    if (!form || !wantFormScroll.current) return
+    wantFormScroll.current = false
+    const el = formPanelRef.current
+    if (!el) return
+    window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - 96, behavior: 'smooth' })
+  }, [form])
 
   const categories = categoriesFor(isExempt)
   const totals = useMemo(() => computeTotals(localItems), [localItems])
@@ -384,6 +398,7 @@ export default function ExpenseReportEditor({
 
   async function openAdd() {
     if (form && !(await closeForm())) return
+    wantFormScroll.current = true
     const blank = { ...EMPTY_FORM }
     setForm(blank)
     formRef.current = blank
@@ -395,6 +410,7 @@ export default function ExpenseReportEditor({
 
   async function openEdit(item: EditorItem) {
     if (form && !(await closeForm())) return
+    wantFormScroll.current = true
     const f: FormState = {
       category: item.category,
       start_date: item.start_date,
@@ -822,7 +838,7 @@ export default function ExpenseReportEditor({
 
           {/* Line form (auto-saving) */}
           {form && (
-            <div className="p-6 bg-zinc-900 rounded-lg border border-zinc-700">
+            <div ref={formPanelRef} className="p-6 bg-zinc-900 rounded-lg border border-zinc-700">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-sm font-semibold">{editingId ? 'Expense' : 'New expense'}</h3>
                 <span className={`text-xs ${itemStatus === 'error' ? 'text-pr-red-light' : itemStatus === 'saved' ? 'text-teal-400' : 'text-zinc-500'}`}>

@@ -201,10 +201,13 @@ export async function mergeGearItems(keepId: string, dropId: string) {
   const { data: dupes } = await admin.from('gear_entry_options').select('entry_id').eq('gear_item_id', keepId)
   const alreadyHas = new Set((dupes ?? []).map((d) => d.entry_id))
   const { data: moving } = await admin.from('gear_entry_options').select('id, entry_id').eq('gear_item_id', dropId)
-  for (const m of moving ?? []) {
-    if (alreadyHas.has(m.entry_id)) await admin.from('gear_entry_options').delete().eq('id', m.id)
-    else await admin.from('gear_entry_options').update({ gear_item_id: keepId }).eq('id', m.id)
-  }
+  // Two calls whatever the count, rather than one per row: every option here
+  // is being asked the same question, and the answer sorts them into exactly
+  // two piles.
+  const redundant = (moving ?? []).filter((m) => alreadyHas.has(m.entry_id)).map((m) => m.id)
+  const rehomed = (moving ?? []).filter((m) => !alreadyHas.has(m.entry_id)).map((m) => m.id)
+  if (redundant.length) await admin.from('gear_entry_options').delete().in('id', redundant)
+  if (rehomed.length) await admin.from('gear_entry_options').update({ gear_item_id: keepId }).in('id', rehomed)
 
   const aliases = [...new Set([
     ...(keep.aliases ?? []), ...(drop.aliases ?? []), drop.name.toLowerCase(),
