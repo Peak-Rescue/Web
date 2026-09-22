@@ -522,28 +522,28 @@ export async function replaceDayOutline(
     prevDepth = depth
   }
 
-  // A level at a time, because a line can't name its parent until that parent
-  // has come back with an id. Ids are matched by parent and sort_order rather
-  // than by insert order, which the database never promised to keep.
-  let parentIds: string[] = []
-  for (const nodes of levels) {
-    if (!nodes.length) break
-    const idOfParent = (n: { parent: number }) => (n.parent === -1 ? null : parentIds[n.parent] ?? null)
-    const { data: inserted, error } = await admin
-      .from('schedule_blocks')
-      .insert(nodes.map((n) => ({
-        day_id: dayId,
-        parent_id: idOfParent(n),
-        title: n.row.title,
-        time_label: n.row.time,
-        location: n.row.location,
-        sort_order: n.order,
-      })))
-      .select('id, parent_id, sort_order')
-    if (error) throw new Error(error.message)
+  // Every line in one insert, parents and children together. This used to go a
+  // level at a time — a line can't name its parent until that parent has an id
+  // — and then match the ids that came back by parent and sort_order, because
+  // insert order is not something the database ever promised to keep. Minting
+  // the ids up here knows every parent_id before anything is sent, so the
+  // levels collapse into one write and the matching has nothing left to get
+  // wrong. Postgres checks the self-reference at the end of the statement, so
+  // a sub-topic may arrive alongside its own parent.
+  const ids = levels.map((nodes) => nodes.map(() => crypto.randomUUID()))
+  const blocks = levels.flatMap((nodes, depth) => nodes.map((n, i) => ({
+    id: ids[depth][i],
+    day_id: dayId,
+    parent_id: n.parent === -1 ? null : ids[depth - 1]?.[n.parent] ?? null,
+    title: n.row.title,
+    time_label: n.row.time,
+    location: n.row.location,
+    sort_order: n.order,
+  })))
 
-    const byKey = new Map((inserted ?? []).map((b) => [`${b.parent_id ?? ''}:${b.sort_order}`, b.id as string]))
-    parentIds = nodes.map((n) => byKey.get(`${idOfParent(n) ?? ''}:${n.order}`) ?? '')
+  if (blocks.length) {
+    const { error } = await admin.from('schedule_blocks').insert(blocks)
+    if (error) throw new Error(error.message)
   }
 
   if (!opts?.quiet) touch(instanceId)
