@@ -30,7 +30,7 @@ export default function VenueRow({ venue, itemCount }: { venue: Venue; itemCount
   }
 
   return (
-    <div className="rounded-lg border border-zinc-800 bg-zinc-900">
+    <div id={`venue-${venue.id}`} className="rounded-lg border border-zinc-800 bg-zinc-900 scroll-mt-6">
       <div className="flex items-center gap-3 px-3 py-2.5">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">

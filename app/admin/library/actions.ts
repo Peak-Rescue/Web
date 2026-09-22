@@ -1,6 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { LIBRARY_KINDS, BUCKET_ORDER } from '@/lib/library'
@@ -327,15 +328,19 @@ export async function createVenue(formData: FormData) {
   const admin = await requireAdmin()
   const name = ((formData.get('name') as string) || '').trim()
   if (!name) throw new Error('Name is required')
-  const { error } = await admin.from('venues').insert({
+  const { data, error } = await admin.from('venues').insert({
     name: name.slice(0, 120),
     region: ((formData.get('region') as string) || '').trim() || null,
     region_code: isValidRegion(formData.get('region_code') as string) ? (formData.get('region_code') as string) : null,
     client_name: ((formData.get('client_name') as string) || '').trim() || null,
     notes: ((formData.get('notes') as string) || '').trim() || null,
-  })
+  }).select('id').single()
   if (error) throw new Error(error.message)
   revalidate()
+  // The venues list is alphabetical and the form that fills it sits under the
+  // whole of it, so the new row lands out of sight. Named here, the page can
+  // take the reader to it. (Outside any try: redirect throws.)
+  redirect(`/admin/venues?added=${data.id}`)
 }
 
 export async function updateVenue(id: string, patch: { name?: string; region?: string | null; region_code?: string | null; client_name?: string | null; notes?: string | null; active?: boolean }) {

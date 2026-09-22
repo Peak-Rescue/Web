@@ -1,6 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { type SiteLink } from '@/lib/sites'
@@ -44,7 +45,7 @@ export async function createSite(formData: FormData) {
   const admin = await requireAdmin()
   const name = ((formData.get('name') as string) || '').trim()
   if (!name) throw new Error('Name is required')
-  const { error } = await admin.from('sites').insert({
+  const { data, error } = await admin.from('sites').insert({
     name: name.slice(0, 160),
     venue_id: ((formData.get('venue_id') as string) || '') || null,
     kind: ((formData.get('kind') as string) || '').trim() || null,
@@ -52,9 +53,14 @@ export async function createSite(formData: FormData) {
     meeting_point_id: ((formData.get('meeting_point_id') as string) || '') || null,
     usual_meeting_time: ((formData.get('usual_meeting_time') as string) || '').trim() || null,
     coords: ((formData.get('coords') as string) || '').trim() || null,
-  })
+  }).select('id').single()
   if (error) throw new Error(error.message)
   revalidate()
+  // The list is grouped by venue and sorted by name, so a new site lands
+  // anywhere but here — the form it was typed into is at the foot of the page.
+  // Redirecting names the row so the page can go to it. (Outside any try:
+  // redirect throws.)
+  redirect(`/admin/sites?added=${data.id}`)
 }
 
 export async function updateSite(

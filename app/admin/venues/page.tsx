@@ -7,11 +7,17 @@ import VenueRow from './VenueRow'
 import RegionSelect from '@/components/RegionSelect'
 import { type Venue } from '@/lib/library'
 import InfoHint from '@/components/InfoHint'
+import JumpToNewRow from '@/components/JumpToNewRow'
 
 const input = 'w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500'
 const label = 'block text-xs text-zinc-400 mb-1'
 
-export default async function VenuesPage() {
+export default async function VenuesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ added?: string }>
+}) {
+  const { added } = await searchParams
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
@@ -50,6 +56,10 @@ export default async function VenuesPage() {
           </Link>
           <span className="text-sm text-zinc-600"> the canyons and crags inside them, with their beta.</span>
         </p>
+
+        {added && venues.some((v) => v.id === added) && (
+          <JumpToNewRow key={added} targetId={`venue-${added}`} />
+        )}
 
         <div className="space-y-2 mb-10">
           {venues.map((v) => <VenueRow key={v.id} venue={v} itemCount={itemCount.get(v.id) ?? 0} />)}

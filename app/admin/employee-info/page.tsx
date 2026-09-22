@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { addResource, deleteResource } from './actions'
 import { readViewAs } from '@/lib/view-as'
 import ViewAsMenu from '@/components/ViewAsMenu'
+import JumpToNewRow from '@/components/JumpToNewRow'
 
 type Resource = {
   id: string
@@ -35,7 +36,12 @@ function linkKind(url: string): string {
 const inputClass =
   'w-full bg-zinc-900 border border-zinc-700 rounded px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500 transition-colors'
 
-export default async function EmployeeInfoPage() {
+export default async function EmployeeInfoPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ added?: string }>
+}) {
+  const { added } = await searchParams
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
@@ -75,12 +81,16 @@ export default async function EmployeeInfoPage() {
           <p className="text-sm text-zinc-500 mb-10">No documents yet.</p>
         )}
 
+        {added && resources.some((r) => r.id === added) && (
+          <JumpToNewRow key={added} targetId={`resource-${added}`} />
+        )}
+
         {sections.map((section) => (
           <section key={section} className="mb-10">
             <h2 className="text-sm font-medium text-zinc-500 uppercase tracking-wide mb-3">{section}</h2>
             <div className="space-y-2">
               {resources.filter((r) => r.section === section).map((r) => (
-                <div key={r.id} className="flex items-center gap-2">
+                <div key={r.id} id={`resource-${r.id}`} className="flex items-center gap-2 rounded-lg scroll-mt-6">
                   <a
                     href={r.url}
                     target="_blank"

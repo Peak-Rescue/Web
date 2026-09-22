@@ -810,26 +810,46 @@ export default function ExpenseReportEditor({
             </button>
           </div>
 
-          {visibleItems.length > 0 && (
-            <div className="bg-zinc-900 rounded-lg border border-zinc-800 divide-y divide-zinc-800 mb-4">
-              {itemsAreGrouped
-                ? itemGroups.map((g) => (
-                    <div key={g.key} className="divide-y divide-zinc-800">
-                      <div className="px-4 py-2 flex items-center justify-between gap-3 bg-zinc-950/40">
-                        <p className={`text-xs font-medium truncate ${g.key === 'unclassified' ? 'text-pr-red-light' : 'text-zinc-300'}`}>
-                          {g.label}
-                        </p>
-                        <p className="text-xs text-zinc-500 shrink-0">
-                          {g.items.length} line{g.items.length === 1 ? '' : 's'} ·{' '}
-                          <span className="font-medium text-zinc-200">{fmtMoney(g.total)}</span>
-                        </p>
-                      </div>
-                      {g.items.map((item) => itemRow(item, true))}
+          {visibleItems.length > 0 &&
+            (itemsAreGrouped ? (
+              /* Each course is its own card with air around it, and its heading
+                 sticks to the top of the screen while its lines scroll past.
+                 A divider inside one long card is the same grey line that sits
+                 between two lines of the same course — by the time you have
+                 scrolled past it you no longer know which side of it you are
+                 on, which is exactly the question a grouped report asks. */
+              <div className="space-y-5 mb-4">
+                {itemGroups.map((g) => (
+                  <div
+                    key={g.key}
+                    className={`bg-zinc-900 rounded-lg border divide-y divide-zinc-800 overflow-hidden ${
+                      g.key === 'unclassified' ? 'border-pr-red/40' : 'border-zinc-800'
+                    }`}
+                  >
+                    <div
+                      className={`sticky top-0 z-10 px-4 py-2.5 flex items-center justify-between gap-3 border-b ${
+                        g.key === 'unclassified'
+                          ? 'bg-pr-red/15 border-pr-red/30'
+                          : 'bg-zinc-800 border-zinc-700'
+                      }`}
+                    >
+                      <p className={`text-sm font-semibold truncate ${g.key === 'unclassified' ? 'text-pr-red-light' : 'text-zinc-100'}`}>
+                        {g.label}
+                      </p>
+                      <p className="text-xs text-zinc-400 shrink-0">
+                        {g.items.length} line{g.items.length === 1 ? '' : 's'} ·{' '}
+                        <span className="font-medium text-zinc-100">{fmtMoney(g.total)}</span>
+                      </p>
                     </div>
-                  ))
-                : visibleItems.map((item) => itemRow(item, false))}
-            </div>
-          )}
+                    {g.items.map((item) => itemRow(item, true))}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="bg-zinc-900 rounded-lg border border-zinc-800 divide-y divide-zinc-800 mb-4">
+                {visibleItems.map((item) => itemRow(item, false))}
+              </div>
+            ))}
           {localItems.length === 0 && !form && (
             <p className="py-8 text-center text-sm text-zinc-500 border border-zinc-800 rounded-lg mb-4">
               No expenses yet — add your first one.
@@ -1147,11 +1167,13 @@ export default function ExpenseReportEditor({
                   {reviewGroups.length > 1
                     ? reviewGroups.map((g) => (
                         <div key={g.key} className="divide-y divide-zinc-800">
-                          <div className="px-3 py-1.5 flex items-center justify-between gap-3 text-xs bg-zinc-950/40">
-                            <span className={`truncate ${g.key === 'unclassified' ? 'text-pr-red-light' : 'text-zinc-300'}`}>
+                          {/* Same weight the list gives a course heading, so
+                              the review reads as the report the list showed. */}
+                          <div className={`px-3 py-2 flex items-center justify-between gap-3 text-xs ${g.key === 'unclassified' ? 'bg-pr-red/15' : 'bg-zinc-800'}`}>
+                            <span className={`font-semibold truncate ${g.key === 'unclassified' ? 'text-pr-red-light' : 'text-zinc-100'}`}>
                               {g.label}
                             </span>
-                            <span className="text-zinc-400 shrink-0">{fmtMoney(g.total)}</span>
+                            <span className="font-medium text-zinc-100 shrink-0">{fmtMoney(g.total)}</span>
                           </div>
                           {g.items.map((item) => reviewRow(item, true))}
                         </div>

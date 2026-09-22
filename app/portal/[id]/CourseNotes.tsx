@@ -18,6 +18,10 @@ import { Linkified } from '@/lib/linkify'
 
 const BULLET = /^(\s*)[-*•]\s+(.*)$/
 
+// Mirrors the cap the action applies, so what stays on screen after a save is
+// what the server actually kept.
+const MAX_NOTES = 8000
+
 type Block =
   | { kind: 'list'; items: string[] }
   | { kind: 'text'; lines: string[] }
@@ -84,6 +88,18 @@ export default function CourseNotes({
   const router = useRouter()
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(notes ?? '')
+  // What's on screen between the write and the server's answer. Re-rendering
+  // this page costs a full round trip (every panel re-reads), so waiting on
+  // the refresh means staring at the old note for a second or more after it
+  // has already been saved. Hold the text we just wrote and let the refresh
+  // catch up behind it.
+  const [saved, setSaved] = useState(notes ?? '')
+  const [lastNotes, setLastNotes] = useState(notes ?? '')
+  if ((notes ?? '') !== lastNotes) {
+    setLastNotes(notes ?? '')
+    setSaved(notes ?? '')
+    if (!editing) setDraft(notes ?? '')
+  }
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const textarea = useRef<HTMLTextAreaElement>(null)
@@ -91,7 +107,10 @@ export default function CourseNotes({
   async function save() {
     setBusy(true); setError(null)
     try {
-      await saveCourseNotes(instanceId, draft)
+      const text = draft.trim().slice(0, MAX_NOTES)
+      await saveCourseNotes(instanceId, text)
+      setSaved(text)
+      setDraft(text)
       setEditing(false)
       router.refresh()
     } catch (e) {
@@ -174,7 +193,7 @@ export default function CourseNotes({
           <CloseButton
             label="Cancel"
             disabled={busy}
-            onClick={() => { setDraft(notes ?? ''); setError(null); setEditing(false) }}
+            onClick={() => { setDraft(saved); setError(null); setEditing(false) }}
           />
         </div>
         <textarea
@@ -204,19 +223,19 @@ export default function CourseNotes({
 
   return (
     <div className="space-y-2">
-      {notes && (
+      {saved && (
         <div className="p-4 bg-zinc-900 border border-zinc-800 rounded-lg text-sm text-zinc-300">
-          <NotesBody notes={notes} />
+          <NotesBody notes={saved} />
         </div>
       )}
       {/* Nothing written yet reads as the same invitation the composers give:
           one row that looks like the field it opens. With a note already here
           the row would be a second box under the first, so it steps down to
           the pencil every other edit on this page uses. */}
-      {canEdit && !notes && (
+      {canEdit && !saved && (
         <ComposerTrigger label="Add notes" icon={<NoteIcon />} onClick={() => setEditing(true)} />
       )}
-      {canEdit && notes && (
+      {canEdit && saved && (
         <button
           onClick={() => setEditing(true)}
           className="inline-flex items-center gap-1.5 rounded border border-zinc-700 px-2 py-1 text-[11px] text-zinc-300 hover:text-white hover:border-zinc-500 transition-colors"
