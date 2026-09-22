@@ -5,7 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { courseAccess, courseSubtitle, isAdmin } from '@/lib/course-access'
 import { courseDisplayName } from '@/lib/courses'
 import { loadCoursePerson } from '@/lib/people'
-import { phoneHref } from '@/lib/phone'
+import PhoneText from '@/components/PhoneText'
 import PersonRemoval from './PersonRemoval'
 
 // One student on one course, for the people running it.
@@ -23,15 +23,6 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       <dd className="text-sm text-zinc-200 mt-0.5">{children}</dd>
     </div>
   )
-}
-
-// Shown as typed — these carry labels like "Office:" or "Cell:" — but dialed
-// from the digits alone, and left as plain text when there is nothing to dial.
-function PhoneText({ phone }: { phone: string }) {
-  const href = phoneHref(phone)
-  return href
-    ? <a href={href} className="hover:text-white transition-colors">{phone}</a>
-    : <>{phone}</>
 }
 
 const longDate = (iso: string) =>
@@ -108,7 +99,7 @@ export default async function CoursePersonPage({
             </Field>
             <Field label="Phone">
               {person.phone
-                ? <PhoneText phone={person.phone} />
+                ? <PhoneText value={person.phone} className="hover:text-white transition-colors" />
                 : <span className="text-zinc-500">Not on file</span>}
             </Field>
             {person.waiverDetails && (
@@ -127,7 +118,7 @@ export default async function CoursePersonPage({
             </Field>
             <Field label="Emergency phone">
               {person.emergencyPhone
-                ? <PhoneText phone={person.emergencyPhone} />
+                ? <PhoneText value={person.emergencyPhone} className="hover:text-white transition-colors" />
                 : <span className="text-amber-300">Nobody on file</span>}
             </Field>
           </dl>

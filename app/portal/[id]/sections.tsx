@@ -2,7 +2,7 @@ import React from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import WaiverDetach from '@/components/WaiverDetach'
-import { formatPhone, phoneHref } from '@/lib/phone'
+import PhoneText from '@/components/PhoneText'
 
 // Presentational shell for the portal page. Every top-level block on a course
 // is a Section: same icon-and-rule header, same spacing, its own anchor. The
@@ -223,11 +223,9 @@ export function InstructorCard({
             )}
             {email && phone && <span className="text-zinc-700"> · </span>}
             {phone && (
-              phoneHref(phone)
-                ? <a href={phoneHref(phone)!} className="hover:text-zinc-300 transition-colors tabular-nums">
-                    {formatPhone(phone)}
-                  </a>
-                : <span className="tabular-nums">{formatPhone(phone)}</span>
+              <span className="tabular-nums">
+                <PhoneText value={phone} format className="hover:text-zinc-300 transition-colors" />
+              </span>
             )}
           </div>
         )}
@@ -318,13 +316,7 @@ export function StudentCard({
             </a>
           )}
           {email && phone && <span className="text-zinc-700"> · </span>}
-          {phone && (
-            phoneHref(phone)
-              ? <a href={phoneHref(phone)!} className="hover:text-zinc-300 transition-colors">
-                  {phone}
-                </a>
-              : <span>{phone}</span>
-          )}
+          {phone && <PhoneText value={phone} className="hover:text-zinc-300 transition-colors" />}
           {!email && !phone && 'No contact details on file'}
         </div>
       </div>
