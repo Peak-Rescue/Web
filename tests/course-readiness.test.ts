@@ -87,6 +87,17 @@ describe('staffing', () => {
       .toBe('5 of 3')
   })
 
+  // 1.5 slots is a lead plus an assistant for part of the course — a real
+  // plan, and one that still needs two names. The fraction is the estimator's
+  // business; staffing counts people.
+  it('rounds a fractional slot count up to whole people', () => {
+    const s = (crew: { role: string }[]) => step(inst({ instructor_slots: 1.5, crew }), extras(), 'staffing')!
+    expect(s([{ role: 'lead' }]).detail).toBe('1 of 2')
+    expect(s([{ role: 'lead' }]).tone).toBe('action')
+    expect(s([{ role: 'lead' }, { role: 'assist' }]).detail).toBe('2 of 2')
+    expect(s([{ role: 'lead' }, { role: 'assist' }]).tone).toBe('done')
+  })
+
   it('always opens the staffing panel, full or not', () => {
     expect(step(inst(), extras(), 'staffing')!.panel).toBe('staffing')
     expect(step(inst({ crew: [{ role: 'lead' }, { role: 'assist' }] }), extras(), 'staffing')!.panel).toBe('staffing')

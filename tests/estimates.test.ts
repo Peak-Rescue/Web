@@ -69,4 +69,39 @@ describe('day counts that follow the course', () => {
     expect(factorValue('days', 'Rental vehicle', counts)).toBe(14)
     expect(factorValue('days', 'Instructor day rate', counts)).toBe(10)
   })
+
+  // Half an instructor is a real plan for pay and nonsense for a bed: the
+  // shadowing instructor who is only there for two days still sleeps in a
+  // whole room, sits in a whole seat and is driven out and back once.
+  it('pays a fraction of an instructor and houses a whole one', () => {
+    const counts = { instructors: 1.5, students: 8, days: 10, calendarDays: 12 }
+    expect(factorValue('instructors', 'Instructor field day/s', counts)).toBe(1.5)
+    expect(factorValue('instructors', 'Instructor day rate', counts)).toBe(1.5)
+    expect(factorValue('instructors', 'Lodging', counts)).toBe(2)
+    expect(factorValue('instructors', 'Meals', counts)).toBe(2)
+    expect(factorValue('instructors', 'Rental vehicle', counts)).toBe(2)
+    expect(factorValue('instructors', 'Instructor travel day/s', counts)).toBe(2)
+    expect(factorValue('participants', 'Catering', counts)).toBe(10)
+  })
+
+  // Everything but the field day rounds up, including the rates that name none
+  // of the words a list of per-head costs would have held. Half an airline
+  // ticket is the failure this shape exists to prevent.
+  it('rounds up a cost it has never seen before', () => {
+    const counts = { instructors: 1.5, students: 8, days: 10, calendarDays: 12 }
+    expect(factorValue('instructors', 'Flights', counts)).toBe(2)
+    expect(factorValue('instructors', 'Lift tickets', counts)).toBe(2)
+    expect(factorValue('instructors', 'SPRAT fees', counts)).toBe(2)
+    expect(factorValue('instructors', 'EMT / medical', counts)).toBe(2)
+    expect(factorValue('instructors', 'Something nobody has added yet', counts)).toBe(2)
+  })
+
+  // A whole crew is a whole crew: the rounding is invisible until somebody
+  // types a fraction, which is most courses.
+  it('changes nothing for a whole number of instructors', () => {
+    const counts = { instructors: 3, students: 8, days: 10, calendarDays: 12 }
+    expect(factorValue('instructors', 'Instructor field day/s', counts)).toBe(3)
+    expect(factorValue('instructors', 'Flights', counts)).toBe(3)
+    expect(factorValue('participants', 'Catering', counts)).toBe(11)
+  })
 })

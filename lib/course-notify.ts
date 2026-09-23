@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { CAPABILITY_ORDER } from '@/lib/capabilities'
+import { slotsToStaff } from '@/lib/course-readiness'
 
 /** Who an update is for. The audience also decides who can see it on the page:
     emailing only the crew while the words sit where the students are reading
@@ -202,7 +203,9 @@ export async function emailAdminsNewCourse(
           ? `Disciplines: ${disciplines.map((d) => CAPABILITY_META[d].label).join(', ')}`
           : null,
         course.max_students ? `Students: up to ${course.max_students}` : null,
-        course.instructor_slots ? `Instructors needed: ${course.instructor_slots}` : null,
+        // People, not instructor days: a course planned for 1.5 instructors is
+        // asking two of us to put a hand up.
+        course.instructor_slots ? `Instructors needed: ${slotsToStaff(course.instructor_slots)}` : null,
         course.notes ? `\nNotes: ${course.notes}` : null,
         '',
         `Open it: ${site}/admin/courses/${instanceId}`,

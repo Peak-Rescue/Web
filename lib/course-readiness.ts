@@ -111,9 +111,17 @@ export type StepInput = {
     close the books. Overridden org-wide — see `loadBooksSettleDays`. */
 export const DEFAULT_SETTLE_DAYS = 30
 
-/** How many instructors a course wants. Unset means at least one. */
+/** How many instructors a course wants. Unset means at least one. Fractional
+    on purpose — 1.5 is a lead plus an assistant for part of the course. */
 export const slotsWanted = (slots: number | null | undefined) =>
   slots && slots > 0 ? slots : 1
+
+/** The same number as people, which only ever come whole: half a slot still
+    takes somebody's name, so 1.5 is two on the roster. Anything counting
+    bodies — the meter's boxes, whether staffing is done — asks for this;
+    anything counting money uses the fraction as written. */
+export const slotsToStaff = (slots: number | null | undefined) =>
+  Math.ceil(slotsWanted(slots))
 
 // A cancelled course owes nobody anything, and saying what it still needs is
 // worse than saying nothing. Everything else has at least one step left —
@@ -218,7 +226,7 @@ export function courseSteps(
   if (coursePhase(inst, today) === 'over') return shaped([billing, books])
 
   const staffed = inst.crew.length
-  const wanted = slotsWanted(inst.instructor_slots)
+  const wanted = slotsToStaff(inst.instructor_slots)
   const hasLead = inst.crew.some((c) => c.role === 'lead')
   const staffingDone = staffed >= wanted && hasLead
 

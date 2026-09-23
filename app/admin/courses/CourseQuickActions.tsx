@@ -10,7 +10,7 @@ import BooksQuickClose from './BooksQuickClose'
 import BillingSection from './BillingSection'
 import { COURSE_STATUSES, COURSE_STATUS_STYLES, COURSE_STATUS_MEANING } from '@/lib/course-status'
 import {
-  moneyPipeline, slotsWanted,
+  moneyPipeline, slotsToStaff,
   type Step, type StepKey, type StepPanel,
   type CourseExtras, type CoursePhase, type MoneyStop,
 } from '@/lib/course-readiness'
@@ -181,7 +181,9 @@ function CrewMeter({
   awaiting: number
   onOpen: () => void
 }) {
-  const wanted = slotsWanted(slots)
+  // Boxes are people, so a fractional slot count rounds up to one: a course
+  // planned for 1.5 instructors still needs two names.
+  const wanted = slotsToStaff(slots)
   const lead = crew.some((c) => c.role === 'lead')
   const full = crew.length >= wanted && lead
   // Lead first, so the L is always the leftmost box and the meter reads the

@@ -105,6 +105,27 @@ function isTravelLine(label: string): boolean {
   return /travel/i.test(label)
 }
 
+// The one line a fractional instructor count is honest about: what the course
+// owes somebody for the days they work. Half an instructor is a real plan
+// there — a shadowing instructor on a $25 hourly costs about half of what the
+// buffered lead day rate assumes, so half a line of it is the right money.
+//
+// Everything else counts bodies, and this is deliberately the narrow test
+// rather than a list of the per-head costs: there is no such thing as half a
+// bed, half a seat in the truck, half a meal, half a drive out or half an
+// airline ticket, and a list of the costs that are per-head would have to be
+// right about every rate anyone ever adds to the library. "Flights", priced
+// per person, is the one that proved it — it named none of the words a list
+// like that would have held, and quoted half a ticket. So a rate nobody
+// anticipated rounds up, which over-quotes by at most a fraction of one line
+// instead of under-quoting a whole cost.
+//
+// The same test 178 used in SQL to find the field pay row — instructor, not
+// travel, field or day — so the two agree by construction.
+function paysFieldTime(label: string): boolean {
+  return /instructor/i.test(label) && !isTravelLine(label) && /field|day/i.test(label)
+}
+
 // Filler for the admin burden a complicated course carries, priced by feel.
 // The course length says nothing about it: twelve field days are not twelve
 // days of paperwork. Nothing is derived, so nothing is ever called stale.
@@ -122,10 +143,12 @@ export function factorValue(name: string, label: string, counts: FactorCounts): 
   // rate. "person" is still understood, for lines written before the rename
   // and for factor names typed by hand, and still means staff.
   if (n.startsWith('instructor') || n.startsWith('person') || n.startsWith('people') || n.startsWith('staff')) {
-    return counts.instructors || null
+    return (paysFieldTime(label) ? counts.instructors : Math.ceil(counts.instructors)) || null
   }
   if (n.startsWith('participant') || n.startsWith('attendee')) {
-    return counts.students === null ? null : counts.instructors + counts.students
+    // Always heads: a participant count feeds catering, transport and seats in
+    // a classroom, and every one of those is a person who turned up.
+    return counts.students === null ? null : Math.ceil(counts.instructors) + counts.students
   }
   if (n.startsWith('student')) return counts.students
   if (n.startsWith('day') || n.startsWith('night')) {

@@ -15,6 +15,7 @@ import CourseLocationFields from '@/components/CourseLocationFields'
 import { todayHere } from '@/lib/course-clock'
 import { loadCourseExtras, loadBooksSettleDays, showsSteps, coursePhase } from '@/lib/course-readiness'
 import { loadCourseOwners } from '@/lib/course-owner'
+import InfoHint from '@/components/InfoHint'
 
 function firstStartDate(inst: Instance): string | null {
   return inst.starts_at ?? null
@@ -166,8 +167,11 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
               <input name="max_students" type="number" min="1" placeholder="e.g. 10" className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
             </div>
             <div>
-              <label className="block text-xs text-zinc-400 mb-1">Instructor slots</label>
-              <input name="instructor_slots" type="number" min="1" placeholder="e.g. 3" className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
+              <label className="block text-xs text-zinc-400 mb-1">
+                Instructor slots
+                <InfoHint text="Takes a fraction: 1.5 is a lead plus a shadowing instructor on the lower hourly. Staffing rounds up to whole people, and so does every cost but the field day." />
+              </label>
+              <input name="instructor_slots" type="number" min="0.5" step="any" placeholder="e.g. 3" className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
             </div>
 
             <div className="sm:col-span-2">

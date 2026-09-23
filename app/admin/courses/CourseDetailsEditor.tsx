@@ -1,6 +1,7 @@
 import { updateInstanceDetails, addOffDay, removeOffDay } from './actions'
 import AutoSaveForm from '@/components/AutoSaveForm'
 import TrashIcon from '@/components/TrashIcon'
+import InfoHint from '@/components/InfoHint'
 import { CourseTypeSelect } from './CourseTypeSelect'
 import CourseLocationFields from '@/components/CourseLocationFields'
 import CourseContactsEditor from '@/components/CourseContactsEditor'
@@ -144,8 +145,14 @@ export default function CourseDetailsEditor({
           </div>
         )}
         <div>
-          <label className="block text-xs text-zinc-400 mb-1">{kind === 'job' ? 'Crew' : 'Instructor slots'}</label>
-          <input name="instructor_slots" type="number" min="1" defaultValue={course.instructor_slots ?? ''} className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
+          <label className="block text-xs text-zinc-400 mb-1">
+            {kind === 'job' ? 'Crew' : 'Instructor slots'}
+            <InfoHint text="Takes a fraction: 1.5 is a lead plus a shadowing instructor on the lower hourly. Staffing rounds up to whole people — 1.5 still wants two names — and so does every cost but the field day, because half an instructor still needs a whole bed, a whole seat and a whole flight." />
+          </label>
+          {/* step="any" rather than a half step: the arrows still count whole
+              instructors, which is what nearly every course wants, and a
+              fraction is there for the ones that don't. */}
+          <input name="instructor_slots" type="number" min="0.5" step="any" defaultValue={course.instructor_slots ?? ''} className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
         </div>
       </AutoSaveForm>
 
