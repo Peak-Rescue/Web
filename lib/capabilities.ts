@@ -11,14 +11,21 @@
 // swiftwater course are differences in delivery and material, not in who can
 // teach it — so they live on the offering and its content, not here.
 //
-// Four skills have no civilian counterpart (jungle, urban, cold weather, small
-// team) and one has no military one (maritime), but they sit in the same list;
-// the sector gate does the filtering.
+// Five skills have no civilian counterpart (mountain, jungle, urban, cold
+// weather, small team) and one has no military one (maritime), but they sit in
+// the same list; the sector gate does the filtering.
+//
+// Mountain and backcountry are two skills, not one. Backcountry is rescue in
+// backcountry terrain — the civilian SAR sense — and its military counterpart
+// is small team rescue, which has always had its own entry. Mountain is
+// mobility: mountaineering and climbing, moving a team through the terrain
+// rather than getting someone out of it. 088 merged the military's mountain
+// into backcountry for want of a civilian twin, and it had the wrong one.
 
 export type CapabilityCategory =
   | 'industry' | 'rope_access' | 'aerial_evac' | 'canyoning'
   | 'swift_water' | 'backcountry' | 'maritime'
-  | 'jungle_mobility' | 'urban_mobility' | 'cold_weather' | 'small_team'
+  | 'mountain' | 'jungle_mobility' | 'urban_mobility' | 'cold_weather' | 'small_team'
 
 export type CapabilityRole = 'lead' | 'assist'
 
@@ -32,6 +39,7 @@ export const CAPABILITY_META: Record<CapabilityCategory, { label: string }> = {
   swift_water:     { label: 'Swift Water' },
   backcountry:     { label: 'Backcountry' },
   maritime:        { label: 'Maritime' },
+  mountain:        { label: 'Mountain Mobility' },
   // Parachute rescue & recovery sits inside jungle mobility.
   jungle_mobility: { label: 'Jungle Mobility' },
   urban_mobility:  { label: 'Urban Mobility' },
@@ -42,7 +50,7 @@ export const CAPABILITY_META: Record<CapabilityCategory, { label: string }> = {
 export const CAPABILITY_ORDER: CapabilityCategory[] = [
   'industry', 'rope_access', 'aerial_evac', 'canyoning',
   'swift_water', 'backcountry', 'maritime',
-  'jungle_mobility', 'urban_mobility', 'cold_weather', 'small_team',
+  'mountain', 'jungle_mobility', 'urban_mobility', 'cold_weather', 'small_team',
 ]
 
 // Which expertise covers each offering. Civilian and military versions of the
@@ -59,8 +67,10 @@ export const CATEGORY_COURSE_TYPES: Record<CapabilityCategory, string[]> = {
   aerial_evac:     ['aerial-tramway-rescue', 'zipline-adventure-park-rescue', 'stableflight', 'aerial-assets'],
   canyoning:       ['class-c-canyon-rescue', 'canyoneering'],
   swift_water:     ['swiftwater-rescue', 'water-mobility'],
-  backcountry:     ['mountain-rescue', 'mountain-mobility-training'],
+  // Rescue in backcountry terrain; the mobility half is its own skill below.
+  backcountry:     ['mountain-rescue'],
   maritime:        ['maritime-mobility'],
+  mountain:        ['mountain-mobility-training'],
   jungle_mobility: ['jungle-mobility'],
   urban_mobility:  ['urban-mobility'],
   cold_weather:    ['cold-weather-arctic-operations'],
