@@ -97,9 +97,11 @@ export default function EstimatePanel({
   initialExtendsId: string | null
   /** What this COA is to the others, null until somebody says. */
   initialRelation: OptionRelation | null
-  /** The other live COAs on this course that an addition could be built on —
-      already filtered to the ones that are not additions themselves. */
-  siblings: { id: string; title: string }[]
+  /** The other live COAs on this course. All of them, because whether the
+      picker is shown at all and which COAs may be a parent are two different
+      questions: a course whose only sibling is an addition to it still has to
+      say what it is. */
+  siblings: { id: string; title: string; relation: OptionRelation | null; archived: boolean }[]
   /** The course's own dates — what the empty boxes are standing in for. */
   courseSpan: { starts_at: string | null; ends_at: string | null }
 }) {
@@ -533,8 +535,14 @@ export default function EstimatePanel({
   const fmtDay = (d: string) =>
     new Date(d + 'T00:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
   const ownSpan = Boolean(startsAt || endsAt)
-  const hasSiblings = siblings.length > 0
+  const hasSiblings = siblings.some((sib) => !sib.archived)
   const parent = siblings.find((sib) => sib.id === extendsId) ?? null
+  // A COA can only be added to one that is a course in its own right —
+  // additions do not chain — but the one this COA already names stays on the
+  // list whatever it is, so the picker never shows a blank where an answer is.
+  const parentChoices = siblings.filter(
+    (sib) => sib.id === extendsId || (!sib.archived && sib.relation !== 'addition')
+  )
   // Lines an addition must not carry: the deployment is already priced in the
   // COA it extends. Warned about rather than refused, because the numbers are
   // the estimator's to set — but warned about with the fix attached, since the
@@ -650,8 +658,10 @@ export default function EstimatePanel({
             >
               <option value="">Relationship not set…</option>
               <option value="standalone">A course on its own</option>
-              {siblings.map((sib) => (
-                <option key={sib.id} value={`addition:${sib.id}`}>In addition to {sib.title}</option>
+              {parentChoices.map((sib) => (
+                <option key={sib.id} value={`addition:${sib.id}`}>
+                  In addition to {sib.title}{sib.archived ? ' (set aside)' : ''}
+                </option>
               ))}
             </select>
             <InfoHint text="A course on its own is one the client can take — and only one of those can be accepted, because two whole courses on one quote are two deployments billed as one. In addition to another is priced as the difference and taken on top of it: the second week of a blended course, which the first week's travel already got the crew to." />

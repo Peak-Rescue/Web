@@ -431,9 +431,19 @@ export default async function CoursePricingEditor({
             initialEndsAt={e.endsAt}
             initialExtendsId={e.extendsId}
             initialRelation={e.relation}
-            siblings={estimatePanels
-              .filter((o) => o.id && o.id !== e.id && o.relation !== 'addition')
-              .map((o) => ({ id: o.id as string, title: o.title }))}
+            siblings={[...estimatePanels, ...archivedCoas]
+              .filter((o) => o.id && o.id !== e.id)
+              .map((o) => ({
+                id: o.id as string,
+                title: o.title,
+                relation: o.relation,
+                // A COA that was set aside is not in play, so it neither asks
+                // its siblings to declare a relationship nor offers itself as
+                // something to be added to — but it stays on the list when a
+                // COA already names it, so setting one aside does not blank
+                // the other's answer.
+                archived: Boolean(o.archivedAt),
+              }))}
             courseSpan={{ starts_at: course.starts_at as string | null, ends_at: course.ends_at as string | null }}
           />
         ))}

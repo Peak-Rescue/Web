@@ -364,6 +364,17 @@ export async function setEstimateArchived(instanceId: string, estimateId: string
 
 export async function deleteEstimateCoa(instanceId: string, estimateId: string) {
   const admin = await requireAdmin()
+  // Anything added to this one loses what it was added to. The FK would set
+  // extends_id null on its own and leave an addition pointing at nothing, which
+  // the column forbids — so the whole answer goes, and the COA asks again. It
+  // is genuinely unanswered: what it was on top of no longer exists.
+  const { error: orphanError } = await admin
+    .from('course_estimates')
+    .update({ relation: null, extends_id: null })
+    .eq('instance_id', instanceId)
+    .eq('extends_id', estimateId)
+  if (orphanError) throw new Error(orphanError.message)
+
   const { error } = await admin
     .from('course_estimates')
     .delete()
