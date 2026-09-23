@@ -242,10 +242,6 @@ export default function QuotesSection({
                   <input name="valid_until" type="date" defaultValue={q.valid_until ?? ''} className={inputCls} />
                 </div>
                 <div>
-                  <label className={labelCls}>Unit rate note (optional)</label>
-                  <input name="unit_rate_note" defaultValue={q.unit_rate_note ?? ''} placeholder="e.g. $440 per student per day" className={inputCls} />
-                </div>
-                <div>
                   <label className={labelCls}>From (contact &amp; signature on the quote)</label>
                   <select name="prepared_by" defaultValue={q.prepared_by ?? ''} className={inputCls}>
                     {!q.prepared_by && <option value="">— choose —</option>}

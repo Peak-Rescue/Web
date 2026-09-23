@@ -122,7 +122,6 @@ export type QuoteRow = {
   valid_until: string | null
   total: number
   options: QuoteOption[] | null
-  unit_rate_note: string | null
   scope_bullets: string[] | null
   course_blurb: string | null
   sent_at: string | null
@@ -132,4 +131,4 @@ export type QuoteRow = {
 
 /** The columns a QuoteRow needs, for the queries that load or return one. */
 export const QUOTE_ROW_COLUMNS =
-  'id, accept_token, estimate_id, archived_at, prepared_by, prepared_by_name, quote_seq, status, issue_date, valid_until, total, options, unit_rate_note, scope_bullets, course_blurb, sent_at, accepted_at, accepted_name' as const
+  'id, accept_token, estimate_id, archived_at, prepared_by, prepared_by_name, quote_seq, status, issue_date, valid_until, total, options, scope_bullets, course_blurb, sent_at, accepted_at, accepted_name' as const

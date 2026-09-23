@@ -753,7 +753,6 @@ export async function updateQuote(instanceId: string, quoteId: string, formData:
       ...preparerPatch,
       ...(existingOptions ? optionsPatch : { total }),
       valid_until: String(formData.get('valid_until') ?? '') || null,
-      unit_rate_note: String(formData.get('unit_rate_note') ?? '').trim() || null,
       scope_bullets: bullets,
       course_blurb: String(formData.get('course_blurb') ?? '').trim() || null,
     })

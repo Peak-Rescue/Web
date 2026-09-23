@@ -225,7 +225,6 @@ export default async function QuotePage({
               <p className="text-5xl font-bold tracking-tight mb-2">{fmtMoney(Number(quote.total))}</p>
             </>
           )}
-          {quote.unit_rate_note && <p className="text-zinc-400 mb-4">{quote.unit_rate_note}</p>}
           {(quote.scope_bullets ?? []).length > 0 && (
             <ul className="mt-6 space-y-2.5">
               {(quote.scope_bullets as string[]).map((b, i) => (
