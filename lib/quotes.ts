@@ -23,17 +23,31 @@ export function quoteNumber(refNumber: number, seq: number): string {
 
 export const QUOTE_VALIDITY_DAYS = 30
 
+/** What an option is to the others on its quote — see migration 213.
+
+    standalone  taken alone or alongside anything.
+    alternative one of a set the client picks between: the drive team and the
+                fly-in are one course reached two ways, and both is two trips
+                billed for one.
+    addition    priced as the difference. `requires` names the option it goes
+                on top of, or is absent when it goes with whatever they take —
+                the gear package is the same money for one week or two. */
+export type OptionRelation = 'standalone' | 'alternative' | 'addition'
+
 export type QuoteOption = {
   estimate_id?: string | null
   title: string
   total: number
   chosen?: boolean
-  /** The option this one is an addition to, snapshotted from the COA's
-      extends_id when the quote was written. An addition carries no travel and
-      no mobilization — those are in the option it extends — so it cannot be
-      accepted on its own. Absent on an option that stands alone. */
+  /** Absent on quotes written before 213, which were all freely combinable. */
+  relation?: OptionRelation | null
+  /** The option an addition goes on top of, when it goes on a particular one.
+      Snapshotted from the COA's extends_id, so re-pointing a COA later cannot
+      change what a client already accepted. */
   requires?: string | null
 }
+
+const isAddition = (o: QuoteOption | undefined) => o?.relation === 'addition' || Boolean(o?.requires)
 
 /** The option an addition depends on, when that option is on this quote at all.
     A COA can extend one whose COA was set aside before the quote was written;
@@ -46,24 +60,52 @@ const parentIndex = (options: QuoteOption[], i: number): number => {
   return req ? options.findIndex((o) => o.estimate_id === req) : -1
 }
 
-/** Whether an option can be ticked on its own — false for an addition whose
-    parent is on the quote and not selected. The client's form and the accept
-    action both ask this, so what the page greys out and what the server
-    refuses cannot come apart. */
+/** Whether an option can be ticked given what else is. The client's form and
+    the accept action both ask this, so what the page greys out and what the
+    server refuses cannot come apart.
+
+    An addition needs the thing it is added to: the option it names, or — when
+    it names none — anything at all that is not itself an addition. An
+    alternative needs no other alternative already taken. */
 export function optionAvailable(options: QuoteOption[], i: number, selected: Iterable<number>): boolean {
+  const picked = [...selected]
+  const o = options[i]
+  if (!o) return false
+  if (o.relation === 'alternative') {
+    return !picked.some((j) => j !== i && options[j]?.relation === 'alternative')
+  }
+  if (!isAddition(o)) return true
   const parent = parentIndex(options, i)
-  return parent === -1 || [...selected].includes(parent)
+  if (parent !== -1) return picked.includes(parent)
+  // An addition that names nothing goes on whatever they take — but it cannot
+  // be the whole order, or the client has bought gear and no course.
+  //
+  // Unless there is nothing else to take. An addition can name a COA that was
+  // set aside before the quote went out, and a quote whose only option is an
+  // addition has nothing for it to be added to — so the rule carries no
+  // information there, and enforcing it anyway would leave a quote that can
+  // never be accepted.
+  if (!options.some((other, j) => j !== i && !isAddition(other))) return true
+  return picked.some((j) => j !== i && !isAddition(options[j]))
 }
 
-/** What is wrong with a selection, or null when nothing is. The message is
-    shown to the client, so it names the options rather than their ids. */
+/** What is wrong with a selection, or null when nothing is. The message reaches
+    the client, so it names the options rather than their ids. */
 export function selectionProblem(options: QuoteOption[], selected: number[]): string | null {
   if (selected.length === 0) return 'Select at least one option'
   if (selected.some((i) => i < 0 || i >= options.length)) return 'That option is no longer on this quote'
+
+  const alternatives = selected.filter((i) => options[i]?.relation === 'alternative')
+  if (alternatives.length > 1) {
+    return `"${options[alternatives[0]].title}" and "${options[alternatives[1]].title}" are alternatives — please choose one.`
+  }
+
   const orphan = selected.find((i) => !optionAvailable(options, i, selected))
   if (orphan === undefined) return null
-  const parent = options[parentIndex(options, orphan)]
-  return `"${options[orphan].title}" is an addition to "${parent.title}" and can only be accepted with it.`
+  const parent = parentIndex(options, orphan)
+  return parent !== -1
+    ? `"${options[orphan].title}" is an addition to "${options[parent].title}" and can only be accepted with it.`
+    : `"${options[orphan].title}" is an addition and has to be taken with one of the other options.`
 }
 
 /** A quote as every screen that lists one reads it. Lives here rather than on

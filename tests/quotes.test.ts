@@ -8,8 +8,8 @@ import { optionAvailable, selectionProblem, type QuoteOption } from '@/lib/quote
 // alone would sell a deployment nobody is flying to.
 describe('option dependencies', () => {
   const OPTS: QuoteOption[] = [
-    { estimate_id: 'wk1', title: 'Week 1 — Mountain Rescue', total: 31980 },
-    { estimate_id: 'wk2', title: 'Week 2 — Mountaineering extension', total: 21976.5, requires: 'wk1' },
+    { estimate_id: 'wk1', title: 'Week 1 — Mountain Rescue', total: 31980, relation: 'standalone' },
+    { estimate_id: 'wk2', title: 'Week 2 — Mountaineering extension', total: 21976.5, relation: 'addition', requires: 'wk1' },
   ]
 
   it('takes week one alone, or both', () => {
@@ -35,8 +35,8 @@ describe('option dependencies', () => {
 
   it('leaves plain alternatives combinable, as before', () => {
     const alts: QuoteOption[] = [
-      { estimate_id: 'a', title: 'Drive team', total: 18400 },
-      { estimate_id: 'b', title: 'Fly-in', total: 24100 },
+      { estimate_id: 'a', title: 'Drive team', total: 18400, relation: 'standalone' },
+      { estimate_id: 'b', title: 'Fly-in', total: 24100, relation: 'standalone' },
     ]
     expect(selectionProblem(alts, [1])).toBeNull()
     expect(selectionProblem(alts, [0, 1])).toBeNull()
@@ -46,8 +46,82 @@ describe('option dependencies', () => {
   // snapshot then points at nothing on offer, and an addition with no parent to
   // wait for must not be unacceptable.
   it('does not strand an addition whose option is not on the quote', () => {
-    const orphan: QuoteOption[] = [{ estimate_id: 'wk2', title: 'Week 2', total: 21976.5, requires: 'gone' }]
+    const orphan: QuoteOption[] = [{ estimate_id: 'wk2', title: 'Week 2', total: 21976.5, relation: 'addition', requires: 'gone' }]
     expect(selectionProblem(orphan, [0])).toBeNull()
     expect(optionAvailable(orphan, 0, [])).toBe(true)
+    // But it is still an addition where there is something to add it to.
+    const beside: QuoteOption[] = [
+      { estimate_id: 'wk1', title: 'Week 1', total: 31980, relation: 'standalone' },
+      { estimate_id: 'wk2', title: 'Week 2', total: 21976.5, relation: 'addition', requires: 'gone' },
+    ]
+    expect(optionAvailable(beside, 1, [])).toBe(false)
+    expect(optionAvailable(beside, 1, [0])).toBe(true)
+  })
+})
+
+// The gear package a unit buys or does not: the same money whether they book
+// one week or two, so it names no particular option — but it cannot be the
+// whole order, or they have bought kit and no course.
+describe('an addition to whatever they take', () => {
+  const WITH_GEAR: QuoteOption[] = [
+    { estimate_id: 'wk1', title: 'Week 1 — Mountain Rescue', total: 31980, relation: 'standalone' },
+    { estimate_id: 'wk2', title: 'Week 2 — Mountaineering extension', total: 21976.5, relation: 'addition', requires: 'wk1' },
+    { estimate_id: 'gear', title: 'Gear package', total: 9400, relation: 'addition' },
+  ]
+
+  it('goes with either the week or the pair', () => {
+    expect(selectionProblem(WITH_GEAR, [0, 2])).toBeNull()
+    expect(selectionProblem(WITH_GEAR, [0, 1, 2])).toBeNull()
+  })
+
+  it('cannot be the whole order', () => {
+    expect(selectionProblem(WITH_GEAR, [2]))
+      .toBe('"Gear package" is an addition and has to be taken with one of the other options.')
+    expect(optionAvailable(WITH_GEAR, 2, [])).toBe(false)
+    expect(optionAvailable(WITH_GEAR, 2, [0])).toBe(true)
+  })
+
+  // Gear plus the second week, with no first week, is two additions propping
+  // each other up.
+  it('is not held up by another addition', () => {
+    expect(optionAvailable(WITH_GEAR, 2, [1])).toBe(false)
+  })
+})
+
+// The drive team and the fly-in are one course reached two ways.
+describe('either/or options', () => {
+  const WAYS: QuoteOption[] = [
+    { estimate_id: 'drive', title: 'Drive team', total: 18400, relation: 'alternative' },
+    { estimate_id: 'fly', title: 'Fly-in', total: 24100, relation: 'alternative' },
+    { estimate_id: 'gear', title: 'Gear package', total: 9400, relation: 'addition' },
+  ]
+
+  it('takes one', () => {
+    expect(selectionProblem(WAYS, [0])).toBeNull()
+    expect(selectionProblem(WAYS, [1, 2])).toBeNull()
+  })
+
+  it('refuses both — that is two trips billed for one', () => {
+    expect(selectionProblem(WAYS, [0, 1]))
+      .toBe('"Drive team" and "Fly-in" are alternatives — please choose one.')
+    expect(optionAvailable(WAYS, 1, [0])).toBe(false)
+  })
+
+  it('lets an addition ride on whichever one was taken', () => {
+    expect(optionAvailable(WAYS, 2, [0])).toBe(true)
+    expect(optionAvailable(WAYS, 2, [1])).toBe(true)
+  })
+})
+
+// Quotes written before 213 carry no relation at all and were freely
+// combinable. They must keep working exactly as they did.
+describe('quotes written before relationships existed', () => {
+  const OLD: QuoteOption[] = [
+    { estimate_id: 'a', title: 'Drive team', total: 18400 },
+    { estimate_id: 'b', title: 'Fly-in', total: 24100 },
+  ]
+  it('still accepts any combination', () => {
+    expect(selectionProblem(OLD, [0])).toBeNull()
+    expect(selectionProblem(OLD, [0, 1])).toBeNull()
   })
 })

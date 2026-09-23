@@ -79,8 +79,12 @@ export async function saveEstimate(
     // what nearly every COA wants — see coaSpan.
     startsAt?: string | null
     endsAt?: string | null
-    /** The COA this one prices an addition to. Null = it stands on its own. */
+    /** The COA this one prices an addition to — only with relation 'addition',
+        and only when the addition goes on that one in particular. */
     extendsId?: string | null
+    /** What this COA is to the others. Null until somebody says, which a course
+        with a second COA shows as outstanding. */
+    relation?: 'standalone' | 'alternative' | 'addition' | null
   }
 ): Promise<{ id: string }> {
   const admin = await requireAdmin()
@@ -112,8 +116,16 @@ export async function saveEstimate(
   // not one that is itself an addition. A chain of additions is a course broken
   // into pieces, which is what the course's own dates are for, and it would
   // leave the client a tick box that silently requires two others.
+  const relation =
+    input.relation === undefined || input.relation === null || (input.relation as string) === ''
+      ? null
+      : input.relation
+  if (relation !== null && !['standalone', 'alternative', 'addition'].includes(relation)) {
+    throw new Error('Not a relationship')
+  }
+
   let extendsId: string | null = null
-  if (input.extendsId !== undefined && input.extendsId !== null && input.extendsId !== '') {
+  if (relation === 'addition' && input.extendsId !== undefined && input.extendsId !== null && input.extendsId !== '') {
     if (!UUID_RE.test(input.extendsId)) throw new Error('Not a COA')
     if (estimateId && input.extendsId === estimateId) throw new Error('A COA cannot extend itself')
     const { data: parent } = await admin
@@ -132,14 +144,14 @@ export async function saveEstimate(
   if (id) {
     const { error } = await admin
       .from('course_estimates')
-      .update({ margin: input.margin, title, price_override: priceOverride, starts_at: startsAt, ends_at: endsAt, extends_id: extendsId })
+      .update({ margin: input.margin, title, price_override: priceOverride, starts_at: startsAt, ends_at: endsAt, extends_id: extendsId, relation })
       .eq('id', id)
       .eq('instance_id', instanceId)
     if (error) throw new Error(error.message)
   } else {
     const { data, error } = await admin
       .from('course_estimates')
-      .insert({ instance_id: instanceId, margin: input.margin, title, price_override: priceOverride, starts_at: startsAt, ends_at: endsAt, extends_id: extendsId })
+      .insert({ instance_id: instanceId, margin: input.margin, title, price_override: priceOverride, starts_at: startsAt, ends_at: endsAt, extends_id: extendsId, relation })
       .select('id')
       .single()
     if (error || !data) throw new Error(error?.message ?? 'Could not save estimate')
@@ -220,8 +232,10 @@ async function seedDefaultCoa(admin: Awaited<ReturnType<typeof requireAdmin>>, i
     title: estimate.title as string,
     margin: estimate.margin as number | null,
     price_override: null,
-    // A COA seeded from the defaults prices the whole course on its own.
+    // A COA seeded from the defaults prices the whole course on its own. It is
+    // still the only one, so what it is to the others is not yet a question.
     extends_id: null as string | null,
+    relation: null as string | null,
     estimate_items: rows,
   }
 }
@@ -560,7 +574,7 @@ export async function createQuote(
   const allCoas = estimateId === '__all__'
   let estimateQuery = admin
     .from('course_estimates')
-    .select('id, title, margin, price_override, extends_id, estimate_items(qty, rate)')
+    .select('id, title, margin, price_override, extends_id, relation, estimate_items(qty, rate)')
     .eq('instance_id', instanceId)
     // Set-aside COAs are out of play: neither the newest-estimate default nor
     // an options quote's column list may reach for one.
@@ -614,10 +628,22 @@ export async function createQuote(
         estimate_id: e.id,
         title: e.title,
         total: quotePrice(e),
+        relation: ((e as { relation?: string | null }).relation ?? null) as 'standalone' | 'alternative' | 'addition' | null,
         requires: (e as { extends_id?: string | null }).extends_id ?? null,
       }))
     : null
   if (allCoas && (options?.length ?? 0) < 2) return { ok: false, error: 'Need at least two COAs for an options quote' }
+
+  // The moment the tick boxes become money. A COA that has not said what it is
+  // to the others would go out as freely combinable by omission, which is the
+  // one thing 213 exists to stop.
+  const undecided = (options ?? []).filter((o) => !o.relation)
+  if (allCoas && undecided.length > 0) {
+    return {
+      ok: false,
+      error: `Say how ${undecided.map((o) => `"${o.title}"`).join(' and ')} relate${undecided.length === 1 ? 's' : ''} to the other options before quoting them side by side.`,
+    }
+  }
   const total = allCoas ? 0 : quotePrice(estimate)
 
   // The dates head the quote already, so the duration line is about the shape

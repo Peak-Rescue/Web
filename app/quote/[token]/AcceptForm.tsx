@@ -41,13 +41,25 @@ export default function AcceptForm({
       const next = new Set(prev)
       if (next.has(i)) {
         next.delete(i)
-        if (options) {
+      } else {
+        // Either/or behaves like a radio: taking one releases the other, rather
+        // than greying it out and leaving the client to work out which to
+        // untick first.
+        if (options?.[i]?.relation === 'alternative') {
           for (let j = 0; j < options.length; j++) {
-            if (!optionAvailable(options, j, next)) next.delete(j)
+            if (j !== i && options[j]?.relation === 'alternative') next.delete(j)
           }
         }
-      } else {
         next.add(i)
+      }
+      // Whatever just moved, an addition left without the thing it is added to
+      // goes with it.
+      if (options) {
+        for (let pass = 0; pass < options.length; pass++) {
+          for (let j = 0; j < options.length; j++) {
+            if (next.has(j) && !optionAvailable(options, j, next)) next.delete(j)
+          }
+        }
       }
       return next
     })
@@ -84,10 +96,17 @@ export default function AcceptForm({
               // rather than hidden, so the client can see what the first option
               // makes available rather than wondering where it went.
               const available = optionAvailable(options, i, selected)
-              const isAddition = Boolean(o.requires)
-              const parentTitle = isAddition
+              const isAddition = o.relation === 'addition' || Boolean(o.requires)
+              const parentTitle = o.requires
                 ? options.find((p) => p.estimate_id === o.requires)?.title ?? null
                 : null
+              const note = isAddition
+                ? parentTitle
+                  ? available ? `Added to ${parentTitle}` : `Available with ${parentTitle}`
+                  : available ? 'Added to your selection' : 'Available with any option above'
+                : o.relation === 'alternative'
+                  ? 'One of these'
+                  : null
               return (
                 <label
                   key={i}
@@ -111,11 +130,7 @@ export default function AcceptForm({
                     />
                     <span className="min-w-0">
                       <span className="block text-sm font-medium text-white">{o.title}</span>
-                      {parentTitle && (
-                        <span className="block text-[11px] text-zinc-500">
-                          {available ? `Added to ${parentTitle}` : `Available with ${parentTitle}`}
-                        </span>
-                      )}
+                      {note && <span className="block text-[11px] text-zinc-500">{note}</span>}
                     </span>
                   </span>
                   <span className="text-sm font-semibold text-white whitespace-nowrap">{fmtMoney(Number(o.total))}</span>

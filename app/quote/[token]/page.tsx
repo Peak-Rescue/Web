@@ -184,7 +184,7 @@ export default async function QuotePage({
                   return (
                     <div
                       key={i}
-                      className={`flex items-center justify-between gap-3 px-4 py-3.5 rounded-lg border ${o.requires ? 'ml-6 ' : ''}${
+                      className={`flex items-center justify-between gap-3 px-4 py-3.5 rounded-lg border ${o.relation === 'addition' || o.requires ? 'ml-6 ' : ''}${
                         o.chosen
                           ? 'border-teal-700 bg-teal-900/20'
                           : dimmed
@@ -198,10 +198,15 @@ export default async function QuotePage({
                         {/* An addition says what it is added to, since its
                             price is the difference and not a course of its
                             own. */}
-                        {o.requires && (
+                        {(o.relation === 'addition' || o.requires) && (
                           <span className="block text-[11px] font-normal text-zinc-500">
-                            Added to {options.find((p) => p.estimate_id === o.requires)?.title ?? 'the option above'}
+                            {o.requires
+                              ? `Added to ${options.find((p) => p.estimate_id === o.requires)?.title ?? 'the option above'}`
+                              : 'Added to whichever option you take'}
                           </span>
+                        )}
+                        {o.relation === 'alternative' && !accepted && (
+                          <span className="block text-[11px] font-normal text-zinc-500">One of these</span>
                         )}
                       </span>
                       <span className="text-xl font-bold whitespace-nowrap">{fmtMoney(Number(o.total))}</span>
@@ -211,8 +216,8 @@ export default async function QuotePage({
               </div>
               {!accepted && (
                 <p className="mt-4 text-sm text-zinc-400">
-                  Options can be combined — select the one or several that fit when accepting below. An
-                  addition is priced as the difference and is taken alongside what it adds to.
+                  Select what fits when accepting below. Options marked &ldquo;one of these&rdquo; are
+                  alternatives; an addition is priced as the difference and is taken on top of what it adds to.
                 </p>
               )}
             </>

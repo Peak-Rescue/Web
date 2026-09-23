@@ -10,6 +10,7 @@ import { CalculatorIcon, NotesIcon } from '@/components/TaskIcons'
 import { useUnsavedGuard, withSaveTimeout } from '@/components/useUnsavedGuard'
 import TrashIcon from '@/components/TrashIcon'
 import InfoHint from '@/components/InfoHint'
+import { type OptionRelation } from '@/lib/quotes'
 import { btn, card } from '@/lib/ui'
 
 export type PricingRate = { id: string; label: string; unit: string | null; rate: number }
@@ -71,6 +72,7 @@ export default function EstimatePanel({
   initialStartsAt,
   initialEndsAt,
   initialExtendsId,
+  initialRelation,
   siblings,
   courseSpan,
 }: {
@@ -90,8 +92,11 @@ export default function EstimatePanel({
   /** The window this COA prices, null for each end that follows the course. */
   initialStartsAt: string | null
   initialEndsAt: string | null
-  /** The COA this one prices an addition to, null when it stands on its own. */
+  /** The COA this one prices an addition to, when the addition goes on one in
+      particular rather than on whatever the client takes. */
   initialExtendsId: string | null
+  /** What this COA is to the others, null until somebody says. */
+  initialRelation: OptionRelation | null
   /** The other live COAs on this course that an addition could be built on —
       already filtered to the ones that are not additions themselves. */
   siblings: { id: string; title: string }[]
@@ -109,6 +114,7 @@ export default function EstimatePanel({
   // date boxes on every panel would be two boxes nobody reads.
   const [spanOpen, setSpanOpen] = useState(Boolean(initialStartsAt || initialEndsAt))
   const [extendsId, setExtendsId] = useState(initialExtendsId ?? '')
+  const [relation, setRelation] = useState<OptionRelation | ''>(initialRelation ?? '')
   const [deleting, setDeleting] = useState(false)
   const [archiving, setArchiving] = useState(false)
   const nextKey = useRef(initialItems.length)
@@ -145,7 +151,7 @@ export default function EstimatePanel({
   // use the calculated price", which is different from an override of $0.
   const [override, setOverride] = useState(initialPriceOverride === null ? '' : String(initialPriceOverride))
   const [status, setStatus] = useState<'idle' | 'pending' | 'saving' | 'saved' | 'error'>('idle')
-  const stateRef = useRef({ rows, margin, title: initialTitle, override, startsAt: initialStartsAt ?? '', endsAt: initialEndsAt ?? '', extendsId: initialExtendsId ?? '' })
+  const stateRef = useRef({ rows, margin, title: initialTitle, override, startsAt: initialStartsAt ?? '', endsAt: initialEndsAt ?? '', extendsId: initialExtendsId ?? '', relation: (initialRelation ?? '') as OptionRelation | '' })
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const saving = useRef(false)
   const rerun = useRef(false)
@@ -201,9 +207,13 @@ export default function EstimatePanel({
 
   // Which COA this one is an addition to. Refreshes like the span does, since
   // it changes what the panel has to warn about.
-  function scheduleExtends(next: string) {
-    setExtendsId(next)
-    stateRef.current = { ...stateRef.current, extendsId: next }
+  function scheduleRelation(nextRelation: OptionRelation | '', nextExtends: string) {
+    // Only an addition may name a parent, the same rule the column carries, so
+    // switching away from "addition" cannot leave a stale one behind.
+    const parent = nextRelation === 'addition' ? nextExtends : ''
+    setRelation(nextRelation)
+    setExtendsId(parent)
+    stateRef.current = { ...stateRef.current, relation: nextRelation, extendsId: parent }
     setStatus('pending')
     if (timer.current) clearTimeout(timer.current)
     timer.current = setTimeout(() => void flush({ thenRefresh: true }), SAVE_DEBOUNCE_MS)
@@ -221,7 +231,7 @@ export default function EstimatePanel({
     saving.current = true
     setStatus('saving')
     try {
-      const { rows: r, margin: m, title: t, override: o, startsAt: sa, endsAt: ea, extendsId: ex } = stateRef.current
+      const { rows: r, margin: m, title: t, override: o, startsAt: sa, endsAt: ea, extendsId: ex, relation: rel } = stateRef.current
       const items: EstimateItemInput[] = r
         .filter((row) => row.label.trim())
         .map((row) => {
@@ -248,6 +258,7 @@ export default function EstimatePanel({
           startsAt: sa.trim() === '' ? null : sa,
           endsAt: ea.trim() === '' ? null : ea,
           extendsId: ex.trim() === '' ? null : ex,
+          relation: rel === '' ? null : rel,
         })
       )
       estimateIdRef.current = saved.id
@@ -522,12 +533,13 @@ export default function EstimatePanel({
   const fmtDay = (d: string) =>
     new Date(d + 'T00:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
   const ownSpan = Boolean(startsAt || endsAt)
+  const hasSiblings = siblings.length > 0
   const parent = siblings.find((sib) => sib.id === extendsId) ?? null
   // Lines an addition must not carry: the deployment is already priced in the
   // COA it extends. Warned about rather than refused, because the numbers are
   // the estimator's to set — but warned about with the fix attached, since the
   // seeded default lines put them here without being asked.
-  const tripRows = parent ? rows.filter((r) => r.label.trim() && isTripLine(r.label)) : []
+  const tripRows = relation === 'addition' ? rows.filter((r) => r.label.trim() && isTripLine(r.label)) : []
   const spanFrom = startsAt || courseSpan.starts_at
   const spanTo = endsAt || courseSpan.ends_at
   const spanLabel =
@@ -618,20 +630,34 @@ export default function EstimatePanel({
           {ownSpan ? `Prices ${spanLabel}` : spanLabel}
         </button>
         <InfoHint text="A COA can price part of the course — the first week of a blended course, quoted beside the pair. Its day counts, prefilled quantities and out-of-date warnings then follow these dates instead of the course's. Empty means the whole course, which is what nearly every COA wants." />
-        {siblings.length > 0 && (
-          <select
-            value={extendsId}
-            onChange={(e) => scheduleExtends(e.target.value)}
-            className={`bg-zinc-800 border rounded px-1.5 py-1 text-[11px] focus:outline-none ${
-              parent ? 'border-teal-800 text-teal-300' : 'border-zinc-700 text-zinc-500'
-            }`}
-            title="An addition can only be accepted alongside the COA it extends"
-          >
-            <option value="">Stands on its own</option>
-            {siblings.map((sib) => (
-              <option key={sib.id} value={sib.id}>Addition to {sib.title}</option>
-            ))}
-          </select>
+        {/* What this COA is to the others. Unanswered while a second COA exists
+            is a gap, not a default: which combinations of tick boxes are real
+            money is the whole of what an options quote says, and by omission it
+            used to say "any of them". */}
+        {hasSiblings && (
+          <>
+            <select
+              value={relation === 'addition' && extendsId ? `addition:${extendsId}` : relation}
+              onChange={(e) => {
+                const v = e.target.value
+                if (v.startsWith('addition:')) scheduleRelation('addition', v.slice('addition:'.length))
+                else scheduleRelation(v as OptionRelation | '', '')
+              }}
+              className={`bg-zinc-800 border rounded px-1.5 py-1 text-[11px] focus:outline-none ${
+                relation === '' ? 'border-amber-600 text-amber-400' : 'border-zinc-700 text-zinc-300'
+              }`}
+              title="Which combinations of these options a client may accept"
+            >
+              <option value="">Relationship not set…</option>
+              <option value="standalone">Stands on its own</option>
+              <option value="alternative">Either/or with the other options</option>
+              <option value="addition">Addition to whatever they take</option>
+              {siblings.map((sib) => (
+                <option key={sib.id} value={`addition:${sib.id}`}>Addition to {sib.title}</option>
+              ))}
+            </select>
+            <InfoHint text="Stands on its own: takeable alone or with anything. Either/or: one of a set the client picks between — the drive team and the fly-in are one course reached two ways, and both would bill two trips for one. Addition: priced as the difference and taken on top, either of one named option (a second week the first week's travel got the crew to) or of whatever they take (a gear package, the same money for one week or two)." />
+          </>
         )}
         {spanOpen && (
           <span className="flex items-center gap-1.5">
