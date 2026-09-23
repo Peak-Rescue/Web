@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
+import { YM } from '@/lib/month-token'
 
 const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
@@ -25,8 +26,6 @@ const fmtMonth = (ym: string) =>
  *  when you jump a long way out — but both are live: this is a map of the
  *  work, not a filter on it.
  */
-/** Where the month goes in a link-mode href. */
-export const YM = '__ym__'
 
 export default function MonthJump({
   month,

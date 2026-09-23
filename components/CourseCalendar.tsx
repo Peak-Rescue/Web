@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import CalendarChip from './CalendarChip'
-import MonthJump, { YM } from './MonthJump'
+import MonthJump from './MonthJump'
+import { YM } from '@/lib/month-token'
 import { todayHere } from '@/lib/course-clock'
 import { CATEGORY_STYLE, sectorOf } from '@/lib/calendar-colors'
 
