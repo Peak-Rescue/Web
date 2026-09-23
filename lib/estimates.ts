@@ -185,6 +185,31 @@ export function unitFactorNames(unit: string | null): string[] {
     .map((f) => (f.endsWith('s') ? f : `${f}s`))
 }
 
+/** The window a COA prices, which is the course's unless it says otherwise.
+
+    Most COAs price the whole course and carry no dates of their own, so they
+    keep following the course's when they move. A COA that prices part of it —
+    the first week of a blended course, offered beside the pair — says so, and
+    then its day counts, its prefilled quantities and its drift warnings are all
+    answered against its own span instead of the course's.
+
+    Either end can stand alone: a COA that starts with the course and stops
+    early only has to say where it stops. */
+export function coaSpan(
+  coa: { starts_at?: string | null; ends_at?: string | null } | null | undefined,
+  course: { starts_at: string | null; ends_at: string | null }
+): { starts_at: string | null; ends_at: string | null } {
+  return {
+    starts_at: coa?.starts_at ?? course.starts_at,
+    ends_at: coa?.ends_at ?? course.ends_at,
+  }
+}
+
+/** Whether a COA prices something other than the whole course — what the panel
+    asks before it draws attention to the dates. */
+export const coaHasOwnSpan = (coa: { starts_at?: string | null; ends_at?: string | null } | null | undefined) =>
+  Boolean(coa?.starts_at || coa?.ends_at)
+
 export type SeedCounts = { instructors: number; days: number; calendarDays: number; students: number | null }
 
 // Quantity for a seeded default estimate line, from the rate's unit and the

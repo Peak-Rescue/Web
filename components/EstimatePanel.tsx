@@ -68,6 +68,9 @@ export default function EstimatePanel({
   canArchive,
   solo,
   counts,
+  initialStartsAt,
+  initialEndsAt,
+  courseSpan,
 }: {
   instanceId: string
   estimateId: string | null // null = not yet persisted (first COA, untouched)
@@ -82,11 +85,22 @@ export default function EstimatePanel({
   canArchive: boolean
   solo: boolean // only COA on the course — the default "COA n" title stays hidden until a second exists
   counts: CourseCounts
+  /** The window this COA prices, null for each end that follows the course. */
+  initialStartsAt: string | null
+  initialEndsAt: string | null
+  /** The course's own dates — what the empty boxes are standing in for. */
+  courseSpan: { starts_at: string | null; ends_at: string | null }
 }) {
   const router = useRouter()
   const estimateIdRef = useRef<string | null>(estimateId)
   const [persistedId, setPersistedId] = useState<string | null>(estimateId)
   const [title, setTitle] = useState(initialTitle)
+  const [startsAt, setStartsAt] = useState(initialStartsAt ?? '')
+  const [endsAt, setEndsAt] = useState(initialEndsAt ?? '')
+  // The dates stay out of the way until they are worth looking at: a COA that
+  // prices the whole course has nothing to say about its own length, and two
+  // date boxes on every panel would be two boxes nobody reads.
+  const [spanOpen, setSpanOpen] = useState(Boolean(initialStartsAt || initialEndsAt))
   const [deleting, setDeleting] = useState(false)
   const [archiving, setArchiving] = useState(false)
   const nextKey = useRef(initialItems.length)
@@ -123,7 +137,7 @@ export default function EstimatePanel({
   // use the calculated price", which is different from an override of $0.
   const [override, setOverride] = useState(initialPriceOverride === null ? '' : String(initialPriceOverride))
   const [status, setStatus] = useState<'idle' | 'pending' | 'saving' | 'saved' | 'error'>('idle')
-  const stateRef = useRef({ rows, margin, title: initialTitle, override })
+  const stateRef = useRef({ rows, margin, title: initialTitle, override, startsAt: initialStartsAt ?? '', endsAt: initialEndsAt ?? '' })
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const saving = useRef(false)
   const rerun = useRef(false)
@@ -153,6 +167,7 @@ export default function EstimatePanel({
     if (nextTitle !== undefined) setTitle(nextTitle)
     if (nextOverride !== undefined) setOverride(nextOverride)
     stateRef.current = {
+      ...stateRef.current,
       rows: nextRows,
       margin: nextMargin,
       title: nextTitle ?? stateRef.current.title,
@@ -163,7 +178,20 @@ export default function EstimatePanel({
     timer.current = setTimeout(() => void flush(), SAVE_DEBOUNCE_MS)
   }
 
-  async function flush() {
+  // The COA's own window. Saved on the same debounce as the rest of the panel,
+  // because a date is an edit like any other — but it also re-derives the day
+  // counts on the server, so the page is refreshed once it lands: the drift
+  // warnings and the prefilled quantities are the point of changing it.
+  function scheduleSpan(nextStart: string, nextEnd: string) {
+    setStartsAt(nextStart)
+    setEndsAt(nextEnd)
+    stateRef.current = { ...stateRef.current, startsAt: nextStart, endsAt: nextEnd }
+    setStatus('pending')
+    if (timer.current) clearTimeout(timer.current)
+    timer.current = setTimeout(() => void flush({ thenRefresh: true }), SAVE_DEBOUNCE_MS)
+  }
+
+  async function flush(opts: { thenRefresh?: boolean } = {}) {
     if (timer.current) {
       clearTimeout(timer.current)
       timer.current = null
@@ -175,7 +203,7 @@ export default function EstimatePanel({
     saving.current = true
     setStatus('saving')
     try {
-      const { rows: r, margin: m, title: t, override: o } = stateRef.current
+      const { rows: r, margin: m, title: t, override: o, startsAt: sa, endsAt: ea } = stateRef.current
       const items: EstimateItemInput[] = r
         .filter((row) => row.label.trim())
         .map((row) => {
@@ -199,11 +227,14 @@ export default function EstimatePanel({
           margin: m,
           priceOverride: priceOverride !== null && Number.isFinite(priceOverride) ? priceOverride : null,
           items,
+          startsAt: sa.trim() === '' ? null : sa,
+          endsAt: ea.trim() === '' ? null : ea,
         })
       )
       estimateIdRef.current = saved.id
       setPersistedId(saved.id)
       setStatus('saved')
+      if (opts.thenRefresh) router.refresh()
     } catch {
       setStatus('error')
     } finally {
@@ -466,6 +497,19 @@ export default function EstimatePanel({
 
   const inputCls = 'bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-zinc-500'
 
+  // What the span line says when it is closed: the COA's own window when it has
+  // one, and otherwise nothing — a COA that prices the whole course is the
+  // ordinary case and does not need a sentence about it.
+  const fmtDay = (d: string) =>
+    new Date(d + 'T00:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
+  const ownSpan = Boolean(startsAt || endsAt)
+  const spanFrom = startsAt || courseSpan.starts_at
+  const spanTo = endsAt || courseSpan.ends_at
+  const spanLabel =
+    spanFrom && spanTo
+      ? `${fmtDay(spanFrom)} – ${fmtDay(spanTo)}${counts.days ? ` · ${counts.days} day${counts.days === 1 ? '' : 's'}` : ''}`
+      : 'Set dates'
+
   return (
     <div ref={rootRef} className={highlight ? 'ring-1 ring-pr-red-light rounded' : undefined}>
       <div className="flex items-center justify-between gap-3 mb-2">
@@ -529,6 +573,59 @@ export default function EstimatePanel({
             </button>
           )}
         </div>
+      </div>
+
+      {/* The COA's window. A COA almost always prices the whole course, so this
+          is one quiet line until somebody opens it — and it stops being quiet
+          the moment a COA carries its own dates, because then the panel's day
+          counts are not the course's and the reader has to be told. */}
+      <div className="mb-2 flex items-center gap-2 flex-wrap text-[11px]">
+        <button
+          type="button"
+          onClick={() => setSpanOpen((o) => !o)}
+          className={`border-b border-dashed transition-colors ${
+            ownSpan
+              ? 'text-amber-400/90 border-amber-700/60 hover:text-amber-200'
+              : 'text-zinc-600 border-zinc-800 hover:text-zinc-400'
+          }`}
+          title={ownSpan ? 'This COA prices part of the course' : 'This COA prices the whole course'}
+        >
+          {ownSpan ? `Prices ${spanLabel}` : spanLabel}
+        </button>
+        <InfoHint text="A COA can price part of the course — the first week of a blended course, quoted beside the pair. Its day counts, prefilled quantities and out-of-date warnings then follow these dates instead of the course's. Empty means the whole course, which is what nearly every COA wants." />
+        {spanOpen && (
+          <span className="flex items-center gap-1.5">
+            <input
+              type="date"
+              value={startsAt}
+              min={courseSpan.starts_at ?? undefined}
+              max={endsAt || courseSpan.ends_at || undefined}
+              onChange={(e) => scheduleSpan(e.target.value, endsAt)}
+              className={`${inputCls} text-[11px] py-1`}
+              title="First day this COA prices — empty follows the course"
+            />
+            <span className="text-zinc-600">→</span>
+            <input
+              type="date"
+              value={endsAt}
+              min={startsAt || courseSpan.starts_at || undefined}
+              max={courseSpan.ends_at ?? undefined}
+              onChange={(e) => scheduleSpan(startsAt, e.target.value)}
+              className={`${inputCls} text-[11px] py-1`}
+              title="Last day this COA prices — empty follows the course"
+            />
+            {ownSpan && (
+              <button
+                type="button"
+                onClick={() => scheduleSpan('', '')}
+                className="text-zinc-500 hover:text-zinc-200 transition-colors"
+                title="Price the whole course again"
+              >
+                Whole course
+              </button>
+            )}
+          </span>
+        )}
       </div>
 
       {unsetRows.length > 0 && (

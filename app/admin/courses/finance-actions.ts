@@ -70,7 +70,16 @@ function cleanAck(ack: EstimateItemInput['drift_ack']): { i: number; s: number |
 export async function saveEstimate(
   instanceId: string,
   estimateId: string | null,
-  input: { title: string; margin: number; priceOverride: number | null; items: EstimateItemInput[] }
+  input: {
+    title: string
+    margin: number
+    priceOverride: number | null
+    items: EstimateItemInput[]
+    // The window this COA prices. Null means the course's own dates, which is
+    // what nearly every COA wants — see coaSpan.
+    startsAt?: string | null
+    endsAt?: string | null
+  }
 ): Promise<{ id: string }> {
   const admin = await requireAdmin()
   if (!Number.isFinite(input.margin) || input.margin < 0 || input.margin > 5) {
@@ -85,18 +94,30 @@ export async function saveEstimate(
     throw new Error('Quote price must be a non-negative number')
   }
 
+  // A date or nothing — an empty box hands the COA back to the course's dates
+  // rather than storing a blank. Ordering is checked here as well as in the
+  // column's constraint, so the panel gets a sentence instead of a 400.
+  const day = (v: string | null | undefined) => {
+    if (v === undefined || v === null || v.trim() === '') return null
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(v.trim())) throw new Error('Dates must be yyyy-mm-dd')
+    return v.trim()
+  }
+  const startsAt = day(input.startsAt)
+  const endsAt = day(input.endsAt)
+  if (startsAt && endsAt && endsAt < startsAt) throw new Error('This COA ends before it starts')
+
   let id = estimateId
   if (id) {
     const { error } = await admin
       .from('course_estimates')
-      .update({ margin: input.margin, title, price_override: priceOverride })
+      .update({ margin: input.margin, title, price_override: priceOverride, starts_at: startsAt, ends_at: endsAt })
       .eq('id', id)
       .eq('instance_id', instanceId)
     if (error) throw new Error(error.message)
   } else {
     const { data, error } = await admin
       .from('course_estimates')
-      .insert({ instance_id: instanceId, margin: input.margin, title, price_override: priceOverride })
+      .insert({ instance_id: instanceId, margin: input.margin, title, price_override: priceOverride, starts_at: startsAt, ends_at: endsAt })
       .select('id')
       .single()
     if (error || !data) throw new Error(error?.message ?? 'Could not save estimate')

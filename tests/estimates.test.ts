@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { coaPrice, DEFAULT_MARGIN, dayCountFollowsCourse, daysForLine, factorValue } from '@/lib/estimates'
+import { coaPrice, coaSpan, coaHasOwnSpan, DEFAULT_MARGIN, dayCountFollowsCourse, daysForLine, factorValue } from '@/lib/estimates'
 
 // The number three places had to agree on. A test so they cannot drift apart
 // again quietly — the column default is checked by hand, this checks the code.
@@ -103,5 +103,38 @@ describe('day counts that follow the course', () => {
     expect(factorValue('instructors', 'Instructor field day/s', counts)).toBe(3)
     expect(factorValue('instructors', 'Flights', counts)).toBe(3)
     expect(factorValue('participants', 'Catering', counts)).toBe(11)
+  })
+})
+
+// A COA that prices part of the course — the first week of a blended course,
+// quoted beside the pair — against the ordinary one that prices all of it.
+describe('coaSpan', () => {
+  const course = { starts_at: '2027-06-22', ends_at: '2027-07-06' }
+
+  it('follows the course when the COA says nothing', () => {
+    expect(coaSpan(null, course)).toEqual(course)
+    expect(coaSpan({ starts_at: null, ends_at: null }, course)).toEqual(course)
+    expect(coaHasOwnSpan(null)).toBe(false)
+    expect(coaHasOwnSpan({ starts_at: null, ends_at: null })).toBe(false)
+  })
+
+  it("takes the COA's own window where it has one", () => {
+    expect(coaSpan({ starts_at: '2027-06-22', ends_at: '2027-06-29' }, course))
+      .toEqual({ starts_at: '2027-06-22', ends_at: '2027-06-29' })
+    expect(coaHasOwnSpan({ starts_at: '2027-06-22', ends_at: '2027-06-29' })).toBe(true)
+  })
+
+  // Either end stands alone: a COA that starts with the course and stops early
+  // only has to say where it stops.
+  it('lets one end follow the course while the other does not', () => {
+    expect(coaSpan({ ends_at: '2027-06-29' }, course))
+      .toEqual({ starts_at: '2027-06-22', ends_at: '2027-06-29' })
+    expect(coaSpan({ starts_at: '2027-06-30' }, course))
+      .toEqual({ starts_at: '2027-06-30', ends_at: '2027-07-06' })
+    expect(coaHasOwnSpan({ ends_at: '2027-06-29' })).toBe(true)
+  })
+
+  it('has no dates to offer on a course with none', () => {
+    expect(coaSpan(null, { starts_at: null, ends_at: null })).toEqual({ starts_at: null, ends_at: null })
   })
 })

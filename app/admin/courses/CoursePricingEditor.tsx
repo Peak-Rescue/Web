@@ -1,6 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { courseShortName, courseDayCounts } from '@/lib/courses'
-import { coaPrice, guessSeedQty, DEFAULT_MARGIN } from '@/lib/estimates'
+import { coaPrice, guessSeedQty, coaSpan, coaHasOwnSpan, DEFAULT_MARGIN } from '@/lib/estimates'
 import { describeForBiller, numberSoFar } from '@/lib/billing'
 import { billingState, pickBillableQuote, pickSeedCoa } from '@/lib/billing-handoff'
 import { QUOTE_ROW_COLUMNS } from '@/lib/quotes'
@@ -73,7 +73,7 @@ export default async function CoursePricingEditor({
     { data: invoiceRows }, { data: billerRows }, { data: readerRows },
   ] = await Promise.all([
     admin.from('course_estimates')
-      .select('id, title, margin, price_override, created_at, archived_at, estimate_items(label, qty, rate, notes, qty_factors, rate_id, drift_ack, sort_order)')
+      .select('id, title, margin, price_override, created_at, archived_at, starts_at, ends_at, estimate_items(label, qty, rate, notes, qty_factors, rate_id, drift_ack, sort_order)')
       .eq('instance_id', instanceId).order('created_at'),
     admin.from('pricing_rates').select('id, label, unit, rate, pay_rate, own_time, default_line').eq('active', true).order('sort_order'),
     admin.from('course_quotes')
@@ -129,6 +129,17 @@ export default async function CoursePricingEditor({
     calendarDays: lengths.calendarDays,
   }
 
+  // A COA that prices part of the course answers its own day counts. The
+  // course's off days are passed through rather than filtered: courseDayCounts
+  // only counts the ones inside the window it is given, so a break in the
+  // second week does not shorten a COA that covers the first.
+  const countsForCoa = (coa: { starts_at?: string | null; ends_at?: string | null } | null) => {
+    if (!coaHasOwnSpan(coa)) return estimateCounts
+    const span = coaSpan(coa, { starts_at: course.starts_at as string | null, ends_at: course.ends_at as string | null })
+    const own = courseDayCounts(span.starts_at, span.ends_at, offDayRows ?? [], course.breaks_paid ?? true)
+    return { ...estimateCounts, days: own.days, calendarDays: own.calendarDays }
+  }
+
   // Copy-picker sources: each course's COAs with their quote prices, plus the
   // relevance flags the picker groups by (same type first, then same client).
   type SourceEstimate = { id: string; title: string; margin: number; price_override: number | null; created_at: string; archived_at: string | null; estimate_items: { qty: number | null; rate: number }[] }
@@ -172,6 +183,8 @@ export default async function CoursePricingEditor({
     id: e.id as string | null,
     title: e.title as string,
     archivedAt: (e.archived_at as string | null) ?? null,
+    startsAt: (e.starts_at as string | null) ?? null,
+    endsAt: (e.ends_at as string | null) ?? null,
     margin: Number(e.margin),
     priceOverride: e.price_override === null ? null : Number(e.price_override),
     items: ((e.estimate_items ?? []) as EstimateItemRow[])
@@ -225,6 +238,8 @@ export default async function CoursePricingEditor({
       margin: DEFAULT_MARGIN,
       priceOverride: null,
       archivedAt: null,
+      startsAt: null,
+      endsAt: null,
       items: (pricingRateRows ?? [])
         .filter((r) => r.default_line)
         .map((r) => {
@@ -406,14 +421,17 @@ export default async function CoursePricingEditor({
             canDelete={estimatePanels.length > 1}
             canArchive={estimatePanels.length > 1}
             solo={estimatePanels.length === 1 && archivedCoas.length === 0}
-            counts={estimateCounts}
+            counts={countsForCoa({ starts_at: e.startsAt, ends_at: e.endsAt })}
+            initialStartsAt={e.startsAt}
+            initialEndsAt={e.endsAt}
+            courseSpan={{ starts_at: course.starts_at as string | null, ends_at: course.ends_at as string | null }}
           />
         ))}
       </div>
       {estimatePanels.length > 1 && (
         <div className={`${sectionRule} mt-6`}>
           <h4 className={`${sectionTitle} mb-3`}>Side by side</h4>
-          <CoaComparison coas={estimatePanels} />
+          <CoaComparison coas={estimatePanels} courseSpan={{ starts_at: course.starts_at as string | null, ends_at: course.ends_at as string | null }} />
         </div>
       )}
       {archivedCoas.length > 0 && (
