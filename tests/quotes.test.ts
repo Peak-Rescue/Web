@@ -33,13 +33,11 @@ describe('option dependencies', () => {
     expect(selectionProblem(OPTS, [])).toBe('Select at least one option')
   })
 
-  it('leaves plain alternatives combinable, as before', () => {
-    const alts: QuoteOption[] = [
-      { estimate_id: 'a', title: 'Drive team', total: 18400, relation: 'standalone' },
-      { estimate_id: 'b', title: 'Fly-in', total: 24100, relation: 'standalone' },
-    ]
-    expect(selectionProblem(alts, [1])).toBeNull()
-    expect(selectionProblem(alts, [0, 1])).toBeNull()
+  // Week one stands on its own, so it is the course being bought. Two of those
+  // is the case below.
+  it('takes the course with or without its addition', () => {
+    expect(selectionProblem(OPTS, [0])).toBeNull()
+    expect(selectionProblem(OPTS, [0, 1])).toBeNull()
   })
 
   // A COA can extend one that was set aside before the quote went out. The
@@ -59,57 +57,23 @@ describe('option dependencies', () => {
   })
 })
 
-// The gear package a unit buys or does not: the same money whether they book
-// one week or two, so it names no particular option — but it cannot be the
-// whole order, or they have bought kit and no course.
-describe('an addition to whatever they take', () => {
-  const WITH_GEAR: QuoteOption[] = [
-    { estimate_id: 'wk1', title: 'Week 1 — Mountain Rescue', total: 31980, relation: 'standalone' },
-    { estimate_id: 'wk2', title: 'Week 2 — Mountaineering extension', total: 21976.5, relation: 'addition', requires: 'wk1' },
-    { estimate_id: 'gear', title: 'Gear package', total: 9400, relation: 'addition' },
-  ]
-
-  it('goes with either the week or the pair', () => {
-    expect(selectionProblem(WITH_GEAR, [0, 2])).toBeNull()
-    expect(selectionProblem(WITH_GEAR, [0, 1, 2])).toBeNull()
-  })
-
-  it('cannot be the whole order', () => {
-    expect(selectionProblem(WITH_GEAR, [2]))
-      .toBe('"Gear package" is an addition and has to be taken with one of the other options.')
-    expect(optionAvailable(WITH_GEAR, 2, [])).toBe(false)
-    expect(optionAvailable(WITH_GEAR, 2, [0])).toBe(true)
-  })
-
-  // Gear plus the second week, with no first week, is two additions propping
-  // each other up.
-  it('is not held up by another addition', () => {
-    expect(optionAvailable(WITH_GEAR, 2, [1])).toBe(false)
-  })
-})
-
-// The drive team and the fly-in are one course reached two ways.
-describe('either/or options', () => {
+// The drive team and the fly-in are one course reached two ways — two COAs that
+// each stand on their own, which is what makes them alternatives.
+describe('two courses on one quote', () => {
   const WAYS: QuoteOption[] = [
-    { estimate_id: 'drive', title: 'Drive team', total: 18400, relation: 'alternative' },
-    { estimate_id: 'fly', title: 'Fly-in', total: 24100, relation: 'alternative' },
-    { estimate_id: 'gear', title: 'Gear package', total: 9400, relation: 'addition' },
+    { estimate_id: 'drive', title: 'Drive team', total: 18400, relation: 'standalone' },
+    { estimate_id: 'fly', title: 'Fly-in', total: 24100, relation: 'standalone' },
   ]
 
   it('takes one', () => {
     expect(selectionProblem(WAYS, [0])).toBeNull()
-    expect(selectionProblem(WAYS, [1, 2])).toBeNull()
+    expect(selectionProblem(WAYS, [1])).toBeNull()
   })
 
-  it('refuses both — that is two trips billed for one', () => {
+  it('refuses both — that is two deployments billed as one', () => {
     expect(selectionProblem(WAYS, [0, 1]))
       .toBe('"Drive team" and "Fly-in" are alternatives — please choose one.')
     expect(optionAvailable(WAYS, 1, [0])).toBe(false)
-  })
-
-  it('lets an addition ride on whichever one was taken', () => {
-    expect(optionAvailable(WAYS, 2, [0])).toBe(true)
-    expect(optionAvailable(WAYS, 2, [1])).toBe(true)
   })
 })
 

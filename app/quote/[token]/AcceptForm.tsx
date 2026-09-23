@@ -42,12 +42,12 @@ export default function AcceptForm({
       if (next.has(i)) {
         next.delete(i)
       } else {
-        // Either/or behaves like a radio: taking one releases the other, rather
-        // than greying it out and leaving the client to work out which to
-        // untick first.
-        if (options?.[i]?.relation === 'alternative') {
+        // Taking a course releases the other course: two of them is two
+        // deployments, and greying the second out would leave the client to
+        // work out which to untick first.
+        if (options?.[i]?.relation === 'standalone') {
           for (let j = 0; j < options.length; j++) {
-            if (j !== i && options[j]?.relation === 'alternative') next.delete(j)
+            if (j !== i && options[j]?.relation === 'standalone') next.delete(j)
           }
         }
         next.add(i)
@@ -104,9 +104,7 @@ export default function AcceptForm({
                 ? parentTitle
                   ? available ? `Added to ${parentTitle}` : `Available with ${parentTitle}`
                   : available ? 'Added to your selection' : 'Available with any option above'
-                : o.relation === 'alternative'
-                  ? 'One of these'
-                  : null
+                : null
               return (
                 <label
                   key={i}

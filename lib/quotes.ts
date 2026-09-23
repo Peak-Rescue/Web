@@ -23,16 +23,17 @@ export function quoteNumber(refNumber: number, seq: number): string {
 
 export const QUOTE_VALIDITY_DAYS = 30
 
-/** What an option is to the others on its quote — see migration 213.
+/** What an option is to the others on its quote — see migration 214.
 
-    standalone  taken alone or alongside anything.
-    alternative one of a set the client picks between: the drive team and the
-                fly-in are one course reached two ways, and both is two trips
-                billed for one.
-    addition    priced as the difference. `requires` names the option it goes
-                on top of, or is absent when it goes with whatever they take —
-                the gear package is the same money for one week or two. */
-export type OptionRelation = 'standalone' | 'alternative' | 'addition'
+    standalone  a course the client can take, and at most one of them: two
+                whole courses on one quote are two deployments billed as one,
+                which is what the drive team and the fly-in would have been.
+    addition    priced as the difference, on top of the option `requires`
+                names. The only way to combine.
+
+    Absent on quotes written before 213, which were freely combinable and must
+    stay that way — it is what their clients were shown. */
+export type OptionRelation = 'standalone' | 'addition'
 
 export type QuoteOption = {
   estimate_id?: string | null
@@ -71,20 +72,17 @@ export function optionAvailable(options: QuoteOption[], i: number, selected: Ite
   const picked = [...selected]
   const o = options[i]
   if (!o) return false
-  if (o.relation === 'alternative') {
-    return !picked.some((j) => j !== i && options[j]?.relation === 'alternative')
+  if (o.relation === 'standalone') {
+    // A second whole course is not a bigger order, so one releases the other.
+    return !picked.some((j) => j !== i && options[j]?.relation === 'standalone')
   }
-  if (!isAddition(o)) return true
+  if (!isAddition(o)) return true // pre-213, freely combinable
   const parent = parentIndex(options, i)
   if (parent !== -1) return picked.includes(parent)
-  // An addition that names nothing goes on whatever they take — but it cannot
-  // be the whole order, or the client has bought gear and no course.
-  //
-  // Unless there is nothing else to take. An addition can name a COA that was
-  // set aside before the quote went out, and a quote whose only option is an
-  // addition has nothing for it to be added to — so the rule carries no
-  // information there, and enforcing it anyway would leave a quote that can
-  // never be accepted.
+  // An addition can name a COA that was set aside before the quote went out.
+  // With nothing on the quote for it to be added to, the rule carries no
+  // information, and enforcing it anyway would leave a quote that can never be
+  // accepted — so it stands on its own instead.
   if (!options.some((other, j) => j !== i && !isAddition(other))) return true
   return picked.some((j) => j !== i && !isAddition(options[j]))
 }
@@ -95,9 +93,9 @@ export function selectionProblem(options: QuoteOption[], selected: number[]): st
   if (selected.length === 0) return 'Select at least one option'
   if (selected.some((i) => i < 0 || i >= options.length)) return 'That option is no longer on this quote'
 
-  const alternatives = selected.filter((i) => options[i]?.relation === 'alternative')
-  if (alternatives.length > 1) {
-    return `"${options[alternatives[0]].title}" and "${options[alternatives[1]].title}" are alternatives — please choose one.`
+  const courses = selected.filter((i) => options[i]?.relation === 'standalone')
+  if (courses.length > 1) {
+    return `"${options[courses[0]].title}" and "${options[courses[1]].title}" are alternatives — please choose one.`
   }
 
   const orphan = selected.find((i) => !optionAvailable(options, i, selected))

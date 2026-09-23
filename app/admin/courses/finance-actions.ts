@@ -84,7 +84,7 @@ export async function saveEstimate(
     extendsId?: string | null
     /** What this COA is to the others. Null until somebody says, which a course
         with a second COA shows as outstanding. */
-    relation?: 'standalone' | 'alternative' | 'addition' | null
+    relation?: 'standalone' | 'addition' | null
   }
 ): Promise<{ id: string }> {
   const admin = await requireAdmin()
@@ -120,8 +120,13 @@ export async function saveEstimate(
     input.relation === undefined || input.relation === null || (input.relation as string) === ''
       ? null
       : input.relation
-  if (relation !== null && !['standalone', 'alternative', 'addition'].includes(relation)) {
+  if (relation !== null && !['standalone', 'addition'].includes(relation)) {
     throw new Error('Not a relationship')
+  }
+  // An addition always says what it is added to — the column insists, and a
+  // sentence here beats the constraint's 400.
+  if (relation === 'addition' && !input.extendsId) {
+    throw new Error('Say which COA this one is an addition to')
   }
 
   let extendsId: string | null = null
@@ -628,7 +633,7 @@ export async function createQuote(
         estimate_id: e.id,
         title: e.title,
         total: quotePrice(e),
-        relation: ((e as { relation?: string | null }).relation ?? null) as 'standalone' | 'alternative' | 'addition' | null,
+        relation: ((e as { relation?: string | null }).relation ?? null) as 'standalone' | 'addition' | null,
         requires: (e as { extends_id?: string | null }).extends_id ?? null,
       }))
     : null

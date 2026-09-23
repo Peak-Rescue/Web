@@ -205,9 +205,7 @@ export default async function QuotePage({
                               : 'Added to whichever option you take'}
                           </span>
                         )}
-                        {o.relation === 'alternative' && !accepted && (
-                          <span className="block text-[11px] font-normal text-zinc-500">One of these</span>
-                        )}
+
                       </span>
                       <span className="text-xl font-bold whitespace-nowrap">{fmtMoney(Number(o.total))}</span>
                     </div>
@@ -216,8 +214,8 @@ export default async function QuotePage({
               </div>
               {!accepted && (
                 <p className="mt-4 text-sm text-zinc-400">
-                  Select what fits when accepting below. Options marked &ldquo;one of these&rdquo; are
-                  alternatives; an addition is priced as the difference and is taken on top of what it adds to.
+                  Select what fits when accepting below. The courses are alternatives — one of them — and an
+                  addition is priced as the difference, taken on top of the course it adds to.
                 </p>
               )}
             </>

@@ -646,17 +646,15 @@ export default function EstimatePanel({
               className={`bg-zinc-800 border rounded px-1.5 py-1 text-[11px] focus:outline-none ${
                 relation === '' ? 'border-amber-600 text-amber-400' : 'border-zinc-700 text-zinc-300'
               }`}
-              title="Which combinations of these options a client may accept"
+              title="Whether this is a course of its own or something on top of another"
             >
               <option value="">Relationship not set…</option>
-              <option value="standalone">Stands on its own</option>
-              <option value="alternative">Either/or with the other options</option>
-              <option value="addition">Addition to whatever they take</option>
+              <option value="standalone">A course on its own</option>
               {siblings.map((sib) => (
-                <option key={sib.id} value={`addition:${sib.id}`}>Addition to {sib.title}</option>
+                <option key={sib.id} value={`addition:${sib.id}`}>In addition to {sib.title}</option>
               ))}
             </select>
-            <InfoHint text="Stands on its own: takeable alone or with anything. Either/or: one of a set the client picks between — the drive team and the fly-in are one course reached two ways, and both would bill two trips for one. Addition: priced as the difference and taken on top, either of one named option (a second week the first week's travel got the crew to) or of whatever they take (a gear package, the same money for one week or two)." />
+            <InfoHint text="A course on its own is one the client can take — and only one of those can be accepted, because two whole courses on one quote are two deployments billed as one. In addition to another is priced as the difference and taken on top of it: the second week of a blended course, which the first week's travel already got the crew to." />
           </>
         )}
         {spanOpen && (
