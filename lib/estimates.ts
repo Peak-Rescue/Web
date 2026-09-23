@@ -185,6 +185,18 @@ export function unitFactorNames(unit: string | null): string[] {
     .map((f) => (f.endsWith('s') ? f : `${f}s`))
 }
 
+// Costs that belong to the deployment rather than to the days: getting there
+// and back. A COA that prices an addition to another must not carry them —
+// they are already in the COA it extends, and charging them twice is what a
+// client taking both weeks would pay for two round trips.
+//
+// Flights are the second half of the answer here and not in countsHeads,
+// because "Flights" is priced per person with no day factor at all: it never
+// had a day count to be wrong about, only a trip.
+export function isTripLine(label: string): boolean {
+  return isTravelLine(label) || /flight|airfare|\bair\b|mobiliz/i.test(label)
+}
+
 /** The window a COA prices, which is the course's unless it says otherwise.
 
     Most COAs price the whole course and carry no dates of their own, so they

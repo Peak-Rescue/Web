@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { coaPrice, coaSpan, coaHasOwnSpan, DEFAULT_MARGIN, dayCountFollowsCourse, daysForLine, factorValue } from '@/lib/estimates'
+import { coaPrice, coaSpan, coaHasOwnSpan, isTripLine, DEFAULT_MARGIN, dayCountFollowsCourse, daysForLine, factorValue } from '@/lib/estimates'
 
 // The number three places had to agree on. A test so they cannot drift apart
 // again quietly — the column default is checked by hand, this checks the code.
@@ -136,5 +136,22 @@ describe('coaSpan', () => {
 
   it('has no dates to offer on a course with none', () => {
     expect(coaSpan(null, { starts_at: null, ends_at: null })).toEqual({ starts_at: null, ends_at: null })
+  })
+})
+
+// What an addition must not carry: the deployment is already paid for by the
+// COA it extends.
+describe('isTripLine', () => {
+  it('claims getting there and back', () => {
+    expect(isTripLine('Instructor travel day/s')).toBe(true)
+    expect(isTripLine('Flights')).toBe(true)
+    expect(isTripLine('Airfare')).toBe(true)
+    expect(isTripLine('Mobilization')).toBe(true)
+  })
+  it('leaves the costs that scale with the days alone', () => {
+    expect(isTripLine('Instructor field day/s')).toBe(false)
+    expect(isTripLine('Lodging')).toBe(false)
+    expect(isTripLine('Meals')).toBe(false)
+    expect(isTripLine('Vehicle rental')).toBe(false)
   })
 })

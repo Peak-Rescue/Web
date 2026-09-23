@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { acceptQuote } from './actions'
 import { fmtMoney } from '@/lib/expenses'
+import { optionAvailable, selectionProblem, type QuoteOption } from '@/lib/quotes'
 
 export default function AcceptForm({
   token,
@@ -14,7 +15,7 @@ export default function AcceptForm({
   clientName: string | null
   // Multi-option quotes: the client checks the option or options they want;
   // null = classic single-total quote, no picking involved.
-  options: { title: string; total: number }[] | null
+  options: QuoteOption[] | null
 }) {
   const [name, setName] = useState('')
   const [title, setTitle] = useState('')
@@ -24,22 +25,36 @@ export default function AcceptForm({
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
 
+  // The same rule the accept action enforces, so the form never offers a
+  // combination the server will turn down.
+  const problem = options ? selectionProblem(options, [...selected]) : null
   const needsPick = Boolean(options) && selected.size === 0
   const selectedTotal = options
     ? [...selected].reduce((s, i) => s + Number(options[i]?.total ?? 0), 0)
     : 0
 
+  // Unticking an option takes its additions with it — an addition cannot stand
+  // alone, so leaving it checked would leave an invalid selection on screen for
+  // the client to work out.
   function toggle(i: number) {
     setSelected((prev) => {
       const next = new Set(prev)
-      if (next.has(i)) next.delete(i)
-      else next.add(i)
+      if (next.has(i)) {
+        next.delete(i)
+        if (options) {
+          for (let j = 0; j < options.length; j++) {
+            if (!optionAvailable(options, j, next)) next.delete(j)
+          }
+        }
+      } else {
+        next.add(i)
+      }
       return next
     })
   }
 
   async function submit() {
-    if (busy || !name.trim() || !authorized || needsPick) return
+    if (busy || !name.trim() || !authorized || needsPick || problem) return
     setBusy(true)
     setError(null)
     try {
@@ -63,25 +78,50 @@ export default function AcceptForm({
         <div className="sm:col-span-2">
           <p className="text-xs text-zinc-400 mb-2">Select the option or options you&apos;d like to move forward with:</p>
           <div className="space-y-2">
-            {options.map((o, i) => (
-              <label
-                key={i}
-                className={`flex items-center justify-between gap-3 px-4 py-3 rounded-lg border cursor-pointer transition-colors ${
-                  selected.has(i) ? 'border-pr-red bg-pr-red/10' : 'border-zinc-700 bg-zinc-800/50 hover:border-zinc-500'
-                }`}
-              >
-                <span className="flex items-center gap-3">
-                  <input
-                    type="checkbox"
-                    checked={selected.has(i)}
-                    onChange={() => toggle(i)}
-                    className="accent-red-600"
-                  />
-                  <span className="text-sm font-medium text-white">{o.title}</span>
-                </span>
-                <span className="text-sm font-semibold text-white whitespace-nowrap">{fmtMoney(Number(o.total))}</span>
-              </label>
-            ))}
+            {options.map((o, i) => {
+              // An addition is offered only once the option it belongs to is
+              // taken: indented under it, and not tickable before. Disabled
+              // rather than hidden, so the client can see what the first option
+              // makes available rather than wondering where it went.
+              const available = optionAvailable(options, i, selected)
+              const isAddition = Boolean(o.requires)
+              const parentTitle = isAddition
+                ? options.find((p) => p.estimate_id === o.requires)?.title ?? null
+                : null
+              return (
+                <label
+                  key={i}
+                  className={`flex items-center justify-between gap-3 px-4 py-3 rounded-lg border transition-colors ${
+                    isAddition ? 'ml-6' : ''
+                  } ${
+                    !available
+                      ? 'border-zinc-800 bg-zinc-900/60 opacity-60 cursor-not-allowed'
+                      : selected.has(i)
+                        ? 'border-pr-red bg-pr-red/10 cursor-pointer'
+                        : 'border-zinc-700 bg-zinc-800/50 hover:border-zinc-500 cursor-pointer'
+                  }`}
+                >
+                  <span className="flex items-center gap-3 min-w-0">
+                    <input
+                      type="checkbox"
+                      checked={selected.has(i)}
+                      disabled={!available}
+                      onChange={() => toggle(i)}
+                      className="accent-red-600 disabled:opacity-50"
+                    />
+                    <span className="min-w-0">
+                      <span className="block text-sm font-medium text-white">{o.title}</span>
+                      {parentTitle && (
+                        <span className="block text-[11px] text-zinc-500">
+                          {available ? `Added to ${parentTitle}` : `Available with ${parentTitle}`}
+                        </span>
+                      )}
+                    </span>
+                  </span>
+                  <span className="text-sm font-semibold text-white whitespace-nowrap">{fmtMoney(Number(o.total))}</span>
+                </label>
+              )
+            })}
           </div>
           {selected.size > 0 && (
             <p className="mt-3 text-sm text-zinc-300 text-right">

@@ -73,7 +73,7 @@ export default async function CoursePricingEditor({
     { data: invoiceRows }, { data: billerRows }, { data: readerRows },
   ] = await Promise.all([
     admin.from('course_estimates')
-      .select('id, title, margin, price_override, created_at, archived_at, starts_at, ends_at, estimate_items(label, qty, rate, notes, qty_factors, rate_id, drift_ack, sort_order)')
+      .select('id, title, margin, price_override, created_at, archived_at, starts_at, ends_at, extends_id, estimate_items(label, qty, rate, notes, qty_factors, rate_id, drift_ack, sort_order)')
       .eq('instance_id', instanceId).order('created_at'),
     admin.from('pricing_rates').select('id, label, unit, rate, pay_rate, own_time, default_line').eq('active', true).order('sort_order'),
     admin.from('course_quotes')
@@ -185,6 +185,7 @@ export default async function CoursePricingEditor({
     archivedAt: (e.archived_at as string | null) ?? null,
     startsAt: (e.starts_at as string | null) ?? null,
     endsAt: (e.ends_at as string | null) ?? null,
+    extendsId: (e.extends_id as string | null) ?? null,
     margin: Number(e.margin),
     priceOverride: e.price_override === null ? null : Number(e.price_override),
     items: ((e.estimate_items ?? []) as EstimateItemRow[])
@@ -240,6 +241,7 @@ export default async function CoursePricingEditor({
       archivedAt: null,
       startsAt: null,
       endsAt: null,
+      extendsId: null,
       items: (pricingRateRows ?? [])
         .filter((r) => r.default_line)
         .map((r) => {
@@ -424,6 +426,10 @@ export default async function CoursePricingEditor({
             counts={countsForCoa({ starts_at: e.startsAt, ends_at: e.endsAt })}
             initialStartsAt={e.startsAt}
             initialEndsAt={e.endsAt}
+            initialExtendsId={e.extendsId}
+            siblings={estimatePanels
+              .filter((o) => o.id && o.id !== e.id && !o.extendsId)
+              .map((o) => ({ id: o.id as string, title: o.title }))}
             courseSpan={{ starts_at: course.starts_at as string | null, ends_at: course.ends_at as string | null }}
           />
         ))}

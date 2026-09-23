@@ -23,7 +23,48 @@ export function quoteNumber(refNumber: number, seq: number): string {
 
 export const QUOTE_VALIDITY_DAYS = 30
 
-export type QuoteOption = { estimate_id?: string | null; title: string; total: number; chosen?: boolean }
+export type QuoteOption = {
+  estimate_id?: string | null
+  title: string
+  total: number
+  chosen?: boolean
+  /** The option this one is an addition to, snapshotted from the COA's
+      extends_id when the quote was written. An addition carries no travel and
+      no mobilization — those are in the option it extends — so it cannot be
+      accepted on its own. Absent on an option that stands alone. */
+  requires?: string | null
+}
+
+/** The option an addition depends on, when that option is on this quote at all.
+    A COA can extend one whose COA was set aside before the quote was written;
+    the snapshot then has a requires nothing else matches, and an addition whose
+    parent is not being offered is not an addition — it is the only thing on
+    offer, and holding it hostage to a missing option would make the quote
+    unacceptable. */
+const parentIndex = (options: QuoteOption[], i: number): number => {
+  const req = options[i]?.requires
+  return req ? options.findIndex((o) => o.estimate_id === req) : -1
+}
+
+/** Whether an option can be ticked on its own — false for an addition whose
+    parent is on the quote and not selected. The client's form and the accept
+    action both ask this, so what the page greys out and what the server
+    refuses cannot come apart. */
+export function optionAvailable(options: QuoteOption[], i: number, selected: Iterable<number>): boolean {
+  const parent = parentIndex(options, i)
+  return parent === -1 || [...selected].includes(parent)
+}
+
+/** What is wrong with a selection, or null when nothing is. The message is
+    shown to the client, so it names the options rather than their ids. */
+export function selectionProblem(options: QuoteOption[], selected: number[]): string | null {
+  if (selected.length === 0) return 'Select at least one option'
+  if (selected.some((i) => i < 0 || i >= options.length)) return 'That option is no longer on this quote'
+  const orphan = selected.find((i) => !optionAvailable(options, i, selected))
+  if (orphan === undefined) return null
+  const parent = options[parentIndex(options, orphan)]
+  return `"${options[orphan].title}" is an addition to "${parent.title}" and can only be accepted with it.`
+}
 
 /** A quote as every screen that lists one reads it. Lives here rather than on
     the list component because the action that makes a quote hands one back. */

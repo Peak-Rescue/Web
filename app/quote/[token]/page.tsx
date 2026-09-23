@@ -6,7 +6,7 @@ import QuoteHeroPicker from '@/app/admin/courses/QuoteHeroPicker'
 import { HERO_CHOICES, clientSafeHero } from '@/lib/quote-heroes'
 import { courseDisplayName, courseShortName } from '@/lib/courses'
 import { services, categoryMeta, type ServiceCategory } from '@/lib/data/services'
-import { QUOTE_MISSION, QUOTE_COMMITMENT, QUOTE_CONTACT, quoteNumber } from '@/lib/quotes'
+import { QUOTE_MISSION, QUOTE_COMMITMENT, QUOTE_CONTACT, quoteNumber, type QuoteOption } from '@/lib/quotes'
 import { fmtMoney } from '@/lib/expenses'
 import AcceptForm from './AcceptForm'
 import { todayHere } from '@/lib/course-clock'
@@ -94,7 +94,7 @@ export default async function QuotePage({
 
   // Multi-option quote: every COA priced side by side; chosen ones are
   // flagged at accept time and the total becomes their sum.
-  const options = (quote.options ?? null) as { title: string; total: number; chosen?: boolean }[] | null
+  const options = (quote.options ?? null) as QuoteOption[] | null
   const chosen = options?.filter((o) => o.chosen) ?? []
 
   return (
@@ -184,7 +184,7 @@ export default async function QuotePage({
                   return (
                     <div
                       key={i}
-                      className={`flex items-center justify-between gap-3 px-4 py-3.5 rounded-lg border ${
+                      className={`flex items-center justify-between gap-3 px-4 py-3.5 rounded-lg border ${o.requires ? 'ml-6 ' : ''}${
                         o.chosen
                           ? 'border-teal-700 bg-teal-900/20'
                           : dimmed
@@ -195,6 +195,14 @@ export default async function QuotePage({
                       <span className="text-base font-medium">
                         {o.chosen && <span className="text-teal-400 mr-2">✓</span>}
                         {o.title}
+                        {/* An addition says what it is added to, since its
+                            price is the difference and not a course of its
+                            own. */}
+                        {o.requires && (
+                          <span className="block text-[11px] font-normal text-zinc-500">
+                            Added to {options.find((p) => p.estimate_id === o.requires)?.title ?? 'the option above'}
+                          </span>
+                        )}
                       </span>
                       <span className="text-xl font-bold whitespace-nowrap">{fmtMoney(Number(o.total))}</span>
                     </div>
@@ -203,7 +211,8 @@ export default async function QuotePage({
               </div>
               {!accepted && (
                 <p className="mt-4 text-sm text-zinc-400">
-                  Options can be combined — select the one or several that fit when accepting below.
+                  Options can be combined — select the one or several that fit when accepting below. An
+                  addition is priced as the difference and is taken alongside what it adds to.
                 </p>
               )}
             </>
@@ -239,7 +248,7 @@ export default async function QuotePage({
             <AcceptForm
               token={token}
               clientName={inst.client_name}
-              options={options ? options.map((o) => ({ title: o.title, total: Number(o.total) })) : null}
+              options={options}
             />
           </section>
         )}

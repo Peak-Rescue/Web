@@ -5,7 +5,7 @@ import { after } from 'next/server'
 import { revalidatePath } from 'next/cache'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { syncCourseCalendar } from '@/lib/google-calendar'
-import { quoteNumber } from '@/lib/quotes'
+import { quoteNumber, selectionProblem, type QuoteOption } from '@/lib/quotes'
 import { courseShortName } from '@/lib/courses'
 import { sendMail } from '@/lib/mailer'
 import { todayHere } from '@/lib/course-clock'
@@ -37,12 +37,16 @@ export async function acceptQuote(
     return { ok: false, error: 'This quote has expired — please contact us for an updated quote' }
   }
 
-  const options = (quote.options ?? null) as { title: string; total: number; chosen?: boolean }[] | null
+  const options = (quote.options ?? null) as QuoteOption[] | null
   let optionsPatch: Record<string, unknown> = {}
   let chosenTitles: string[] = []
   if (options) {
     const selected = [...new Set((input.selected ?? []).filter((i) => Number.isInteger(i) && i >= 0 && i < options.length))]
-    if (selected.length === 0) return { ok: false, error: 'Please select at least one option' }
+    // The form greys out an addition whose option is unticked, but the form is
+    // the client's copy of the rule and this is the one that counts: an
+    // addition accepted alone is a deployment with no travel priced into it.
+    const problem = selectionProblem(options, selected)
+    if (problem) return { ok: false, error: problem }
     const flagged = options.map((o, i) => ({ ...o, chosen: selected.includes(i) }))
     chosenTitles = flagged.filter((o) => o.chosen).map((o) => o.title)
     optionsPatch = {

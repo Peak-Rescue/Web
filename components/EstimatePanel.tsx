@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { fmtMoney, round2 } from '@/lib/expenses'
-import { impliedMargin, factorValue, prefillFactor, unitFactorNames, dayCountFollowsCourse } from '@/lib/estimates'
+import { impliedMargin, factorValue, prefillFactor, unitFactorNames, dayCountFollowsCourse, isTripLine } from '@/lib/estimates'
 import { publishCoaPrice, retractCoaPrice } from '@/lib/live-coa-prices'
 import { saveEstimate, deleteEstimateCoa, setEstimateArchived, type EstimateItemInput } from '@/app/admin/courses/finance-actions'
 import { useRouter } from 'next/navigation'
@@ -70,6 +70,8 @@ export default function EstimatePanel({
   counts,
   initialStartsAt,
   initialEndsAt,
+  initialExtendsId,
+  siblings,
   courseSpan,
 }: {
   instanceId: string
@@ -88,6 +90,11 @@ export default function EstimatePanel({
   /** The window this COA prices, null for each end that follows the course. */
   initialStartsAt: string | null
   initialEndsAt: string | null
+  /** The COA this one prices an addition to, null when it stands on its own. */
+  initialExtendsId: string | null
+  /** The other live COAs on this course that an addition could be built on —
+      already filtered to the ones that are not additions themselves. */
+  siblings: { id: string; title: string }[]
   /** The course's own dates — what the empty boxes are standing in for. */
   courseSpan: { starts_at: string | null; ends_at: string | null }
 }) {
@@ -101,6 +108,7 @@ export default function EstimatePanel({
   // prices the whole course has nothing to say about its own length, and two
   // date boxes on every panel would be two boxes nobody reads.
   const [spanOpen, setSpanOpen] = useState(Boolean(initialStartsAt || initialEndsAt))
+  const [extendsId, setExtendsId] = useState(initialExtendsId ?? '')
   const [deleting, setDeleting] = useState(false)
   const [archiving, setArchiving] = useState(false)
   const nextKey = useRef(initialItems.length)
@@ -137,7 +145,7 @@ export default function EstimatePanel({
   // use the calculated price", which is different from an override of $0.
   const [override, setOverride] = useState(initialPriceOverride === null ? '' : String(initialPriceOverride))
   const [status, setStatus] = useState<'idle' | 'pending' | 'saving' | 'saved' | 'error'>('idle')
-  const stateRef = useRef({ rows, margin, title: initialTitle, override, startsAt: initialStartsAt ?? '', endsAt: initialEndsAt ?? '' })
+  const stateRef = useRef({ rows, margin, title: initialTitle, override, startsAt: initialStartsAt ?? '', endsAt: initialEndsAt ?? '', extendsId: initialExtendsId ?? '' })
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const saving = useRef(false)
   const rerun = useRef(false)
@@ -191,6 +199,16 @@ export default function EstimatePanel({
     timer.current = setTimeout(() => void flush({ thenRefresh: true }), SAVE_DEBOUNCE_MS)
   }
 
+  // Which COA this one is an addition to. Refreshes like the span does, since
+  // it changes what the panel has to warn about.
+  function scheduleExtends(next: string) {
+    setExtendsId(next)
+    stateRef.current = { ...stateRef.current, extendsId: next }
+    setStatus('pending')
+    if (timer.current) clearTimeout(timer.current)
+    timer.current = setTimeout(() => void flush({ thenRefresh: true }), SAVE_DEBOUNCE_MS)
+  }
+
   async function flush(opts: { thenRefresh?: boolean } = {}) {
     if (timer.current) {
       clearTimeout(timer.current)
@@ -203,7 +221,7 @@ export default function EstimatePanel({
     saving.current = true
     setStatus('saving')
     try {
-      const { rows: r, margin: m, title: t, override: o, startsAt: sa, endsAt: ea } = stateRef.current
+      const { rows: r, margin: m, title: t, override: o, startsAt: sa, endsAt: ea, extendsId: ex } = stateRef.current
       const items: EstimateItemInput[] = r
         .filter((row) => row.label.trim())
         .map((row) => {
@@ -229,6 +247,7 @@ export default function EstimatePanel({
           items,
           startsAt: sa.trim() === '' ? null : sa,
           endsAt: ea.trim() === '' ? null : ea,
+          extendsId: ex.trim() === '' ? null : ex,
         })
       )
       estimateIdRef.current = saved.id
@@ -503,6 +522,12 @@ export default function EstimatePanel({
   const fmtDay = (d: string) =>
     new Date(d + 'T00:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
   const ownSpan = Boolean(startsAt || endsAt)
+  const parent = siblings.find((sib) => sib.id === extendsId) ?? null
+  // Lines an addition must not carry: the deployment is already priced in the
+  // COA it extends. Warned about rather than refused, because the numbers are
+  // the estimator's to set — but warned about with the fix attached, since the
+  // seeded default lines put them here without being asked.
+  const tripRows = parent ? rows.filter((r) => r.label.trim() && isTripLine(r.label)) : []
   const spanFrom = startsAt || courseSpan.starts_at
   const spanTo = endsAt || courseSpan.ends_at
   const spanLabel =
@@ -593,6 +618,21 @@ export default function EstimatePanel({
           {ownSpan ? `Prices ${spanLabel}` : spanLabel}
         </button>
         <InfoHint text="A COA can price part of the course — the first week of a blended course, quoted beside the pair. Its day counts, prefilled quantities and out-of-date warnings then follow these dates instead of the course's. Empty means the whole course, which is what nearly every COA wants." />
+        {siblings.length > 0 && (
+          <select
+            value={extendsId}
+            onChange={(e) => scheduleExtends(e.target.value)}
+            className={`bg-zinc-800 border rounded px-1.5 py-1 text-[11px] focus:outline-none ${
+              parent ? 'border-teal-800 text-teal-300' : 'border-zinc-700 text-zinc-500'
+            }`}
+            title="An addition can only be accepted alongside the COA it extends"
+          >
+            <option value="">Stands on its own</option>
+            {siblings.map((sib) => (
+              <option key={sib.id} value={sib.id}>Addition to {sib.title}</option>
+            ))}
+          </select>
+        )}
         {spanOpen && (
           <span className="flex items-center gap-1.5">
             <input
@@ -627,6 +667,28 @@ export default function EstimatePanel({
           </span>
         )}
       </div>
+
+      {tripRows.length > 0 && (
+        <div className="mb-1.5 text-[11px] flex items-center gap-2 flex-wrap text-zinc-500">
+          <InfoHint
+            below
+            caution
+            text="This COA is an addition, so the trip out and back is already priced in the COA it extends. Left here, a client accepting both pays to travel twice."
+          />
+          <span className="text-amber-500/80">
+            {tripRows.length === 1 ? 'A line prices' : 'Lines price'} the trip {parent ? `already in ${parent.title}` : 'twice'}
+          </span>
+          <span className="text-zinc-600 min-w-0 truncate">{tripRows.map((r) => r.label.trim()).join(', ')}</span>
+          <button
+            type="button"
+            onClick={() => schedule(rows.filter((r) => !tripRows.includes(r)), margin)}
+            className="text-amber-400 hover:text-amber-200 transition-colors underline decoration-amber-800"
+            title={`Remove ${tripRows.length === 1 ? 'it' : 'them'} — ${parent?.title ?? 'the other COA'} pays for the trip`}
+          >
+            Remove
+          </button>
+        </div>
+      )}
 
       {unsetRows.length > 0 && (
         <div className="mb-1.5 text-[11px] flex items-center gap-2 flex-wrap text-zinc-500">

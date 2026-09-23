@@ -79,6 +79,8 @@ export async function saveEstimate(
     // what nearly every COA wants — see coaSpan.
     startsAt?: string | null
     endsAt?: string | null
+    /** The COA this one prices an addition to. Null = it stands on its own. */
+    extendsId?: string | null
   }
 ): Promise<{ id: string }> {
   const admin = await requireAdmin()
@@ -106,18 +108,38 @@ export async function saveEstimate(
   const endsAt = day(input.endsAt)
   if (startsAt && endsAt && endsAt < startsAt) throw new Error('This COA ends before it starts')
 
+  // What a COA may be an addition to: another live COA on this same course, and
+  // not one that is itself an addition. A chain of additions is a course broken
+  // into pieces, which is what the course's own dates are for, and it would
+  // leave the client a tick box that silently requires two others.
+  let extendsId: string | null = null
+  if (input.extendsId !== undefined && input.extendsId !== null && input.extendsId !== '') {
+    if (!UUID_RE.test(input.extendsId)) throw new Error('Not a COA')
+    if (estimateId && input.extendsId === estimateId) throw new Error('A COA cannot extend itself')
+    const { data: parent } = await admin
+      .from('course_estimates')
+      .select('id, extends_id, archived_at')
+      .eq('id', input.extendsId)
+      .eq('instance_id', instanceId)
+      .maybeSingle()
+    if (!parent) throw new Error('That COA is not on this course')
+    if (parent.extends_id) throw new Error('That COA is already an addition to another — additions cannot be chained')
+    if (parent.archived_at) throw new Error('That COA has been set aside')
+    extendsId = parent.id
+  }
+
   let id = estimateId
   if (id) {
     const { error } = await admin
       .from('course_estimates')
-      .update({ margin: input.margin, title, price_override: priceOverride, starts_at: startsAt, ends_at: endsAt })
+      .update({ margin: input.margin, title, price_override: priceOverride, starts_at: startsAt, ends_at: endsAt, extends_id: extendsId })
       .eq('id', id)
       .eq('instance_id', instanceId)
     if (error) throw new Error(error.message)
   } else {
     const { data, error } = await admin
       .from('course_estimates')
-      .insert({ instance_id: instanceId, margin: input.margin, title, price_override: priceOverride, starts_at: startsAt, ends_at: endsAt })
+      .insert({ instance_id: instanceId, margin: input.margin, title, price_override: priceOverride, starts_at: startsAt, ends_at: endsAt, extends_id: extendsId })
       .select('id')
       .single()
     if (error || !data) throw new Error(error?.message ?? 'Could not save estimate')
@@ -198,6 +220,8 @@ async function seedDefaultCoa(admin: Awaited<ReturnType<typeof requireAdmin>>, i
     title: estimate.title as string,
     margin: estimate.margin as number | null,
     price_override: null,
+    // A COA seeded from the defaults prices the whole course on its own.
+    extends_id: null as string | null,
     estimate_items: rows,
   }
 }
@@ -536,7 +560,7 @@ export async function createQuote(
   const allCoas = estimateId === '__all__'
   let estimateQuery = admin
     .from('course_estimates')
-    .select('id, title, margin, price_override, estimate_items(qty, rate)')
+    .select('id, title, margin, price_override, extends_id, estimate_items(qty, rate)')
     .eq('instance_id', instanceId)
     // Set-aside COAs are out of play: neither the newest-estimate default nor
     // an options quote's column list may reach for one.
@@ -581,8 +605,17 @@ export async function createQuote(
   // Multi-option: snapshot every COA as { title, total }; the quote's own
   // total stays 0 until the client picks (it becomes the sum of the chosen).
   // estimate_id rides along so each option can be re-pulled from its COA.
+  // Each COA's dependency rides along: an addition's trip is priced in the COA
+  // it extends, so accepting it alone would sell a deployment nobody travels
+  // to. Snapshotted rather than read live, like the totals beside it — a COA
+  // re-pointed next month must not change what a client already accepted.
   const options = allCoas
-    ? (estimates ?? []).map((e) => ({ estimate_id: e.id, title: e.title, total: quotePrice(e) }))
+    ? (estimates ?? []).map((e) => ({
+        estimate_id: e.id,
+        title: e.title,
+        total: quotePrice(e),
+        requires: (e as { extends_id?: string | null }).extends_id ?? null,
+      }))
     : null
   if (allCoas && (options?.length ?? 0) < 2) return { ok: false, error: 'Need at least two COAs for an options quote' }
   const total = allCoas ? 0 : quotePrice(estimate)
