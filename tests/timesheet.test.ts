@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { draftRows, periodEndFromDue, periodFor, shiftPeriod, stateOf, rowsAsTsv, totalHours, type TimesheetCourse } from '@/lib/timesheet'
+import { draftRows, periodEndFromDue, periodFor, shiftPeriod, stateFor, stateOf, rowsAsTsv, totalHours, type TimesheetCourse } from '@/lib/timesheet'
 import { FIELD_CODE, TRAVEL_CODE, PAY_CODES } from '@/lib/paycodes'
 
 // A real hours-due date off the admin calendar — a Friday — and the period it
@@ -12,6 +12,7 @@ const course = (over: Partial<TimesheetCourse> = {}): TimesheetCourse => ({
   course_type: 'rope-access',
   custom_title: null,
   location: 'Casper, WY',
+  region: 'US-WY',
   status: 'confirmed',
   starts_at: '2026-12-08',
   ends_at: '2026-12-11',
@@ -108,7 +109,18 @@ describe('draft rows', () => {
 })
 
 describe('the state ADP asks for', () => {
-  it('reads an abbreviation or a name, and guesses at neither', () => {
+  it('comes off the region code, not the prose', () => {
+    // "San Diego" names no state; US-CA does, and the course carries both.
+    expect(stateFor({ region: 'US-CA', location: 'San Diego' })).toBe('CA')
+    expect(stateFor({ region: 'US-WY', location: 'Casper' })).toBe('WY')
+    // Abroad there is no state to give.
+    expect(stateFor({ region: 'JO', location: 'Wadi Rum' })).toBe('')
+    // Only a course written before the field existed falls back to the prose.
+    expect(stateFor({ region: null, location: 'Saint George UT' })).toBe('UT')
+    expect(stateFor({ region: null, location: 'San Diego' })).toBe('')
+  })
+
+  it('reads an abbreviation or a name from prose, and guesses at neither', () => {
     expect(stateOf('Casper, WY')).toBe('WY')
     // Half the courses are written without the comma.
     expect(stateOf('Saint George UT')).toBe('UT')

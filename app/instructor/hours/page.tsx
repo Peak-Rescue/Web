@@ -5,7 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { workEmail } from '@/lib/contacts'
 import { listUpcomingEvents } from '@/lib/google-calendar'
 import { courseShortName, dayShift } from '@/lib/courses'
-import { draftRows, periodEndFromDue, periodFor, shiftPeriod, stateOf, type Period, type TimesheetCourse, type TimesheetRow } from '@/lib/timesheet'
+import { draftRows, periodEndFromDue, periodFor, shiftPeriod, stateFor, type Period, type TimesheetCourse, type TimesheetRow } from '@/lib/timesheet'
 import TimesheetEditor from './TimesheetEditor'
 import { saveTimesheet, markTimesheetSent } from './actions'
 
@@ -71,7 +71,7 @@ export default async function HoursPage({
     const [{ data: instances }, { data: offDays }, { data: rates }] = await Promise.all([
       admin
         .from('course_instances')
-        .select('id, course_type, course_category, custom_title, client_name, internal, location, status, starts_at, ends_at')
+        .select('id, course_type, course_category, custom_title, client_name, internal, location, region, status, starts_at, ends_at')
         .in('id', ids)
         .neq('status', 'cancelled')
         // A course either side of the period can still put a travel day
@@ -112,7 +112,7 @@ export default async function HoursPage({
       client: (c as { client_name?: string | null }).client_name ?? null,
       location: c.location,
       href: `/portal/${c.id}`,
-      state: stateOf(c.location),
+      state: stateFor(c),
     }))
 
   // The month the grid opens on: the one the period starts in, unless the

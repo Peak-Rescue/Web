@@ -9,6 +9,7 @@
 
 import { computeBlocks, courseShortName, dayShift, type OffDayRange } from '@/lib/courses'
 import { weekStart } from '@/lib/pay'
+import { splitRegion } from '@/lib/regions'
 import { FIELD_CODE, TRAVEL_CODE } from '@/lib/paycodes'
 
 export const PERIOD_DAYS = 14
@@ -29,6 +30,8 @@ export type TimesheetCourse = {
   course_type: string
   custom_title: string | null
   location: string | null
+  /** ISO region code — 'US-CA'. The location is prose; this is the fact. */
+  region?: string | null
   status: string
   starts_at: string | null
   ends_at: string | null
@@ -84,6 +87,22 @@ const STATES: Record<string, string> = {
 
 const ABBREVIATIONS = new Set(Object.values(STATES))
 
+/** The state ADP wants, off the course's own region code.
+ *
+ *  A course records where it is twice: `location` is prose somebody typed,
+ *  `region` is the ISO code the venue and map matching run on. The code is
+ *  the one to read — "San Diego" names no state and US-CA does.
+ *
+ *  A course outside the US has no state to give, and gets a blank. Only a
+ *  course with no region at all falls back to reading the prose, which is
+ *  every course written before the field existed. */
+export function stateFor(c: { region?: string | null; location: string | null }): string {
+  const { country, sub } = splitRegion(c.region)
+  if (country === 'US') return sub.split('-')[1] ?? ''
+  if (c.region) return ''
+  return stateOf(c.location)
+}
+
 /** The state a location names, when it names one at all.
     A comma is not required — half the courses are written "Saint George UT"
     — so this reads the end of the string rather than the last field: the
@@ -128,7 +147,7 @@ export function draftRows(period: Period, courses: TimesheetCourse[]): Timesheet
       .filter(Boolean)
       .map((s) => s!.trim())
       .join(' — ')
-    const state = stateOf(c.location)
+    const state = stateFor(c)
     const hours = c.hours_per_day ?? DEFAULT_HOURS
 
     for (const b of computeBlocks(w.start, w.end, c.off_days)) {
