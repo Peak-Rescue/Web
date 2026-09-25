@@ -33,6 +33,7 @@ export default function TimesheetEditor({
   savedAt,
   hasSaved,
   senderName,
+  senderEmail,
   approverEmail,
   onSave,
   onMarkSent,
@@ -46,6 +47,7 @@ export default function TimesheetEditor({
   savedAt: string | null
   hasSaved: boolean
   senderName: string
+  senderEmail: string | null
   approverEmail: string | null
   onSave: (periodStart: string, periodEnd: string, rows: TimesheetRow[]) => Promise<void>
   onMarkSent: (periodStart: string) => Promise<void>
@@ -145,9 +147,13 @@ export default function TimesheetEditor({
 
   // Gmail's compose window, not a mailto:. A mailto hands the draft to
   // whatever the operating system thinks the mail app is, which here is one
-  // nobody uses — the message went nowhere anybody would ever see it. This
-  // opens a tab in the account already signed in, which is the inbox the mail
-  // has to leave from.
+  // nobody uses — the message went nowhere anybody would ever see it.
+  //
+  // authuser names the work address rather than trusting whichever account
+  // the browser happens to have first: Chrome is usually signed into a
+  // personal Gmail, and payroll leaving from a personal address is the same
+  // failure as payroll leaving from the portal. Gmail resolves it by email,
+  // so it lands in the right account without knowing its index.
   const composeUrl = useMemo(() => {
     const subject = `Hours — ${senderName} — ${short(period.start)} to ${short(period.end)}`
     const body = `${rowsAsText(rows)}\n\nTotal ${totalHours(rows)} hrs`
@@ -158,8 +164,9 @@ export default function TimesheetEditor({
       su: subject,
       body,
     })
+    if (senderEmail) q.set('authuser', senderEmail)
     return `https://mail.google.com/mail/?${q}`
-  }, [rows, period, senderName, approverEmail])
+  }, [rows, period, senderName, senderEmail, approverEmail])
 
   async function copy() {
     await navigator.clipboard.writeText(rowsAsTsv(rows))
@@ -396,7 +403,7 @@ export default function TimesheetEditor({
         >
           Email these hours
         </a>
-        <InfoHint text="Opens a Gmail draft in a new tab, addressed and filled in. It goes out from you rather than from the portal — so save your edits first, since the draft is built from what is on screen. Check the account in the corner if you're signed into more than one." />
+        <InfoHint text="Opens a Gmail draft in a new tab, addressed and filled in, in your peak-rescue.com account rather than whichever one the browser had open. It goes out from you rather than from the portal — so save your edits first, since the draft is built from what is on screen." />
       </div>
 
       {error && <p className="text-red-400 text-xs">{error}</p>}

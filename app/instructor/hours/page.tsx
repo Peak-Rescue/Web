@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { workEmail } from '@/lib/contacts'
 import { listUpcomingEvents } from '@/lib/google-calendar'
 import { courseShortName, dayShift } from '@/lib/courses'
 import { draftRows, periodEndFromDue, periodFor, shiftPeriod, stateOf, type Period, type TimesheetCourse, type TimesheetRow } from '@/lib/timesheet'
@@ -37,7 +38,7 @@ export default async function HoursPage({
   const admin = createAdminClient()
   const { data: instructor } = await admin
     .from('instructors')
-    .select('id, name, hours_via_admin')
+    .select('id, name, email, hours_via_admin')
     .eq('profile_id', user.id)
     .maybeSingle()
 
@@ -143,6 +144,7 @@ export default async function HoursPage({
           savedAt={saved?.sent_at ?? null}
           hasSaved={Boolean(saved?.rows)}
           senderName={instructor.name}
+          senderEmail={workEmail(instructor.email)}
           approverEmail={approver?.email ?? null}
           onSave={saveTimesheet}
           onMarkSent={markTimesheetSent}
