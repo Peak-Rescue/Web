@@ -303,3 +303,37 @@ export async function deleteCert(id: string) {
   if (error) throw new Error(error.message)
   revalidatePath('/instructor')
 }
+
+// ─── The schedule you share outside the company ─────────────────────────────
+//
+// Two writes to the same column. Making a link and replacing one are the same
+// act — a fresh secret — and the only thing that can be done to a URL already
+// in someone else's calendar app is to stop answering it.
+
+export async function setScheduleLink() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Not authenticated')
+
+  const { error } = await createAdminClient()
+    .from('instructors')
+    .update({ schedule_token: crypto.randomUUID() })
+    .eq('profile_id', user.id)
+
+  if (error) throw new Error(error.message)
+  revalidatePath('/instructor')
+}
+
+export async function clearScheduleLink() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Not authenticated')
+
+  const { error } = await createAdminClient()
+    .from('instructors')
+    .update({ schedule_token: null })
+    .eq('profile_id', user.id)
+
+  if (error) throw new Error(error.message)
+  revalidatePath('/instructor')
+}

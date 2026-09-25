@@ -13,6 +13,7 @@ import { upsertCert, deleteCert, addCertDocument, deleteCertDocument, updateProf
 import { workEmail } from '@/lib/contacts'
 import { signInAddresses } from '@/lib/sign-in-address'
 import CourseAlertsForm from './CourseAlertsForm'
+import ScheduleSharePanel from './ScheduleSharePanel'
 import { signOut } from '@/app/actions'
 import { CAPABILITY_META, CAPABILITY_ORDER } from '@/lib/capabilities'
 
@@ -25,7 +26,7 @@ export default async function InstructorPage() {
 
   const [{ data: profile }, { data: instructor }, signInOptions] = await Promise.all([
     admin.from('profiles').select('role, first_name, last_name, email, phone, emergency_name, emergency_relationship, emergency_phone').eq('id', user.id).single(),
-    admin.from('instructors').select('id, name, email, bio, avatar, avatar_position, avatar_scale, calendar_invites, show_email, show_phone, course_alert_muted_disciplines, course_alert_muted_sectors, instructor_capabilities(category, role)').eq('profile_id', user.id).maybeSingle(),
+    admin.from('instructors').select('id, name, email, bio, avatar, avatar_position, avatar_scale, calendar_invites, schedule_token, show_email, show_phone, course_alert_muted_disciplines, course_alert_muted_sectors, instructor_capabilities(category, role)').eq('profile_id', user.id).maybeSingle(),
     signInAddresses(admin, user.id),
   ])
 
@@ -203,6 +204,16 @@ export default async function InstructorPage() {
               </SaveButton>
             </div>
           </form>
+          <ScheduleSharePanel
+            url={
+              instructor.schedule_token
+                // Someone outside this dev environment subscribes to this, so
+                // it must always name the live site — never
+                // NEXT_PUBLIC_SITE_URL, which is localhost locally.
+                ? `https://peak-rescue.com/calendar/${instructor.schedule_token}.ics`
+                : null
+            }
+          />
         </section>
 
         {/* New-course alerts — admins only, because nobody else can act on a
