@@ -1,10 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import { draftRows, periodFor, shiftPeriod, stateOf, rowsAsTsv, totalHours, type TimesheetCourse } from '@/lib/timesheet'
+import { draftRows, periodEndFromDue, periodFor, shiftPeriod, stateOf, rowsAsTsv, totalHours, type TimesheetCourse } from '@/lib/timesheet'
 import { FIELD_CODE, TRAVEL_CODE, PAY_CODES } from '@/lib/paycodes'
 
-// A real hours-due date off the admin calendar; every period boundary hangs
-// off one of these.
-const ANCHOR = '2026-12-18'
+// A real hours-due date off the admin calendar — a Friday — and the period it
+// closes, which ends on the Saturday of that same week.
+const DUE = '2026-12-18'
+const ANCHOR = periodEndFromDue(DUE)
 
 const course = (over: Partial<TimesheetCourse> = {}): TimesheetCourse => ({
   id: 'c1',
@@ -19,21 +20,29 @@ const course = (over: Partial<TimesheetCourse> = {}): TimesheetCourse => ({
 })
 
 describe('pay periods', () => {
-  it('runs the fortnight up to a due date', () => {
-    expect(periodFor('2026-12-10', ANCHOR)).toEqual({ start: '2026-12-05', end: '2026-12-18' })
-    // The due date itself belongs to the period it closes, not the next one.
-    expect(periodFor('2026-12-18', ANCHOR)).toEqual({ start: '2026-12-05', end: '2026-12-18' })
-    expect(periodFor('2026-12-19', ANCHOR)).toEqual({ start: '2026-12-19', end: '2027-01-01' })
+  it('closes on the Saturday of the week the hours are due in', () => {
+    // Hours are due on the Friday so payroll can run; the period itself is
+    // two Sunday-to-Saturday weeks, the same week overtime is counted in.
+    expect(periodEndFromDue('2026-12-18')).toBe('2026-12-19')
+    expect(new Date(ANCHOR + 'T00:00:00Z').getUTCDay()).toBe(6) // Saturday
+  })
+
+  it('runs the fortnight Sunday to Saturday', () => {
+    expect(periodFor('2026-12-10', ANCHOR)).toEqual({ start: '2026-12-06', end: '2026-12-19' })
+    expect(new Date('2026-12-06T00:00:00Z').getUTCDay()).toBe(0) // Sunday
+    // The last day belongs to the period it closes, not the next one.
+    expect(periodFor('2026-12-19', ANCHOR)).toEqual({ start: '2026-12-06', end: '2026-12-19' })
+    expect(periodFor('2026-12-20', ANCHOR)).toEqual({ start: '2026-12-20', end: '2027-01-02' })
   })
 
   it('steps by a fortnight in both directions', () => {
     const p = periodFor('2026-12-10', ANCHOR)
-    expect(shiftPeriod(p, -1)).toEqual({ start: '2026-11-21', end: '2026-12-04' })
-    expect(shiftPeriod(p, 1)).toEqual({ start: '2026-12-19', end: '2027-01-01' })
+    expect(shiftPeriod(p, -1)).toEqual({ start: '2026-11-22', end: '2026-12-05' })
+    expect(shiftPeriod(p, 1)).toEqual({ start: '2026-12-20', end: '2027-01-02' })
   })
 
   it('holds the anchor across a year boundary', () => {
-    expect(periodFor('2026-12-31', ANCHOR).end).toBe('2027-01-01')
+    expect(periodFor('2026-12-31', ANCHOR).end).toBe('2027-01-02')
   })
 })
 
@@ -88,7 +97,7 @@ describe('draft rows', () => {
   it('drops days belonging to the period either side', () => {
     const rows = draftRows(period, [course({ starts_at: '2026-12-16', ends_at: '2026-12-22' })])
     expect(rows.every((r) => r.date >= period.start && r.date <= period.end)).toBe(true)
-    expect(rows.at(-1)!.date).toBe('2026-12-18')
+    expect(rows.at(-1)!.date).toBe('2026-12-19')
   })
 
   it('follows their own days and their own hours', () => {

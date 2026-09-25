@@ -95,7 +95,12 @@ export default function TimesheetEditor({
       courses.find((c) => c.starts_at <= date && date <= c.ends_at) ??
       courses.find((c) => c.starts_at === dayShift(date, 1)) ??
       courses.find((c) => c.ends_at === dayShift(date, -1))
-    return { state: on?.state ?? '', note: on?.label ?? '' }
+    if (on) return { state: on.state, note: on.label }
+    // No course to inherit from — a day of admin, a day added by hand. Carry
+    // the nearest row above it instead, which is nearly always the same trip,
+    // rather than leaving a blank state to be retyped.
+    const above = [...rows].filter((r) => r.date <= date).sort((a, b) => a.date.localeCompare(b.date)).at(-1)
+    return { state: above?.state ?? '', note: above?.note ?? '' }
   }
 
   // The calendar paints into the same list the table edits — one day, one
@@ -122,6 +127,14 @@ export default function TimesheetEditor({
     const taken = new Set(rows.map((r) => r.date))
     for (let d = period.start; d <= period.end; d = dayShift(d, 1)) if (!taken.has(d)) return d
     return null
+  }
+
+  // Copying a row is how a run of days that the courses don't know about gets
+  // entered — a week of admin, a course that was never written down.
+  const duplicate = (r: TimesheetRow) => {
+    const date = firstFreeDay()
+    if (!date) return
+    setRows([...rows, { ...r, date }].sort((a, b) => a.date.localeCompare(b.date)))
   }
 
   const addRow = () => {
@@ -208,7 +221,7 @@ export default function TimesheetEditor({
                 <th className="px-3 py-2 font-medium">Department code</th>
                 <th className="px-3 py-2 font-medium">State</th>
                 <th className="px-3 py-2 font-medium">Course</th>
-                <th className="px-3 py-2" />
+                <th className="px-3 py-2 sticky right-0 bg-zinc-900" />
               </tr>
             </thead>
             <tbody>
@@ -244,20 +257,24 @@ export default function TimesheetEditor({
                       max="24"
                       value={r.hours}
                       onChange={(e) => edit(i, { hours: Number(e.target.value) })}
-                      className="w-16 bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-xs focus:outline-none focus:border-zinc-500"
+                      className="w-12 bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-xs focus:outline-none focus:border-zinc-500 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                     />
                   </td>
                   <td className="px-3 py-1.5">
                     <select
                       value={r.code}
                       onChange={(e) => edit(i, { code: e.target.value })}
-                      className={`bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-xs focus:outline-none focus:border-zinc-500 ${
+                      className={`w-[8.5rem] bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-xs focus:outline-none focus:border-zinc-500 ${
                         r.code === TRAVEL_CODE ? 'text-zinc-400' : 'text-white'
                       }`}
                     >
                       {PAY_CODES.map((c) => (
                         <option key={c.code} value={c.code}>
-                          {c.code} · {c.entity} {c.label} (${c.rate})
+                          {/* The code already says which entity and which
+                              rung. The entity is named only on PR Service,
+                              which is the one nobody expects to see. */}
+                          {c.code} · {c.short} (${c.rate})
+                          {c.entity === 'PR Service' ? ' · PR Service' : ''}
                         </option>
                       ))}
                     </select>
@@ -270,16 +287,32 @@ export default function TimesheetEditor({
                       className="w-12 bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-xs uppercase placeholder:text-zinc-600 focus:outline-none focus:border-zinc-500"
                     />
                   </td>
-                  <td className="px-3 py-1.5 text-xs text-zinc-500 max-w-[14rem] truncate">{r.note}</td>
-                  <td className="px-3 py-1.5 text-right">
-                    <button
-                      onClick={() => setRows(rows.filter((_, n) => n !== i))}
-                      className="text-zinc-600 hover:text-red-400 text-xs transition-colors"
-                      aria-label="Remove this day"
-                      title="Remove this day"
-                    >
-                      ✕
-                    </button>
+                  <td className="px-3 py-1.5 text-xs text-zinc-500">
+                    <span className="block max-w-[10rem] truncate" title={r.note}>{r.note}</span>
+                  </td>
+                  {/* Pinned: the table can still scroll sideways on a phone,
+                      and a delete you have to scroll to find is a delete
+                      nobody finds. */}
+                  <td className="px-3 py-1.5 text-right sticky right-0 bg-zinc-900">
+                    <div className="flex items-center gap-2 justify-end">
+                      <button
+                        onClick={() => duplicate(r)}
+                        disabled={!firstFreeDay()}
+                        className="text-zinc-600 hover:text-zinc-300 disabled:opacity-30 text-xs transition-colors"
+                        aria-label="Copy this day to the next free date"
+                        title="Copy this day to the next free date"
+                      >
+                        ⧉
+                      </button>
+                      <button
+                        onClick={() => setRows(rows.filter((_, n) => n !== i))}
+                        className="text-zinc-600 hover:text-red-400 text-xs transition-colors"
+                        aria-label="Remove this day"
+                        title="Remove this day"
+                      >
+                        ✕
+                      </button>
+                    </div>
                   </td>
                 </tr>
                 </Fragment>

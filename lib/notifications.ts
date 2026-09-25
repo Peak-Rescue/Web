@@ -21,6 +21,7 @@ import { courseShortName } from '@/lib/courses'
 import { listUpcomingEvents } from '@/lib/google-calendar'
 import { sendMail } from '@/lib/mailer'
 import { dayShift } from '@/lib/courses'
+import { weekStart } from '@/lib/pay'
 import { todayHere } from '@/lib/course-clock'
 
 type Admin = ReturnType<typeof createAdminClient>
@@ -284,9 +285,13 @@ export async function runHoursReminders(
 
   let sent = 0
   for (const dueDate of dueDates) {
-    const periodStart = addDaysISO(dueDate, -13)
+    // The period the due date closes runs to the Saturday of its own week —
+    // hours are wanted before payroll runs, not after the period shuts. Same
+    // boundary the timesheet page draws; see lib/timesheet periodEndFromDue.
+    const periodEnd = addDaysISO(weekStart(dueDate), 6)
+    const periodStart = addDaysISO(periodEnd, -13)
     const worked = allInstances.filter(
-      (c) => c.starts_at! <= dueDate && (c.ends_at ?? c.starts_at!) >= periodStart
+      (c) => c.starts_at! <= periodEnd && (c.ends_at ?? c.starts_at!) >= periodStart
     )
     if (worked.length === 0) continue
     const instanceById = new Map(worked.map((c) => [c.id, c]))

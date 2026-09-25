@@ -8,6 +8,7 @@
 // what a generated timesheet cannot know.
 
 import { computeBlocks, courseShortName, dayShift, type OffDayRange } from '@/lib/courses'
+import { weekStart } from '@/lib/pay'
 import { FIELD_CODE, TRAVEL_CODE } from '@/lib/paycodes'
 
 export const PERIOD_DAYS = 14
@@ -42,10 +43,22 @@ export type Period = { start: string; end: string }
 const daysBetween = (a: string, b: string) =>
   Math.round((Date.parse(b + 'T00:00:00Z') - Date.parse(a + 'T00:00:00Z')) / 86_400_000)
 
-/** The pay period containing `date`, anchored on a known hours-due date.
-    Due dates recur every fortnight, so any one of them fixes all of them. */
-export function periodFor(date: string, anchorDue: string): Period {
-  const drift = ((daysBetween(anchorDue, date) % PERIOD_DAYS) + PERIOD_DAYS) % PERIOD_DAYS
+/** The pay period a given hours-due date closes.
+ *
+ *  The due date is not the last day of the period — it is the Friday inside
+ *  its final week, because payroll has to be told the hours before it runs.
+ *  The period itself is two of the Sunday-to-Saturday weeks overtime is
+ *  reckoned in (lib/pay.ts `weekStart`), so it ends on the Saturday of the
+ *  week the due date falls in. Derived from the weekday rather than by adding
+ *  a day, so a due date that ever moves to a Thursday still lands right. */
+export function periodEndFromDue(due: string): string {
+  return dayShift(weekStart(due), 6)
+}
+
+/** The pay period containing `date`, anchored on a known period end.
+    Periods recur every fortnight, so any one of them fixes all of them. */
+export function periodFor(date: string, anchorEnd: string): Period {
+  const drift = ((daysBetween(anchorEnd, date) % PERIOD_DAYS) + PERIOD_DAYS) % PERIOD_DAYS
   const end = dayShift(date, drift === 0 ? 0 : PERIOD_DAYS - drift)
   return { start: dayShift(end, -(PERIOD_DAYS - 1)), end }
 }

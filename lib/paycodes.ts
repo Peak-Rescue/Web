@@ -15,27 +15,32 @@ export type PayEntity = 'Peak Rescue' | 'PR Service'
 export type PayCode = {
   code: string
   entity: PayEntity
+  /** The handbook's own wording, for anywhere with room for it. */
   label: string
+  /** The same thing in as few characters as still say it, for the picker on
+      a timesheet row — where the code is already on screen saying which
+      entity and which rung, and the words are only there to be recognised. */
+  short: string
   rate: number
   /** True for the code a travel day takes, which is generated rather than chosen. */
   travel?: boolean
 }
 
 export const PAY_CODES: PayCode[] = [
-  { code: '07597T', entity: 'Peak Rescue', label: 'Travel', rate: 20, travel: true },
-  { code: '07597S', entity: 'Peak Rescue', label: 'Shadow', rate: 25 },
-  { code: '075971', entity: 'Peak Rescue', label: 'Level 1', rate: 40 },
-  { code: '075972', entity: 'Peak Rescue', label: 'Level 2', rate: 43 },
-  { code: '075973', entity: 'Peak Rescue', label: 'Level 3', rate: 45 },
-  { code: '07597L', entity: 'Peak Rescue', label: 'Lead or Guiding', rate: 50 },
+  { code: '07597T', entity: 'Peak Rescue', label: 'Travel', short: 'Travel', rate: 20, travel: true },
+  { code: '07597S', entity: 'Peak Rescue', label: 'Shadow', short: 'Shadow', rate: 25 },
+  { code: '075971', entity: 'Peak Rescue', label: 'Level 1', short: 'Level 1', rate: 40 },
+  { code: '075972', entity: 'Peak Rescue', label: 'Level 2', short: 'Level 2', rate: 43 },
+  { code: '075973', entity: 'Peak Rescue', label: 'Level 3', short: 'Level 3', rate: 45 },
+  { code: '07597L', entity: 'Peak Rescue', label: 'Lead or Guiding', short: 'Lead', rate: 50 },
   // Admin is the odd one out in the handbook's own table — six digits, and it
   // belongs to no class. Kept verbatim rather than tidied into the pattern.
-  { code: '007598', entity: 'Peak Rescue', label: 'Admin', rate: 40 },
-  { code: '075111', entity: 'PR Service', label: 'Shadow', rate: 25 },
-  { code: '075112', entity: 'PR Service', label: 'Assist / Level 1', rate: 40 },
-  { code: '075113', entity: 'PR Service', label: 'Level 2', rate: 43 },
-  { code: '075114', entity: 'PR Service', label: 'Level 3', rate: 45 },
-  { code: '07511L', entity: 'PR Service', label: 'Lead', rate: 50 },
+  { code: '007598', entity: 'Peak Rescue', label: 'Admin', short: 'Admin', rate: 40 },
+  { code: '075111', entity: 'PR Service', label: 'Shadow', short: 'Shadow', rate: 25 },
+  { code: '075112', entity: 'PR Service', label: 'Assist / Level 1', short: 'Level 1', rate: 40 },
+  { code: '075113', entity: 'PR Service', label: 'Level 2', short: 'Level 2', rate: 43 },
+  { code: '075114', entity: 'PR Service', label: 'Level 3', short: 'Level 3', rate: 45 },
+  { code: '07511L', entity: 'PR Service', label: 'Lead', short: 'Lead', rate: 50 },
 ]
 
 export const TRAVEL_CODE = '07597T'

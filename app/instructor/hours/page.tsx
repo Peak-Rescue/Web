@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { listUpcomingEvents } from '@/lib/google-calendar'
 import { courseShortName, dayShift } from '@/lib/courses'
-import { draftRows, periodFor, shiftPeriod, stateOf, type Period, type TimesheetCourse, type TimesheetRow } from '@/lib/timesheet'
+import { draftRows, periodEndFromDue, periodFor, shiftPeriod, stateOf, type Period, type TimesheetCourse, type TimesheetRow } from '@/lib/timesheet'
 import TimesheetEditor from './TimesheetEditor'
 import { saveTimesheet, markTimesheetSent } from './actions'
 
@@ -14,12 +14,15 @@ import { saveTimesheet, markTimesheetSent } from './actions'
 // aligned with everybody else's even when Google is unreachable.
 const ANCHOR_DUE = '2026-12-18'
 
-async function anchorDue(): Promise<string> {
+// The period that due date closes — a Saturday, since the period is two of
+// the Sunday-to-Saturday weeks overtime is counted in and the Friday due date
+// sits inside the second of them.
+async function anchorPeriodEnd(): Promise<string> {
   const calendarId = process.env.GCAL_GENERAL_CALENDAR_ID
-  if (!calendarId) return ANCHOR_DUE
+  if (!calendarId) return periodEndFromDue(ANCHOR_DUE)
   const events = await listUpcomingEvents(calendarId)
   const due = (events ?? []).filter((e) => /hours.*due/i.test(e.summary)).map((e) => e.start).sort()
-  return due[0] ?? ANCHOR_DUE
+  return periodEndFromDue(due[0] ?? ANCHOR_DUE)
 }
 
 export default async function HoursPage({
@@ -43,7 +46,7 @@ export default async function HoursPage({
   if (!instructor?.hours_via_admin) redirect('/instructor')
 
   const { period: asked, cal } = await searchParams
-  const anchor = await anchorDue()
+  const anchor = await anchorPeriodEnd()
   const period: Period = /^\d{4}-\d{2}-\d{2}$/.test(asked ?? '')
     ? periodFor(asked!, anchor)
     : periodFor(new Date().toISOString().slice(0, 10), anchor)
