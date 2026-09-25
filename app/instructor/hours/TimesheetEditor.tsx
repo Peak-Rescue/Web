@@ -121,6 +121,24 @@ export default function TimesheetEditor({
   const edit = (i: number, patch: Partial<TimesheetRow>) =>
     setRows(rows.map((r, n) => (n === i ? { ...r, ...patch } : r)))
 
+  // Typing a state carries it to the rest of that course's days.
+  //
+  // The state is read off the course location, and a location like
+  // "San Diego" names no state to read — inferring California from a city is
+  // a guess, and a guessed state on a payroll line is worse than a blank one.
+  // So it gets typed once rather than six times: every other day of the same
+  // course that was blank, or wrong in the same way, follows.
+  const editState = (i: number, next: string) => {
+    const row = rows[i]
+    setRows(
+      rows.map((r, n) =>
+        n === i || (r.note === row.note && (r.state === '' || r.state === row.state))
+          ? { ...r, state: next }
+          : r
+      )
+    )
+  }
+
   // The first day of the period that hasn't got a row yet. It used to reuse
   // the last row's date, which put a second row on a day that already had one
   // — invisible on the calendar, since a day can only be painted once, and a
@@ -306,8 +324,9 @@ export default function TimesheetEditor({
                   <td className="px-3 py-1.5">
                     <input
                       value={r.state}
-                      onChange={(e) => edit(i, { state: e.target.value.toUpperCase().slice(0, 2) })}
+                      onChange={(e) => editState(i, e.target.value.toUpperCase().slice(0, 2))}
                       placeholder="—"
+                      title="Fills the rest of this course's days too"
                       className="w-12 bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-xs uppercase placeholder:text-zinc-600 focus:outline-none focus:border-zinc-500"
                     />
                   </td>
