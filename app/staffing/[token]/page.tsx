@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server'
 import { courseDisplayName, courseShortName } from '@/lib/courses'
 import ResponseForm from './ResponseForm'
 import { courseZone, todayIn } from '@/lib/course-clock'
+import { slotsToStaff } from '@/lib/course-readiness'
 
 // Public, tokenized staffing-interest page — instructors land here from the
 // invite email to say whether they want to work the course.
@@ -37,18 +38,27 @@ export default async function StaffingInvitePage({
   const [{ data: invite }, { data: { user } }] = await Promise.all([
     admin
       .from('course_interest_invites')
-      .select('id, instance_id, interested, note, instructors(name)')
+      .select('id, instance_id, instructor_id, interested, note, instructors(name)')
       .eq('token', token)
       .maybeSingle(),
     supabase.auth.getUser(),
   ])
   if (!invite) notFound()
 
-  const { data: inst } = await admin
-    .from('course_instances')
-    .select('course_type, custom_title, client_name, location, region, starts_at, ends_at, status')
-    .eq('id', invite.instance_id)
-    .single()
+  // The crew comes along because a course can fill up between the email going
+  // out and the link being opened, and somebody weighing a week of their life
+  // should not have to guess which of those two moments they are in.
+  const [{ data: inst }, { data: crew }] = await Promise.all([
+    admin
+      .from('course_instances')
+      .select('course_type, custom_title, client_name, location, region, starts_at, ends_at, status, instructor_slots')
+      .eq('id', invite.instance_id)
+      .single(),
+    admin
+      .from('instance_instructors')
+      .select('role, instructor_id')
+      .eq('instance_id', invite.instance_id),
+  ])
   if (!inst) notFound()
 
   const instructor = invite.instructors as unknown as { name: string } | null
@@ -60,6 +70,18 @@ export default async function StaffingInvitePage({
     : 'Dates to be confirmed'
   const cancelled = inst.status === 'cancelled'
   const over = Boolean(inst.ends_at && inst.ends_at < todayIn(courseZone(inst.region)))
+  // Same test the courses list uses for a green staffing mark: every slot has
+  // a name, and one of them is leading.
+  // Never to somebody who is on the crew themselves: they are the staffing,
+  // and telling them to volunteer as a backup for their own course is nonsense.
+  // Never on a course that is off or done either — those say so themselves,
+  // and how full the crew was is not the news.
+  const assigned = crew ?? []
+  const staffed =
+    !cancelled && !over &&
+    !assigned.some((c) => c.instructor_id === invite.instructor_id) &&
+    assigned.length >= slotsToStaff(inst.instructor_slots) &&
+    assigned.some((c) => c.role === 'lead')
 
   return (
     <main className="min-h-screen bg-zinc-950 text-white">
@@ -70,9 +92,34 @@ export default async function StaffingInvitePage({
           </Link>
         )}
         <div className="w-16 h-[3px] bg-pr-red mb-8" />
-        <p className="text-pr-red font-semibold tracking-[0.2em] text-sm uppercase mb-2">Staffing Interest</p>
+        {/* A full course changes what this page is, so it changes what the page
+            calls itself. The eyebrow is the first line under the rule and the
+            question is the second, and on a staffed course both of them were
+            saying the wrong thing while the truth sat in grey below the fold.
+            Filled, not outlined, and not the red label's colour: the one thing
+            here that is a block of colour is the thing you cannot miss, and it
+            reads at a glance on a phone held at arm's length.
+
+            "Now", because the crew usually filled after the email went out,
+            and without it the badge reads as a standing fact — which makes the
+            invite they are holding look like a mistake. It does not name the
+            course: the course's name is the next line down. */}
+        {staffed ? (
+          <p className="inline-block bg-amber-400 text-zinc-950 font-bold tracking-[0.15em] text-xs uppercase px-3 py-1.5 rounded mb-3">
+            Now fully staffed
+          </p>
+        ) : (
+          <p className="text-pr-red font-semibold tracking-[0.2em] text-sm uppercase mb-2">Staffing Interest</p>
+        )}
         <h1 className="text-3xl md:text-4xl font-bold tracking-tight mb-2">{courseName}</h1>
-        {instructor && <p className="text-zinc-400 mb-8">Hi {instructor.name.split(' ')[0]} — are you interested in working this course?</p>}
+        {instructor && (
+          <p className="text-zinc-400 mb-8">
+            Hi {instructor.name.split(' ')[0]} —{' '}
+            {staffed
+              ? 'the crew is full. Plans do shift, so let us know if you want to be a backup.'
+              : 'are you interested in working this course?'}
+          </p>
+        )}
 
         <div className="p-6 bg-zinc-900 border border-zinc-800 rounded-xl mb-8 space-y-2 text-sm">
           <div className="flex items-center gap-2 flex-wrap">
@@ -106,10 +153,15 @@ export default async function StaffingInvitePage({
                 was the same fact in two shapes — the note repeated the field
                 it was already sitting in, and the line about changing your
                 response described a button that is right there. */}
-            <ResponseForm token={token} currentInterested={invite.interested} currentNote={invite.note} />
-            <p className="mt-6 text-xs text-zinc-500">
-              Expressing interest isn&apos;t a commitment — the ops team confirms final staffing separately.
-            </p>
+            <ResponseForm token={token} currentInterested={invite.interested} currentNote={invite.note} staffed={staffed} />
+            {/* Not on a staffed course: the greeting has already said plans
+                shift and the button already says backup, so this is the third
+                telling of it on the page that can least afford one. */}
+            {!staffed && (
+              <p className="mt-6 text-xs text-zinc-500">
+                Expressing interest isn&apos;t a commitment — the ops team confirms final staffing separately.
+              </p>
+            )}
           </>
         )}
       </div>

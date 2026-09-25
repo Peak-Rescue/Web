@@ -21,6 +21,12 @@ import { respondToInvite } from './actions'
 // ring on the other one is what makes the pair read as a single choice rather
 // than as two buttons that happen to sit together.
 //
+// On a course that is already crewed the yes button says what it now means:
+// backup. The fact is at the top of the page in a colour nothing else uses,
+// but the top of the page is not where the decision happens, and the page has
+// enough grey sentences without a second copy of that one. Putting it in the
+// label costs no reading and cannot be clicked past.
+//
 // Two buttons and not one segmented control, which this was briefly. Sharing a
 // container means the unpicked side has to be flat — no border, no fill — or
 // the control stops reading as one object. That is fine once something is
@@ -32,10 +38,13 @@ export default function ResponseForm({
   token,
   currentInterested,
   currentNote,
+  staffed = false,
 }: {
   token: string
   currentInterested: boolean | null
   currentNote: string | null
+  /** The crew is already full, so saying yes is volunteering as a backup. */
+  staffed?: boolean
 }) {
   const [note, setNote] = useState(currentNote ?? '')
   const [busy, setBusy] = useState<'yes' | 'no' | null>(null)
@@ -69,6 +78,9 @@ export default function ResponseForm({
   }
 
   const answered = currentInterested !== null
+  const question = staffed
+    ? 'Do you want to be considered as a backup for this course?'
+    : 'Are you interested in working this course?'
 
   const choice = (yes: boolean, label: string, picked: string) => {
     const chosen = currentInterested === yes
@@ -119,10 +131,10 @@ export default function ResponseForm({
       <div className="flex items-center gap-3 flex-wrap">
         <div
           role="radiogroup"
-          aria-label="Are you interested in working this course?"
+          aria-label={question}
           className="flex items-center gap-3 flex-wrap"
         >
-          {choice(true, "I'm interested", 'border-teal-600 bg-teal-900/40 text-teal-200')}
+          {choice(true, staffed ? 'Consider me as backup' : "I'm interested", 'border-teal-600 bg-teal-900/40 text-teal-200')}
           {choice(false, "Can't make it", 'border-zinc-500 bg-zinc-800 text-zinc-100')}
         </div>
         {saved && <span className="text-xs text-teal-400">Saved</span>}
