@@ -34,9 +34,11 @@ export default function ScheduleSharePanel({ url }: { url: string | null }) {
 
   return (
     <div className="mt-4 p-6 bg-zinc-900 rounded-lg border border-zinc-800 space-y-3">
-      <h3 className="text-sm font-medium inline-flex items-center gap-1.5">
+      {/* flex, not inline-flex: the button below is inline, and an inline
+          heading lets it ride up alongside the icon. */}
+      <h3 className="text-sm font-medium flex items-center gap-1.5">
         Share your schedule
-        <InfoHint text="A calendar of the days you're working, for someone who isn't on the crew. It carries the course name, the town and the dates — no client, no contact details, no meeting point. Anyone with the link can read it, so hand it out the way you'd hand out a house key." />
+        <InfoHint text="Course, town and dates for the days you're working — nothing about the client. Anyone with the link can read it." />
       </h3>
 
       {url ? (
@@ -54,7 +56,7 @@ export default function ScheduleSharePanel({ url }: { url: string | null }) {
           </div>
           <p className="text-xs text-zinc-500 inline-flex items-center gap-1.5">
             In Google Calendar: Other calendars → From URL.
-            <InfoHint text="Google decides for itself how often to re-read a subscribed URL — usually within a day, sometimes longer, and there's no way to hurry it. If a course moves this week, tell them; don't count on the calendar to." />
+            <InfoHint text="Google re-reads a subscribed link on its own schedule, usually within a day. If a course moves this week, tell them yourself." />
           </p>
           <div className="flex items-center gap-4">
             <button
