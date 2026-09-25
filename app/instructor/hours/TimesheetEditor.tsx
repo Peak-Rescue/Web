@@ -114,11 +114,21 @@ export default function TimesheetEditor({
   const edit = (i: number, patch: Partial<TimesheetRow>) =>
     setRows(rows.map((r, n) => (n === i ? { ...r, ...patch } : r)))
 
-  const addRow = () =>
-    setRows(
-      [...rows, { date: rows[rows.length - 1]?.date ?? period.start, hours: DEFAULT_HOURS, code: FIELD_CODE, state: rows[rows.length - 1]?.state ?? '', note: '' }]
-        .sort((a, b) => a.date.localeCompare(b.date))
-    )
+  // The first day of the period that hasn't got a row yet. It used to reuse
+  // the last row's date, which put a second row on a day that already had one
+  // — invisible on the calendar, since a day can only be painted once, and a
+  // duplicate in the list. A day you add is a day you can see.
+  const firstFreeDay = () => {
+    const taken = new Set(rows.map((r) => r.date))
+    for (let d = period.start; d <= period.end; d = dayShift(d, 1)) if (!taken.has(d)) return d
+    return null
+  }
+
+  const addRow = () => {
+    const date = firstFreeDay()
+    if (!date) return
+    setDay(date, FIELD_CODE)
+  }
 
   const mailto = useMemo(() => {
     const subject = `Hours — ${senderName} — ${short(period.start)} to ${short(period.end)}`
@@ -266,6 +276,7 @@ export default function TimesheetEditor({
                       onClick={() => setRows(rows.filter((_, n) => n !== i))}
                       className="text-zinc-600 hover:text-red-400 text-xs transition-colors"
                       aria-label="Remove this day"
+                      title="Remove this day"
                     >
                       ✕
                     </button>
@@ -284,9 +295,19 @@ export default function TimesheetEditor({
           </table>
         </div>
         <div className="px-3 py-2 border-t border-zinc-800 flex items-center gap-4">
-          <button onClick={addRow} className="text-xs text-zinc-400 hover:text-white transition-colors">
+          <button
+            onClick={addRow}
+            disabled={!firstFreeDay()}
+            title={firstFreeDay() ? undefined : 'Every day in this period already has a row'}
+            className="text-xs text-zinc-400 hover:text-white disabled:text-zinc-700 disabled:cursor-default transition-colors"
+          >
             + Add a day
           </button>
+          {rows.length > 0 && (
+            <span className="text-[11px] text-zinc-600">
+              Remove one with the ✕ on its row, or by clicking its mark on the calendar.
+            </span>
+          )}
           {hasSaved && !sameRows(rows, generated) && (
             <button
               onClick={() => setRows(generated)}
