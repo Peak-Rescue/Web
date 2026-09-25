@@ -179,7 +179,7 @@ export default function CourseCalendar({
           return (
             <div
               key={day}
-              className={`min-h-20 p-1 ${
+              className={`min-h-20 p-1 flex flex-col ${
                 day === todayStr
                   ? 'bg-pr-surface-raised ring-1 ring-inset ring-pr-red-light'
                   : 'bg-zinc-950'
@@ -234,7 +234,10 @@ export default function CourseCalendar({
                   return <CalendarChip key={c.id} course={c} style={style} className={chipClass} />
                 })}
               </div>
-              {marks?.[day] && <div className="mt-1">{marks[day]}</div>}
+              {/* mt-auto: a mark hangs off the bottom of the cell rather
+                  than off the last chip, so a day with two courses and a day
+                  with none still line up across the week. */}
+              {marks?.[day] && <div className="mt-auto pt-1">{marks[day]}</div>}
             </div>
           )
         })}

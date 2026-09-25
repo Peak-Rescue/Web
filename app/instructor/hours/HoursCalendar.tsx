@@ -13,9 +13,11 @@ export type { CalendarCourse }
 // that could drift out of step with the first — different chip colours, a
 // different idea of which week a Sunday starts.
 //
-// L and T are the only two buttons because they are the only two codes anyone
-// here uses. Days outside the period show their courses and take no marks —
-// they belong to the timesheet either side of this one.
+// Lead and Travel are the only two buttons because they are the only two
+// codes anyone here uses. They are pills rather than chips, a size down and
+// in colours no course chip can take — a mark you made has to be legible as
+// something other than another course. Days outside the period show their
+// courses and take no marks: they belong to the timesheet either side.
 export default function HoursCalendar({
   month,
   period,
@@ -40,8 +42,8 @@ export default function HoursCalendar({
     marks[day] = (
       <div className="flex gap-1">
         {[
-          { code: FIELD_CODE, letter: 'L', on: 'bg-pr-red text-white border-pr-red' },
-          { code: TRAVEL_CODE, letter: 'T', on: 'bg-zinc-600 text-white border-zinc-500' },
+          { code: FIELD_CODE, letter: 'Lead', on: 'bg-emerald-600 text-white border-emerald-500' },
+          { code: TRAVEL_CODE, letter: 'Travel', on: 'bg-violet-600 text-white border-violet-500' },
         ].map(({ code, letter, on }) => {
           const isOn = row?.code === code
           return (
@@ -51,7 +53,7 @@ export default function HoursCalendar({
               onClick={() => onSet(day, isOn ? null : code)}
               aria-pressed={isOn}
               aria-label={`${letter} on ${day}`}
-              className={`flex-1 rounded border text-[10px] font-medium leading-none py-1 transition-colors ${
+              className={`flex-1 rounded-full border text-[9px] font-medium leading-none py-[3px] transition-colors ${
                 isOn ? on : 'border-zinc-800 text-zinc-600 hover:border-zinc-600 hover:text-zinc-300'
               }`}
             >
