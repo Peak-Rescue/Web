@@ -69,16 +69,25 @@ const STATES: Record<string, string> = {
   'district of columbia': 'DC',
 }
 
-/** The state a location names, when it names one at all. "Casper, WY" and
-    "Juneau, Alaska" both answer; "Maui" and "Jordan" do not, and get a blank
-    for someone to fill rather than a guess. */
+const ABBREVIATIONS = new Set(Object.values(STATES))
+
+/** The state a location names, when it names one at all.
+    A comma is not required — half the courses are written "Saint George UT"
+    — so this reads the end of the string rather than the last field: the
+    final word if it is an abbreviation, else the last word or two if they
+    spell a state out. "Maui" and "San Diego" name no state and get a blank
+    for someone to fill, because inferring one from a city is guessing. */
 export function stateOf(location: string | null): string {
   if (!location) return ''
-  const tail = location.trim().replace(/[.,]$/, '').split(',').pop()!.trim()
-  if (/^[A-Za-z]{2}$/.test(tail) && Object.values(STATES).includes(tail.toUpperCase())) {
-    return tail.toUpperCase()
-  }
-  return STATES[tail.toLowerCase()] ?? ''
+  const words = location.trim().replace(/[.,]+$/, '').split(/[\s,]+/).filter(Boolean)
+  if (words.length === 0) return ''
+
+  const last = words[words.length - 1]
+  if (/^[A-Za-z]{2}$/.test(last) && ABBREVIATIONS.has(last.toUpperCase())) return last.toUpperCase()
+
+  // "New Mexico" and "West Virginia" are two words; everything else is one.
+  const lastTwo = words.slice(-2).join(' ').toLowerCase()
+  return STATES[lastTwo] ?? STATES[last.toLowerCase()] ?? ''
 }
 
 /** The window this person works on a course — theirs when it differs. */

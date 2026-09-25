@@ -4,6 +4,8 @@ import { useMemo, useState, useTransition } from 'react'
 import Link from 'next/link'
 import InfoHint from '@/components/InfoHint'
 import { PAY_CODES, TRAVEL_CODE, FIELD_CODE } from '@/lib/paycodes'
+import { dayShift } from '@/lib/courses'
+import HoursCalendar, { type CalendarCourse } from './HoursCalendar'
 import {
   DEFAULT_HOURS,
   rowsAsText,
@@ -25,6 +27,8 @@ export default function TimesheetEditor({
   period,
   rows: initial,
   generated,
+  courses,
+  spill,
   savedAt,
   hasSaved,
   senderName,
@@ -35,6 +39,8 @@ export default function TimesheetEditor({
   period: Period
   rows: TimesheetRow[]
   generated: TimesheetRow[]
+  courses: (CalendarCourse & { state: string })[]
+  spill: TimesheetRow[]
   savedAt: string | null
   hasSaved: boolean
   senderName: string
@@ -60,6 +66,30 @@ export default function TimesheetEditor({
         setError(err instanceof Error ? err.message : 'Something went wrong')
       }
     })
+  }
+
+  // What a newly painted day inherits. A travel day usually sits beside its
+  // course rather than on it, so a blank day looks to the course that starts
+  // tomorrow or ended yesterday before giving up.
+  const metaFor = (date: string) => {
+    const on =
+      courses.find((c) => c.starts_at <= date && date <= c.ends_at) ??
+      courses.find((c) => c.starts_at === dayShift(date, 1)) ??
+      courses.find((c) => c.ends_at === dayShift(date, -1))
+    return { state: on?.state ?? '', note: on?.label ?? '' }
+  }
+
+  // The calendar paints into the same list the table edits — one day, one
+  // row, and clicking the mark a day already has takes the day off.
+  const setDay = (date: string, code: string | null) => {
+    if (code === null) return setRows(rows.filter((r) => r.date !== date))
+    const held = rows.find((r) => r.date === date)
+    if (held) return setRows(rows.map((r) => (r.date === date ? { ...r, code } : r)))
+    setRows(
+      [...rows, { date, hours: DEFAULT_HOURS, code, ...metaFor(date) }].sort((a, b) =>
+        a.date.localeCompare(b.date)
+      )
+    )
   }
 
   const edit = (i: number, patch: Partial<TimesheetRow>) =>
@@ -115,6 +145,22 @@ export default function TimesheetEditor({
           />
         </span>
       </div>
+
+      <HoursCalendar period={period} rows={rows} courses={courses} onSet={setDay} />
+
+      {/* A travel day that lands the far side of a boundary is not missing —
+          it is on the next timesheet, which is where it gets paid. Said here
+          because its absence from the grid reads like a mistake. */}
+      {spill.length > 0 && (
+        <p className="text-xs text-zinc-500">
+          {spill.map((r) => `${short(r.date)} ${r.code === TRAVEL_CODE ? 'travel' : 'field'}`).join(', ')}
+          {' '}falls in the next pay period —{' '}
+          <Link href={`/instructor/hours?period=${shiftPeriod(period, 1).end}`} className="underline hover:text-zinc-300">
+            it belongs on that timesheet
+          </Link>
+          .
+        </p>
+      )}
 
       <div className="bg-zinc-900 rounded-lg border border-zinc-800 overflow-hidden">
         <div className="overflow-x-auto">

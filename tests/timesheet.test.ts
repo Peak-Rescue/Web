@@ -101,6 +101,11 @@ describe('draft rows', () => {
 describe('the state ADP asks for', () => {
   it('reads an abbreviation or a name, and guesses at neither', () => {
     expect(stateOf('Casper, WY')).toBe('WY')
+    // Half the courses are written without the comma.
+    expect(stateOf('Saint George UT')).toBe('UT')
+    expect(stateOf('Santa Fe New Mexico')).toBe('NM')
+    // A city that names no state gets a blank, not a guess.
+    expect(stateOf('San Diego')).toBe('')
     expect(stateOf('Juneau, Alaska')).toBe('AK')
     expect(stateOf('WA')).toBe('WA')
     expect(stateOf('Maui')).toBe('')
