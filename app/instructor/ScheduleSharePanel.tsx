@@ -56,7 +56,7 @@ export default function ScheduleSharePanel({ url }: { url: string | null }) {
           </div>
           <p className="text-xs text-zinc-500 inline-flex items-center gap-1.5">
             In Google Calendar: Other calendars → From URL.
-            <InfoHint text="Google re-reads a subscribed link on its own schedule, usually within a day. If a course moves this week, tell them yourself." />
+            <InfoHint text="Google names it after the link until it re-reads the file — they can rename it in its settings. It re-reads on its own schedule too, usually within a day, so if a course moves this week, tell them yourself." />
           </p>
           <div className="flex items-center gap-4">
             <button

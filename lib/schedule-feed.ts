@@ -77,10 +77,16 @@ export function buildScheduleIcs(
     'VERSION:2.0',
     'PRODID:-//Peak Rescue//Portal Schedule//EN',
     'CALSCALE:GREGORIAN',
+    // The name, said twice: NAME is the standard property (RFC 7986) and
+    // X-WR-CALNAME is the one every calendar app actually grew up reading.
+    // Neither compels Google, which labels a URL subscription with the URL
+    // until it feels like re-reading the file — so the panel tells the person
+    // handing this out that their partner may have to rename it once.
+    `NAME:${esc(opts.calendarName)}`,
     `X-WR-CALNAME:${esc(opts.calendarName)}`,
-    // Both spellings: the standard one, and the Outlook/Google-era one that
-    // predates it. Google honours neither closely — it refetches when it
-    // refetches, which is why the link is described as a daily feed.
+    `X-WR-CALDESC:${esc('Field days only. Published from the Peak Rescue portal.')}`,
+    // Likewise a request, not a setting: it refetches when it refetches, which
+    // is why the link is described as a daily feed.
     'REFRESH-INTERVAL;VALUE=DURATION:PT12H',
     'X-PUBLISHED-TTL:PT12H',
   ]
