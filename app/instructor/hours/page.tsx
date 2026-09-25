@@ -25,7 +25,7 @@ async function anchorDue(): Promise<string> {
 export default async function HoursPage({
   searchParams,
 }: {
-  searchParams: Promise<{ period?: string }>
+  searchParams: Promise<{ period?: string; cal?: string }>
 }) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -42,7 +42,7 @@ export default async function HoursPage({
   // isn't in: their hours go into ADP under their own login.
   if (!instructor?.hours_via_admin) redirect('/instructor')
 
-  const { period: asked } = await searchParams
+  const { period: asked, cal } = await searchParams
   const anchor = await anchorDue()
   const period: Period = /^\d{4}-\d{2}-\d{2}$/.test(asked ?? '')
     ? periodFor(asked!, anchor)
@@ -104,10 +104,16 @@ export default async function HoursPage({
       ends_at: c.ends_at ?? c.starts_at!,
       status: c.status,
       category: (c as { course_category?: string | null }).course_category ?? null,
-      internal: (c as { internal?: boolean | null }).internal ?? null,
+      internal: (c as { internal?: boolean | null }).internal ?? undefined,
       client: (c as { client_name?: string | null }).client_name ?? null,
+      location: c.location,
+      href: `/portal/${c.id}`,
       state: stateOf(c.location),
     }))
+
+  // The month the grid opens on: the one the period starts in, unless the
+  // month arrows have said otherwise.
+  const month = /^\d{4}-\d{2}$/.test(cal ?? '') ? cal! : period.start.slice(0, 7)
 
   // The days this course puts on the NEXT timesheet — a travel home the far
   // side of a due date reads as a missing day otherwise.
@@ -126,6 +132,7 @@ export default async function HoursPage({
 
         <TimesheetEditor
           period={period}
+          month={month}
           rows={rows}
           generated={generated}
           courses={calendarCourses}

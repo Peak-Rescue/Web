@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState, useTransition } from 'react'
+import { Fragment, useMemo, useState, useTransition } from 'react'
 import Link from 'next/link'
 import InfoHint from '@/components/InfoHint'
 import { PAY_CODES, TRAVEL_CODE, FIELD_CODE } from '@/lib/paycodes'
@@ -25,6 +25,7 @@ const sameRows = (a: TimesheetRow[], b: TimesheetRow[]) => JSON.stringify(a) ===
 
 export default function TimesheetEditor({
   period,
+  month,
   rows: initial,
   generated,
   courses,
@@ -37,6 +38,7 @@ export default function TimesheetEditor({
   onMarkSent,
 }: {
   period: Period
+  month: string
   rows: TimesheetRow[]
   generated: TimesheetRow[]
   courses: (CalendarCourse & { state: string })[]
@@ -52,6 +54,23 @@ export default function TimesheetEditor({
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+
+  // Where a new week starts in the list, and what the week before it came to.
+  // Sunday, because that is the week the overtime rule counts in.
+  const weekBreaks = useMemo(() => {
+    const out = new Map<number, { start: string; hours: number }>()
+    let weekStart: string | null = null
+    rows.forEach((r, i) => {
+      const sunday = dayShift(r.date, -new Date(r.date + 'T00:00:00Z').getUTCDay())
+      if (sunday === weekStart) return
+      weekStart = sunday
+      out.set(i, {
+        start: sunday,
+        hours: totalHours(rows.filter((x) => dayShift(x.date, -new Date(x.date + 'T00:00:00Z').getUTCDay()) === sunday)),
+      })
+    })
+    return out
+  }, [rows])
 
   const dirty = !sameRows(rows, initial)
   const prev = shiftPeriod(period, -1)
@@ -146,7 +165,14 @@ export default function TimesheetEditor({
         </span>
       </div>
 
-      <HoursCalendar period={period} rows={rows} courses={courses} onSet={setDay} />
+      <HoursCalendar
+        month={month}
+        period={period}
+        rows={rows}
+        courses={courses}
+        basePath="/instructor/hours"
+        onSet={setDay}
+      />
 
       {/* A travel day that lands the far side of a boundary is not missing —
           it is on the next timesheet, which is where it gets paid. Said here
@@ -177,7 +203,21 @@ export default function TimesheetEditor({
             </thead>
             <tbody>
               {rows.map((r, i) => (
-                <tr key={i} className="border-b border-zinc-800/60 last:border-0">
+                <Fragment key={i}>
+                {/* Overtime is reckoned by the week, so the weeks are broken
+                    apart and each totals its own hours. */}
+                {weekBreaks.has(i) && (
+                  <tr className="bg-zinc-950/60">
+                    <td colSpan={6} className="px-3 py-1 text-[11px] text-zinc-500">
+                      Week of {short(weekBreaks.get(i)!.start)}
+                      <span className={weekBreaks.get(i)!.hours > 40 ? 'text-amber-400' : 'text-zinc-600'}>
+                        {' · '}{weekBreaks.get(i)!.hours} hrs
+                        {weekBreaks.get(i)!.hours > 40 ? ' · over 40' : ''}
+                      </span>
+                    </td>
+                  </tr>
+                )}
+                <tr className="border-b border-zinc-800/60 last:border-0">
                   <td className="px-3 py-1.5">
                     <input
                       type="date"
@@ -231,6 +271,7 @@ export default function TimesheetEditor({
                     </button>
                   </td>
                 </tr>
+                </Fragment>
               ))}
               {rows.length === 0 && (
                 <tr>

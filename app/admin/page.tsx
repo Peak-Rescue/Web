@@ -228,8 +228,25 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         </svg>
       ),
     },
+    {
+      title: 'All Instructor Profiles',
+      desc: 'Certifications, expertise, and portal access',
+      href: '/admin/instructors',
+      section: 'personal',
+      icon: (
+        <svg {...svgProps} viewBox="0 0 72 24">
+          <circle cx="12" cy="7" r="4"/><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+          <circle cx="36" cy="7" r="4"/><path d="M44 21v-2a4 4 0 0 0-4-4H32a4 4 0 0 0-4 4v2"/>
+          <circle cx="60" cy="7" r="4"/><path d="M68 21v-2a4 4 0 0 0-4-4H56a4 4 0 0 0-4 4v2"/>
+        </svg>
+      ),
+    },
     // Only for the people ADP will not let key their own hours in. For
     // everyone else the tile would be a door onto a page that redirects.
+    //
+    // Fourth rather than third: the grid is two columns, so a tile sits under
+    // the one two places ahead of it. Here that is the expense report, which
+    // is the thing it is a sibling of — you file one and you send the other.
     ...(hoursRow?.hours_via_admin
       ? [
           {
@@ -245,19 +262,6 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
           },
         ]
       : []),
-    {
-      title: 'All Instructor Profiles',
-      desc: 'Certifications, expertise, and portal access',
-      href: '/admin/instructors',
-      section: 'personal',
-      icon: (
-        <svg {...svgProps} viewBox="0 0 72 24">
-          <circle cx="12" cy="7" r="4"/><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-          <circle cx="36" cy="7" r="4"/><path d="M44 21v-2a4 4 0 0 0-4-4H32a4 4 0 0 0-4 4v2"/>
-          <circle cx="60" cy="7" r="4"/><path d="M68 21v-2a4 4 0 0 0-4-4H56a4 4 0 0 0-4 4v2"/>
-        </svg>
-      ),
-    },
     {
       title: 'Employee Documents',
       desc: 'Handbook, policies, and employment paperwork',

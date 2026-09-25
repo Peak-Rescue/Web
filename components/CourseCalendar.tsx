@@ -53,6 +53,7 @@ export default function CourseCalendar({
   params,
   category,
   newHref,
+  marks,
 }: {
   month: string
   courses: CalendarCourse[]
@@ -60,6 +61,11 @@ export default function CourseCalendar({
   params?: Record<string, string> // extra query params to preserve in month-nav links
   category?: string | null // active military/civilian filter (?cat=), toggled via the legend
   newHref?: string // when set, a + beside the arrows opens the new-course form
+  // Something to render at the foot of a given day's cell, keyed by date.
+  // The timesheet paints its L/T marks through here rather than drawing a
+  // second calendar: two grids of the same month that disagree about which
+  // Tuesday is which is the failure this avoids.
+  marks?: Record<string, React.ReactNode>
 }) {
   const catFilter = category === 'military' || category === 'civilian' ? category : null
   const isMilitary = (c: CalendarCourse) => c.category === 'tactical'
@@ -228,6 +234,7 @@ export default function CourseCalendar({
                   return <CalendarChip key={c.id} course={c} style={style} className={chipClass} />
                 })}
               </div>
+              {marks?.[day] && <div className="mt-1">{marks[day]}</div>}
             </div>
           )
         })}
