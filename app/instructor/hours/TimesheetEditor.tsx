@@ -264,18 +264,23 @@ export default function TimesheetEditor({
                     <select
                       value={r.code}
                       onChange={(e) => edit(i, { code: e.target.value })}
-                      className={`w-[8.5rem] bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-xs focus:outline-none focus:border-zinc-500 ${
+                      className={`bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-xs focus:outline-none focus:border-zinc-500 ${
                         r.code === TRAVEL_CODE ? 'text-zinc-400' : 'text-white'
                       }`}
                     >
-                      {PAY_CODES.map((c) => (
-                        <option key={c.code} value={c.code}>
-                          {/* The code already says which entity and which
-                              rung. The entity is named only on PR Service,
-                              which is the one nobody expects to see. */}
-                          {c.code} · {c.short} (${c.rate})
-                          {c.entity === 'PR Service' ? ' · PR Service' : ''}
-                        </option>
+                      {/* Grouped by entity rather than suffixed with it: a
+                          select is as wide as its widest option, and the
+                          closed box has to show the whole of the one chosen.
+                          The group heading says Peak Rescue or PR Service
+                          once instead of on all twelve lines. */}
+                      {(['Peak Rescue', 'PR Service'] as const).map((entity) => (
+                        <optgroup key={entity} label={entity}>
+                          {PAY_CODES.filter((c) => c.entity === entity).map((c) => (
+                            <option key={c.code} value={c.code}>
+                              {c.code} · {c.short} (${c.rate})
+                            </option>
+                          ))}
+                        </optgroup>
                       ))}
                     </select>
                   </td>
