@@ -293,12 +293,12 @@ export async function runHoursReminders(
 
     const { data: assignmentRows } = await admin
       .from('instance_instructors')
-      .select('instance_id, instructor_id, instructors(name, email)')
+      .select('instance_id, instructor_id, instructors(name, email, hours_via_admin)')
       .in('instance_id', worked.map((c) => c.id))
     const assignments = ((assignmentRows ?? []) as unknown as {
       instance_id: string
       instructor_id: string
-      instructors: { name: string; email: string | null } | null
+      instructors: { name: string; email: string | null; hours_via_admin: boolean } | null
     }[]).filter((a) => a.instructors?.email)
 
     const byInstructor = new Map<string, typeof assignments>()
@@ -309,7 +309,7 @@ export async function runHoursReminders(
     const due = friendlyDate(dueDate)
     for (const [instructorId, theirs] of byInstructor) {
       if (!(await claim(admin, 'hours_due', `${dueDate}:${instructorId}`))) continue
-      const { name, email } = theirs[0].instructors!
+      const { name, email, hours_via_admin } = theirs[0].instructors!
       const ok = await sendEmail(
         email!,
         `Reminder: hours due in ADP by ${due}`,
@@ -319,7 +319,13 @@ export async function runHoursReminders(
           'Your courses this pay period:',
           ...theirs.map((a) => courseLine(instanceById.get(a.instance_id)!)),
           '',
-          `Please make sure your hours are uploaded to ADP by end of day ${due}.`,
+          // ADP will not take this person's own hours; somebody else keys
+          // them in. Telling them to upload would be telling them to do the
+          // one thing they cannot — so they get the page that drafts the
+          // days instead.
+          hours_via_admin
+            ? `Your days are drafted here — check them and send them on: ${siteUrl()}/instructor/hours`
+            : `Please make sure your hours are uploaded to ADP by end of day ${due}.`,
         ].join('\n')
       )
       if (ok) sent++

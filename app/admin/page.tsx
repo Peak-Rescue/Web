@@ -43,7 +43,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     instance_instructors?: { role: string; instructors: { name: string } | null }[] | null
   }
   // Profile gate + personalized data in one parallel round.
-  const [{ data: profile }, { data: assignmentRows }, myTasks, myDoneTasks, allInstancesRes, { data: inviteRows }, { data: capRow }] = await Promise.all([
+  const [{ data: profile }, { data: assignmentRows }, myTasks, myDoneTasks, allInstancesRes, { data: inviteRows }, { data: capRow }, { data: hoursRow }] = await Promise.all([
     admin.from('profiles').select('role, first_name, last_name, email').eq('id', user.id).single(),
     admin
       .from('instance_instructors')
@@ -65,6 +65,10 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     showAllCourses
       ? admin.from('instructors').select('instructor_capabilities(category)').eq('profile_id', user.id).maybeSingle()
       : Promise.resolve({ data: null }),
+    // Almost nobody has this on, and the tile below is the only thing that
+    // reads it — but it rides along in the round that is already happening
+    // rather than costing a trip of its own.
+    admin.from('instructors').select('hours_via_admin').eq('profile_id', user.id).maybeSingle(),
   ])
 
   if (!['admin', 'instructor'].includes(profile?.role ?? '')) redirect('/dashboard')
@@ -224,6 +228,23 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         </svg>
       ),
     },
+    // Only for the people ADP will not let key their own hours in. For
+    // everyone else the tile would be a door onto a page that redirects.
+    ...(hoursRow?.hours_via_admin
+      ? [
+          {
+            title: 'My Hours',
+            desc: 'Build your pay period and send it to be entered',
+            href: '/instructor/hours',
+            section: 'personal' as const,
+            icon: (
+              <svg {...svgProps}>
+                <circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" />
+              </svg>
+            ),
+          },
+        ]
+      : []),
     {
       title: 'All Instructor Profiles',
       desc: 'Certifications, expertise, and portal access',
