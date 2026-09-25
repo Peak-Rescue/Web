@@ -185,6 +185,20 @@ const usDate = (d: string) => {
 export const rowsAsTsv = (rows: TimesheetRow[]): string =>
   ['Date\tHours\tCode\tState', ...rows.map((r) => [usDate(r.date), r.hours, r.code, r.state].join('\t'))].join('\n')
 
-/** The same rows as plain text, for the body of an email. */
-export const rowsAsText = (rows: TimesheetRow[]): string =>
-  rows.map((r) => `${usDate(r.date)}   ${r.hours} hrs   ${r.code}${r.state ? `   ${r.state}` : ''}`).join('\n')
+/** The same rows as plain text, for the body of an email — a blank line
+    between the weeks. Two blocks of seven can be counted at a glance; a
+    fourteen-line wall has to be read, and the thing being checked is whether
+    a day is missing. The break falls on Sunday, the week payroll counts in.
+
+    Not in the spreadsheet copy above: a blank line there is an empty row. */
+export const rowsAsText = (rows: TimesheetRow[]): string => {
+  const lines: string[] = []
+  let week: string | null = null
+  for (const r of rows) {
+    const sunday = weekStart(r.date)
+    if (week && sunday !== week) lines.push('')
+    week = sunday
+    lines.push(`${usDate(r.date)}   ${r.hours} hrs   ${r.code}${r.state ? `   ${r.state}` : ''}`)
+  }
+  return lines.join('\n')
+}

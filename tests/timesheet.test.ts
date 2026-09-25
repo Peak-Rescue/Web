@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { draftRows, periodEndFromDue, periodFor, shiftPeriod, stateFor, stateOf, rowsAsTsv, totalHours, type TimesheetCourse } from '@/lib/timesheet'
+import { draftRows, periodEndFromDue, periodFor, shiftPeriod, stateFor, stateOf, rowsAsText, rowsAsTsv, totalHours, type TimesheetCourse } from '@/lib/timesheet'
 import { FIELD_CODE, TRAVEL_CODE, PAY_CODES } from '@/lib/paycodes'
 
 // A real hours-due date off the admin calendar — a Friday — and the period it
@@ -141,6 +141,20 @@ describe('what gets handed over', () => {
     const [header, first] = rowsAsTsv(rows).split('\n')
     expect(header).toBe('Date\tHours\tCode\tState')
     expect(first).toBe('12/7/2026\t10\t07597T\tWY')
+  })
+
+  it('breaks the email between the weeks, and the spreadsheet copy not at all', () => {
+    // A course running Tuesday to Friday over a weekend: two weeks, and the
+    // blank line is what makes a missing day visible.
+    const rows = draftRows(periodFor('2026-12-10', ANCHOR), [
+      course({ starts_at: '2026-12-08', ends_at: '2026-12-15' }),
+    ])
+    const text = rowsAsText(rows).split('\n')
+    expect(text.filter((l) => l === '')).toHaveLength(1)
+    // The break lands before the Sunday, not mid-week.
+    expect(text[text.indexOf('') + 1]).toContain('12/13/2026')
+    // A blank line in a spreadsheet paste is an empty row.
+    expect(rowsAsTsv(rows)).not.toContain('\n\n')
   })
 
   it('uses codes that exist in the handbook', () => {
