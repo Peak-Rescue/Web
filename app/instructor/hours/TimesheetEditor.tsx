@@ -174,7 +174,7 @@ export default function TimesheetEditor({
   // so it lands in the right account without knowing its index.
   const composeUrl = useMemo(() => {
     const subject = `Hours — ${senderName} — ${short(period.start)} to ${short(period.end)}`
-    const body = `${rowsAsText(rows)}\n\nTotal ${totalHours(rows)} hrs`
+    const body = rowsAsText(rows)
     const q = new URLSearchParams({
       view: 'cm',
       fs: '1',
