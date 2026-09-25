@@ -143,10 +143,22 @@ export default function TimesheetEditor({
     setDay(date, FIELD_CODE)
   }
 
-  const mailto = useMemo(() => {
+  // Gmail's compose window, not a mailto:. A mailto hands the draft to
+  // whatever the operating system thinks the mail app is, which here is one
+  // nobody uses — the message went nowhere anybody would ever see it. This
+  // opens a tab in the account already signed in, which is the inbox the mail
+  // has to leave from.
+  const composeUrl = useMemo(() => {
     const subject = `Hours — ${senderName} — ${short(period.start)} to ${short(period.end)}`
     const body = `${rowsAsText(rows)}\n\nTotal ${totalHours(rows)} hrs`
-    return `mailto:${approverEmail ?? ''}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+    const q = new URLSearchParams({
+      view: 'cm',
+      fs: '1',
+      to: approverEmail ?? '',
+      su: subject,
+      body,
+    })
+    return `https://mail.google.com/mail/?${q}`
   }, [rows, period, senderName, approverEmail])
 
   async function copy() {
@@ -376,13 +388,15 @@ export default function TimesheetEditor({
             a payroll hand-off that looks like automated portal mail is one
             that gets read on Monday. */}
         <a
-          href={mailto}
+          href={composeUrl}
+          target="_blank"
+          rel="noopener noreferrer"
           onClick={() => run(() => onMarkSent(period.start))}
           className="px-3 py-2 rounded bg-pr-red hover:bg-pr-red-dark text-white text-xs font-medium transition-colors inline-flex items-center gap-1.5"
         >
           Email these hours
         </a>
-        <InfoHint text="Opens a draft in your own mail app, addressed and filled in. It comes from you, not from the portal — so save your edits first, since the draft is built from what is on screen." />
+        <InfoHint text="Opens a Gmail draft in a new tab, addressed and filled in. It goes out from you rather than from the portal — so save your edits first, since the draft is built from what is on screen. Check the account in the corner if you're signed into more than one." />
       </div>
 
       {error && <p className="text-red-400 text-xs">{error}</p>}
