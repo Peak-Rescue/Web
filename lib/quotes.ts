@@ -6,11 +6,29 @@ export const QUOTE_MISSION =
   'prevent catastrophe. We also respond to difficult rescue scenarios with the safest and most effective ' +
   'techniques available to rescuers.'
 
-export const QUOTE_COMMITMENT =
-  'We truly look forward to this opportunity! We stand behind our mission to be the top training team for ' +
-  'mountain warfare operations. We are committed to giving you the best training; specially designed for YOU ' +
-  'and your team! Your teams are the heart of our company and we value your experience with Peak Rescue! ' +
-  'Looking forward to working with you!'
+// The closing paragraph. The original copy was written for military clients
+// and claimed a mountain-warfare mission on every quote that went out — a
+// sheriff's SAR team and a refinery's SPRAT class were both being told we
+// train warfighters. Only the mission sentence varies; the rest is the same
+// promise to everyone.
+//
+// Tactical is the one category that needs its own words. Everything else —
+// SAR, industrial, specialty — is covered by "technical rescue and mobility",
+// which is broad enough to be true of a county SAR team and a refinery alike
+// without claiming either one's specialty. That is also why a category added
+// later needs no change here: the general line is the default, and it will be
+// right. Only a new *military* offering would want a look.
+export function quoteCommitment(course_category: string | null): string {
+  const domain =
+    course_category === 'tactical' ? 'mountain warfare operations' : 'technical rescue and mobility'
+  return (
+    'We truly look forward to this opportunity! We stand behind our mission to be the top training team for ' +
+    domain +
+    '. We are committed to giving you the best training; specially designed for YOU ' +
+    'and your team! Your teams are the heart of our company and we value your experience with Peak Rescue! ' +
+    'Looking forward to working with you!'
+  )
+}
 
 export const QUOTE_CONTACT = {
   phone: '(833) 737-2834',

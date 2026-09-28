@@ -52,7 +52,7 @@ export default async function GearOrderPage({ params }: { params: Promise<{ toke
   return (
     <main className="min-h-screen bg-zinc-950 text-white">
       <div className="max-w-3xl mx-auto px-4 py-12 md:py-16">
-        <p className="text-xs uppercase tracking-[0.2em] text-pr-red mb-2">Peak Rescue Mountain Guides</p>
+        <p className="text-xs uppercase tracking-[0.2em] text-pr-red mb-2">Peak Rescue</p>
         <h1 className="text-2xl md:text-3xl font-bold">Gear list — {courseName}</h1>
         <p className="text-sm text-zinc-400 mt-1">
           {[inst.client_name, dates, inst.location].filter(Boolean).join(' · ')}

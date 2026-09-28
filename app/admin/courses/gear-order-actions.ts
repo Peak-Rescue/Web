@@ -226,7 +226,7 @@ export async function sendGearOrder(instanceId: string, orderId: string, formDat
   const cc = [...new Set([...contactCc, ...adminCc])]
 
   const { error: sendError } = await sendMail({
-    from: 'Peak Rescue Mountain Guides <noreply@peak-rescue.com>',
+    from: 'Peak Rescue <noreply@peak-rescue.com>',
     to: [toEmail],
     cc: cc.length > 0 ? cc : undefined,
     subject: order.es_quote_number

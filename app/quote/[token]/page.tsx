@@ -6,7 +6,7 @@ import QuoteHeroPicker from '@/app/admin/courses/QuoteHeroPicker'
 import { HERO_CHOICES, clientSafeHero } from '@/lib/quote-heroes'
 import { courseDisplayName, courseShortName } from '@/lib/courses'
 import { services, categoryMeta, type ServiceCategory } from '@/lib/data/services'
-import { QUOTE_MISSION, QUOTE_COMMITMENT, QUOTE_CONTACT, quoteNumber, type QuoteOption } from '@/lib/quotes'
+import { QUOTE_MISSION, quoteCommitment, QUOTE_CONTACT, quoteNumber, type QuoteOption } from '@/lib/quotes'
 import { fmtMoney } from '@/lib/expenses'
 import AcceptForm from './AcceptForm'
 import { todayHere } from '@/lib/course-clock'
@@ -281,11 +281,11 @@ export default async function QuotePage({
         {/* ── Commitment ── */}
         <section className="mt-12 mb-20 pt-10 border-t border-zinc-800">
           <h2 className="text-xl font-bold mb-4">Our Commitment to You</h2>
-          <p className="text-zinc-300 leading-relaxed">{QUOTE_COMMITMENT}</p>
+          <p className="text-zinc-300 leading-relaxed">{quoteCommitment(inst.course_category)}</p>
           {quote.prepared_by_name && (
             <div className="mt-8">
               <p className="font-semibold">{quote.prepared_by_name}</p>
-              <p className="text-sm text-zinc-500">Peak Rescue Mountain Guides</p>
+              <p className="text-sm text-zinc-500">Peak Rescue</p>
             </div>
           )}
         </section>

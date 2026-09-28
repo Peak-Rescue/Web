@@ -969,7 +969,7 @@ export async function sendQuote(instanceId: string, quoteId: string, formData?: 
   const cc = [...new Set([...(quote.prepared_by_email ? [quote.prepared_by_email] : []), ...requestedCc, ...adminCc])]
 
   const { error: sendError } = await sendMail({
-    from: 'Peak Rescue Mountain Guides <noreply@peak-rescue.com>',
+    from: 'Peak Rescue <noreply@peak-rescue.com>',
     to: [toEmail],
     cc: cc.length > 0 ? cc : undefined,
     replyTo: quote.prepared_by_email ?? undefined,
@@ -985,7 +985,7 @@ export async function sendQuote(instanceId: string, quoteId: string, formData?: 
       '',
       `Questions? Just reply to this email.`,
       '',
-      quote.prepared_by_name ?? 'Peak Rescue Mountain Guides',
+      quote.prepared_by_name ?? 'Peak Rescue',
     ].join('\n'),
   })
   if (sendError) throw new Error(`Email failed: ${sendError.message}`)
