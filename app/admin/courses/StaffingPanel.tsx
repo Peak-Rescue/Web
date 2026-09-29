@@ -6,6 +6,7 @@ import { removeInstructor, setCourseRole, setPrimary } from './actions'
 import InstructorAssign from './InstructorAssign'
 import GuestInstructorButton from './GuestInstructorButton'
 import StaffingInterest from './StaffingInterest'
+import PrimaryStar from '@/components/PrimaryStar'
 import type { StaffingPanelData } from '@/lib/staffing-panel'
 import { INSTANCE_ROLES, roleLabel, PRIMARY_LABEL, ROLE_BADGE, ROLE_TEXT, asInstanceRole } from '@/lib/staffing-roles'
 
@@ -112,10 +113,24 @@ function CrewRow({
   const router = useRouter()
 
   return (
-    <div className={`px-4 py-2 bg-zinc-900 border rounded-lg ${clashes.length ? 'border-amber-800/70' : 'border-zinc-800'}`}>
+    // The primary's row is lifted: a left edge in teal and a name in white.
+    // Marking the person rather than adding a badge to their row is the whole
+    // distinction — the bands label a row, this one picks it out of the list.
+    // A clash still owns the border, because a double-booking outranks it.
+    <div
+      className={`px-4 py-2 bg-zinc-900 border rounded-lg ${
+        clashes.length
+          ? 'border-amber-800/70'
+          : member.inCharge
+            ? 'border-zinc-800 border-l-2 border-l-teal-400/80'
+            : 'border-zinc-800'
+      }`}
+    >
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3 min-w-0">
-          <span className="font-medium text-sm truncate">{member.name}</span>
+          <span className={`text-sm truncate ${member.inCharge ? 'font-semibold text-white' : 'font-medium text-zinc-300'}`}>
+            {member.name}
+          </span>
           {/* What they are paid. A select rather than a label, because this is
               the number their hours are worked out at and it is set by how they
               were staffed — a wage typed again in the actuals is a wage typed
@@ -137,32 +152,36 @@ function CrewRow({
               <option key={r} value={r}>{roleLabel(r)}</option>
             ))}
           </select>
-          {/* Who is running it — primary, the team's word, and more than one
-              person can be. Teal, the colour "lead" used to carry, because this
-              is what that colour always meant to whoever was reading it. */}
-          <label
-            className={`shrink-0 flex items-center gap-1.5 text-xs cursor-pointer transition-colors ${
-              member.inCharge ? 'text-teal-300' : 'text-zinc-600 hover:text-zinc-400'
-            }`}
+          {/* Who is running it. A star you press, not a tick box beside a
+              select: the two controls sat in a row looking like two fields of
+              one form, and they are not the same kind of answer. A filled star
+              is a statement, an outlined one is an offer — and more than one
+              person can hold it, which no tick box in a list of people implies.
+              The word stays beside it on the primary's own row, since that is
+              the row somebody is scanning for. */}
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() =>
+              start(async () => { await setPrimary(instanceId, member.instructorId, !member.inCharge); router.refresh() })
+            }
+            aria-pressed={member.inCharge}
             title={
               member.inCharge
                 ? solePrimary
-                  ? 'Primary on this course — the only one. Unticking leaves nobody running it.'
-                  : 'Primary — running this course in the field'
-                : 'Mark them primary — running this course in the field. More than one person can be.'
+                  ? 'Primary on this course — the only one. Unstarring leaves nobody running it.'
+                  : 'Primary — running this course in the field. Press to unstar.'
+                : 'Make them primary — running this course in the field. More than one person can be.'
             }
+            className={`shrink-0 flex items-center gap-1.5 text-xs transition-colors disabled:opacity-50 ${
+              member.inCharge ? 'text-teal-300 hover:text-teal-200' : 'text-zinc-700 hover:text-teal-400/70'
+            }`}
           >
-            <input
-              type="checkbox"
-              checked={member.inCharge}
-              disabled={pending}
-              onChange={(e) =>
-                start(async () => { await setPrimary(instanceId, member.instructorId, e.target.checked); router.refresh() })
-              }
-              className="accent-teal-500 disabled:opacity-50"
-            />
-            {PRIMARY_LABEL}
-          </label>
+            <PrimaryStar filled={member.inCharge} className="shrink-0" />
+            {member.inCharge && (
+              <span className="font-bold uppercase tracking-wider text-[10px]">{PRIMARY_LABEL}</span>
+            )}
+          </button>
         </div>
         <button
           disabled={pending}

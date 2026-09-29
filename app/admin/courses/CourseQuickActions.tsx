@@ -20,6 +20,7 @@ import type { QuoteQuickData, BooksQuickData } from './quick-actions'
 import OwnerPill from '@/components/OwnerPill'
 import { type CourseOwner } from '@/lib/course-owner'
 import { crewOrder, roleLabel, ROLE_SOLID, asInstanceRole } from '@/lib/staffing-roles'
+import PrimaryStar from '@/components/PrimaryStar'
 
 // The list's quick actions: where a course has got to, and the things you can
 // settle from here without opening it.
@@ -223,13 +224,13 @@ function CrewMeter({
               }`}
             >
               {/* The marked box is the primary, because that is the one fact
-                  you scan a crew meter for. It used to be the lead's box and it
-                  was the same box while a course had one lead. Only they are
-                  lettered: a letter in every box would turn a thing you count
-                  into a thing you read. */}
-              {person?.in_charge && (
-                <span className="text-[9px] font-bold leading-none text-white">P</span>
-              )}
+                  you scan a crew meter for. A star and not a P: the box already
+                  carries the band in its colour, and a letter inside it would be
+                  a second initial competing with the L, A and S the bands are
+                  known by everywhere else. Only the primary is marked — a mark
+                  in every box would turn a thing you count into a thing you
+                  read. */}
+              {person?.in_charge && <PrimaryStar className="w-2.5 h-2.5 text-white" />}
             </span>
           )
         })}

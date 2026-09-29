@@ -3,6 +3,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import WaiverDetach from '@/components/WaiverDetach'
 import PhoneText from '@/components/PhoneText'
+import PrimaryStar from '@/components/PrimaryStar'
 import { roleLabel, roleBadgeClass, PRIMARY_LABEL, studentFacingRole } from '@/lib/staffing-roles'
 
 // Presentational shell for the portal page. Every top-level block on a course
@@ -197,7 +198,6 @@ export function InstructorCard({
   phone?: string | null
 }) {
   const primary = Boolean(inCharge)
-  const lead = primary
   const initials = name
     .split(/\s+/)
     .slice(0, 2)
@@ -207,9 +207,14 @@ export function InstructorCard({
 
   const inner = (
     <>
+      {/* The primary's avatar is ringed rather than tinted. A tint is the same
+          move the wage pills make — a colour inside a shape — and this has to
+          read as a mark *on the person*, not as another category they are in. */}
       <span
         className={`grid place-items-center w-9 h-9 rounded-full overflow-hidden text-xs font-semibold shrink-0 ${
-          lead ? 'bg-teal-900/50 text-teal-300' : 'bg-zinc-800 text-zinc-400'
+          primary
+            ? 'bg-teal-900/50 text-teal-300 ring-2 ring-teal-400/70 ring-offset-2 ring-offset-zinc-900'
+            : 'bg-zinc-800 text-zinc-400'
         }`}
       >
         {avatar ? (
@@ -238,24 +243,39 @@ export function InstructorCard({
               </Link>
             ) : name}
           </span>
-          {/* shrink-0: the name truncates, the chips never do — a clipped
-              "Direct…" would be worse than a short name. */}
+          {/* A star, not a pill. Primary answers a different question from the
+              wage bands, and a pill beside pills is a peer whatever is written
+              in it — it read as a fourth band. So it takes a shape the bands
+              never use and hangs off the name rather than joining the row of
+              categories.
+
+              The word rides with it, always. To the crew it is the shorthand;
+              to a student it is the whole noun, because they have been taught
+              nothing about our stars. shrink-0 throughout: the name truncates,
+              the marks do not. */}
           {primary && (
-            <span className="shrink-0 px-1.5 py-px rounded border text-[10px] font-semibold uppercase tracking-wide bg-teal-500/10 border-teal-500/30 text-teal-300">
-              {showRank ? PRIMARY_LABEL : studentFacingRole(true)}
+            <span
+              className="shrink-0 inline-flex items-center gap-1 text-teal-300"
+              title={`${studentFacingRole(true)} — running this course`}
+            >
+              <PrimaryStar className="shrink-0" />
+              <span className="text-[10px] font-bold uppercase tracking-wider">
+                {showRank ? PRIMARY_LABEL : studentFacingRole(true)}
+              </span>
             </span>
           )}
+          {/* The pay band, to the crew only, and still a pill — a pill is right
+              for a category, which is what a band is. In its own colour so a
+              crew list is scannable by seat. */}
+          {showRank && role && <span className={roleBadgeClass(role)}>{roleLabel(role)}</span>}
+          {/* A student with no star beside their name is being told what the
+              person is, not what they are not. Plain text rather than a pill,
+              so the row's only pill-shaped thing is never a rank to a student. */}
           {!primary && !showRank && (
-            <span className="shrink-0 px-1.5 py-px rounded border text-[10px] font-semibold uppercase tracking-wide bg-blue-500/10 border-blue-500/30 text-blue-300">
+            <span className="shrink-0 text-[10px] font-medium uppercase tracking-wider text-zinc-500">
               Instructor
             </span>
           )}
-          {/* The pay band, to the crew only — a pill like the primary's, in its
-              own colour, so a crew list is scannable by seat and not only by
-              name. Teal is not among the three: it means primary, and the two
-              chips sit side by side on the same row precisely because they are
-              answering different questions. */}
-          {showRank && role && <span className={roleBadgeClass(role)}>{roleLabel(role)}</span>}
         </div>
         {(email || phone) && (
           <div className="text-[11px] text-zinc-500 leading-tight truncate">

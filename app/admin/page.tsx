@@ -12,6 +12,7 @@ import { todayHere } from '@/lib/course-clock'
 import { readViewAs } from '@/lib/view-as'
 import ViewAsMenu from '@/components/ViewAsMenu'
 import { roleLabel, ROLE_BADGE, asInstanceRole } from '@/lib/staffing-roles'
+import PrimaryStar from '@/components/PrimaryStar'
 
 export default async function AdminPage({ searchParams }: { searchParams: Promise<{ cal?: string; scope?: string; cat?: string }> }) {
   const { cal, scope, cat } = await searchParams
@@ -481,19 +482,20 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
                       {c.inst.location ? ` · ${c.inst.location}` : ''}
                     </p>
                   </Link>
-                  {/* Two pills, because they answer two questions: what the
-                      week pays, and whether it is yours to run. One pill saying
-                      "Lead · primary" made them look like one fact with a
-                      qualifier. Teal is only ever the second of them. */}
-                  <span className="shrink-0 flex items-center gap-1">
+                  {/* Two questions, two kinds of mark. The band is a pill,
+                      because a band is a category. Running it is a star, because
+                      it is a fact about you on this course — and as two pills
+                      they read as one fact with a qualifier. */}
+                  <span className="shrink-0 flex items-center gap-1.5">
+                    {c.inCharge && (
+                      <span className="flex items-center gap-1 text-teal-300" title="You are primary on this course">
+                        <PrimaryStar />
+                        <span className="text-[10px] font-bold uppercase tracking-wider">Primary</span>
+                      </span>
+                    )}
                     <span className={`text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full border ${ROLE_BADGE[asInstanceRole(c.role)]}`}>
                       {roleLabel(c.role)}
                     </span>
-                    {c.inCharge && (
-                      <span className="text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full border border-teal-700 bg-teal-900/30 text-teal-300">
-                        Primary
-                      </span>
-                    )}
                   </span>
                 </div>
               ))}
