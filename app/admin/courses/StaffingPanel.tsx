@@ -19,10 +19,36 @@ import { INSTANCE_ROLES, roleLabel, DIRECTOR_SHORT } from '@/lib/staffing-roles'
 // the calling page's manifest and arrives as nothing at all.
 
 export default function StaffingPanel({ data }: { data: StaffingPanelData }) {
-  const { instanceId, internal, assigned, qualified, unassigned, hasDirector, conflicts, candidates, invites } = data
+  const { instanceId, internal, assigned, qualified, unassigned, hasDirector, seats, conflicts, candidates, invites } = data
+
+  const shortSeats = seats.filter((s) => s.open > 0)
 
   return (
     <div>
+      {/* What the course is planned to run, against who is on it. The crew
+          count alone said how many were missing; it could not say which kind,
+          and "one short" is a different job to do depending on whether the
+          missing person is a lead or a shadow. Only the seats still open — a
+          plan that is met is a plan you do not need to read. */}
+      {seats.length > 0 && (
+        <p className="mb-3 text-xs flex items-center gap-2 flex-wrap">
+          {shortSeats.length > 0 ? (
+            <>
+              <span className="text-amber-400/90">Still wanted</span>
+              {shortSeats.map((s) => (
+                <span key={s.role} className="text-zinc-400">
+                  {s.open} {roleLabel(s.role).toLowerCase()}
+                </span>
+              ))}
+            </>
+          ) : (
+            <span className="text-zinc-500">
+              Crew plan met — {seats.map((s) => `${s.seats} ${roleLabel(s.role).toLowerCase()}`).join(' · ')}
+            </span>
+          )}
+        </p>
+      )}
+
       {assigned.length > 0 && (
         <div className="mb-4 space-y-2">
           {assigned.map((a) => (

@@ -1,4 +1,5 @@
 import { updateInstanceDetails, addOffDay, removeOffDay } from './actions'
+import { CREW_SEAT_FIELDS } from '@/lib/staffing-roles'
 import AutoSaveForm from '@/components/AutoSaveForm'
 import TrashIcon from '@/components/TrashIcon'
 import InfoHint from '@/components/InfoHint'
@@ -32,6 +33,9 @@ export type CourseDetailsRow = {
   client_name: string | null
   max_students: number | null
   instructor_slots: number | null
+  lead_slots?: number | null
+  assist_slots?: number | null
+  shadow_slots?: number | null
   starts_at: string | null
   ends_at: string | null
   breaks_paid?: boolean | null
@@ -144,15 +148,39 @@ export default function CourseDetailsEditor({
             </select>
           </div>
         )}
+        {/* The crew, by seat. It was one number, and one number cannot say what
+            the people are there to do — which is the first thing an instructor
+            asked to work the week wants to know, and the thing that decides
+            whether they can say yes at all. The total follows from the boxes
+            rather than being a fourth box to keep in step. */}
         <div>
           <label className="block text-xs text-zinc-400 mb-1">
-            {kind === 'job' ? 'Crew' : 'Instructor slots'}
-            <InfoHint text="Takes a fraction: 1.5 is a lead plus a shadowing instructor on the lower hourly. Staffing rounds up to whole people — 1.5 still wants two names — and so does every cost but the field day, because half an instructor still needs a whole bed, a whole seat and a whole flight." />
+            {kind === 'job' ? 'Crew' : 'Crew plan'}
+            <InfoHint text="How many of each the course is planned to run. Each is a wage — a lead hour, an assist hour and a shadow hour are three different numbers — and how somebody is staffed is what puts them on one. The call-out tells an instructor which seats are open, so this is what they are saying yes to. Leave a box empty if nobody has decided; empty and 0 are different answers, and 0 means there is no room." />
           </label>
-          {/* step="any" rather than a half step: the arrows still count whole
-              instructors, which is what nearly every course wants, and a
-              fraction is there for the ones that don't. */}
-          <input name="instructor_slots" type="number" min="0.5" step="any" defaultValue={course.instructor_slots ?? ''} className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
+          <div className="flex items-end gap-2">
+            {CREW_SEAT_FIELDS.map((f) => (
+              <div key={f.name} className="flex-1 min-w-0">
+                <span className="block text-[10px] uppercase tracking-wide text-zinc-600 mb-1">{f.label}</span>
+                <input
+                  name={f.name}
+                  type="number"
+                  min="0"
+                  step="1"
+                  defaultValue={(course[f.key] as number | null) ?? ''}
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500"
+                />
+              </div>
+            ))}
+            {/* Read-only, because it is worked out. A fourth box here is how
+                the parts and the total come to disagree. */}
+            <div className="shrink-0 text-center">
+              <span className="block text-[10px] uppercase tracking-wide text-zinc-600 mb-1">Total</span>
+              <span className="block px-3 py-2 text-sm text-zinc-400 tabular-nums">
+                {course.instructor_slots ?? '—'}
+              </span>
+            </div>
+          </div>
         </div>
       </AutoSaveForm>
 

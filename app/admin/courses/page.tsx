@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation'
+import { CREW_SEAT_FIELDS } from '@/lib/staffing-roles'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -39,7 +40,7 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
     admin
       .from('course_instances')
       .select(`
-        id, ref_number, slug, course_type, course_category, custom_title, status, location, client_name, contacts, owner_id, invite_token, invite_expires_at, starts_at, ends_at, max_students, instructor_slots, internal,
+        id, ref_number, slug, course_type, course_category, custom_title, status, location, client_name, contacts, owner_id, invite_token, invite_expires_at, starts_at, ends_at, max_students, instructor_slots, lead_slots, assist_slots, shadow_slots, internal,
         instance_instructors(count),
         crew:instance_instructors(role, in_charge, instructors(name)),
         enrollments(count),
@@ -168,10 +169,24 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
             </div>
             <div>
               <label className="block text-xs text-zinc-400 mb-1">
-                Instructor slots
-                <InfoHint text="Takes a fraction: 1.5 is a lead plus a shadowing instructor on the lower hourly. Staffing rounds up to whole people, and so does every cost but the field day." />
+                Crew plan
+                <InfoHint text="How many of each the course is planned to run. Each is a wage, and it is what an instructor is told when we call for interest — so it is what they are saying yes to. Empty is fine at intake; it can be broken down later." />
               </label>
-              <input name="instructor_slots" type="number" min="0.5" step="any" placeholder="e.g. 3" className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
+              <div className="flex items-end gap-2">
+                {CREW_SEAT_FIELDS.map((f) => (
+                  <div key={f.name} className="flex-1 min-w-0">
+                    <span className="block text-[10px] uppercase tracking-wide text-zinc-600 mb-1">{f.label}</span>
+                    <input
+                      name={f.name}
+                      type="number"
+                      min="0"
+                      step="1"
+                      placeholder={f.role === 'lead' ? '1' : f.role === 'assist' ? '2' : ''}
+                      className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500"
+                    />
+                  </div>
+                ))}
+              </div>
             </div>
 
             <div className="sm:col-span-2">

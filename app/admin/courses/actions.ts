@@ -12,7 +12,7 @@ import { sendMail } from '@/lib/mailer'
 import { announcesChanges, emailAdminsNewCourse } from '@/lib/course-notify'
 import { clampOffDays, dayShift, strokeOffDays, type OffSpan } from '@/lib/courses'
 import { assertCustomCourseTagged } from '@/lib/capabilities'
-import { asInstanceRole } from '@/lib/staffing-roles'
+import { asInstanceRole, crewPlanTotal, type CrewPlan } from '@/lib/staffing-roles'
 
 const fmtLong = (d: string) =>
   new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
@@ -212,7 +212,8 @@ export async function createInstance(formData: FormData) {
   const contacts         = contactsFromForm(formData.get('contacts_json'))
   const notes            = (formData.get('notes') as string) || null
   const max_students     = formData.get('max_students') ? Number(formData.get('max_students')) : null
-  const instructor_slots = formData.get('instructor_slots') ? Number(formData.get('instructor_slots')) : null
+  const crewPlan         = crewPlanFromForm(formData)
+  const instructor_slots = crewPlanTotal(crewPlan)
   const starts_at        = (formData.get('starts_at') as string) || null
   const ends_at          = (formData.get('ends_at') as string) || null
 
@@ -258,7 +259,15 @@ export async function createInstance(formData: FormData) {
     // change in Details, and the alternative — every new course landing
     // unassigned — makes the state that means "nobody is driving this" so
     // common that it stops being read.
-    .insert({ course_category, course_type, custom_title, custom_categories, status, internal, starts_at, ends_at, location, region, venue_id, client_name, contacts, notes, max_students, instructor_slots, slug, owner_id: creator.id })
+    .insert({
+      course_category, course_type, custom_title, custom_categories, status, internal,
+      starts_at, ends_at, location, region, venue_id, client_name, contacts, notes, max_students,
+      // The seats are what somebody typed; the total is worked out from them,
+      // here and nowhere else, so the parts and the sum cannot drift apart.
+      lead_slots: crewPlan.lead, assist_slots: crewPlan.assist, shadow_slots: crewPlan.shadow,
+      instructor_slots,
+      slug, owner_id: creator.id,
+    })
     .select('id')
     .single()
 
@@ -312,7 +321,7 @@ export async function updateInstanceDetails(id: string, formData: FormData) {
   const contactsRaw      = formData.get('contacts_json')
   const notes            = (formData.get('notes') as string) || null
   const max_students     = formData.get('max_students') ? Number(formData.get('max_students')) : null
-  const instructor_slots = formData.get('instructor_slots') ? Number(formData.get('instructor_slots')) : null
+  const crewPlan         = crewPlanFromForm(formData)
   // Empty means nobody, which is a real answer and not a missing one.
   const owner_id = (formData.get('owner_id') as string) || null
 
@@ -335,7 +344,17 @@ export async function updateInstanceDetails(id: string, formData: FormData) {
       ...(formData.has('client_name') ? { client_name } : {}),
       ...(formData.has('notes') ? { notes } : {}),
       ...(formData.has('max_students') ? { max_students } : {}),
-      ...(formData.has('instructor_slots') ? { instructor_slots } : {}),
+      // The crew plan arrives as three boxes and the head count follows from
+      // them. Guarded on the lead box because the three always travel together
+      // — a form carrying one carries all three.
+      ...(formData.has('lead_slots')
+        ? {
+            lead_slots: crewPlan.lead,
+            assist_slots: crewPlan.assist,
+            shadow_slots: crewPlan.shadow,
+            instructor_slots: crewPlanTotal(crewPlan),
+          }
+        : {}),
       ...(formData.has('owner_id') ? { owner_id } : {}),
       ...(contactsRaw !== null ? { contacts: contactsFromForm(contactsRaw) } : {}),
     })
@@ -1121,6 +1140,24 @@ export async function deleteItem(instanceId: string, itemId: string) {
 
   if (error) throw new Error(error.message)
   revalidatePath(`/admin/courses/${instanceId}`)
+}
+
+// The crew plan off a details form: three boxes, each of them allowed to be
+// empty. Empty is not zero — a blank shadow box means nobody has said, and zero
+// means somebody thought about it and there is no room — so a course that has
+// never been broken down keeps reading as "just a head count" rather than as a
+// crew of nobody.
+function crewPlanFromForm(formData: FormData): CrewPlan {
+  const seat = (name: string) => {
+    const raw = String(formData.get(name) ?? '').trim()
+    if (raw === '') return null
+    const n = Number(raw)
+    // A seat count is whole people. Anything else is a typo, and a typo that
+    // silently became 2.5 instructors is what 208 spent a migration on.
+    if (!Number.isInteger(n) || n < 0 || n > 99) throw new Error('Crew seats are whole numbers')
+    return n
+  }
+  return { lead: seat('lead_slots'), assist: seat('assist_slots'), shadow: seat('shadow_slots') }
 }
 
 export async function assignInstructor(instanceId: string, formData: FormData) {

@@ -1,6 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { loadStaffingPanel, type StaffingPanelData } from '@/lib/staffing-panel'
 import type { OffDayRange } from '@/lib/courses'
+import type { CrewPlan } from '@/lib/staffing-roles'
 import StaffingPanel from './StaffingPanel'
 
 // The course page's staffing block: load, then draw.
@@ -14,6 +15,7 @@ export default async function CourseStaffingEditor(props: {
   courseCategory: string | null
   customCategories: string[] | null
   internal: boolean
+  plan?: CrewPlan
   startsAt: string | null
   endsAt: string | null
   offDays: OffDayRange[]

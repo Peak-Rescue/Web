@@ -1,6 +1,7 @@
 'use server'
 
 import { requireAdminUser } from '@/lib/course-access'
+import { crewPlanOf } from '@/lib/staffing-roles'
 import { parseContacts, primaryContactEmail, ccEmailOptions } from '@/lib/contacts'
 import { loadStaffingPanel, type StaffingPanelData } from '@/lib/staffing-panel'
 import { loadBillingPanel, type BillingPanelData } from '@/lib/billing-handoff'
@@ -27,7 +28,7 @@ export async function staffingData(instanceId: string): Promise<StaffingPanelDat
   const [{ data: inst }, { data: offDays }] = await Promise.all([
     admin
       .from('course_instances')
-      .select('course_type, course_category, custom_categories, internal, starts_at, ends_at')
+      .select('course_type, course_category, custom_categories, internal, starts_at, ends_at, lead_slots, assist_slots, shadow_slots')
       .eq('id', instanceId)
       .single(),
     admin
@@ -44,6 +45,7 @@ export async function staffingData(instanceId: string): Promise<StaffingPanelDat
     courseCategory: inst.course_category as string | null,
     customCategories: inst.custom_categories as string[] | null,
     internal: Boolean(inst.internal),
+    plan: crewPlanOf(inst),
     startsAt: inst.starts_at as string | null,
     endsAt: inst.ends_at as string | null,
     offDays: offDays ?? [],

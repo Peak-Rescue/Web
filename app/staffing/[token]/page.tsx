@@ -1,4 +1,6 @@
 import { notFound } from 'next/navigation'
+import { crewPlanOf, openSeats, bestOpenSeatFor, roleLabel } from '@/lib/staffing-roles'
+import { courseCapabilityCategories } from '@/lib/capabilities'
 import Link from 'next/link'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
@@ -38,7 +40,9 @@ export default async function StaffingInvitePage({
   const [{ data: invite }, { data: { user } }] = await Promise.all([
     admin
       .from('course_interest_invites')
-      .select('id, instance_id, instructor_id, interested, note, instructors(name)')
+      // Their capabilities ride along: what this page may offer them is capped
+      // by what they are signed off to do, not by what the course has open.
+      .select('id, instance_id, instructor_id, interested, note, instructors(name, instructor_capabilities(category, role))')
       .eq('token', token)
       .maybeSingle(),
     supabase.auth.getUser(),
@@ -51,7 +55,7 @@ export default async function StaffingInvitePage({
   const [{ data: inst }, { data: crew }] = await Promise.all([
     admin
       .from('course_instances')
-      .select('course_type, custom_title, client_name, location, region, starts_at, ends_at, status, instructor_slots')
+      .select('course_type, custom_title, client_name, location, region, starts_at, ends_at, status, instructor_slots, lead_slots, assist_slots, shadow_slots, course_category, custom_categories')
       .eq('id', invite.instance_id)
       .single(),
     admin
@@ -61,7 +65,27 @@ export default async function StaffingInvitePage({
   ])
   if (!inst) notFound()
 
-  const instructor = invite.instructors as unknown as { name: string } | null
+  const instructor = invite.instructors as unknown as
+    { name: string; instructor_capabilities: { category: string; role: string }[] | null } | null
+
+  // What is open, worked out now. Deliberately absent from the invite email:
+  // an emailed count is a photograph of a moment that has passed by the time
+  // somebody opens it, and a letter saying a lead seat is free when it went
+  // last week is worse than a letter that never mentioned seats.
+  const plan = crewPlanOf(inst)
+  const seats = openSeats(plan, crew ?? [])
+
+  // Whether a lead seat is one they could actually take. A lead can work as an
+  // assist or shadow — nobody is too qualified to help — but the reverse is not
+  // true, so an assist is shown their own ceiling rather than the course's.
+  const courseCategories: string[] = courseCapabilityCategories(
+    (inst.course_type ?? '') as string,
+    inst.custom_categories as string[] | null
+  )
+  const qualifiedToLead = (instructor?.instructor_capabilities ?? []).some(
+    (c) => courseCategories.includes(c.category) && c.role === 'lead'
+  )
+  const offered = bestOpenSeatFor(seats, qualifiedToLead)
   const courseName = courseDisplayName(inst.course_type, inst.custom_title)
   const fmtLong = (d: string) =>
     new Date(d + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
@@ -117,7 +141,23 @@ export default async function StaffingInvitePage({
             Hi {instructor.name.split(' ')[0]} —{' '}
             {staffed
               ? 'the crew is full. Plans do shift, so let us know if you want to be a backup.'
-              : 'are you interested in working this course?'}
+              : offered
+                ? `are you interested in working this course as ${roleLabel(offered).toLowerCase()}?`
+                : 'are you interested in working this course?'}
+          </p>
+        )}
+        {/* Which seat is actually theirs. Said plainly, because "3 open" above a
+            person who can only fill one of them is a number that answers
+            somebody else's question — and somebody who says yes to a lead week
+            they were never going to be given has been misled by arithmetic.
+
+            Only when the plan and their sign-offs disagree about the best seat:
+            if the best open seat is already the best seat they could hold, the
+            line above has said it and this would be the same fact twice. */}
+        {!staffed && !cancelled && !over && offered && offered !== 'lead' && (seats.find((s) => s.role === 'lead')?.open ?? 0) > 0 && (
+          <p className="-mt-6 mb-8 text-xs text-zinc-500">
+            The lead seat needs a lead sign-off in this discipline, so we&apos;re asking you
+            about the {roleLabel(offered).toLowerCase()} seat.
           </p>
         )}
 
@@ -131,6 +171,24 @@ export default async function StaffingInvitePage({
           </div>
           <p className="text-zinc-300">{dates}</p>
           {inst.location && <p className="text-zinc-400">{inst.location}</p>}
+
+          {/* The crew, seat by seat, counted against who is on it right now.
+              This is the page's reason for existing rather than the email's: it
+              is read at the moment it is true. A seat they could not be given is
+              still shown — what the week looks like is part of deciding — but it
+              is not offered, and the line below says which one is theirs. */}
+          {seats.length > 0 && !cancelled && !over && (
+            <div className="pt-2 border-t border-zinc-800 mt-2 space-y-1">
+              {seats.map((s) => (
+                <div key={s.role} className="flex items-baseline justify-between gap-4 text-xs">
+                  <span className="text-zinc-400">{roleLabel(s.role)}</span>
+                  <span className={s.open > 0 ? 'text-zinc-300 tabular-nums' : 'text-zinc-600 tabular-nums'}>
+                    {s.open > 0 ? `${s.open} of ${s.seats} open` : `${s.seats} filled`}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
           {!cancelled && inst.status !== 'confirmed' && (
             <p className="text-xs text-yellow-300/80 pt-1">
               This course isn&apos;t confirmed yet — dates and details may still shift.

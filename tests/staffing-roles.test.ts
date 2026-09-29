@@ -5,6 +5,12 @@ import {
   asInstanceRole,
   crewOrder,
   studentFacingRole,
+  crewPlanTotal,
+  crewPlanSummary,
+  hasCrewPlan,
+  openSeats,
+  bestOpenSeatFor,
+  EMPTY_CREW_PLAN,
 } from '@/lib/staffing-roles'
 
 // The split "lead" went through: a wage category, and separately who is running
@@ -77,5 +83,81 @@ describe('what a student is told', () => {
     expect(studentFacingRole(true)).toBe('Course director')
     expect(studentFacingRole(false)).toBe('Instructor')
     expect(studentFacingRole(null)).toBe('Instructor')
+  })
+})
+
+// The crew plan: what the course is planned to run, seat by seat. It exists
+// because one head count could not say what the people were there to do, which
+// is the first thing somebody asked to work the week wants to know.
+describe('the crew plan', () => {
+  const plan = { lead: 1, assist: 2, shadow: 1 }
+
+  it('adds up to the head count the estimate quotes for', () => {
+    expect(crewPlanTotal(plan)).toBe(4)
+  })
+
+  // Empty and zero are different answers, and the difference matters: a course
+  // nobody has broken down must not read as a crew of nobody.
+  it('has no total at all when nobody has broken the crew down', () => {
+    expect(crewPlanTotal(EMPTY_CREW_PLAN)).toBeNull()
+    expect(hasCrewPlan(EMPTY_CREW_PLAN)).toBe(false)
+    expect(crewPlanTotal({ lead: 0, assist: 0, shadow: 0 })).toBe(0)
+    expect(hasCrewPlan({ lead: 0, assist: 0, shadow: 0 })).toBe(true)
+  })
+
+  it('says what it is out loud, skipping the seats it does not have', () => {
+    expect(crewPlanSummary({ lead: 2, assist: 1, shadow: 0 })).toBe('2 lead · 1 assist')
+    expect(crewPlanSummary(EMPTY_CREW_PLAN)).toBe('')
+  })
+
+  // Worked out at read time, every time. This is the number an emailed
+  // call-out cannot tell the truth about, which is why it is only ever on a
+  // page somebody is looking at.
+  it('counts what is open against who is on the course now', () => {
+    const crew = [{ role: 'lead' }, { role: 'assist' }]
+    expect(openSeats(plan, crew)).toEqual([
+      { role: 'lead', seats: 1, filled: 1, open: 0 },
+      { role: 'assist', seats: 2, filled: 1, open: 1 },
+      { role: 'shadow', seats: 1, filled: 0, open: 1 },
+    ])
+  })
+
+  // Over-staffing a category is real and shows as filled, never as a negative
+  // seat somebody could be offered.
+  it('never reports a negative open seat', () => {
+    const over = openSeats({ lead: 1, assist: 0, shadow: null }, [{ role: 'lead' }, { role: 'lead' }])
+    expect(over).toEqual([{ role: 'lead', seats: 1, filled: 2, open: 0 }])
+  })
+})
+
+// What a given person may be offered: their ceiling, not the course's. An
+// assist told a lead seat is open can say yes to a week they were never going
+// to be given.
+describe('the seat somebody is offered', () => {
+  const open = [
+    { role: 'lead' as const, open: 1 },
+    { role: 'assist' as const, open: 1 },
+    { role: 'shadow' as const, open: 1 },
+  ]
+
+  it('offers a lead the lead seat', () => {
+    expect(bestOpenSeatFor(open, true)).toBe('lead')
+  })
+
+  it('never offers a lead seat to somebody without the sign-off', () => {
+    expect(bestOpenSeatFor(open, false)).toBe('assist')
+  })
+
+  // Nobody is too qualified to help: a lead drops to what is actually free.
+  it('drops a lead to the best seat that is actually open', () => {
+    expect(bestOpenSeatFor([{ role: 'lead', open: 0 }, { role: 'shadow', open: 2 }], true)).toBe('shadow')
+  })
+
+  it('offers nothing when the only open seat is out of reach', () => {
+    expect(bestOpenSeatFor([{ role: 'lead', open: 2 }], false)).toBeNull()
+  })
+
+  it('offers nothing on a full crew', () => {
+    expect(bestOpenSeatFor([{ role: 'lead', open: 0 }, { role: 'assist', open: 0 }], true)).toBeNull()
   })
 })

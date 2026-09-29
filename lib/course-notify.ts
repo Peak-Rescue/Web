@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { crewPlanOf, crewPlanSummary } from '@/lib/staffing-roles'
 import { CAPABILITY_ORDER } from '@/lib/capabilities'
 import { slotsToStaff } from '@/lib/course-readiness'
 
@@ -129,7 +130,7 @@ export async function emailAdminsNewCourse(
 
     const { data: course } = await admin
       .from('course_instances')
-      .select('ref_number, course_type, course_category, custom_title, custom_categories, status, internal, client_name, location, starts_at, ends_at, max_students, instructor_slots, notes')
+      .select('ref_number, course_type, course_category, custom_title, custom_categories, status, internal, client_name, location, starts_at, ends_at, max_students, instructor_slots, lead_slots, assist_slots, shadow_slots, notes')
       .eq('id', instanceId)
       .single()
     if (!course) return
@@ -205,7 +206,11 @@ export async function emailAdminsNewCourse(
         course.max_students ? `Students: up to ${course.max_students}` : null,
         // People, not instructor days: a course planned for 1.5 instructors is
         // asking two of us to put a hand up.
-        course.instructor_slots ? `Instructors needed: ${slotsToStaff(course.instructor_slots)}` : null,
+        crewPlanSummary(crewPlanOf(course))
+          ? `Crew: ${crewPlanSummary(crewPlanOf(course))}`
+          : course.instructor_slots
+            ? `Instructors needed: ${slotsToStaff(course.instructor_slots)}`
+            : null,
         course.notes ? `\nNotes: ${course.notes}` : null,
         '',
         `Open it: ${site}/admin/courses/${instanceId}`,

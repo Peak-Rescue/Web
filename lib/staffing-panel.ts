@@ -1,5 +1,5 @@
 import { type createAdminClient } from '@/lib/supabase/admin'
-import { crewOrder } from '@/lib/staffing-roles'
+import { crewOrder, openSeats, EMPTY_CREW_PLAN, type CrewPlan, type InstanceRole } from '@/lib/staffing-roles'
 import { courseCapabilityCategories, courseSector } from '@/lib/capabilities'
 import {
   courseShortName, formatDayList, overlappingDates,
@@ -48,6 +48,9 @@ export type StaffingPanelData = {
       wage — those came apart in 219, and this is the one that decides a course
       is staffed and who may close its tasks. */
   hasDirector: boolean
+  /** The crew plan against who is on it, seat by seat. Empty when nobody has
+      broken the course down — then the panel counts heads, as it always did. */
+  seats: { role: InstanceRole; seats: number; filled: number; open: number }[]
   conflicts: StaffingConflicts
   candidates: InterestCandidate[]
   invites: InterestInviteRow[]
@@ -74,6 +77,11 @@ export async function loadStaffingPanel(
     /** An internal course can be staffed by anyone — there is no client to be
         cleared for, and nobody outside the company on it. */
     internal,
+    /** How many of each category the course is planned to run, so the panel can
+        say which seats are still open rather than only how many heads short it
+        is. Handed in rather than read here: every caller already has the course
+        row, and this panel is on a page that counts its round trips. */
+    plan,
     /** This course's window and its breaks: working out who is double-booked
         needs them before the query that finds it can be built. */
     startsAt,
@@ -85,6 +93,7 @@ export async function loadStaffingPanel(
     courseCategory: string | null
     customCategories: string[] | null
     internal: boolean
+    plan?: CrewPlan
     startsAt: string | null
     endsAt: string | null
     offDays: OffDayRange[]
@@ -170,6 +179,7 @@ export async function loadStaffingPanel(
       .map((i) => ({ id: i.id, name: i.name })),
     unassigned: unassigned.map((i) => ({ id: i.id, name: i.name })),
     hasDirector: (assigned ?? []).some((a) => a.in_charge),
+    seats: openSeats(plan ?? EMPTY_CREW_PLAN, (assigned ?? []).map((a) => ({ role: a.role as string | null }))),
     conflicts,
     candidates: unassigned.map((i) => ({
       id: i.id,
