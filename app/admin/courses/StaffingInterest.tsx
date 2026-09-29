@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { INSTANCE_ROLES, roleLabel, type InstanceRole } from '@/lib/staffing-roles'
 import { useRouter } from 'next/navigation'
 import { assignInstructor } from './actions'
 import { sendInterestInvites, deleteInterestInvite } from './staffing-actions'
@@ -25,14 +26,16 @@ export default function StaffingInterest({
   instanceId,
   candidates,
   invites,
-  hasLead,
+  hasCrew,
   preselect = true,
   conflicts = {},
 }: {
   instanceId: string
   candidates: InterestCandidate[]
   invites: InterestInviteRow[]
-  hasLead: boolean
+  /** Whether anybody is on the course yet — it only picks which wage button
+      is filled in. */
+  hasCrew: boolean
   // Whether opening the picker starts with everyone qualified already ticked.
   // On a client course that's the usual intent. On an internal one, offering a
   // place is deliberate — who gets asked is the decision, so nobody is
@@ -107,7 +110,7 @@ export default function StaffingInterest({
     }
   }
 
-  async function assign(instructorId: string, role: 'lead' | 'assist') {
+  async function assign(instructorId: string, role: InstanceRole) {
     if (assigningId) return
     setAssigningId(instructorId)
     try {
@@ -250,20 +253,33 @@ export default function StaffingInterest({
                     <span className="text-xs text-teal-400">Assigned ✓</span>
                   ) : inv.interested === true ? (
                     <>
-                      <button
-                        onClick={() => assign(inv.instructorId, hasLead ? 'assist' : 'lead')}
-                        disabled={assigningId !== null}
-                        className="text-xs px-2.5 py-1 rounded bg-pr-red hover:bg-pr-red-dark text-white font-medium transition-colors disabled:opacity-40"
-                      >
-                        {assigningId === inv.instructorId ? 'Assigning…' : `Assign ${hasLead ? 'assist' : 'lead'}`}
-                      </button>
-                      <button
-                        onClick={() => assign(inv.instructorId, hasLead ? 'lead' : 'assist')}
-                        disabled={assigningId !== null}
-                        className="text-xs px-2.5 py-1 rounded border border-zinc-700 hover:border-zinc-500 text-zinc-300 transition-colors disabled:opacity-40"
-                      >
-                        as {hasLead ? 'lead' : 'assist'}
-                      </button>
+                      {/* One button per wage category — the pair this replaced
+                          was "the default, and the other one", which only ever
+                          worked while there were two. The likely one is filled
+                          in; being in charge is set on the crew row, because it
+                          is not what you are deciding at this moment. */}
+                      {assigningId === inv.instructorId ? (
+                        <span className="text-xs text-zinc-500">Assigning…</span>
+                      ) : (
+                        <span className="flex items-center gap-1">
+                          <span className="text-xs text-zinc-600">Assign as</span>
+                          {INSTANCE_ROLES.map((r) => (
+                            <button
+                              key={r}
+                              onClick={() => assign(inv.instructorId, r)}
+                              disabled={assigningId !== null}
+                              title={`Staff them at the ${roleLabel(r).toLowerCase()} rate`}
+                              className={`text-xs px-2 py-1 rounded font-medium transition-colors disabled:opacity-40 ${
+                                r === (hasCrew ? 'assist' : 'lead')
+                                  ? 'bg-pr-red hover:bg-pr-red-dark text-white'
+                                  : 'border border-zinc-700 hover:border-zinc-500 text-zinc-300'
+                              }`}
+                            >
+                              {roleLabel(r)}
+                            </button>
+                          ))}
+                        </span>
+                      )}
                     </>
                   ) : null}
                   <button

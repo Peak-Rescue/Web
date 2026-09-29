@@ -14,6 +14,7 @@
 // sync target — the import tool only retires legacy course events from it.
 
 import { createSign } from 'crypto'
+import { crewOrder } from '@/lib/staffing-roles'
 import { type createAdminClient } from '@/lib/supabase/admin'
 import { courseEventTitle } from '@/lib/courses'
 
@@ -198,7 +199,7 @@ export async function syncCourseCalendar(admin: Admin, instanceId: string): Prom
       admin.from('course_instances').select(COURSE_COLS).eq('id', instanceId).maybeSingle(),
       admin
         .from('instance_instructors')
-        .select('role, instructors(name, email, calendar_invites)')
+        .select('role, in_charge, instructors(name, email, calendar_invites)')
         .eq('instance_id', instanceId),
     ])
     if (!c) return
@@ -207,11 +208,12 @@ export async function syncCourseCalendar(admin: Admin, instanceId: string): Prom
     const crew: CrewMember[] = (
       (crewRows ?? []) as unknown as {
         role: string
+        in_charge: boolean | null
         instructors: { name: string; email: string | null; calendar_invites: boolean } | null
       }[]
     )
       .filter((a) => a.instructors)
-      .sort((a, b) => (a.role === 'lead' ? 0 : 1) - (b.role === 'lead' ? 0 : 1))
+      .sort((a, b) => crewOrder({ ...a, name: a.instructors!.name }, { ...b, name: b.instructors!.name }))
       .map((a) => ({
         name: a.instructors!.name,
         email: a.instructors!.email,

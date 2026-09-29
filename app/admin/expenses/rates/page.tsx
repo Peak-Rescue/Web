@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation'
+import { INSTANCE_ROLES, roleLabel } from '@/lib/staffing-roles'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -128,7 +129,7 @@ export default async function AdminExpenseRatesPage() {
   // the scale is the common one and the list is read as a scale.
   const { data: payRateRows } = await admin
     .from('pay_field_rates')
-    .select('hourly')
+    .select('hourly, role')
     .eq('active', true)
     .order('hourly', { ascending: false })
 
@@ -315,13 +316,30 @@ export default async function AdminExpenseRatesPage() {
 
           <h3 className="text-xs uppercase tracking-wide text-zinc-500 mt-6 mb-1">Field hourly rates</h3>
           <p className="text-xs text-zinc-500 mb-3">
-            The rates somebody can be put on. Who is on which is set on their instructor page, and a course
-            can override it for that course.
+            What each staffing category pays. How somebody is staffed on a course is what puts them on a
+            rate — a course&rsquo;s crew list prices itself — and the course can still pay somebody something
+            else by picking it on their crew row in the actuals.
           </p>
           <div className="bg-zinc-900 rounded-lg border border-zinc-800 divide-y divide-zinc-800">
             {(payRateRows ?? []).map((r) => (
               <div key={String(r.hourly)} className="flex items-center justify-between gap-4 px-4 py-2.5">
-                <p className="text-sm font-medium text-zinc-200">{fmtRate(Number(r.hourly))} / hour</p>
+                <p className="text-sm font-medium text-zinc-200">
+                  {r.role ? (
+                    <>
+                      <span className="text-zinc-100">{roleLabel(r.role as string)}</span>
+                      <span className="text-zinc-500"> · </span>
+                      {fmtRate(Number(r.hourly))} / hour
+                    </>
+                  ) : (
+                    <>
+                      {fmtRate(Number(r.hourly))} / hour
+                      {/* A rate no category is on: somebody was put on it once,
+                          and the courses priced at it still have to name a rate
+                          that exists. */}
+                      <span className="ml-2 text-xs font-normal text-zinc-600">no category</span>
+                    </>
+                  )}
+                </p>
                 <RetirePayRateButton hourly={Number(r.hourly)} />
               </div>
             ))}
@@ -343,6 +361,23 @@ export default async function AdminExpenseRatesPage() {
                 placeholder="45"
                 className="w-28 bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500"
               />
+            </div>
+            <div>
+              <label className="block text-xs text-zinc-400 mb-1">Is the wage for</label>
+              {/* Naming a category here is how a raise is given: this becomes
+                  what the category pays and the rate it replaces is retired.
+                  Leaving it blank adds a rate somebody can be put on by hand
+                  without moving anybody else's pay. */}
+              <select
+                name="role"
+                defaultValue=""
+                className="bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500"
+              >
+                <option value="">Nobody in particular</option>
+                {INSTANCE_ROLES.map((r) => (
+                  <option key={r} value={r}>{roleLabel(r)}</option>
+                ))}
+              </select>
             </div>
             <SaveButton className="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 text-white rounded text-sm font-medium transition-colors">
               Add rate

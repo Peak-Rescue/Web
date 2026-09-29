@@ -1,6 +1,7 @@
 'use server'
 
 import { randomUUID } from 'crypto'
+import { isInstanceRole } from '@/lib/staffing-roles'
 import { revalidatePath } from 'next/cache'
 import { requireAdminUser } from '@/lib/course-access'
 import { round2 } from '@/lib/expenses'
@@ -821,15 +822,41 @@ export async function updateOrgSetting(key: string, formData: FormData) {
 // ─── The hourly rates people can be on ──────────────────────────────────────
 // A library of a few numbers, because a raise is a row. The rate is its own
 // key: two rows both saying $40 would be one rate entered twice.
+//
+// Since 219 a rate can also name the staffing category it is the wage for, and
+// that is what lets a course's crew list price itself: how somebody was staffed
+// says what their hour costs. One active rate per category.
 
 export async function addPayFieldRate(formData: FormData) {
   const { admin } = await requireAdminUser()
   const hourly = Number(String(formData.get('hourly') ?? '').trim())
   if (!Number.isFinite(hourly) || hourly <= 0 || hourly > 10000) throw new Error('That is not an hourly rate')
+  // Which staffing category this is the wage for, or none: a rate somebody was
+  // put on as a one-off is still a rate, it just is not what a category pays.
+  const roleRaw = String(formData.get('role') ?? '').trim()
+  const role = roleRaw === '' ? null : isInstanceRole(roleRaw) ? roleRaw : null
+  if (roleRaw !== '' && role === null) throw new Error('Not a staffing category')
+
+  // A category has one standing wage, so naming this rate as the category's
+  // retires whichever rate held it. That is what a raise is: the old number
+  // stops being on offer and every course already priced at it still names a
+  // rate that exists.
+  if (role) {
+    await admin
+      .from('pay_field_rates')
+      .update({ active: false })
+      .eq('role', role)
+      .eq('active', true)
+      .neq('hourly', round2(hourly))
+    // The index allows one active rate per category, so the rate being taken
+    // over has to let go of the category rather than just go quiet.
+    await admin.from('pay_field_rates').update({ role: null }).eq('role', role).eq('active', false)
+  }
+
   // Re-adding a retired rate brings it back rather than failing on the key.
   const { error } = await admin
     .from('pay_field_rates')
-    .upsert({ hourly: round2(hourly), active: true }, { onConflict: 'hourly' })
+    .upsert({ hourly: round2(hourly), active: true, role }, { onConflict: 'hourly' })
   if (error) throw new Error(error.message)
   revalidatePath('/admin/expenses/rates')
   revalidatePath('/portal', 'layout')

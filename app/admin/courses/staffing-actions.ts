@@ -1,6 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { type InstanceRole } from '@/lib/staffing-roles'
 import { after } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -171,7 +172,7 @@ export async function sendInterestInvites(
 // of creating a duplicate.
 export async function addGuestInstructor(
   instanceId: string,
-  input: { firstName: string; lastName: string; email: string; role: 'lead' | 'assist' }
+  input: { firstName: string; lastName: string; email: string; role: InstanceRole }
 ): Promise<{ name: string; existed: boolean }> {
   await requireAdmin()
   const admin = createAdminClient()
@@ -192,9 +193,27 @@ export async function addGuestInstructor(
 
   const instructorId = existing?.id ?? (await adminCreateInstructor(firstName, lastName, email)).id
 
+  // The first person on a course is running it until somebody says otherwise —
+  // the same rule assignInstructor follows, and it has to be here too or a
+  // course staffed entirely with guests ends up with nobody answering for it.
+  const { data: inCharge } = await admin
+    .from('instance_instructors')
+    .select('id')
+    .eq('instance_id', instanceId)
+    .eq('in_charge', true)
+    .limit(1)
+
   const { error } = await admin
     .from('instance_instructors')
-    .upsert({ instance_id: instanceId, instructor_id: instructorId, role: input.role }, { onConflict: 'instance_id,instructor_id' })
+    .upsert(
+      {
+        instance_id: instanceId,
+        instructor_id: instructorId,
+        role: input.role,
+        ...((inCharge ?? []).length === 0 ? { in_charge: true } : {}),
+      },
+      { onConflict: 'instance_id,instructor_id' }
+    )
   if (error) throw new Error(error.message)
 
   // Portal invite (or a sign-in link if they already have an account).

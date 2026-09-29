@@ -1,6 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { crewOrder } from '@/lib/staffing-roles'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { requireCourseStaff } from '@/lib/course-access'
 import { normalizeDocLink } from '@/lib/doc-links'
@@ -815,7 +816,7 @@ export async function courseCrew(instanceId: string): Promise<Askable[]> {
   const [{ data: assigned }, { data: roster }] = await Promise.all([
     admin
       .from('instance_instructors')
-      .select('role, instructors(id, name, email)')
+      .select('role, in_charge, instructors(id, name, email)')
       .eq('instance_id', instanceId),
     // Everybody else on the books, in one round trip with the crew: the
     // picker shows both, and two presses to see the second half would be a
@@ -827,7 +828,7 @@ export async function courseCrew(instanceId: string): Promise<Askable[]> {
   const mineIs = (email: string) => email.trim().toLowerCase() === mine
 
   const rows = ((assigned ?? []) as unknown as
-    { role: string; instructors: { id: string; name: string; email: string | null } | null }[])
+    { role: string; in_charge: boolean | null; instructors: { id: string; name: string; email: string | null } | null }[])
     .filter((r) => r.instructors?.email)
 
   const crew = rows
@@ -835,10 +836,11 @@ export async function courseCrew(instanceId: string): Promise<Askable[]> {
       name: r.instructors!.name,
       email: r.instructors!.email!,
       role: r.role,
+      in_charge: r.in_charge,
       isMe: mineIs(r.instructors!.email!),
       onCourse: true,
     }))
-    .sort((a, b) => (a.role === 'lead' ? 0 : 1) - (b.role === 'lead' ? 0 : 1) || a.name.localeCompare(b.name))
+    .sort(crewOrder)
 
   const staffed = new Set(rows.map((r) => r.instructors!.id))
   const others = ((roster ?? []) as { id: string; name: string; email: string | null; instructor_role: string }[])

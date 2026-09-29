@@ -32,6 +32,7 @@ import { GEAR_ENTRIES_SELECT, KIT_LABEL } from '@/lib/gear'
 import { courseCapabilityCategories } from '@/lib/capabilities'
 import { GEAR_ENTRY_COLUMNS, gearLabel, gearQuantity, isChoice, placeSets, productName } from '@/lib/gear'
 import { courseDisplayName, computeBlocks, courseDates, courseEventTitle, isJob, workNoun, WorkNoun } from '@/lib/courses'
+import { crewOrder } from '@/lib/staffing-roles'
 import CourseTasksPanel, { type CourseTask, type TaskPerson } from '@/components/CourseTasksPanel'
 import PdfLink from '@/components/PdfLink'
 import { ForPill } from '@/components/AudiencePills'
@@ -137,8 +138,12 @@ export type Viewer = {
   userId: string | null
   isAdmin: boolean
   isInstructor: boolean
-  // The course role, not the site role: a lead gets the manage controls.
+  // What the course pays them — lead, assist or shadow. Display only: it is a
+  // wage band and grants nothing.
   instructorRole: string | null
+  /** Whether they are running this course. This is what the manage controls
+      hang off, and any number of the crew can be it. */
+  inCharge: boolean
   // Admin previewing as someone else. A guest can't preview anything.
   viewAs: 'student' | 'instructor' | null
   /** Which half of the job the jump bar shows an admin. Null means work it out
@@ -156,6 +161,7 @@ export const GUEST: Viewer = {
   isAdmin: false,
   isInstructor: false,
   instructorRole: null,
+  inCharge: false,
   viewAs: null,
   mode: null,
   openSection: null,
@@ -203,11 +209,13 @@ export default async function CourseView({
   const { userId, isAdmin, isInstructor, viewAs } = viewer
   const showAsAdmin = viewAs ? false : isAdmin
   const showAsInstructor = viewAs ? viewAs === 'instructor' : isInstructor
-  // Instructor preview keeps your real course role, so a lead previewing
-  // still gets the lead's manage controls (just not the admin-only rows).
+  // Instructor preview keeps your real standing on the course, so somebody
+  // running it still gets the manage controls while previewing (just not the
+  // admin-only rows). Lead wage grants nothing on its own — three people can
+  // be on it and the course still has one person answering for it.
   const canManageTasks = viewAs
-    ? viewAs === 'instructor' && viewer.instructorRole === 'lead'
-    : isAdmin || viewer.instructorRole === 'lead'
+    ? viewAs === 'instructor' && viewer.inCharge
+    : isAdmin || viewer.inCharge
 
   // Everything else in a second parallel round (roles known, filters set).
   const showTasks = showAsAdmin || showAsInstructor
@@ -345,7 +353,7 @@ export default async function CourseView({
         .order('off_date'),
       modulesQuery,
       admin.from('instance_instructors')
-        .select('role, instructors(name, email, profile_id, slug, active, title, avatar, avatar_position, avatar_scale, show_phone, show_email, profiles(phone))')
+        .select('role, in_charge, instructors(name, email, profile_id, slug, active, title, avatar, avatar_position, avatar_scale, show_phone, show_email, profiles(phone))')
         .eq('instance_id', id),
       showTasks ? loadTasksWithDocs(admin, id) : Promise.resolve([]),
       showTasks
@@ -1712,7 +1720,16 @@ export default async function CourseView({
           {(instructors ?? []).length > 0 && (
             <div>
               <div className="grid sm:grid-cols-2 gap-2">
-                {(instructors ?? []).map((a, i) => {
+                {[...(instructors ?? [])]
+                  // Whoever is running the course reads first. A student
+                  // scanning for who to ask should not have to.
+                  .sort((x, y) =>
+                    crewOrder(
+                      { role: x.role, in_charge: x.in_charge, name: (x.instructors as unknown as { name?: string } | null)?.name },
+                      { role: y.role, in_charge: y.in_charge, name: (y.instructors as unknown as { name?: string } | null)?.name }
+                    )
+                  )
+                  .map((a, i) => {
                   const p = a.instructors as unknown as {
                     name: string; slug: string | null; active: boolean | null; email: string | null
                     show_phone: boolean | null
@@ -1726,6 +1743,8 @@ export default async function CourseView({
                       key={i}
                       name={p?.name ?? 'Instructor'}
                       role={a.role}
+                      inCharge={a.in_charge}
+                      showRank={showTasks}
                       // /team/[slug] only serves active instructors — anyone else
                       // would land on a 404, so they stay unlinked.
                       slug={p?.active ? p.slug : null}

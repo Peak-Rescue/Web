@@ -207,6 +207,15 @@ export type PayPerson = {
   /** What this course pays them and for which days. All exceptions: null
       fields follow the course. */
   terms: PayTerms
+  /** How they were staffed — lead, assist or shadow. The wage follows it, so
+      this is where `terms.fieldHourly` comes from on the ordinary course where
+      nobody typed a rate. Display only here: the arithmetic reads the resolved
+      rate, never the category. */
+  role?: string | null
+  /** Whether the rate came from their category rather than from a rate typed
+      onto this course. What lets the crew table say so instead of showing a
+      number with no visible source. */
+  rateFromRole?: boolean
 }
 
 export type PayLineDraft = {

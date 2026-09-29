@@ -56,7 +56,7 @@ export default async function StaffingInvitePage({
       .single(),
     admin
       .from('instance_instructors')
-      .select('role, instructor_id')
+      .select('role, in_charge, instructor_id')
       .eq('instance_id', invite.instance_id),
   ])
   if (!inst) notFound()
@@ -81,7 +81,7 @@ export default async function StaffingInvitePage({
     !cancelled && !over &&
     !assigned.some((c) => c.instructor_id === invite.instructor_id) &&
     assigned.length >= slotsToStaff(inst.instructor_slots) &&
-    assigned.some((c) => c.role === 'lead')
+    assigned.some((c) => c.in_charge)
 
   return (
     <main className="min-h-screen bg-zinc-950 text-white">

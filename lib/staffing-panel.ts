@@ -1,4 +1,5 @@
 import { type createAdminClient } from '@/lib/supabase/admin'
+import { crewOrder } from '@/lib/staffing-roles'
 import { courseCapabilityCategories, courseSector } from '@/lib/capabilities'
 import {
   courseShortName, formatDayList, overlappingDates,
@@ -40,10 +41,13 @@ export type InterestInviteRow = {
 export type StaffingPanelData = {
   instanceId: string
   internal: boolean
-  assigned: { instructorId: string; name: string; role: string }[]
+  assigned: { instructorId: string; name: string; role: string; inCharge: boolean }[]
   qualified: { id: string; name: string }[]
   unassigned: { id: string; name: string }[]
-  hasLead: boolean
+  /** Whether anybody is running this course. Not whether anybody is on lead
+      wage — those came apart in 219, and this is the one that decides a course
+      is staffed and who may close its tasks. */
+  hasDirector: boolean
   conflicts: StaffingConflicts
   candidates: InterestCandidate[]
   invites: InterestInviteRow[]
@@ -104,7 +108,7 @@ export async function loadStaffingPanel(
 
   const [{ data: assigned }, { data: allInstructors }, { data: inviteRows }, { data: nearby }] = await Promise.all([
     admin.from('instance_instructors')
-      .select('instructor_id, role, instructors(name, profile_id)')
+      .select('instructor_id, role, in_charge, instructors(name, profile_id)')
       .eq('instance_id', instanceId),
     admin.from('instructors')
       .select('id, name, email, instructor_role, sectors, instructor_capabilities(category, role)')
@@ -153,16 +157,19 @@ export async function loadStaffingPanel(
   return {
     instanceId,
     internal,
-    assigned: (assigned ?? []).map((a) => ({
-      instructorId: a.instructor_id,
-      name: (a.instructors as unknown as { name: string } | null)?.name ?? a.instructor_id,
-      role: a.role,
-    })),
+    assigned: (assigned ?? [])
+      .map((a) => ({
+        instructorId: a.instructor_id,
+        name: (a.instructors as unknown as { name: string } | null)?.name ?? a.instructor_id,
+        role: a.role,
+        inCharge: Boolean(a.in_charge),
+      }))
+      .sort((x, y) => crewOrder({ ...x, in_charge: x.inCharge }, { ...y, in_charge: y.inCharge })),
     qualified: unassigned
       .filter((i) => hasSkill(i) && clearedForSector(i))
       .map((i) => ({ id: i.id, name: i.name })),
     unassigned: unassigned.map((i) => ({ id: i.id, name: i.name })),
-    hasLead: (assigned ?? []).some((a) => a.role === 'lead'),
+    hasDirector: (assigned ?? []).some((a) => a.in_charge),
     conflicts,
     candidates: unassigned.map((i) => ({
       id: i.id,

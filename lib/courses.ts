@@ -1,4 +1,5 @@
 import { services, categoryMeta, type ServiceCategory } from './data/services'
+import { crewOrder } from '@/lib/staffing-roles'
 
 export type DateBlock = { starts_at: string; ends_at: string }
 export type OffDayRange = { off_date: string; end_date?: string | null }
@@ -276,12 +277,11 @@ export function courseEventTitle(
     .join(' — ')
 }
 
-// Lead(s) first, first names only — the team's long-standing manual
-// calendar-event convention.
-export function crewFirstNames(crew: { role: string; name: string }[]): string[] {
-  return [...crew]
-    .sort((a, b) => Number(a.role !== 'lead') - Number(b.role !== 'lead'))
-    .map((m) => m.name.split(' ')[0])
+// Whoever is running it first, first names only — the team's long-standing
+// manual calendar-event convention. It used to sort on lead wage, which was the
+// same list only while a course had one lead.
+export function crewFirstNames(crew: { role: string; name: string; in_charge?: boolean | null }[]): string[] {
+  return [...crew].sort(crewOrder).map((m) => m.name.split(' ')[0])
 }
 
 // Compact display label for a course instance — the human parts (type,

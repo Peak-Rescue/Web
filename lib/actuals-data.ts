@@ -66,6 +66,9 @@ export type LoadedActuals = {
   paySettings: PaySettings
   /** The hourly rates somebody can be put on, for the per-person picker. */
   fieldRateChoices: number[]
+  /** What each staffing category pays an hour, so the picker can name the
+      category beside the number. */
+  roleHourly: Record<string, number>
   rolled: Actuals
 }
 
@@ -139,15 +142,16 @@ export async function loadActuals(admin: Admin, instanceId: string): Promise<Loa
     // round trips for one small table.
     admin.from('org_settings').select('key, value'),
     admin.from('profiles').select('id, first_name, last_name'),
-    // The crew, with the two facts that travel with a person: whether the
-    // premium is theirs (the account's FLSA flag, 039) and whether their
-    // course days are paid at all. What they earn an hour does not travel
-    // with them — it is checked on this course, below.
+    // The crew, with the two facts that travel with a person — whether the
+    // premium is theirs (the account's FLSA flag, 039) and whether their course
+    // days are paid at all — and the one that does not: how they were staffed.
+    // The wage follows the staffing, so `role` is where a rate nobody has typed
+    // comes from.
     admin
       .from('instance_instructors')
-      .select('instructors(id, name, profile_id, paid_for_days, profiles(is_exempt))')
+      .select('role, instructors(id, name, profile_id, paid_for_days, profiles(is_exempt))')
       .eq('instance_id', instanceId),
-    admin.from('pay_field_rates').select('hourly').eq('active', true).order('hourly', { ascending: false }),
+    admin.from('pay_field_rates').select('hourly, role').eq('active', true).order('hourly', { ascending: false }),
     admin
       .from('course_pay_rates')
       .select('instructor_id, field_hourly, starts_at, ends_at, travel_days, hours_per_day')
@@ -256,10 +260,20 @@ export async function loadActuals(admin: Admin, instanceId: string): Promise<Loa
     paid_for_days: boolean | null
     profiles: { is_exempt: boolean | null } | null
   }
+  // The wage each staffing category is on. 219 named them, so how somebody was
+  // staffed now answers what their hour costs — which is the whole reason the
+  // categories exist, and it used to be a number typed from memory onto every
+  // person on every course.
+  const roleHourly: Record<string, number> = Object.fromEntries(
+    (fieldRateRows ?? [])
+      .filter((r) => r.role)
+      .map((r) => [r.role as string, Number(r.hourly)])
+  )
+
   const payPeople: PayPerson[] = ((rosterRows ?? [])
-    .map((r) => r.instructors as unknown as RosterRow | null)
-    .filter((i): i is RosterRow => Boolean(i?.id && i?.name)))
-    .map((i) => ({
+    .map((r) => ({ role: r.role as string | null, person: r.instructors as unknown as RosterRow | null }))
+    .filter((r): r is { role: string | null; person: RosterRow } => Boolean(r.person?.id && r.person?.name)))
+    .map(({ role, person: i }) => ({
       id: i.id,
       profileId: i.profile_id ?? null,
       name: i.name as string,
@@ -268,7 +282,20 @@ export async function loadActuals(admin: Admin, instanceId: string): Promise<Loa
       exempt: Boolean(i.profiles?.is_exempt),
       // Absent counts as paid, which is what everybody but Micah is.
       paidForDays: i.paid_for_days !== false,
-      terms: payTerms[i.id] ?? NO_TERMS,
+      terms: {
+        ...(payTerms[i.id] ?? NO_TERMS),
+        // The course's own row still wins — that is what it is for, and a rate
+        // somebody accepted must not move because a category's wage was raised
+        // afterwards. Absent, the category answers, and a category with no
+        // named wage leaves it null: still a question for a human, never a zero
+        // to multiply hours by.
+        fieldHourly: payTerms[i.id]?.fieldHourly ?? (role ? roleHourly[role] ?? null : null),
+      },
+      /** How they were staffed, so the crew table can say where a rate nobody
+          typed came from. */
+      role: role ?? null,
+      rateFromRole:
+        payTerms[i.id]?.fieldHourly == null && Boolean(role && roleHourly[role] !== undefined),
     }))
     .sort((a, b) => a.name.localeCompare(b.name))
 
@@ -297,6 +324,7 @@ export async function loadActuals(admin: Admin, instanceId: string): Promise<Loa
     payPeople,
     paySettings,
     fieldRateChoices: (fieldRateRows ?? []).map((r) => Number(r.hourly)),
+    roleHourly,
     peopleById: Object.fromEntries([
       ...(profileRows ?? []).map((p) => [
         p.id as string,

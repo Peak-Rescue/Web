@@ -3,6 +3,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import WaiverDetach from '@/components/WaiverDetach'
 import PhoneText from '@/components/PhoneText'
+import { roleLabel, DIRECTOR_LABEL, DIRECTOR_SHORT } from '@/lib/staffing-roles'
 
 // Presentational shell for the portal page. Every top-level block on a course
 // is a Section: same icon-and-rule header, same spacing, its own anchor. The
@@ -147,13 +148,20 @@ export function SubHead({ title, note, badge }: { title: string; note?: string; 
 }
 
 /**
- * Roster row — the role rides in a chip beside the name, carrying both the
- * word and a colour. It used to be grey subtext under the name: spelled out,
- * which was the point, but at the same weight as the email below it, so
- * telling the lead from the assistants meant reading every card. The colour
- * is the thing you can scan (teal lead / blue assistant, the same pairing the
- * staffing editor uses) and the word is what makes it legible to anyone who
- * cannot use the colour — neither channel carries it alone.
+ * Roster row — what this person is rides in a chip beside the name, carrying
+ * both the word and a colour. It used to be grey subtext under the name:
+ * spelled out, which was the point, but at the same weight as the email below
+ * it, so telling the lead from the assistants meant reading every card. The
+ * colour is the thing you can scan and the word is what makes it legible to
+ * anyone who cannot use the colour — neither channel carries it alone.
+ *
+ * What the chip *says* depends on who is reading, because the two audiences
+ * are asking different questions. A student wants to know who is running their
+ * course, and teal now answers exactly that. The wage bands behind it — lead,
+ * assist, shadow — are ours: a student has no use for the difference between an
+ * assist and a shadow, and "Shadow" beside somebody teaching them would read as
+ * a warning about the person. The crew sees both, because for them the pay band
+ * is a fact about the week.
  *
  * An instructor with a public bio page links to it, so a student can find out
  * who they're spending the week with.
@@ -161,6 +169,8 @@ export function SubHead({ title, note, badge }: { title: string; note?: string; 
 export function InstructorCard({
   name,
   role,
+  inCharge,
+  showRank,
   slug,
   avatar,
   avatarPosition,
@@ -170,6 +180,12 @@ export function InstructorCard({
 }: {
   name: string
   role: string
+  /** Running the course. Any number of the crew can be, so this is not "the
+      one at the top" — it is everyone a student can take a question to. */
+  inCharge?: boolean
+  /** Whether the reader is staff, and so whether the wage band is shown at
+      all. Off for students and for a share link. */
+  showRank?: boolean
   slug?: string | null
   avatar?: string | null
   avatarPosition?: string | null
@@ -180,7 +196,8 @@ export function InstructorCard({
   email?: string | null
   phone?: string | null
 }) {
-  const lead = role === 'lead'
+  const director = Boolean(inCharge)
+  const lead = director
   const initials = name
     .split(/\s+/)
     .slice(0, 2)
@@ -221,17 +238,28 @@ export function InstructorCard({
               </Link>
             ) : name}
           </span>
-          {/* shrink-0: the name truncates, the role never does — a clipped
-              "Assista…" would be worse than a short name. */}
-          <span
-            className={`shrink-0 px-1.5 py-px rounded border text-[10px] font-semibold uppercase tracking-wide ${
-              lead
-                ? 'bg-teal-500/10 border-teal-500/30 text-teal-300'
-                : 'bg-blue-500/10 border-blue-500/30 text-blue-300'
-            }`}
-          >
-            {lead ? 'Lead' : 'Assistant'}
-          </span>
+          {/* shrink-0: the name truncates, the chips never do — a clipped
+              "Direct…" would be worse than a short name. */}
+          {director && (
+            <span className="shrink-0 px-1.5 py-px rounded border text-[10px] font-semibold uppercase tracking-wide bg-teal-500/10 border-teal-500/30 text-teal-300">
+              {showRank ? DIRECTOR_SHORT : DIRECTOR_LABEL}
+            </span>
+          )}
+          {!director && !showRank && (
+            <span className="shrink-0 px-1.5 py-px rounded border text-[10px] font-semibold uppercase tracking-wide bg-blue-500/10 border-blue-500/30 text-blue-300">
+              Instructor
+            </span>
+          )}
+          {/* The pay band, to the crew only, and deliberately quiet: it is a
+              fact you can look up, not one you scan the roster for. Colour is
+              spoken for — teal means the person answering for the course — and
+              three more shades would only teach everyone to ignore all of
+              them. */}
+          {showRank && role && (
+            <span className="shrink-0 text-[10px] font-medium uppercase tracking-wide text-zinc-500">
+              {roleLabel(role)}
+            </span>
+          )}
         </div>
         {(email || phone) && (
           <div className="text-[11px] text-zinc-500 leading-tight truncate">

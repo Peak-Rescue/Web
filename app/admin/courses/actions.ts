@@ -12,6 +12,7 @@ import { sendMail } from '@/lib/mailer'
 import { announcesChanges, emailAdminsNewCourse } from '@/lib/course-notify'
 import { clampOffDays, dayShift, strokeOffDays, type OffSpan } from '@/lib/courses'
 import { assertCustomCourseTagged } from '@/lib/capabilities'
+import { asInstanceRole } from '@/lib/staffing-roles'
 
 const fmtLong = (d: string) =>
   new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
@@ -1127,21 +1128,43 @@ export async function assignInstructor(instanceId: string, formData: FormData) {
   const admin = createAdminClient()
 
   const instructor_id = formData.get('instructor_id') as string
-  const role          = (formData.get('role') as string) || 'assist'
+  const role          = asInstanceRole(formData.get('role'))
 
   if (!instructor_id) return
 
-  // Distinguish a new assignment from a role change so only the former emails.
-  const { data: existing } = await admin
-    .from('instance_instructors')
-    .select('id')
-    .eq('instance_id', instanceId)
-    .eq('instructor_id', instructor_id)
-    .maybeSingle()
+  // Distinguish a new assignment from a wage change so only the former emails,
+  // and read who is already running the course in the same trip.
+  const [{ data: existing }, { data: crew }] = await Promise.all([
+    admin
+      .from('instance_instructors')
+      .select('id')
+      .eq('instance_id', instanceId)
+      .eq('instructor_id', instructor_id)
+      .maybeSingle(),
+    admin
+      .from('instance_instructors')
+      .select('id')
+      .eq('instance_id', instanceId)
+      .eq('in_charge', true)
+      .limit(1),
+  ])
+
+  // The first person on a course is running it until somebody says otherwise.
+  // Not because leading and being in charge are the same thing — they are the
+  // two facts this column stopped conflating — but because a course with one
+  // instructor and nobody answering for it is a readiness warning about
+  // nothing, and staffing the second person is when the question gets real.
+  //
+  // Only ever set on the way in: upserting it on a wage change would quietly
+  // hand the course back to whoever was edited last.
+  const firstOnCourse = !existing && (crew ?? []).length === 0
 
   const { error } = await admin
     .from('instance_instructors')
-    .upsert({ instance_id: instanceId, instructor_id, role }, { onConflict: 'instance_id,instructor_id' })
+    .upsert(
+      { instance_id: instanceId, instructor_id, role, ...(firstOnCourse ? { in_charge: true } : {}) },
+      { onConflict: 'instance_id,instructor_id' }
+    )
 
   if (error) throw new Error(error.message)
 
@@ -1198,6 +1221,52 @@ export async function assignInstructor(instanceId: string, formData: FormData) {
   revalidatePath('/admin/courses')
   revalidatePath(`/portal/${instanceId}`)
   revalidatePath('/admin')
+}
+
+// What the course pays somebody, changed on the crew row itself. Its own
+// action rather than a re-assign: an upsert through assignInstructor would
+// re-read who is in charge and re-send the "you're staffed" mail on a row that
+// has been there for weeks.
+export async function setCourseRole(instanceId: string, instructorId: string, role: string) {
+  await requireAdmin()
+  const admin = createAdminClient()
+
+  const { error } = await admin
+    .from('instance_instructors')
+    .update({ role: asInstanceRole(role) })
+    .eq('instance_id', instanceId)
+    .eq('instructor_id', instructorId)
+  if (error) throw new Error(error.message)
+
+  revalidatePath(`/admin/courses/${instanceId}`)
+  revalidatePath('/admin/courses')
+}
+
+// Who is actually running the course in the field. Any number of the crew can
+// be, and nothing stops it being somebody on assist wage — a strong assist
+// running a course is a real week, and making them a lead on paper to describe
+// it would put the wrong number on their hours.
+//
+// The last one cannot simply be taken away silently: a course with nobody in
+// charge has no task authority and reads as unstaffed, so the caller is told
+// rather than left to discover it on the readiness chain.
+export async function setInCharge(instanceId: string, instructorId: string, inCharge: boolean) {
+  await requireAdmin()
+  const admin = createAdminClient()
+
+  const { error } = await admin
+    .from('instance_instructors')
+    .update({ in_charge: inCharge })
+    .eq('instance_id', instanceId)
+    .eq('instructor_id', instructorId)
+  if (error) throw new Error(error.message)
+
+  // The crew is in the Google event title, and who leads it comes first.
+  after(() => syncCourseCalendar(admin, instanceId))
+
+  revalidatePath(`/admin/courses/${instanceId}`)
+  revalidatePath('/admin/courses')
+  revalidatePath(`/portal/${instanceId}`)
 }
 
 export async function removeInstructor(instanceId: string, instructorId: string) {

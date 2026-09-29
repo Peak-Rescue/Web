@@ -32,7 +32,7 @@ export default async function PortalPage({
     admin.from('profiles').select('role').eq('id', user.id).single(),
     admin
       .from('instance_instructors')
-      .select('id, role, instructors!inner(profile_id)')
+      .select('id, role, in_charge, instructors!inner(profile_id)')
       .eq('instance_id', id)
       .eq('instructors.profile_id', user.id)
       .maybeSingle(),
@@ -46,8 +46,9 @@ export default async function PortalPage({
   const isInstructor = !!instructorAssignment
   if (!(isAdmin || isInstructor || enrollment)) redirect('/dashboard')
 
-  // Admins can preview the page as a student or a (non-lead) instructor —
-  // purely a display role; the access check above uses the real one.
+  // Admins can preview the page as a student or an instructor who is not
+  // running the course — purely a display role; the access check above uses
+  // the real one.
   const viewAs = await readViewAs(isAdmin)
 
   const viewer: Viewer = {
@@ -55,6 +56,7 @@ export default async function PortalPage({
     isAdmin,
     isInstructor,
     instructorRole: instructorAssignment?.role ?? null,
+    inCharge: Boolean(instructorAssignment?.in_charge),
     viewAs,
     mode: mode === 'build' || mode === 'teach' ? mode : null,
     // A door named in the link — how "open the gear list" in an email lands

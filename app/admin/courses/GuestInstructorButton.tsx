@@ -3,23 +3,25 @@
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { addGuestInstructor } from './staffing-actions'
+import { INSTANCE_ROLES, roleLabel, type InstanceRole } from '@/lib/staffing-roles'
 
 // Staff a one-off guest who isn't in the instructor roster: name + email
 // creates their instructor record, assigns them here, and emails a portal
 // invite so they can set up their login.
 export default function GuestInstructorButton({
   instanceId,
-  hasLead,
+  hasCrew,
 }: {
   instanceId: string
-  hasLead: boolean
+  /** Only picks the wage the box opens on — see InstructorAssign. */
+  hasCrew: boolean
 }) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
   const [email, setEmail] = useState('')
-  const [role, setRole] = useState<'lead' | 'assist'>(hasLead ? 'assist' : 'lead')
+  const [role, setRole] = useState<InstanceRole>(hasCrew ? 'assist' : 'lead')
   const [error, setError] = useState<string | null>(null)
   const [done, setDone] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
@@ -102,14 +104,16 @@ export default function GuestInstructorButton({
           />
         </div>
         <div>
-          <label className="block text-xs text-zinc-500 mb-1">Role</label>
+          <label className="block text-xs text-zinc-500 mb-1">Pay</label>
           <select
             value={role}
-            onChange={(e) => setRole(e.target.value as 'lead' | 'assist')}
+            onChange={(e) => setRole(e.target.value as InstanceRole)}
+            title="What this course pays them by the hour"
             className="bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500"
           >
-            <option value="lead">Lead</option>
-            <option value="assist">Assist</option>
+            {INSTANCE_ROLES.map((r) => (
+              <option key={r} value={r}>{roleLabel(r)}</option>
+            ))}
           </select>
         </div>
         <button

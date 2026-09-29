@@ -45,7 +45,7 @@ export type Instance = {
   invite_expires_at?: string | null
   internal?: boolean | null
   instance_instructors: { count: number }[]
-  crew?: { role: string; instructors: { name: string } | null }[] | null
+  crew?: { role: string; in_charge?: boolean | null; instructors: { name: string } | null }[] | null
   enrollments: { count: number }[]
   course_estimates?: { count: number }[]
 }
@@ -56,7 +56,7 @@ function asStepInput(inst: Instance): StepInput {
     id: inst.id,
     status: inst.status,
     instructor_slots: inst.instructor_slots,
-    crew: (inst.crew ?? []).map((c) => ({ role: c.role })),
+    crew: (inst.crew ?? []).map((c) => ({ role: c.role, in_charge: c.in_charge })),
     estimates: inst.course_estimates?.[0]?.count ?? 0,
     starts_at: inst.starts_at,
     ends_at: inst.ends_at,

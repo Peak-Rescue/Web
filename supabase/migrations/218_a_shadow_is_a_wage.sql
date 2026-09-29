@@ -1,0 +1,11 @@
+-- A shadowing instructor is a third thing we pay for.
+--
+-- The roster has had two answers since 014 — lead and assist — and a third
+-- kind of person has been on courses the whole time: somebody learning the
+-- course by working it, at $25 an hour rather than $40 or $50. They were
+-- staffed as assists and their rate corrected by hand in the actuals, one
+-- course at a time, which is a wage category kept in somebody's head.
+--
+-- Its own migration because Postgres will not let a new enum value be used in
+-- the transaction that adds it. 219 is where it starts meaning something.
+alter type instructor_instance_role add value if not exists 'shadow' after 'assist';

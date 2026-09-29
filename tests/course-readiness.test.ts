@@ -53,27 +53,44 @@ describe('staffing', () => {
   })
 
   it('shouts when the crew is short and nothing is out', () => {
-    const s = step(inst({ crew: [{ role: 'lead' }] }), extras(), 'staffing')!
+    const s = step(inst({ crew: [{ role: 'lead', in_charge: true }] }), extras(), 'staffing')!
     expect(s.tone).toBe('action')
     expect(s.detail).toBe('1 of 2')
   })
 
-  // A full crew with nobody leading it is the failure that reads as success
-  // if you only count heads.
-  it('shouts at a full crew with no lead', () => {
+  // A full crew with nobody answering for it is the failure that reads as
+  // success if you only count heads.
+  it('shouts at a full crew with nobody in charge', () => {
     const s = step(inst({ crew: [{ role: 'assist' }, { role: 'assist' }] }), extras(), 'staffing')!
     expect(s.tone).toBe('action')
-    expect(s.detail).toBe('No lead')
+    expect(s.detail).toBe('Nobody in charge')
   })
 
-  it('settles once the crew is full and led', () => {
-    const s = step(inst({ crew: [{ role: 'lead' }, { role: 'assist' }] }), extras(), 'staffing')!
+  // The whole point of 219: lead is a wage, and a course can carry three people
+  // on it. Being well paid is not being in charge, and counting lead wage was
+  // how a course full of leads read as ready with nobody running it.
+  it('is not satisfied by lead wage alone', () => {
+    const s = step(inst({ crew: [{ role: 'lead' }, { role: 'lead' }] }), extras(), 'staffing')!
+    expect(s.tone).toBe('action')
+    expect(s.detail).toBe('Nobody in charge')
+  })
+
+  // And the converse: somebody on assist wage can be the one running it, which
+  // is a real week and not a thing the roster should need a raise to describe.
+  it('accepts an assist who is in charge', () => {
+    const s = step(inst({ crew: [{ role: 'assist', in_charge: true }, { role: 'shadow' }] }), extras(), 'staffing')!
+    expect(s.tone).toBe('done')
+    expect(s.detail).toBe('2 of 2')
+  })
+
+  it('settles once the crew is full and somebody is in charge', () => {
+    const s = step(inst({ crew: [{ role: 'lead', in_charge: true }, { role: 'assist' }] }), extras(), 'staffing')!
     expect(s.tone).toBe('done')
     expect(s.detail).toBe('2 of 2')
   })
 
   it('wants one instructor when no slot count was set', () => {
-    expect(tone(inst({ instructor_slots: null, crew: [{ role: 'lead' }] }), extras(), 'staffing')).toBe('done')
+    expect(tone(inst({ instructor_slots: null, crew: [{ role: 'lead', in_charge: true }] }), extras(), 'staffing')).toBe('done')
   })
 
   // Counting against a slot count nobody set reads as an error — "3 of 1"
@@ -81,7 +98,7 @@ describe('staffing', () => {
   // number. Over-staffing against a real count still shows, because it is
   // real: "5 of 3" is something to go and look at.
   it('just counts heads when no slot count was set', () => {
-    const crew3 = [{ role: 'lead' }, { role: 'assist' }, { role: 'assist' }]
+    const crew3 = [{ role: 'lead', in_charge: true }, { role: 'assist' }, { role: 'assist' }]
     expect(step(inst({ instructor_slots: null, crew: crew3 }), extras(), 'staffing')!.detail).toBe('3 staffed')
     expect(step(inst({ instructor_slots: 3, crew: [...crew3, { role: 'assist' }, { role: 'assist' }] }), extras(), 'staffing')!.detail)
       .toBe('5 of 3')
@@ -91,16 +108,16 @@ describe('staffing', () => {
   // plan, and one that still needs two names. The fraction is the estimator's
   // business; staffing counts people.
   it('rounds a fractional slot count up to whole people', () => {
-    const s = (crew: { role: string }[]) => step(inst({ instructor_slots: 1.5, crew }), extras(), 'staffing')!
-    expect(s([{ role: 'lead' }]).detail).toBe('1 of 2')
-    expect(s([{ role: 'lead' }]).tone).toBe('action')
-    expect(s([{ role: 'lead' }, { role: 'assist' }]).detail).toBe('2 of 2')
-    expect(s([{ role: 'lead' }, { role: 'assist' }]).tone).toBe('done')
+    const s = (crew: { role: string; in_charge?: boolean }[]) => step(inst({ instructor_slots: 1.5, crew }), extras(), 'staffing')!
+    expect(s([{ role: 'lead', in_charge: true }]).detail).toBe('1 of 2')
+    expect(s([{ role: 'lead', in_charge: true }]).tone).toBe('action')
+    expect(s([{ role: 'lead', in_charge: true }, { role: 'assist' }]).detail).toBe('2 of 2')
+    expect(s([{ role: 'lead', in_charge: true }, { role: 'assist' }]).tone).toBe('done')
   })
 
   it('always opens the staffing panel, full or not', () => {
     expect(step(inst(), extras(), 'staffing')!.panel).toBe('staffing')
-    expect(step(inst({ crew: [{ role: 'lead' }, { role: 'assist' }] }), extras(), 'staffing')!.panel).toBe('staffing')
+    expect(step(inst({ crew: [{ role: 'lead', in_charge: true }, { role: 'assist' }] }), extras(), 'staffing')!.panel).toBe('staffing')
   })
 })
 
@@ -441,7 +458,7 @@ describe('needs', () => {
 
   it('finds the courses with nobody on them', () => {
     expect(needing('staffing', inst(), extras())).toBe(true)
-    expect(needing('staffing', inst({ crew: [{ role: 'lead' }, { role: 'assist' }] }), extras())).toBe(false)
+    expect(needing('staffing', inst({ crew: [{ role: 'lead', in_charge: true }, { role: 'assist' }] }), extras())).toBe(false)
   })
 
   it('finds a draft sitting written and unsent', () => {
@@ -463,7 +480,7 @@ describe('needs', () => {
   // list you work from — a course with an amber step is not waiting.
   it('keeps waiting and acting apart', () => {
     const waiting = courseSteps(
-      inst({ crew: [{ role: 'lead' }, { role: 'assist' }], estimates: 1 }),
+      inst({ crew: [{ role: 'lead', in_charge: true }, { role: 'assist' }], estimates: 1 }),
       extras({ quote: 'sent', schedule: true, curriculum: true, gear: true }),
       TODAY
     )

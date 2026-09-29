@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { assignInstructor } from './actions'
 import type { StaffingConflicts } from '@/lib/courses'
+import { INSTANCE_ROLES, roleLabel } from '@/lib/staffing-roles'
 
 type Instructor = { id: string; name: string }
 
@@ -10,14 +11,17 @@ export default function InstructorAssign({
   instanceId,
   qualified,
   unassigned,
-  hasLead,
+  hasCrew,
   anyone = false,
   conflicts = {},
 }: {
   instanceId: string
   qualified: Instructor[]
   unassigned: Instructor[]
-  hasLead: boolean
+  /** Whether anybody is on the course yet — it only picks the wage the box
+      opens on. The first person staffed is usually the lead; after that the
+      guess is an assist, and the box is right there either way. */
+  hasCrew: boolean
   // Internal events don't run by the staffing rules — who comes to a CE day or
   // a planning day is a choice, not a qualification — so the list opens on
   // everyone rather than on whoever the expertise map would have allowed.
@@ -65,9 +69,19 @@ export default function InstructorAssign({
             toShow.map(i => <option key={i.id} value={i.id}>{label(i)}</option>)
           )}
         </select>
-        <select name="role" defaultValue={hasLead ? 'assist' : 'lead'} className="bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500">
-          <option value="lead">Lead</option>
-          <option value="assist">Assist</option>
+        {/* What they are paid, not what they are in charge of. Staffing a
+            second lead used to mean the box quietly said "assist", because one
+            lead was all a course could have; a course can now carry three and
+            say separately which of them is running it. */}
+        <select
+          name="role"
+          defaultValue={hasCrew ? 'assist' : 'lead'}
+          title="What this course pays them by the hour"
+          className="bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500"
+        >
+          {INSTANCE_ROLES.map((r) => (
+            <option key={r} value={r}>{roleLabel(r)}</option>
+          ))}
         </select>
         <button type="submit" className="px-4 py-2 bg-pr-red hover:bg-pr-red-dark text-white rounded text-sm font-medium transition-colors">Assign</button>
       </form>

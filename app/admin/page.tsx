@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation'
+import { roleLabel } from '@/lib/staffing-roles'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import Link from 'next/link'
@@ -40,14 +41,14 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     status: string
     internal?: boolean | null
     custom_categories?: string[] | null
-    instance_instructors?: { role: string; instructors: { name: string } | null }[] | null
+    instance_instructors?: { role: string; in_charge?: boolean | null; instructors: { name: string } | null }[] | null
   }
   // Profile gate + personalized data in one parallel round.
   const [{ data: profile }, { data: assignmentRows }, myTasks, myDoneTasks, allInstancesRes, { data: inviteRows }, { data: capRow }, { data: hoursRow }] = await Promise.all([
     admin.from('profiles').select('role, first_name, last_name, email').eq('id', user.id).single(),
     admin
       .from('instance_instructors')
-      .select('role, course_instances!inner(id, ref_number, course_type, course_category, custom_title, client_name, location, starts_at, ends_at, status, instance_instructors(role, instructors(name))), instructors!inner(profile_id)')
+      .select('role, in_charge, course_instances!inner(id, ref_number, course_type, course_category, custom_title, client_name, location, starts_at, ends_at, status, instance_instructors(role, in_charge, instructors(name))), instructors!inner(profile_id)')
       .eq('instructors.profile_id', user.id),
     loadMyOpenTasks(admin, user.id),
     loadMyDoneTasks(admin, user.id, today),
@@ -86,7 +87,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     || user.email
 
   const myAssignments = (assignmentRows ?? [])
-    .map((a) => ({ role: a.role as string, inst: a.course_instances as unknown as InstRow }))
+    .map((a) => ({ role: a.role as string, inCharge: Boolean(a.in_charge), inst: a.course_instances as unknown as InstRow }))
     .filter((c) => c.inst && c.inst.status !== 'cancelled')
 
   const myCourses = myAssignments
@@ -151,12 +152,12 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       )
     : (assignmentRows ?? []).map((a) => a.course_instances as unknown as InstRow)
   // Chip labels mirror the Google Calendar event titles: name — client —
-  // location — crew first names (lead first).
+  // location — crew first names, whoever is running it first.
   const chipCrew = (i: InstRow) =>
     crewFirstNames(
       (i.instance_instructors ?? [])
         .filter((r) => r.instructors)
-        .map((r) => ({ role: r.role, name: r.instructors!.name }))
+        .map((r) => ({ role: r.role, in_charge: r.in_charge, name: r.instructors!.name }))
     )
   const calendarCourses: CalendarCourse[] = calendarSource
     .filter((i) => i && i.status !== 'cancelled' && i.starts_at && i.ends_at)
@@ -480,14 +481,18 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
                       {c.inst.location ? ` · ${c.inst.location}` : ''}
                     </p>
                   </Link>
+                  {/* Teal has always meant "this one is yours to run" to
+                      whoever reads this list, so it follows the flag that
+                      actually says so rather than the wage it used to stand in
+                      for. The band is still named — it is what the week pays. */}
                   <span
                     className={`shrink-0 text-[10px] font-medium px-2 py-0.5 rounded-full border ${
-                      c.role === 'lead'
+                      c.inCharge
                         ? 'border-teal-700 bg-teal-900/30 text-teal-300'
                         : 'border-blue-800 bg-blue-900/20 text-blue-300'
                     }`}
                   >
-                    {c.role}
+                    {c.inCharge ? `${roleLabel(c.role)} · in charge` : roleLabel(c.role)}
                   </span>
                 </div>
               ))}

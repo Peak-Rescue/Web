@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useTransition } from 'react'
+import { crewOrder, roleLabel } from '@/lib/staffing-roles'
 import Link from 'next/link'
 import { staffingData, quoteData, billingData, booksData } from './quick-actions'
 import { setInstanceStatus, setInstanceOwner } from './actions'
@@ -177,19 +178,21 @@ function CrewMeter({
   onOpen,
 }: {
   slots: number | null | undefined
-  crew: { role: string }[]
+  crew: { role: string; in_charge?: boolean | null }[]
   awaiting: number
   onOpen: () => void
 }) {
   // Boxes are people, so a fractional slot count rounds up to one: a course
   // planned for 1.5 instructors still needs two names.
   const wanted = slotsToStaff(slots)
-  const lead = crew.some((c) => c.role === 'lead')
-  const full = crew.length >= wanted && lead
-  // Lead first, so the L is always the leftmost box and the meter reads the
-  // same way down a column. The boxes are slots, not particular people, so
-  // nothing is lost by ordering them.
-  const filled = [...crew].sort((a, b) => Number(b.role === 'lead') - Number(a.role === 'lead'))
+  // A crew with nobody answering for it is not a staffed crew, however many
+  // people are on it and whatever they are paid.
+  const director = crew.some((c) => c.in_charge)
+  const full = crew.length >= wanted && director
+  // Whoever is in charge first, so the marked box is always the leftmost and
+  // the meter reads the same way down a column. The boxes are slots, not
+  // particular people, so nothing is lost by ordering them.
+  const filled = [...crew].sort(crewOrder)
 
   return (
     <div className="shrink-0">
@@ -202,7 +205,11 @@ function CrewMeter({
           return (
             <span
               key={i}
-              title={person ? (person.role === 'lead' ? 'Lead instructor' : 'Assist') : 'Open slot — nobody assigned'}
+              title={
+                person
+                  ? `${roleLabel(person.role)}${person.in_charge ? ' · in charge' : ''}`
+                  : 'Open slot — nobody assigned'
+              }
               className={`w-4 h-4 rounded-[3px] border grid place-items-center ${
                 person
                   ? 'bg-teal-400 border-teal-400'
@@ -211,11 +218,12 @@ function CrewMeter({
                     : 'border-amber-500/60 bg-amber-500/10'
               }`}
             >
-              {/* The lead's slot says so, because a mark that only means
-                  "this one is different" still leaves you to remember how.
-                  Only the lead is lettered: an A in every other box would
-                  turn a thing you count into a thing you read. */}
-              {person?.role === 'lead' && (
+              {/* The marked box is whoever is running the course, because that
+                  is the one fact you scan a crew meter for. It used to be the
+                  lead's box and it was the same box while a course had one
+                  lead. Only they are lettered: a letter in every box would turn
+                  a thing you count into a thing you read. */}
+              {person?.in_charge && (
                 <span className="text-[9px] font-bold leading-none text-zinc-950">L</span>
               )}
             </span>
@@ -227,8 +235,8 @@ function CrewMeter({
         <span className={`text-[11px] ml-1.5 ${full ? 'text-zinc-500' : awaiting > 0 ? 'text-teal-300' : 'text-amber-300'}`}>
           {full
             ? `${crew.length} of ${wanted}`
-            : crew.length > 0 && !lead
-              ? 'no lead'
+            : crew.length > 0 && !director
+              ? 'nobody in charge'
               : awaiting > 0
                 ? `${awaiting} asked`
                 : `${crew.length} of ${wanted}`}
@@ -383,7 +391,7 @@ export default function CourseQuickActions({
   extras: CourseExtras
   /** The assigned crew and how many the course wants — the meter's whole
       world, and not a thing the step list carries in a countable form. */
-  crew: { role: string }[]
+  crew: { role: string; in_charge?: boolean | null }[]
   slots: number | null | undefined
   /** Who is running comms on this one, and everyone it could be handed to. */
   owner: CourseOwner | undefined

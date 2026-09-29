@@ -71,6 +71,7 @@ function loaded(over: Partial<LoadedActuals> = {}): LoadedActuals {
     ],
     paySettings: DEFAULT_PAY_SETTINGS,
     fieldRateChoices: [50, 40, 25],
+    roleHourly: { lead: 50, assist: 40, shadow: 25 },
     rolled: rollUpActuals({
       accounts: ACCOUNTS,
       expenseLines,

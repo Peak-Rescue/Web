@@ -95,9 +95,11 @@ export type StepInput = {
   id: string
   status: string
   instructor_slots?: number | null
-  /** Assigned crew, with roles, so "nobody leading" reads differently from
-      "nobody at all". */
-  crew: { role: string }[]
+  /** Assigned crew, so "nobody in charge" reads differently from "nobody at
+      all". Whether somebody is in charge is the question, not what anyone is
+      paid: a course with three lead-wage instructors and nobody answering for
+      it is not staffed. */
+  crew: { role: string; in_charge?: boolean | null }[]
   estimates: number
   /** The course's window. Billing is not a thing you can owe before the first
       day, and after the last one it is nearly the only thing left to owe. */
@@ -227,8 +229,8 @@ export function courseSteps(
 
   const staffed = inst.crew.length
   const wanted = slotsToStaff(inst.instructor_slots)
-  const hasLead = inst.crew.some((c) => c.role === 'lead')
-  const staffingDone = staffed >= wanted && hasLead
+  const hasDirector = inst.crew.some((c) => c.in_charge)
+  const staffingDone = staffed >= wanted && hasDirector
 
   // Somebody has been asked and hasn't answered. Still a gap, but a gap with
   // something already in flight — which is the difference between "go and do
@@ -249,8 +251,8 @@ export function courseSteps(
         ? awaiting > 0
           ? { tone: 'waiting' as const, detail: `${awaiting} asked` }
           : { tone: 'action' as const, detail: 'Nobody yet' }
-        : !hasLead
-          ? { tone: 'action' as const, detail: 'No lead' }
+        : !hasDirector
+          ? { tone: 'action' as const, detail: 'Nobody in charge' }
           : awaiting > 0
             ? { tone: 'waiting' as const, detail: `${staffed} of ${wanted}, ${awaiting} out` }
             : { tone: 'action' as const, detail: `${staffed} of ${wanted}` }),

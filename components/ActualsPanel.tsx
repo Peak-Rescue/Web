@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { roleLabel } from '@/lib/staffing-roles'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { fmtMoney, fmtDateRange, round2 } from '@/lib/expenses'
@@ -728,17 +729,34 @@ export default function ActualsPanel({
                     {!paid ? (
                       <span className={`${input} w-24 text-center text-zinc-500 border-dashed`}>no day pay</span>
                     ) : (
-                      <select
-                        value={rate ?? ''}
-                        onChange={(e) => reterm(p.person.id, { fieldHourly: e.target.value === '' ? null : Number(e.target.value) })}
-                        title="What this course pays them an hour in the field"
-                        className={`${input} w-24 ${rate === null ? 'border-amber-700/70 text-amber-200' : ''}`}
-                      >
-                        <option value="">— rate —</option>
-                        {rateChoices.map((r) => (
-                          <option key={r} value={r}>{fmtRate(r)}/h</option>
-                        ))}
-                      </select>
+                      <span className="w-24 flex flex-col">
+                        <select
+                          value={rate ?? ''}
+                          onChange={(e) => reterm(p.person.id, { fieldHourly: e.target.value === '' ? null : Number(e.target.value) })}
+                          title={
+                            p.person.rateFromRole
+                              ? `The ${roleLabel(p.person.role).toLowerCase()} rate, from how they were staffed. Pick another to pay them something else on this course.`
+                              : 'What this course pays them an hour in the field'
+                          }
+                          className={`${input} w-24 ${rate === null ? 'border-amber-700/70 text-amber-200' : ''}`}
+                        >
+                          <option value="">— rate —</option>
+                          {rateChoices.map((r) => (
+                            <option key={r} value={r}>{fmtRate(r)}/h</option>
+                          ))}
+                        </select>
+                        {/* Where the number came from. A rate that arrives on
+                            its own has to say why, or the reader is left
+                            deciding whether somebody checked it — which is the
+                            question this panel exists to answer. */}
+                        <span className="text-[10px] leading-tight text-zinc-600 mt-0.5 text-center">
+                          {p.person.rateFromRole
+                            ? `${roleLabel(p.person.role)} rate`
+                            : rate !== null
+                              ? 'set here'
+                              : ''}
+                        </span>
+                      </span>
                     )}
 
                     {/* The day counts, editable here because they are the
