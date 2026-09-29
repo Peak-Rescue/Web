@@ -147,8 +147,15 @@ export function SubHead({ title, note, badge }: { title: string; note?: string; 
 }
 
 /**
- * Roster row — names with the role spelled out, not left to a colour. An
- * instructor with a public bio page links to it, so a student can find out
+ * Roster row — the role rides in a chip beside the name, carrying both the
+ * word and a colour. It used to be grey subtext under the name: spelled out,
+ * which was the point, but at the same weight as the email below it, so
+ * telling the lead from the assistants meant reading every card. The colour
+ * is the thing you can scan (teal lead / blue assistant, the same pairing the
+ * staffing editor uses) and the word is what makes it legible to anyone who
+ * cannot use the colour — neither channel carries it alone.
+ *
+ * An instructor with a public bio page links to it, so a student can find out
  * who they're spending the week with.
  */
 export function InstructorCard({
@@ -206,15 +213,25 @@ export function InstructorCard({
         )}
       </span>
       <div className="min-w-0">
-        <div className="text-sm font-medium leading-tight truncate">
-          {slug ? (
-            <Link href={`/team/${slug}`} className="hover:text-white hover:underline transition-colors">
-              {name}
-            </Link>
-          ) : name}
-        </div>
-        <div className="text-[11px] text-zinc-500 leading-tight">
-          {lead ? 'Lead instructor' : 'Assistant instructor'}
+        <div className="flex items-center gap-2 leading-tight">
+          <span className="text-sm font-medium truncate">
+            {slug ? (
+              <Link href={`/team/${slug}`} className="hover:text-white hover:underline transition-colors">
+                {name}
+              </Link>
+            ) : name}
+          </span>
+          {/* shrink-0: the name truncates, the role never does — a clipped
+              "Assista…" would be worse than a short name. */}
+          <span
+            className={`shrink-0 px-1.5 py-px rounded border text-[10px] font-semibold uppercase tracking-wide ${
+              lead
+                ? 'bg-teal-500/10 border-teal-500/30 text-teal-300'
+                : 'bg-blue-500/10 border-blue-500/30 text-blue-300'
+            }`}
+          >
+            {lead ? 'Lead' : 'Assistant'}
+          </span>
         </div>
         {(email || phone) && (
           <div className="text-[11px] text-zinc-500 leading-tight truncate">
