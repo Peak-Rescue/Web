@@ -141,8 +141,8 @@ export type Viewer = {
   // What the course pays them — lead, assist or shadow. Display only: it is a
   // wage band and grants nothing.
   instructorRole: string | null
-  /** Whether they are running this course. This is what the manage controls
-      hang off, and any number of the crew can be it. */
+  /** Whether they are primary on this course — running it in the field. This is
+      what the manage controls hang off, and any number of the crew can be. */
   inCharge: boolean
   // Admin previewing as someone else. A guest can't preview anything.
   viewAs: 'student' | 'instructor' | null
@@ -209,10 +209,10 @@ export default async function CourseView({
   const { userId, isAdmin, isInstructor, viewAs } = viewer
   const showAsAdmin = viewAs ? false : isAdmin
   const showAsInstructor = viewAs ? viewAs === 'instructor' : isInstructor
-  // Instructor preview keeps your real standing on the course, so somebody
-  // running it still gets the manage controls while previewing (just not the
-  // admin-only rows). Lead wage grants nothing on its own — three people can
-  // be on it and the course still has one person answering for it.
+  // Instructor preview keeps your real standing on the course, so a primary
+  // still gets the manage controls while previewing (just not the admin-only
+  // rows). Lead wage grants nothing on its own — three people can be on it and
+  // the course still has one person answering for it.
   const canManageTasks = viewAs
     ? viewAs === 'instructor' && viewer.inCharge
     : isAdmin || viewer.inCharge

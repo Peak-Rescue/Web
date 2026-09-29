@@ -1187,7 +1187,7 @@ export async function assignInstructor(instanceId: string, formData: FormData) {
   ])
 
   // The first person on a course is running it until somebody says otherwise.
-  // Not because leading and being in charge are the same thing — they are the
+  // Not because lead wage and being primary are the same thing — they are the
   // two facts this column stopped conflating — but because a course with one
   // instructor and nobody answering for it is a readiness warning about
   // nothing, and staffing the second person is when the question gets real.
@@ -1262,7 +1262,7 @@ export async function assignInstructor(instanceId: string, formData: FormData) {
 
 // What the course pays somebody, changed on the crew row itself. Its own
 // action rather than a re-assign: an upsert through assignInstructor would
-// re-read who is in charge and re-send the "you're staffed" mail on a row that
+// re-read who is primary and re-send the "you're staffed" mail on a row that
 // has been there for weeks.
 export async function setCourseRole(instanceId: string, instructorId: string, role: string) {
   await requireAdmin()
@@ -1279,15 +1279,15 @@ export async function setCourseRole(instanceId: string, instructorId: string, ro
   revalidatePath('/admin/courses')
 }
 
-// Who is actually running the course in the field. Any number of the crew can
-// be, and nothing stops it being somebody on assist wage — a strong assist
-// running a course is a real week, and making them a lead on paper to describe
-// it would put the wrong number on their hours.
+// The primary: who is actually running the course in the field. Any number of
+// the crew can be, and nothing stops it being somebody on assist wage — a strong
+// assist running a course is a real week, and making them a lead on paper to
+// describe it would put the wrong number on their hours.
 //
-// The last one cannot simply be taken away silently: a course with nobody in
-// charge has no task authority and reads as unstaffed, so the caller is told
-// rather than left to discover it on the readiness chain.
-export async function setInCharge(instanceId: string, instructorId: string, inCharge: boolean) {
+// The last one cannot simply be taken away silently: a course with no primary
+// has no task authority and reads as unstaffed, so the caller is told rather
+// than left to discover it on the readiness chain.
+export async function setPrimary(instanceId: string, instructorId: string, inCharge: boolean) {
   await requireAdmin()
   const admin = createAdminClient()
 

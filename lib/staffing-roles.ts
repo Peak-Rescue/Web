@@ -48,7 +48,7 @@ const RANK: Record<InstanceRole, number> = { lead: 0, assist: 1, shadow: 2 }
 
 /** Crew order: whoever is running the course, then by wage, then by name.
     The team's calendar-event convention put leads first and this keeps it —
-    what changed is that "first" now means in charge rather than well paid. */
+    what changed is that "first" now means primary rather than well paid. */
 export function crewOrder(
   a: { role?: string | null; in_charge?: boolean | null; name?: string | null },
   b: { role?: string | null; in_charge?: boolean | null; name?: string | null }
@@ -60,20 +60,24 @@ export function crewOrder(
   )
 }
 
-// One word for the person running the course, used to students and to the crew
-// alike. "Lead" cannot do this job any more — it is a pay band now, and a
-// student reading "Lead" beside one of three lead-wage instructors learns
-// nothing about who to go to.
-export const DIRECTOR_LABEL = 'Course director'
+// The team's word for whoever is running the course: primary. There can be
+// more than one on a week, which is the whole reason it could not go on being
+// called the lead — that is a pay band now, and a student reading "Lead" beside
+// one of three lead-wage instructors learns nothing about who to go to.
+//
+// The column behind it is still `in_charge`. Renaming a column buys nothing a
+// comment cannot, and costs a window where the deployed code and the database
+// disagree about what it is called.
+export const PRIMARY_LABEL = 'Primary'
 
-/** The chip on a roster row, where the column is narrow. */
-export const DIRECTOR_SHORT = 'Director'
+/** What a student is told somebody is. "Primary" alone is the crew's shorthand
+    and means nothing to a student, so they get the noun with it.
 
-/** What a student is told somebody is. Wage categories are ours, not theirs:
-    a student has no use for the difference between an assist and a shadow, and
-    "Shadow" beside somebody teaching them reads as a warning. */
+    Wage categories never reach them: a student has no use for the difference
+    between an assist and a shadow, and "Shadow" beside somebody teaching them
+    reads as a warning about the person. */
 export function studentFacingRole(inCharge: boolean | null | undefined): string {
-  return inCharge ? DIRECTOR_LABEL : 'Instructor'
+  return inCharge ? 'Primary instructor' : 'Instructor'
 }
 
 // ─── The crew plan ──────────────────────────────────────────────────────────

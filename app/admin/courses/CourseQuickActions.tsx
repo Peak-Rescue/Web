@@ -187,9 +187,9 @@ function CrewMeter({
   const wanted = slotsToStaff(slots)
   // A crew with nobody answering for it is not a staffed crew, however many
   // people are on it and whatever they are paid.
-  const director = crew.some((c) => c.in_charge)
-  const full = crew.length >= wanted && director
-  // Whoever is in charge first, so the marked box is always the leftmost and
+  const primary = crew.some((c) => c.in_charge)
+  const full = crew.length >= wanted && primary
+  // The primary first, so the marked box is always the leftmost and
   // the meter reads the same way down a column. The boxes are slots, not
   // particular people, so nothing is lost by ordering them.
   const filled = [...crew].sort(crewOrder)
@@ -207,7 +207,7 @@ function CrewMeter({
               key={i}
               title={
                 person
-                  ? `${roleLabel(person.role)}${person.in_charge ? ' · in charge' : ''}`
+                  ? `${roleLabel(person.role)}${person.in_charge ? ' · primary' : ''}`
                   : 'Open slot — nobody assigned'
               }
               className={`w-4 h-4 rounded-[3px] border grid place-items-center ${
@@ -218,13 +218,13 @@ function CrewMeter({
                     : 'border-amber-500/60 bg-amber-500/10'
               }`}
             >
-              {/* The marked box is whoever is running the course, because that
-                  is the one fact you scan a crew meter for. It used to be the
-                  lead's box and it was the same box while a course had one
-                  lead. Only they are lettered: a letter in every box would turn
-                  a thing you count into a thing you read. */}
+              {/* The marked box is the primary, because that is the one fact
+                  you scan a crew meter for. It used to be the lead's box and it
+                  was the same box while a course had one lead. Only they are
+                  lettered: a letter in every box would turn a thing you count
+                  into a thing you read. */}
               {person?.in_charge && (
-                <span className="text-[9px] font-bold leading-none text-zinc-950">L</span>
+                <span className="text-[9px] font-bold leading-none text-zinc-950">P</span>
               )}
             </span>
           )
@@ -235,8 +235,8 @@ function CrewMeter({
         <span className={`text-[11px] ml-1.5 ${full ? 'text-zinc-500' : awaiting > 0 ? 'text-teal-300' : 'text-amber-300'}`}>
           {full
             ? `${crew.length} of ${wanted}`
-            : crew.length > 0 && !director
-              ? 'nobody in charge'
+            : crew.length > 0 && !primary
+              ? 'no primary'
               : awaiting > 0
                 ? `${awaiting} asked`
                 : `${crew.length} of ${wanted}`}

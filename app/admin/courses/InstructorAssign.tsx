@@ -69,7 +69,7 @@ export default function InstructorAssign({
             toShow.map(i => <option key={i.id} value={i.id}>{label(i)}</option>)
           )}
         </select>
-        {/* What they are paid, not what they are in charge of. Staffing a
+        {/* What they are paid, not whether they are primary. Staffing a
             second lead used to mean the box quietly said "assist", because one
             lead was all a course could have; a course can now carry three and
             say separately which of them is running it. */}

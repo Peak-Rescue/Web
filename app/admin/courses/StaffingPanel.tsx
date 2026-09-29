@@ -2,12 +2,12 @@
 
 import { useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { removeInstructor, setCourseRole, setInCharge } from './actions'
+import { removeInstructor, setCourseRole, setPrimary } from './actions'
 import InstructorAssign from './InstructorAssign'
 import GuestInstructorButton from './GuestInstructorButton'
 import StaffingInterest from './StaffingInterest'
 import type { StaffingPanelData } from '@/lib/staffing-panel'
-import { INSTANCE_ROLES, roleLabel, DIRECTOR_SHORT } from '@/lib/staffing-roles'
+import { INSTANCE_ROLES, roleLabel, PRIMARY_LABEL } from '@/lib/staffing-roles'
 
 // Who is running this course: the crew, who else could be, and who has been
 // asked.
@@ -19,7 +19,7 @@ import { INSTANCE_ROLES, roleLabel, DIRECTOR_SHORT } from '@/lib/staffing-roles'
 // the calling page's manifest and arrives as nothing at all.
 
 export default function StaffingPanel({ data }: { data: StaffingPanelData }) {
-  const { instanceId, internal, assigned, qualified, unassigned, hasDirector, seats, conflicts, candidates, invites } = data
+  const { instanceId, internal, assigned, qualified, unassigned, hasPrimary, seats, conflicts, candidates, invites } = data
 
   const shortSeats = seats.filter((s) => s.open > 0)
 
@@ -57,7 +57,7 @@ export default function StaffingPanel({ data }: { data: StaffingPanelData }) {
               instanceId={instanceId}
               member={a}
               clashes={conflicts[a.instructorId] ?? []}
-              soleDirector={a.inCharge && assigned.filter((m) => m.inCharge).length === 1}
+              solePrimary={a.inCharge && assigned.filter((m) => m.inCharge).length === 1}
             />
           ))}
         </div>
@@ -66,9 +66,9 @@ export default function StaffingPanel({ data }: { data: StaffingPanelData }) {
       {/* A crew with nobody answering for it. Said here, beside the rows that
           fix it, as well as on the readiness chain — the chain is where you
           notice, this is where you are when you can do something about it. */}
-      {assigned.length > 0 && !hasDirector && (
+      {assigned.length > 0 && !hasPrimary && (
         <p className="mb-4 -mt-2 text-xs text-amber-400/90">
-          Nobody is in charge of this course yet — mark whoever is running it.
+          Nobody is primary on this course yet — mark whoever is running it.
         </p>
       )}
 
@@ -99,14 +99,14 @@ function CrewRow({
   instanceId,
   member,
   clashes,
-  soleDirector,
+  solePrimary,
 }: {
   instanceId: string
   member: { instructorId: string; name: string; role: string; inCharge: boolean }
   clashes: { course: string; days: string }[]
-  /** The only person in charge, so unticking them leaves the course with
-      nobody — worth a word before it happens rather than a warning after. */
-  soleDirector: boolean
+  /** The only primary, so unticking them leaves the course with nobody — worth
+      a word before it happens rather than a warning after. */
+  solePrimary: boolean
 }) {
   const [pending, start] = useTransition()
   const router = useRouter()
@@ -133,18 +133,19 @@ function CrewRow({
               <option key={r} value={r}>{roleLabel(r)}</option>
             ))}
           </select>
-          {/* Who is running it. Teal, the colour "lead" used to carry, because
-              this is what that colour always meant to whoever was reading it. */}
+          {/* Who is running it — primary, the team's word, and more than one
+              person can be. Teal, the colour "lead" used to carry, because this
+              is what that colour always meant to whoever was reading it. */}
           <label
             className={`shrink-0 flex items-center gap-1.5 text-xs cursor-pointer transition-colors ${
               member.inCharge ? 'text-teal-300' : 'text-zinc-600 hover:text-zinc-400'
             }`}
             title={
               member.inCharge
-                ? soleDirector
-                  ? 'Running this course — the only one. Unticking leaves nobody in charge of it.'
-                  : 'Running this course in the field'
-                : 'Mark them as running this course in the field — more than one person can be'
+                ? solePrimary
+                  ? 'Primary on this course — the only one. Unticking leaves nobody running it.'
+                  : 'Primary — running this course in the field'
+                : 'Mark them primary — running this course in the field. More than one person can be.'
             }
           >
             <input
@@ -152,11 +153,11 @@ function CrewRow({
               checked={member.inCharge}
               disabled={pending}
               onChange={(e) =>
-                start(async () => { await setInCharge(instanceId, member.instructorId, e.target.checked); router.refresh() })
+                start(async () => { await setPrimary(instanceId, member.instructorId, e.target.checked); router.refresh() })
               }
               className="accent-teal-500 disabled:opacity-50"
             />
-            {DIRECTOR_SHORT}
+            {PRIMARY_LABEL}
           </label>
         </div>
         <button

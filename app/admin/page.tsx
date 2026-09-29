@@ -482,9 +482,9 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
                     </p>
                   </Link>
                   {/* Teal has always meant "this one is yours to run" to
-                      whoever reads this list, so it follows the flag that
-                      actually says so rather than the wage it used to stand in
-                      for. The band is still named — it is what the week pays. */}
+                      whoever reads this list, so it follows the primary flag
+                      rather than the wage it used to stand in for. The band is
+                      still named — it is what the week pays. */}
                   <span
                     className={`shrink-0 text-[10px] font-medium px-2 py-0.5 rounded-full border ${
                       c.inCharge
@@ -492,7 +492,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
                         : 'border-blue-800 bg-blue-900/20 text-blue-300'
                     }`}
                   >
-                    {c.inCharge ? `${roleLabel(c.role)} · in charge` : roleLabel(c.role)}
+                    {c.inCharge ? `${roleLabel(c.role)} · primary` : roleLabel(c.role)}
                   </span>
                 </div>
               ))}

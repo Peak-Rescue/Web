@@ -72,7 +72,7 @@ export async function importCourseFromEvent(formData: FormData) {
   // migrated, so no "you're assigned" emails — the Google invite from the
   // sync is the only notification the crew gets.
   // An imported course names one lead, and on a course that already ran that
-  // person was the one running it — so they arrive in charge as well as on
+  // person was the one running it — so they arrive primary as well as on
   // lead wage. The two are separate facts now, and this is one of the few
   // places where the same person is both by construction.
   const crew = [

@@ -50,7 +50,7 @@ describe('crew order', () => {
   // The person answering for the course reads first even when somebody beside
   // them is paid more — the calendar title, the crew meter and the student's
   // roster are all asking "who do I go to", not "who costs most".
-  it('puts whoever is in charge first, over wage', () => {
+  it('puts the primary first, over wage', () => {
     expect([...crew].sort(crewOrder).map((c) => c.name)).toEqual(['Toph', 'Eric', 'Cody'])
   })
 
@@ -63,9 +63,9 @@ describe('crew order', () => {
     expect([...flat].sort(crewOrder).map((c) => c.name)).toEqual(['Mia', 'Zoe', 'Abe'])
   })
 
-  // Two people in charge is the case this was all built for, and the order
+  // Two primaries is the case this was all built for, and the order
   // between them is then just the wage and the name — no tie-break invented.
-  it('handles more than one person in charge', () => {
+  it('handles more than one primary', () => {
     const two = [
       { name: 'Nadav', role: 'lead', in_charge: true },
       { name: 'Toph', role: 'assist', in_charge: true },
@@ -79,8 +79,9 @@ describe('crew order', () => {
 // assist and a shadow, and "Shadow" beside somebody teaching them would read as
 // a warning about the person rather than as a pay band.
 describe('what a student is told', () => {
-  it('says course director, or just instructor', () => {
-    expect(studentFacingRole(true)).toBe('Course director')
+  // "Primary" alone is the crew's shorthand; a student gets the noun with it.
+  it('says primary instructor, or just instructor', () => {
+    expect(studentFacingRole(true)).toBe('Primary instructor')
     expect(studentFacingRole(false)).toBe('Instructor')
     expect(studentFacingRole(null)).toBe('Instructor')
   })

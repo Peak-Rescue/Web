@@ -44,10 +44,10 @@ export type StaffingPanelData = {
   assigned: { instructorId: string; name: string; role: string; inCharge: boolean }[]
   qualified: { id: string; name: string }[]
   unassigned: { id: string; name: string }[]
-  /** Whether anybody is running this course. Not whether anybody is on lead
+  /** Whether anybody is primary on this course. Not whether anybody is on lead
       wage — those came apart in 219, and this is the one that decides a course
       is staffed and who may close its tasks. */
-  hasDirector: boolean
+  hasPrimary: boolean
   /** The crew plan against who is on it, seat by seat. Empty when nobody has
       broken the course down — then the panel counts heads, as it always did. */
   seats: { role: InstanceRole; seats: number; filled: number; open: number }[]
@@ -178,7 +178,7 @@ export async function loadStaffingPanel(
       .filter((i) => hasSkill(i) && clearedForSector(i))
       .map((i) => ({ id: i.id, name: i.name })),
     unassigned: unassigned.map((i) => ({ id: i.id, name: i.name })),
-    hasDirector: (assigned ?? []).some((a) => a.in_charge),
+    hasPrimary: (assigned ?? []).some((a) => a.in_charge),
     seats: openSeats(plan ?? EMPTY_CREW_PLAN, (assigned ?? []).map((a) => ({ role: a.role as string | null }))),
     conflicts,
     candidates: unassigned.map((i) => ({

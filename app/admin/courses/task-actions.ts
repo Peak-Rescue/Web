@@ -19,11 +19,11 @@ async function getCaller() {
   return { user, admin, isAdmin: profile?.role === 'admin' }
 }
 
-// Authority over a course's tasks belongs to whoever is running it, which is
-// not the same question as who is on lead wage — a course can carry three
-// people on the lead rate, and handing all three the power to close everyone's
-// tasks was only ever right because there used to be one of them.
-async function isInChargeOf(admin: ReturnType<typeof createAdminClient>, instanceId: string, profileId: string) {
+// Authority over a course's tasks belongs to its primary, which is not the same
+// question as who is on lead wage — a course can carry three people on the lead
+// rate, and handing all three the power to close everyone's tasks was only ever
+// right because there used to be one of them.
+async function isPrimaryOf(admin: ReturnType<typeof createAdminClient>, instanceId: string, profileId: string) {
   const { data } = await admin
     .from('instance_instructors')
     .select('id, instructors!inner(profile_id)')
@@ -36,8 +36,8 @@ async function isInChargeOf(admin: ReturnType<typeof createAdminClient>, instanc
 
 async function requireManager(instanceId: string) {
   const { user, admin, isAdmin } = await getCaller()
-  if (!isAdmin && !(await isInChargeOf(admin, instanceId, user.id))) {
-    throw new Error('Only admins or an instructor running this course can manage tasks')
+  if (!isAdmin && !(await isPrimaryOf(admin, instanceId, user.id))) {
+    throw new Error('Only admins or a primary instructor on this course can manage tasks')
   }
   return { user, admin }
 }
@@ -200,7 +200,7 @@ export async function setTaskStatus(instanceId: string, taskId: string, done: bo
     .single()
   if (!task) throw new Error('Task not found')
 
-  const allowed = isAdmin || task.assigned_to === user.id || (await isInChargeOf(admin, instanceId, user.id))
+  const allowed = isAdmin || task.assigned_to === user.id || (await isPrimaryOf(admin, instanceId, user.id))
   if (!allowed) throw new Error('Not authorized')
 
   const { error } = await admin
@@ -224,7 +224,7 @@ export async function updateTaskNotes(instanceId: string, taskId: string, notes:
     .single()
   if (!task) throw new Error('Task not found')
 
-  const allowed = isAdmin || task.assigned_to === user.id || (await isInChargeOf(admin, instanceId, user.id))
+  const allowed = isAdmin || task.assigned_to === user.id || (await isPrimaryOf(admin, instanceId, user.id))
   if (!allowed) throw new Error('Not authorized')
 
   const { error } = await admin
@@ -251,7 +251,7 @@ async function requireTaskParticipant(instanceId: string, taskId: string) {
     .eq('instance_id', instanceId)
     .single()
   if (!task) throw new Error('Task not found')
-  const allowed = isAdmin || task.assigned_to === user.id || (await isInChargeOf(admin, instanceId, user.id))
+  const allowed = isAdmin || task.assigned_to === user.id || (await isPrimaryOf(admin, instanceId, user.id))
   if (!allowed) throw new Error('Not authorized')
   return { user, admin }
 }

@@ -3,7 +3,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import WaiverDetach from '@/components/WaiverDetach'
 import PhoneText from '@/components/PhoneText'
-import { roleLabel, DIRECTOR_LABEL, DIRECTOR_SHORT } from '@/lib/staffing-roles'
+import { roleLabel, PRIMARY_LABEL, studentFacingRole } from '@/lib/staffing-roles'
 
 // Presentational shell for the portal page. Every top-level block on a course
 // is a Section: same icon-and-rule header, same spacing, its own anchor. The
@@ -196,8 +196,8 @@ export function InstructorCard({
   email?: string | null
   phone?: string | null
 }) {
-  const director = Boolean(inCharge)
-  const lead = director
+  const primary = Boolean(inCharge)
+  const lead = primary
   const initials = name
     .split(/\s+/)
     .slice(0, 2)
@@ -240,12 +240,12 @@ export function InstructorCard({
           </span>
           {/* shrink-0: the name truncates, the chips never do — a clipped
               "Direct…" would be worse than a short name. */}
-          {director && (
+          {primary && (
             <span className="shrink-0 px-1.5 py-px rounded border text-[10px] font-semibold uppercase tracking-wide bg-teal-500/10 border-teal-500/30 text-teal-300">
-              {showRank ? DIRECTOR_SHORT : DIRECTOR_LABEL}
+              {showRank ? PRIMARY_LABEL : studentFacingRole(true)}
             </span>
           )}
-          {!director && !showRank && (
+          {!primary && !showRank && (
             <span className="shrink-0 px-1.5 py-px rounded border text-[10px] font-semibold uppercase tracking-wide bg-blue-500/10 border-blue-500/30 text-blue-300">
               Instructor
             </span>

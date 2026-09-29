@@ -256,7 +256,7 @@ export default function StaffingInterest({
                       {/* One button per wage category — the pair this replaced
                           was "the default, and the other one", which only ever
                           worked while there were two. The likely one is filled
-                          in; being in charge is set on the crew row, because it
+                          in; who is primary is set on the crew row, because it
                           is not what you are deciding at this moment. */}
                       {assigningId === inv.instructorId ? (
                         <span className="text-xs text-zinc-500">Assigning…</span>

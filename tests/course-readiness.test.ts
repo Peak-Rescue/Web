@@ -60,30 +60,30 @@ describe('staffing', () => {
 
   // A full crew with nobody answering for it is the failure that reads as
   // success if you only count heads.
-  it('shouts at a full crew with nobody in charge', () => {
+  it('shouts at a full crew with no primary', () => {
     const s = step(inst({ crew: [{ role: 'assist' }, { role: 'assist' }] }), extras(), 'staffing')!
     expect(s.tone).toBe('action')
-    expect(s.detail).toBe('Nobody in charge')
+    expect(s.detail).toBe('No primary')
   })
 
   // The whole point of 219: lead is a wage, and a course can carry three people
-  // on it. Being well paid is not being in charge, and counting lead wage was
+  // on it. Being well paid is not being primary, and counting lead wage was
   // how a course full of leads read as ready with nobody running it.
   it('is not satisfied by lead wage alone', () => {
     const s = step(inst({ crew: [{ role: 'lead' }, { role: 'lead' }] }), extras(), 'staffing')!
     expect(s.tone).toBe('action')
-    expect(s.detail).toBe('Nobody in charge')
+    expect(s.detail).toBe('No primary')
   })
 
   // And the converse: somebody on assist wage can be the one running it, which
   // is a real week and not a thing the roster should need a raise to describe.
-  it('accepts an assist who is in charge', () => {
+  it('accepts an assist who is the primary', () => {
     const s = step(inst({ crew: [{ role: 'assist', in_charge: true }, { role: 'shadow' }] }), extras(), 'staffing')!
     expect(s.tone).toBe('done')
     expect(s.detail).toBe('2 of 2')
   })
 
-  it('settles once the crew is full and somebody is in charge', () => {
+  it('settles once the crew is full and somebody is primary', () => {
     const s = step(inst({ crew: [{ role: 'lead', in_charge: true }, { role: 'assist' }] }), extras(), 'staffing')!
     expect(s.tone).toBe('done')
     expect(s.detail).toBe('2 of 2')
