@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { fmtMoney, round2 } from '@/lib/expenses'
-import { impliedMargin, factorValue, prefillFactor, unitFactorNames, dayCountFollowsCourse, isTripLine } from '@/lib/estimates'
+import { impliedMargin, factorValue, prefillFactor, unitFactorNames, dayCountFollowsCourse, isTripLine, guessSeedQty } from '@/lib/estimates'
 import { publishCoaPrice, retractCoaPrice } from '@/lib/live-coa-prices'
 import { saveEstimate, deleteEstimateCoa, setEstimateArchived, type EstimateItemInput } from '@/app/admin/courses/finance-actions'
 import { useRouter } from 'next/navigation'
@@ -148,6 +148,7 @@ export default function EstimatePanel({
   )
   const [calcOpen, setCalcOpen] = useState<Set<number>>(new Set())
   const [driftOpen, setDriftOpen] = useState(false)
+  const [resetArmed, setResetArmed] = useState(false)
   const [margin, setMargin] = useState(initialMargin)
   // Held as a string so the field can be empty — empty means "no override,
   // use the calculated price", which is different from an override of $0.
@@ -352,6 +353,46 @@ export default function EstimatePanel({
     schedule(rows.map((r) => (wanted.has(r.key) ? syncRow(r) : r)), margin)
   }
 
+  // Back to the number the course itself puts on a line: the rate's unit read
+  // against this COA's counts, by the same rules a freshly added line is
+  // prefilled with. Null when the line has no auto number to return to, or is
+  // already sitting on it.
+  //
+  // "Update all" above cannot do this job. It only reaches lines whose
+  // breakdown is still intact, and typing over a quantity clears that
+  // breakdown — which on a multi-factor rate takes the line out of drift
+  // detection for good. An instructor field day somebody typed over is exactly
+  // the line that never speaks up again, and exactly the line this is for.
+  //
+  // Only library lines are touched, and only when the course can supply every
+  // factor. A quantity nobody can derive — miles driven, days of admin burden,
+  // meals bought — has no auto number, so it is left as typed rather than
+  // blanked: the estimator is the only source for it.
+  function autoRow(r: Row): Row | null {
+    const lib = rateFor(r)
+    if (!lib) return null
+    // The same call that seeds a fresh COA's lines, so a reset lands exactly
+    // on the number this line would have had if it had just been added.
+    const { qty, factors } = guessSeedQty(lib, counts)
+    if (qty === null) return null
+    const nextQty = String(round2(qty))
+    const nextFactors = factors ? factors.map(String) : null
+    if (nextQty === r.qty.trim() && JSON.stringify(nextFactors) === JSON.stringify(r.factors)) return null
+    // The breakdown comes back with the quantity, so the line is drift-aware
+    // again — and the factor labels go with it, since they are the library's
+    // now rather than whatever was typed alongside a hand-set number.
+    return { ...r, qty: nextQty, factors: nextFactors, flabels: [], ack: null }
+  }
+
+  // The rate, the notes and the line itself are untouched — this is about
+  // quantities. Resetting a rate would throw away a negotiated price, which is
+  // not something the course can work out and not what was asked for.
+  function resetQuantities() {
+    const byKey = new Map(resettableRows.map((x) => [x.row.key, x.auto]))
+    schedule(rows.map((r) => byKey.get(r.key) ?? r), margin)
+    setResetArmed(false)
+  }
+
   function addFromLibrary(rateId: string) {
     const lib = rates.find((r) => r.id === rateId)
     if (!lib) return
@@ -497,6 +538,12 @@ export default function EstimatePanel({
   // Lines still carrying the numbers the course had when they were written.
   const driftedRows = rows.map((r) => ({ row: r, drifts: rowDrifts(r) })).filter((d) => d.drifts.length > 0)
   const driftsByKey = new Map(driftedRows.map((d) => [d.row.key, d.drifts]))
+
+  // Lines whose quantity is not the one the course works out — whether it was
+  // typed over, kept through a change, or built before the details moved.
+  const resettableRows = rows
+    .map((r) => ({ row: r, auto: autoRow(r) }))
+    .filter((x): x is { row: Row; auto: Row } => x.auto !== null)
   const countSummary = [
     counts.instructors ? `${counts.instructors} instructor${counts.instructors === 1 ? '' : 's'}` : null,
     counts.students ? `${counts.students} student${counts.students === 1 ? '' : 's'}` : null,
@@ -784,6 +831,55 @@ export default function EstimatePanel({
                 </li>
               ))}
             </ul>
+          )}
+        </div>
+      )}
+
+      {/* An action, not a warning: a quantity set by hand is usually somebody
+          deciding something, and a standing amber nag over every deliberate
+          edit would teach people to stop reading the amber that matters. It is
+          offered only while it has something to do, and it says what it would
+          do before it does it — this overwrites decisions. */}
+      {resettableRows.length > 0 && (
+        <div className="mb-1.5 text-[11px] flex items-center gap-2 flex-wrap text-zinc-500">
+          <InfoHint
+            below
+            text="Puts every library line back to the quantity the course works out for it — instructors, students, days, and the extra day at each end for the things that travel. Quantities typed by hand are overwritten. Rates, notes, custom lines, and numbers the course cannot derive (miles, admin days, meals) are left alone."
+          />
+          {resetArmed ? (
+            <>
+              <span className="text-amber-500/80">
+                Overwrite {resettableRows.length} quantit{resettableRows.length === 1 ? 'y' : 'ies'}?
+              </span>
+              <span className="text-zinc-600 min-w-0 truncate">
+                {resettableRows
+                  .map(({ row, auto }) => `${row.label.trim() || 'Untitled line'} ${row.qty.trim() || '—'} → ${auto.qty}`)
+                  .join(', ')}
+              </span>
+              <button
+                type="button"
+                onClick={resetQuantities}
+                className="text-amber-400 hover:text-amber-200 underline decoration-amber-800 transition-colors"
+              >
+                Reset
+              </button>
+              <button
+                type="button"
+                onClick={() => setResetArmed(false)}
+                className="hover:text-zinc-200 transition-colors"
+              >
+                Cancel
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setResetArmed(true)}
+              className="text-zinc-600 hover:text-zinc-200 underline underline-offset-2 decoration-zinc-700 transition-colors"
+              title={`Recompute ${resettableRows.length === 1 ? 'one quantity' : `${resettableRows.length} quantities`} from the course's own numbers`}
+            >
+              Reset quantities to the course's numbers
+            </button>
           )}
         </div>
       )}

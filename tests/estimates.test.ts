@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { coaPrice, coaSpan, coaHasOwnSpan, isTripLine, DEFAULT_MARGIN, dayCountFollowsCourse, daysForLine, factorValue } from '@/lib/estimates'
+import { coaPrice, coaSpan, coaHasOwnSpan, isTripLine, DEFAULT_MARGIN, dayCountFollowsCourse, daysForLine, factorValue, guessSeedQty } from '@/lib/estimates'
 
 // The number three places had to agree on. A test so they cannot drift apart
 // again quietly — the column default is checked by hand, this checks the code.
@@ -153,5 +153,49 @@ describe('isTripLine', () => {
     expect(isTripLine('Lodging')).toBe(false)
     expect(isTripLine('Meals')).toBe(false)
     expect(isTripLine('Vehicle rental')).toBe(false)
+  })
+})
+
+// What "reset this line to the course's numbers" means. The panel's reset
+// button and the server's COA seeding both go through guessSeedQty, so a reset
+// lands on the number a freshly added line would have carried — and refuses to
+// invent one where the course cannot know it.
+describe('the auto quantity for a line', () => {
+  const counts = { instructors: 2, students: 8, days: 5, calendarDays: 5 }
+
+  it('multiplies a two-dimension rate out and keeps the breakdown', () => {
+    expect(guessSeedQty({ label: 'Instructor field day', unit: 'per instructor per day' }, counts))
+      .toEqual({ qty: 10, factors: [2, 5] })
+  })
+
+  it('gives a single-dimension rate a bare count and no breakdown', () => {
+    expect(guessSeedQty({ label: 'Student manual', unit: 'per student' }, counts))
+      .toEqual({ qty: 8, factors: null })
+  })
+
+  // A reset must not quietly re-price a drive at one mile, so a factor the
+  // course cannot supply yields no quantity at all and the line is left as the
+  // estimator typed it.
+  it('refuses to guess a number only a person can supply', () => {
+    expect(guessSeedQty({ label: 'Mileage', unit: 'per mile' }, counts).qty).toBeNull()
+    expect(guessSeedQty({ label: 'Admin burden', unit: 'per day' }, counts).qty).toBeNull()
+  })
+
+  it('leaves a flat-fee line alone — no unit, nothing to compute', () => {
+    expect(guessSeedQty({ label: 'Permit', unit: null }, counts).qty).toBeNull()
+  })
+
+  // The vehicle and the lodging are held a day either side of the course, so a
+  // reset has to put those days back too.
+  it('gives the travelling costs the extra day at each end', () => {
+    expect(guessSeedQty({ label: 'Lodging', unit: 'per instructor per night' }, counts))
+      .toEqual({ qty: 14, factors: [2, 7] })
+  })
+
+  // Asked about a course whose details are half-filled — the panel does this,
+  // and the answer is "no number", never zero.
+  it('has no answer when the course has no dates yet', () => {
+    expect(guessSeedQty({ label: 'Instructor field day', unit: 'per instructor per day' },
+      { instructors: 2, students: 8, days: null, calendarDays: null }).qty).toBeNull()
   })
 })

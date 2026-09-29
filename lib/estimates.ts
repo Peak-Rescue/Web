@@ -224,12 +224,20 @@ export const coaHasOwnSpan = (coa: { starts_at?: string | null; ends_at?: string
 
 export type SeedCounts = { instructors: number; days: number; calendarDays: number; students: number | null }
 
-// Quantity for a seeded default estimate line, from the rate's unit and the
-// same rules the panel prefills with. Null quantity = nobody can guess this
-// one; the line is seeded blank and asks to be filled in.
+// Quantity for an estimate line built from a library rate — its unit read
+// against the course's numbers. Null quantity = nobody can guess this one; the
+// line is seeded blank and asks to be filled in.
+//
+// The definition of "the auto quantity", and deliberately the only one: it
+// seeds a fresh COA's lines on the server and answers "reset this line to the
+// course's numbers" in the panel, so a reset lands on the number a new COA
+// would have had. Takes the wider FactorCounts rather than SeedCounts because
+// the panel asks it about courses whose details are still incomplete — a
+// missing day count is a factor nobody can supply, which this already answers
+// with null rather than a guess.
 export function guessSeedQty(
   rate: { label: string; unit: string | null },
-  counts: SeedCounts
+  counts: FactorCounts
 ): { qty: number | null; factors: number[] | null } {
   const names = unitFactorNames(rate.unit)
   if (names.length === 0) return { qty: null, factors: null }
