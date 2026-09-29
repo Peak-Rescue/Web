@@ -11,6 +11,7 @@ import { courseSubtitle } from '@/lib/course-access'
 import { loadActuals } from '@/lib/actuals-data'
 import { generateActualsPdf } from '@/lib/actuals-pdf'
 import { todayHere } from '@/lib/course-clock'
+import { pickBillableQuote } from '@/lib/billing-handoff'
 
 export async function actualsPdfResponse(instanceId: string): Promise<Response> {
   const admin = createAdminClient()
@@ -30,7 +31,12 @@ export async function actualsPdfResponse(instanceId: string): Promise<Response> 
   ])
   if (!inst) return new Response('Not found', { status: 404 })
 
-  const accepted = (quoteRows ?? []).find((q) => q.status === 'accepted' && !q.archived_at)
+  // The accepted quote, and only while it is still the one the client is
+  // holding. A re-quote sent after it supersedes it — see pickBillableQuote —
+  // and a superseded figure printed beside the actuals invites a client to
+  // reconcile against a document we replaced.
+  const billable = pickBillableQuote((quoteRows ?? []).map((q) => ({ ...q, total: Number(q.total ?? 0) })))
+  const accepted = billable?.status === 'accepted' ? billable : null
 
   const bytes = await generateActualsPdf({
     courseTitle: courseDisplayName(inst.course_type, inst.custom_title),

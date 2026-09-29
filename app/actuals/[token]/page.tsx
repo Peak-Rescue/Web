@@ -5,6 +5,7 @@ import { loadActuals } from '@/lib/actuals-data'
 import { accountsWithMoney, carriesMoney, expenseLineLabel, payLineName } from '@/lib/actuals'
 import { fmtMoney, fmtDateRange } from '@/lib/expenses'
 import { dateAtOffice, longDate } from '@/lib/course-clock'
+import { pickBillableQuote } from '@/lib/billing-handoff'
 
 // The course's profit and loss, at an address you can put in an email.
 //
@@ -48,7 +49,12 @@ export default async function SharedActualsPage({ params }: { params: Promise<{ 
   // Only what carries money. A $0 row is somebody's placeholder on the panel
   // this came from, and nothing at all to a reader.
   const payLines = actuals.payLines.filter(carriesMoney)
-  const accepted = (quoteRows ?? []).find((q) => q.status === 'accepted' && !q.archived_at)
+  // The accepted quote, and only while it is still the one the client is
+  // holding. A re-quote sent after it supersedes it — see pickBillableQuote —
+  // and a superseded figure printed beside the actuals invites a client to
+  // reconcile against a document we replaced.
+  const billable = pickBillableQuote((quoteRows ?? []).map((q) => ({ ...q, total: Number(q.total ?? 0) })))
+  const accepted = billable?.status === 'accepted' ? billable : null
   const dates = inst.starts_at
     ? `${inst.starts_at}${inst.ends_at && inst.ends_at !== inst.starts_at ? ` – ${inst.ends_at}` : ''}`
     : null

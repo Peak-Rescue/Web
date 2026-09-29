@@ -28,41 +28,57 @@ export function billingState(requests: { status: InvoiceStatus }[]): BillingStat
   return live.some((r) => r.status === 'invoiced') ? 'invoiced' : 'with-harken'
 }
 
-/** What the invoiced and billing boxes offer as a number.
+/** What the invoiced and billing boxes offer as a number, and what a handoff
+ *  stamps as the quote it was billed against.
  *
- *  An accepted quote first, and failing that the newest live quote that names
- *  a figure — plenty of courses are billed off a quote that was agreed on the
- *  phone and never marked, and offering nothing there only means retyping a
- *  number the page is already holding. A declined or expired one is not
- *  offered: that number was refused. Nor is an options quote nobody has picked
- *  from, whose total is still 0.
+ *  The last quote the client actually received, and no further back. A course
+ *  gets re-quoted because the first answer stopped being true — details
+ *  changed, days moved — and the moment Q3 goes out, Q2 is history whether or
+ *  not anybody accepted it. Reaching past a live re-quote to the accepted one
+ *  behind it is how a client gets invoiced for the course we are no longer
+ *  running.
  *
- *  Quotes come in newest first, so the highest-numbered accepted one wins —
- *  a re-quote that was also accepted supersedes.
+ *  Which is why a sent quote outranks an accepted older one rather than the
+ *  other way around. The number arrives saying "Quote 3 was sent at", not
+ *  "was accepted at", so nobody mistakes it for an agreed figure — an
+ *  unagreed number that names the right course beats an agreed one that
+ *  prices the wrong one.
+ *
+ *  A draft is not out of the building and does not supersede anything; it is
+ *  offered only when nothing has ever been sent, because plenty of courses
+ *  are agreed on the phone off a quote that was never marked. Declined and
+ *  expired quotes are skipped entirely — that number was refused — and so is
+ *  an options re-quote nobody has picked from, whose total is still 0. That
+ *  last one offers nothing at all rather than falling back: the client is
+ *  holding a quote with no figure on it yet, and the honest answer is the COA
+ *  underneath, not the superseded price.
+ *
+ *  Quotes come in newest first.
  */
 export function pickBillableQuote<T extends { status: string; total: number; archived_at: string | null }>(
   quotesNewestFirst: T[]
 ): T | null {
-  const accepted = quotesNewestFirst.find((q) => q.status === 'accepted' && !q.archived_at)
-  const offerable = quotesNewestFirst.find(
-    (q) => !q.archived_at && ['accepted', 'sent', 'draft'].includes(q.status) && q.total > 0
-  )
-  return accepted ?? offerable ?? null
+  const live = quotesNewestFirst.filter((q) => !q.archived_at)
+  const issued = live.find((q) => q.status === 'accepted' || q.status === 'sent')
+  if (issued) return issued.total > 0 ? issued : null
+  return live.find((q) => q.status === 'draft' && q.total > 0) ?? null
 }
 
-/** The COA this course would be billed from: the one the client actually
- *  accepted, else the one the latest quote was priced from, else the first
- *  live one. A course with two live COAs and no quote has no right answer,
+/** The COA this course would be billed from: the one behind the quote that
+ *  would be billed, else the one the latest quote was priced from, else the
+ *  first live one. It follows `pickBillableQuote` rather than the accepted
+ *  quote directly, so a re-quote moves the money and the costs underneath it
+ *  together. A course with two live COAs and no quote has no right answer,
  *  and the first is the working one. */
 export function pickSeedCoa<T extends { id: string | null }>(
   liveCoas: T[],
-  acceptedEstimateId: string | null | undefined,
+  billableEstimateId: string | null | undefined,
   latestQuoteEstimateId: string | null | undefined
 ): T | null {
   const live = liveCoas.filter((e) => e.id)
   if (live.length === 0) return null
   const named = (id: string | null | undefined) => (id ? live.find((e) => e.id === id) : undefined)
-  return named(acceptedEstimateId) ?? named(latestQuoteEstimateId) ?? live[0]
+  return named(billableEstimateId) ?? named(latestQuoteEstimateId) ?? live[0]
 }
 
 /** Everything `BillingSection` needs, in the shape it takes it. */
@@ -113,7 +129,6 @@ export async function loadBillingPanel(
 
   const quotes = (quoteRows ?? []).map((q) => ({ ...q, total: Number(q.total ?? 0) }))
   const quote = pickBillableQuote(quotes)
-  const accepted = quotes.find((q) => q.status === 'accepted' && !q.archived_at)
 
   const liveCoas = (coaRows ?? [])
     .filter((e) => !e.archived_at)
@@ -127,7 +142,7 @@ export async function loadBillingPanel(
         rate: Number(i.rate),
       })),
     }))
-  const seedCoa = pickSeedCoa(liveCoas, accepted?.estimate_id, quotes[0]?.estimate_id)
+  const seedCoa = pickSeedCoa(liveCoas, quote?.estimate_id as string | null | undefined, quotes[0]?.estimate_id)
 
   const payee = billTo(parseContacts(inst.contacts))
 

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { chooseRecipients, numberSoFar } from '@/lib/billing'
+import { pickBillableQuote } from '@/lib/billing-handoff'
 
 const billed = { total: 13200, count: 1 }
 const quote = { seq: 2, total: 12800, status: 'accepted' }
@@ -85,5 +86,64 @@ describe('who a handoff is mailed to', () => {
 
   it('chooses nobody when every ticked biller has gone, so the send refuses', () => {
     expect(chooseRecipients(active, ['gone'])).toEqual([])
+  })
+})
+
+describe('which quote a course is billed against', () => {
+  const q = (seq: number, status: string, total = 12800, archived_at: string | null = null) =>
+    ({ quote_seq: seq, status, total, archived_at })
+  // Newest first, as both call sites order them.
+  const newestFirst = (...qs: ReturnType<typeof q>[]) => [...qs].sort((a, b) => b.quote_seq - a.quote_seq)
+
+  it('takes the accepted quote when it is the only one out', () => {
+    expect(pickBillableQuote(newestFirst(q(1, 'accepted')))?.quote_seq).toBe(1)
+  })
+
+  it('moves to a re-quote the moment it goes out, accepted or not', () => {
+    // The whole reason for this file. Q1 was accepted, the client changed the
+    // details, Q2 went out — and billing was still stamping Q1.
+    const picked = pickBillableQuote(newestFirst(q(1, 'accepted', 12800), q(2, 'sent', 14400)))
+    expect(picked?.quote_seq).toBe(2)
+    expect(picked?.total).toBe(14400)
+  })
+
+  it('says out loud that the number nobody has agreed to is not agreed', () => {
+    const picked = pickBillableQuote(newestFirst(q(1, 'accepted'), q(2, 'sent', 14400)))!
+    expect(numberSoFar({ quote: { seq: picked.quote_seq, total: picked.total, status: picked.status } })?.text)
+      .toBe('Quote 2 was sent at')
+  })
+
+  it('goes back to the accepted one when the re-quote is refused', () => {
+    // Declined and expired are not supersessions — that number was refused.
+    for (const dead of ['declined', 'expired']) {
+      expect(pickBillableQuote(newestFirst(q(1, 'accepted'), q(2, dead, 14400)))?.quote_seq).toBe(1)
+    }
+  })
+
+  it('ignores a draft sitting on top of an accepted quote', () => {
+    // A draft has not left the building, so it supersedes nothing.
+    expect(pickBillableQuote(newestFirst(q(1, 'accepted'), q(2, 'draft', 14400)))?.quote_seq).toBe(1)
+  })
+
+  it('still offers a draft when nothing has ever been sent', () => {
+    expect(pickBillableQuote(newestFirst(q(1, 'draft')))?.quote_seq).toBe(1)
+  })
+
+  it('offers nothing rather than the superseded price when the re-quote has no figure yet', () => {
+    // An options re-quote nobody has picked from totals 0. Falling back to Q1
+    // would bill the course we are no longer running.
+    expect(pickBillableQuote(newestFirst(q(1, 'accepted'), q(2, 'sent', 0)))).toBeNull()
+  })
+
+  it('skips an archived re-quote, whose COAs have all been set aside', () => {
+    expect(pickBillableQuote(newestFirst(q(1, 'accepted'), q(2, 'sent', 14400, '2026-09-01')))?.quote_seq).toBe(1)
+  })
+
+  it('takes the newest of two accepted quotes', () => {
+    expect(pickBillableQuote(newestFirst(q(1, 'accepted'), q(2, 'accepted', 14400)))?.quote_seq).toBe(2)
+  })
+
+  it('has nothing to offer on a course booked with no quote', () => {
+    expect(pickBillableQuote([])).toBeNull()
   })
 })

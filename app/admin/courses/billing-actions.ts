@@ -7,6 +7,7 @@ import { parseContacts, billTo } from '@/lib/contacts'
 import { courseShortName } from '@/lib/courses'
 import { chooseRecipients, describeForBiller, parseMoney } from '@/lib/billing'
 import { quoteNumber } from '@/lib/quotes'
+import { pickBillableQuote } from '@/lib/billing-handoff'
 import { fmtMoney } from '@/lib/expenses'
 import { sendMail } from '@/lib/mailer'
 
@@ -57,7 +58,6 @@ export async function sendInvoiceRequest(
       .from('course_quotes')
       .select('id, quote_seq, total, status, archived_at')
       .eq('instance_id', instanceId)
-      .eq('status', 'accepted')
       .order('quote_seq', { ascending: false }),
     admin.from('billing_recipients').select('id, name, email, token').eq('active', true),
   ])
@@ -92,16 +92,25 @@ export async function sendInvoiceRequest(
       startsAt: inst.starts_at,
       endsAt: inst.ends_at,
     })
-  const accepted = (quotes ?? []).find((q) => !q.archived_at)
   // The number on the document the client actually received — what they will
   // reconcile the invoice against, and what tells a re-quote's request apart
   // from the first one. Null when no quote went out through the portal, which
   // the biller's row reads as "no quote number" rather than inventing one.
-  const qNum = accepted ? quoteNumber(inst.ref_number, accepted.quote_seq as number) : null
+  //
+  // The last quote they received, not the last one they accepted. This used to
+  // ask the database for accepted quotes and take the newest, which on a
+  // re-quoted course stamped Q2 onto a request raised from Q3's figure — the
+  // client reconciling against a document we had already replaced. The same
+  // pick the page made the suggestion from, so the stamp and the number on
+  // screen cannot disagree.
+  const billable = pickBillableQuote(
+    (quotes ?? []).map((q) => ({ ...q, total: Number(q.total ?? 0) }))
+  )
+  const qNum = billable ? quoteNumber(inst.ref_number, billable.quote_seq as number) : null
 
   const { error } = await admin.from('invoice_requests').insert({
     instance_id: instanceId,
-    quote_id: accepted?.id ?? null,
+    quote_id: billable?.id ?? null,
     quote_number: qNum,
     amount,
     description,

@@ -263,7 +263,6 @@ export default async function CoursePricingEditor({
   // Where the conversation landed, offered to the invoiced field as a
   // starting point. Shared with the courses list, which offers the same
   // handoff from a drawer under the row — see lib/billing-handoff.
-  const accepted = quotes.find((q) => q.status === 'accepted' && !q.archived_at)
   const suggested = pickBillableQuote(quotes)
 
   // The handoff to Harken. The payee is the POC tagged billing in Details, or
@@ -296,10 +295,12 @@ export default async function CoursePricingEditor({
   // ever happens once); the numbers are worked out here, where the COA, the
   // rates and the chart of accounts are already loaded.
   //
-  // Which COA: the one the client actually accepted, else the one the latest
-  // quote was priced from, else the first live one. A course with two live
-  // COAs and no quote has no right answer, and the first is the working one.
-  const seedCoa = pickSeedCoa(estimatePanels, accepted?.estimate_id, quotes[0]?.estimate_id)
+  // Which COA: the one behind the quote that would be billed — see
+  // pickBillableQuote, which is the last quote the client received rather than
+  // the last one accepted — else the one the latest quote was priced from,
+  // else the first live one. A course with two live COAs and no quote has no
+  // right answer, and the first is the working one.
+  const seedCoa = pickSeedCoa(estimatePanels, suggested?.estimate_id, quotes[0]?.estimate_id)
 
   // What each of the last two steps offers as its number.
   //
@@ -320,7 +321,7 @@ export default async function CoursePricingEditor({
     ? { seq: suggested.quote_seq as number, total: suggested.total, status: suggested.status }
     : null
   // The COA this course would be billed from, priced as it stands. The same
-  // one the actuals seed their costs from — whichever the client accepted,
+  // one the actuals seed their costs from — whichever quote is being billed,
   // else the latest quoted, else the first live one.
   const estimateLink = seedCoa
     ? {
