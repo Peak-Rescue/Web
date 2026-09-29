@@ -1,5 +1,4 @@
 import { redirect } from 'next/navigation'
-import { roleLabel } from '@/lib/staffing-roles'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import Link from 'next/link'
@@ -12,6 +11,7 @@ import { courseCapabilityCategories } from '@/lib/capabilities'
 import { todayHere } from '@/lib/course-clock'
 import { readViewAs } from '@/lib/view-as'
 import ViewAsMenu from '@/components/ViewAsMenu'
+import { roleLabel, ROLE_BADGE, asInstanceRole } from '@/lib/staffing-roles'
 
 export default async function AdminPage({ searchParams }: { searchParams: Promise<{ cal?: string; scope?: string; cat?: string }> }) {
   const { cal, scope, cat } = await searchParams
@@ -481,18 +481,19 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
                       {c.inst.location ? ` · ${c.inst.location}` : ''}
                     </p>
                   </Link>
-                  {/* Teal has always meant "this one is yours to run" to
-                      whoever reads this list, so it follows the primary flag
-                      rather than the wage it used to stand in for. The band is
-                      still named — it is what the week pays. */}
-                  <span
-                    className={`shrink-0 text-[10px] font-medium px-2 py-0.5 rounded-full border ${
-                      c.inCharge
-                        ? 'border-teal-700 bg-teal-900/30 text-teal-300'
-                        : 'border-blue-800 bg-blue-900/20 text-blue-300'
-                    }`}
-                  >
-                    {c.inCharge ? `${roleLabel(c.role)} · primary` : roleLabel(c.role)}
+                  {/* Two pills, because they answer two questions: what the
+                      week pays, and whether it is yours to run. One pill saying
+                      "Lead · primary" made them look like one fact with a
+                      qualifier. Teal is only ever the second of them. */}
+                  <span className="shrink-0 flex items-center gap-1">
+                    <span className={`text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full border ${ROLE_BADGE[asInstanceRole(c.role)]}`}>
+                      {roleLabel(c.role)}
+                    </span>
+                    {c.inCharge && (
+                      <span className="text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full border border-teal-700 bg-teal-900/30 text-teal-300">
+                        Primary
+                      </span>
+                    )}
                   </span>
                 </div>
               ))}

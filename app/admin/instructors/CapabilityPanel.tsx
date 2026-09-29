@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { ROLE_SOLID } from '@/lib/staffing-roles'
 import { adminSetCapability, adminRemoveCapability } from './[id]/actions'
 import { CAPABILITY_META, CAPABILITY_ORDER, type CapabilityCategory, type CapabilityRole } from '@/lib/capabilities'
 
@@ -55,11 +56,7 @@ export default function CapabilityPanel({
                   disabled={!!isSaving}
                   onClick={() => handleSet(category, role)}
                   className={`flex-1 px-2 py-1 rounded text-xs font-medium capitalize transition-colors disabled:opacity-50 ${
-                    current === role
-                      ? role === 'lead'
-                        ? 'bg-teal-700 text-white'
-                        : 'bg-blue-700 text-white'
-                      : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-white'
+                    current === role ? ROLE_SOLID[role] : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-white'
                   }`}
                 >
                   {role}

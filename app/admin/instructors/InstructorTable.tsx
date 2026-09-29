@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useMemo } from 'react'
+import { ROLE_SOLID, ROLE_MUTED, ROLE_DOT, roleInitial, asInstanceRole } from '@/lib/staffing-roles'
 import Link from 'next/link'
 import { CERT_META, CERT_GROUPS, certStatus, type CertType, type CertGroup } from '@/lib/certs'
 import { CAPABILITY_META, CAPABILITY_ORDER, type CapabilityCategory, type CapabilityRole } from '@/lib/capabilities'
@@ -360,17 +361,13 @@ export function InstructorTable({ instructors, isAdmin = false }: { instructors:
                       <button
                         onClick={() => setExpertiseRole(cat, 'lead')}
                         className={`px-2 py-1 text-[10px] font-bold transition-colors ${
-                          roleFilter === 'lead'
-                            ? 'bg-teal-500 text-white'
-                            : 'bg-teal-900 text-teal-400 hover:bg-teal-800'
+                          roleFilter === 'lead' ? ROLE_SOLID.lead : `${ROLE_MUTED.lead} hover:brightness-125`
                         }`}
                       >L</button>
                       <button
                         onClick={() => setExpertiseRole(cat, 'assist')}
                         className={`px-2 py-1 text-[10px] font-bold rounded-r transition-colors ${
-                          roleFilter === 'assist'
-                            ? 'bg-blue-500 text-white'
-                            : 'bg-blue-900/60 text-blue-400 hover:bg-blue-800/60'
+                          roleFilter === 'assist' ? ROLE_SOLID.assist : `${ROLE_MUTED.assist} hover:brightness-125`
                         }`}
                       >A</button>
                     </>
@@ -594,7 +591,7 @@ export function InstructorTable({ instructors, isAdmin = false }: { instructors:
                           return (
                             <span
                               key={cat}
-                              className={`inline-block w-2 h-2 rounded-full ${role === 'lead' ? 'bg-teal-500' : role === 'assist' ? 'bg-blue-500' : 'bg-zinc-700'}`}
+                              className={`inline-block w-2 h-2 rounded-full ${role ? ROLE_DOT[asInstanceRole(role)] : 'bg-zinc-700'}`}
                               title={`${CAPABILITY_META[cat].label}${role ? `: ${role}` : ''}`}
                             />
                           )
@@ -606,10 +603,8 @@ export function InstructorTable({ instructors, isAdmin = false }: { instructors:
                     return (
                       <td key={cat} className="py-3 px-2 text-center border-b border-zinc-900">
                         {role ? (
-                          <span className={`inline-flex items-center justify-center rounded px-1.5 py-0.5 text-[10px] font-bold leading-none ${
-                            role === 'lead' ? 'bg-teal-900/60 text-teal-300' : 'bg-blue-900/60 text-blue-300'
-                          }`}>
-                            {role === 'lead' ? 'L' : 'A'}
+                          <span className={`inline-flex items-center justify-center rounded px-1.5 py-0.5 text-[10px] font-bold leading-none ${ROLE_MUTED[asInstanceRole(role)]}`}>
+                            {roleInitial(role)}
                           </span>
                         ) : (
                           <span className="inline-block w-2.5 h-2.5 rounded-full bg-zinc-800" />

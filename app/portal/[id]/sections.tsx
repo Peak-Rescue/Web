@@ -3,7 +3,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import WaiverDetach from '@/components/WaiverDetach'
 import PhoneText from '@/components/PhoneText'
-import { roleLabel, PRIMARY_LABEL, studentFacingRole } from '@/lib/staffing-roles'
+import { roleLabel, roleBadgeClass, PRIMARY_LABEL, studentFacingRole } from '@/lib/staffing-roles'
 
 // Presentational shell for the portal page. Every top-level block on a course
 // is a Section: same icon-and-rule header, same spacing, its own anchor. The
@@ -250,16 +250,12 @@ export function InstructorCard({
               Instructor
             </span>
           )}
-          {/* The pay band, to the crew only, and deliberately quiet: it is a
-              fact you can look up, not one you scan the roster for. Colour is
-              spoken for — teal means the person answering for the course — and
-              three more shades would only teach everyone to ignore all of
-              them. */}
-          {showRank && role && (
-            <span className="shrink-0 text-[10px] font-medium uppercase tracking-wide text-zinc-500">
-              {roleLabel(role)}
-            </span>
-          )}
+          {/* The pay band, to the crew only — a pill like the primary's, in its
+              own colour, so a crew list is scannable by seat and not only by
+              name. Teal is not among the three: it means primary, and the two
+              chips sit side by side on the same row precisely because they are
+              answering different questions. */}
+          {showRank && role && <span className={roleBadgeClass(role)}>{roleLabel(role)}</span>}
         </div>
         {(email || phone) && (
           <div className="text-[11px] text-zinc-500 leading-tight truncate">

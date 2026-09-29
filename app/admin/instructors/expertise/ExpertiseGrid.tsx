@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { ROLE_SOLID, roleInitial } from '@/lib/staffing-roles'
 import Link from 'next/link'
 import { adminSetExpertise, adminSetInstructorSectors } from '../[id]/actions'
 import { CAPABILITY_META, CAPABILITY_ORDER, type CapabilityCategory, type CapabilityRole } from '@/lib/capabilities'
@@ -75,13 +76,11 @@ export default function ExpertiseGrid({ rows }: { rows: GridRow[] }) {
     }
   }
 
+  // Same colours the crew row and the roster card give these two words — one
+  // definition, so a lead looks like a lead everywhere in the portal.
   const roleBtn = (active: boolean, role: CapabilityRole) =>
     `w-8 h-7 rounded text-xs font-bold transition-colors ${
-      active
-        ? role === 'lead'
-          ? 'bg-teal-700 text-white'
-          : 'bg-blue-700 text-white'
-        : 'bg-zinc-800/70 text-zinc-600 hover:bg-zinc-700 hover:text-zinc-300'
+      active ? ROLE_SOLID[role] : 'bg-zinc-800/70 text-zinc-600 hover:bg-zinc-700 hover:text-zinc-300'
     }`
 
   return (
@@ -190,7 +189,7 @@ export default function ExpertiseGrid({ rows }: { rows: GridRow[] }) {
                             title={`${r.name} — ${CAPABILITY_META[c].label}: ${opt}`}
                             className={roleBtn(role === opt, opt)}
                           >
-                            {opt === 'lead' ? 'L' : 'A'}
+                            {roleInitial(opt)}
                           </button>
                         ))}
                       </div>

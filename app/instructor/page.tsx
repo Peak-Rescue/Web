@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation'
+import { ROLE_MUTED } from '@/lib/staffing-roles'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -250,12 +251,8 @@ export default async function InstructorPage() {
                       <div className="text-sm font-medium text-white mb-2">{CAPABILITY_META[cat].label}</div>
                       <div className="flex gap-1.5">
                         {(['lead', 'assist'] as const).map(r => (
-                          <span key={r} className={`flex-1 px-2 py-1 rounded text-xs font-medium capitalize text-center ${
-                            role === r
-                              ? r === 'lead'
-                                ? 'bg-teal-900/40 border border-teal-700 text-teal-300'
-                                : 'bg-blue-900/40 border border-blue-700 text-blue-300'
-                              : 'bg-zinc-800 text-zinc-600'
+                          <span key={r} className={`flex-1 px-2 py-1 rounded text-xs font-medium capitalize text-center border ${
+                            role === r ? `${ROLE_MUTED[r]} border-current/40` : 'bg-zinc-800 text-zinc-600 border-transparent'
                           }`}>{r}</span>
                         ))}
                       </div>

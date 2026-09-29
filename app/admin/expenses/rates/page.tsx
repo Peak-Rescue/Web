@@ -1,5 +1,4 @@
 import { redirect } from 'next/navigation'
-import { INSTANCE_ROLES, roleLabel } from '@/lib/staffing-roles'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -12,6 +11,7 @@ import CostCategoryRow from './CostCategoryRow'
 import { CATEGORY_LABELS, categoriesFor, type ExpenseCategory } from '@/lib/expenses'
 import DeletePricingRateButton from './DeletePricingRateButton'
 import DefaultLineToggle from './DefaultLineToggle'
+import { INSTANCE_ROLES, roleLabel, ROLE_TEXT, asInstanceRole } from '@/lib/staffing-roles'
 
 // One template for the header and every row of each table. The rows were
 // flex, so each one ended wherever its own contents happened to run out and
@@ -326,7 +326,9 @@ export default async function AdminExpenseRatesPage() {
                 <p className="text-sm font-medium text-zinc-200">
                   {r.role ? (
                     <>
-                      <span className="text-zinc-100">{roleLabel(r.role as string)}</span>
+                      <span className={`font-semibold ${ROLE_TEXT[asInstanceRole(r.role as string)]}`}>
+                        {roleLabel(r.role as string)}
+                      </span>
                       <span className="text-zinc-500"> · </span>
                       {fmtRate(Number(r.hourly))} / hour
                     </>

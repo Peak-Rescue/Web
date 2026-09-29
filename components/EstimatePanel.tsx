@@ -878,7 +878,7 @@ export default function EstimatePanel({
               className="text-zinc-600 hover:text-zinc-200 underline underline-offset-2 decoration-zinc-700 transition-colors"
               title={`Recompute ${resettableRows.length === 1 ? 'one quantity' : `${resettableRows.length} quantities`} from the course's own numbers`}
             >
-              Reset quantities to the course's numbers
+              Reset quantities to the course&apos;s numbers
             </button>
           )}
         </div>

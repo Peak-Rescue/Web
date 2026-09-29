@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { INSTANCE_ROLES, roleLabel, type InstanceRole } from '@/lib/staffing-roles'
+import { INSTANCE_ROLES, roleLabel, ROLE_BADGE, type InstanceRole } from '@/lib/staffing-roles'
 import { useRouter } from 'next/navigation'
 import { assignInstructor } from './actions'
 import { sendInterestInvites, deleteInterestInvite } from './staffing-actions'
@@ -269,10 +269,10 @@ export default function StaffingInterest({
                               onClick={() => assign(inv.instructorId, r)}
                               disabled={assigningId !== null}
                               title={`Staff them at the ${roleLabel(r).toLowerCase()} rate`}
-                              className={`text-xs px-2 py-1 rounded font-medium transition-colors disabled:opacity-40 ${
+                              className={`text-xs px-2 py-1 rounded font-medium transition-colors disabled:opacity-40 border ${
                                 r === (hasCrew ? 'assist' : 'lead')
-                                  ? 'bg-pr-red hover:bg-pr-red-dark text-white'
-                                  : 'border border-zinc-700 hover:border-zinc-500 text-zinc-300'
+                                  ? 'bg-pr-red hover:bg-pr-red-dark border-pr-red text-white'
+                                  : `${ROLE_BADGE[r]} hover:brightness-125`
                               }`}
                             >
                               {roleLabel(r)}

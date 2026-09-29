@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState, useTransition } from 'react'
-import { crewOrder, roleLabel } from '@/lib/staffing-roles'
 import Link from 'next/link'
 import { staffingData, quoteData, billingData, booksData } from './quick-actions'
 import { setInstanceStatus, setInstanceOwner } from './actions'
@@ -20,6 +19,7 @@ import type { BillingPanelData } from '@/lib/billing-handoff'
 import type { QuoteQuickData, BooksQuickData } from './quick-actions'
 import OwnerPill from '@/components/OwnerPill'
 import { type CourseOwner } from '@/lib/course-owner'
+import { crewOrder, roleLabel, ROLE_SOLID, asInstanceRole } from '@/lib/staffing-roles'
 
 // The list's quick actions: where a course has got to, and the things you can
 // settle from here without opening it.
@@ -210,9 +210,13 @@ function CrewMeter({
                   ? `${roleLabel(person.role)}${person.in_charge ? ' · primary' : ''}`
                   : 'Open slot — nobody assigned'
               }
+              // A filled box wears its seat's colour, so the meter is
+              // scannable by what the crew is made of and not only by how many
+              // there are. Teal is gone from here: it meant "filled" while also
+              // meaning "primary" two pixels away, and the P says primary now.
               className={`w-4 h-4 rounded-[3px] border grid place-items-center ${
                 person
-                  ? 'bg-teal-400 border-teal-400'
+                  ? ROLE_SOLID[asInstanceRole(person.role)]
                   : full
                     ? 'border-zinc-700 bg-zinc-800'
                     : 'border-amber-500/60 bg-amber-500/10'
@@ -224,7 +228,7 @@ function CrewMeter({
                   lettered: a letter in every box would turn a thing you count
                   into a thing you read. */}
               {person?.in_charge && (
-                <span className="text-[9px] font-bold leading-none text-zinc-950">P</span>
+                <span className="text-[9px] font-bold leading-none text-white">P</span>
               )}
             </span>
           )

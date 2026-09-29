@@ -1,5 +1,4 @@
 import { notFound } from 'next/navigation'
-import { crewPlanOf, openSeats, bestOpenSeatFor, roleLabel } from '@/lib/staffing-roles'
 import { courseCapabilityCategories } from '@/lib/capabilities'
 import Link from 'next/link'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -8,6 +7,7 @@ import { courseDisplayName, courseShortName } from '@/lib/courses'
 import ResponseForm from './ResponseForm'
 import { courseZone, todayIn } from '@/lib/course-clock'
 import { slotsToStaff } from '@/lib/course-readiness'
+import { crewPlanOf, openSeats, bestOpenSeatFor, roleLabel, ROLE_TEXT } from '@/lib/staffing-roles'
 
 // Public, tokenized staffing-interest page — instructors land here from the
 // invite email to say whether they want to work the course.
@@ -181,7 +181,7 @@ export default async function StaffingInvitePage({
             <div className="pt-2 border-t border-zinc-800 mt-2 space-y-1">
               {seats.map((s) => (
                 <div key={s.role} className="flex items-baseline justify-between gap-4 text-xs">
-                  <span className="text-zinc-400">{roleLabel(s.role)}</span>
+                  <span className={`font-semibold uppercase tracking-wide ${ROLE_TEXT[s.role]}`}>{roleLabel(s.role)}</span>
                   <span className={s.open > 0 ? 'text-zinc-300 tabular-nums' : 'text-zinc-600 tabular-nums'}>
                     {s.open > 0 ? `${s.open} of ${s.seats} open` : `${s.seats} filled`}
                   </span>

@@ -11,6 +11,13 @@ import {
   openSeats,
   bestOpenSeatFor,
   EMPTY_CREW_PLAN,
+  ROLE_BADGE,
+  ROLE_TEXT,
+  ROLE_SOLID,
+  ROLE_MUTED,
+  ROLE_DOT,
+  roleBadgeClass,
+  roleInitial,
 } from '@/lib/staffing-roles'
 
 // The split "lead" went through: a wage category, and separately who is running
@@ -160,5 +167,52 @@ describe('the seat somebody is offered', () => {
 
   it('offers nothing on a full crew', () => {
     expect(bestOpenSeatFor([{ role: 'lead', open: 0 }, { role: 'assist', open: 0 }], true)).toBeNull()
+  })
+})
+
+// One palette, one definition. These exist because the same three words appear
+// on the crew row, the roster card, the dashboard, the call-out, the expertise
+// grid and the rate library, and three screens each picking their own blue is
+// how a colour stops meaning anything.
+describe('the wage band palette', () => {
+  it('dresses every band, in every weight', () => {
+    for (const r of INSTANCE_ROLES) {
+      expect(ROLE_BADGE[r]).toBeTruthy()
+      expect(ROLE_TEXT[r]).toBeTruthy()
+      expect(ROLE_SOLID[r]).toBeTruthy()
+      expect(ROLE_MUTED[r]).toBeTruthy()
+      expect(ROLE_DOT[r]).toBeTruthy()
+    }
+  })
+
+  // Teal is the one colour this palette must not contain: it means primary —
+  // the person answering for the course — and a band that borrowed it would put
+  // the two facts back together after all the work of pulling them apart.
+  it('leaves teal alone, because teal means primary', () => {
+    const everything = INSTANCE_ROLES.flatMap((r) => [
+      ROLE_BADGE[r], ROLE_TEXT[r], ROLE_SOLID[r], ROLE_MUTED[r], ROLE_DOT[r],
+    ]).join(' ')
+    expect(everything).not.toMatch(/teal/)
+    // Amber is likewise spoken for: it means something needs doing.
+    expect(everything).not.toMatch(/amber/)
+  })
+
+  it('gives each band its own hue, so two seats never look alike', () => {
+    const hue = (c: string) => c.match(/-(violet|sky|zinc|blue|indigo)-/)?.[1]
+    const hues = INSTANCE_ROLES.map((r) => hue(ROLE_BADGE[r]))
+    expect(new Set(hues).size).toBe(INSTANCE_ROLES.length)
+  })
+
+  // A pill is a shape and a colour, and a caller should not be able to get one
+  // right and the other wrong.
+  it('hands out the whole pill, not just the colour', () => {
+    expect(roleBadgeClass('lead')).toContain('rounded')
+    expect(roleBadgeClass('lead')).toContain('violet')
+    // An unknown role still gets a readable pill rather than a broken one.
+    expect(roleBadgeClass('nonsense')).toContain('sky')
+  })
+
+  it('initials each band distinctly', () => {
+    expect(INSTANCE_ROLES.map(roleInitial)).toEqual(['L', 'A', 'S'])
   })
 })

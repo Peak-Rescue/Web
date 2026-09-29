@@ -1,5 +1,4 @@
 import { updateInstanceDetails, addOffDay, removeOffDay } from './actions'
-import { CREW_SEAT_FIELDS } from '@/lib/staffing-roles'
 import AutoSaveForm from '@/components/AutoSaveForm'
 import TrashIcon from '@/components/TrashIcon'
 import InfoHint from '@/components/InfoHint'
@@ -16,6 +15,7 @@ export type CourseOffDay = { id: string; off_date: string; end_date: string | nu
 import { type CoursePOC } from '@/lib/contacts'
 import { type CourseOwner } from '@/lib/course-owner'
 import { type Venue } from '@/lib/library'
+import { CREW_SEAT_FIELDS, ROLE_TEXT } from '@/lib/staffing-roles'
 
 function fmt(d: string) {
   return new Date(d + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
@@ -161,7 +161,7 @@ export default function CourseDetailsEditor({
           <div className="flex items-end gap-2">
             {CREW_SEAT_FIELDS.map((f) => (
               <div key={f.name} className="flex-1 min-w-0">
-                <span className="block text-[10px] uppercase tracking-wide text-zinc-600 mb-1">{f.label}</span>
+                <span className={`block text-[10px] font-semibold uppercase tracking-wide mb-1 ${ROLE_TEXT[f.role]}`}>{f.label}</span>
                 <input
                   name={f.name}
                   type="number"

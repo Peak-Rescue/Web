@@ -174,3 +174,82 @@ export function crewPlanOf(course: {
     shadow: course.shadow_slots ?? null,
   }
 }
+
+// ─── How a wage band looks ───────────────────────────────────────────────────
+// A colour per band, defined once, because the same three words appear on the
+// crew row, the roster card, the dashboard, the call-out and the rate library,
+// and three screens each picking their own blue is how a colour stops meaning
+// anything.
+//
+// Which colours were available is most of the answer. Teal is spoken for — it
+// means "primary", the person answering for the course, and it has meant
+// roughly that to everyone reading these screens for a long time. Amber means
+// something needs doing. Red is the brand and destruction. So the bands take
+// violet and sky, which are far enough apart to tell at ten pixels (indigo
+// beside blue is not), and shadow takes zinc on purpose: it is the quietest
+// badge because it is the most junior seat, and a third bright colour would
+// give a trainee the same visual weight as the person running the week.
+export const ROLE_BADGE: Record<InstanceRole, string> = {
+  lead: 'bg-violet-500/10 border-violet-500/30 text-violet-300',
+  assist: 'bg-sky-500/10 border-sky-500/30 text-sky-300',
+  shadow: 'bg-zinc-500/10 border-zinc-600/40 text-zinc-400',
+}
+
+/** Just the text colour, for places already inside a border — a select, a
+    label, a line in a list. */
+export const ROLE_TEXT: Record<InstanceRole, string> = {
+  lead: 'text-violet-300',
+  assist: 'text-sky-300',
+  shadow: 'text-zinc-400',
+}
+
+/** The pill's own classes, band colour included. One string so a caller cannot
+    get the shape right and the colour wrong. */
+export function roleBadgeClass(role: string | null | undefined): string {
+  return `shrink-0 px-1.5 py-px rounded border text-[10px] font-semibold uppercase tracking-wide ${
+    ROLE_BADGE[asInstanceRole(role)]
+  }`
+}
+
+// The same three words appear on a second axis: `instructor_capabilities.role`,
+// what somebody is signed off to do across a discipline. A standing fact about a
+// person rather than a fact about one course — but it is the same vocabulary, so
+// it wears the same colours. A lead looks like a lead on their profile, on the
+// expertise grid and on a course crew row, and the axis is told apart by what is
+// around it, not by inventing a second palette for the same word.
+//
+// Capabilities have no shadow, and should not: shadowing is what somebody does
+// before they are signed off for anything, so there is nothing to record.
+//
+// This is also what freed teal. It used to mean "qualified to lead" on the
+// instructor table and "primary" on a course, which are not the same claim and
+// were the same colour.
+
+/** Filled, for a toggle that is on — an expertise button, a picked capability.
+    A translucent pill does not read as pressed. */
+export const ROLE_SOLID: Record<InstanceRole, string> = {
+  lead: 'bg-violet-700 text-white',
+  assist: 'bg-sky-700 text-white',
+  shadow: 'bg-zinc-600 text-white',
+}
+
+/** Dimmer than solid, brighter than nothing: a value that is set but is not the
+    thing you are pointing at. */
+export const ROLE_MUTED: Record<InstanceRole, string> = {
+  lead: 'bg-violet-900/60 text-violet-300',
+  assist: 'bg-sky-900/60 text-sky-300',
+  shadow: 'bg-zinc-800 text-zinc-400',
+}
+
+/** A bare dot, where a whole word will not fit — the capability column in a
+    dense table. Never the only channel: it carries a title with the word in it. */
+export const ROLE_DOT: Record<InstanceRole, string> = {
+  lead: 'bg-violet-500',
+  assist: 'bg-sky-500',
+  shadow: 'bg-zinc-500',
+}
+
+/** One letter, for a cell two characters wide. */
+export function roleInitial(role: string | null | undefined): string {
+  return roleLabel(role).slice(0, 1).toUpperCase()
+}

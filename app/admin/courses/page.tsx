@@ -1,5 +1,4 @@
 import { redirect } from 'next/navigation'
-import { CREW_SEAT_FIELDS } from '@/lib/staffing-roles'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -17,6 +16,7 @@ import { todayHere } from '@/lib/course-clock'
 import { loadCourseExtras, loadBooksSettleDays, showsSteps, coursePhase } from '@/lib/course-readiness'
 import { loadCourseOwners } from '@/lib/course-owner'
 import InfoHint from '@/components/InfoHint'
+import { CREW_SEAT_FIELDS, ROLE_TEXT } from '@/lib/staffing-roles'
 
 function firstStartDate(inst: Instance): string | null {
   return inst.starts_at ?? null
@@ -175,7 +175,7 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
               <div className="flex items-end gap-2">
                 {CREW_SEAT_FIELDS.map((f) => (
                   <div key={f.name} className="flex-1 min-w-0">
-                    <span className="block text-[10px] uppercase tracking-wide text-zinc-600 mb-1">{f.label}</span>
+                    <span className={`block text-[10px] font-semibold uppercase tracking-wide mb-1 ${ROLE_TEXT[f.role]}`}>{f.label}</span>
                     <input
                       name={f.name}
                       type="number"

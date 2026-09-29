@@ -7,7 +7,7 @@ import InstructorAssign from './InstructorAssign'
 import GuestInstructorButton from './GuestInstructorButton'
 import StaffingInterest from './StaffingInterest'
 import type { StaffingPanelData } from '@/lib/staffing-panel'
-import { INSTANCE_ROLES, roleLabel, PRIMARY_LABEL } from '@/lib/staffing-roles'
+import { INSTANCE_ROLES, roleLabel, PRIMARY_LABEL, ROLE_BADGE, ROLE_TEXT, asInstanceRole } from '@/lib/staffing-roles'
 
 // Who is running this course: the crew, who else could be, and who has been
 // asked.
@@ -36,7 +36,7 @@ export default function StaffingPanel({ data }: { data: StaffingPanelData }) {
             <>
               <span className="text-amber-400/90">Still wanted</span>
               {shortSeats.map((s) => (
-                <span key={s.role} className="text-zinc-400">
+                <span key={s.role} className={ROLE_TEXT[s.role]}>
                   {s.open} {roleLabel(s.role).toLowerCase()}
                 </span>
               ))}
@@ -120,6 +120,10 @@ function CrewRow({
               the number their hours are worked out at and it is set by how they
               were staffed — a wage typed again in the actuals is a wage typed
               twice. */}
+          {/* Tinted with its own band, so the row reads as a badge you can
+              change rather than as a form field that happens to be there. The
+              colour is the same one the roster card and the dashboard use for
+              that band — there is one definition of it. */}
           <select
             value={member.role}
             disabled={pending}
@@ -127,7 +131,7 @@ function CrewRow({
               start(async () => { await setCourseRole(instanceId, member.instructorId, e.target.value); router.refresh() })
             }
             title="What this course pays them by the hour"
-            className="bg-zinc-800 border border-zinc-700 rounded px-1.5 py-0.5 text-xs text-zinc-300 focus:outline-none focus:border-zinc-500 disabled:opacity-50"
+            className={`bg-zinc-800 border rounded px-1.5 py-0.5 text-xs font-semibold uppercase tracking-wide focus:outline-none focus:border-zinc-500 disabled:opacity-50 ${ROLE_BADGE[asInstanceRole(member.role)]}`}
           >
             {INSTANCE_ROLES.map((r) => (
               <option key={r} value={r}>{roleLabel(r)}</option>
