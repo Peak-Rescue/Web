@@ -8,6 +8,7 @@ import { syncCourseCalendar } from '@/lib/google-calendar'
 import { parseContacts, primaryContactEmail, ccEmailOptions } from '@/lib/contacts'
 import { guessSeedQty, coaPrice, type SeedCounts, plannedInstructorCount } from '@/lib/estimates'
 import { courseDayCounts, trainingDurationPhrase } from '@/lib/courses'
+import { todayHere } from '@/lib/course-clock'
 import { sendMail } from '@/lib/mailer'
 import { QUOTE_ROW_COLUMNS, type QuoteRow } from '@/lib/quotes'
 
@@ -678,6 +679,15 @@ export async function createQuote(
   const { QUOTE_VALIDITY_DAYS } = await import('@/lib/quotes')
   const validUntil = new Date()
   validUntil.setDate(validUntil.getDate() + QUOTE_VALIDITY_DAYS)
+  // A quote cannot outlive the course it prices: 30 days from today would
+  // have told a client they could still accept a week into teaching. The
+  // window closes on the first day at the latest, and shorter when the course
+  // is sooner than that. A course that has already started is left on the
+  // plain 30 days — there is no future date to clamp to, and an expired quote
+  // nobody can accept is worse than a generous one.
+  let validThrough = validUntil.toISOString().slice(0, 10)
+  const startsOn = inst.starts_at as string | null
+  if (startsOn && startsOn > todayHere() && startsOn < validThrough) validThrough = startsOn
 
   const { data: created, error } = await admin
     .from('course_quotes')
@@ -688,7 +698,7 @@ export async function createQuote(
       options,
       // Options quotes carry a COA per option instead of one for the quote.
       estimate_id: allCoas ? null : estimate?.id ?? null,
-      valid_until: validUntil.toISOString().slice(0, 10),
+      valid_until: validThrough,
       scope_bullets: bullets,
       course_blurb: blurb,
       prepared_by: user?.id ?? null,
