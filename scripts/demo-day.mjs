@@ -208,14 +208,20 @@ if (CREATE) {
   if (cErr) throw cErr
   course = c
 
-  // in_charge is spelled out on both rows rather than left to the column
-  // default: PostgREST unifies the columns across a batch insert, so a row that
-  // merely omits the key is sent an explicit null, which a not-null column
-  // rejects — and it rejects the whole batch.
-  const { error: crewErr } = await db.from('instance_instructors').insert([
-    ...(primary ? [{ instance_id: c.id, instructor_id: primary.id, role: 'lead', in_charge: true }] : []),
-    { instance_id: c.id, instructor_id: person.id, role: 'assist', in_charge: false },
-  ])
+  // A primary, and deliberately nobody else.
+  //
+  // The demo instructor is *not* crewed here, because being crewed is what the
+  // demo is about arriving at. The staff home lists a live interest invite only
+  // for a course you are not already on (app/admin/page.tsx) — staffing somebody
+  // is the answer to the question, so the question stops being asked — so a
+  // demo instructor who starts on the crew never sees the invite in their portal
+  // and the whole first half has to happen in an email instead.
+  //
+  // They do not need the crew row for anything else: the expense editor offers
+  // every live course, not only yours.
+  const { error: crewErr } = await db.from('instance_instructors').insert(
+    primary ? [{ instance_id: c.id, instructor_id: primary.id, role: 'lead', in_charge: true }] : []
+  )
   if (crewErr) throw crewErr
 
   const { error: invErr } = await db
@@ -329,17 +335,25 @@ console.log(`
   thing that lands in an instructor's inbox. Three roles, what each pays, the
   hours, and tick-boxes for which they would take.
 
-  ─── Then, without leaving that window ──────────────────────────────────────
+  ─── Or start one step earlier, from your own admin window ──────────────────
+
+  Send Demo Instructor a staffing-interest invite from the course's staffing
+  panel. The mail lands in your own inbox — the account is ${DEMO_EMAIL} — and
+  the same ask appears on their portal home, because they are not on this crew
+  yet. That is the more honest opening: the room sees where the link comes from.
+
+  ─── Then, without leaving the private window ───────────────────────────────
 
   1 · Accept it. Untick a role first: they say what they will take, we do not
       tell them what they are.
 
-  2 · In your own admin window, assign "Print student packets" to Demo
-      Instructor. It is unassigned, so right now nobody can see it at all.
+  2 · In your admin window, staff them. Their answer is sitting in the staffing
+      panel, and the roles they declined are struck through.
 
-  3 · Back in the private window: "← Portal" → the course → the task is there.
-      They can tick it off and add a note. No Add button, and nothing of
-      anybody else's — assigning belongs to the primary.
+  3 · Back in the private window: "← Portal" → the course is theirs now. Two
+      tasks are already assigned to them; assign "Print student packets" as well
+      and reload to watch it land. They can tick tasks off and add notes, but
+      there is no Add button — assigning belongs to the primary.
 
   4 · Then /instructor/expenses for the draft report: lodging, per diem, and a
       612-mile drive that works out its own amount.
