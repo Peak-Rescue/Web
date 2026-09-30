@@ -138,32 +138,22 @@ export function openSeats(
   })
 }
 
-/** The best seat somebody could be offered: their own ceiling, not the
-    course's. A lead can work an assist seat or shadow — nobody is too qualified
-    to help — but an assist cannot cover a lead seat, and telling them a lead
-    seat is open when they cannot take it is how somebody says yes to a week
-    they were never going to be given.
 
-    Reads the open seats in wage order, so the answer is the best one actually
-    available to them rather than the best one that exists. */
+/** The three boxes, in wage order, as the details forms draw them. Named here so
+    the form, the parser and the column names cannot fall out of step. */
 /** Every seat this person could hold, best first — their ceiling, not the
     course's. A lead can work an assist seat or shadow; nobody is too qualified
     to help. An assist cannot cover a lead seat, so they are never shown a lead
-    tick-box to put their name against. */
+    tick-box to put their name against.
+
+    This is the whole answer now. There used to be a companion that picked the
+    single best *open* seat, for a greeting that told somebody which seat they
+    would be put in — and that greeting was the last place the page still spoke
+    as though the seat were ours to assign rather than theirs to accept. */
 export function reachableSeats(qualifiedToLead: boolean): InstanceRole[] {
   return qualifiedToLead ? [...INSTANCE_ROLES] : INSTANCE_ROLES.filter((r) => r !== 'lead')
 }
 
-export function bestOpenSeatFor(
-  open: { role: InstanceRole; open: number }[],
-  qualifiedToLead: boolean
-): InstanceRole | null {
-  const reachable = qualifiedToLead ? INSTANCE_ROLES : INSTANCE_ROLES.filter((r) => r !== 'lead')
-  return reachable.find((r) => (open.find((o) => o.role === r)?.open ?? 0) > 0) ?? null
-}
-
-/** The three boxes, in wage order, as the details forms draw them. Named here so
-    the form, the parser and the column names cannot fall out of step. */
 export const CREW_SEAT_FIELDS = [
   { role: 'lead' as InstanceRole, name: 'lead_slots', key: 'lead_slots', label: 'Lead' },
   { role: 'assist' as InstanceRole, name: 'assist_slots', key: 'assist_slots', label: 'Assist' },

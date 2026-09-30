@@ -7,7 +7,7 @@ import { courseDisplayName, courseShortName } from '@/lib/courses'
 import ResponseForm from './ResponseForm'
 import { courseZone, todayIn } from '@/lib/course-clock'
 import { slotsToStaff } from '@/lib/course-readiness'
-import { crewPlanOf, openSeats, bestOpenSeatFor, reachableSeats, roleLabel, ROLE_TEXT } from '@/lib/staffing-roles'
+import { crewPlanOf, openSeats, reachableSeats, roleLabel, ROLE_TEXT } from '@/lib/staffing-roles'
 import { payForPerson, paySettingsFrom, courseFieldDates, NO_TERMS } from '@/lib/pay'
 
 // Public, tokenized staffing-interest page — instructors land here from the
@@ -96,7 +96,6 @@ export default async function StaffingInvitePage({
   const qualifiedToLead = (instructor?.instructor_capabilities ?? []).some(
     (c) => courseCategories.includes(c.category) && c.role === 'lead'
   )
-  const offered = bestOpenSeatFor(seats, qualifiedToLead)
 
   // ── What the seats pay, and how long the week is ──────────────────────────
   // The question changed direction: instead of telling somebody which seat they
@@ -214,20 +213,16 @@ export default async function StaffingInvitePage({
             Hi {instructor.name.split(' ')[0]} —{' '}
             {staffed
               ? 'the crew is full. Plans do shift, so let us know if you want to be a backup.'
-              : offered
-                ? `are you interested in working this course as ${roleLabel(offered).toLowerCase()}?`
+              : canTake.length === 1
+                ? `are you interested in working this course as ${roleLabel(canTake[0]).toLowerCase()}?`
                 : 'are you interested in working this course?'}
           </p>
         )}
-        {/* Which seat is actually theirs. Said plainly, because "3 open" above a
-            person who can only fill one of them is a number that answers
-            somebody else's question — and somebody who says yes to a lead week
-            they were never going to be given has been misled by arithmetic.
-
-            Only when the plan and their sign-offs disagree about the best seat:
-            if the best open seat is already the best seat they could hold, the
-            line above has said it and this would be the same fact twice. */}
-        {!staffed && !cancelled && !over && offered && offered !== 'lead' && (seats.find((s) => s.role === 'lead')?.open ?? 0) > 0 && (
+        {/* Why there is no lead tick-box below. The seat list above shows one,
+            because what the course is made of is part of deciding — but it is
+            not theirs to take, and a lead seat listed with no way to say yes to
+            it is a question left hanging. */}
+        {!staffed && !cancelled && !over && !qualifiedToLead && (seats.find((s) => s.role === 'lead')?.seats ?? 0) > 0 && (
           <p className="-mt-6 mb-8 text-xs text-zinc-500">
             The lead seat needs a lead sign-off in this discipline.
           </p>
