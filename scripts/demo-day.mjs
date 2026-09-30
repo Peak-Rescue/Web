@@ -184,6 +184,24 @@ if (CREATE) {
     .insert({ instance_id: c.id, instructor_id: person.id })
   if (invErr) throw invErr
 
+  // Tasks, with two of them theirs.
+  //
+  // The section hides itself entirely when a course has no tasks and you are not
+  // the one who can add them — so an empty demo course shows an instructor no
+  // Tasks section at all, which reads as "instructors don't get tasks" rather
+  // than "this course has none".
+  //
+  // Not primary on purpose, because that is the ordinary case: an assist can
+  // tick off and annotate the tasks assigned to *them*, and cannot add, assign
+  // or delete. Seeding one unassigned task shows the difference in the same list.
+  const { error: taskErr } = await db.from('course_tasks').insert([
+    { instance_id: c.id, title: 'Pick up the rental van', status: 'open', assigned_to: person.profile_id, sort_order: 0 },
+    { instance_id: c.id, title: 'Check litter and hardware', status: 'open', assigned_to: person.profile_id, sort_order: 1 },
+    { instance_id: c.id, title: 'Confirm canyon permits', status: 'done', completed_at: new Date('2026-09-20T00:00:00Z').toISOString(), sort_order: 2 },
+    { instance_id: c.id, title: 'Print student packets', status: 'open', sort_order: 3 },
+  ])
+  if (taskErr) throw taskErr
+
   const { data: report, error: rErr } = await db
     .from('expense_reports')
     .insert({
@@ -205,7 +223,7 @@ if (CREATE) {
   ])
   if (itemErr) throw itemErr
 
-  console.log(`  built PR-${String(c.ref_number).padStart(4, '0')}, the demo instructor, an invite, and a 3-line draft report`)
+  console.log(`  built PR-${String(c.ref_number).padStart(4, '0')}, the demo instructor, an invite, 4 tasks, and a 3-line draft report`)
 }
 
 if (!course || !person) {
@@ -233,24 +251,39 @@ const { data: invite } = await db
   .maybeSingle()
 
 console.log(`
-  ─── The two personal screens ───────────────────────────────────────────────
+  ─── Run of show ────────────────────────────────────────────────────────────
 
-  1 · Accepting a course — open cold, no login. This is what lands in an
-      instructor's inbox.
+  1 · Accepting a course. No login — open it cold, in a private window. This is
+      what lands in an instructor's inbox.
 
       ${BASE}/staffing/${invite?.token ?? '(none)'}
 
-      Three roles with what each pays, the length of the week and its overtime,
-      and tick-boxes for which ones they would take. Untick one and the point
-      makes itself: they say what they will accept, we do not tell them what
-      they are.
+      Three roles, what each pays, the hours, and tick-boxes for which ones they
+      would take. Untick one and the point makes itself: they say what they will
+      accept, we do not tell them what they are.
 
-  2 · The expense report — needs the demo login. Private window, this first:
+  ── Everything below needs the demo login. Open this next, same window: ──────
 
-      ${BASE}/auth/callback?token_hash=${link.properties.hashed_token}&type=email&next=%2Finstructor%2Fexpenses
+      ${BASE}/auth/callback?token_hash=${link.properties.hashed_token}&type=email&next=%2Finstructor
 
-      Opens on a draft with three lines in it: lodging, per diem, and a 612-mile
-      drive that works out its own amount.
+      That IS the sign-in — one click, no email, no password. It lands on the
+      instructor's own page. The two links below only work afterwards; on their
+      own they bounce you to the login screen.
+
+  2 · Their tasks, on the course page.
+
+      ${BASE}/portal/${course.id}
+
+      Two of the four tasks are theirs: they can tick those off and add notes.
+      No Add button and no sign of anybody else's work — assigning is the
+      primary's, and unassigned tasks are invisible to everyone.
+
+  3 · Their expense report.
+
+      ${BASE}/instructor/expenses
+
+      A draft with three lines in it: lodging, per diem, and a 612-mile drive
+      that works out its own amount.
 
   Everything else — prep, schedule, updates, gear, photos, the student view —
   from your own admin window on a real course with the view-as chip. The chip
@@ -260,5 +293,6 @@ console.log(`
 
     node scripts/demo-day.mjs --delete
 
-  The sign-in token above is single-use. Rerun without --delete for a fresh one.
+  The sign-in token is single-use and expires. Rerun without --delete for a
+  fresh one — do that right before you present.
 `)
