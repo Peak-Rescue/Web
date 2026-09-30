@@ -9,6 +9,7 @@ import StaffingInterestList from '@/components/StaffingInterestList'
 import { courseShortName, courseEventTitle, crewFirstNames } from '@/lib/courses'
 import { courseCapabilityCategories } from '@/lib/capabilities'
 import { todayHere } from '@/lib/course-clock'
+import { slotsToStaff } from '@/lib/course-readiness'
 import { readViewAs } from '@/lib/view-as'
 import ViewAsMenu from '@/components/ViewAsMenu'
 import { roleLabel, ROLE_BADGE, asInstanceRole } from '@/lib/staffing-roles'
@@ -40,6 +41,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     starts_at: string | null
     ends_at: string | null
     status: string
+    instructor_slots?: number | null
     internal?: boolean | null
     custom_categories?: string[] | null
     instance_instructors?: { role: string; in_charge?: boolean | null; instructors: { name: string } | null }[] | null
@@ -61,7 +63,9 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       : Promise.resolve({ data: null }),
     admin
       .from('course_interest_invites')
-      .select('token, interested, note, course_instances!inner(id, ref_number, course_type, custom_title, client_name, location, starts_at, ends_at, status), instructors!inner(profile_id)')
+      // The crew rides along for the answered ones below: "has it filled yet"
+      // is half of why somebody comes back to an invite they already replied to.
+      .select('token, interested, note, course_instances!inner(id, ref_number, course_type, custom_title, client_name, location, starts_at, ends_at, status, instructor_slots, instance_instructors(role, in_charge)), instructors!inner(profile_id)')
       .eq('instructors.profile_id', user.id)
       .not('sent_at', 'is', null),
     showAllCourses
@@ -109,12 +113,13 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     (assignmentRows ?? []).map((a) => (a.course_instances as unknown as InstRow).id)
   )
 
-  // Live staffing-interest invites (answered or not) for upcoming courses the
-  // viewer isn't already assigned to — answers stay changeable until then.
-  // Unanswered only. A reply you have already given is changed from the link
-  // in the invite email, which never expires — this page carries the asking,
-  // not the record of what was asked.
-  const liveInvites = (inviteRows ?? [])
+  // Staffing-interest invites for courses the viewer isn't already assigned to.
+  // Three bounds, all shared by the answered ones below: not cancelled, not yet
+  // over, not already theirs. A course that has run or been called off is done
+  // asking and done being answered, and once somebody is on the crew the
+  // question has been settled by somebody else — it belongs in Your courses
+  // from then on, not in a list about being asked.
+  const myInvites = (inviteRows ?? [])
     .map((r) => ({
       token: r.token as string,
       interested: r.interested as boolean | null,
@@ -123,12 +128,39 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     .filter(
       (r) =>
         r.inst &&
-        r.interested === null &&
         r.inst.status !== 'cancelled' &&
         (!r.inst.ends_at || r.inst.ends_at >= today) &&
         !assignedIds.has(r.inst.id)
     )
     .sort((a, b) => (a.inst.starts_at ?? '9999').localeCompare(b.inst.starts_at ?? '9999'))
+
+  const liveInvites = myInvites.filter((r) => r.interested === null)
+
+  // The ones already answered, folded. They were cut from this page in
+  // September for spending its best space on the small chance of a change of
+  // mind, and the email's link was called their permanent home. It isn't one:
+  // the two reasons people come back — changing the answer, and seeing whether
+  // the crew filled without them — both need a door that isn't an inbox, and
+  // the inbox here has failed before. Folded rather than restored to full
+  // height, because the original objection about the space was right.
+  //
+  // Same test for a full crew the courses list and the staffing page use:
+  // every slot has a name and one of them is leading. Read from the row's own
+  // crew, so it is as live as the page — which is the point, since a yes given
+  // three weeks ago says nothing about who has been staffed since.
+  const answeredInvites = myInvites
+    .filter((r) => r.interested !== null)
+    .map((r) => {
+      const crew = r.inst.instance_instructors ?? []
+      const wanted = slotsToStaff(r.inst.instructor_slots)
+      return {
+        ...r,
+        interested: r.interested as boolean,
+        crew: crew.length,
+        wanted,
+        filled: crew.length >= wanted && crew.some((c) => c.in_charge),
+      }
+    })
 
   // Calendar: assigned courses by default, every course when scope=all (past
   // months included so back-navigation isn't empty), cancelled excluded.
@@ -387,15 +419,32 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         </div>
 
 
-        {liveInvites.length > 0 && (
-          <section className="mb-10">
-            <h2 className="text-sm font-medium text-zinc-500 uppercase tracking-wide mb-3">Courses looking for staff</h2>
+        {/* The heading names what is open, so it only appears when something
+            is. With every invite answered the section is just the fold, whose
+            own line says what it holds — a header claiming a course wants
+            staffing when the only thing left is your own answer, already
+            given, is a line that lies to be tidy. */}
+        {(liveInvites.length > 0 || answeredInvites.length > 0) && (
+          <section className={liveInvites.length > 0 ? 'mb-10' : 'mb-6'}>
+            {liveInvites.length > 0 && (
+              <h2 className="text-sm font-medium text-zinc-500 uppercase tracking-wide mb-3">Courses looking for staff</h2>
+            )}
             <StaffingInterestList
               items={liveInvites.map((r) => ({
                 token: r.token,
                 title: courseShortName(r.inst.course_type, r.inst.custom_title),
                 client: r.inst.client_name,
                 meta: `${fmtRange(r.inst)}${r.inst.location ? ` · ${r.inst.location}` : ''}`,
+              }))}
+              answered={answeredInvites.map((r) => ({
+                token: r.token,
+                title: courseShortName(r.inst.course_type, r.inst.custom_title),
+                client: r.inst.client_name,
+                meta: `${fmtRange(r.inst)}${r.inst.location ? ` · ${r.inst.location}` : ''}`,
+                interested: r.interested,
+                filled: r.filled,
+                crew: r.crew,
+                wanted: r.wanted,
               }))}
             />
           </section>
