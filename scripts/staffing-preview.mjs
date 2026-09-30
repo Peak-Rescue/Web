@@ -188,7 +188,20 @@ const { data: invite, error: inviteErr } = await db
   .single()
 if (inviteErr) throw inviteErr
 
-console.log(`\n  ${BASE}/staffing/${invite.token}`)
+const url = `${BASE}/staffing/${invite.token}`
+console.log(`\n  ${url}`)
+
+// Whether anything is actually listening. The link is useless without a server
+// behind it, and "I opened it and nothing happened" is indistinguishable from
+// every other kind of nothing until somebody checks.
+if (BASE.includes('localhost')) {
+  const up = await fetch(BASE, { method: 'HEAD' }).then(() => true).catch(() => false)
+  console.log(
+    up
+      ? '  (dev server is up — that link will open)'
+      : `  ⚠ Nothing is listening on ${BASE}. Run "npm run dev" in another terminal\n    and leave it running, then open the link above.`
+  )
+}
 console.log(`\n  Nothing was emailed. sent_at is ${invite.sent_at ?? 'null — the staffing panel will show this as not yet sent'}.`)
 if (invite.interested !== null) {
   console.log(`  Heads up: this invite already carries an answer (${invite.interested ? 'interested' : "can't make it"}),`)
