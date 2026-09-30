@@ -63,10 +63,12 @@ const { data: found } = await db
   .from('course_instances')
   .select('id, ref_number')
   .like('custom_title', `${MARK} —%`)
+const DEMO_SLUG = 'demo-instructor'
+
 const { data: foundPerson } = await db
   .from('instructors')
   .select('id, name, profile_id')
-  .ilike('email', DEMO_EMAIL)
+  .eq('slug', DEMO_SLUG)
   .maybeSingle()
 
 let course = found?.[0] ?? null
@@ -131,7 +133,7 @@ if (CREATE) {
     .from('instructors')
     .insert({
       name: 'Demo Instructor',
-      slug: 'demo-instructor',
+      slug: DEMO_SLUG,
       instructor_role: 'lead',
       title: 'Rescue Instructor',
       email: DEMO_EMAIL,
@@ -252,12 +254,27 @@ const { data: link, error: linkErr } = await db.auth.admin.generateLink({
 })
 if (linkErr) throw linkErr
 
-const { data: invite } = await db
+// Re-minted if it has gone. The invite is the one thing here that somebody can
+// delete from the staffing panel without meaning to end the demo, and a run of
+// show whose first link is "/staffing/" with nothing after it is a bad thing to
+// discover in front of a room.
+let { data: invite } = await db
   .from('course_interest_invites')
   .select('token')
   .eq('instance_id', course.id)
   .eq('instructor_id', person.id)
   .maybeSingle()
+
+if (!invite) {
+  const { data: remade, error: remakeErr } = await db
+    .from('course_interest_invites')
+    .insert({ instance_id: course.id, instructor_id: person.id })
+    .select('token')
+    .single()
+  if (remakeErr) throw remakeErr
+  invite = remade
+  console.log('  (the invite had gone — minted a new one)')
+}
 
 // One link: signs in as the demo instructor *and* lands on the interest page.
 //
