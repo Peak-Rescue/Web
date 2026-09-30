@@ -36,7 +36,8 @@ const BASE = process.env.PREVIEW_BASE ?? env.NEXT_PUBLIC_SITE_URL ?? 'http://loc
 // The marker every demo row carries, and the only thing --delete will touch.
 const MARK = 'DEMO'
 const DEMO_EMAIL = process.env.DEMO_EMAIL ?? 'demo.instructor@peak-rescue.com'
-const CURRICULUM_FROM = 13 // PR-0013 — the most fully built real course we have
+const STUDENT_EMAIL = process.env.DEMO_STUDENT_EMAIL ?? 'demo.student@peak-rescue.com'
+const COPY_FROM = 13 // PR-0013 — the most completely built real course we have
 
 const CREATE = process.argv.includes('--create')
 let wiped = false
@@ -59,6 +60,12 @@ const { data: person } = await db
   .from('instructors')
   .select('id, name, profile_id, schedule_token')
   .ilike('email', DEMO_EMAIL)
+  .maybeSingle()
+
+const { data: studentRow } = await db
+  .from('profiles')
+  .select('id')
+  .ilike('email', STUDENT_EMAIL)
   .maybeSingle()
 
 // ── Teardown ────────────────────────────────────────────────────────────────
@@ -84,6 +91,12 @@ if (DELETE || (CREATE && ((courses ?? []).length > 0 || person))) {
     }
     console.log(`  deleted the demo instructor and ${(reports ?? []).length} expense report(s)`)
   }
+  if (studentRow) {
+    // Enrollments go with the courses; the account does not.
+    await db.from('profiles').delete().eq('id', studentRow.id)
+    await db.auth.admin.deleteUser(studentRow.id).catch(() => {})
+    console.log('  deleted the demo student')
+  }
   if (DELETE) {
     console.log('\n  Clean.\n')
     process.exit(0)
@@ -97,6 +110,7 @@ if (DELETE || (CREATE && ((courses ?? []).length > 0 || person))) {
 // exists, so a wipe forgets all of it rather than finding out through a foreign
 // key three inserts later.
 let demo = wiped ? null : person
+let student = wiped ? null : studentRow
 let upcoming = wiped ? null : (courses ?? []).find((c) => c.custom_title.includes('next month'))
 let finished = wiped ? null : (courses ?? []).find((c) => c.custom_title.includes('last week'))
 
@@ -165,8 +179,46 @@ if (CREATE) {
       .single()
     if (tokErr) throw tokErr
 
+    // The instructor's own page is one of the five screens in the demo, and an
+    // empty profile is the least convincing of the five. Filled in with the
+    // shape of a real record rather than lorem: a bio that reads like somebody
+    // wrote it, certs with real expiry dates (one of them expiring soon, since
+    // that is the state the page exists to nag about), and expertise across the
+    // disciplines this course actually needs.
+    await db
+      .from('instructors')
+      .update({
+        bio:
+          'Demo has been working rope and water rescue since 2012, first with a ' +
+          'county dive team and then full time in canyon environments. They teach ' +
+          'anchors, moving water and litter work, and spend the off season running ' +
+          'swiftwater refreshers for municipal teams in the mountain west.',
+        certifications: ['SPRAT Level 2', 'Swiftwater Rescue Technician', 'WFR'],
+        specialties: ['Canyon rescue', 'Moving water', 'Litter rigging'],
+        sectors: ['civilian'],
+        show_phone: true,
+        show_email: true,
+      })
+      .eq('id', ins.id)
+
+    const { error: capErr } = await db.from('instructor_capabilities').insert([
+      { instructor_id: ins.id, category: 'canyon', role: 'assist' },
+      { instructor_id: ins.id, category: 'swiftwater', role: 'assist' },
+      { instructor_id: ins.id, category: 'rope', role: 'lead' },
+    ])
+    if (capErr) console.error('  (capabilities skipped:', capErr.message + ')')
+
+    // instructor_certs.instructor_id points at profiles, not instructors —
+    // the column name says otherwise, and a foreign key is how you find out.
+    const { error: certErr } = await db.from('instructor_certs').insert([
+      { instructor_id: uid, cert_type: 'sprat', level: '2', expires_at: day(400) },
+      { instructor_id: uid, cert_type: 'swiftwater', expires_at: day(45) },
+      { instructor_id: uid, cert_type: 'wfr', expires_at: day(210) },
+    ])
+    if (certErr) console.error('  (certs skipped:', certErr.message + ')')
+
     demo = tokened
-    console.log('  created the demo instructor')
+    console.log('  created the demo instructor, with bio, certs and expertise')
   }
 
   // Somebody real to be the primary, so the crew list is not one name.
@@ -176,28 +228,61 @@ if (CREATE) {
     .ilike('name', 'Nadav%')
     .maybeSingle()
 
-  const makeCourse = async (title, startOffset, days, status) => {
+  // A real course, copied whole. Everything below this line used to be invented —
+  // a five-line intro, eight gear entries, four tasks — and invented content
+  // reads as invented to a room of people who have run the real thing. So the
+  // demo courses are copies of PR-0013, which is the most completely built course
+  // we have: ten modules, a hundred and twelve items, seven tasks, three
+  // updates, a gear list and a hundred and seventeen photos.
+  //
+  // Photos are the one thing that cannot come along. course_photos has a unique
+  // index on drive_file_id — deliberately, because the same Drive file recorded
+  // twice doubles it in the gallery — so a photo belongs to exactly one course
+  // and there is no copying it without taking it off the real one. The demo shows
+  // the upload, and the 117 real photos stay where they are.
+  //
+  // Enrollments deliberately do not copy. Those are five real students with real
+  // names and emails, and putting them on a screen in front of the pool is the
+  // same mistake as demoing from a real instructor's login.
+  const SKIP_ON_COPY = new Set([
+    'id', 'ref_number', 'slug', 'created_at', 'updated_at',
+    // A copied Google event id would make the demo edit a real course's calendar
+    // entry, and a copied token would hand out a live waiver link.
+    'gcal_event_id', 'gcal_calendar_id', 'invite_token', 'invite_expires_at',
+    'waiver_token', 'waiver_token_expires_at',
+  ])
+
+  const copyCourse = async (title, startOffset, status) => {
+    const { data: src, error: srcErr } = await db
+      .from('course_instances')
+      .select('*')
+      .eq('ref_number', COPY_FROM)
+      .single()
+    if (srcErr) throw srcErr
+
+    const days =
+      src.starts_at && src.ends_at
+        ? Math.round((Date.parse(src.ends_at) - Date.parse(src.starts_at)) / 86400000)
+        : 4
+
+    const fields = Object.fromEntries(Object.entries(src).filter(([k]) => !SKIP_ON_COPY.has(k)))
     const { data: c, error } = await db
       .from('course_instances')
       .insert({
-        course_type: 'canyoneering',
+        ...fields,
         custom_title: `${MARK} — ${title}`,
         client_name: 'Demo Client',
         status,
-        location: 'Ouray, Colorado',
-        region: 'US-CO',
         starts_at: day(startOffset),
-        ends_at: day(startOffset + days - 1),
-        max_students: 8,
+        ends_at: day(startOffset + days),
         lead_slots: 1,
         assist_slots: 2,
         shadow_slots: 1,
         instructor_slots: 4,
-        meeting_point: 'Ouray Hot Springs parking lot, north end',
-        meeting_time: '07:30',
-        intro:
-          'Five days of canyon rescue: anchors and rigging, moving water, ' +
-          'litter work and a full scenario on the last day.',
+        // The one thing PR-0013 never filled in, and the first thing a student
+        // looks for.
+        meeting_point: src.meeting_point ?? 'Ouray Hot Springs parking lot, north end',
+        meeting_time: src.meeting_time ?? '07:30',
       })
       .select('id, ref_number, custom_title, starts_at')
       .single()
@@ -208,111 +293,83 @@ if (CREATE) {
       { instance_id: c.id, instructor_id: demo.id, role: 'assist', in_charge: false },
     ])
     if (crewErr) throw crewErr
+
+    // Curriculum: modules, then the items under each.
+    const { data: mods } = await db
+      .from('course_modules')
+      .select('title, audience, order, course_items(title, type, url, description, order, audience, library_item_id)')
+      .eq('instance_id', src.id)
+    let items = 0
+    for (const m of mods ?? []) {
+      const { data: mod, error: mErr } = await db
+        .from('course_modules')
+        .insert({ instance_id: c.id, title: m.title, audience: m.audience, order: m.order })
+        .select('id')
+        .single()
+      if (mErr) throw mErr
+      const rows = (m.course_items ?? []).map((it) => ({ ...it, module_id: mod.id }))
+      if (rows.length) {
+        const { error: iErr } = await db.from('course_items').insert(rows)
+        if (iErr) throw iErr
+        items += rows.length
+      }
+    }
+
+    // Gear, with its entries.
+    const { data: lists } = await db
+      .from('gear_lists')
+      .select('name, audience, intro, description, disciplines, topics, students, course_type, gear_list_entries(gear_item_id, name, url, section, group_type, quantity, sort_order, note, joined_above, qty_each, qty_per_students)')
+      .eq('instance_id', src.id)
+    for (const l of lists ?? []) {
+      const { gear_list_entries: entries, ...list } = l
+      const { data: made, error: lErr } = await db
+        .from('gear_lists')
+        .insert({ ...list, instance_id: c.id })
+        .select('id')
+        .single()
+      if (lErr) throw lErr
+      if (entries?.length) {
+        const { error: eErr } = await db
+          .from('gear_list_entries')
+          .insert(entries.map((e) => ({ ...e, list_id: made.id })))
+        if (eErr) throw eErr
+      }
+    }
+
+    // The flat children: same columns, new instance.
+    const copyRows = async (table, cols) => {
+      const { data: rows } = await db.from(table).select(cols).eq('instance_id', src.id)
+      if (!rows?.length) return 0
+      const { error: e } = await db.from(table).insert(rows.map((r) => ({ ...r, instance_id: c.id })))
+      if (e) throw e
+      return rows.length
+    }
+    const tasks = await copyRows('course_tasks', 'title, notes, status, completed_at, sort_order')
+    const updates = await copyRows('course_updates', 'body, audience, links, attachments')
+    await copyRows('instance_off_days', 'off_date, end_date')
+    const links = await copyRows('course_links', 'purpose, label, url, audience, sort_order, drive_folder_id')
+
+    console.log(
+      `  copied PR-${String(COPY_FROM).padStart(4, '0')} → PR-${String(c.ref_number).padStart(4, '0')} (${title}): ` +
+      `${(mods ?? []).length} modules, ${items} items, ${tasks} tasks, ${updates} updates, ${links} links`
+    )
     return c
   }
 
   if (!upcoming) {
-    upcoming = await makeCourse('next month', 27, 5, 'confirmed')
-    console.log(`  created PR-${String(upcoming.ref_number).padStart(4, '0')} (next month)`)
-
-    // Curriculum copied from a real course. Invented modules read as invented,
-    // and the room knows the difference.
-    const { data: src } = await db
-      .from('course_instances')
-      .select('id, course_modules(id, title, audience, order, course_items(title, type, url, description, order, audience))')
-      .eq('ref_number', CURRICULUM_FROM)
-      .maybeSingle()
-    for (const m of src?.course_modules ?? []) {
-      const { data: mod } = await db
-        .from('course_modules')
-        .insert({ instance_id: upcoming.id, title: m.title, audience: m.audience, order: m.order })
-        .select('id')
-        .single()
-      const items = (m.course_items ?? []).map((it) => ({
-        module_id: mod.id,
-        title: it.title,
-        type: it.type,
-        url: it.url,
-        description: it.description,
-        order: it.order,
-        audience: it.audience,
-      }))
-      if (items.length) await db.from('course_items').insert(items)
-    }
-    console.log(`    curriculum copied from PR-${String(CURRICULUM_FROM).padStart(4, '0')}`)
-
-    // A gear list, because "what am I bringing" is the question instructors ask
-    // first and it is the screen that sells the portal on its own.
-    const { data: list, error: listErr } = await db
-      .from('gear_lists')
-      .insert({
-        instance_id: upcoming.id,
-        name: 'Personal kit — canyon rescue',
-        audience: 'instructor',
-        intro: 'Bring all of it. Anything marked per-student is issued, not yours.',
-      })
-      .select('id')
-      .single()
-    if (listErr) throw listErr
-    const { error: e_gear_list_entries } = await db.from('gear_list_entries').insert(
-      [
-        ['Harness', 'Personal', 1],
-        ['Helmet', 'Personal', 1],
-        ['Wetsuit, 5mm', 'Personal', 1],
-        ['Canyon boots', 'Personal', 1],
-        ['Belay device', 'Technical', 1],
-        ['Locking carabiners', 'Technical', 4],
-        ['200ft static line', 'Team', 2],
-        ['Litter, break-apart', 'Team', 1],
-      ].map(([name, section, quantity], i) => ({
-        list_id: list.id,
-        name,
-        section,
-        quantity,
-        sort_order: i,
-      }))
-    )
-    if (e_gear_list_entries) throw e_gear_list_entries
-    console.log('    gear list added')
-
-    const { error: e_course_tasks } = await db.from('course_tasks').insert([
-      { instance_id: upcoming.id, title: 'Confirm canyon permits', status: 'done', completed_at: new Date().toISOString(), sort_order: 0 },
-      { instance_id: upcoming.id, title: 'Pick up the rental van', status: 'open', assigned_to: demo.profile_id, sort_order: 1 },
-      { instance_id: upcoming.id, title: 'Print student packets', status: 'open', sort_order: 2 },
-      { instance_id: upcoming.id, title: 'Check litter and hardware', status: 'open', assigned_to: demo.profile_id, sort_order: 3 },
-    ])
-    if (e_course_tasks) throw e_course_tasks
-
-    const { error: e_course_updates } = await db.from('course_updates').insert([
-      {
-        instance_id: upcoming.id,
-        body: 'Water is running high this month, so day 3 moves to the lower canyon. Same meeting point.',
-        audience: 'everyone',
-      },
-      {
-        instance_id: upcoming.id,
-        body: 'Crew: we are one assist short. Say something if you know somebody free that week.',
-        audience: 'instructors',
-      },
-    ])
-    if (e_course_updates) throw e_course_updates
-    console.log('    tasks and updates added')
-
-    // The invite, so the accept flow can be shown live without sending mail.
-    const { data: inv } = await db
+    upcoming = await copyCourse('next month', 27, 'confirmed')
+    const { data: inv, error: invErr } = await db
       .from('course_interest_invites')
       .insert({ instance_id: upcoming.id, instructor_id: demo.id })
       .select('token')
       .single()
-    upcoming.inviteToken = inv.token
+    if (invErr) throw invErr
   }
 
   if (!finished) {
-    finished = await makeCourse('last week', -9, 5, 'completed')
-    console.log(`  created PR-${String(finished.ref_number).padStart(4, '0')} (last week)`)
+    finished = await copyCourse('last week', -9, 'completed')
 
-    // An expense report mid-flight: the state an instructor actually opens.
-    const { data: report } = await db
+    const { data: report, error: rErr } = await db
       .from('expense_reports')
       .insert({
         profile_id: demo.profile_id,
@@ -322,13 +379,41 @@ if (CREATE) {
       })
       .select('id')
       .single()
+    if (rErr) throw rErr
     const { error: e_expense_items } = await db.from('expense_items').insert([
       { report_id: report.id, start_date: day(-10), category: 'lodging', paid_by: 'personal', description: 'Motel, 2 nights', amount: 218.4, instance_id: finished.id, sort_order: 0 },
       { report_id: report.id, start_date: day(-9), category: 'per_diem', paid_by: 'personal', description: 'Crew dinner, 4 people', amount: 96.15, instance_id: finished.id, sort_order: 1 },
       { report_id: report.id, start_date: day(-10), end_date: day(-4), category: 'personal_auto', paid_by: 'personal', description: 'Casper to Ouray and back', miles: 612, amount: 410.04, instance_id: finished.id, sort_order: 2 },
     ])
     if (e_expense_items) throw e_expense_items
-    console.log('    draft expense report with 3 lines')
+    console.log('  draft expense report, 3 lines')
+  }
+
+  // ── A student, so the room can see what their students see ────────────────
+  // Asked for, and worth its own account rather than the admin preview: the
+  // preview is honest about most things but it is still an admin looking at a
+  // page, and the question in the room will be "what do they actually get".
+  if (!student) {
+    const { data: created, error: sErr } = await db.auth.admin.createUser({
+      email: STUDENT_EMAIL,
+      email_confirm: true,
+    })
+    if (sErr && !/already/i.test(sErr.message)) throw sErr
+    let sid = created?.user?.id
+    if (!sid) {
+      const { data: list } = await db.auth.admin.listUsers({ perPage: 200 })
+      sid = list.users.find((u) => u.email?.toLowerCase() === STUDENT_EMAIL)?.id
+    }
+    await db.from('profiles').update({ role: 'student', first_name: 'Demo', last_name: 'Student' }).eq('id', sid)
+    student = { id: sid }
+    // On both courses: one to prepare for, one they have been through.
+    for (const c of [upcoming, finished]) {
+      const { error: eErr } = await db
+        .from('enrollments')
+        .insert({ instance_id: c.id, user_id: sid })
+      if (eErr) throw eErr
+    }
+    console.log('  created the demo student, enrolled on both')
   }
 }
 
@@ -353,9 +438,18 @@ const { data: link, error: linkErr } = await db.auth.admin.generateLink({
   email: DEMO_EMAIL,
 })
 if (linkErr) throw linkErr
-const signIn =
-  `${BASE}/auth/callback?token_hash=${link.properties.hashed_token}` +
-  `&type=email&next=${encodeURIComponent('/instructor')}`
+const callback = (hash, next) =>
+  `${BASE}/auth/callback?token_hash=${hash}&type=email&next=${encodeURIComponent(next)}`
+
+const signIn = callback(link.properties.hashed_token, '/instructor')
+
+// The student's own way in, so the room sees the student's course page rather
+// than an admin's preview of it. Same page, different person — and the
+// difference is the point: no tasks, no crew pay, no pricing.
+const { data: sLink } = await db.auth.admin.generateLink({ type: 'magiclink', email: STUDENT_EMAIL })
+const studentSignIn = sLink?.properties?.hashed_token
+  ? callback(sLink.properties.hashed_token, `/portal/${upcoming.id}`)
+  : null
 
 const { data: invite } = await db
   .from('course_interest_invites')
@@ -379,17 +473,25 @@ console.log(`
   2 · "You're on it"                          — the portal for ${ref(upcoming)}
        ${BASE}/portal/${upcoming.id}
        Details · Prep · Schedule · Updates. Gear list, tasks, meeting point.
-       Curriculum is real — copied from ${`PR-${String(CURRICULUM_FROM).padStart(4, '0')}`}.
+       Curriculum is real — copied from ${`PR-${String(COPY_FROM).padStart(4, '0')}`}.
 
-  3 · "Your own page"
+  3 · "What your students see"                — a second private window
+       ${studentSignIn ?? '(no student account)'}
+       Signs in as Demo Student, straight onto the same course. No tasks, no
+       crew, no pricing — and the gear list they get rather than yours.
+
+  4 · "Your own page"
        ${BASE}/instructor
        Profile, certs, expertise, and the calendar feed to subscribe to.
 
-  4 · "Your calendar, in your own calendar app"
+  5 · "Your calendar, in your own calendar app"
        ${BASE}/calendar/${demo.schedule_token ?? '(no token yet — open /instructor once)'}
 
-  5 · "The course ran. Now the paperwork."     — ${ref(finished)}
-       ${BASE}/portal/${finished.id}            photos, notes, close-out
+  6 · "The course ran. Now the paperwork."     — ${ref(finished)}
+       ${BASE}/portal/${finished.id}            notes and close-out
+       Photos are the one thing not seeded — a Drive file belongs to exactly
+       one course, so the 117 on PR-0013 stay there. Upload one live, or show
+       PR-0013's gallery from your own admin window.
        ${BASE}/instructor/expenses              the draft report, 3 lines in
        ${BASE}/instructor/hours                 hours for the pay period
 
@@ -397,6 +499,6 @@ console.log(`
 
     node scripts/demo-day.mjs --delete
 
-  Removes both courses, the demo instructor, their login and their expense
-  report. Nothing was emailed and no calendar events were made.
+  Removes both courses, both accounts, their logins and the expense report.
+  Nothing was emailed and no calendar events were made.
 `)
