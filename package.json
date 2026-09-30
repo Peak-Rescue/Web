@@ -9,8 +9,7 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
-    "smoke": "node scripts/smoke.mjs",
-    "staffing:preview": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/staffing-preview.mjs"
+    "smoke": "node scripts/smoke.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.10.2",
