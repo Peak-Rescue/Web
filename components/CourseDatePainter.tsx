@@ -6,7 +6,7 @@ import { clampOffDays, strokeOffDays, type OffSpan } from '@/lib/courses'
 import { useSteadyRefresh } from './useSteadyRefresh'
 import InfoHint from './InfoHint'
 import MonthJump from './MonthJump'
-import { CATEGORY_STYLE, sectorOf } from '@/lib/calendar-colors'
+import { CATEGORY_STYLE, OURS_MARK, isOurs, sectorOf } from '@/lib/calendar-colors'
 
 /** Another course on the books, as this calendar needs to draw it. */
 export type OtherCourse = {
@@ -370,7 +370,9 @@ export default function CourseDatePainter({
   // ——— the other courses ————————————————————————————————————————
 
   // Same rule as the month calendar's legend: both sectors show by default,
-  // and asking for one drops the courses belonging to neither.
+  // and every course has a sector — internal ones included, since a day of
+  // ours occupies the crew exactly as a client's day does, and this overlay
+  // exists to say which days are already spoken for.
   const overlay = useMemo(() => {
     if (!showOthers || !others?.length) return { lanes: new Map<string, number>(), shown: [] as OtherCourse[] }
     const shown = others
@@ -564,7 +566,7 @@ export default function CourseDatePainter({
                             <span
                               key={lane}
                               style={span > 1 ? { width: `calc(${span * 100}% + ${(span - 1) * 6}px)` } : undefined}
-                              className={`relative z-10 block h-4 px-1 border rounded text-[10px] leading-4 truncate ${CATEGORY_STYLE[sectorOf(o)].solid}`}
+                              className={`relative z-10 block h-4 px-1 border rounded text-[10px] leading-4 truncate ${CATEGORY_STYLE[sectorOf(o)].solid}${isOurs(o) ? ` ${OURS_MARK}` : ''}`}
                             >
                               {o.label}
                             </span>
@@ -629,6 +631,16 @@ export default function CourseDatePainter({
                 </button>
               )
             })}
+          {/* Same key as the month calendar's: a mark, not a third sector. */}
+          {showOthers && overlay.shown.some(isOurs) && (
+            <span
+              className="flex items-center gap-1.5 text-zinc-400"
+              title="Ours — no client: instructor development, CE, or anything else we lay on for ourselves. Still counted under its own sector."
+            >
+              <span className={`w-3 h-3 rounded-sm border border-zinc-700 bg-zinc-800 ${OURS_MARK}`} />
+              Internal
+            </span>
+          )}
         </div>
       )}
 

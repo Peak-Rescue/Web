@@ -3,7 +3,7 @@ import CalendarChip from './CalendarChip'
 import MonthJump from './MonthJump'
 import { YM } from '@/lib/month-token'
 import { todayHere } from '@/lib/course-clock'
-import { CATEGORY_STYLE, sectorOf } from '@/lib/calendar-colors'
+import { CATEGORY_STYLE, OURS_MARK, isOurs, sectorOf } from '@/lib/calendar-colors'
 
 export type CalendarCourse = {
   id: string
@@ -21,22 +21,22 @@ export type CalendarCourse = {
   crew?: string[]
 }
 
-// No client of any kind — see CATEGORY_STYLE.ours.
-const isOurs = (c: CalendarCourse) => sectorOf(c) === 'ours'
-
 function chipStyle(c: CalendarCourse): string {
   const s = CATEGORY_STYLE[sectorOf(c)]
+  // The internal stripe rides along with whatever the status draws — a
+  // tentative internal day is dashed and striped, both facts at once.
+  const mark = isOurs(c) ? ` ${OURS_MARK}` : ''
   switch (c.status) {
     case 'tentative':
-      return `${s.outline} border-dashed`
+      return `${s.outline} border-dashed${mark}`
     case 'quoted':
-      return s.outline
+      return `${s.outline}${mark}`
     case 'completed':
-      return `${s.solid} opacity-60`
+      return `${s.solid} opacity-60${mark}`
     case 'cancelled':
-      return 'bg-red-900/50 text-red-300 border-red-900 line-through'
+      return `bg-red-900/50 text-red-300 border-red-900 line-through${mark}`
     default:
-      return s.solid // confirmed
+      return `${s.solid}${mark}` // confirmed
   }
 }
 
@@ -68,11 +68,10 @@ export default function CourseCalendar({
   marks?: Record<string, React.ReactNode>
 }) {
   const catFilter = category === 'military' || category === 'civilian' ? category : null
-  const isMilitary = (c: CalendarCourse) => c.category === 'tactical'
-  // Asking for one sector's courses excludes the ones belonging to neither.
-  const visible = catFilter
-    ? courses.filter((c) => !isOurs(c) && (catFilter === 'military') === isMilitary(c))
-    : courses
+  // Internal courses are filtered by their own category like any other: the
+  // question this asks is which of the month's days are that sector's work,
+  // and a CE day blocks the same instructors a client job would.
+  const visible = catFilter ? courses.filter((c) => sectorOf(c) === catFilter) : courses
 
   const navHref = (m?: string) => {
     const q = new URLSearchParams(params)
@@ -245,14 +244,15 @@ export default function CourseCalendar({
 
       {courses.some((c) => c.category !== undefined) && (
         <div className="flex items-center gap-4 mt-2 text-[10px]">
-          {/* Only worth a legend entry on a calendar that has one. Not a
-              filter link: the sector checkboxes already drop these. */}
-          {courses.some(isOurs) && (
+          {/* A key, not a filter: internal is not a third sector but a mark on
+              a course that has one, so it is drawn as the stripe it puts on
+              the chip rather than as a checkbox nobody can ever check. */}
+          {visible.some(isOurs) && (
             <span
               className="flex items-center gap-1.5 text-zinc-400"
-              title="Ours — no client and no students: instructor development, CE, or anything else we lay on for ourselves"
+              title="Ours — no client: instructor development, CE, or anything else we lay on for ourselves. Still counted under its own sector."
             >
-              <span className={`w-3 h-3 rounded-sm border ${CATEGORY_STYLE.ours.swatch}`} />
+              <span className={`w-3 h-3 rounded-sm border border-zinc-700 bg-zinc-800 ${OURS_MARK}`} />
               Internal
             </span>
           )}

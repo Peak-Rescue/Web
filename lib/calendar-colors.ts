@@ -18,22 +18,43 @@ export const CATEGORY_STYLE = {
     outline: 'border-cyan-700 text-cyan-300',
     bar: 'bg-cyan-700',
   },
-  // Work of ours with no client belongs to neither sector and syncs to the
-  // admin calendar rather than the military or civilian one — so it reads as
-  // neither colour here either. A client job with no students keeps its
-  // sector; the client is what the colour is about.
-  ours: {
-    swatch: 'bg-zinc-700 border-zinc-500 text-zinc-100',
-    solid: 'bg-zinc-700/80 text-zinc-100 border-zinc-500',
-    outline: 'border-zinc-500 text-zinc-300',
-    bar: 'bg-zinc-500',
-  },
 } as const
 
 export type Sector = keyof typeof CATEGORY_STYLE
 
-/** No client of any kind — see CATEGORY_STYLE.ours. */
-export function sectorOf(c: { category?: string | null; internal?: boolean | null; client?: string | null }): Sector {
-  if (c.internal && !c.client) return 'ours'
+export type CalendarSubject = {
+  category?: string | null
+  internal?: boolean | null
+  client?: string | null
+}
+
+/**
+ * Every course has a category, internal ones included — it is required at the
+ * top of the new-course form and the column is not null. So the sector is a
+ * fact about the discipline alone, and internal never overrides it: a CE day
+ * on rope rescue is a tactical day, and a calendar that said otherwise would
+ * hide it from anyone filtering to the sector whose instructors it occupies.
+ */
+export function sectorOf(c: CalendarSubject): Sector {
   return c.category === 'tactical' ? 'military' : 'civilian'
 }
+
+/**
+ * No client of any kind: instructor development, CE, a planning day — work we
+ * lay on for ourselves. A consultation has no students but is still that
+ * client's job, so the client is what this is about.
+ *
+ * It rides on top of the sector colour rather than replacing it, because the
+ * two answer different questions: the colour says which sector's work a day
+ * is, this says whether it earns. Both stay true of the same chip.
+ */
+export function isOurs(c: CalendarSubject): boolean {
+  return Boolean(c.internal) && !c.client
+}
+
+/**
+ * The internal marker: a pale stripe down the chip's leading edge. A stripe
+ * rather than a border, because the border already carries status — dashed is
+ * tentative — and the two must be readable at once.
+ */
+export const OURS_MARK = 'shadow-[inset_3px_0_0_0_#a1a1aa]'

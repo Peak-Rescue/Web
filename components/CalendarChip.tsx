@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { CalendarCourse } from './CourseCalendar'
+import { CATEGORY_STYLE, isOurs, sectorOf } from '@/lib/calendar-colors'
 
 // Calendar event bar with a styled hover tooltip replacing the native title
 // popup (whose ~1s delay is browser-controlled). Rendered through a portal so
@@ -55,10 +56,8 @@ export default function CalendarChip({
     // The tooltip replaces the native one — no title attribute.
   }
 
-  const isMilitary = course.category === 'tactical'
-  // Ours only when there's no client at all — a consultation has no students
-  // but is still that client's job.
-  const ours = !!course.internal && !course.client
+  const sector = sectorOf(course)
+  const ours = isOurs(course)
   const tooltip =
     tip &&
     createPortal(
@@ -77,12 +76,11 @@ export default function CalendarChip({
             <p className="text-zinc-400 mt-1">Instructors: {course.crew!.join(', ')}</p>
           )}
           <p className="flex items-center gap-1.5 text-zinc-500 mt-1.5">
-            <span
-              className={`w-2 h-2 rounded-full ${
-                ours ? 'bg-zinc-500' : isMilitary ? 'bg-orange-700' : 'bg-cyan-700'
-              }`}
-            />
-            {ours ? 'Internal' : isMilitary ? 'Military' : 'Civilian'}
+            <span className={`w-2 h-2 rounded-full ${CATEGORY_STYLE[sector].bar}`} />
+            {sector === 'military' ? 'Military' : 'Civilian'}
+            {/* Its sector and whether it earns are both true of the same
+                course, so the tooltip reads them out as two facts. */}
+            {ours && <span>· Internal</span>}
             <span className="capitalize">· {course.status}</span>
           </p>
           {course.internal && (
