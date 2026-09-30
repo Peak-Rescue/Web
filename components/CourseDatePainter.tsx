@@ -125,6 +125,11 @@ export default function CourseDatePainter({
   const [showOthers, setShowOthers] = useState(true)
   const [sector, setSector] = useState<'military' | 'civilian' | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // Somebody the new dates just put on two courses at once. Not an error — the
+  // dates saved, and moving a course onto a clash is sometimes the right call.
+  // It is the thing you would only have found out by opening the staffing panel
+  // on one of the two courses, which is why it says itself here instead.
+  const [clash, setClash] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
   const refresh = useSteadyRefresh()
@@ -185,7 +190,10 @@ export default function CourseDatePainter({
       const fd = new FormData()
       fd.set('starts_at', start ?? '')
       fd.set('ends_at', end ?? '')
-      await updateInstanceDates(instanceId, fd)
+      const { clash: found } = await updateInstanceDates(instanceId, fd)
+      // Replaced rather than accumulated: the answer is about the dates as they
+      // now stand, so a move that fixes the clash has to clear the warning.
+      setClash(found)
     }, () => {
       saved.current = before.win
       setWin(before.win)
@@ -213,7 +221,7 @@ export default function CourseDatePainter({
     const before = breaks
     setBreaks(strokeOffDays(breaks, from, to, paint))
     void run(
-      () => paintOffDays(instanceId, from, to, paint),
+      async () => { setClash((await paintOffDays(instanceId, from, to, paint)).clash) },
       () => setBreaks(before)
     )
   }
@@ -665,6 +673,15 @@ export default function CourseDatePainter({
       </div>
 
       {error && <p className="mt-2 text-xs text-pr-red-light">{error}</p>}
+      {/* Amber, not red, and below the save rather than in place of it: the dates
+          are saved. This is the double-booking the move created, named, so it can
+          be dealt with by whoever made it instead of being found by whoever
+          opens the staffing panel next. */}
+      {clash && !error && (
+        <p className="mt-2 text-xs text-amber-400/90">
+          Dates saved — but {clash}.
+        </p>
+      )}
     </div>
   )
 }

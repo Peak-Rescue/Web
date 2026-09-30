@@ -497,7 +497,17 @@ export async function updateQuoteHero(id: string, formData: FormData) {
   revalidatePath(`/admin/courses/${id}`)
 }
 
-export async function updateInstanceDates(id: string, formData: FormData) {
+/** A date move can put somebody on two courses at once, and until now it did so
+    silently: the clash rule only ever ran inside the staffing panel, and whoever
+    moves dates is not on the staffing screen. So the move reports what it just
+    created — a warning, never a refusal. Moving a course onto dates that clash is
+    sometimes the right call; not being told is never.
+
+    Null when the new dates are clean, so the caller shows nothing. */
+export async function updateInstanceDates(
+  id: string,
+  formData: FormData
+): Promise<{ clash: string | null }> {
   await requireAdmin()
 
   const starts_at = (formData.get('starts_at') as string) || null
@@ -584,6 +594,28 @@ export async function updateInstanceDates(id: string, formData: FormData) {
   after(() => syncCourseCalendar(createAdminClient(), id))
   revalidatePath(`/admin/courses/${id}`)
   revalidatePath(`/portal/${id}`)
+
+  // Read after the write and after the off-days were clamped, because both move
+  // which days this course actually holds — and a clash is about days held, not
+  // days typed.
+  return { clash: await crewClashNotice(admin, id) }
+}
+
+/** Who on this course is now double-booked, in one sentence, or null.
+    Deliberately never throws: this is a warning attached to a save that has
+    already succeeded, and losing the save because the warning could not be
+    worked out would be the worse failure by far. */
+async function crewClashNotice(
+  admin: ReturnType<typeof createAdminClient>,
+  instanceId: string
+): Promise<string | null> {
+  try {
+    const { loadCrewClashes } = await import('@/lib/crew-clashes')
+    return (await loadCrewClashes(admin, instanceId)).sentence
+  } catch (e) {
+    console.error('Crew clash check failed:', e)
+    return null
+  }
 }
 
 export async function addOffDay(instanceId: string, formData: FormData) {
@@ -661,7 +693,17 @@ export async function removeOffDay(instanceId: string, offDayId: string) {
 // that row is paid if the stroke or anything it swallowed was: two breaks that
 // disagree already read as paid everywhere else (see computeBlocks), and a
 // stroke must not quietly take pay away from days that had it.
-export async function paintOffDays(instanceId: string, a: string, b: string, paint: boolean) {
+//
+// Reports double-bookings too, like a date move does: a break is days the course
+// stops holding, so painting one can clear a clash and erasing one can create
+// it. Somebody freed by a rest week is genuinely free that week — that is the
+// whole reason the overlap is counted day by day.
+export async function paintOffDays(
+  instanceId: string,
+  a: string,
+  b: string,
+  paint: boolean
+): Promise<{ clash: string | null }> {
   await requireAdmin()
   const admin = createAdminClient()
 
@@ -686,7 +728,7 @@ export async function paintOffDays(instanceId: string, a: string, b: string, pai
     const last = dayShift(inst.ends_at, -1)
     if (from < first) from = first
     if (to > last) to = last
-    if (to < from) return
+    if (to < from) return { clash: null }
   }
 
   const { data: rows } = await admin
@@ -699,6 +741,8 @@ export async function paintOffDays(instanceId: string, a: string, b: string, pai
 
   revalidatePath(`/admin/courses/${instanceId}`)
   revalidatePath(`/portal/${instanceId}`)
+
+  return { clash: await crewClashNotice(admin, instanceId) }
 }
 
 export async function addModule(instanceId: string, formData: FormData) {

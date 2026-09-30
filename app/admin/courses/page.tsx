@@ -17,6 +17,7 @@ import { loadCourseExtras, loadBooksSettleDays, showsSteps, coursePhase } from '
 import { loadCourseOwners } from '@/lib/course-owner'
 import InfoHint from '@/components/InfoHint'
 import { CREW_SEAT_FIELDS, ROLE_TEXT } from '@/lib/staffing-roles'
+import { clashesAcross, clashNames, asClashCourse } from '@/lib/staffing-conflicts'
 
 function firstStartDate(inst: Instance): string | null {
   return inst.starts_at ?? null
@@ -36,17 +37,22 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
   const { data: profile } = await admin.from('profiles').select('role').eq('id', user.id).single()
   if (profile?.role !== 'admin') redirect('/dashboard')
 
-  const [{ data: raw }, { data: venueRows }] = await Promise.all([
+  const [{ data: raw }, { data: venueRows }, { data: allOffDays }] = await Promise.all([
     admin
       .from('course_instances')
       .select(`
         id, ref_number, slug, course_type, course_category, custom_title, status, location, client_name, contacts, owner_id, invite_token, invite_expires_at, starts_at, ends_at, max_students, instructor_slots, lead_slots, assist_slots, shadow_slots, internal,
         instance_instructors(count),
-        crew:instance_instructors(role, in_charge, instructors(name)),
+        crew:instance_instructors(instructor_id, role, in_charge, instructors(name)),
         enrollments(count),
         course_estimates(count)
       `),
     admin.from('venues').select('id, name, region_code').eq('active', true).order('name'),
+    // Breaks, for every course at once. Needed because a clash is counted day by
+    // day: a course running entirely inside another's rest week is not a clash,
+    // and without the breaks the chain would cry double-booked at a crew who are
+    // genuinely free. One small query, and it saves a per-row one.
+    admin.from('instance_off_days').select('instance_id, off_date, end_date'),
   ])
 
   // Who could be driving a course, for the pill on every row and the filter
@@ -56,6 +62,48 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
   const instances = (raw ?? []) as unknown as Instance[]
 
   const today = todayHere()
+
+  // Who is on two courses at once, across the whole book, in one pass over rows
+  // already loaded. This used to be knowable only by opening the staffing panel
+  // on one of the two courses — so a date move that created a clash said nothing
+  // and the chain went on reading "2 of 2". Now the chain asks.
+  const offDaysByCourse = new Map<string, { off_date: string; end_date: string | null }[]>()
+  for (const o of allOffDays ?? []) {
+    const list = offDaysByCourse.get(o.instance_id as string) ?? []
+    list.push({ off_date: o.off_date as string, end_date: (o.end_date as string | null) ?? null })
+    offDaysByCourse.set(o.instance_id as string, list)
+  }
+  const clashesByCourse = clashesAcross(
+    instances.map((i) => ({
+      // Built field by field rather than spread: the list's row already uses
+      // `instance_instructors` for a count, and the clash shape wants ids under
+      // that name. Spreading one into the other compiles and means nothing.
+      ...asClashCourse({
+        ref_number: i.ref_number,
+        course_type: i.course_type,
+        custom_title: i.custom_title,
+        client_name: i.client_name,
+        status: i.status,
+        starts_at: i.starts_at,
+        ends_at: i.ends_at,
+      }),
+      id: i.id,
+      offDays: offDaysByCourse.get(i.id) ?? [],
+      crew: (i.crew ?? []).map((c) => ({ instructor_id: c.instructor_id })),
+    }))
+  )
+  const nameById = new Map<string, string>()
+  for (const i of instances) {
+    for (const c of i.crew ?? []) {
+      if (c.instructors?.name) nameById.set(c.instructor_id, c.instructors.name)
+    }
+  }
+  const doubleBooked: Record<string, string[]> = Object.fromEntries(
+    Object.entries(clashesByCourse).map(([courseId, conflicts]) => [
+      courseId,
+      clashNames(conflicts, (id) => nameById.get(id)),
+    ])
+  )
 
   // Everything already on the books, for the date painter's overlay in the
   // create form — the same set the calendar below draws, minus its chrome.
@@ -246,7 +294,7 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
         </details>
 
         {/* ── Course list with filters ─────────────────────────────── */}
-        <CourseList upcoming={upcoming} past={past} extras={extras} today={today} settleDays={settleDays} owners={owners} />
+        <CourseList upcoming={upcoming} past={past} extras={extras} today={today} settleDays={settleDays} owners={owners} doubleBooked={doubleBooked} />
       </div>
     </main>
   )

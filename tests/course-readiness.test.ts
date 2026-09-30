@@ -497,3 +497,39 @@ describe('needs', () => {
     expect(matchesNeeds(steps, new Set(['billing', 'staffing']))).toBe(true)
   })
 })
+
+// A course had to move dates and the new dates double-booked an instructor.
+// Nothing caught it: the clash rule only ran inside the staffing panel, so the
+// chain went on saying "2 of 2 ✓" about a crew who could not all turn up.
+describe('staffing with somebody double-booked', () => {
+  const full = [{ role: 'lead', in_charge: true }, { role: 'assist' }]
+
+  it('does not call a full crew done when one of them is in two places', () => {
+    const s = step(inst({ crew: full, doubleBooked: ['Eric Tolliver'] }), extras(), 'staffing')!
+    expect(s.tone).toBe('action')
+    expect(s.detail).toBe('Eric Tolliver double-booked')
+  })
+
+  // Ahead of the head count and ahead of the primary, because a full crew with
+  // somebody in two places is worse than a short one: it reads as solved.
+  it('says it even when the crew is short and has no primary', () => {
+    const s = step(inst({ crew: [{ role: 'assist' }], doubleBooked: ['Toph Vance'] }), extras(), 'staffing')!
+    expect(s.detail).toBe('Toph Vance double-booked')
+  })
+
+  it('counts them once there are too many to name', () => {
+    const s = step(inst({ crew: full, doubleBooked: ['Eric', 'Toph'] }), extras(), 'staffing')!
+    expect(s.detail).toBe('2 double-booked')
+  })
+
+  it('settles again once the clash is gone', () => {
+    expect(step(inst({ crew: full, doubleBooked: [] }), extras(), 'staffing')!.tone).toBe('done')
+    expect(step(inst({ crew: full }), extras(), 'staffing')!.tone).toBe('done')
+  })
+
+  // A course nobody is staffed on cannot have a clash, and must still read as
+  // the thing it is: empty.
+  it('leaves an unstaffed course saying nobody yet', () => {
+    expect(step(inst({ crew: [], doubleBooked: [] }), extras(), 'staffing')!.detail).toBe('Nobody yet')
+  })
+})

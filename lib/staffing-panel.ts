@@ -1,10 +1,8 @@
 import { type createAdminClient } from '@/lib/supabase/admin'
 import { crewOrder, openSeats, EMPTY_CREW_PLAN, type CrewPlan, type InstanceRole } from '@/lib/staffing-roles'
+import { busyDuring, asClashCourse } from '@/lib/staffing-conflicts'
 import { courseCapabilityCategories, courseSector } from '@/lib/capabilities'
-import {
-  courseShortName, formatDayList, overlappingDates,
-  type OffDayRange, type StaffingConflicts,
-} from '@/lib/courses'
+import { type OffDayRange, type StaffingConflicts } from '@/lib/courses'
 
 // Everything the staffing panel needs to know, worked out in one place.
 //
@@ -128,23 +126,15 @@ export async function loadStaffingPanel(
     nearbyCourses,
   ])
 
-  // Keyed by person, because that is what is double-booked. One instructor
-  // can be clashing with two other courses at once, so it's a list.
-  const conflicts: StaffingConflicts = {}
-  for (const c of (nearby ?? []) as NearbyCourse[]) {
-    const shared = overlappingDates(
-      { starts_at: startsAt, ends_at: endsAt, offDays },
-      { starts_at: c.starts_at, ends_at: c.ends_at, offDays: c.instance_off_days ?? [] },
-    )
-    if (shared.length === 0) continue
-    const clash = {
-      course: `${courseShortName(c.course_type, c.custom_title)}${c.client_name ? ` · ${c.client_name}` : ''} (PR-${String(c.ref_number).padStart(4, '0')})`,
-      days: formatDayList(shared),
-    }
-    for (const { instructor_id } of c.instance_instructors ?? []) {
-      (conflicts[instructor_id] ??= []).push(clash)
-    }
-  }
+  // Everybody booked on these days, whoever they are — the panel asks about
+  // people who are not on this course yet, because the warning that matters
+  // here is the one before somebody is picked. The same rule, from the same
+  // place, now answers "who on this course is already double-booked" for the
+  // readiness chain and for the moment dates move.
+  const conflicts: StaffingConflicts = busyDuring(
+    { starts_at: startsAt, ends_at: endsAt, offDays },
+    ((nearby ?? []) as NearbyCourse[]).map(asClashCourse)
+  )
 
   const categories: string[] = courseCapabilityCategories(courseType ?? '', customCategories)
   const assignedIds = new Set((assigned ?? []).map((a) => a.instructor_id))

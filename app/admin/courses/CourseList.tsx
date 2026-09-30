@@ -45,18 +45,22 @@ export type Instance = {
   invite_expires_at?: string | null
   internal?: boolean | null
   instance_instructors: { count: number }[]
-  crew?: { role: string; in_charge?: boolean | null; instructors: { name: string } | null }[] | null
+  crew?: { instructor_id: string; role: string; in_charge?: boolean | null; instructors: { name: string } | null }[] | null
   enrollments: { count: number }[]
   course_estimates?: { count: number }[]
 }
 
-/** The list's row, as the step model reads it. */
-function asStepInput(inst: Instance): StepInput {
+/** The list's row, as the step model reads it.
+    `clashing` is handed in rather than worked out here: who is double-booked is a
+    fact about a course's neighbours, so it is answered once for the whole book on
+    the server and not row by row in the browser. */
+function asStepInput(inst: Instance, clashing: string[] = []): StepInput {
   return {
     id: inst.id,
     status: inst.status,
     instructor_slots: inst.instructor_slots,
     crew: (inst.crew ?? []).map((c) => ({ role: c.role, in_charge: c.in_charge })),
+    doubleBooked: clashing,
     estimates: inst.course_estimates?.[0]?.count ?? 0,
     starts_at: inst.starts_at,
     ends_at: inst.ends_at,
@@ -71,6 +75,7 @@ function InstanceCard({
   settleDays,
   owner,
   owners,
+  clashing,
 }: {
   inst: Instance
   extras: CourseExtras | undefined
@@ -79,6 +84,8 @@ function InstanceCard({
   owner: CourseOwner | undefined
   /** Everyone it could be handed to, so the pill can hand it over in place. */
   owners: CourseOwner[]
+  /** Crew of this course who are on another at the same time. */
+  clashing: string[]
 }) {
   const studentCount = inst.enrollments?.[0]?.count ?? 0
   const displayName = courseShortName(inst.course_type, inst.custom_title)
@@ -92,7 +99,7 @@ function InstanceCard({
         ? 'expired' as const
         : 'live' as const,
   }
-  const step = asStepInput(inst)
+  const step = asStepInput(inst, clashing)
   const steps = courseSteps(step, x, today, settleDays)
   // What an open panel watches to know it has gone stale. Every number in it
   // moves when the thing the panel changes changes — assigning somebody, a
@@ -183,6 +190,7 @@ function Section({
   settleDays: number
   ownerById: Map<string, CourseOwner>
   owners: CourseOwner[]
+  doubleBooked: Record<string, string[]>
 }) {
   return (
     <section className="mb-10">
@@ -212,6 +220,7 @@ function Section({
               settleDays={card.settleDays}
               owner={inst.owner_id ? card.ownerById.get(inst.owner_id) : undefined}
               owners={card.owners}
+              clashing={card.doubleBooked[inst.id] ?? []}
             />
           ))}
         </div>
@@ -254,6 +263,7 @@ export default function CourseList({
   today,
   settleDays,
   owners,
+  doubleBooked,
 }: {
   upcoming: Instance[]
   past: Instance[]
@@ -268,6 +278,10 @@ export default function CourseList({
   settleDays: number
   /** Everyone a course can be pinned on. */
   owners: CourseOwner[]
+  /** Crew on two courses at once, by course id — worked out for the whole book
+      in one pass on the server, because it is a fact about a course's neighbours
+      rather than about the course. */
+  doubleBooked: Record<string, string[]>
 }) {
   const [query, setQuery] = useState('')
   const [categories, setCategories] = useState<Set<string>>(new Set())
@@ -297,10 +311,10 @@ export default function CourseList({
   const stepsOf = useMemo(() => {
     const m = new Map<string, ReturnType<typeof courseSteps>>()
     for (const i of [...upcoming, ...past]) {
-      m.set(i.id, courseSteps(asStepInput(i), extras[i.id] ?? NO_EXTRAS, today, settleDays))
+      m.set(i.id, courseSteps(asStepInput(i, doubleBooked[i.id] ?? []), extras[i.id] ?? NO_EXTRAS, today, settleDays))
     }
     return m
-  }, [upcoming, past, extras, today, settleDays])
+  }, [upcoming, past, extras, today, settleDays, doubleBooked])
 
   const needCounts = useMemo(() => {
     const out: Record<string, number> = {}
@@ -362,21 +376,21 @@ export default function CourseList({
   // A past course is either still owing somebody something or it is finished
   // with. Nothing else about it matters from here.
   const isSettled = (i: Instance) =>
-    courseSettled(asStepInput(i), extras[i.id] ?? NO_EXTRAS, today, settleDays)
+    courseSettled(asStepInput(i, doubleBooked[i.id] ?? []), extras[i.id] ?? NO_EXTRAS, today, settleDays)
   const stillOwed = shownPast.filter(i => !isSettled(i))
   const archive   = shownPast.filter(isSettled)
 
   // The one number the section heading shouts, because it is money we have
   // not asked for.
   const unsentToHarken = stillOwed.filter(i =>
-    courseSteps(asStepInput(i), extras[i.id] ?? NO_EXTRAS, today, settleDays)
+    courseSteps(asStepInput(i, doubleBooked[i.id] ?? []), extras[i.id] ?? NO_EXTRAS, today, settleDays)
       .some(s => s.key === 'billing' && s.tone === 'action')
   ).length
 
   const archiveYears = [...new Set(archive.map(i => i.ends_at?.slice(0, 4)).filter(Boolean))].sort().reverse() as string[]
   const archiveShown = year ? archive.filter(i => i.ends_at?.startsWith(year)) : archive
 
-  const cardProps = { extras, today, settleDays, ownerById, owners }
+  const cardProps = { extras, today, settleDays, ownerById, owners, doubleBooked }
 
   return (
     <>
@@ -611,6 +625,7 @@ export default function CourseList({
                       settleDays={settleDays}
                       owner={inst.owner_id ? ownerById.get(inst.owner_id) : undefined}
                       owners={owners}
+                      clashing={doubleBooked[inst.id] ?? []}
                     />
                   ))}
             </div>

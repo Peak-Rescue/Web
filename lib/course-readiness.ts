@@ -100,6 +100,12 @@ export type StepInput = {
       course with three lead-wage instructors and nobody answering for it is not
       staffed. */
   crew: { role: string; in_charge?: boolean | null }[]
+  /** Crew who are on another course at the same time, by name. A staffed crew
+      that cannot all turn up is not a staffed course, and this is the one gap
+      nobody was being told about: the clash rule only ran inside the staffing
+      panel, so moving a course onto somebody's other week said nothing and the
+      chain went on reading "2 of 2". */
+  doubleBooked?: string[]
   estimates: number
   /** The course's window. Billing is not a thing you can owe before the first
       day, and after the last one it is nearly the only thing left to owe. */
@@ -230,7 +236,8 @@ export function courseSteps(
   const staffed = inst.crew.length
   const wanted = slotsToStaff(inst.instructor_slots)
   const hasPrimary = inst.crew.some((c) => c.in_charge)
-  const staffingDone = staffed >= wanted && hasPrimary
+  const clashed = inst.doubleBooked ?? []
+  const staffingDone = staffed >= wanted && hasPrimary && clashed.length === 0
 
   // Somebody has been asked and hasn't answered. Still a gap, but a gap with
   // something already in flight — which is the difference between "go and do
@@ -251,6 +258,15 @@ export function courseSteps(
         ? awaiting > 0
           ? { tone: 'waiting' as const, detail: `${awaiting} asked` }
           : { tone: 'action' as const, detail: 'Nobody yet' }
+        // Ahead of the head count and ahead of the primary, because a full crew
+        // with somebody in two places is worse than a short one: it reads as
+        // solved. Named rather than counted — the name is what you were going to
+        // go looking for anyway.
+        : clashed.length > 0
+          ? {
+              tone: 'action' as const,
+              detail: clashed.length === 1 ? `${clashed[0]} double-booked` : `${clashed.length} double-booked`,
+            }
         : !hasPrimary
           ? { tone: 'action' as const, detail: 'No primary' }
           : awaiting > 0
