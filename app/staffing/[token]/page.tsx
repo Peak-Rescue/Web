@@ -213,9 +213,7 @@ export default async function StaffingInvitePage({
             Hi {instructor.name.split(' ')[0]} —{' '}
             {staffed
               ? 'the crew is full. Plans do shift, so let us know if you want to be a backup.'
-              : canTake.length === 1
-                ? `are you interested in working this course as ${roleLabel(canTake[0]).toLowerCase()}?`
-                : 'are you interested in working this course?'}
+              : 'are you interested in working this course?'}
           </p>
         )}
         {/* Why there is no lead tick-box below. The seat list above shows one,
