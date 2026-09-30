@@ -175,12 +175,17 @@ function MoneyTrack({
 function CrewMeter({
   slots,
   crew,
+  clashing,
   awaiting,
   onOpen,
 }: {
   slots: number | null | undefined
   crew: { role: string; in_charge?: boolean | null }[]
   awaiting: number
+  /** Crew who are on another course these same days. The meter counts heads and
+      the heads are all here — which is exactly why it has to say this: "2 of 2"
+      about somebody who cannot turn up reads as solved. */
+  clashing: string[]
   onOpen: () => void
 }) {
   // Boxes are people, so a fractional slot count rounds up to one: a course
@@ -189,7 +194,7 @@ function CrewMeter({
   // A crew with nobody answering for it is not a staffed crew, however many
   // people are on it and whatever they are paid.
   const primary = crew.some((c) => c.in_charge)
-  const full = crew.length >= wanted && primary
+  const full = crew.length >= wanted && primary && clashing.length === 0
   // The primary first, so the marked box is always the leftmost and
   // the meter reads the same way down a column. The boxes are slots, not
   // particular people, so nothing is lost by ordering them.
@@ -237,9 +242,17 @@ function CrewMeter({
         {crew.length > wanted && (
           <span className="text-[11px] text-teal-300 ml-1">+{crew.length - wanted}</span>
         )}
-        <span className={`text-[11px] ml-1.5 ${full ? 'text-zinc-500' : awaiting > 0 ? 'text-teal-300' : 'text-amber-300'}`}>
+        <span
+          className={`text-[11px] ml-1.5 ${full ? 'text-zinc-500' : awaiting > 0 && clashing.length === 0 ? 'text-teal-300' : 'text-amber-300'}`}
+          title={clashing.length > 0 ? `${clashing.join(', ')} also booked on another course these days` : undefined}
+        >
           {full
             ? `${crew.length} of ${wanted}`
+            // Ahead of the head count and ahead of the primary: a crew that
+            // cannot all turn up is the worse problem, and the only one the
+            // boxes above cannot show — they are full.
+            : clashing.length > 0
+              ? clashing.length === 1 ? `${clashing[0]} clashes` : `${clashing.length} clash`
             : crew.length > 0 && !primary
               ? 'no primary'
               : awaiting > 0
@@ -379,6 +392,7 @@ export default function CourseQuickActions({
   extras,
   crew,
   slots,
+  clashing,
   owner,
   owners,
   students,
@@ -398,6 +412,9 @@ export default function CourseQuickActions({
       world, and not a thing the step list carries in a countable form. */
   crew: { role: string; in_charge?: boolean | null }[]
   slots: number | null | undefined
+  /** Crew double-booked on another course, by name. Worked out for the whole
+      book on the server — see lib/staffing-conflicts. */
+  clashing: string[]
   /** Who is running comms on this one, and everyone it could be handed to. */
   owner: CourseOwner | undefined
   owners: CourseOwner[]
@@ -451,6 +468,7 @@ export default function CourseQuickActions({
           <CrewMeter
             slots={slots}
             crew={crew}
+            clashing={clashing}
             awaiting={extras.invitesSent - extras.invitesAnswered}
             onOpen={() => toggle('staffing')}
           />

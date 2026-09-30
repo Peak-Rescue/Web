@@ -160,6 +160,7 @@ function InstanceCard({
           students={inst.internal ? null : { enrolled: studentCount, max: inst.max_students }}
           hasBillingContact={billTo(parseContacts(inst.contacts)) !== null}
           version={version}
+          clashing={clashing}
         />
       )}
     </div>
