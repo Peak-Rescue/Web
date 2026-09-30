@@ -188,7 +188,7 @@ export default function CourseCalendar({
               <p
                 className={`text-[10px] mb-1 ${
                   day === todayStr
-                    ? 'inline-block rounded-full bg-pr-red px-1.5 font-bold text-white'
+                    ? 'font-bold text-zinc-300'
                     : inMonth
                       ? 'text-zinc-600'
                       : 'text-zinc-700'
