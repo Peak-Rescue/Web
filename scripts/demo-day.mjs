@@ -250,49 +250,63 @@ const { data: invite } = await db
   .eq('instructor_id', person.id)
   .maybeSingle()
 
+// One link: signs in as the demo instructor *and* lands on the interest page.
+//
+// The interest page itself needs no login — that is the point of it, an emailed
+// token opening cold on a phone. But a demo that starts there and then wants to
+// walk into the portal needs the session anyway, and asking somebody to click a
+// sign-in link first and the interest link second is two chances to click them
+// in the wrong order. So the callback carries the interest page as its
+// destination and the demo begins in one click.
+//
+// Signed in, the interest page grows a "← Portal" link to the staff home, which
+// is where their courses are. That is the whole onward path: everything else in
+// the demo is a click from there.
+const start = `${BASE}/auth/callback?token_hash=${link.properties.hashed_token}&type=email&next=${encodeURIComponent(`/staffing/${invite?.token ?? ''}`)}`
+
 console.log(`
-  ─── Run of show ────────────────────────────────────────────────────────────
+  ─── Start here ─────────────────────────────────────────────────────────────
 
-  1 · Accepting a course. No login — open it cold, in a private window. This is
-      what lands in an instructor's inbox.
+  A private window, this link, and everything else is navigation.
 
-      ${BASE}/staffing/${invite?.token ?? '(none)'}
+    ${start}
 
-      Three roles, what each pays, the hours, and tick-boxes for which ones they
-      would take. Untick one and the point makes itself: they say what they will
-      accept, we do not tell them what they are.
+  It signs you in as Demo Instructor and opens the course interest page — the
+  thing that lands in an instructor's inbox. Three roles, what each pays, the
+  hours, and tick-boxes for which they would take.
 
-  ── Everything below needs the demo login. Open this next, same window: ──────
+  ─── Then, without leaving that window ──────────────────────────────────────
 
-      ${BASE}/auth/callback?token_hash=${link.properties.hashed_token}&type=email&next=%2Finstructor
+  1 · Accept it. Untick a role first: they say what they will take, we do not
+      tell them what they are.
 
-      That IS the sign-in — one click, no email, no password. It lands on the
-      instructor's own page. The two links below only work afterwards; on their
-      own they bounce you to the login screen.
+  2 · In your own admin window, assign "Print student packets" to Demo
+      Instructor. It is unassigned, so right now nobody can see it at all.
 
-  2 · Their tasks, on the course page.
+  3 · Back in the private window: "← Portal" → the course → the task is there.
+      They can tick it off and add a note. No Add button, and nothing of
+      anybody else's — assigning belongs to the primary.
 
-      ${BASE}/portal/${course.id}
+  4 · Then /instructor/expenses for the draft report: lodging, per diem, and a
+      612-mile drive that works out its own amount.
 
-      Two of the four tasks are theirs: they can tick those off and add notes.
-      No Add button and no sign of anybody else's work — assigning is the
-      primary's, and unassigned tasks are invisible to everyone.
+  The course, if you want it directly:
+    ${BASE}/portal/${course.id}
 
-  3 · Their expense report.
+  ─── Notes ──────────────────────────────────────────────────────────────────
 
-      ${BASE}/instructor/expenses
+  Nothing refreshes on its own — reload after assigning.
 
-      A draft with three lines in it: lodging, per diem, and a 612-mile drive
-      that works out its own amount.
+  Assigning emails the assignee, and demo.instructor@peak-rescue.com is not a
+  real mailbox, so it bounces. Fine once or twice; do not rehearse it twenty
+  times.
 
-  Everything else — prep, schedule, updates, gear, photos, the student view —
-  from your own admin window on a real course with the view-as chip. The chip
-  takes pricing away rather than dimming it.
+  The sign-in token is single-use and expires. Rerun this for a fresh one, and
+  do that right before you present:
 
-  ─── Afterwards ─────────────────────────────────────────────────────────────
+    PREVIEW_BASE=${BASE} node scripts/demo-day.mjs
+
+  Afterwards:
 
     node scripts/demo-day.mjs --delete
-
-  The sign-in token is single-use and expires. Rerun without --delete for a
-  fresh one — do that right before you present.
 `)
