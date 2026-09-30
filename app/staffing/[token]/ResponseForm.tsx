@@ -69,6 +69,21 @@ export default function ResponseForm({
     () => new Set(currentAccepts ?? seats.map((s) => s.role))
   )
   const [note, setNote] = useState(currentNote ?? '')
+  // The press, held locally until the server agrees.
+  //
+  // These buttons used to render straight off the prop, so pressing one did
+  // nothing visible until the action returned *and* the revalidate came back —
+  // a second or more of a page that looks like it ignored you, on the one
+  // control the whole page exists for. Long enough to press again.
+  //
+  // An override rather than a copy of the prop: copying it would need an effect
+  // to keep the two in step, and the effect is both a cascading render and a
+  // second source of truth. This is just "what I pressed, if I have pressed
+  // anything", and the prop answers whenever it has not. Once the refresh lands
+  // the two agree and the override stops mattering; it is cleared on failure,
+  // because a button that stays where you put it while the answer did not is
+  // worse than the lag.
+  const [pressed, setPressed] = useState<boolean | null>(null)
   const [busy, setBusy] = useState<'yes' | 'no' | null>(null)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -92,6 +107,7 @@ export default function ResponseForm({
       setError('Pick at least one role, or "Can\'t make it".')
       return
     }
+    setPressed(interested)
     setBusy(interested ? 'yes' : 'no')
     setError(null)
     try {
@@ -104,20 +120,25 @@ export default function ResponseForm({
         setSaved(true)
         router.refresh()
       } else {
+        setPressed(null)
         setError(result.error)
       }
+    } catch (e) {
+      setPressed(null)
+      setError(e instanceof Error ? e.message : 'Could not save that — please try again')
     } finally {
       setBusy(null)
     }
   }
 
-  const answered = currentInterested !== null
+  const answer = pressed ?? currentInterested
+  const answered = answer !== null
   const question = staffed
     ? 'Do you want to be considered as a backup for this course?'
     : 'Are you interested in working this course?'
 
   const choice = (yes: boolean, label: string, picked: string) => {
-    const chosen = currentInterested === yes
+    const chosen = answer === yes
     const sending = busy === (yes ? 'yes' : 'no')
     return (
       <button
