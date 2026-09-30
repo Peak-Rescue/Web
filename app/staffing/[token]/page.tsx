@@ -247,17 +247,8 @@ export default async function StaffingInvitePage({
               {seats.map((s) => (
                 <div key={s.role} className="flex items-baseline justify-between gap-4 text-xs">
                   <span className={`font-semibold uppercase tracking-wide ${ROLE_TEXT[s.role]}`}>{roleLabel(s.role)}</span>
-                  <span className="flex items-baseline gap-2">
-                    {/* What the seat pays. Beside the seat and not in a table of
-                        its own, because the rate is a fact about the seat and the
-                        only reason anybody needs it here is to answer whether
-                        they would take that one. */}
-                    {seatHourly[s.role] !== undefined && (
-                      <span className="text-zinc-400 tabular-nums">${seatHourly[s.role]}/h</span>
-                    )}
-                    <span className={s.open > 0 ? 'text-zinc-300 tabular-nums' : 'text-zinc-600 tabular-nums'}>
-                      {s.open > 0 ? `${s.open} of ${s.seats} open` : `${s.seats} filled`}
-                    </span>
+                  <span className={s.open > 0 ? 'text-zinc-300 tabular-nums' : 'text-zinc-600 tabular-nums'}>
+                    {s.open > 0 ? `${s.open} of ${s.seats} open` : `${s.seats} filled`}
                   </span>
                 </div>
               ))}
@@ -271,15 +262,11 @@ export default async function StaffingInvitePage({
                   dates are not known until they are staffed. */}
               {week && week.hours > 0 && (
                 <p className="pt-1.5 text-[11px] text-zinc-500 leading-snug">
-                  {[
-                    `${week.fieldDays} day${week.fieldDays === 1 ? '' : 's'} plus ${week.travelDayCount} travel`,
-                    `— about ${Math.round(week.hours)} hours.`,
-                    week.overtimeHours > 0
-                      ? `Around ${Math.round(week.overtimeHours)} past forty in the week, at time and a half.`
-                      : exempt
-                        ? 'Your hours are exempt, so no overtime.'
-                        : 'Not enough in one week for overtime.',
-                  ].join(' ')}
+                  {week.overtimeHours > 0
+                    ? `About ${Math.round(week.hours)} hours, around ${Math.round(week.overtimeHours)} of them overtime.`
+                    : exempt
+                      ? `About ${Math.round(week.hours)} hours — your hours are exempt from overtime.`
+                      : `About ${Math.round(week.hours)} hours, no overtime.`}
                 </p>
               )}
             </div>
