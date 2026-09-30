@@ -77,7 +77,12 @@ export async function importCourseFromEvent(formData: FormData) {
   // places where the same person is both by construction.
   const crew = [
     ...(leadInstructorId ? [{ instance_id: data.id, instructor_id: leadInstructorId, role: 'lead', in_charge: true }] : []),
-    ...assistInstructorIds.map((iid) => ({ instance_id: data.id, instructor_id: iid, role: 'assist' })),
+    // in_charge is spelled out rather than left to the column default, because
+    // PostgREST unifies the columns across a batch insert: a row that merely
+    // omits the key is sent an explicit null, which a not-null column rejects —
+    // and it rejects the whole batch. The course would import with no crew at
+    // all, and say so only in a log line.
+    ...assistInstructorIds.map((iid) => ({ instance_id: data.id, instructor_id: iid, role: 'assist', in_charge: false })),
   ]
   if (crew.length > 0) {
     const { error: crewError } = await admin.from('instance_instructors').insert(crew)
