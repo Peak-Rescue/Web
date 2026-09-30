@@ -248,6 +248,15 @@ export default function StaffingInterest({
                 {inv.interested === null && inv.sentAt && (
                   <span className="text-xs text-zinc-600">sent {fmtDay(inv.sentAt)}</span>
                 )}
+                {/* What their yes was to. A yes with no seats beside it predates
+                    the question, and says so rather than reading as "any". */}
+                {inv.interested === true && (
+                  <span className="text-xs text-zinc-500">
+                    {inv.accepts === null
+                      ? 'role not asked'
+                      : `would take ${inv.accepts.map((a) => roleLabel(a).toLowerCase()).join(' or ')}`}
+                  </span>
+                )}
                 <div className="ml-auto flex items-center gap-2">
                   {inv.assigned ? (
                     <span className="text-xs text-teal-400">Assigned ✓</span>
@@ -255,29 +264,49 @@ export default function StaffingInterest({
                     <>
                       {/* One button per wage category — the pair this replaced
                           was "the default, and the other one", which only ever
-                          worked while there were two. The likely one is filled
-                          in; who is primary is set on the crew row, because it
-                          is not what you are deciding at this moment. */}
+                          worked while there were two. Who is primary is set on
+                          the crew row, because it is not what you are deciding
+                          at this moment.
+
+                          Which button is filled in follows *their answer* where
+                          they gave one: the best seat they said they would take.
+                          Seats they declined go quiet and say so, because
+                          staffing somebody into a role they turned down is the
+                          mistake this whole flow exists to make visible. Not
+                          disabled — it is their preference, not a permission,
+                          and an ops call can override it knowingly. */}
                       {assigningId === inv.instructorId ? (
                         <span className="text-xs text-zinc-500">Assigning…</span>
                       ) : (
                         <span className="flex items-center gap-1">
                           <span className="text-xs text-zinc-600">Assign as</span>
-                          {INSTANCE_ROLES.map((r) => (
-                            <button
-                              key={r}
-                              onClick={() => assign(inv.instructorId, r)}
-                              disabled={assigningId !== null}
-                              title={`Staff them at the ${roleLabel(r).toLowerCase()} rate`}
-                              className={`text-xs px-2 py-1 rounded font-medium transition-colors disabled:opacity-40 border ${
-                                r === (hasCrew ? 'assist' : 'lead')
-                                  ? 'bg-pr-red hover:bg-pr-red-dark border-pr-red text-white'
-                                  : `${ROLE_BADGE[r]} hover:brightness-125`
-                              }`}
-                            >
-                              {roleLabel(r)}
-                            </button>
-                          ))}
+                          {INSTANCE_ROLES.map((r) => {
+                            const said = inv.accepts
+                            const declined = said !== null && !said.includes(r)
+                            const best = said?.find((a) => INSTANCE_ROLES.includes(a as InstanceRole))
+                            const likely = said ? best === r : r === (hasCrew ? 'assist' : 'lead')
+                            return (
+                              <button
+                                key={r}
+                                onClick={() => assign(inv.instructorId, r)}
+                                disabled={assigningId !== null}
+                                title={
+                                  declined
+                                    ? `${inv.name} did not say they would take the ${roleLabel(r).toLowerCase()} seat — ask before staffing them into it`
+                                    : `Staff them at the ${roleLabel(r).toLowerCase()} rate`
+                                }
+                                className={`text-xs px-2 py-1 rounded font-medium transition-colors disabled:opacity-40 border ${
+                                  declined
+                                    ? 'border-zinc-800 text-zinc-700 hover:text-zinc-500 line-through decoration-zinc-700'
+                                    : likely
+                                      ? 'bg-pr-red hover:bg-pr-red-dark border-pr-red text-white'
+                                      : `${ROLE_BADGE[r]} hover:brightness-125`
+                                }`}
+                              >
+                                {roleLabel(r)}
+                              </button>
+                            )
+                          })}
                         </span>
                       )}
                     </>

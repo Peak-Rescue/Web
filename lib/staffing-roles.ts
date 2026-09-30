@@ -146,6 +146,14 @@ export function openSeats(
 
     Reads the open seats in wage order, so the answer is the best one actually
     available to them rather than the best one that exists. */
+/** Every seat this person could hold, best first — their ceiling, not the
+    course's. A lead can work an assist seat or shadow; nobody is too qualified
+    to help. An assist cannot cover a lead seat, so they are never shown a lead
+    tick-box to put their name against. */
+export function reachableSeats(qualifiedToLead: boolean): InstanceRole[] {
+  return qualifiedToLead ? [...INSTANCE_ROLES] : INSTANCE_ROLES.filter((r) => r !== 'lead')
+}
+
 export function bestOpenSeatFor(
   open: { role: InstanceRole; open: number }[],
   qualifiedToLead: boolean

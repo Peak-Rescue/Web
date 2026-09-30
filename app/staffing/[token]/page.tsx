@@ -7,7 +7,8 @@ import { courseDisplayName, courseShortName } from '@/lib/courses'
 import ResponseForm from './ResponseForm'
 import { courseZone, todayIn } from '@/lib/course-clock'
 import { slotsToStaff } from '@/lib/course-readiness'
-import { crewPlanOf, openSeats, bestOpenSeatFor, roleLabel, ROLE_TEXT } from '@/lib/staffing-roles'
+import { crewPlanOf, openSeats, bestOpenSeatFor, reachableSeats, roleLabel, ROLE_TEXT } from '@/lib/staffing-roles'
+import { payForPerson, paySettingsFrom, courseFieldDates, NO_TERMS } from '@/lib/pay'
 
 // Public, tokenized staffing-interest page — instructors land here from the
 // invite email to say whether they want to work the course.
@@ -42,7 +43,12 @@ export default async function StaffingInvitePage({
       .from('course_interest_invites')
       // Their capabilities ride along: what this page may offer them is capped
       // by what they are signed off to do, not by what the course has open.
-      .select('id, instance_id, instructor_id, interested, note, instructors(name, instructor_capabilities(category, role))')
+      // paid_for_days and the account's FLSA flag, because what this page may
+      // say about money is different for three kinds of person: most people see
+      // a rate and an overtime figure, an exempt person sees the rate and never
+      // the premium, and somebody whose course days are not paid on top of
+      // anything else must not be quoted an hourly at all.
+      .select('id, instance_id, instructor_id, interested, note, accepts, instructors(name, paid_for_days, profile_id, instructor_capabilities(category, role), profiles(is_exempt))')
       .eq('token', token)
       .maybeSingle(),
     supabase.auth.getUser(),
@@ -55,7 +61,7 @@ export default async function StaffingInvitePage({
   const [{ data: inst }, { data: crew }] = await Promise.all([
     admin
       .from('course_instances')
-      .select('course_type, custom_title, client_name, location, region, starts_at, ends_at, status, instructor_slots, lead_slots, assist_slots, shadow_slots, course_category, custom_categories')
+      .select('course_type, custom_title, client_name, location, region, starts_at, ends_at, status, instructor_slots, lead_slots, assist_slots, shadow_slots, course_category, custom_categories, breaks_paid, instance_off_days(off_date, end_date)')
       .eq('id', invite.instance_id)
       .single(),
     admin
@@ -65,8 +71,13 @@ export default async function StaffingInvitePage({
   ])
   if (!inst) notFound()
 
-  const instructor = invite.instructors as unknown as
-    { name: string; instructor_capabilities: { category: string; role: string }[] | null } | null
+  const instructor = invite.instructors as unknown as {
+    name: string
+    paid_for_days: boolean | null
+    profile_id: string | null
+    instructor_capabilities: { category: string; role: string }[] | null
+    profiles: { is_exempt: boolean | null } | { is_exempt: boolean | null }[] | null
+  } | null
 
   // What is open, worked out now. Deliberately absent from the invite email:
   // an emailed count is a photograph of a moment that has passed by the time
@@ -86,6 +97,68 @@ export default async function StaffingInvitePage({
     (c) => courseCategories.includes(c.category) && c.role === 'lead'
   )
   const offered = bestOpenSeatFor(seats, qualifiedToLead)
+
+  // ── What the seats pay, and how long the week is ──────────────────────────
+  // The question changed direction: instead of telling somebody which seat they
+  // would be put in, the page asks which they would take. That is only a fair
+  // question if it says what each one pays — a tick against "shadow" is not an
+  // informed answer from somebody who does not know it is the $25 seat.
+  //
+  // Nothing is shown to anybody whose course days are not paid on top of
+  // anything else. There is no hourly to quote them, and a blank where everybody
+  // else sees a number would invite exactly the wrong question.
+  const paidForDays = instructor?.paid_for_days !== false
+  const profileRow = Array.isArray(instructor?.profiles) ? instructor?.profiles[0] : instructor?.profiles
+  // Unlinked crew count as non-exempt: the law's default, and the safer error.
+  const exempt = Boolean(profileRow?.is_exempt)
+
+  const [{ data: rateRows }, { data: orgRows }] = await Promise.all([
+    paidForDays
+      ? admin.from('pay_field_rates').select('hourly, role').eq('active', true)
+      : Promise.resolve({ data: [] }),
+    paidForDays ? admin.from('org_settings').select('key, value') : Promise.resolve({ data: [] }),
+  ])
+  const seatHourly: Record<string, number> = Object.fromEntries(
+    (rateRows ?? []).filter((r) => r.role).map((r) => [r.role as string, Number(r.hourly)])
+  )
+
+  // The week, worked out rather than described. "Over four days including travel
+  // earns overtime" is true of a course sitting inside one week and wrong about
+  // one that straddles a weekend — the forty hours belong to a Sunday-to-Saturday
+  // week, so seven days split across two weeks can earn no premium at all. This
+  // is the same library the actuals bill from, so the page and the paycheck
+  // cannot tell different stories.
+  const paySettings = paySettingsFrom(
+    ((orgRows ?? []) as { key: string; value: number }[]).map((o) => ({ key: o.key, value: o.value }))
+  )
+  const week =
+    paidForDays && inst.starts_at
+      ? payForPerson(
+          {
+            id: invite.instructor_id as string,
+            profileId: instructor?.profile_id ?? null,
+            name: instructor?.name ?? '',
+            exempt,
+            paidForDays: true,
+            // The standard shape: the course's own days, a travel day either
+            // side, ten hours each. Their own dates are not known until they are
+            // staffed, which is why this is offered as an estimate and not a
+            // figure.
+            terms: NO_TERMS,
+          },
+          courseFieldDates(
+            { starts_at: inst.starts_at as string, ends_at: inst.ends_at as string | null, breaks_paid: inst.breaks_paid as boolean | null },
+            (inst.instance_off_days ?? []) as { off_date: string; end_date: string | null }[]
+          ),
+          paySettings
+        )
+      : null
+
+  // Which seats they may put their name against — their ceiling, not the
+  // course's, and every seat the plan has rather than only the open ones: a
+  // willingness outlives this week's vacancies, which is the whole reason it is
+  // worth storing instead of a count that goes stale.
+  const canTake = reachableSeats(qualifiedToLead).filter((r) => seats.some((sx) => sx.role === r))
   const courseName = courseDisplayName(inst.course_type, inst.custom_title)
   const fmtLong = (d: string) =>
     new Date(d + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
@@ -182,11 +255,42 @@ export default async function StaffingInvitePage({
               {seats.map((s) => (
                 <div key={s.role} className="flex items-baseline justify-between gap-4 text-xs">
                   <span className={`font-semibold uppercase tracking-wide ${ROLE_TEXT[s.role]}`}>{roleLabel(s.role)}</span>
-                  <span className={s.open > 0 ? 'text-zinc-300 tabular-nums' : 'text-zinc-600 tabular-nums'}>
-                    {s.open > 0 ? `${s.open} of ${s.seats} open` : `${s.seats} filled`}
+                  <span className="flex items-baseline gap-2">
+                    {/* What the seat pays. Beside the seat and not in a table of
+                        its own, because the rate is a fact about the seat and the
+                        only reason anybody needs it here is to answer whether
+                        they would take that one. */}
+                    {seatHourly[s.role] !== undefined && (
+                      <span className="text-zinc-400 tabular-nums">${seatHourly[s.role]}/h</span>
+                    )}
+                    <span className={s.open > 0 ? 'text-zinc-300 tabular-nums' : 'text-zinc-600 tabular-nums'}>
+                      {s.open > 0 ? `${s.open} of ${s.seats} open` : `${s.seats} filled`}
+                    </span>
                   </span>
                 </div>
               ))}
+
+              {/* How long the week is, and how much of it is past forty hours.
+                  Worked out from the course's own dates by the same library the
+                  actuals bill from, rather than stated as a rule — "over four
+                  days including travel" is true of a course inside one week and
+                  wrong about one that straddles a weekend, because the forty
+                  belongs to the week. An estimate, and it says so: their own
+                  dates are not known until they are staffed. */}
+              {week && week.hours > 0 && (
+                <p className="pt-1.5 text-[11px] text-zinc-500 leading-snug">
+                  {[
+                    `About ${Math.round(week.hours)} hours all in`,
+                    `— ${week.fieldDays} day${week.fieldDays === 1 ? '' : 's'} on the ground`,
+                    `plus ${week.travelDayCount} travel.`,
+                    week.overtimeHours > 0
+                      ? `Roughly ${Math.round(week.overtimeHours)} of them fall past forty in the week, which pay at time and a half.`
+                      : exempt
+                        ? 'Your hours are exempt, so no overtime premium.'
+                        : 'Not enough in any one week to earn the overtime premium.',
+                  ].join(' ')}
+                </p>
+              )}
             </div>
           )}
           {!cancelled && inst.status !== 'confirmed' && (
@@ -211,7 +315,19 @@ export default async function StaffingInvitePage({
                 was the same fact in two shapes — the note repeated the field
                 it was already sitting in, and the line about changing your
                 response described a button that is right there. */}
-            <ResponseForm token={token} currentInterested={invite.interested} currentNote={invite.note} staffed={staffed} />
+            <ResponseForm
+              token={token}
+              currentInterested={invite.interested}
+              currentAccepts={(invite.accepts as string[] | null) ?? null}
+              currentNote={invite.note}
+              staffed={staffed}
+              seats={canTake.map((r) => ({
+                role: r,
+                label: roleLabel(r),
+                hourly: seatHourly[r] ?? null,
+                open: seats.find((sx) => sx.role === r)?.open ?? 0,
+              }))}
+            />
             {/* Not on a staffed course: the greeting has already said plans
                 shift and the button already says backup, so this is the third
                 telling of it on the page that can least afford one. */}

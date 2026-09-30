@@ -37,15 +37,37 @@ import { respondToInvite } from './actions'
 export default function ResponseForm({
   token,
   currentInterested,
+  currentAccepts,
   currentNote,
   staffed = false,
+  seats = [],
 }: {
   token: string
   currentInterested: boolean | null
+  /** The seats they have already said they would take. Null is a yes given
+      before we started asking which — "seat unstated", not "any seat". */
+  currentAccepts: string[] | null
   currentNote: string | null
   /** The crew is already full, so saying yes is volunteering as a backup. */
   staffed?: boolean
+  /** The seats this person could hold, each with what it pays. Their ceiling,
+      not the course's — a lead seat is not offered to somebody without the
+      sign-off, so there is nothing here to tick that they could not be given.
+      Empty on a course with no crew plan, and then the yes is a plain yes. */
+  seats?: { role: string; label: string; hourly: number | null; open: number }[]
 }) {
+  // Which seats they would take. The yes used to be a yes to nothing in
+  // particular, and staffing then had to guess — which mattered the moment the
+  // seat became the wage, because guessing wrong is a pay cut nobody agreed to.
+  //
+  // Pre-ticked from their last answer, and on a first visit from every seat they
+  // could hold: the common case is somebody who will work the week in whatever
+  // capacity is needed, and making that person tick three boxes to say so is a
+  // tax on the answer we most want. Unticking is how you say "not that one",
+  // which is the rarer and more deliberate claim.
+  const [accepts, setAccepts] = useState<Set<string>>(
+    () => new Set(currentAccepts ?? seats.map((s) => s.role))
+  )
   const [note, setNote] = useState(currentNote ?? '')
   const [busy, setBusy] = useState<'yes' | 'no' | null>(null)
   const [saved, setSaved] = useState(false)
@@ -62,10 +84,22 @@ export default function ResponseForm({
 
   async function submit(interested: boolean) {
     if (busy) return
+    // A yes to no seat at all is not an answer this page will send. It would
+    // arrive at staffing as an empty array, which reads as "any" to anybody
+    // glancing and as "none" to the code — and the difference between those two
+    // is somebody's wage.
+    if (interested && seats.length > 0 && accepts.size === 0) {
+      setError('Pick at least one role you would take — or use "Can\'t make it".')
+      return
+    }
     setBusy(interested ? 'yes' : 'no')
     setError(null)
     try {
-      const result = await respondToInvite(token, { interested, note })
+      const result = await respondToInvite(token, {
+        interested,
+        note,
+        accepts: interested && seats.length > 0 ? [...accepts] : null,
+      })
       if (result.ok) {
         setSaved(true)
         router.refresh()
@@ -115,15 +149,72 @@ export default function ResponseForm({
     )
   }
 
+  function toggleSeat(role: string) {
+    setAccepts((cur) => {
+      const next = new Set(cur)
+      if (next.has(role)) next.delete(role)
+      else next.add(role)
+      return next
+    })
+    // Their answer is already on file and they have just changed what it means,
+    // so it is no longer saved. Saying so beats letting a stale "Saved" sit
+    // under a box somebody has just unticked.
+    setSaved(false)
+  }
+
   return (
     <div className="space-y-4">
+      {seats.length > 0 && (
+        <div>
+          <label className="block text-xs text-zinc-400 mb-2">
+            Which of these would you take?
+          </label>
+          <div className="space-y-1.5">
+            {seats.map((s) => {
+              const on = accepts.has(s.role)
+              return (
+                <label
+                  key={s.role}
+                  className={`flex items-center gap-3 px-3 py-2 rounded border cursor-pointer transition-colors ${
+                    on
+                      ? 'border-teal-700 bg-teal-900/20 text-zinc-100'
+                      : 'border-zinc-800 bg-zinc-900/60 text-zinc-500 hover:border-zinc-700'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={on}
+                    onChange={() => toggleSeat(s.role)}
+                    className="accent-teal-500"
+                  />
+                  <span className="text-sm font-medium flex-1">{s.label}</span>
+                  {/* The rate, so a tick is an informed one. Absent for anybody
+                      whose course days are not paid on top of anything else —
+                      there is no hourly to quote them. */}
+                  {s.hourly !== null && (
+                    <span className="text-xs text-zinc-400 tabular-nums">${s.hourly}/h</span>
+                  )}
+                  {s.open === 0 && (
+                    <span className="text-[10px] uppercase tracking-wide text-zinc-600">filled for now</span>
+                  )}
+                </label>
+              )
+            })}
+          </div>
+          <p className="mt-2 text-[11px] text-zinc-600 leading-snug">
+            Saying yes to a role is not the same as being given it — we confirm
+            staffing separately. It does mean we will not put you in one you left
+            unticked without asking you first.
+          </p>
+        </div>
+      )}
       <div>
         <label className="block text-xs text-zinc-400 mb-1.5">Note for the ops team (optional)</label>
         <textarea
           value={note}
           onChange={(e) => setNote(e.target.value)}
           rows={3}
-          placeholder="Availability caveats, travel needs, role preference…"
+          placeholder="Availability caveats, travel needs, anything we should know…"
           className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500"
         />
       </div>

@@ -30,6 +30,10 @@ export type InterestInviteRow = {
   sentAt: string | null
   respondedAt: string | null
   interested: boolean | null
+  /** The seats they said they would take. Null on a yes given before we started
+      asking which — "seat unstated", not "any seat", so staffing still has to
+      ask rather than assume. */
+  accepts: string[] | null
   note: string | null
   assigned: boolean
 }
@@ -121,7 +125,7 @@ export async function loadStaffingPanel(
       .select('id, name, email, instructor_role, sectors, instructor_capabilities(category, role)')
       .eq('active', true).order('name'),
     admin.from('course_interest_invites')
-      .select('id, instructor_id, sent_at, responded_at, interested, note')
+      .select('id, instructor_id, sent_at, responded_at, interested, accepts, note')
       .eq('instance_id', instanceId).order('created_at'),
     nearbyCourses,
   ])
@@ -185,6 +189,7 @@ export async function loadStaffingPanel(
       sentAt: r.sent_at,
       respondedAt: r.responded_at,
       interested: r.interested,
+      accepts: (r.accepts as string[] | null) ?? null,
       note: r.note,
       assigned: assignedIds.has(r.instructor_id),
     })),
