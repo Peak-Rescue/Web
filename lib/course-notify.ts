@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { crewPlanOf, crewPlanSummary } from '@/lib/staffing-roles'
+import { crewPlanOf, crewPlanSummary, roleLabel } from '@/lib/staffing-roles'
 import { CAPABILITY_ORDER } from '@/lib/capabilities'
 import { slotsToStaff } from '@/lib/course-readiness'
 
@@ -220,5 +220,82 @@ export async function emailAdminsNewCourse(
     })
   } catch (e) {
     console.error('New-course admin alert failed:', e)
+  }
+}
+
+/** Tells somebody their seat on a course changed, and what it now pays.
+ *
+ *  Called from every path that can move an existing person between seats, and
+ *  there are three: the select on the crew row, a re-assign through the assign
+ *  form (its upsert overwrites the role), and adding somebody as a guest who
+ *  turns out to be on the course already. The first was the obvious one; the
+ *  other two would have changed a wage in silence, which is the whole thing
+ *  this exists to stop.
+ *
+ *  The rate is in the letter because the rate is the reason the letter exists:
+ *  naming the seat and leaving the money to be inferred would be the same
+ *  silence in a longer sentence. Left out for anybody whose course days are not
+ *  paid on top of anything else — a salaried lead with no day pay — because
+ *  quoting them an hourly would be worse than quoting them nothing.
+ *
+ *  Best-effort, like every other notice here: the change is saved either way. */
+export async function notifyRoleChange(
+  admin: SupabaseClient,
+  instanceId: string,
+  instructorId: string,
+  from: string,
+  to: string
+) {
+  try {
+    const [{ data: instructor }, { data: inst }, { data: rates }, { data: own }] = await Promise.all([
+      admin.from('instructors').select('name, email, paid_for_days').eq('id', instructorId).single(),
+      admin
+        .from('course_instances')
+        .select('course_type, custom_title, client_name, starts_at, ends_at')
+        .eq('id', instanceId)
+        .single(),
+      admin.from('pay_field_rates').select('hourly, role').eq('active', true),
+      // A rate typed for them on this course beats the seat's standing one —
+      // the same precedence the actuals use, so the letter cannot quote a number
+      // the course will not pay.
+      admin
+        .from('course_pay_rates')
+        .select('field_hourly')
+        .eq('instance_id', instanceId)
+        .eq('instructor_id', instructorId)
+        .maybeSingle(),
+    ])
+    if (!instructor?.email || !inst) return
+
+    const seatRate = (rates ?? []).find((r) => r.role === to)?.hourly ?? null
+    const hourly = instructor.paid_for_days === false ? null : own?.field_hourly ?? seatRate
+
+    const { courseShortName } = await import('@/lib/courses')
+    const { sendMail } = await import('@/lib/mailer')
+    const courseName = courseShortName(inst.course_type, inst.custom_title)
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://peak-rescue.com'
+    const dates = inst.starts_at
+      ? `${inst.starts_at}${inst.ends_at && inst.ends_at !== inst.starts_at ? ` – ${inst.ends_at}` : ''}`
+      : 'dates TBD'
+
+    await sendMail({
+      from: 'Peak Rescue Portal <noreply@peak-rescue.com>',
+      to: [instructor.email],
+      subject: `Your role on ${courseName} changed — now ${roleLabel(to).toLowerCase()}`,
+      text: [
+        `${instructor.name}, your role on ${courseName} has changed from ${roleLabel(from).toLowerCase()} to ${roleLabel(to).toLowerCase()}.`,
+        hourly !== null ? `That seat pays $${Number(hourly)} an hour in the field.` : null,
+        '',
+        `Course: ${courseName}${inst.client_name ? ` · ${inst.client_name}` : ''}`,
+        `Dates: ${dates}`,
+        '',
+        `If that is not what you agreed to, reply and tell us — this is not the`,
+        `kind of change that should arrive as a surprise.`,
+        '',
+        `Course details and tasks: ${siteUrl}/portal/${instanceId}`,
+      ].filter((l): l is string => l !== null).join('\n'),
+    })
+  } catch (e) {
+    console.error('Role-change email failed:', e)
   }
 }

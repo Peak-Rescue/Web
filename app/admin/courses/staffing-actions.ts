@@ -196,12 +196,25 @@ export async function addGuestInstructor(
   // The first person on a course is running it until somebody says otherwise —
   // the same rule assignInstructor follows, and it has to be here too or a
   // course staffed entirely with guests ends up with nobody answering for it.
-  const { data: inCharge } = await admin
-    .from('instance_instructors')
-    .select('id')
-    .eq('instance_id', instanceId)
-    .eq('in_charge', true)
-    .limit(1)
+  //
+  // The seat they are already in comes along for the same reason it does there:
+  // "add a guest" who turns out to be on the course already is an upsert, and
+  // the upsert overwrites their seat. A wage change is a wage change however it
+  // was arrived at.
+  const [{ data: inCharge }, { data: already }] = await Promise.all([
+    admin
+      .from('instance_instructors')
+      .select('id')
+      .eq('instance_id', instanceId)
+      .eq('in_charge', true)
+      .limit(1),
+    admin
+      .from('instance_instructors')
+      .select('role')
+      .eq('instance_id', instanceId)
+      .eq('instructor_id', instructorId)
+      .maybeSingle(),
+  ])
 
   const { error } = await admin
     .from('instance_instructors')
@@ -215,6 +228,12 @@ export async function addGuestInstructor(
       { onConflict: 'instance_id,instructor_id' }
     )
   if (error) throw new Error(error.message)
+
+  const wasRole = (already?.role ?? null) as string | null
+  if (wasRole !== null && wasRole !== input.role && process.env.RESEND_API_KEY) {
+    const { notifyRoleChange } = await import('@/lib/course-notify')
+    after(() => notifyRoleChange(admin, instanceId, instructorId, wasRole, input.role))
+  }
 
   // Portal invite (or a sign-in link if they already have an account).
   await adminSendInvite(instructorId)

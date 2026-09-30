@@ -9,7 +9,7 @@ import { syncCourseCalendar, removeCourseEvent } from '@/lib/google-calendar'
 import { isValidRegion } from '@/lib/regions'
 import { requireAdminUser, requireCourseStaff } from '@/lib/course-access'
 import { sendMail } from '@/lib/mailer'
-import { announcesChanges, emailAdminsNewCourse } from '@/lib/course-notify'
+import { announcesChanges, emailAdminsNewCourse, notifyRoleChange } from '@/lib/course-notify'
 import { clampOffDays, dayShift, strokeOffDays, type OffSpan } from '@/lib/courses'
 import { assertCustomCourseTagged } from '@/lib/capabilities'
 import { asInstanceRole, crewPlanTotal, type CrewPlan } from '@/lib/staffing-roles'
@@ -870,7 +870,6 @@ export async function addLibraryItems(instanceId: string, moduleId: string, item
   revalidatePath(`/portal/${instanceId}`)
 }
 
-
 // Library material for a course's pickers, fetched on demand. Loading ~700
 // items on every course-page render cost about half a second whether or not
 // anyone opened a picker — and every delete revalidates the page.
@@ -1213,12 +1212,15 @@ export async function assignInstructor(instanceId: string, formData: FormData) {
 
   if (!instructor_id) return
 
-  // Distinguish a new assignment from a wage change so only the former emails,
-  // and read who is already running the course in the same trip.
+  // Distinguish a new assignment from a wage change so only the former sends
+  // the "you're staffed" letter, and read who is already running the course in
+  // the same trip. The seat comes along because this upsert overwrites it: a
+  // second assign at a different role is a wage change wearing the clothes of
+  // an assignment, and it used to go out in silence.
   const [{ data: existing }, { data: crew }] = await Promise.all([
     admin
       .from('instance_instructors')
-      .select('id')
+      .select('id, role')
       .eq('instance_id', instanceId)
       .eq('instructor_id', instructor_id)
       .maybeSingle(),
@@ -1248,6 +1250,13 @@ export async function assignInstructor(instanceId: string, formData: FormData) {
     )
 
   if (error) throw new Error(error.message)
+
+  // Already on the course, now in a different seat: that is a change to what
+  // their week pays, and it gets said so.
+  const wasRole = (existing?.role ?? null) as string | null
+  if (wasRole !== null && wasRole !== role && process.env.RESEND_API_KEY) {
+    after(() => notifyRoleChange(admin, instanceId, instructor_id, wasRole, role))
+  }
 
   // Best-effort notification on new assignments — deferred with after() so
   // the assign click doesn't wait on the email provider.
@@ -1341,75 +1350,6 @@ export async function setCourseRole(instanceId: string, instructorId: string, ro
   revalidatePath('/admin/courses')
 }
 
-/** Tells somebody their seat on a course changed, and what it now pays.
- *
- *  The rate is in the letter because the rate is the reason the letter exists:
- *  naming the seat and leaving the money to be inferred would be the same
- *  silence in a longer sentence. Left out for anybody whose course days are not
- *  paid on top of anything else — a salaried lead with no day pay — because
- *  quoting them an hourly would be worse than quoting them nothing.
- *
- *  Best-effort, like every other notice here: the change is saved either way. */
-async function notifyRoleChange(
-  admin: ReturnType<typeof createAdminClient>,
-  instanceId: string,
-  instructorId: string,
-  from: string,
-  to: string
-) {
-  try {
-    const { roleLabel } = await import('@/lib/staffing-roles')
-    const [{ data: instructor }, { data: inst }, { data: rates }, { data: own }] = await Promise.all([
-      admin.from('instructors').select('name, email, paid_for_days').eq('id', instructorId).single(),
-      admin
-        .from('course_instances')
-        .select('course_type, custom_title, client_name, starts_at, ends_at')
-        .eq('id', instanceId)
-        .single(),
-      admin.from('pay_field_rates').select('hourly, role').eq('active', true),
-      // A rate typed for them on this course beats the seat's standing one —
-      // the same precedence the actuals use, so the letter cannot quote a number
-      // the course will not pay.
-      admin
-        .from('course_pay_rates')
-        .select('field_hourly')
-        .eq('instance_id', instanceId)
-        .eq('instructor_id', instructorId)
-        .maybeSingle(),
-    ])
-    if (!instructor?.email || !inst) return
-
-    const seatRate = (rates ?? []).find((r) => r.role === to)?.hourly ?? null
-    const hourly = instructor.paid_for_days === false ? null : own?.field_hourly ?? seatRate
-
-    const { courseShortName } = await import('@/lib/courses')
-    const courseName = courseShortName(inst.course_type, inst.custom_title)
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://peak-rescue.com'
-    const dates = inst.starts_at
-      ? `${inst.starts_at}${inst.ends_at && inst.ends_at !== inst.starts_at ? ` – ${inst.ends_at}` : ''}`
-      : 'dates TBD'
-
-    await sendMail({
-      from: 'Peak Rescue Portal <noreply@peak-rescue.com>',
-      to: [instructor.email],
-      subject: `Your role on ${courseName} changed — now ${roleLabel(to).toLowerCase()}`,
-      text: [
-        `${instructor.name}, your role on ${courseName} has changed from ${roleLabel(from).toLowerCase()} to ${roleLabel(to).toLowerCase()}.`,
-        hourly !== null ? `That seat pays $${Number(hourly)} an hour in the field.` : null,
-        '',
-        `Course: ${courseName}${inst.client_name ? ` · ${inst.client_name}` : ''}`,
-        `Dates: ${dates}`,
-        '',
-        `If that is not what you agreed to, reply and tell us — this is not the`,
-        `kind of change that should arrive as a surprise.`,
-        '',
-        `Course details and tasks: ${siteUrl}/portal/${instanceId}`,
-      ].filter((l): l is string => l !== null).join('\n'),
-    })
-  } catch (e) {
-    console.error('Role-change email failed:', e)
-  }
-}
 
 // The primary: who is actually running the course in the field. Any number of
 // the crew can be, and nothing stops it being somebody on assist wage — a strong
