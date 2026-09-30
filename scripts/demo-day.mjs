@@ -338,17 +338,24 @@ if (!demo || !upcoming || !finished) {
 }
 
 // ── The run of show ─────────────────────────────────────────────────────────
-// The link has to keep Supabase's own host — that is the endpoint that verifies
-// the token — and send the browser back to wherever we are demoing afterwards.
-// Rewriting the host instead points the browser at a verify endpoint that does
-// not exist there, which fails in a way that looks like a bad token.
+// Built against our own /auth/callback rather than Supabase's action_link.
+//
+// That is not a shortcut, it is what this app does: the email templates point at
+// /auth/callback with the token hash, deliberately, because some corporate
+// networks block *.supabase.co in the browser and the verify hop died there.
+// Handing out the action_link instead sends you through the host the app stopped
+// using, and you arrive at the login page wondering which password you forgot.
+//
+// The callback also runs linkStaffAccount, so signing in this way promotes the
+// profile exactly as a real instructor's first sign-in does.
 const { data: link, error: linkErr } = await db.auth.admin.generateLink({
   type: 'magiclink',
   email: DEMO_EMAIL,
-  options: { redirectTo: `${BASE}/instructor` },
 })
 if (linkErr) throw linkErr
-const signIn = link?.properties?.action_link
+const signIn =
+  `${BASE}/auth/callback?token_hash=${link.properties.hashed_token}` +
+  `&type=email&next=${encodeURIComponent('/instructor')}`
 
 const { data: invite } = await db
   .from('course_interest_invites')
