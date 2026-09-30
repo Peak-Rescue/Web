@@ -1311,16 +1311,104 @@ export async function assignInstructor(instanceId: string, formData: FormData) {
 export async function setCourseRole(instanceId: string, instructorId: string, role: string) {
   await requireAdmin()
   const admin = createAdminClient()
+  const next = asInstanceRole(role)
+
+  // Read the seat they were in before it is overwritten. Being assigned emails
+  // them and names the seat; being *moved* between seats said nothing at all, so
+  // somebody told "assist" could be made a shadow and find out from their pay.
+  // The seat is the wage now — that was the whole point of 219 — which makes a
+  // silent change to it a silent change to what their week is worth.
+  const { data: before } = await admin
+    .from('instance_instructors')
+    .select('role')
+    .eq('instance_id', instanceId)
+    .eq('instructor_id', instructorId)
+    .maybeSingle()
 
   const { error } = await admin
     .from('instance_instructors')
-    .update({ role: asInstanceRole(role) })
+    .update({ role: next })
     .eq('instance_id', instanceId)
     .eq('instructor_id', instructorId)
   if (error) throw new Error(error.message)
 
+  const was = (before?.role ?? null) as string | null
+  if (was !== null && was !== next && process.env.RESEND_API_KEY) {
+    after(() => notifyRoleChange(admin, instanceId, instructorId, was, next))
+  }
+
   revalidatePath(`/admin/courses/${instanceId}`)
   revalidatePath('/admin/courses')
+}
+
+/** Tells somebody their seat on a course changed, and what it now pays.
+ *
+ *  The rate is in the letter because the rate is the reason the letter exists:
+ *  naming the seat and leaving the money to be inferred would be the same
+ *  silence in a longer sentence. Left out for anybody whose course days are not
+ *  paid on top of anything else — a salaried lead with no day pay — because
+ *  quoting them an hourly would be worse than quoting them nothing.
+ *
+ *  Best-effort, like every other notice here: the change is saved either way. */
+async function notifyRoleChange(
+  admin: ReturnType<typeof createAdminClient>,
+  instanceId: string,
+  instructorId: string,
+  from: string,
+  to: string
+) {
+  try {
+    const { roleLabel } = await import('@/lib/staffing-roles')
+    const [{ data: instructor }, { data: inst }, { data: rates }, { data: own }] = await Promise.all([
+      admin.from('instructors').select('name, email, paid_for_days').eq('id', instructorId).single(),
+      admin
+        .from('course_instances')
+        .select('course_type, custom_title, client_name, starts_at, ends_at')
+        .eq('id', instanceId)
+        .single(),
+      admin.from('pay_field_rates').select('hourly, role').eq('active', true),
+      // A rate typed for them on this course beats the seat's standing one —
+      // the same precedence the actuals use, so the letter cannot quote a number
+      // the course will not pay.
+      admin
+        .from('course_pay_rates')
+        .select('field_hourly')
+        .eq('instance_id', instanceId)
+        .eq('instructor_id', instructorId)
+        .maybeSingle(),
+    ])
+    if (!instructor?.email || !inst) return
+
+    const seatRate = (rates ?? []).find((r) => r.role === to)?.hourly ?? null
+    const hourly = instructor.paid_for_days === false ? null : own?.field_hourly ?? seatRate
+
+    const { courseShortName } = await import('@/lib/courses')
+    const courseName = courseShortName(inst.course_type, inst.custom_title)
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://peak-rescue.com'
+    const dates = inst.starts_at
+      ? `${inst.starts_at}${inst.ends_at && inst.ends_at !== inst.starts_at ? ` – ${inst.ends_at}` : ''}`
+      : 'dates TBD'
+
+    await sendMail({
+      from: 'Peak Rescue Portal <noreply@peak-rescue.com>',
+      to: [instructor.email],
+      subject: `Your role on ${courseName} changed — now ${roleLabel(to).toLowerCase()}`,
+      text: [
+        `${instructor.name}, your role on ${courseName} has changed from ${roleLabel(from).toLowerCase()} to ${roleLabel(to).toLowerCase()}.`,
+        hourly !== null ? `That seat pays $${Number(hourly)} an hour in the field.` : null,
+        '',
+        `Course: ${courseName}${inst.client_name ? ` · ${inst.client_name}` : ''}`,
+        `Dates: ${dates}`,
+        '',
+        `If that is not what you agreed to, reply and tell us — this is not the`,
+        `kind of change that should arrive as a surprise.`,
+        '',
+        `Course details and tasks: ${siteUrl}/portal/${instanceId}`,
+      ].filter((l): l is string => l !== null).join('\n'),
+    })
+  } catch (e) {
+    console.error('Role-change email failed:', e)
+  }
 }
 
 // The primary: who is actually running the course in the field. Any number of
