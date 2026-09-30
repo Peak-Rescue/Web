@@ -61,7 +61,7 @@ const ENDS = '2026-10-30'
 
 const { data: found } = await db
   .from('course_instances')
-  .select('id, ref_number')
+  .select('id, ref_number, gcal_event_id')
   .like('custom_title', `${MARK} —%`)
 const DEMO_SLUG = 'demo-instructor'
 
@@ -74,10 +74,31 @@ const { data: foundPerson } = await db
 let course = found?.[0] ?? null
 let person = foundPerson ?? null
 
+// --create used to tear down first, so that a build which died halfway could not
+// leave a half-built demo behind. That was the wrong trade: it also meant a
+// rerun silently destroyed a demo course somebody had been editing, taking the
+// date they had just changed with it — and leaving the Google Calendar event
+// behind, because a raw row delete knows nothing about Google. The next edit
+// then made a second event.
+//
+// So it refuses instead. Deleting is a thing you ask for.
+if (CREATE && (course || person)) {
+  console.log(`
+  A demo already exists${course ? ` (PR-${String(course.ref_number).padStart(4, '0')})` : ''}.
+
+  Rebuilding would throw away any changes made to it — dates, answers, tasks —
+  and leave its Google Calendar event orphaned. If that is what you want:
+
+    node scripts/demo-day.mjs --delete && node scripts/demo-day.mjs --create
+
+  For links to what is already there, run this with no arguments.
+`)
+  process.exit(1)
+}
+
 // ── Teardown ────────────────────────────────────────────────────────────────
-// --create runs this first. A build that died halfway leaves rows behind, and a
-// rerun that skips what already exists is how you get on stage with half a demo.
-if (DELETE || (CREATE && (course || person))) {
+if (DELETE) {
+  const gcalLeft = (found ?? []).filter((c) => c.gcal_event_id)
   for (const c of found ?? []) {
     await db.from('course_instances').delete().eq('id', c.id)
     console.log(`  deleted PR-${String(c.ref_number).padStart(4, '0')}`)
@@ -96,13 +117,20 @@ if (DELETE || (CREATE && (course || person))) {
     }
     console.log(`  deleted the demo instructor and ${(reports ?? []).length} expense report(s)`)
   }
-  if (DELETE) {
-    console.log('\n  Clean.\n')
-    process.exit(0)
+  // The calendar event does not live in Postgres, so deleting the row cannot
+  // take it with it. deleteInstance calls removeCourseEvent before it deletes;
+  // this cannot, so it says what is left rather than leaving it to be found in
+  // the team's calendar next week.
+  if (gcalLeft.length > 0) {
+    console.log(`
+  ${gcalLeft.length} Google Calendar event(s) may be left behind — a row delete
+  cannot remove them. Sweep with:
+
+    node scripts/gcal-demo-cleanup.mjs --delete
+`)
   }
-  console.log('  (cleared what was there — rebuilding)')
-  course = null
-  person = null
+  console.log('  Clean.\n')
+  process.exit(0)
 }
 
 // ── Build ───────────────────────────────────────────────────────────────────
