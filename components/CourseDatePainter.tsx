@@ -679,7 +679,7 @@ export default function CourseDatePainter({
           opens the staffing panel next. */}
       {clash && !error && (
         <p className="mt-2 text-xs text-amber-400/90">
-          Dates saved — but {clash}.
+          Saved. {clash}.
         </p>
       )}
     </div>

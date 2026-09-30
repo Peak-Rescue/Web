@@ -844,7 +844,7 @@ export default function EstimatePanel({
         <div className="mb-1.5 text-[11px] flex items-center gap-2 flex-wrap text-zinc-500">
           <InfoHint
             below
-            text="Puts every library line back to the quantity the course works out for it — instructors, students, days, and the extra day at each end for the things that travel. Quantities typed by hand are overwritten. Rates, notes, custom lines, and numbers the course cannot derive (miles, admin days, meals) are left alone."
+            text="Recomputes every library line from the course — instructors, students, days, and the extra day at each end for things that travel. Overwrites quantities typed by hand. Leaves rates, notes, custom lines, and numbers the course cannot work out (miles, admin days, meals)."
           />
           {resetArmed ? (
             <>
@@ -876,9 +876,9 @@ export default function EstimatePanel({
               type="button"
               onClick={() => setResetArmed(true)}
               className="text-zinc-600 hover:text-zinc-200 underline underline-offset-2 decoration-zinc-700 transition-colors"
-              title={`Recompute ${resettableRows.length === 1 ? 'one quantity' : `${resettableRows.length} quantities`} from the course's own numbers`}
+              title={`Recompute ${resettableRows.length === 1 ? 'one quantity' : `${resettableRows.length} quantities`} from the course`}
             >
-              Reset quantities to the course&apos;s numbers
+              Reset quantities from the course
             </button>
           )}
         </div>

@@ -89,7 +89,7 @@ export default function ResponseForm({
     // glancing and as "none" to the code — and the difference between those two
     // is somebody's wage.
     if (interested && seats.length > 0 && accepts.size === 0) {
-      setError('Pick at least one role you would take — or use "Can\'t make it".')
+      setError('Pick at least one role, or "Can\'t make it".')
       return
     }
     setBusy(interested ? 'yes' : 'no')
@@ -202,9 +202,7 @@ export default function ResponseForm({
             })}
           </div>
           <p className="mt-2 text-[11px] text-zinc-600 leading-snug">
-            Saying yes to a role is not the same as being given it — we confirm
-            staffing separately. It does mean we will not put you in one you left
-            unticked without asking you first.
+            We won&apos;t put you in a role you left unticked without asking.
           </p>
         </div>
       )}

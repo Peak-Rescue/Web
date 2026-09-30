@@ -37,7 +37,7 @@ async function isPrimaryOf(admin: ReturnType<typeof createAdminClient>, instance
 async function requireManager(instanceId: string) {
   const { user, admin, isAdmin } = await getCaller()
   if (!isAdmin && !(await isPrimaryOf(admin, instanceId, user.id))) {
-    throw new Error('Only admins or a primary instructor on this course can manage tasks')
+    throw new Error('Only admins and primary instructors can manage this course\'s tasks')
   }
   return { user, admin }
 }

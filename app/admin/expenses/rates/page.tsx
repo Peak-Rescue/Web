@@ -316,9 +316,8 @@ export default async function AdminExpenseRatesPage() {
 
           <h3 className="text-xs uppercase tracking-wide text-zinc-500 mt-6 mb-1">Field hourly rates</h3>
           <p className="text-xs text-zinc-500 mb-3">
-            What each staffing category pays. How somebody is staffed on a course is what puts them on a
-            rate — a course&rsquo;s crew list prices itself — and the course can still pay somebody something
-            else by picking it on their crew row in the actuals.
+            What each staffing category pays. How somebody is staffed on a course puts them on a rate; a
+            course can still pay a different figure by picking it on their crew row in the actuals.
           </p>
           <div className="bg-zinc-900 rounded-lg border border-zinc-800 divide-y divide-zinc-800">
             {(payRateRows ?? []).map((r) => (

@@ -188,15 +188,15 @@ describe('the sentence a date move shows', () => {
       .toBe('Eric Tolliver is also on SPRAT (PR-0002) (Mar 5–6)')
   })
 
-  // Trimmed rather than truncated mid-list: the count of the rest is more use
-  // than a third name and no idea how many followed it.
+  // Trimmed rather than truncated mid-list: a count of the rest is more use than
+  // a third name and no idea how many followed it.
   it('trims at two and counts the rest', () => {
     const many = {
       eric: [{ course: 'A', days: 'Mar 5' }],
       toph: [{ course: 'B', days: 'Mar 5' }],
       cody: [{ course: 'C', days: 'Mar 5' }],
     }
-    expect(clashSentence(many, nameOf)).toContain('and 1 other')
+    expect(clashSentence(many, nameOf)).toContain('and 1 more')
   })
 
   it('falls back to somebody rather than to a bare id', () => {

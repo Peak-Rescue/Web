@@ -44,7 +44,7 @@ export default function StaffingPanel({ data }: { data: StaffingPanelData }) {
             </>
           ) : (
             <span className="text-zinc-500">
-              Crew plan met — {seats.map((s) => `${s.seats} ${roleLabel(s.role).toLowerCase()}`).join(' · ')}
+              Crew plan met · {seats.map((s) => `${s.seats} ${roleLabel(s.role).toLowerCase()}`).join(' · ')}
             </span>
           )}
         </p>
@@ -69,7 +69,7 @@ export default function StaffingPanel({ data }: { data: StaffingPanelData }) {
           notice, this is where you are when you can do something about it. */}
       {assigned.length > 0 && !hasPrimary && (
         <p className="mb-4 -mt-2 text-xs text-amber-400/90">
-          Nobody is primary on this course yet — mark whoever is running it.
+          Nobody is primary yet — mark whoever is running it.
         </p>
       )}
 
@@ -169,9 +169,9 @@ function CrewRow({
             title={
               member.inCharge
                 ? solePrimary
-                  ? 'Primary on this course — the only one. Unstarring leaves nobody running it.'
-                  : 'Primary — running this course in the field. Press to unstar.'
-                : 'Make them primary — running this course in the field. More than one person can be.'
+                  ? 'The only primary — unstarring leaves nobody running this course'
+                  : 'Primary — running this course in the field'
+                : 'Make them primary. More than one person can be.'
             }
             className={`shrink-0 flex items-center gap-1.5 text-xs transition-colors disabled:opacity-50 ${
               member.inCharge ? 'text-teal-300 hover:text-teal-200' : 'text-zinc-700 hover:text-teal-400/70'

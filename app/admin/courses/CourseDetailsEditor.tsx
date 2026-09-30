@@ -156,7 +156,7 @@ export default function CourseDetailsEditor({
         <div>
           <label className="block text-xs text-zinc-400 mb-1">
             {kind === 'job' ? 'Crew' : 'Crew plan'}
-            <InfoHint text="How many of each the course is planned to run. Each is a wage — a lead hour, an assist hour and a shadow hour are three different numbers — and how somebody is staffed is what puts them on one. The call-out tells an instructor which seats are open, so this is what they are saying yes to. Leave a box empty if nobody has decided; empty and 0 are different answers, and 0 means there is no room." />
+            <InfoHint text="How many of each the course runs. Each is a wage, and it is what the call-out asks an instructor to accept. Empty means nobody has decided; 0 means there is no room." />
           </label>
           <div className="flex items-end gap-2">
             {CREW_SEAT_FIELDS.map((f) => (

@@ -137,7 +137,7 @@ export function clashSentence(
   const parts = shown.map(
     (p) => `${p.name} is also on ${p.clashes.map((c) => `${c.course} (${c.days})`).join(' and ')}`
   )
-  return parts.join('; ') + (rest > 0 ? ` — and ${rest} other${rest === 1 ? '' : 's'}` : '')
+  return parts.join('; ') + (rest > 0 ? ` and ${rest} more` : '')
 }
 
 /** Just the names, for a chain step with room for a few words. */

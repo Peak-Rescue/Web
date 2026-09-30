@@ -218,7 +218,7 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
             <div>
               <label className="block text-xs text-zinc-400 mb-1">
                 Crew plan
-                <InfoHint text="How many of each the course is planned to run. Each is a wage, and it is what an instructor is told when we call for interest — so it is what they are saying yes to. Empty is fine at intake; it can be broken down later." />
+                <InfoHint text="How many of each the course runs. Each is a wage, and it is what the call-out asks an instructor to accept. Empty is fine at intake." />
               </label>
               <div className="flex items-end gap-2">
                 {CREW_SEAT_FIELDS.map((f) => (

@@ -229,8 +229,7 @@ export default async function StaffingInvitePage({
             line above has said it and this would be the same fact twice. */}
         {!staffed && !cancelled && !over && offered && offered !== 'lead' && (seats.find((s) => s.role === 'lead')?.open ?? 0) > 0 && (
           <p className="-mt-6 mb-8 text-xs text-zinc-500">
-            The lead seat needs a lead sign-off in this discipline, so we&apos;re asking you
-            about the {roleLabel(offered).toLowerCase()} seat.
+            The lead seat needs a lead sign-off in this discipline.
           </p>
         )}
 
@@ -280,14 +279,13 @@ export default async function StaffingInvitePage({
               {week && week.hours > 0 && (
                 <p className="pt-1.5 text-[11px] text-zinc-500 leading-snug">
                   {[
-                    `About ${Math.round(week.hours)} hours all in`,
-                    `— ${week.fieldDays} day${week.fieldDays === 1 ? '' : 's'} on the ground`,
-                    `plus ${week.travelDayCount} travel.`,
+                    `${week.fieldDays} day${week.fieldDays === 1 ? '' : 's'} plus ${week.travelDayCount} travel`,
+                    `— about ${Math.round(week.hours)} hours.`,
                     week.overtimeHours > 0
-                      ? `Roughly ${Math.round(week.overtimeHours)} of them fall past forty in the week, which pay at time and a half.`
+                      ? `Around ${Math.round(week.overtimeHours)} past forty in the week, at time and a half.`
                       : exempt
-                        ? 'Your hours are exempt, so no overtime premium.'
-                        : 'Not enough in any one week to earn the overtime premium.',
+                        ? 'Your hours are exempt, so no overtime.'
+                        : 'Not enough in one week for overtime.',
                   ].join(' ')}
                 </p>
               )}
