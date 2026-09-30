@@ -23,8 +23,8 @@ export type CalendarCourse = {
 
 function chipStyle(c: CalendarCourse): string {
   const s = CATEGORY_STYLE[sectorOf(c)]
-  // The internal stripe rides along with whatever the status draws — a
-  // tentative internal day is dashed and striped, both facts at once.
+  // The internal hatch rides along with whatever the status draws — a
+  // tentative internal day is dashed and hatched, both facts at once.
   const mark = isOurs(c) ? ` ${OURS_MARK}` : ''
   switch (c.status) {
     case 'tentative':
@@ -245,14 +245,16 @@ export default function CourseCalendar({
       {courses.some((c) => c.category !== undefined) && (
         <div className="flex items-center gap-4 mt-2 text-[10px]">
           {/* A key, not a filter: internal is not a third sector but a mark on
-              a course that has one, so it is drawn as the stripe it puts on
-              the chip rather than as a checkbox nobody can ever check. */}
+              a course that has one, so it is drawn as the hatch it lays over
+              the chip rather than as a checkbox nobody can ever check. The
+              swatch is a bar, not a 3px square, or the hatch has nowhere to
+              repeat and the key stops resembling what it explains. */}
           {visible.some(isOurs) && (
             <span
               className="flex items-center gap-1.5 text-zinc-400"
               title="Ours — no client: instructor development, CE, or anything else we lay on for ourselves. Still counted under its own sector."
             >
-              <span className={`w-3 h-3 rounded-sm border border-zinc-700 bg-zinc-800 ${OURS_MARK}`} />
+              <span className={`w-5 h-3 rounded-sm border border-zinc-700 bg-zinc-800 ${OURS_MARK}`} />
               Internal
             </span>
           )}

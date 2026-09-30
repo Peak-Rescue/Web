@@ -156,3 +156,15 @@ body::-webkit-scrollbar {
   }
 }
 
+
+/* Internal days on the calendars — ours, no client. Hatched over whatever the
+   chip already draws, so the fill keeps saying which sector and the border
+   keeps saying which status. 135° at a 7px period: fine enough to read as a
+   texture on a 13px bar, coarse enough to survive a one-day chip. */
+.ours-hatch {
+  background-image: repeating-linear-gradient(
+    135deg,
+    rgb(228 228 231 / 0.2) 0 3px,
+    transparent 3px 7px
+  );
+}

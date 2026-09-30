@@ -637,7 +637,7 @@ export default function CourseDatePainter({
               className="flex items-center gap-1.5 text-zinc-400"
               title="Ours — no client: instructor development, CE, or anything else we lay on for ourselves. Still counted under its own sector."
             >
-              <span className={`w-3 h-3 rounded-sm border border-zinc-700 bg-zinc-800 ${OURS_MARK}`} />
+              <span className={`w-5 h-3 rounded-sm border border-zinc-700 bg-zinc-800 ${OURS_MARK}`} />
               Internal
             </span>
           )}

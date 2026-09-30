@@ -36,7 +36,16 @@ const BASE = process.env.PREVIEW_BASE ?? env.NEXT_PUBLIC_SITE_URL ?? 'http://loc
 
 // The marker every demo row carries, and the only thing --delete will touch.
 const MARK = 'DEMO'
-const DEMO_EMAIL = process.env.DEMO_EMAIL ?? 'demo.instructor@peak-rescue.com'
+// An address with a real mailbox behind it, for two reasons.
+//
+// The sign-in link below is a magic link: single-use, and it expires. That is
+// what a magic link is, and the login page offers no password to fall back on —
+// so without a reachable address, a dead link means finding a terminal. With
+// one, /login works the ordinary way and the code arrives in an inbox.
+//
+// And assigning a task emails the assignee. Pointed at an address that does not
+// exist, every rehearsal is a bounce against our sending domain's reputation.
+const DEMO_EMAIL = process.env.DEMO_EMAIL ?? 'nadav+demo@peak-rescue.com'
 
 const CREATE = process.argv.includes('--create')
 const DELETE = process.argv.includes('--delete')
@@ -297,12 +306,16 @@ console.log(`
 
   Nothing refreshes on its own — reload after assigning.
 
-  Assigning emails the assignee, and demo.instructor@peak-rescue.com is not a
-  real mailbox, so it bounces. Fine once or twice; do not rehearse it twenty
-  times.
+  Assigning emails the assignee, and that address is yours — so the mail lands
+  in your inbox instead of bouncing, and you can show it arriving.
 
-  The sign-in token is single-use and expires. Rerun this for a fresh one, and
-  do that right before you present:
+  The link above is a magic link: single-use, and it expires. The session does
+  not — sign in once, leave the window open, and you are set for the talk.
+
+  If it does die you do not need this script. Go to ${BASE}/login, enter
+  ${DEMO_EMAIL}, and the code comes to your own inbox.
+
+  For a fresh link anyway:
 
     PREVIEW_BASE=${BASE} node scripts/demo-day.mjs
 

@@ -53,8 +53,11 @@ export function isOurs(c: CalendarSubject): boolean {
 }
 
 /**
- * The internal marker: a pale stripe down the chip's leading edge. A stripe
- * rather than a border, because the border already carries status — dashed is
- * tentative — and the two must be readable at once.
+ * The internal marker: a faint hatch across the whole bar (defined in
+ * globals.css). Texture rather than an edge, because the edges are spoken for
+ * — the border carries status, dashed is tentative — and because a mark that
+ * covers the bar grows with it: a week-long CE block is exactly the one worth
+ * noticing when hunting for a free weekend, and the leading stripe this
+ * replaces was 3px of signal against the whole length of that bar.
  */
-export const OURS_MARK = 'shadow-[inset_3px_0_0_0_#a1a1aa]'
+export const OURS_MARK = 'ours-hatch'
