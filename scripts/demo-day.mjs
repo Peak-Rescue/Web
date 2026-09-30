@@ -212,7 +212,7 @@ if (CREATE) {
   }
 
   if (!upcoming) {
-    upcoming = await makeCourse('next month', 30, 5, 'confirmed')
+    upcoming = await makeCourse('next month', 27, 5, 'confirmed')
     console.log(`  created PR-${String(upcoming.ref_number).padStart(4, '0')} (next month)`)
 
     // Curriculum copied from a real course. Invented modules read as invented,
