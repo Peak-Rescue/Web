@@ -175,6 +175,19 @@ if (CREATE) {
   if (insErr) throw insErr
   person = ins
 
+  // Signed off for this discipline, so the interest picker reads them as a
+  // sensible person to ask rather than putting "not qualified" beside the name
+  // you are about to invite in front of a room.
+  //
+  // Assist and not lead on purpose: no lead sign-off is what makes the interest
+  // page explain why the lead seat is not theirs, which is half of what that
+  // page is for showing.
+  const { error: capErr } = await db.from('instructor_capabilities').insert([
+    { instructor_id: ins.id, category: 'canyoning', role: 'assist' },
+    { instructor_id: ins.id, category: 'swift_water', role: 'assist' },
+  ])
+  if (capErr) throw capErr
+
   const { data: primary } = await db
     .from('instructors')
     .select('id')
