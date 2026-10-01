@@ -71,6 +71,16 @@ export type FactorCounts = {
   students: number | null
   days: number | null
   calendarDays: number | null
+  /** The crew by seat, when the course has said what it is made of. A lead day
+      and a shadow day are not the same money — we pay $50 an hour and $25 — and
+      a quote that bills them identically is wrong in the client's favour on one
+      and ours on the other.
+
+      Null means the course has never been broken down, and then there is only
+      one instructor count and one rate to put against it. */
+  leads: number | null
+  assists: number | null
+  shadows: number | null
 }
 
 // Costs that run a day longer at each end of the course: people arrive the
@@ -145,6 +155,16 @@ export function factorValue(name: string, label: string, counts: FactorCounts): 
   if (n.startsWith('instructor') || n.startsWith('person') || n.startsWith('people') || n.startsWith('staff')) {
     return (paysFieldTime(label) ? counts.instructors : Math.ceil(counts.instructors)) || null
   }
+  // One seat each. Checked before the generic instructor test above would ever
+  // see them — none of these words begins with "instructor" — and answering null
+  // when the course has no crew plan is what makes the per-seat lines seed
+  // nothing and the plain instructor line carry the course instead.
+  //
+  // Zero is a real answer and stays zero: a course planned with no shadow has a
+  // shadow line worth nothing, which is different from a course that never said.
+  if (n.startsWith('lead')) return counts.leads
+  if (n.startsWith('assist')) return counts.assists
+  if (n.startsWith('shadow')) return counts.shadows
   if (n.startsWith('participant') || n.startsWith('attendee')) {
     // Always heads: a participant count feeds catering, transport and seats in
     // a classroom, and every one of those is a person who turned up.
@@ -222,7 +242,15 @@ export function coaSpan(
 export const coaHasOwnSpan = (coa: { starts_at?: string | null; ends_at?: string | null } | null | undefined) =>
   Boolean(coa?.starts_at || coa?.ends_at)
 
-export type SeedCounts = { instructors: number; days: number; calendarDays: number; students: number | null }
+export type SeedCounts = {
+  instructors: number
+  days: number
+  calendarDays: number
+  students: number | null
+  leads: number | null
+  assists: number | null
+  shadows: number | null
+}
 
 // Quantity for an estimate line built from a library rate — its unit read
 // against the course's numbers. Null quantity = nobody can guess this one; the
@@ -235,6 +263,39 @@ export type SeedCounts = { instructors: number; days: number; calendarDays: numb
 // the panel asks it about courses whose details are still incomplete — a
 // missing day count is a factor nobody can supply, which this already answers
 // with null rather than a guess.
+/** Which default lines a course actually wants.
+ *
+ *  The three per-seat field-day rates and the plain instructor field day answer
+ *  the same question at different resolutions, so a COA takes one answer or the
+ *  other and never both. A course that has said what its crew is made of is
+ *  quoted seat by seat; a course that has not is quoted on the head count,
+ *  which is all it can say.
+ *
+ *  Seats the plan has none of drop out too — a course planned with no shadow
+ *  does not want a shadow line worth nothing. That is why zero and null have to
+ *  stay different all the way down here: zero is "we thought about it and there
+ *  is no room", null is "nobody has said", and only the second falls back.
+ *
+ *  Everything else — travel, lodging, flights — is untouched. A travel day costs
+ *  the same $300 whoever is in the seat, which is why its rate never split. */
+export function wantsSeedLine(
+  rate: { label: string; unit: string | null },
+  counts: FactorCounts
+): boolean {
+  const brokenDown = counts.leads !== null || counts.assists !== null || counts.shadows !== null
+  const seat = unitFactorNames(rate.unit).find((n) => /^(lead|assist|shadow)/i.test(n))
+
+  // A per-seat line: only on a course with a plan, and only for a seat it has.
+  if (seat) return brokenDown && (factorValue(seat, rate.label, counts) ?? 0) > 0
+
+  // The generic field day. paysFieldTime is the same test 178 used to find this
+  // row in SQL — instructor, not travel, field or day — so "Instructor travel
+  // day/s" is correctly not it, and keeps seeding either way.
+  if (paysFieldTime(rate.label)) return !brokenDown
+
+  return true
+}
+
 export function guessSeedQty(
   rate: { label: string; unit: string | null },
   counts: FactorCounts

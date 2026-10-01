@@ -6,7 +6,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { after } from 'next/server'
 import { syncCourseCalendar } from '@/lib/google-calendar'
 import { parseContacts, primaryContactEmail, ccEmailOptions } from '@/lib/contacts'
-import { guessSeedQty, coaPrice, type SeedCounts, plannedInstructorCount } from '@/lib/estimates'
+import { guessSeedQty, wantsSeedLine, coaPrice, type SeedCounts, plannedInstructorCount } from '@/lib/estimates'
 import { courseDayCounts, trainingDurationPhrase } from '@/lib/courses'
 import { todayHere } from '@/lib/course-clock'
 import { sendMail } from '@/lib/mailer'
@@ -194,7 +194,7 @@ export async function saveEstimate(
 // anything is saved). Returns it shaped like createQuote's estimate query.
 async function seedDefaultCoa(admin: Awaited<ReturnType<typeof requireAdmin>>, instanceId: string) {
   const [{ data: inst }, { count }, { data: defaults }, { count: assignedCount }, { data: offDays }] = await Promise.all([
-    admin.from('course_instances').select('starts_at, ends_at, max_students, instructor_slots, breaks_paid').eq('id', instanceId).single(),
+    admin.from('course_instances').select('starts_at, ends_at, max_students, instructor_slots, lead_slots, assist_slots, shadow_slots, breaks_paid').eq('id', instanceId).single(),
     admin.from('course_estimates').select('id', { count: 'exact', head: true }).eq('instance_id', instanceId),
     admin.from('pricing_rates').select('id, label, unit, rate').eq('active', true).eq('default_line', true).order('sort_order'),
     admin.from('instance_instructors').select('id', { count: 'exact', head: true }).eq('instance_id', instanceId),
@@ -210,6 +210,9 @@ async function seedDefaultCoa(admin: Awaited<ReturnType<typeof requireAdmin>>, i
     days: lengths.days ?? 1,
     calendarDays: lengths.calendarDays ?? 1,
     students: inst.max_students,
+    leads: inst.lead_slots as number | null,
+    assists: inst.assist_slots as number | null,
+    shadows: inst.shadow_slots as number | null,
   }
 
   const { data: estimate, error } = await admin
@@ -219,7 +222,9 @@ async function seedDefaultCoa(admin: Awaited<ReturnType<typeof requireAdmin>>, i
     .single()
   if (error || !estimate) throw new Error(error?.message ?? 'Could not create estimate')
 
-  const rows = (defaults ?? []).map((r, idx) => {
+  // A planned crew is quoted seat by seat; an unplanned one on the head count.
+  // Never both — the two answer the same question at different resolutions.
+  const rows = (defaults ?? []).filter((r) => wantsSeedLine(r, counts)).map((r, idx) => {
     const guess = guessSeedQty(r, counts)
     return {
       estimate_id: estimate.id,

@@ -24,6 +24,10 @@ export type CourseCounts = {
   students: number | null
   days: number | null
   calendarDays: number | null
+  /** The crew by seat, null when the course has never been broken down. */
+  leads: number | null
+  assists: number | null
+  shadows: number | null
 }
 
 type Row = {
@@ -81,7 +85,7 @@ export default function EstimatePanel({
   initialTitle: string
   initialMargin: number
   initialPriceOverride: number | null // hand-set price; null = use the calculated one
-  initialItems: { label: string; qty: number | null; rate: number; notes: string | null; factors: number[] | null; factor_labels: (string | null)[] | null; rate_id: string | null; drift_ack: { i: number; s: number | null; d: number | null; c?: number | null } | null }[]
+  initialItems: { label: string; qty: number | null; rate: number; notes: string | null; factors: number[] | null; factor_labels: (string | null)[] | null; rate_id: string | null; drift_ack: { i: number; s: number | null; d: number | null; c?: number | null; l?: number | null; a?: number | null; w?: number | null } | null }[]
   rates: PricingRate[]
   canDelete: boolean
   /** Whether this COA can be set aside — false when it is the only live one,
@@ -139,6 +143,12 @@ export default function EstimatePanel({
             students: i.drift_ack.s,
             days: i.drift_ack.d,
             calendarDays: i.drift_ack.c === undefined ? counts.calendarDays : i.drift_ack.c,
+            // Same reading as `c` above, for the same reason: these postdate the
+            // column, so a line kept before the crew had seats is taken as kept
+            // for the seats it has now rather than reopened unasked.
+            leads: i.drift_ack.l === undefined ? counts.leads : i.drift_ack.l,
+            assists: i.drift_ack.a === undefined ? counts.assists : i.drift_ack.a,
+            shadows: i.drift_ack.w === undefined ? counts.shadows : i.drift_ack.w,
           }
         : null,
     }))
@@ -248,7 +258,12 @@ export default function EstimatePanel({
             factors: trimmed.length >= 2 ? trimmed : null,
             factor_labels: trimmed.length >= 2 ? trimmedLabels : null,
             rate_id: row.rateId,
-            drift_ack: row.ack ? { i: row.ack.instructors, s: row.ack.students, d: row.ack.days, c: row.ack.calendarDays } : null,
+            drift_ack: row.ack
+              ? {
+                  i: row.ack.instructors, s: row.ack.students, d: row.ack.days, c: row.ack.calendarDays,
+                  l: row.ack.leads, a: row.ack.assists, w: row.ack.shadows,
+                }
+              : null,
           }
         })
       const priceOverride = o.trim() === '' ? null : Number(o)
@@ -300,7 +315,12 @@ export default function EstimatePanel({
       ack.instructors === counts.instructors &&
       ack.students === counts.students &&
       ack.days === counts.days &&
-      ack.calendarDays === counts.calendarDays
+      ack.calendarDays === counts.calendarDays &&
+      // A crew plan that gains an assist reopens the assist line, the same way
+      // a course that gains a day reopens the day lines.
+      ack.leads === counts.leads &&
+      ack.assists === counts.assists &&
+      ack.shadows === counts.shadows
     )
   }
 

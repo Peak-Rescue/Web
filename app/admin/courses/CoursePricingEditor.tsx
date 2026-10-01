@@ -1,6 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
+import { crewPlanOf } from '@/lib/staffing-roles'
 import { courseShortName, courseDayCounts } from '@/lib/courses'
-import { coaPrice, guessSeedQty, coaSpan, coaHasOwnSpan, DEFAULT_MARGIN } from '@/lib/estimates'
+import { coaPrice, guessSeedQty, wantsSeedLine, coaSpan, coaHasOwnSpan, DEFAULT_MARGIN } from '@/lib/estimates'
 import { type OptionRelation } from '@/lib/quotes'
 import { describeForBiller, numberSoFar } from '@/lib/billing'
 import { billingState, pickBillableQuote, pickSeedCoa } from '@/lib/billing-handoff'
@@ -123,11 +124,18 @@ export default async function CoursePricingEditor({
   // vehicle and the lodging are held across the whole span plus a day at each
   // end.
   const lengths = courseDayCounts(course.starts_at, course.ends_at, offDayRows ?? [], course.breaks_paid ?? true)
+  // The crew by seat rides along with the head count, so a rate priced "per
+  // assist per day" can be answered. Null throughout on a course nobody has
+  // broken down, which is what keeps those lines off it.
+  const crewPlan = crewPlanOf(course as { lead_slots?: number | null; assist_slots?: number | null; shadow_slots?: number | null })
   const estimateCounts = {
     instructors: instructorCount,
     students: course.max_students,
     days: lengths.days,
     calendarDays: lengths.calendarDays,
+    leads: crewPlan.lead,
+    assists: crewPlan.assist,
+    shadows: crewPlan.shadow,
   }
 
   // A COA that prices part of the course answers its own day counts. The
@@ -234,6 +242,9 @@ export default async function CoursePricingEditor({
       days: lengths.days ?? 1,
       calendarDays: lengths.calendarDays ?? 1,
       students: (course.max_students as number | null) ?? null,
+      leads: crewPlan.lead,
+      assists: crewPlan.assist,
+      shadows: crewPlan.shadow,
     }
     estimatePanels = [{
       id: null,
@@ -246,7 +257,9 @@ export default async function CoursePricingEditor({
       extendsId: null,
       relation: null,
       items: (pricingRateRows ?? [])
-        .filter((r) => r.default_line)
+        // Same pick the server makes when it persists this COA, so the panel you
+        // look at and the rows that get saved cannot show different lines.
+        .filter((r) => r.default_line && wantsSeedLine(r, seedCounts))
         .map((r) => {
           const guess = guessSeedQty(r, seedCounts)
           return { label: r.label, qty: guess.qty, rate: Number(r.rate), notes: null, factors: guess.factors, factor_labels: null, rate_id: r.id as string, drift_ack: null }
