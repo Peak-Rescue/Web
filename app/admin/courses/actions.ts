@@ -12,7 +12,7 @@ import { sendMail } from '@/lib/mailer'
 import { announcesChanges, emailAdminsNewCourse, notifyRoleChange } from '@/lib/course-notify'
 import { clampOffDays, dayShift, strokeOffDays, type OffSpan } from '@/lib/courses'
 import { assertCustomCourseTagged } from '@/lib/capabilities'
-import { asInstanceRole, crewPlanTotal, type CrewPlan } from '@/lib/staffing-roles'
+import { asInstanceRole, type CrewPlan } from '@/lib/staffing-roles'
 
 const fmtLong = (d: string) =>
   new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
@@ -213,7 +213,6 @@ export async function createInstance(formData: FormData) {
   const notes            = (formData.get('notes') as string) || null
   const max_students     = formData.get('max_students') ? Number(formData.get('max_students')) : null
   const crewPlan         = crewPlanFromForm(formData)
-  const instructor_slots = crewPlanTotal(crewPlan)
   const starts_at        = (formData.get('starts_at') as string) || null
   const ends_at          = (formData.get('ends_at') as string) || null
 
@@ -262,10 +261,9 @@ export async function createInstance(formData: FormData) {
     .insert({
       course_category, course_type, custom_title, custom_categories, status, internal,
       starts_at, ends_at, location, region, venue_id, client_name, contacts, notes, max_students,
-      // The seats are what somebody typed; the total is worked out from them,
-      // here and nowhere else, so the parts and the sum cannot drift apart.
+      // The seats are what somebody typed. instructor_slots is not written here
+      // or anywhere — the database computes it from these three.
       lead_slots: crewPlan.lead, assist_slots: crewPlan.assist, shadow_slots: crewPlan.shadow,
-      instructor_slots,
       slug, owner_id: creator.id,
     })
     .select('id')
@@ -344,15 +342,14 @@ export async function updateInstanceDetails(id: string, formData: FormData) {
       ...(formData.has('client_name') ? { client_name } : {}),
       ...(formData.has('notes') ? { notes } : {}),
       ...(formData.has('max_students') ? { max_students } : {}),
-      // The crew plan arrives as three boxes and the head count follows from
-      // them. Guarded on the lead box because the three always travel together
-      // — a form carrying one carries all three.
+      // The crew plan arrives as three boxes; the head count follows from them in
+      // the database. Guarded on the lead box because the three always travel
+      // together — a form carrying one carries all three.
       ...(formData.has('lead_slots')
         ? {
             lead_slots: crewPlan.lead,
             assist_slots: crewPlan.assist,
             shadow_slots: crewPlan.shadow,
-            instructor_slots: crewPlanTotal(crewPlan),
           }
         : {}),
       ...(formData.has('owner_id') ? { owner_id } : {}),
