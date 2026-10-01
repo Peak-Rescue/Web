@@ -1,4 +1,5 @@
 import { type createAdminClient } from '@/lib/supabase/admin'
+import { openSeats, roleLabel, type CrewPlan } from '@/lib/staffing-roles'
 import { billingState, type BillingState } from '@/lib/billing-handoff'
 import { type InvoiceStatus } from '@/lib/billing'
 
@@ -106,6 +107,10 @@ export type StepInput = {
       panel, so moving a course onto somebody's other week said nothing and the
       chain went on reading "2 of 2". */
   doubleBooked?: string[]
+  /** How many of each seat the course is planned to run. "2 of 3" cannot say
+      which one is missing, and which one it is decides who you go looking for —
+      a lead seat is a different search from a shadow seat. */
+  plan?: CrewPlan
   estimates: number
   /** The course's window. Billing is not a thing you can owe before the first
       day, and after the last one it is nearly the only thing left to owe. */
@@ -237,7 +242,16 @@ export function courseSteps(
   const wanted = slotsToStaff(inst.instructor_slots)
   const hasPrimary = inst.crew.some((c) => c.in_charge)
   const clashed = inst.doubleBooked ?? []
-  const staffingDone = staffed >= wanted && hasPrimary && clashed.length === 0
+
+  // Which seats are still open, when the course has said what it is made of.
+  // Counting heads alone calls a course full that has two assists where it
+  // wanted a lead and an assist.
+  const short = inst.plan
+    ? openSeats(inst.plan, inst.crew).filter((s) => s.open > 0)
+    : []
+  const shortOf = short.reduce((n, s) => n + s.open, 0)
+
+  const staffingDone = staffed >= wanted && hasPrimary && clashed.length === 0 && shortOf === 0
 
   // Somebody has been asked and hasn't answered. Still a gap, but a gap with
   // something already in flight — which is the difference between "go and do
@@ -269,6 +283,14 @@ export function courseSteps(
             }
         : !hasPrimary
           ? { tone: 'action' as const, detail: 'No primary' }
+        // Named rather than counted, because the name is the search. Two gaps
+        // are still short enough to say both; three is a plan nobody has
+        // started, and the head count says that better.
+        : short.length > 0 && short.length <= 2
+          ? {
+              tone: 'action' as const,
+              detail: `Needs ${short.map((x) => `${x.open} ${roleLabel(x.role).toLowerCase()}`).join(', ')}`,
+            }
           : awaiting > 0
             ? { tone: 'waiting' as const, detail: `${staffed} of ${wanted}, ${awaiting} out` }
             : { tone: 'action' as const, detail: `${staffed} of ${wanted}` }),

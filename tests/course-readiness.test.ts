@@ -533,3 +533,66 @@ describe('staffing with somebody double-booked', () => {
     expect(step(inst({ crew: [], doubleBooked: [] }), extras(), 'staffing')!.detail).toBe('Nobody yet')
   })
 })
+
+// Counting heads calls a course full that has two assists where it wanted a
+// lead and an assist. The crew plan knows which seat is missing, and which one
+// it is decides who you go looking for.
+describe('staffing against the crew plan', () => {
+  const plan = { lead: 1, assist: 2, shadow: null }
+
+  it('is not done when the heads are there but a seat is not', () => {
+    const s = step(
+      inst({ instructor_slots: 3, plan, crew: [
+        { role: 'assist', in_charge: true }, { role: 'assist' }, { role: 'assist' },
+      ] }),
+      extras(),
+      'staffing'
+    )!
+    expect(s.tone).toBe('action')
+    expect(s.detail).toBe('Needs 1 lead')
+  })
+
+  it('names two gaps, since two is still short enough to read', () => {
+    const s = step(
+      inst({ instructor_slots: 3, plan, crew: [{ role: 'assist', in_charge: true }] }),
+      extras(),
+      'staffing'
+    )!
+    expect(s.detail).toBe('Needs 1 lead, 1 assist')
+  })
+
+  // A course nobody has broken down keeps counting heads — the old behaviour,
+  // and the right one when there is no plan to count against.
+  it('falls back to the head count with no plan', () => {
+    const s = step(
+      inst({ instructor_slots: 2, crew: [{ role: 'assist', in_charge: true }, { role: 'assist' }] }),
+      extras(),
+      'staffing'
+    )!
+    expect(s.tone).toBe('done')
+    expect(s.detail).toBe('2 of 2')
+  })
+
+  it('settles when every seat is filled', () => {
+    const s = step(
+      inst({ instructor_slots: 3, plan, crew: [
+        { role: 'lead', in_charge: true }, { role: 'assist' }, { role: 'assist' },
+      ] }),
+      extras(),
+      'staffing'
+    )!
+    expect(s.tone).toBe('done')
+  })
+
+  // Over-staffing one seat does not fill another, and must not read as done.
+  it('is still short when the extra body is in the wrong seat', () => {
+    const s = step(
+      inst({ instructor_slots: 3, plan: { lead: 1, assist: 1, shadow: null }, crew: [
+        { role: 'assist', in_charge: true }, { role: 'assist' }, { role: 'assist' },
+      ] }),
+      extras(),
+      'staffing'
+    )!
+    expect(s.detail).toBe('Needs 1 lead')
+  })
+})

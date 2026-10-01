@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import { crewPlanOf } from '@/lib/staffing-roles'
 import Link from 'next/link'
 import { courseShortName, COURSE_TYPE_OPTIONS } from '@/lib/courses'
 import { COURSE_STATUSES, COURSE_STATUS_STYLES as STATUS_STYLES } from '@/lib/course-status'
@@ -34,6 +35,9 @@ export type Instance = {
   ends_at: string | null
   max_students: number | null
   instructor_slots?: number | null
+  lead_slots?: number | null
+  assist_slots?: number | null
+  shadow_slots?: number | null
   /** Only to answer "is there anybody to bill" — the money track says so on
       the stop rather than behind a panel you had to open to find out. */
   contacts?: unknown
@@ -61,6 +65,7 @@ function asStepInput(inst: Instance, clashing: string[] = []): StepInput {
     instructor_slots: inst.instructor_slots,
     crew: (inst.crew ?? []).map((c) => ({ role: c.role, in_charge: c.in_charge })),
     doubleBooked: clashing,
+    plan: crewPlanOf(inst),
     estimates: inst.course_estimates?.[0]?.count ?? 0,
     starts_at: inst.starts_at,
     ends_at: inst.ends_at,

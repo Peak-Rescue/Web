@@ -7,7 +7,7 @@ import { courseDisplayName, courseShortName } from '@/lib/courses'
 import ResponseForm from './ResponseForm'
 import { courseZone, todayIn } from '@/lib/course-clock'
 import { slotsToStaff } from '@/lib/course-readiness'
-import { crewPlanOf, openSeats, reachableSeats, roleLabel, ROLE_TEXT } from '@/lib/staffing-roles'
+import { crewPlanOf, openSeats, reachableSeats, roleLabel, ROLE_TEXT, PRIMARY_LABEL } from '@/lib/staffing-roles'
 import { payForPerson, paySettingsFrom, courseFieldDates, NO_TERMS } from '@/lib/pay'
 
 // Public, tokenized staffing-interest page — instructors land here from the
@@ -173,6 +173,14 @@ export default async function StaffingInvitePage({
   // Never on a course that is off or done either — those say so themselves,
   // and how full the crew was is not the news.
   const assigned = crew ?? []
+
+  // Already on it. The page was built for somebody being asked, and it went on
+  // asking after the answer had been acted on — "are you interested in working
+  // this course?" to a person who is staffed on it, with tick-boxes for seats
+  // they are no longer choosing between. The ask is over; what they want now is
+  // which seat they got and a way into the course.
+  const mine = assigned.find((c) => c.instructor_id === invite.instructor_id) ?? null
+
   const staffed =
     !cancelled && !over &&
     !assigned.some((c) => c.instructor_id === invite.instructor_id) &&
@@ -211,16 +219,18 @@ export default async function StaffingInvitePage({
         {instructor && (
           <p className="text-zinc-400 mb-8">
             Hi {instructor.name.split(' ')[0]} —{' '}
-            {staffed
-              ? 'the crew is full. Plans do shift, so let us know if you want to be a backup.'
-              : 'are you interested in working this course?'}
+            {mine
+              ? `you're on this course as ${roleLabel(mine.role).toLowerCase()}${mine.in_charge ? `, and ${PRIMARY_LABEL.toLowerCase()}` : ''}.`
+              : staffed
+                ? 'the crew is full. Plans do shift, so let us know if you want to be a backup.'
+                : 'are you interested in working this course?'}
           </p>
         )}
         {/* Why there is no lead tick-box below. The seat list above shows one,
             because what the course is made of is part of deciding — but it is
             not theirs to take, and a lead seat listed with no way to say yes to
             it is a question left hanging. */}
-        {!staffed && !cancelled && !over && !qualifiedToLead && (seats.find((s) => s.role === 'lead')?.seats ?? 0) > 0 && (
+        {!mine && !staffed && !cancelled && !over && !qualifiedToLead && (seats.find((s) => s.role === 'lead')?.seats ?? 0) > 0 && (
           <p className="-mt-6 mb-8 text-xs text-zinc-500">
             The lead seat needs a lead sign-off in this discipline.
           </p>
@@ -285,6 +295,20 @@ export default async function StaffingInvitePage({
         ) : over ? (
           <div className="p-4 bg-zinc-900 border border-zinc-700 rounded-lg text-zinc-400 text-sm">
             This course has already ended.
+          </div>
+        ) : mine ? (
+          /* Staffed. The question has been answered and acted on, so the form
+             goes: leaving tick-boxes up for seats they are no longer choosing
+             between invites an answer nobody will read. What is useful now is
+             the way in. */
+          <div className="p-4 bg-zinc-900 border border-zinc-800 rounded-lg text-sm">
+            <p className="text-zinc-300">You&apos;re staffed on this one. Nothing more to do here.</p>
+            <Link
+              href={`/portal/${invite.instance_id}`}
+              className="mt-3 inline-block text-teal-400 hover:text-teal-300 transition-colors"
+            >
+              Open the course →
+            </Link>
           </div>
         ) : (
           <>
