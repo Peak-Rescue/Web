@@ -50,7 +50,7 @@ export default function OwnerPill({
           owner.initials
         )}
       </span>
-      {owner.name}
+      <span className="truncate">{owner.name}</span>
     </span>
   )
 }

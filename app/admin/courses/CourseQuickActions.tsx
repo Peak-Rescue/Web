@@ -52,6 +52,48 @@ import PrimaryStar from '@/components/PrimaryStar'
 
 export type Panel = StepPanel | 'status' | 'owner'
 
+// ── The columns ──────────────────────────────────────────────────────────────
+//
+// Every card lays its marks out on the same grid, so going down the page is
+// reading a column rather than hunting a row. Widths are fixed and set to the
+// widest thing that can land in them: let a cell size to its contents and a
+// course with three crew slots shunts the money sideways relative to the
+// course above it, which is the one thing a list of twenty courses cannot
+// afford.
+//
+// Two bands, always. Who is on it on top, where the money is underneath — the
+// pipeline is wider than the four columns above it put together, so letting it
+// ride up onto the first line whenever a card happened to be narrow is what
+// made every card wrap differently.
+const COL = {
+  owner: 'w-[186px]',
+  status: 'w-[104px]',
+  crew: 'w-[176px]',
+  students: 'w-[148px]',
+}
+
+/** A labelled column: the heading, the rule under it, and the mark below. The
+    rule spans the whole column rather than the mark, so the headings line up
+    down the page even where the marks under them are different sizes. */
+function Cell({
+  label,
+  width,
+  children,
+}: {
+  label: string
+  width: string
+  children?: React.ReactNode
+}) {
+  return (
+    <div className={`shrink-0 ${width}`}>
+      <span className="block text-[9.5px] font-semibold uppercase tracking-[0.14em] text-zinc-600 border-b border-zinc-800 pb-1">
+        {label}
+      </span>
+      <div className="mt-2">{children}</div>
+    </div>
+  )
+}
+
 /** Where each step is built, for the marks that only point at it. */
 const STEP_SECTION: Record<StepKey, string> = {
   staffing: 'details',
@@ -201,66 +243,61 @@ function CrewMeter({
   const filled = [...crew].sort(crewOrder)
 
   return (
-    <div className="shrink-0">
-      <span className="block text-[9.5px] font-semibold uppercase tracking-[0.14em] text-zinc-600 border-b border-zinc-800 pb-1">
-        Crew
-      </span>
-      <button type="button" onClick={onOpen} title="Opens staffing here" className="flex items-center gap-1 mt-2">
-        {Array.from({ length: wanted }, (_, i) => {
-          const person = filled[i]
-          return (
-            <span
-              key={i}
-              title={
-                person
-                  ? `${roleLabel(person.role)}${person.in_charge ? ' · primary' : ''}`
-                  : 'Open slot — nobody assigned'
-              }
-              // A filled box wears its seat's colour, so the meter is
-              // scannable by what the crew is made of and not only by how many
-              // there are. Teal is gone from here: it meant "filled" while also
-              // meaning "primary" two pixels away, and the P says primary now.
-              className={`w-4 h-4 rounded-[3px] border grid place-items-center ${
-                person
-                  ? ROLE_SOLID[asInstanceRole(person.role)]
-                  : full
-                    ? 'border-zinc-700 bg-zinc-800'
-                    : 'border-amber-500/60 bg-amber-500/10'
-              }`}
-            >
-              {/* The marked box is the primary, because that is the one fact
-                  you scan a crew meter for. A star and not a P: the box already
-                  carries the band in its colour, and a letter inside it would be
-                  a second initial competing with the L, A and S the bands are
-                  known by everywhere else. Only the primary is marked — a mark
-                  in every box would turn a thing you count into a thing you
-                  read. */}
-              {person?.in_charge && <PrimaryStar className="w-2.5 h-2.5 text-white" />}
-            </span>
-          )
-        })}
-        {crew.length > wanted && (
-          <span className="text-[11px] text-teal-300 ml-1">+{crew.length - wanted}</span>
-        )}
-        <span
-          className={`text-[11px] ml-1.5 ${full ? 'text-zinc-500' : awaiting > 0 && clashing.length === 0 ? 'text-teal-300' : 'text-amber-300'}`}
-          title={clashing.length > 0 ? `${clashing.join(', ')} also booked on another course these days` : undefined}
-        >
-          {full
-            ? `${crew.length} of ${wanted}`
-            // Ahead of the head count and ahead of the primary: a crew that
-            // cannot all turn up is the worse problem, and the only one the
-            // boxes above cannot show — they are full.
-            : clashing.length > 0
-              ? clashing.length === 1 ? `${clashing[0]} clashes` : `${clashing.length} clash`
-            : crew.length > 0 && !primary
-              ? 'no primary'
-              : awaiting > 0
-                ? `${awaiting} asked`
-                : `${crew.length} of ${wanted}`}
-        </span>
-      </button>
-    </div>
+    <button type="button" onClick={onOpen} title="Opens staffing here" className="flex items-center gap-1">
+      {Array.from({ length: wanted }, (_, i) => {
+        const person = filled[i]
+        return (
+          <span
+            key={i}
+            title={
+              person
+                ? `${roleLabel(person.role)}${person.in_charge ? ' · primary' : ''}`
+                : 'Open slot — nobody assigned'
+            }
+            // A filled box wears its seat's colour, so the meter is
+            // scannable by what the crew is made of and not only by how many
+            // there are. Teal is gone from here: it meant "filled" while also
+            // meaning "primary" two pixels away, and the P says primary now.
+            className={`w-4 h-4 rounded-[3px] border grid place-items-center ${
+              person
+                ? ROLE_SOLID[asInstanceRole(person.role)]
+                : full
+                  ? 'border-zinc-700 bg-zinc-800'
+                  : 'border-amber-500/60 bg-amber-500/10'
+            }`}
+          >
+            {/* The marked box is the primary, because that is the one fact
+                you scan a crew meter for. A star and not a P: the box already
+                carries the band in its colour, and a letter inside it would be
+                a second initial competing with the L, A and S the bands are
+                known by everywhere else. Only the primary is marked — a mark
+                in every box would turn a thing you count into a thing you
+                read. */}
+            {person?.in_charge && <PrimaryStar className="w-2.5 h-2.5 text-white" />}
+          </span>
+        )
+      })}
+      {crew.length > wanted && (
+        <span className="text-[11px] text-teal-300 ml-1">+{crew.length - wanted}</span>
+      )}
+      <span
+        className={`text-[11px] ml-1.5 ${full ? 'text-zinc-500' : awaiting > 0 && clashing.length === 0 ? 'text-teal-300' : 'text-amber-300'}`}
+        title={clashing.length > 0 ? `${clashing.join(', ')} also booked on another course these days` : undefined}
+      >
+        {full
+          ? `${crew.length} of ${wanted}`
+          // Ahead of the head count and ahead of the primary: a crew that
+          // cannot all turn up is the worse problem, and the only one the
+          // boxes above cannot show — they are full.
+          : clashing.length > 0
+            ? clashing.length === 1 ? `${clashing[0]} clashes` : `${clashing.length} clash`
+          : crew.length > 0 && !primary
+            ? 'no primary'
+            : awaiting > 0
+              ? `${awaiting} asked`
+              : `${crew.length} of ${wanted}`}
+    </span>
+    </button>
   )
 }
 
@@ -293,29 +330,24 @@ function Students({
   }[link]
 
   return (
-    <div className="shrink-0">
-      <span className="block text-[9.5px] font-semibold uppercase tracking-[0.14em] text-zinc-600 border-b border-zinc-800 pb-1">
-        Students
+    <Link
+      href={`/portal/${instanceId}?open=details`}
+      prefetch={false}
+      title={
+        link === 'live' ? 'A join link has been made for this course — open the roster'
+        : link === 'expired' ? 'The join link has expired, so nobody can join on it — open the roster'
+        : 'No join link has been made, so there is no way to join yet — open the roster'
+      }
+      className="flex items-center gap-2 group/st"
+    >
+      <span className="text-[11px] text-zinc-400 tabular-nums group-hover/st:text-zinc-200 transition-colors">
+        {students.max ? `${students.enrolled} of ${students.max}` : `${students.enrolled} enrolled`}
       </span>
-      <Link
-        href={`/portal/${instanceId}?open=details`}
-        prefetch={false}
-        title={
-          link === 'live' ? 'A join link has been made for this course — open the roster'
-          : link === 'expired' ? 'The join link has expired, so nobody can join on it — open the roster'
-          : 'No join link has been made, so there is no way to join yet — open the roster'
-        }
-        className="mt-2 flex items-center gap-2 group/st"
-      >
-        <span className="text-[11px] text-zinc-400 tabular-nums group-hover/st:text-zinc-200 transition-colors">
-          {students.max ? `${students.enrolled} of ${students.max}` : `${students.enrolled} enrolled`}
-        </span>
-        <span className={`inline-flex items-center gap-1.5 text-[10.5px] ${said.cls}`}>
-          <span className={`w-2 h-2 rounded-full border-[1.5px] ${said.dot}`} aria-hidden />
-          {said.text}
-        </span>
-      </Link>
-    </div>
+      <span className={`inline-flex items-center gap-1.5 text-[10.5px] ${said.cls}`}>
+        <span className={`w-2 h-2 rounded-full border-[1.5px] ${said.dot}`} aria-hidden />
+        {said.text}
+      </span>
+    </Link>
   )
 }
 
@@ -329,10 +361,7 @@ const BOOKS_CLS: Record<string, string> = {
 
 function BooksMark({ step, onOpen }: { step: Step; onOpen: () => void }) {
   return (
-    <div className="shrink-0">
-      <span className="block text-[9.5px] font-semibold uppercase tracking-[0.14em] text-zinc-600 border-b border-zinc-800 pb-1">
-        Our books
-      </span>
+    <Cell label="Our books" width="w-[150px]">
       <button
         type="button"
         onClick={onOpen}
@@ -343,12 +372,12 @@ function BooksMark({ step, onOpen }: { step: Step; onOpen: () => void }) {
               ? 'Every cost should be in by now. Closing the books is what finishes the course off.'
               : 'A card charge or an expense report may still be coming. Closing now is how one ends up with nowhere to go.'
         }
-        className={`mt-2 inline-flex items-center gap-2 px-2.5 py-1 rounded-full border text-[11.5px] transition-colors ${BOOKS_CLS[step.tone] ?? BOOKS_CLS.waiting}`}
+        className={`inline-flex items-center gap-2 px-2.5 py-1 rounded-full border text-[11.5px] transition-colors ${BOOKS_CLS[step.tone] ?? BOOKS_CLS.waiting}`}
       >
         <span className={`w-2 h-2 rounded-sm border ${step.tone === 'done' ? 'bg-teal-400 border-teal-400' : step.tone === 'action' ? 'border-amber-400' : 'border-zinc-600'}`} />
         {step.detail}
       </button>
-    </div>
+    </Cell>
   )
 }
 
@@ -432,52 +461,55 @@ export default function CourseQuickActions({
 
   return (
     <div className="mt-3">
-      <div className="flex items-start gap-3 flex-wrap">
-        <div className="shrink-0">
-          <span className="block text-[9.5px] font-semibold uppercase tracking-[0.14em] text-zinc-600 border-b border-zinc-800 pb-1">
-            Owner
-          </span>
+      {/* Who is on it. Fixed columns, so the crew meter on the twentieth
+          course starts where the crew meter on the first one did. */}
+      <div className="flex flex-wrap items-start gap-x-5 gap-y-4">
+        <Cell label="Owner" width={COL.owner}>
           <button
             type="button"
             onClick={() => toggle('owner')}
             title={owner ? `${owner.name} is running comms on this — click to hand it over` : 'Nobody is running comms on this — click to put a name on it'}
-            className={`mt-2 block transition-opacity hover:opacity-80 ${open === 'owner' ? 'ring-1 ring-zinc-400 rounded-full' : ''}`}
+            className={`block max-w-full transition-opacity hover:opacity-80 ${open === 'owner' ? 'ring-1 ring-zinc-400 rounded-full' : ''}`}
           >
-            <OwnerPill owner={owner ?? null} />
+            <OwnerPill owner={owner ?? null} className="max-w-full" />
           </button>
-        </div>
+        </Cell>
 
-        <div className="shrink-0">
-          <span className="block text-[9.5px] font-semibold uppercase tracking-[0.14em] text-zinc-600 border-b border-zinc-800 pb-1">
-            Status
-          </span>
+        <Cell label="Status" width={COL.status}>
           <button
             type="button"
             onClick={() => toggle('status')}
             title="Move this course along"
-            className={`mt-2 text-[10px] font-bold px-2 py-1 rounded border uppercase tracking-wide transition-colors hover:brightness-125 ${
+            className={`text-[10px] font-bold px-2 py-1 rounded border uppercase tracking-wide transition-colors hover:brightness-125 ${
               COURSE_STATUS_STYLES[status] ?? ''
             } ${open === 'status' ? 'ring-1 ring-zinc-400' : ''}`}
           >
             {status}
           </button>
-        </div>
+        </Cell>
 
         {/* A course that has run is done being staffed. */}
         {phase !== 'over' && (
-          <CrewMeter
-            slots={slots}
-            crew={crew}
-            clashing={clashing}
-            awaiting={extras.invitesSent - extras.invitesAnswered}
-            onOpen={() => toggle('staffing')}
-          />
+          <Cell label="Crew" width={COL.crew}>
+            <CrewMeter
+              slots={slots}
+              crew={crew}
+              clashing={clashing}
+              awaiting={extras.invitesSent - extras.invitesAnswered}
+              onOpen={() => toggle('staffing')}
+            />
+          </Cell>
         )}
 
         {phase !== 'over' && students && (
-          <Students instanceId={instanceId} students={students} link={extras.inviteLink} />
+          <Cell label="Students" width={COL.students}>
+            <Students instanceId={instanceId} students={students} link={extras.inviteLink} />
+          </Cell>
         )}
+      </div>
 
+      {/* Where the money has got to, on its own line on every card. */}
+      <div className="mt-4 flex flex-wrap items-start gap-x-5 gap-y-4">
         <MoneyTrack stops={pipe.stops} frontier={pipe.frontier} onOpen={(p) => toggle(p)} />
 
         {books && <BooksMark step={books} onOpen={() => toggle('books')} />}
