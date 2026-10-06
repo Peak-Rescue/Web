@@ -51,7 +51,7 @@ Project → **Environment Variables**. These must exist for Production:
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key |
 | `SUPABASE_SERVICE_ROLE_KEY` | **secret** — server only, never exposed to the browser |
 | `NEXT_PUBLIC_SITE_URL` | `https://peak-rescue.com` (used to build auth/invite redirect links) |
-| `CRON_SECRET` | **secret** — any long random string; authorizes `/api/cron/notifications` (daily reminder emails). The **same value** must also be saved as a GitHub Actions secret named `CRON_SECRET` in this repo (Settings → Secrets → Actions), which the `reminder-emails.yml` workflow uses to call the route. |
+| `CRON_SECRET` | **secret** — any long random string; authorizes `/api/cron/notifications` (daily sweep: reminder emails and the calendar mirror check). The **same value** must also be saved as a GitHub Actions secret named `CRON_SECRET` in this repo (Settings → Secrets → Actions), which the `reminder-emails.yml` workflow uses to call the route. |
 
 The reminder sweep additionally relies on `RESEND_API_KEY` (to send) and
 `GCAL_GENERAL_CALENDAR_ID` + `GOOGLE_SERVICE_ACCOUNT_KEY` (to read "hours

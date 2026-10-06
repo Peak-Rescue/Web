@@ -18,7 +18,12 @@
 import { type createAdminClient } from '@/lib/supabase/admin'
 import { CERT_GROUPS, CERT_META, type CertType } from '@/lib/certs'
 import { courseShortName } from '@/lib/courses'
-import { listUpcomingEvents } from '@/lib/google-calendar'
+import {
+  findCalendarDrift,
+  listUpcomingEvents,
+  syncCourseCalendar,
+  type CalendarDrift,
+} from '@/lib/google-calendar'
 import { sendMail } from '@/lib/mailer'
 import { dayShift } from '@/lib/courses'
 import { weekStart } from '@/lib/pay'
@@ -337,4 +342,58 @@ export async function runHoursReminders(
     }
   }
   return { sent, dueDates }
+}
+
+// ─── Calendar mirror drift ──────────────────────────────────────────────────
+
+// The Google calendars are a one-way mirror of the portal, but nothing stops
+// someone deleting a course event on the Google side, and the sync only ever
+// runs when that course is next saved — PR-0046 sat invisible for three weeks
+// in Sept 2026 that way. So: repair it nightly, and say so. The repair is the
+// ordinary sync, which revives a trashed event in place (keeping its id, and
+// with it the invite links already emailed).
+//
+// Deleting from the Google side is not a supported way to cancel a course —
+// cancel it in the portal and the event comes off properly — so the email is
+// an alert about a thing that shouldn't have happened, not a receipt.
+export async function runCalendarDriftSweep(
+  admin: Admin
+): Promise<{ checked: number; repaired: number } | { skipped: string }> {
+  const report = await findCalendarDrift(admin)
+  if (!report) return { skipped: 'calendar sync not configured' }
+  if (report.drift.length === 0) return { checked: report.checked, repaired: 0 }
+
+  for (const d of report.drift) await syncCourseCalendar(admin, d.instanceId)
+
+  // One claim for the whole run, keyed by the day and what it found: a retried
+  // cron run reports nothing twice, while drift that reappears tomorrow —
+  // someone deleting the same event again — gets said again.
+  const fingerprint = report.drift.map((d) => `${d.ref}:${d.kind}`).sort().join(',')
+  if (!(await claim(admin, 'calendar_drift', `${todayISO()}:${fingerprint}`))) {
+    return { checked: report.checked, repaired: report.drift.length }
+  }
+
+  const WHAT: Record<CalendarDrift['kind'], string> = {
+    trashed: 'event had been deleted on the Google side (restored in place)',
+    missing: 'event was gone from Google entirely (recreated)',
+    'wrong-calendar': 'event was on the wrong calendar (moved)',
+    absent: 'course had no event at all (created)',
+  }
+  const { data: admins } = await admin.from('profiles').select('email').eq('role', 'admin')
+  const text = [
+    `The nightly calendar check found ${report.drift.length} course${report.drift.length > 1 ? 's' : ''} whose Google event didn't match the portal, out of ${report.checked} upcoming. All have been repaired — this is a heads-up, not a to-do.`,
+    '',
+    ...report.drift.map(
+      (d) =>
+        `- ${d.ref} ${d.title}${d.starts_at ? ` (${friendlyDate(d.starts_at)})` : ''}\n  ${WHAT[d.kind]}\n  ${siteUrl()}/portal/${d.instanceId}`
+    ),
+    '',
+    'Course events are written by the portal. If one of these needs to come off the calendar, cancel the course in the portal rather than deleting the event in Google — otherwise the nightly check will simply put it back.',
+  ].join('\n')
+
+  const subject = `Calendar mirror repaired ${report.drift.length} course${report.drift.length > 1 ? 's' : ''}`
+  for (const a of admins ?? []) {
+    if (a.email) await sendEmail(a.email as string, subject, text)
+  }
+  return { checked: report.checked, repaired: report.drift.length }
 }

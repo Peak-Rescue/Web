@@ -1,8 +1,9 @@
 name: Portal Reminder Emails
 
-# Triggers the portal's daily reminder sweep: medical-cert expiry alerts for
-# staffed instructors and ADP hours-due reminders. The route dedupes every
-# send, so a manual re-run never double-emails anyone.
+# Triggers the portal's daily sweep: medical-cert expiry alerts for staffed
+# instructors, ADP hours-due reminders, and the Google Calendar mirror check
+# (which repairs drifted course events and reports what it fixed). The route
+# dedupes every send, so a manual re-run never double-emails anyone.
 
 on:
   schedule:

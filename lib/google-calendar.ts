@@ -14,9 +14,10 @@
 // sync target — the import tool only retires legacy course events from it.
 
 import { createSign } from 'crypto'
+import { todayHere } from '@/lib/course-clock'
 import { crewOrder } from '@/lib/staffing-roles'
 import { type createAdminClient } from '@/lib/supabase/admin'
-import { courseEventTitle } from '@/lib/courses'
+import { courseEventTitle, courseShortName } from '@/lib/courses'
 
 const SCOPE = 'https://www.googleapis.com/auth/calendar'
 const API = 'https://www.googleapis.com/calendar/v3'
@@ -183,6 +184,13 @@ function buildEvent(c: CourseRow, crew: CrewMember[]) {
       .join('\n\n'),
     start: { date: c.starts_at },
     end: { date: endExclusive },
+    // Sent on every patch so a trashed event is revived in place rather than
+    // replaced. Google keeps a deleted event, marked cancelled, and answers
+    // GET and PATCH for it with a cheerful 200 — so without this the portal
+    // spends the rest of the course's life updating an event nobody can see.
+    // Reviving keeps the event id, which keeps the invite links already
+    // emailed and the RSVPs already given; recreating would break both.
+    status: 'confirmed',
     guestsCanModify: false,
     guestsCanInviteOthers: false,
   }
@@ -240,6 +248,7 @@ export async function syncCourseCalendar(admin: Admin, instanceId: string): Prom
     // through our patches, since sending attendees without responseStatus
     // resets them.
     type ExistingEvent = {
+      status?: string
       attendees?: { email?: string; responseStatus?: string }[]
     }
     let existing: ExistingEvent | null = null
@@ -255,6 +264,13 @@ export async function syncCourseCalendar(admin: Admin, instanceId: string): Prom
       )
       if (res.ok) {
         existing = (await res.json()) as ExistingEvent
+        // Trashed out from under us. The patch below revives it (buildEvent
+        // sends status), so this is only worth saying out loud — a course
+        // whose event keeps needing revival is a course someone keeps
+        // deleting, and that argues with the portal rather than with Google.
+        if (existing.status === 'cancelled') {
+          console.warn(`gcal: reviving trashed event for course ${instanceId}`)
+        }
       } else if (res.status === 404 || res.status === 410) {
         course.gcal_event_id = null // deleted out from under us — recreate below
       }
@@ -352,10 +368,16 @@ export async function syncCourseCalendar(admin: Admin, instanceId: string): Prom
       return
     }
 
+    // Same compare-and-swap as the claim above, for the same reason. If a
+    // concurrent run has moved the pointer on since this run read it, leaving
+    // the row alone is right: writing our id back unconditionally is how a
+    // pointer to an event another run has already deleted gets re-stamped onto
+    // a live course, where nothing will ever rebuild it.
     await admin
       .from('course_instances')
       .update({ gcal_event_id: course.gcal_event_id, gcal_calendar_id: target })
       .eq('id', instanceId)
+      .eq('gcal_event_id', course.gcal_event_id)
   } catch (e) {
     console.error('Calendar sync failed:', e)
   }
@@ -458,4 +480,80 @@ export async function deleteImportedEvent(calendarId: string, eventId: string): 
   } catch (e) {
     console.error('imported event cleanup failed:', e)
   }
+}
+
+// ─── Drift detection ────────────────────────────────────────────────────────
+//
+// The mirror is written by after() hooks on portal writes, so a course whose
+// event is deleted on the Google side stays broken until someone next saves
+// that course — which for PR-0046 was three weeks of nobody noticing. This
+// reads every live course's pointer and reports what doesn't line up. It
+// repairs nothing: syncCourseCalendar is the repair, and the caller decides
+// whether to run it (lib/notifications.ts runs it nightly and emails).
+
+export type CalendarDrift = {
+  instanceId: string
+  ref: string
+  title: string
+  starts_at: string | null
+  // trashed: the event still exists, flagged cancelled — Google's trash, which
+  //   answers GET with a 200 and so is invisible to the sync's own checks.
+  // missing: the event id is gone from Google entirely.
+  // wrong-calendar: the row's calendar isn't the one this course now routes to.
+  // absent: the course should be mirrored and has no event at all.
+  kind: 'trashed' | 'missing' | 'wrong-calendar' | 'absent'
+}
+
+export async function findCalendarDrift(
+  admin: Admin
+): Promise<{ checked: number; drift: CalendarDrift[] } | null> {
+  if (!calendarSyncEnabled()) return null
+
+  // Only courses that are still ahead of us. A cancelled or dateless course
+  // routes nowhere, so it can't drift by this definition — and a finished one
+  // is history nobody is about to show up for.
+  const today = todayHere()
+  const { data: rows } = await admin
+    .from('course_instances')
+    .select(COURSE_COLS)
+    .neq('status', 'cancelled')
+    .not('starts_at', 'is', null)
+    .order('starts_at')
+  const courses = ((rows ?? []) as CourseRow[]).filter(
+    (c) => (c.ends_at ?? c.starts_at!) >= today
+  )
+
+  const found: CalendarDrift[] = []
+  for (const c of courses) {
+    const target = targetCalendar(c)
+    if (!target) continue
+    const label = {
+      instanceId: c.id,
+      ref: `PR-${String(c.ref_number).padStart(4, '0')}`,
+      title: courseShortName(c.course_type, c.custom_title),
+      starts_at: c.starts_at,
+    }
+    if (!c.gcal_event_id || !c.gcal_calendar_id) {
+      found.push({ ...label, kind: 'absent' })
+      continue
+    }
+    const res = await gcal(
+      'GET',
+      `/calendars/${encodeURIComponent(c.gcal_calendar_id)}/events/${c.gcal_event_id}`
+    )
+    if (res.status === 404 || res.status === 410) {
+      found.push({ ...label, kind: 'missing' })
+      continue
+    }
+    if (!res.ok) {
+      // A calendar we can't read tells us nothing — don't call that drift and
+      // send the portal rewriting events on a guess.
+      console.error(`gcal drift check failed for ${label.ref} (${res.status})`)
+      continue
+    }
+    const event = (await res.json()) as { status?: string }
+    if (event.status === 'cancelled') found.push({ ...label, kind: 'trashed' })
+    else if (c.gcal_calendar_id !== target) found.push({ ...label, kind: 'wrong-calendar' })
+  }
+  return { checked: courses.length, drift: found }
 }
