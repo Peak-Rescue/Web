@@ -64,7 +64,14 @@ const { data: enrolled } = await admin.from('enrollments')
 // A real instructor, not an admin previewing as one: the library merged the
 // two roles onto one page, and only a real instructor proves the gate.
 const { data: instructorRow } = await admin.from('profiles')
-  .select('email').eq('role', 'instructor').not('email', 'is', null).limit(1).maybeSingle()
+  .select('id, email').eq('role', 'instructor').not('email', 'is', null).limit(1).maybeSingle()
+// A course that instructor is actually on — the one page where their own
+// student preview has anything to subtract.
+const { data: instructorCourse } = instructorRow
+  ? await admin.from('instance_instructors')
+    .select('instance_id, instructors!inner(profile_id)')
+    .eq('instructors.profile_id', instructorRow.id).limit(1).maybeSingle()
+  : { data: null }
 const { data: courses } = await admin.from('course_instances')
   .select('id').order('created_at', { ascending: false }).limit(6)
 
@@ -110,6 +117,13 @@ if (argv.length) {
   })
   if (instructorRow?.email) {
     runs.push({ who: instructorRow.email, label: 'instructor', paths: ['/admin', ...LIBRARY_PATHS] })
+    // An instructor reads down to a student too now. /dashboard is the proof
+    // it took: un-previewed it bounces staff to /admin, so a 200 there is the
+    // preview being honoured for somebody who is not an admin.
+    runs.push({
+      who: instructorRow.email, label: 'instructor as student', preview: 'student',
+      paths: ['/dashboard', ...(instructorCourse ? [`/portal/${instructorCourse.instance_id}`] : [])],
+    })
   }
   if (enrolled?.profiles?.email) {
     runs.push({
@@ -132,17 +146,35 @@ for (const run of runs) {
   }
   console.log(`  ${run.label}: ${run.paths.length} pages as ${run.who}`)
 }
-// The one thing no page render covers: the handler that writes the cookie.
-{
+// The one thing no page render covers: the handler that writes the cookie —
+// and, more to the point, the asks it refuses. You may only ever read down, so
+// the rows expecting null are the ones worth having: an instructor asking to
+// be read as an instructor is asking for a course they may not be assigned to,
+// and a student asking for anything is asking for the whole portal.
+const COOKIE_CASES = [
+  { who: adminRow.email, label: 'admin', ask: 'instructor', want: 'instructor' },
+  { who: adminRow.email, label: 'admin', ask: 'student', want: 'student' },
+  ...(instructorRow?.email ? [
+    { who: instructorRow.email, label: 'instructor', ask: 'student', want: 'student' },
+    { who: instructorRow.email, label: 'instructor', ask: 'instructor', want: null },
+  ] : []),
+  ...(enrolled?.profiles?.email ? [
+    { who: enrolled.profiles.email, label: 'student', ask: 'instructor', want: null },
+    { who: enrolled.profiles.email, label: 'student', ask: 'student', want: null },
+  ] : []),
+]
+for (const c of COOKIE_CASES) {
   total++
-  const cookie = await sessionCookie(adminRow.email)
-  const res = await fetch(`${BASE}/api/view-as?as=instructor&next=%2Fadmin`, {
+  const cookie = await sessionCookie(c.who)
+  const res = await fetch(`${BASE}/api/view-as?as=${c.ask}&next=%2Fadmin`, {
     headers: { cookie }, redirect: 'manual',
   })
-  const setCookie = res.headers.get('set-cookie') ?? ''
-  if (res.status >= 400 || !setCookie.includes('view_as=instructor')) {
+  // A refusal still sends a Set-Cookie: the delete, which carries an empty
+  // value. What must never come back is the cookie holding the role asked for.
+  const got = /view_as=(instructor|student)(;|$)/.exec(res.headers.get('set-cookie') ?? '')?.[1] ?? null
+  if (res.status >= 400 || got !== c.want) {
     bad++
-    console.log(`  HTTP ${res.status} no view_as cookie  [admin] /api/view-as`)
+    console.log(`  HTTP ${res.status} view_as=${got} wanted ${c.want}  [${c.label}] /api/view-as?as=${c.ask}`)
   }
 }
 
