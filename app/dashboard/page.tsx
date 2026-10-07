@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { courseDisplayName } from '@/lib/courses'
 import { todayHere } from '@/lib/course-clock'
-import { readViewAs } from '@/lib/view-as'
+import { readViewAs, viewAsSelf } from '@/lib/view-as'
 import ViewAsMenu from '@/components/ViewAsMenu'
 
 // Where a student lands after accepting an invite or signing in.
@@ -50,11 +50,11 @@ export default async function DashboardPage() {
     .eq('id', user.id)
     .single()
 
-  // This page *is* the student's portal home, so it is also where an admin
+  // This page *is* the student's portal home, so it is also where anyone
   // previewing as a student belongs — the only place their own enrolments (or
   // the empty state a student with none actually reads) can be seen.
-  const isAdmin = profile?.role === 'admin'
-  const viewAs = await readViewAs(isAdmin)
+  const self = viewAsSelf(profile?.role)
+  const viewAs = await readViewAs(profile?.role)
   if (viewAs !== 'student' && (profile?.role === 'admin' || profile?.role === 'instructor')) redirect('/admin')
 
   const { data: rows } = await admin
@@ -118,7 +118,7 @@ export default async function DashboardPage() {
       <div className="max-w-3xl mx-auto px-4 py-10">
         <div className="mb-1 flex items-center justify-between gap-3">
           <h1 className="text-2xl font-bold">{greeting}</h1>
-          {isAdmin && <ViewAsMenu viewAs={viewAs ?? ''} />}
+          {self && <ViewAsMenu self={self} viewAs={viewAs ?? ''} />}
         </div>
         <p className="text-sm text-zinc-500 mb-8">
           {courses.length > 0

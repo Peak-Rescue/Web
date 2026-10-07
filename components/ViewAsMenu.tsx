@@ -2,8 +2,9 @@
 
 import { Suspense, useEffect, useRef, useState } from 'react'
 import { usePathname, useSearchParams } from 'next/navigation'
+import { type ViewAs, viewAsChoices } from '@/lib/view-as-roles'
 
-// Which role an admin is reading the page as.
+// Which role the reader is reading the page as.
 //
 // It was three links sitting in the bar, always. Three is the widest a
 // two-state control ever needs to be, and the bar it sat in has a job of its
@@ -24,25 +25,40 @@ import { usePathname, useSearchParams } from 'next/navigation'
 // It lives in components/ because the portal home and the employee documents
 // page each had their own older copy of the idea — a row of always-on text
 // links, no amber, nothing to say you were still in a preview two pages later.
-// One control, one place, every page that has an admin reading it.
+// One control, one place, every page that has someone reading it from above.
 
-const ROLES = [
-  { key: '', label: 'Admin', hint: 'Everything, unfiltered' },
-  { key: 'instructor', label: 'Instructor', hint: 'What an assigned instructor sees (uses your real role on this course)' },
-  { key: 'student', label: 'Student', hint: 'What an enrolled student sees' },
-] as const
+const ROLE_LABELS = {
+  admin: { label: 'Admin', a: 'an admin', hint: 'Everything, unfiltered' },
+  instructor: { label: 'Instructor', a: 'an instructor', hint: 'What an assigned instructor sees (uses your real role on this course)' },
+  student: { label: 'Student', a: 'a student', hint: 'What an enrolled student sees' },
+} as const
 
-export default function ViewAsMenu({ viewAs }: { viewAs: string }) {
+/**
+ * `self` is the reader's real role, and it decides both the top entry — the one
+ * that is not a preview at all — and which previews are under it. An instructor
+ * gets the same control an admin does, one item shorter: the list is whatever
+ * they outrank, and the role they outrank is the one their own work is for.
+ */
+function rolesFor(self: 'admin' | 'instructor') {
+  return [
+    // Your own row is not a preview, so it does not get the preview's caveat:
+    // an instructor reading as an instructor is just reading the page.
+    { key: '' as const, ...ROLE_LABELS[self], hint: self === 'admin' ? ROLE_LABELS.admin.hint : 'Your own view of this page' },
+    ...viewAsChoices(self).map((key: ViewAs) => ({ key, ...ROLE_LABELS[key] })),
+  ]
+}
+
+export default function ViewAsMenu({ self, viewAs }: { self: 'admin' | 'instructor'; viewAs: string }) {
   // useSearchParams suspends; the chip is a corner of a header, so a hole in
   // that corner for one render is the whole cost.
   return (
     <Suspense fallback={null}>
-      <Menu viewAs={viewAs} />
+      <Menu self={self} viewAs={viewAs} />
     </Suspense>
   )
 }
 
-function Menu({ viewAs }: { viewAs: string }) {
+function Menu({ self, viewAs }: { self: 'admin' | 'instructor'; viewAs: string }) {
   const [open, setOpen] = useState(false)
   const box = useRef<HTMLDivElement>(null)
   const pathname = usePathname()
@@ -74,7 +90,8 @@ function Menu({ viewAs }: { viewAs: string }) {
     return `/api/view-as?${q}`
   }
 
-  const current = ROLES.find((r) => r.key === viewAs) ?? ROLES[0]
+  const roles = rolesFor(self)
+  const current = roles.find((r) => r.key === viewAs) ?? roles[0]
   const previewing = Boolean(viewAs)
 
   return (
@@ -100,7 +117,11 @@ function Menu({ viewAs }: { viewAs: string }) {
           onClick={() => setOpen((v) => !v)}
           aria-expanded={open}
           aria-haspopup="menu"
-          title={previewing ? `Previewing as ${current.label.toLowerCase()} — some controls are hidden` : 'Read this page as an instructor or a student'}
+          title={
+            previewing
+              ? `Previewing as ${current.label.toLowerCase()} — some controls are hidden`
+              : `Read this page as ${roles.slice(1).map((r) => r.a).join(' or ')}`
+          }
           className="py-1 whitespace-nowrap"
         >
           {/* The header row on a phone is 342px with a 140px wordmark and a
@@ -117,8 +138,8 @@ function Menu({ viewAs }: { viewAs: string }) {
         {previewing && (
           <a
             href={href('')}
-            title="Back to admin"
-            aria-label="Back to admin"
+            title={`Back to ${roles[0].label.toLowerCase()}`}
+            aria-label={`Back to ${roles[0].label.toLowerCase()}`}
             className="border-l border-amber-800/70 px-1.5 py-1 leading-none hover:text-white transition-colors"
           >
             ✕
@@ -132,7 +153,7 @@ function Menu({ viewAs }: { viewAs: string }) {
           className="absolute right-0 top-[calc(100%+5px)] z-30 min-w-40 rounded-lg border border-zinc-700 bg-zinc-950 p-1 shadow-xl"
         >
           <p className="px-2 pt-1.5 pb-1 text-[9.5px] uppercase tracking-widest text-zinc-500">See this page as</p>
-          {ROLES.map((r) => (
+          {roles.map((r) => (
             // Plain anchors, not Link: the destination is a route handler that
             // has to set a cookie, so this is a real navigation either way.
             <a

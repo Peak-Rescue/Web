@@ -3,7 +3,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { addResource, deleteResource } from './actions'
-import { readViewAs } from '@/lib/view-as'
+import { readViewAs, viewAsSelf } from '@/lib/view-as'
 import ViewAsMenu from '@/components/ViewAsMenu'
 import JumpToNewRow from '@/components/JumpToNewRow'
 
@@ -53,7 +53,8 @@ export default async function EmployeeInfoPage({
   // Purely a display role; the access gate above and the actions use the real
   // one. A student can't reach this page at all, so previewing as one lands
   // where a student lands.
-  const viewAs = await readViewAs(isAdmin)
+  const self = viewAsSelf(profile?.role)
+  const viewAs = await readViewAs(profile?.role)
   if (viewAs === 'student') redirect('/dashboard')
   const showAsAdmin = viewAs ? false : isAdmin
 
@@ -72,7 +73,7 @@ export default async function EmployeeInfoPage({
       <div className="max-w-4xl mx-auto px-4 py-10">
         <div className="mb-6 flex items-center justify-between gap-3 flex-wrap">
           <Link href="/admin" className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors">← Portal</Link>
-          {isAdmin && <ViewAsMenu viewAs={viewAs ?? ''} />}
+          {self && <ViewAsMenu self={self} viewAs={viewAs ?? ''} />}
         </div>
         <h1 className="text-2xl font-bold mb-2">Employee Documents</h1>
         <p className="text-zinc-400 text-sm mb-8">Handbook, policies, and employment documents</p>

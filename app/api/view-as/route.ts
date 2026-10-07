@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { VIEW_AS_COOKIE, normalizeViewAs } from '@/lib/view-as'
+import { VIEW_AS_COOKIE, normalizeViewAs, viewAsChoices } from '@/lib/view-as'
 
-// Sets — or clears — the admin's preview role, then puts them back where they
+// Sets — or clears — the reader's preview role, then puts them back where they
 // were. A GET so the menu can be plain links: no JavaScript, no form, and the
 // browser's own back button undoes it the way you'd expect.
 //
@@ -44,11 +44,11 @@ export async function GET(request: Request) {
   const { data: profile } = await admin.from('profiles').select('role').eq('id', user.id).single()
 
   const res = NextResponse.redirect(new URL(back, url.origin))
-  // Non-admins get sent back untouched rather than refused: there is nothing
-  // to protect here beyond not letting them fake a role, and readViewAs already
-  // ignores the cookie for them. Clearing it as well keeps a demoted admin from
-  // carrying a stale preview around forever.
-  if (profile?.role === 'admin' && role) {
+  // A role you don't outrank gets you sent back untouched rather than refused:
+  // there is nothing to protect here beyond not letting anyone fake a role, and
+  // readViewAs already ignores such a cookie. Clearing it as well keeps a
+  // demoted admin from carrying a stale instructor preview around forever.
+  if (role && viewAsChoices(profile?.role).includes(role)) {
     res.cookies.set(VIEW_AS_COOKIE, role, {
       path: '/',
       httpOnly: true,

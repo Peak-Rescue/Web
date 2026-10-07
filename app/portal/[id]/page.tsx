@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import CourseView, { type Viewer } from './CourseView'
-import { readViewAs } from '@/lib/view-as'
+import { readViewAs, viewAsSelf } from '@/lib/view-as'
 
 // The course page for people who are on the course. All it does is work out
 // who is asking and what that entitles them to — the page itself is
@@ -46,10 +46,12 @@ export default async function PortalPage({
   const isInstructor = !!instructorAssignment
   if (!(isAdmin || isInstructor || enrollment)) redirect('/dashboard')
 
-  // Admins can preview the page as a student or an instructor who is not
-  // running the course — purely a display role; the access check above uses
-  // the real one.
-  const viewAs = await readViewAs(isAdmin)
+  // An admin can preview the page as a student or as an instructor who is not
+  // running the course; an instructor can preview it as a student, which on
+  // this page is the one that matters — the welcome, the gear quantities and
+  // what is held back as internal are all their own work. Purely a display
+  // role either way; the access check above uses the real one.
+  const viewAs = await readViewAs(profile?.role)
 
   const viewer: Viewer = {
     userId: user.id,
@@ -58,6 +60,7 @@ export default async function PortalPage({
     instructorRole: instructorAssignment?.role ?? null,
     inCharge: Boolean(instructorAssignment?.in_charge),
     viewAs,
+    viewAsSelf: viewAsSelf(profile?.role),
     mode: mode === 'build' || mode === 'teach' ? mode : null,
     // A door named in the link — how "open the gear list" in an email lands
     // on the gear list rather than on wherever you were last.

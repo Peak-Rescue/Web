@@ -22,7 +22,7 @@ import CourseSetupRow from './CourseSetupRow'
 import CourseSetupReadOnly from './CourseSetupReadOnly'
 import InfoHint from '@/components/InfoHint'
 import { CAPABILITY_META, CAPABILITY_ORDER, type CapabilityCategory } from '@/lib/capabilities'
-import { readViewAs } from '@/lib/view-as'
+import { readViewAs, viewAsSelf } from '@/lib/view-as'
 import ViewAsMenu from '@/components/ViewAsMenu'
 
 const input = 'w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500'
@@ -53,7 +53,8 @@ export default async function LibraryPage({
   // The preview means it here more than anywhere: the difference between the
   // two roles on this page is the whole page's worth of verbs, and the only
   // way to check that an instructor's library is usable is to read it as one.
-  const viewAs = await readViewAs(realAdmin)
+  const self = viewAsSelf(profile?.role)
+  const viewAs = await readViewAs(profile?.role)
   if (viewAs === 'student') redirect('/dashboard')
   const isAdmin = realAdmin && !viewAs
   // Archived and pending are an admin's working states. Nobody else has a
@@ -312,7 +313,7 @@ export default async function LibraryPage({
               </>
             )}
           </div>
-          {realAdmin && <ViewAsMenu viewAs={viewAs ?? ''} />}
+          {self && <ViewAsMenu self={self} viewAs={viewAs ?? ''} />}
         </div>
 
         <div className="mb-8 flex items-end justify-between gap-4 flex-wrap">

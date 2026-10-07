@@ -144,8 +144,11 @@ export type Viewer = {
   /** Whether they are primary on this course — running it in the field. This is
       what the manage controls hang off, and any number of the crew can be. */
   inCharge: boolean
-  // Admin previewing as someone else. A guest can't preview anything.
+  // Previewing as someone else. A guest can't preview anything.
   viewAs: 'student' | 'instructor' | null
+  /** Their real role, where it has previews under it — what the chip calls
+      "you", and null for anyone who gets no chip. */
+  viewAsSelf: 'admin' | 'instructor' | null
   /** Which half of the job the jump bar shows an admin. Null means work it out
       from the dates. */
   mode: 'build' | 'teach' | null
@@ -163,6 +166,7 @@ export const GUEST: Viewer = {
   instructorRole: null,
   inCharge: false,
   viewAs: null,
+  viewAsSelf: null,
   mode: null,
   openSection: null,
   lastSeenAt: null,
@@ -216,6 +220,13 @@ export default async function CourseView({
   const canManageTasks = viewAs
     ? viewAs === 'instructor' && viewer.inCharge
     : isAdmin || viewer.inCharge
+  // The chip is for whoever has a role under them *on this page*: an admin, or
+  // an instructor on this course. Someone merely enrolled here gets none — the
+  // student view is already the view they have. The `viewAs` arm is what keeps
+  // it drawn once a preview is on, including the preview an instructor turned
+  // on somewhere else and then opened a course they are only enrolled in: the
+  // chip is the way back out, so it has to survive landing anywhere.
+  const showViewAs = Boolean(viewer.viewAsSelf) && (showAsAdmin || showAsInstructor || Boolean(viewAs))
 
   // Everything else in a second parallel round (roles known, filters set).
   const showTasks = showAsAdmin || showAsInstructor
@@ -1507,11 +1518,11 @@ export default async function CourseView({
           buildSections={buildSections}
           storageKey={`course-door:${id}`}
           openSection={viewer.openSection ?? null}
-          controls={showAsAdmin || isAdmin ? (
+          controls={showAsAdmin || showViewAs ? (
             <>
               {showAsAdmin && <CourseMode />}
-              {isAdmin && (
-                <ViewAsMenu viewAs={viewAs ?? ''} />
+              {showViewAs && viewer.viewAsSelf && (
+                <ViewAsMenu self={viewer.viewAsSelf} viewAs={viewAs ?? ''} />
               )}
             </>
           ) : null}

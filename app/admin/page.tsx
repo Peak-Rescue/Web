@@ -10,7 +10,7 @@ import { courseShortName, courseEventTitle, crewFirstNames } from '@/lib/courses
 import { courseCapabilityCategories } from '@/lib/capabilities'
 import { todayHere } from '@/lib/course-clock'
 import { slotsToStaff } from '@/lib/course-readiness'
-import { readViewAs } from '@/lib/view-as'
+import { readViewAs, viewAsSelf } from '@/lib/view-as'
 import ViewAsMenu from '@/components/ViewAsMenu'
 import { roleLabel, ROLE_BADGE, asInstanceRole } from '@/lib/staffing-roles'
 import PrimaryStar from '@/components/PrimaryStar'
@@ -81,7 +81,8 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
 
   const isAdmin = profile?.role === 'admin'
   // Purely a display role; the access gate above uses the real one.
-  const viewAs = await readViewAs(isAdmin)
+  const self = viewAsSelf(profile?.role)
+  const viewAs = await readViewAs(profile?.role)
   // A student's portal home is /dashboard — a different route, not a thinner
   // version of this one. Previewing as a student means going there, and the
   // chip over there is what brings you back.
@@ -411,9 +412,9 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
           {displayName && (
             <span className="text-sm text-zinc-500">Signed in as {displayName}</span>
           )}
-          {isAdmin && (
+          {self && (
             <div className="ml-auto">
-              <ViewAsMenu viewAs={viewAs ?? ''} />
+              <ViewAsMenu self={self} viewAs={viewAs ?? ''} />
             </div>
           )}
         </div>
