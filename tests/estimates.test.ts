@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { coaPrice, coaSpan, coaHasOwnSpan, isTripLine, DEFAULT_MARGIN, dayCountFollowsCourse, daysForLine, factorValue, guessSeedQty, wantsSeedLine } from '@/lib/estimates'
+import { coaPrice, coaSpan, coaHasOwnSpan, isTripLine, DEFAULT_MARGIN, dayCountFollowsCourse, daysForLine, factorValue, guessSeedQty, wantsSeedLine, missingSeatRates, seatOfRate } from '@/lib/estimates'
 
 // The number three places had to agree on. A test so they cannot drift apart
 // again quietly — the column default is checked by hand, this checks the code.
@@ -293,5 +293,78 @@ describe('what a seeded COA comes to', () => {
       seeded(counts).filter((r) => !/field day/.test(r.label)).map((r) => [r.label, r.amount])
     expect(pick({ ...base, leads: 1, assists: 2, shadows: 1 }))
       .toEqual(pick({ ...base, leads: null, assists: null, shadows: null }))
+  })
+})
+
+// Seeding happens once, when a COA is created; a crew plan keeps changing after
+// that. A seat added later has no line to be wrong about, so it has to be asked
+// about rather than quietly priced at nothing.
+describe('seats the plan has and the COA does not', () => {
+  const LEAD = { label: 'Lead field day/s', unit: 'per lead per day' }
+  const ASSIST = { label: 'Assist field day/s', unit: 'per assist per day' }
+  const SHADOW = { label: 'Shadow field day/s', unit: 'per shadow per day' }
+  const GENERIC = { label: 'Instructor field day/s', unit: 'per instructor per day' }
+  const LODGING = { label: 'Lodging', unit: 'per instructor per night' }
+  const RATES = [GENERIC, LEAD, ASSIST, SHADOW, LODGING]
+
+  const base = { instructors: 3, students: 8, days: 5, calendarDays: 5 }
+  const priced = (labels: string[]) => (r: { label: string }) => labels.includes(r.label)
+
+  it('names the per-seat rates and nothing else', () => {
+    expect(seatOfRate(LEAD)).toBe('leads')
+    expect(seatOfRate(SHADOW)).toBe('shadows')
+    expect(seatOfRate(GENERIC)).toBeNull()
+    expect(seatOfRate(LODGING)).toBeNull()
+  })
+
+  // PR-0069: quoted as 2 lead and 1 assist, then a shadow was added in Details.
+  it('asks about a seat added after the COA was built', () => {
+    const missing = missingSeatRates(
+      RATES,
+      priced(['Lead field day/s', 'Assist field day/s', 'Lodging']),
+      { ...base, leads: 2, assists: 0, shadows: 1 }
+    )
+    expect(missing.map((r) => r.label)).toEqual(['Shadow field day/s'])
+  })
+
+  it('says nothing when every planned seat is priced', () => {
+    const missing = missingSeatRates(
+      RATES,
+      priced(['Lead field day/s', 'Assist field day/s', 'Shadow field day/s']),
+      { ...base, leads: 2, assists: 1, shadows: 1 }
+    )
+    expect(missing).toEqual([])
+  })
+
+  // A seat line kept at zero is still a line — which is how somebody declines
+  // this without being asked again.
+  it('counts a line the plan has no seats for as priced', () => {
+    const missing = missingSeatRates(
+      RATES,
+      priced(['Lead field day/s', 'Shadow field day/s']),
+      { ...base, leads: 2, assists: 0, shadows: 1 }
+    )
+    expect(missing).toEqual([])
+  })
+
+  // Every course alive got a crew plan from one backfill, so a COA built on the
+  // head count must not be asked to re-price itself seat by seat: those quotes
+  // have gone out.
+  it('leaves a COA quoting on the head count alone', () => {
+    const missing = missingSeatRates(
+      RATES,
+      priced(['Instructor field day/s', 'Lodging']),
+      { ...base, leads: 2, assists: 0, shadows: 1 }
+    )
+    expect(missing).toEqual([])
+  })
+
+  it('has nothing to say about a course nobody has broken down', () => {
+    const missing = missingSeatRates(
+      RATES,
+      priced(['Lead field day/s']),
+      { ...base, leads: null, assists: null, shadows: null }
+    )
+    expect(missing).toEqual([])
   })
 })

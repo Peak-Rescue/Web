@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { fmtMoney, round2 } from '@/lib/expenses'
-import { impliedMargin, factorValue, prefillFactor, unitFactorNames, dayCountFollowsCourse, isTripLine, guessSeedQty } from '@/lib/estimates'
+import { impliedMargin, factorValue, prefillFactor, unitFactorNames, dayCountFollowsCourse, isTripLine, guessSeedQty, missingSeatRates, seatOfRate } from '@/lib/estimates'
 import { publishCoaPrice, retractCoaPrice } from '@/lib/live-coa-prices'
 import { saveEstimate, deleteEstimateCoa, setEstimateArchived, type EstimateItemInput } from '@/app/admin/courses/finance-actions'
 import { useRouter } from 'next/navigation'
@@ -413,29 +413,36 @@ export default function EstimatePanel({
     setResetArmed(false)
   }
 
-  function addFromLibrary(rateId: string) {
-    const lib = rates.find((r) => r.id === rateId)
-    if (!lib) return
+  // A library rate as a fresh line, quantity prefilled from the course.
+  function libraryRow(lib: PricingRate): Row {
     const labels = unitFactorNames(lib.unit)
     const values = labels.map((l) => prefillFactor(l, lib.label, counts))
     // Anything the course cannot supply arrives blank rather than as a 1 that
     // reads like a real number.
     const unknown = values.some((v) => v === null)
-    const qty = unknown ? '' : String((values as number[]).reduce((p, v) => p * v, 1))
-    schedule(
-      [...rows, {
-        key: nextKey.current++,
-        label: lib.label,
-        qty,
-        rate: String(lib.rate),
-        notes: '',
-        factors: !unknown && labels.length >= 2 ? values.map(String) : null,
-        flabels: [],
-        rateId: lib.id,
-        ack: null,
-      }],
-      margin
-    )
+    return {
+      key: nextKey.current++,
+      label: lib.label,
+      qty: unknown ? '' : String((values as number[]).reduce((p, v) => p * v, 1)),
+      rate: String(lib.rate),
+      notes: '',
+      factors: !unknown && labels.length >= 2 ? values.map(String) : null,
+      flabels: [],
+      rateId: lib.id,
+      ack: null,
+    }
+  }
+
+  // One schedule for however many lines are being added: two calls in a row
+  // would both build on the same `rows` and the first would be dropped.
+  function addLibraryRows(libs: PricingRate[]) {
+    if (libs.length === 0) return
+    schedule([...rows, ...libs.map(libraryRow)], margin)
+  }
+
+  function addFromLibrary(rateId: string) {
+    const lib = rates.find((r) => r.id === rateId)
+    if (lib) addLibraryRows([lib])
   }
 
   function addCustom() {
@@ -558,6 +565,17 @@ export default function EstimatePanel({
   // Lines still carrying the numbers the course had when they were written.
   const driftedRows = rows.map((r) => ({ row: r, drifts: rowDrifts(r) })).filter((d) => d.drifts.length > 0)
   const driftsByKey = new Map(driftedRows.map((d) => [d.row.key, d.drifts]))
+
+  // Seats the crew plan has that this COA prices nothing for — a seat added in
+  // Details after the COA was seeded. Only ever asked of a COA already quoting
+  // seat by seat; see missingSeatRates for why the head-count COAs are left
+  // alone. Matched the same way every other lookup matches a line to a rate:
+  // by stored id first, by label for lines written before ids were kept.
+  const missingSeats = missingSeatRates(
+    rates,
+    (lib) => rows.some((r) => (r.rateId ? r.rateId === lib.id : r.label.trim() === lib.label)),
+    counts
+  ).map((lib) => ({ lib, seats: factorValue(seatOfRate(lib) ?? '', lib.label, counts) ?? 0 }))
 
   // Lines whose quantity is not the one the course works out — whether it was
   // typed over, kept through a change, or built before the details moved.
@@ -802,6 +820,38 @@ export default function EstimatePanel({
             {unsetRows.length} line{unsetRows.length === 1 ? '' : 's'} need{unsetRows.length === 1 ? 's' : ''} a number
           </span>
           <span className="text-zinc-600 min-w-0 truncate">{unsetRows.map((r) => r.label.trim()).join(', ')}</span>
+        </div>
+      )}
+
+      {/* A seat the course gained after this COA was built. The same amber as a
+          drifted quantity, because it is the same kind of fact — the course
+          moved and the estimate has not caught up — and the fix is attached for
+          the same reason the seeded lines exist at all: the course already knows
+          the number. Adding is a click rather than automatic, since a saved COA
+          can be the one a quote already went out on. */}
+      {missingSeats.length > 0 && (
+        <div className="mb-1.5 text-[11px] flex items-center gap-2 flex-wrap text-zinc-500">
+          <InfoHint
+            below
+            caution
+            text="The crew plan in Details has a seat this COA prices nothing for — usually a seat added after the estimate was built. Add prices it at the library rate for the course's days. To quote the course without it, leave the line at a quantity of 0 rather than deleting it."
+          />
+          <span className="text-amber-500/80">
+            {missingSeats.length === 1
+              ? 'A seat in the crew plan is not priced'
+              : 'Seats in the crew plan are not priced'}
+          </span>
+          <span className="text-zinc-600 min-w-0 truncate">
+            {missingSeats.map(({ lib, seats }) => `${seats} × ${lib.label}`).join(', ')}
+          </span>
+          <button
+            type="button"
+            onClick={() => addLibraryRows(missingSeats.map((m) => m.lib))}
+            className="text-amber-400 hover:text-amber-200 transition-colors underline decoration-amber-800"
+            title={`Add ${missingSeats.length === 1 ? 'the line' : 'the lines'} at the library rate, priced for the course's days`}
+          >
+            Add
+          </button>
         </div>
       )}
 

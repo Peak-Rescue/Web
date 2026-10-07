@@ -296,6 +296,39 @@ export function wantsSeedLine(
   return true
 }
 
+/** The seat a per-seat field-day rate prices ("per shadow per day" → "shadows"),
+    or null for every other rate in the library. */
+export function seatOfRate(rate: { unit: string | null }): string | null {
+  return unitFactorNames(rate.unit).find((n) => /^(lead|assist|shadow)/i.test(n)) ?? null
+}
+
+/** Seats the crew plan has that a COA quoting seat by seat carries no line for.
+ *
+ *  Seeding only happens once, when a COA is created, and a crew plan goes on
+ *  changing after that. A seat added later leaves no trace in the estimate: the
+ *  drift machinery can reopen the *quantity* of a line that exists, but a line
+ *  that was never there has no quantity to be wrong, so a shadow added in
+ *  Details reads as $0 rather than as a question. This is that question.
+ *
+ *  Only asked of a COA that is already quoting seat by seat — it has at least
+ *  one seat line. A COA built on the head count is left alone on purpose: every
+ *  course alive got a crew plan from one backfill migration, so asking the
+ *  older COAs to re-price themselves seat by seat would reopen quotes that have
+ *  already gone out, and that is a decision rather than a drift.
+ *
+ *  A seat the plan has none of is not here either — the line for it sits at
+ *  qty 0 and the drift check already pulls it there. Which is also the way to
+ *  decline this: a seat line kept at zero is a line, and says so. */
+export function missingSeatRates<R extends { label: string; unit: string | null }>(
+  rates: R[],
+  priced: (rate: R) => boolean,
+  counts: FactorCounts
+): R[] {
+  const seats = rates.filter((r) => seatOfRate(r))
+  if (!seats.some(priced)) return []
+  return seats.filter((r) => wantsSeedLine(r, counts) && !priced(r))
+}
+
 export function guessSeedQty(
   rate: { label: string; unit: string | null },
   counts: FactorCounts
