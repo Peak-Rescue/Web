@@ -118,6 +118,11 @@ export type StepInput = {
   ends_at: string | null
   /** No client, so nobody to invoice. */
   internal?: boolean | null
+  /** An internal meeting, which nobody has to be staffed on: everyone turns
+      up, and a crew is only named when somebody is tasked with teaching it.
+      "Unset means at least one" is the rule for a course, and here it turned
+      twenty-five weekly meetings into twenty-five open seats. */
+  crewOptional?: boolean
 }
 
 /** How long costs are allowed to keep arriving before anybody is asked to
@@ -251,7 +256,12 @@ export function courseSteps(
     : []
   const shortOf = short.reduce((n, s) => n + s.open, 0)
 
-  const staffingDone = staffed >= wanted && hasPrimary && clashed.length === 0 && shortOf === 0
+  // Only while no crew plan was set. A meeting somebody did plan seats for is
+  // asking for them like any course.
+  const optional = Boolean(inst.crewOptional && !inst.instructor_slots)
+  const staffingDone = optional
+    ? staffed > 0 && clashed.length === 0
+    : staffed >= wanted && hasPrimary && clashed.length === 0 && shortOf === 0
 
   // Somebody has been asked and hasn't answered. Still a gap, but a gap with
   // something already in flight — which is the difference between "go and do
@@ -268,6 +278,8 @@ export function courseSteps(
     // never said how many it wanted just says how many it has.
     ...(staffingDone
       ? { tone: 'done' as const, detail: inst.instructor_slots ? `${staffed} of ${wanted}` : `${staffed} staffed` }
+      : optional && staffed === 0
+        ? { tone: 'idle' as const, detail: 'Nobody needed' }
       : staffed === 0
         ? awaiting > 0
           ? { tone: 'waiting' as const, detail: `${awaiting} asked` }

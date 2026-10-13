@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react'
 import { crewPlanOf } from '@/lib/staffing-roles'
 import Link from 'next/link'
-import { courseShortName, COURSE_TYPE_OPTIONS } from '@/lib/courses'
+import { courseShortName, COURSE_TYPE_OPTIONS, isSession } from '@/lib/courses'
 import { COURSE_STATUSES, COURSE_STATUS_STYLES as STATUS_STYLES } from '@/lib/course-status'
 import {
   courseSteps, showsSteps, coursePhase, courseSettled, NO_EXTRAS,
@@ -71,6 +71,7 @@ function asStepInput(inst: Instance, clashing: string[] = []): StepInput {
     starts_at: inst.starts_at,
     ends_at: inst.ends_at,
     internal: inst.internal,
+    crewOptional: isSession(inst),
   }
 }
 
@@ -161,6 +162,7 @@ function InstanceCard({
           extras={x}
           crew={step.crew}
           slots={inst.instructor_slots}
+          crewOptional={step.crewOptional}
           owner={owner}
           owners={owners}
           students={inst.internal ? null : { enrolled: studentCount, max: inst.max_students }}

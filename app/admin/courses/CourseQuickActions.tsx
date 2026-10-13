@@ -216,12 +216,17 @@ function MoneyTrack({
 
 function CrewMeter({
   slots,
+  optional,
   crew,
   clashing,
   awaiting,
   onOpen,
 }: {
   slots: number | null | undefined
+  /** An internal meeting with no crew plan: nobody is wanted, so there are no
+      open boxes to draw and nothing to be short of. Whoever has been tasked
+      with it still shows. */
+  optional?: boolean
   crew: { role: string; in_charge?: boolean | null }[]
   awaiting: number
   /** Crew who are on another course these same days. The meter counts heads and
@@ -232,11 +237,12 @@ function CrewMeter({
 }) {
   // Boxes are people, so a fractional slot count rounds up to one: a course
   // planned for 1.5 instructors still needs two names.
-  const wanted = slotsToStaff(slots)
+  const unasked = Boolean(optional && !slots)
+  const wanted = unasked ? crew.length : slotsToStaff(slots)
   // A crew with nobody answering for it is not a staffed crew, however many
   // people are on it and whatever they are paid.
   const primary = crew.some((c) => c.in_charge)
-  const full = crew.length >= wanted && primary && clashing.length === 0
+  const full = unasked ? clashing.length === 0 : crew.length >= wanted && primary && clashing.length === 0
   // The primary first, so the marked box is always the leftmost and
   // the meter reads the same way down a column. The boxes are slots, not
   // particular people, so nothing is lost by ordering them.
@@ -284,7 +290,9 @@ function CrewMeter({
         className={`text-[11px] ml-1.5 ${full ? 'text-zinc-500' : awaiting > 0 && clashing.length === 0 ? 'text-teal-300' : 'text-amber-300'}`}
         title={clashing.length > 0 ? `${clashing.join(', ')} also booked on another course these days` : undefined}
       >
-        {full
+        {unasked && full
+          ? crew.length === 0 ? 'None needed' : `${crew.length} staffed`
+          : full
           ? `${crew.length} of ${wanted}`
           // Ahead of the head count and ahead of the primary: a crew that
           // cannot all turn up is the worse problem, and the only one the
@@ -421,6 +429,7 @@ export default function CourseQuickActions({
   extras,
   crew,
   slots,
+  crewOptional,
   clashing,
   owner,
   owners,
@@ -441,6 +450,7 @@ export default function CourseQuickActions({
       world, and not a thing the step list carries in a countable form. */
   crew: { role: string; in_charge?: boolean | null }[]
   slots: number | null | undefined
+  crewOptional?: boolean
   /** Crew double-booked on another course, by name. Worked out for the whole
       book on the server — see lib/staffing-conflicts. */
   clashing: string[]
@@ -493,6 +503,7 @@ export default function CourseQuickActions({
           <Cell label="Crew" width={COL.crew}>
             <CrewMeter
               slots={slots}
+              optional={crewOptional}
               crew={crew}
               clashing={clashing}
               awaiting={extras.invitesSent - extras.invitesAnswered}
