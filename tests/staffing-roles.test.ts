@@ -9,6 +9,7 @@ import {
   crewPlanSummary,
   hasCrewPlan,
   openSeats,
+  seatsOverPlan,
   EMPTY_CREW_PLAN,
   ROLE_BADGE,
   ROLE_TEXT,
@@ -134,6 +135,36 @@ describe('the crew plan', () => {
   it('never reports a negative open seat', () => {
     const over = openSeats({ lead: 1, assist: 0, shadow: null }, [{ role: 'lead' }, { role: 'lead' }])
     expect(over).toEqual([{ role: 'lead', seats: 1, filled: 2, open: 0 }])
+  })
+})
+
+describe('a crew that is not the crew that was priced', () => {
+  const plan = { lead: 1, assist: 1, shadow: 0 }
+
+  it('names the seat with more people than the plan has', () => {
+    expect(seatsOverPlan(plan, [{ role: 'lead' }, { role: 'lead' }])).toEqual([
+      { role: 'lead', seats: 1, filled: 2 },
+    ])
+  })
+
+  it('counts a seat the plan never had', () => {
+    expect(seatsOverPlan(plan, [{ role: 'lead' }, { role: 'shadow' }])).toEqual([
+      { role: 'shadow', seats: 0, filled: 1 },
+    ])
+  })
+
+  // Not staffed yet is not a disagreement.
+  it('says nothing about a course that is only short of people', () => {
+    expect(seatsOverPlan(plan, [])).toEqual([])
+    expect(seatsOverPlan(plan, [{ role: 'lead' }])).toEqual([])
+  })
+
+  it('says nothing when the crew is the plan', () => {
+    expect(seatsOverPlan(plan, [{ role: 'lead' }, { role: 'assist' }])).toEqual([])
+  })
+
+  it('has nothing to be over on a course with no plan', () => {
+    expect(seatsOverPlan(EMPTY_CREW_PLAN, [{ role: 'lead' }, { role: 'lead' }])).toEqual([])
   })
 })
 

@@ -138,6 +138,28 @@ export function openSeats(
   })
 }
 
+/** Seats with more people in them than the plan has — the crew that was
+    assigned is not the crew that was priced.
+
+    The estimate quotes the plan and the actuals pay the people, so a second
+    lead in a course planned for one lead and one assist is a cost nothing
+    upstream has heard about. Only that direction is reported. A seat with
+    nobody in it yet is a course still being staffed, which readiness already
+    says and which is not a disagreement about anything.
+
+    Nothing on a course with no plan: there is nothing to be over. */
+export function seatsOverPlan(
+  plan: CrewPlan,
+  crew: { role?: string | null }[]
+): { role: InstanceRole; seats: number; filled: number }[] {
+  if (!hasCrewPlan(plan)) return []
+  return INSTANCE_ROLES.map((role) => ({
+    role,
+    seats: plan[role] ?? 0,
+    filled: crew.filter((c) => asInstanceRole(c.role) === role).length,
+  })).filter((s) => s.filled > s.seats)
+}
+
 
 /** The three boxes, in wage order, as the details forms draw them. Named here so
     the form, the parser and the column names cannot fall out of step. */

@@ -1,5 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin'
-import { crewPlanOf } from '@/lib/staffing-roles'
+import { crewPlanOf, crewPlanSummary, roleLabel, seatsOverPlan } from '@/lib/staffing-roles'
+import InfoHint from '@/components/InfoHint'
 import { courseShortName, courseDayCounts } from '@/lib/courses'
 import { coaPrice, guessSeedQty, wantsSeedLine, coaSpan, coaHasOwnSpan, DEFAULT_MARGIN } from '@/lib/estimates'
 import { type OptionRelation } from '@/lib/quotes'
@@ -39,6 +40,7 @@ export default async function CoursePricingEditor({
   course,
   contacts,
   instructorCount,
+  crewRoles,
   currentUserId,
 }: {
   instanceId: string
@@ -62,6 +64,9 @@ export default async function CoursePricingEditor({
     hero_scale: string | number | null
   }
   contacts: CoursePOC[]
+  /** The seat each assigned instructor is in, so the page can say when the
+      people on the course are not the crew the estimate priced. */
+  crewRoles?: (string | null)[]
   /** Instructor slots from the course details — what the course is planned to
       need, not who is assigned yet. At least one, because a course with nobody
       on it still costs a day of somebody's time to quote. */
@@ -130,6 +135,7 @@ export default async function CoursePricingEditor({
   // assist per day" can be answered. Null throughout on a course nobody has
   // broken down, which is what keeps those lines off it.
   const crewPlan = crewPlanOf(course as { lead_slots?: number | null; assist_slots?: number | null; shadow_slots?: number | null })
+  const overPlan = seatsOverPlan(crewPlan, (crewRoles ?? []).map((role) => ({ role })))
   const estimateCounts = {
     instructors: instructorCount,
     students: course.max_students,
@@ -428,6 +434,24 @@ export default async function CoursePricingEditor({
           bar), which reads as four unrelated things stacked rather than one
           section with parts. */}
       <PricingFold title="Cost" summary={costSummary} defaultOpen={!actualsLive}>
+      {/* The crew assigned is not the crew priced. Said once for the course
+          rather than on each COA, because it is a fact about the course —
+          and only when somebody is in a seat the plan does not have. A seat
+          still empty is a course being staffed, not a disagreement. */}
+      {overPlan.length > 0 && (
+        <div className="mb-3 text-[11px] flex items-center gap-2 flex-wrap text-zinc-500">
+          <InfoHint
+            below
+            caution
+            text="Someone is assigned to a seat the crew plan in Details does not have. The estimate prices the plan and the actuals pay the people assigned, so the difference comes out of the margin. Change the plan in Details, or the seat on the crew row, whichever is wrong."
+          />
+          <span className="text-amber-500/80">The crew assigned is not the crew priced</span>
+          <span className="text-zinc-600 min-w-0 truncate">
+            {overPlan.map((s) => `${s.filled} ${roleLabel(s.role).toLowerCase()} assigned, ${s.seats} planned`).join(' · ')}
+            {' — '}plan is {crewPlanSummary(crewPlan) || 'nobody'}
+          </span>
+        </div>
+      )}
       <div className="space-y-8">
         {estimatePanels.map((e) => (
           <EstimatePanel

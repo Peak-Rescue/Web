@@ -3077,6 +3077,7 @@ export default async function CourseView({
               course={inst as unknown as React.ComponentProps<typeof CoursePricingEditor>['course']}
               contacts={coursePocs}
               instructorCount={plannedInstructorCount(inst, (instructors ?? []).length)}
+              crewRoles={(instructors ?? []).map((r) => r.role as string | null)}
               currentUserId={userId ?? ''}
             />
           </Section>
