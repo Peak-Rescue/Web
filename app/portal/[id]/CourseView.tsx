@@ -31,7 +31,7 @@ import { unseenSections, lastPushToStudents, behindOnPush, type Push } from '@/l
 import { GEAR_ENTRIES_SELECT, KIT_LABEL } from '@/lib/gear'
 import { courseCapabilityCategories } from '@/lib/capabilities'
 import { GEAR_ENTRY_COLUMNS, gearLabel, gearQuantity, isChoice, placeSets, productName } from '@/lib/gear'
-import { courseDisplayName, computeBlocks, courseDates, courseEventTitle, isJob, startTimeLabel, workNoun, WorkNoun } from '@/lib/courses'
+import { courseDisplayName, computeBlocks, courseDates, courseEventTitle, isJob, isSession, startTimeLabel, workNoun, WorkNoun } from '@/lib/courses'
 import { crewOrder, crewPlanOf, crewPlanSummary } from '@/lib/staffing-roles'
 import CourseTasksPanel, { type CourseTask, type TaskPerson } from '@/components/CourseTasksPanel'
 import PdfLink from '@/components/PdfLink'
@@ -430,6 +430,12 @@ export default async function CourseView({
   // switches off is switched off because filling it in would be a question
   // nobody on a job has an answer to.
   const jobNotCourse = isJob(inst.course_type as string)
+  // Nearly every section below is shown to staff while it is still empty,
+  // because an empty section is where its first contents get added. A staff
+  // session is the exception — an hour's class has no gear list to start and
+  // no quote to write — so there an empty section is simply not there. One
+  // that somebody did fill in still shows, on that week alone.
+  const staffSeeEmpty = showTasks && !isSession(inst)
   // And the word for one, for the copy that has to name it.
   const noun = workNoun(inst.course_type as string)
   const Noun = WorkNoun(inst.course_type as string)
@@ -636,7 +642,7 @@ export default async function CourseView({
   // material this course produced, filed with the maps and the reference, and
   // it did not earn a tab.
   const hasAlbum =
-    (albumsEnabled() && (showTasks || Boolean(albumRow))) || linkedAlbums.length > 0
+    (albumsEnabled() && (staffSeeEmpty || Boolean(albumRow))) || linkedAlbums.length > 0
 
   // Library maps take their title and link from the library item; the edit
   // twin (CalTopo edit URL) is only ever handed to the team.
@@ -1071,10 +1077,10 @@ export default async function CourseView({
   // Staff see the section whether or not there is a schedule in it: a course
   // created this morning is exactly the one that needs a running order, and it
   // was the one course you could not start one for from here.
-  const hasMapsOrReference = resources.length > 0 || maps.length > 0 || otherLinks.length > 0 || showTasks
+  const hasMapsOrReference = resources.length > 0 || maps.length > 0 || otherLinks.length > 0 || staffSeeEmpty
   // Schedule now holds the maps and the reference shelf as well as the days,
   // so a course with a med plan and no schedule still has somewhere to put it.
-  const showSchedule = hasSchedule || showTasks || hasMapsOrReference
+  const showSchedule = hasSchedule || staffSeeEmpty || hasMapsOrReference
   const hasOverview = Boolean(sched?.overview) || (sched?.objectives?.length ?? 0) > 0
   // Staff get it whether or not anything is in it: this is where the first
   // section gets added, and a section that appears only once it has contents
@@ -1082,7 +1088,7 @@ export default async function CourseView({
   // Nothing to teach on a job, so no curriculum and no gear list: the crew
   // brings its own kit and always has, and an empty list of either is a
   // question somebody feels they have to answer.
-  const hasCurriculum = (orderedModules.length > 0 || showTasks) && !jobNotCourse
+  const hasCurriculum = (orderedModules.length > 0 || staffSeeEmpty) && !jobNotCourse
 
   // What is behind each half of Prep, said on the line you decide by.
   //
@@ -1131,7 +1137,7 @@ export default async function CourseView({
   // one is made. Same trap the schedule and the waiver had: a course created
   // this morning has none of these, and a section that only appears once it
   // has contents is one nobody can put contents into.
-  const showGear = (hasGear || showTasks) && !jobNotCourse
+  const showGear = (hasGear || staffSeeEmpty) && !jobNotCourse
   // Staff get the section whether or not anything is in it: it is where the
   // first resource and the first file get added, and a section that appears
   // only once it has contents is one nobody can put contents into.
@@ -1299,7 +1305,7 @@ export default async function CourseView({
 
   const hasUpdates =
     // Staff always: it is where the first post goes.
-    canPostUpdates ||
+    (canPostUpdates && staffSeeEmpty) ||
     // Anybody, once something has actually been said.
     courseUpdates.length > 0 ||
     // Anyone on the course, said or not. "Has anything been announced?" is a
@@ -1309,7 +1315,7 @@ export default async function CourseView({
     // and a student who has never seen it does not know announcements happen.
     // An empty feed is a real answer here, unlike an empty state reporting
     // that nothing needs doing.
-    Boolean(userId) ||
+    (Boolean(userId) && !isSession(inst)) ||
     // The album lives in here now, and a course can have one before anybody
     // has posted a word.
     hasAlbum
@@ -1365,7 +1371,7 @@ export default async function CourseView({
   // walk-up QR code, and the unmatched signatures it produces. Those have to
   // be reachable on a course where nobody has enrolled yet, because that is
   // exactly the course somebody walks up to.
-  const showWaiver = Boolean(waiver) || showTasks
+  const showWaiver = Boolean(waiver) || staffSeeEmpty || (showTasks && waiverOnCourse)
   // Staff see the crew whether or not anyone is on it yet — an unstaffed
   // course is the one that needs the section.
   const showStaffing = (instructors ?? []).length > 0 || showTasks
@@ -1506,16 +1512,28 @@ export default async function CourseView({
           {/* A staff session's hour and where to call in. Nearly every course
               has neither and draws nothing here. */}
           {(startTimeLabel(inst.start_time) || inst.video_url) && (
-            <p className="mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-1 text-sm text-zinc-300">
-              {startTimeLabel(inst.start_time) && (
-                <span>{[startTimeLabel(inst.start_time), startTimeLabel(inst.end_time)].filter(Boolean).join('–')} Mountain</span>
-              )}
+            <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2">
+              {/* The one thing somebody out of town opens this page for, so
+                  it is a button and it is first. */}
               {inst.video_url && (
-                <a href={inst.video_url} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-white">
-                  Join video
+                <a
+                  href={inst.video_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-pr-red hover:bg-pr-red-dark text-white rounded font-medium text-sm transition-colors"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="m22 8-6 4 6 4V8Z" /><rect x="2" y="6" width="14" height="12" rx="2" />
+                  </svg>
+                  Join video call
                 </a>
               )}
-            </p>
+              {startTimeLabel(inst.start_time) && (
+                <span className="text-base text-zinc-300">
+                  {[startTimeLabel(inst.start_time), startTimeLabel(inst.end_time)].filter(Boolean).join('–')} Mountain
+                </span>
+              )}
+            </div>
           )}
 
           {/* Only when the course breaks around off days, where "Aug 24 – 28"

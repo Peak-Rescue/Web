@@ -285,6 +285,20 @@ export function startTimeLabel(t: string | null | undefined): string | null {
   return m ? `${m[1]}${m[2]}` : null
 }
 
+/** An hour on the calendar rather than a course: internal, one day, and given a
+    start time — the weekly staff class. Nothing is quoted, packed for or
+    scheduled by the day, so its page keeps only who is teaching, the notes,
+    the tasks and the files. Read off the row rather than ticked, so the
+    twenty-five weeks of a series cannot disagree about what they are. */
+export function isSession(c: {
+  internal?: boolean | null
+  start_time?: string | null
+  starts_at?: string | null
+  ends_at?: string | null
+}): boolean {
+  return Boolean(c.internal && startTimeLabel(c.start_time) && c.starts_at && (!c.ends_at || c.ends_at === c.starts_at))
+}
+
 // Whoever is running it first, first names only — the team's long-standing
 // manual calendar-event convention. It used to sort on lead wage, which was the
 // same list only while a course had one lead.
