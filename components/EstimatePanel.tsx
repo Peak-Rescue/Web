@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { fmtMoney, round2 } from '@/lib/expenses'
-import { impliedMargin, factorValue, prefillFactor, unitFactorNames, dayCountFollowsCourse, isTripLine, guessSeedQty, missingSeatRates, seatOfRate } from '@/lib/estimates'
+import { impliedMargin, factorValue, prefillFactor, unitFactorNames, dayCountFollowsCourse, isTripLine, guessSeedQty, missingSeatRates, headCountRatesToSplit, seatOfRate, wantsSeedLine } from '@/lib/estimates'
 import { publishCoaPrice, retractCoaPrice } from '@/lib/live-coa-prices'
 import { saveEstimate, deleteEstimateCoa, setEstimateArchived, type EstimateItemInput } from '@/app/admin/courses/finance-actions'
 import { useRouter } from 'next/navigation'
@@ -577,6 +577,26 @@ export default function EstimatePanel({
     counts
   ).map((lib) => ({ lib, seats: factorValue(seatOfRate(lib) ?? '', lib.label, counts) ?? 0 }))
 
+  // A head-count field-day line on a course whose plan now has an assist or a
+  // shadow in it: every instructor billed as a lead, and nothing drifted to
+  // say so. See headCountRatesToSplit. Kept is kept, the same as a quantity —
+  // asked again only when the course changes shape.
+  const pricesRate = (lib: PricingRate) => (r: Row) => (r.rateId ? r.rateId === lib.id : r.label.trim() === lib.label)
+  const headCountLibs = headCountRatesToSplit(rates, (lib) => rows.some(pricesRate(lib)), counts)
+  const headCountRows = rows.filter((r) => headCountLibs.some((lib) => pricesRate(lib)(r)) && !keptForThisCourse(r.ack))
+  const seatLibs = rates.filter((lib) => seatOfRate(lib) && wantsSeedLine(lib, counts))
+  const seatSummary = seatLibs
+    .map((lib) => `${factorValue(seatOfRate(lib) ?? '', lib.label, counts) ?? 0} ${(seatOfRate(lib) ?? '').replace(/s$/, '')}`)
+    .join(', ')
+
+  // The seat lines go where the head-count line was, at the library rate and
+  // the course's days — what a COA built today would have been seeded with.
+  function priceBySeat() {
+    const gone = new Set(headCountRows.map((r) => r.key))
+    const at = headCountRows[0]?.key
+    schedule(rows.flatMap((r) => (r.key === at ? seatLibs.map(libraryRow) : gone.has(r.key) ? [] : [r])), margin)
+  }
+
   // Lines whose quantity is not the one the course works out — whether it was
   // typed over, kept through a change, or built before the details moved.
   const resettableRows = rows
@@ -851,6 +871,35 @@ export default function EstimatePanel({
             title={`Add ${missingSeats.length === 1 ? 'the line' : 'the lines'} at the library rate, priced for the course's days`}
           >
             Add
+          </button>
+        </div>
+      )}
+
+      {/* A COA from before the crew had seats, on a course that now has a
+          cheaper one. Same amber, same reason: Details moved and the estimate
+          has not. */}
+      {headCountRows.length > 0 && seatLibs.length > 0 && (
+        <div className="mb-1.5 text-[11px] flex items-center gap-2 flex-wrap text-zinc-500">
+          <InfoHint
+            below
+            caution
+            text="This COA bills every instructor on one line at the lead rate, so changing a lead to an assist or a shadow in Details does not move its cost. Price by seat replaces that line with one per seat at the library rates for the course's days. Keep leaves it, and asks again only if the course changes shape."
+          />
+          <span className="text-amber-500/80">Every instructor is priced as a lead</span>
+          <span className="text-zinc-600 min-w-0 truncate">crew plan is {seatSummary}</span>
+          <button
+            type="button"
+            onClick={priceBySeat}
+            className="text-amber-400 hover:text-amber-200 transition-colors underline decoration-amber-800"
+          >
+            Price by seat
+          </button>
+          <button
+            type="button"
+            onClick={() => keepRows(headCountRows.map((r) => r.key))}
+            className="underline underline-offset-2 hover:text-white transition-colors"
+          >
+            Keep
           </button>
         </div>
       )}

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { coaPrice, coaSpan, coaHasOwnSpan, isTripLine, DEFAULT_MARGIN, dayCountFollowsCourse, daysForLine, factorValue, guessSeedQty, wantsSeedLine, missingSeatRates, seatOfRate } from '@/lib/estimates'
+import { coaPrice, coaSpan, coaHasOwnSpan, isTripLine, DEFAULT_MARGIN, dayCountFollowsCourse, daysForLine, factorValue, guessSeedQty, wantsSeedLine, missingSeatRates, headCountRatesToSplit, seatOfRate } from '@/lib/estimates'
 
 // The number three places had to agree on. A test so they cannot drift apart
 // again quietly — the column default is checked by hand, this checks the code.
@@ -357,6 +357,42 @@ describe('seats the plan has and the COA does not', () => {
       { ...base, leads: 2, assists: 0, shadows: 1 }
     )
     expect(missing).toEqual([])
+  })
+
+  // PR-0059: built on the head count in August, then a lead became an assist.
+  // Two instructors either way, so nothing drifted and the estimate kept
+  // charging two lead days.
+  it('offers to split a head-count line once the plan has a cheaper seat', () => {
+    const split = headCountRatesToSplit(
+      RATES,
+      priced(['Instructor field day/s', 'Lodging']),
+      { ...base, instructors: 2, leads: 1, assists: 1, shadows: 0 }
+    )
+    expect(split.map((r) => r.label)).toEqual(['Instructor field day/s'])
+  })
+
+  it('does not ask while every seat is a lead, which prices the same', () => {
+    expect(headCountRatesToSplit(
+      RATES,
+      priced(['Instructor field day/s']),
+      { ...base, instructors: 2, leads: 2, assists: null, shadows: 0 }
+    )).toEqual([])
+  })
+
+  it('does not ask a COA that is already quoting by seat', () => {
+    expect(headCountRatesToSplit(
+      RATES,
+      priced(['Instructor field day/s', 'Lead field day/s']),
+      { ...base, leads: 1, assists: 2, shadows: 0 }
+    )).toEqual([])
+  })
+
+  it('does not ask a course nobody has broken down', () => {
+    expect(headCountRatesToSplit(
+      RATES,
+      priced(['Instructor field day/s']),
+      { ...base, leads: null, assists: null, shadows: null }
+    )).toEqual([])
   })
 
   it('has nothing to say about a course nobody has broken down', () => {

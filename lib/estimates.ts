@@ -329,6 +329,33 @@ export function missingSeatRates<R extends { label: string; unit: string | null 
   return seats.filter((r) => wantsSeedLine(r, counts) && !priced(r))
 }
 
+/** The head-count field-day rates a COA should be offered to split by seat.
+ *
+ *  A COA built before the crew had seats bills every instructor on one line at
+ *  one rate, and that rate is the lead's. Swapping a lead for an assist in
+ *  Details then moves nothing here: the head count is the same number, so no
+ *  quantity has drifted, and the estimate goes on charging a lead day for a
+ *  seat that costs less. `missingSeatRates` stays out of it on purpose — it
+ *  will not re-price a head-count COA unasked — which left this case with
+ *  nobody asking at all.
+ *
+ *  So it is asked, and only when the answer is worth money: the plan has an
+ *  assist or a shadow in it. An all-lead crew prices the same either way, and
+ *  a course nobody has broken down has no seats to split into. A COA that
+ *  already carries a seat line has made the move, and is `missingSeatRates`'
+ *  to look after.
+ *
+ *  Offered, never applied — a saved COA can be the one a quote went out on. */
+export function headCountRatesToSplit<R extends { label: string; unit: string | null }>(
+  rates: R[],
+  priced: (rate: R) => boolean,
+  counts: FactorCounts
+): R[] {
+  if ((counts.assists ?? 0) <= 0 && (counts.shadows ?? 0) <= 0) return []
+  if (rates.some((r) => seatOfRate(r) && priced(r))) return []
+  return rates.filter((r) => !seatOfRate(r) && paysFieldTime(r.label) && priced(r))
+}
+
 export function guessSeedQty(
   rate: { label: string; unit: string | null },
   counts: FactorCounts
