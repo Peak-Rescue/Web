@@ -6,7 +6,7 @@ import MyTasksList from '@/components/MyTasksList'
 import { loadMyOpenTasks, loadMyDoneTasks } from '@/lib/course-tasks'
 import CourseCalendar, { type CalendarCourse } from '@/components/CourseCalendar'
 import StaffingInterestList from '@/components/StaffingInterestList'
-import { courseShortName, courseEventTitle, crewFirstNames } from '@/lib/courses'
+import { courseShortName, courseEventTitle, crewFirstNames, startTimeLabel } from '@/lib/courses'
 import { courseCapabilityCategories } from '@/lib/capabilities'
 import { todayHere } from '@/lib/course-clock'
 import { slotsToStaff } from '@/lib/course-readiness'
@@ -44,21 +44,28 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     instructor_slots?: number | null
     internal?: boolean | null
     custom_categories?: string[] | null
+    start_time?: string | null
+    video_url?: string | null
+    all_staff?: boolean | null
     instance_instructors?: { role: string; in_charge?: boolean | null; instructors: { name: string } | null }[] | null
   }
+  // What a calendar chip is drawn from, for the two reads that fetch courses
+  // nobody assigned the viewer to.
+  const CAL_COLS =
+    'id, ref_number, course_type, course_category, custom_title, custom_categories, client_name, location, starts_at, ends_at, status, internal, start_time, video_url, all_staff, instance_instructors(role, instructors(name))'
   // Profile gate + personalized data in one parallel round.
-  const [{ data: profile }, { data: assignmentRows }, myTasks, myDoneTasks, allInstancesRes, { data: inviteRows }, { data: capRow }, { data: hoursRow }] = await Promise.all([
+  const [{ data: profile }, { data: assignmentRows }, myTasks, myDoneTasks, allInstancesRes, { data: inviteRows }, { data: capRow }, { data: hoursRow }, { data: allStaffRows }] = await Promise.all([
     admin.from('profiles').select('role, first_name, last_name, email').eq('id', user.id).single(),
     admin
       .from('instance_instructors')
-      .select('role, in_charge, course_instances!inner(id, ref_number, course_type, course_category, custom_title, client_name, location, starts_at, ends_at, status, instance_instructors(role, in_charge, instructors(name))), instructors!inner(profile_id)')
+      .select('role, in_charge, course_instances!inner(id, ref_number, course_type, course_category, custom_title, client_name, location, starts_at, ends_at, status, start_time, instance_instructors(role, in_charge, instructors(name))), instructors!inner(profile_id)')
       .eq('instructors.profile_id', user.id),
     loadMyOpenTasks(admin, user.id),
     loadMyDoneTasks(admin, user.id, today),
     showAllCourses
       ? admin
           .from('course_instances')
-          .select('id, ref_number, course_type, course_category, custom_title, custom_categories, client_name, location, starts_at, ends_at, status, internal, instance_instructors(role, instructors(name))')
+          .select(CAL_COLS)
           .neq('status', 'cancelled')
       : Promise.resolve({ data: null }),
     admin
@@ -75,6 +82,12 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     // reads it — but it rides along in the round that is already happening
     // rather than costing a trip of its own.
     admin.from('instructors').select('hours_via_admin').eq('profile_id', user.id).maybeSingle(),
+    // The sessions everyone is welcome at, which "My courses" would otherwise
+    // hide from everybody but whoever is teaching that week. "All courses"
+    // already has them in its own read.
+    showAllCourses
+      ? Promise.resolve({ data: null })
+      : admin.from('course_instances').select(CAL_COLS).eq('all_staff', true).neq('status', 'cancelled'),
   ])
 
   if (!['admin', 'instructor'].includes(profile?.role ?? '')) redirect('/dashboard')
@@ -181,10 +194,16 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         (i) =>
           showAsAdmin ||
           assignedIds.has(i.id) ||
+          // Said to be for everyone, which is the one thing that outranks
+          // the rule about internal courses below.
+          i.all_staff ||
           (!i.internal &&
             courseCapabilityCategories(i.course_type, i.custom_categories).some((c) => myCategories.has(c)))
       )
-    : (assignmentRows ?? []).map((a) => a.course_instances as unknown as InstRow)
+    : [
+        ...(assignmentRows ?? []).map((a) => a.course_instances as unknown as InstRow),
+        ...((allStaffRows ?? []) as unknown as InstRow[]).filter((i) => !assignedIds.has(i.id)),
+      ]
   // Chip labels mirror the Google Calendar event titles: name — client —
   // location — crew first names, whoever is running it first.
   const chipCrew = (i: InstRow) =>
@@ -197,11 +216,15 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     .filter((i) => i && i.status !== 'cancelled' && i.starts_at && i.ends_at)
     .map((i) => ({
       id: i.id,
-      label: courseEventTitle(i, chipCrew(i)),
+      label: [startTimeLabel(i.start_time), courseEventTitle(i, chipCrew(i))].filter(Boolean).join(' '),
+      time: startTimeLabel(i.start_time),
       status: i.status,
       starts_at: i.starts_at!,
       ends_at: i.ends_at! >= i.starts_at! ? i.ends_at! : i.starts_at!,
       href: showAsAdmin || assignedIds.has(i.id) ? `/portal/${i.id}` : undefined,
+      // The course page is the crew's; everyone else gets the one thing they
+      // came for.
+      joinHref: i.all_staff && i.video_url ? i.video_url : undefined,
       category: i.course_category ?? null,
       internal: !!i.internal,
       name: courseShortName(i.course_type, i.custom_title),

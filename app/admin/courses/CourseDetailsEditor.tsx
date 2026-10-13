@@ -1,4 +1,4 @@
-import { updateInstanceDetails, addOffDay, removeOffDay } from './actions'
+import { updateInstanceDetails, applySessionToSeries, addOffDay, removeOffDay } from './actions'
 import AutoSaveForm from '@/components/AutoSaveForm'
 import TrashIcon from '@/components/TrashIcon'
 import InfoHint from '@/components/InfoHint'
@@ -40,6 +40,11 @@ export type CourseDetailsRow = {
   ends_at: string | null
   breaks_paid?: boolean | null
   owner_id?: string | null
+  start_time?: string | null
+  end_time?: string | null
+  series_id?: string | null
+  video_url?: string | null
+  all_staff?: boolean | null
 }
 
 // What a course *is*, as opposed to how it runs: the offering, who asked, who
@@ -93,6 +98,12 @@ export default function CourseDetailsEditor({
           defaultCustomTitle={course.custom_title ?? ''}
           defaultCustomCategories={course.custom_categories ?? []}
           defaultInternal={internal}
+          session="edit"
+          defaultStartTime={course.start_time ?? ''}
+          defaultEndTime={course.end_time ?? ''}
+          applyToSeries={course.series_id ? applySessionToSeries.bind(null, instanceId) : undefined}
+          defaultVideoUrl={course.video_url ?? ''}
+          defaultAllStaff={Boolean(course.all_staff)}
         />
         <div>
           <label className="block text-xs text-zinc-400 mb-1">Status</label>

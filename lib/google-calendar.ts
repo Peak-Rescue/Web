@@ -14,7 +14,7 @@
 // sync target — the import tool only retires legacy course events from it.
 
 import { createSign } from 'crypto'
-import { todayHere } from '@/lib/course-clock'
+import { HOME_ZONE, todayHere } from '@/lib/course-clock'
 import { crewOrder } from '@/lib/staffing-roles'
 import { type createAdminClient } from '@/lib/supabase/admin'
 import { courseEventTitle, courseShortName } from '@/lib/courses'
@@ -134,13 +134,16 @@ type CourseRow = {
   ends_at: string | null
   status: string
   internal?: boolean | null
+  start_time?: string | null
+  end_time?: string | null
+  video_url?: string | null
   notes: string | null
   gcal_event_id: string | null
   gcal_calendar_id: string | null
 }
 
 const COURSE_COLS =
-  'id, ref_number, course_type, course_category, custom_title, client_name, location, starts_at, ends_at, status, internal, notes, gcal_event_id, gcal_calendar_id'
+  'id, ref_number, course_type, course_category, custom_title, client_name, location, starts_at, ends_at, status, internal, start_time, end_time, video_url, notes, gcal_event_id, gcal_calendar_id'
 
 function targetCalendar(c: CourseRow): string | null {
   if (c.status === 'cancelled' || !c.starts_at) return null
@@ -158,6 +161,24 @@ function targetCalendar(c: CourseRow): string | null {
 
 type CrewMember = { name: string; email: string | null; invite: boolean }
 
+// A one-day course with a start time is an hour on the calendar rather than a
+// band across the top of the day — the weekly staff session. Anything longer
+// stays all-day whatever time it carries: "0900" on a five-day course says when
+// to turn up on day one, not that the course is five days of one hour.
+function timedSpan(c: CourseRow): { start: string; end: string } | null {
+  const begins = /^(\d{2}):(\d{2})/.exec(c.start_time ?? '')
+  if (!begins || !c.starts_at || (c.ends_at && c.ends_at !== c.starts_at)) return null
+  const from = Number(begins[1]) * 60 + Number(begins[2])
+  const ends = /^(\d{2}):(\d{2})/.exec(c.end_time ?? '')
+  const asked = ends ? Number(ends[1]) * 60 + Number(ends[2]) : 0
+  // An end at or before the start is a typo, not a session that runs
+  // backwards; it gets the hour a missing one gets. Held inside the day.
+  const to = Math.min(asked > from ? asked : from + 60, 23 * 60 + 59)
+  const at = (mins: number) =>
+    `${c.starts_at}T${String(Math.floor(mins / 60)).padStart(2, '0')}:${String(mins % 60).padStart(2, '0')}:00`
+  return { start: at(from), end: at(to) }
+}
+
 function buildEvent(c: CourseRow, crew: CrewMember[]) {
   const ref = `PR-${String(c.ref_number).padStart(4, '0')}`
   // Calendar events are shared with people outside this dev environment, so the
@@ -168,6 +189,7 @@ function buildEvent(c: CourseRow, crew: CrewMember[]) {
   const endExclusive = new Date(Date.parse(c.ends_at ?? c.starts_at!) + 86_400_000)
     .toISOString()
     .slice(0, 10)
+  const timed = timedSpan(c)
   return {
     // crew arrives lead-first; first names match the team's long-standing
     // manual event convention.
@@ -177,13 +199,24 @@ function buildEvent(c: CourseRow, crew: CrewMember[]) {
     // Course notes lead; the footer's "managed by the Peak Rescue portal"
     // marker must stay — the import tool uses it to recognize synced events.
     description: [
+      c.video_url ? `Join: ${c.video_url}` : null,
       c.notes?.trim() || null,
       [`${ref} · managed by the Peak Rescue portal`, `${siteUrl}/portal/${c.id}`].join('\n'),
     ]
       .filter(Boolean)
       .join('\n\n'),
-    start: { date: c.starts_at },
-    end: { date: endExclusive },
+    // Each shape names the other's fields as null. A PATCH merges, so an
+    // event changing from all-day to timed would otherwise carry both a date
+    // and a dateTime, which Google refuses.
+    ...(timed
+      ? {
+          start: { dateTime: timed.start, timeZone: HOME_ZONE, date: null },
+          end: { dateTime: timed.end, timeZone: HOME_ZONE, date: null },
+        }
+      : {
+          start: { date: c.starts_at, dateTime: null, timeZone: null },
+          end: { date: endExclusive, dateTime: null, timeZone: null },
+        }),
     // Sent on every patch so a trashed event is revived in place rather than
     // replaced. Google keeps a deleted event, marked cancelled, and answers
     // GET and PATCH for it with a cheerful 200 — so without this the portal

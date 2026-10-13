@@ -14,6 +14,10 @@ export type CalendarCourse = {
   href?: string // absent → rendered as a non-clickable chip
   category?: string | null // course_category; 'tactical' → military, anything else → civilian
   internal?: boolean // instructor development / CE — ours, no client
+  time?: string | null // "0900", office clock — a staff session; absent on an all-day course
+  // Where a chip with no href goes instead: the call-in link of an all-staff
+  // session, for the people who see it without being on its crew.
+  joinHref?: string
   // Optional structured fields for the hover tooltip (falls back to label).
   name?: string
   client?: string | null

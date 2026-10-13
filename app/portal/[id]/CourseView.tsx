@@ -31,7 +31,7 @@ import { unseenSections, lastPushToStudents, behindOnPush, type Push } from '@/l
 import { GEAR_ENTRIES_SELECT, KIT_LABEL } from '@/lib/gear'
 import { courseCapabilityCategories } from '@/lib/capabilities'
 import { GEAR_ENTRY_COLUMNS, gearLabel, gearQuantity, isChoice, placeSets, productName } from '@/lib/gear'
-import { courseDisplayName, computeBlocks, courseDates, courseEventTitle, isJob, workNoun, WorkNoun } from '@/lib/courses'
+import { courseDisplayName, computeBlocks, courseDates, courseEventTitle, isJob, startTimeLabel, workNoun, WorkNoun } from '@/lib/courses'
 import { crewOrder, crewPlanOf, crewPlanSummary } from '@/lib/staffing-roles'
 import CourseTasksPanel, { type CourseTask, type TaskPerson } from '@/components/CourseTasksPanel'
 import PdfLink from '@/components/PdfLink'
@@ -355,7 +355,7 @@ export default async function CourseView({
   const [{ data: inst }, { data: offDays }, { data: modules }, { data: instructors }, taskRows, { data: peopleRows }, { data: templateRows }, { data: courseDocRows }, { data: taskDocRows }, { data: mapRows }, { data: resourceRows }, { data: linkRows }, { data: updateRows }, { data: enrollmentRows }, { data: messageRows }] =
     await Promise.all([
       admin.from('course_instances')
-        .select('course_type, custom_title, status, location, client_name, notes, ref_number, starts_at, ends_at, meeting_date, meeting_announced_dates, meeting_point, meeting_time, meeting_links, meeting_attachments, intro, custom_categories, contacts, max_students, instructor_slots, lead_slots, assist_slots, shadow_slots, course_category, internal, invite_token, invite_expires_at, hero_image, hero_position, hero_scale, venue_id, region, waiver_template_id, waiver_token, waiver_token_expires_at, breaks_paid, owner_id, billing_quote_id')
+        .select('course_type, custom_title, status, location, client_name, notes, ref_number, starts_at, ends_at, meeting_date, meeting_announced_dates, meeting_point, meeting_time, meeting_links, meeting_attachments, intro, custom_categories, contacts, max_students, instructor_slots, lead_slots, assist_slots, shadow_slots, course_category, internal, invite_token, invite_expires_at, hero_image, hero_position, hero_scale, venue_id, region, waiver_template_id, waiver_token, waiver_token_expires_at, breaks_paid, owner_id, billing_quote_id, start_time, end_time, video_url, all_staff, series_id')
         .eq('id', id)
         .single(),
       admin.from('instance_off_days')
@@ -1499,6 +1499,21 @@ export default async function CourseView({
               {inst.location && blocks.length > 0 && <span className="text-zinc-700">·</span>}
               {blocks.length > 0 && (
                 <span>{fmtSpan(blocks[0].starts_at, blocks[blocks.length - 1].ends_at)}</span>
+              )}
+            </p>
+          )}
+
+          {/* A staff session's hour and where to call in. Nearly every course
+              has neither and draws nothing here. */}
+          {(startTimeLabel(inst.start_time) || inst.video_url) && (
+            <p className="mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-1 text-sm text-zinc-300">
+              {startTimeLabel(inst.start_time) && (
+                <span>{[startTimeLabel(inst.start_time), startTimeLabel(inst.end_time)].filter(Boolean).join('–')} Mountain</span>
+              )}
+              {inst.video_url && (
+                <a href={inst.video_url} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-white">
+                  Join video
+                </a>
               )}
             </p>
           )}

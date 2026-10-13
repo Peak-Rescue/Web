@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useTransition } from 'react'
 import { COURSE_TYPE_OPTIONS } from '@/lib/courses'
 import { CAPABILITY_META, CAPABILITY_ORDER } from '@/lib/capabilities'
 import InfoHint from '@/components/InfoHint'
@@ -11,17 +11,38 @@ export function CourseTypeSelect({
   defaultCustomTitle = '',
   defaultCustomCategories = [],
   defaultInternal = false,
+  session,
+  defaultStartTime = '',
+  defaultEndTime = '',
+  applyToSeries,
+  defaultVideoUrl = '',
+  defaultAllStaff = false,
 }: {
   defaultCategory?: string
   defaultType?: string
   defaultCustomTitle?: string
   defaultCustomCategories?: string[]
   defaultInternal?: boolean
+  /** Offer what makes an internal course a staff session: a start time, a
+      call-in link, and whether everyone sees it. 'new' also offers to repeat
+      it weekly, which only a form that creates can do. Left out on the import
+      form, whose action reads none of them. */
+  session?: 'new' | 'edit'
+  defaultStartTime?: string
+  defaultEndTime?: string
+  /** Set on a week of a repeating session: copies what is on the form to the
+      weeks still to come, and answers with how many it changed. */
+  applyToSeries?: (formData: FormData) => Promise<number>
+  defaultVideoUrl?: string
+  defaultAllStaff?: boolean
 }) {
   const [category, setCategory] = useState(defaultCategory)
   const [courseType, setCourseType] = useState(defaultType)
   const [internal, setInternal] = useState(defaultInternal)
   const [categories, setCategories] = useState<string[]>(defaultCustomCategories)
+  const [allStaff, setAllStaff] = useState(defaultAllStaff)
+  const [applying, startApplying] = useTransition()
+  const [applied, setApplied] = useState<number | null>(null)
 
   const selectedGroup = COURSE_TYPE_OPTIONS.find(g => g.category === category)
   const isCustom = courseType === 'custom'
@@ -109,6 +130,86 @@ export function CourseTypeSelect({
               />
               Internal — no students
             </label>
+            {internal && session && (
+              <div className="w-full grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 mt-1 border-t border-zinc-700">
+                <label className="sm:col-span-2 flex items-center gap-1.5 text-sm text-zinc-300 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    name="all_staff"
+                    checked={allStaff}
+                    onChange={e => setAllStaff(e.target.checked)}
+                    className="accent-red-600"
+                  />
+                  All staff see it
+                  <InfoHint text="Puts it on every instructor’s calendar without adding them to the crew. For anyone not on the crew, clicking it there opens the video link." />
+                </label>
+                <div>
+                  <label className="block text-xs text-zinc-400 mb-1">Start time (Mountain)</label>
+                  <input
+                    name="start_time"
+                    type="time"
+                    defaultValue={defaultStartTime.slice(0, 5)}
+                    className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-zinc-400 mb-1">
+                    End time
+                    <InfoHint text="How long the Google Calendar event is drawn. Left empty, it is an hour." />
+                  </label>
+                  <input
+                    name="end_time"
+                    type="time"
+                    defaultValue={defaultEndTime.slice(0, 5)}
+                    className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500"
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="block text-xs text-zinc-400 mb-1">Video link</label>
+                  <input
+                    name="video_url"
+                    type="url"
+                    defaultValue={defaultVideoUrl}
+                    placeholder="https://meet.google.com/…"
+                    className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500"
+                  />
+                </div>
+                {applyToSeries && (
+                  <div className="sm:col-span-2 flex items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={applying}
+                      onClick={(e) => {
+                        const form = e.currentTarget.form
+                        if (!form) return
+                        const data = new FormData(form)
+                        startApplying(async () => setApplied(await applyToSeries(data)))
+                      }}
+                      className="px-3 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-white rounded text-xs font-medium transition-colors disabled:opacity-50"
+                    >
+                      {applying ? 'Applying…' : 'Apply to all upcoming weeks'}
+                    </button>
+                    <InfoHint text="Copies the times, the video link, who sees it and the location to every week of this series that has not happened yet. Each week keeps its own name, crew and notes." />
+                    {applied !== null && !applying && (
+                      <span className="text-xs text-zinc-400">{applied === 1 ? '1 week updated' : `${applied} weeks updated`}</span>
+                    )}
+                  </div>
+                )}
+                {session === 'new' && (
+                  <div>
+                    <label className="block text-xs text-zinc-400 mb-1">
+                      Repeats weekly until
+                      <InfoHint text="Makes one course a week, on the same weekday as the start date, up to and including this date. Each is its own course, so a week can be renamed, staffed or cancelled without touching the others." />
+                    </label>
+                    <input
+                      name="repeat_until"
+                      type="date"
+                      className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500"
+                    />
+                  </div>
+                )}
+              </div>
+            )}
             {isCustom && (
               <div className="w-full pt-2 mt-1 border-t border-zinc-700">
                 <p className="text-xs text-zinc-400 mb-2 flex items-center gap-1.5">
@@ -143,7 +244,7 @@ export function CourseTypeSelect({
           </div>
           <p className="text-[11px] text-zinc-500 mt-1">
             {internal
-              ? 'Seen only by the people added to it — anyone can be added.'
+              ? allStaff ? null : 'Seen only by the people added to it — anyone can be added.'
               : 'Instructors with expertise in a checked category see this course in their “All courses” calendar and count as qualified for staffing.'}
           </p>
         </div>

@@ -11,6 +11,7 @@ import { requireAdminUser, requireCourseStaff } from '@/lib/course-access'
 import { sendMail } from '@/lib/mailer'
 import { announcesChanges, emailAdminsNewCourse, notifyRoleChange } from '@/lib/course-notify'
 import { clampOffDays, dayShift, strokeOffDays, type OffSpan } from '@/lib/courses'
+import { todayHere } from '@/lib/course-clock'
 import { assertCustomCourseTagged } from '@/lib/capabilities'
 import { asInstanceRole, type CrewPlan } from '@/lib/staffing-roles'
 
@@ -194,6 +195,33 @@ async function requireItemStaff(itemId: string) {
   return { admin, instanceId: mod.instance_id }
 }
 
+// What makes an internal course a staff session. Read only off an internal
+// course: the fields are not on the form otherwise, and a client course that
+// carried a start time would be drawn with one.
+function sessionFromForm(formData: FormData, internal: boolean) {
+  if (!internal) return { start_time: null, end_time: null, video_url: null, all_staff: false }
+  const time = ((formData.get('start_time') as string) || '').trim()
+  const until = ((formData.get('end_time') as string) || '').trim()
+  const raw = ((formData.get('video_url') as string) || '').trim()
+  // The calendar turns this into a link every instructor can click, so it is
+  // held to being a web address. A pasted "meet.google.com/abc" is the common
+  // case and gets its scheme; anything with another scheme is dropped.
+  const url = /^https?:\/\//i.test(raw) ? raw : /^[\w-]+(\.[\w-]+)+(\/|$)/.test(raw) ? `https://${raw}` : ''
+  return {
+    start_time: /^\d{2}:\d{2}/.test(time) ? time.slice(0, 5) : null,
+    end_time: /^\d{2}:\d{2}/.test(until) ? until.slice(0, 5) : null,
+    video_url: url.slice(0, 500) || null,
+    all_staff: formData.get('all_staff') !== null,
+  }
+}
+
+const addDays = (ymd: string, days: number) =>
+  new Date(Date.parse(`${ymd}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10)
+
+// A year of Wednesdays and some slack. The cap is against a mistyped year in
+// the until field, not against anything anybody would ask for.
+const MAX_REPEATS = 60
+
 export async function createInstance(formData: FormData) {
   const creator = await requireAdmin()
   const admin = createAdminClient()
@@ -214,7 +242,13 @@ export async function createInstance(formData: FormData) {
   const max_students     = formData.get('max_students') ? Number(formData.get('max_students')) : null
   const crewPlan         = crewPlanFromForm(formData)
   const starts_at        = (formData.get('starts_at') as string) || null
-  const ends_at          = (formData.get('ends_at') as string) || null
+  const session          = sessionFromForm(formData, internal)
+  const repeatUntil      = internal ? (formData.get('repeat_until') as string) || null : null
+  if (repeatUntil && !starts_at) throw new Error('A course that repeats needs a start date')
+  // A repeating course with no end date is a one-day one. The calendar draws
+  // nothing for a course without both ends, and a weekly session nobody can
+  // see on the calendar is the one thing this must not make.
+  const ends_at          = (formData.get('ends_at') as string) || (repeatUntil ? starts_at : null)
 
   // A course identical to one made moments ago is a double submit, not a second
   // course. Two MARSOC jungle courses in Oahu on the same dates were created
@@ -249,31 +283,57 @@ export async function createInstance(formData: FormData) {
   assertCustomCourseTagged(course_type, custom_categories, internal)
 
   const displayName = course_type === 'custom' ? (custom_title ?? 'custom') : course_type
-  const slug = await generateSlug([displayName, client_name, location, starts_at])
 
-  const { data, error } = await admin
+  // One course a week rather than one course that recurs: everything else in
+  // the portal — the calendar, staffing, pay, clashes — reads a course as an
+  // unbroken span of days, and a week of a standing class is a thing somebody
+  // will want to rename, staff or cancel on its own.
+  const weeks: number[] = [0]
+  if (repeatUntil && starts_at) {
+    for (let w = 1; w < MAX_REPEATS && addDays(starts_at, w * 7) <= repeatUntil; w++) weeks.push(w)
+  }
+  const series_id = weeks.length > 1 ? crypto.randomUUID() : null
+  const occurrences: { starts_at: string | null; ends_at: string | null; slug: string }[] = []
+  for (const w of weeks) {
+    const start = starts_at && addDays(starts_at, w * 7)
+    occurrences.push({
+      starts_at: start,
+      ends_at: ends_at && addDays(ends_at, w * 7),
+      slug: await generateSlug([displayName, client_name, location, start]),
+    })
+  }
+
+  const { data: made, error } = await admin
     .from('course_instances')
     // Whoever took the call owns it until somebody says otherwise. A default
     // rather than a rule: it is right nearly every time, it is one dropdown to
     // change in Details, and the alternative — every new course landing
     // unassigned — makes the state that means "nobody is driving this" so
     // common that it stops being read.
-    .insert({
+    .insert(occurrences.map((o) => ({
       course_category, course_type, custom_title, custom_categories, status, internal,
-      starts_at, ends_at, location, region, venue_id, client_name, contacts, notes, max_students,
+      location, region, venue_id, client_name, contacts, notes, max_students,
       // The seats are what somebody typed. instructor_slots is not written here
       // or anywhere — the database computes it from these three.
       lead_slots: crewPlan.lead, assist_slots: crewPlan.assist, shadow_slots: crewPlan.shadow,
-      slug, owner_id: creator.id,
-    })
-    .select('id')
-    .single()
+      owner_id: creator.id,
+      ...session, series_id, ...o,
+    })))
+    .select('id, starts_at')
 
   if (error) throw new Error(error.message)
+  const data = [...(made ?? [])].sort((a, b) => (a.starts_at ?? '').localeCompare(b.starts_at ?? ''))[0]
+  if (!data) throw new Error('The course was not created')
 
-  after(() => syncCourseCalendar(admin, data.id))
+  // One after another: twenty-five events at once is a burst Google is
+  // entitled to refuse, and nobody is waiting on this.
+  after(async () => {
+    for (const row of made ?? []) await syncCourseCalendar(admin, row.id)
+  })
   // Every status, tentative included: the crew only hears about a confirmed
-  // course, but a tentative one is precisely what an admin wants early.
+  // course, but a tentative one is precisely what an admin wants early. Once
+  // for a series, about its first week — the same news twenty-five times is
+  // not news.
   after(() => emailAdminsNewCourse(admin, data.id, creator.id))
 
   redirect(`/portal/${data.id}`)
@@ -336,6 +396,14 @@ export async function updateInstanceDetails(id: string, formData: FormData) {
     .update({
       ...(formData.has('course_type') ? { course_category, course_type, custom_title, custom_categories } : {}),
       ...(formData.has('status') ? { status, internal } : {}),
+      // The session fields are only on the form while Internal is ticked.
+      // Carried, they are written; a course that stops being internal gives
+      // them up, or it would go on being drawn at 0900 on everyone's calendar.
+      ...(formData.has('video_url')
+        ? sessionFromForm(formData, internal)
+        : formData.has('status') && !internal
+          ? sessionFromForm(formData, false)
+          : {}),
       ...(formData.has('location') ? { location } : {}),
       ...(formData.has('region') ? { region } : {}),
       ...(formData.has('venue_id') ? { venue_id } : {}),
@@ -389,6 +457,44 @@ export async function updateInstanceDetails(id: string, formData: FormData) {
   revalidatePath('/admin/courses')
   revalidatePath(`/portal/${id}`)
   revalidatePath('/admin')
+}
+
+// Edit all. The weeks of a repeating session are separate courses, which is
+// what lets one be renamed or cancelled alone — and what made moving the hour
+// or replacing the link twenty-five edits.
+//
+// Takes the values off the form rather than off the saved row: the details
+// form auto-saves on a delay, so the row can be a second behind what is on
+// screen, and copying a stale link to every week is worse than copying none.
+// Only what is the same every week travels. A week's name and crew are that
+// week's, and a week that has already happened is left as it was.
+export async function applySessionToSeries(id: string, formData: FormData): Promise<number> {
+  await requireAdmin()
+  const admin = createAdminClient()
+  const { data: me } = await admin.from('course_instances').select('series_id').eq('id', id).single()
+  if (!me?.series_id) return 0
+
+  const { data: rows, error } = await admin
+    .from('course_instances')
+    .update({
+      ...sessionFromForm(formData, true),
+      ...(formData.has('location') ? { location: (formData.get('location') as string) || null } : {}),
+    })
+    .eq('series_id', me.series_id)
+    .eq('internal', true)
+    .neq('id', id)
+    .neq('status', 'cancelled')
+    .gte('ends_at', todayHere())
+    .select('id')
+  if (error) throw new Error(error.message)
+
+  after(async () => {
+    for (const row of rows ?? []) await syncCourseCalendar(admin, row.id)
+  })
+  for (const row of rows ?? []) revalidatePath(`/portal/${row.id}`)
+  revalidatePath('/admin/courses')
+  revalidatePath('/admin')
+  return rows?.length ?? 0
 }
 
 // Moving a course along, from the list, without opening the details form.

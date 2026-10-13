@@ -6,7 +6,7 @@ import { createInstance } from './actions'
 import CreateCourseButton from './CreateCourseButton'
 import CancelNewCourseButton from './CancelNewCourseButton'
 import { CourseTypeSelect } from './CourseTypeSelect'
-import { courseShortName, courseEventTitle, crewFirstNames } from '@/lib/courses'
+import { courseShortName, courseEventTitle, crewFirstNames, startTimeLabel } from '@/lib/courses'
 import CourseCalendar, { type CalendarCourse } from '@/components/CourseCalendar'
 import NewCourseDates from '@/components/NewCourseDates'
 import CourseContactsEditor from '@/components/CourseContactsEditor'
@@ -41,7 +41,7 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
     admin
       .from('course_instances')
       .select(`
-        id, ref_number, slug, course_type, course_category, custom_title, status, location, client_name, contacts, owner_id, invite_token, invite_expires_at, starts_at, ends_at, max_students, instructor_slots, lead_slots, assist_slots, shadow_slots, internal,
+        id, ref_number, slug, course_type, course_category, custom_title, status, location, client_name, contacts, owner_id, invite_token, invite_expires_at, starts_at, ends_at, max_students, instructor_slots, lead_slots, assist_slots, shadow_slots, internal, start_time,
         instance_instructors(count),
         crew:instance_instructors(instructor_id, role, in_charge, instructors(name)),
         enrollments(count),
@@ -189,7 +189,7 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
             </div>
           </summary>
           <form action={createInstance} className="mt-4 p-6 bg-zinc-900 rounded-lg border border-zinc-800 grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <CourseTypeSelect />
+            <CourseTypeSelect session="new" />
 
             <div>
               <label className="block text-xs text-zinc-400 mb-1">Status</label>
@@ -272,10 +272,12 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
                       .filter((r) => r.instructors)
                       .map((r) => ({ role: r.role, name: r.instructors!.name }))
                   )
+                  const time = startTimeLabel(i.start_time)
                   return {
                     id: i.id,
                     // Mirrors the Google Calendar event title convention.
-                    label: courseEventTitle(i, crew),
+                    label: [time, courseEventTitle(i, crew)].filter(Boolean).join(' '),
+                    time,
                     status: i.status,
                     starts_at: i.starts_at!,
                     ends_at: i.ends_at! >= i.starts_at! ? i.ends_at! : i.starts_at!,

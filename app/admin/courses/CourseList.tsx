@@ -48,6 +48,7 @@ export type Instance = {
   invite_token?: string | null
   invite_expires_at?: string | null
   internal?: boolean | null
+  start_time?: string | null
   instance_instructors: { count: number }[]
   crew?: { instructor_id: string; role: string; in_charge?: boolean | null; instructors: { name: string } | null }[] | null
   enrollments: { count: number }[]

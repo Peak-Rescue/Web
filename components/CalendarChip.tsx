@@ -69,7 +69,10 @@ export default function CalendarChip({
       >
         <div className="bg-zinc-900 border border-zinc-700 rounded-lg shadow-xl px-3 py-2 text-xs w-max max-w-64 text-left">
           <p className="font-semibold text-white leading-snug">{course.name ?? course.label}</p>
-          <p className="text-zinc-400 mt-0.5">{fmtRange(course.starts_at, course.ends_at)}</p>
+          <p className="text-zinc-400 mt-0.5">
+            {fmtRange(course.starts_at, course.ends_at)}
+            {course.time && ` · ${course.time} MT`}
+          </p>
           {course.client && <p className="text-zinc-300 mt-1">{course.client}</p>}
           {course.location && <p className="text-zinc-400">{course.location}</p>}
           {(course.crew?.length ?? 0) > 0 && (
@@ -86,6 +89,9 @@ export default function CalendarChip({
           {course.internal && (
             <p className="text-zinc-500 mt-0.5">No students</p>
           )}
+          {!course.href && course.joinHref && (
+            <p className="text-zinc-300 mt-1.5">Click to join the video call</p>
+          )}
         </div>
       </div>,
       document.body
@@ -96,6 +102,11 @@ export default function CalendarChip({
       {course.label}
       {tooltip}
     </Link>
+  ) : course.joinHref ? (
+    <a key={course.id} href={course.joinHref} target="_blank" rel="noopener noreferrer" {...chipProps}>
+      {course.label}
+      {tooltip}
+    </a>
   ) : (
     <span key={course.id} {...chipProps}>
       {course.label}

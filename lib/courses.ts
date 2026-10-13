@@ -277,6 +277,14 @@ export function courseEventTitle(
     .join(' — ')
 }
 
+// A course's start time the way the team writes one — "0900", as on a site's
+// usual meeting time. Postgres hands a `time` back as "09:00:00". Null for the
+// all-day course nearly every course is.
+export function startTimeLabel(t: string | null | undefined): string | null {
+  const m = /^(\d{2}):(\d{2})/.exec(t ?? '')
+  return m ? `${m[1]}${m[2]}` : null
+}
+
 // Whoever is running it first, first names only — the team's long-standing
 // manual calendar-event convention. It used to sort on lead wage, which was the
 // same list only while a course had one lead.
