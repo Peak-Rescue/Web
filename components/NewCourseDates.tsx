@@ -76,7 +76,9 @@ export default function NewCourseDates({
         <div className="sm:col-span-2 -mt-2">
           <CourseDatePainter
             startsAt={start}
-            endsAt={end}
+            // One day until a second date says otherwise, which is what the
+            // form makes of it on submit.
+            endsAt={end ?? start}
             today={today}
             others={others}
             onChange={(s, e) => {

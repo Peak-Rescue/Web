@@ -245,10 +245,10 @@ export async function createInstance(formData: FormData) {
   const session          = sessionFromForm(formData, internal)
   const repeatUntil      = internal ? (formData.get('repeat_until') as string) || null : null
   if (repeatUntil && !starts_at) throw new Error('A course that repeats needs a start date')
-  // A repeating course with no end date is a one-day one. The calendar draws
-  // nothing for a course without both ends, and a weekly session nobody can
-  // see on the calendar is the one thing this must not make.
-  const ends_at          = (formData.get('ends_at') as string) || (repeatUntil ? starts_at : null)
+  // A start with no end is a one-day course. The calendars draw nothing for a
+  // course without both ends, so leaving the second box empty used to make a
+  // course that was on the books and on no calendar.
+  const ends_at          = (formData.get('ends_at') as string) || starts_at
 
   // A course identical to one made moments ago is a double submit, not a second
   // course. Two MARSOC jungle courses in Oahu on the same dates were created
