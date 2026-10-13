@@ -778,6 +778,24 @@ export async function updateQuote(instanceId: string, quoteId: string, formData:
   revalidatePath(`/admin/courses/${instanceId}`)
 }
 
+// A quote going out ends a choice of billing quote made before it existed.
+//
+// The choice (migration 225) was a judgment among the quotes on the table at
+// the time. A new one sent afterwards is the reason the default rule exists —
+// the earlier answers stopped being true — so the course goes back to
+// following the last quote sent, and anybody who still means the older one
+// says so again with the new one in front of them. Left sticky, the page
+// would go on billing Q1 with nothing on screen to say Q3 had gone out.
+//
+// Sending the chosen quote itself changes nothing: that is the same answer.
+async function releaseBillingChoice(admin: Awaited<ReturnType<typeof requireAdmin>>, instanceId: string, sentQuoteId: string) {
+  await admin
+    .from('course_instances')
+    .update({ billing_quote_id: null })
+    .eq('id', instanceId)
+    .neq('billing_quote_id', sentQuoteId)
+}
+
 // Manual transitions for now (the send/accept flow automates these later).
 // Sent syncs the course to 'quoted'; accepted syncs it to 'confirmed'.
 // Accepting a multi-option quote manually (client committed by phone/email)
@@ -814,6 +832,8 @@ export async function setQuoteStatus(instanceId: string, quoteId: string, status
 
   const { error } = await admin.from('course_quotes').update(patch).eq('id', quoteId).eq('instance_id', instanceId)
   if (error) throw new Error(error.message)
+
+  if (status === 'sent') await releaseBillingChoice(admin, instanceId, quoteId)
 
   const { data: inst } = await admin.from('course_instances').select('status').eq('id', instanceId).single()
   if (status === 'sent' && inst?.status === 'tentative') {
@@ -1006,6 +1026,7 @@ export async function sendQuote(instanceId: string, quoteId: string, formData?: 
   if (sendError) throw new Error(`Email failed: ${sendError.message}`)
 
   await admin.from('course_quotes').update({ status: 'sent', sent_at: new Date().toISOString() }).eq('id', quoteId)
+  await releaseBillingChoice(admin, instanceId, quoteId)
   const { data: cur } = await admin.from('course_instances').select('status').eq('id', instanceId).single()
   if (cur?.status === 'tentative') {
     await admin.from('course_instances').update({ status: 'quoted' }).eq('id', instanceId)

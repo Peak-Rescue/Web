@@ -4,6 +4,7 @@ import { round2 } from '@/lib/expenses'
 import { billTo, parseContacts } from '@/lib/contacts'
 import { courseShortName } from '@/lib/courses'
 import { describeForBiller, numberSoFar, type ChainLink, type InvoiceRequest, type InvoiceStatus } from '@/lib/billing'
+import { quoteNumber } from '@/lib/quotes'
 
 // The handoff to Harken, worked out once.
 //
@@ -53,19 +54,80 @@ export function billingState(requests: { status: InvoiceStatus }[]): BillingStat
  *  holding a quote with no figure on it yet, and the honest answer is the COA
  *  underneath, not the superseded price.
  *
+ *  All of which is the default and only the default. A quote goes back and
+ *  forth between options, and the one a course ends up billed against is
+ *  sometimes the accepted one behind a re-quote that was never declined — no
+ *  status says so. `chosenId` is somebody saying so (see migration 225), and
+ *  it wins for as long as it names a quote that can be billed at all. A choice
+ *  since declined or archived is ignored rather than obeyed.
+ *
  *  Quotes come in newest first.
  */
-export function pickBillableQuote<T extends { status: string; total: number; archived_at: string | null }>(
-  quotesNewestFirst: T[]
-): T | null {
+export function pickBillableQuote<
+  T extends { id?: string; status: string; total: number; archived_at: string | null }
+>(quotesNewestFirst: T[], chosenId?: string | null): T | null {
+  const chosen = chosenId ? quotesNewestFirst.find((q) => q.id === chosenId && canBill(q)) : undefined
+  if (chosen) return chosen
   const live = quotesNewestFirst.filter((q) => !q.archived_at)
   const issued = live.find((q) => q.status === 'accepted' || q.status === 'sent')
   if (issued) return issued.total > 0 ? issued : null
   return live.find((q) => q.status === 'draft' && q.total > 0) ?? null
 }
 
+// Anything with a figure that was not refused: a declined or expired number
+// is one the client turned down, an archived quote has had its COAs set
+// aside, and a quote with no total has nothing to bill.
+const canBill = (q: { status: string; total: number; archived_at: string | null }) =>
+  !q.archived_at && q.total > 0 && ['accepted', 'sent', 'draft'].includes(q.status)
+
+/** A quote the handoff can be raised against, as the send form lists it. */
+export type BillableQuoteOption = { id: string; number: string; seq: number; total: number; status: string }
+
+/** Every quote a handoff could be stamped with, newest first.
+ *
+ *  `pickBillableQuote` is the default and only the default. A course whose
+ *  quote went back and forth between options has no rule that always lands on
+ *  the one being billed — the client can be holding a re-quote for a second
+ *  course while the first, accepted one is the course that ran — so the pick
+ *  is offered and the person sending says which.
+ */
+export function billableQuoteOptions<
+  T extends { id: string; quote_seq: number; status: string; total: number; archived_at: string | null }
+>(quotesNewestFirst: T[], refNumber: number): BillableQuoteOption[] {
+  return quotesNewestFirst
+    .filter(canBill)
+    .map((q) => ({
+      id: q.id,
+      number: quoteNumber(refNumber, q.quote_seq),
+      seq: q.quote_seq,
+      total: q.total,
+      status: q.status,
+    }))
+}
+
+/** The quote a handoff is stamped with, given what the sender chose.
+ *
+ *  `undefined` is a form that never asked — a tab left open across a deploy —
+ *  and gets the course's own pick, which is what it would have got before.
+ *  `null` is somebody saying no quote. An id that is not one of this course's
+ *  billable quotes is refused rather than swapped for the default: the screen
+ *  showed one number and the request would carry another.
+ */
+export function resolveBilledQuote<
+  T extends { id: string; quote_seq: number; status: string; total: number; archived_at: string | null }
+>(
+  quotesNewestFirst: T[],
+  chosenId: string | null | undefined,
+  coursePick?: string | null
+): { ok: true; quote: T | null } | { ok: false } {
+  if (chosenId === undefined) return { ok: true, quote: pickBillableQuote(quotesNewestFirst, coursePick) }
+  if (chosenId === null) return { ok: true, quote: null }
+  const quote = quotesNewestFirst.find((q) => q.id === chosenId && canBill(q))
+  return quote ? { ok: true, quote } : { ok: false }
+}
+
 /** The COA this course would be billed from: the one behind the quote that
- *  would be billed, else the one the latest quote was priced from, else the
+ *  would be billed — chosen or picked — else the one the latest quote was priced from, else the
  *  first live one. It follows `pickBillableQuote` rather than the accepted
  *  quote directly, so a re-quote moves the money and the costs underneath it
  *  together. A course with two live COAs and no quote has no right answer,
@@ -87,6 +149,8 @@ export type BillingPanelData = {
   requests: InvoiceRequest[]
   billTo: { name: string; email: string | null; tagged: boolean } | null
   suggested: ChainLink | null
+  quotes: BillableQuoteOption[]
+  quoteId: string | null
   forWhat: string
   recipients: { id: string; name: string }[]
 }
@@ -99,7 +163,7 @@ export async function loadBillingPanel(
     await Promise.all([
       admin
         .from('course_instances')
-        .select('ref_number, course_type, custom_title, client_name, contacts, starts_at, ends_at')
+        .select('ref_number, course_type, custom_title, client_name, contacts, starts_at, ends_at, billing_quote_id')
         .eq('id', instanceId)
         .single(),
       admin
@@ -127,8 +191,13 @@ export async function loadBillingPanel(
     amount_received: r.amount_received === null || r.amount_received === undefined ? null : Number(r.amount_received),
   })) as InvoiceRequest[]
 
-  const quotes = (quoteRows ?? []).map((q) => ({ ...q, total: Number(q.total ?? 0) }))
-  const quote = pickBillableQuote(quotes)
+  const quotes = (quoteRows ?? []).map((q) => ({
+    ...q,
+    id: q.id as string,
+    quote_seq: q.quote_seq as number,
+    total: Number(q.total ?? 0),
+  }))
+  const quote = pickBillableQuote(quotes, inst.billing_quote_id as string | null)
 
   const liveCoas = (coaRows ?? [])
     .filter((e) => !e.archived_at)
@@ -163,6 +232,8 @@ export async function loadBillingPanel(
           }
         : null,
     }),
+    quotes: billableQuoteOptions(quotes, inst.ref_number as number),
+    quoteId: quote?.id ?? null,
     forWhat: describeForBiller({
       refNumber: inst.ref_number as number,
       courseName: courseShortName((inst.course_type as string) ?? 'custom', null),

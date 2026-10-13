@@ -7,7 +7,7 @@ import { parseContacts, billTo } from '@/lib/contacts'
 import { courseShortName } from '@/lib/courses'
 import { chooseRecipients, describeForBiller, parseMoney } from '@/lib/billing'
 import { quoteNumber } from '@/lib/quotes'
-import { pickBillableQuote } from '@/lib/billing-handoff'
+import { pickBillableQuote, resolveBilledQuote } from '@/lib/billing-handoff'
 import { fmtMoney } from '@/lib/expenses'
 import { sendMail } from '@/lib/mailer'
 
@@ -44,6 +44,10 @@ export async function sendInvoiceRequest(
         — it is a list of what Harken has to do, not a per-person inbox — so
         this decides who is told, not who can see it. */
     recipientIds?: string[]
+    /** The quote this request is raised against, as chosen on the form. Null
+        is no quote at all; absent is a form that never asked, which gets the
+        default pick. */
+    quoteId?: string | null
   }
 ): Promise<Result> {
   const { user, admin } = await requireAdminUser()
@@ -51,7 +55,7 @@ export async function sendInvoiceRequest(
   const [{ data: inst }, { data: quotes }, { data: recipients }] = await Promise.all([
     admin
       .from('course_instances')
-      .select('ref_number, course_type, custom_title, client_name, starts_at, ends_at, contacts')
+      .select('ref_number, course_type, custom_title, client_name, starts_at, ends_at, contacts, billing_quote_id')
       .eq('id', instanceId)
       .maybeSingle(),
     admin
@@ -97,16 +101,24 @@ export async function sendInvoiceRequest(
   // from the first one. Null when no quote went out through the portal, which
   // the biller's row reads as "no quote number" rather than inventing one.
   //
-  // The last quote they received, not the last one they accepted. This used to
-  // ask the database for accepted quotes and take the newest, which on a
-  // re-quoted course stamped Q2 onto a request raised from Q3's figure — the
-  // client reconciling against a document we had already replaced. The same
-  // pick the page made the suggestion from, so the stamp and the number on
-  // screen cannot disagree.
-  const billable = pickBillableQuote(
-    (quotes ?? []).map((q) => ({ ...q, total: Number(q.total ?? 0) }))
+  // Whichever quote the sender chose. The form offers the last one the client
+  // received and lets that be overruled, because a course re-quoted back and
+  // forth has no rule that always names the one being billed. Resolved here
+  // against the course's own quotes, so the stamp is the number the screen
+  // showed or the send is refused.
+  const resolved = resolveBilledQuote(
+    (quotes ?? []).map((q) => ({
+      ...q,
+      id: q.id as string,
+      quote_seq: q.quote_seq as number,
+      total: Number(q.total ?? 0),
+    })),
+    input.quoteId,
+    inst.billing_quote_id as string | null
   )
-  const qNum = billable ? quoteNumber(inst.ref_number, billable.quote_seq as number) : null
+  if (!resolved.ok) return { ok: false, error: 'That quote can no longer be billed — reload and choose again' }
+  const billable = resolved.quote
+  const qNum = billable ? quoteNumber(inst.ref_number, billable.quote_seq) : null
 
   const { error } = await admin.from('invoice_requests').insert({
     instance_id: instanceId,
@@ -167,6 +179,43 @@ export async function sendInvoiceRequest(
 
   revalidatePath(`/portal/${instanceId}`)
   revalidatePath('/admin/billing')
+  return { ok: true }
+}
+
+/** Says which quote this course is billed against.
+
+    Written on the course rather than kept on the form, because it is not only
+    the request that reads it: the figure offered to "what we billed" and the
+    COA the actuals start from follow the same quote, and a choice that moved
+    one of them and not the others is two screens disagreeing about what the
+    course cost.
+
+    Choosing the quote the default would have picked anyway stores nothing.
+    That keeps "nobody has said" meaning what it says, so a later re-quote
+    still takes over on a course where nobody ever overruled the rule. */
+export async function chooseBillingQuote(instanceId: string, quoteId: string): Promise<Result> {
+  const { admin } = await requireAdminUser()
+  const { data: rows } = await admin
+    .from('course_quotes')
+    .select('id, quote_seq, total, status, archived_at')
+    .eq('instance_id', instanceId)
+    .order('quote_seq', { ascending: false })
+  const quotes = (rows ?? []).map((q) => ({
+    ...q,
+    id: q.id as string,
+    quote_seq: q.quote_seq as number,
+    total: Number(q.total ?? 0),
+  }))
+  const resolved = resolveBilledQuote(quotes, quoteId)
+  if (!resolved.ok) return { ok: false, error: 'That quote can no longer be billed — reload and choose again' }
+
+  const { error } = await admin
+    .from('course_instances')
+    .update({ billing_quote_id: pickBillableQuote(quotes)?.id === quoteId ? null : quoteId })
+    .eq('id', instanceId)
+  if (error) return { ok: false, error: 'Could not save the quote — please try again' }
+
+  revalidatePath(`/portal/${instanceId}`)
   return { ok: true }
 }
 

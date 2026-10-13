@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { chooseRecipients, numberSoFar } from '@/lib/billing'
-import { pickBillableQuote } from '@/lib/billing-handoff'
+import { billableQuoteOptions, pickBillableQuote, resolveBilledQuote } from '@/lib/billing-handoff'
 
 const billed = { total: 13200, count: 1 }
 const quote = { seq: 2, total: 12800, status: 'accepted' }
@@ -145,5 +145,48 @@ describe('which quote a course is billed against', () => {
 
   it('has nothing to offer on a course booked with no quote', () => {
     expect(pickBillableQuote([])).toBeNull()
+  })
+})
+
+describe('choosing the quote a handoff is stamped with', () => {
+  const row = (id: string, quote_seq: number, status: string, total: number, archived_at: string | null = null) => ({
+    id, quote_seq, status, total, archived_at,
+  })
+  // PR-0059: Q1 accepted, then a re-quote sent that is not the course we ran.
+  const quotes = [row('q2', 2, 'sent', 49660), row('q1', 1, 'accepted', 24830)]
+
+  it('offers every quote with a figure that was not refused, newest first', () => {
+    const all = [row('q4', 4, 'declined', 100), row('q3', 3, 'sent', 0), row('qa', 5, 'sent', 90, '2026-01-01'), ...quotes]
+    expect(billableQuoteOptions(all, 59).map((o) => o.number)).toEqual(['PR-0059-Q2', 'PR-0059-Q1'])
+  })
+
+  it('lets the sender reach back past a re-quote to the accepted one', () => {
+    expect(resolveBilledQuote(quotes, 'q1')).toEqual({ ok: true, quote: quotes[1] })
+  })
+
+  it('falls back to the default pick for a form that never asked', () => {
+    expect(resolveBilledQuote(quotes, undefined)).toEqual({ ok: true, quote: quotes[0] })
+  })
+
+  it('stamps no quote when the sender says none', () => {
+    expect(resolveBilledQuote(quotes, null)).toEqual({ ok: true, quote: null })
+  })
+
+  it('refuses a quote that is not billable rather than swapping in another', () => {
+    expect(resolveBilledQuote([row('q9', 9, 'declined', 100), ...quotes], 'q9')).toEqual({ ok: false })
+    expect(resolveBilledQuote(quotes, 'someone-elses')).toEqual({ ok: false })
+  })
+
+  it('moves the whole pick to the chosen quote, not only the request', () => {
+    expect(pickBillableQuote(quotes, 'q1')).toBe(quotes[1])
+  })
+
+  it('goes back to the default when the chosen quote is later refused', () => {
+    const refused = [quotes[0], row('q1', 1, 'declined', 24830)]
+    expect(pickBillableQuote(refused, 'q1')).toBe(refused[0])
+  })
+
+  it('sends an old tab against the quote the course was set to', () => {
+    expect(resolveBilledQuote(quotes, undefined, 'q1')).toEqual({ ok: true, quote: quotes[1] })
   })
 })

@@ -19,23 +19,26 @@ export async function actualsPdfResponse(instanceId: string): Promise<Response> 
   const [{ data: inst }, actuals, { data: quoteRows }] = await Promise.all([
     admin
       .from('course_instances')
-      .select('ref_number, course_type, custom_title, client_name, starts_at, ends_at, location, status')
+      .select('ref_number, course_type, custom_title, client_name, starts_at, ends_at, location, billing_quote_id, status')
       .eq('id', instanceId)
       .maybeSingle(),
     loadActuals(admin, instanceId),
     admin
       .from('course_quotes')
-      .select('quote_seq, total, status, archived_at')
+      .select('id, quote_seq, total, status, archived_at')
       .eq('instance_id', instanceId)
       .order('quote_seq', { ascending: false }),
   ])
   if (!inst) return new Response('Not found', { status: 404 })
 
-  // The accepted quote, and only while it is still the one the client is
-  // holding. A re-quote sent after it supersedes it — see pickBillableQuote —
-  // and a superseded figure printed beside the actuals invites a client to
-  // reconcile against a document we replaced.
-  const billable = pickBillableQuote((quoteRows ?? []).map((q) => ({ ...q, total: Number(q.total ?? 0) })))
+  // The accepted quote, and only while it is the one this course is billed
+  // against. A re-quote sent after it supersedes it unless somebody chose
+  // otherwise — see pickBillableQuote — and a superseded figure printed beside
+  // the actuals invites a client to reconcile against a document we replaced.
+  const billable = pickBillableQuote(
+    (quoteRows ?? []).map((q) => ({ ...q, id: q.id as string, total: Number(q.total ?? 0) })),
+    inst.billing_quote_id as string | null
+  )
   const accepted = billable?.status === 'accepted' ? billable : null
 
   const bytes = await generateActualsPdf({

@@ -4,7 +4,7 @@ import { courseShortName, courseDayCounts } from '@/lib/courses'
 import { coaPrice, guessSeedQty, wantsSeedLine, coaSpan, coaHasOwnSpan, DEFAULT_MARGIN } from '@/lib/estimates'
 import { type OptionRelation } from '@/lib/quotes'
 import { describeForBiller, numberSoFar } from '@/lib/billing'
-import { billingState, pickBillableQuote, pickSeedCoa } from '@/lib/billing-handoff'
+import { billableQuoteOptions, billingState, pickBillableQuote, pickSeedCoa } from '@/lib/billing-handoff'
 import { QUOTE_ROW_COLUMNS } from '@/lib/quotes'
 import { primaryContactEmail, ccEmailOptions, billTo, type CoursePOC } from '@/lib/contacts'
 import EstimatePanel, { type PricingRate } from '@/components/EstimatePanel'
@@ -55,6 +55,8 @@ export default async function CoursePricingEditor({
         history — the status, and the clock the answer is asked on. */
     status?: string | null
     region?: string | null
+    /** The quote somebody chose to bill against, when they have. */
+    billing_quote_id?: string | null
     hero_image: string | null
     hero_position: string | null
     hero_scale: string | number | null
@@ -276,7 +278,7 @@ export default async function CoursePricingEditor({
   // Where the conversation landed, offered to the invoiced field as a
   // starting point. Shared with the courses list, which offers the same
   // handoff from a drawer under the row — see lib/billing-handoff.
-  const suggested = pickBillableQuote(quotes)
+  const suggested = pickBillableQuote(quotes, course.billing_quote_id)
 
   // The handoff to Harken. The payee is the POC tagged billing in Details, or
   // the course's own contact when nobody is tagged —
@@ -309,8 +311,8 @@ export default async function CoursePricingEditor({
   // rates and the chart of accounts are already loaded.
   //
   // Which COA: the one behind the quote that would be billed — see
-  // pickBillableQuote, which is the last quote the client received rather than
-  // the last one accepted — else the one the latest quote was priced from,
+  // pickBillableQuote, which is the one chosen in Billing, or failing that the
+  // last quote the client received — else the one the latest quote was priced from,
   // else the first live one. A course with two live COAs and no quote has no
   // right answer, and the first is the working one.
   const seedCoa = pickSeedCoa(estimatePanels, suggested?.estimate_id, quotes[0]?.estimate_id)
@@ -527,6 +529,8 @@ export default async function CoursePricingEditor({
             : null
         }
         suggested={billingSuggestion}
+        quotes={billableQuoteOptions(quotes, course.ref_number)}
+        quoteId={suggested?.id ?? null}
         forWhat={describeForBiller({
           refNumber: course.ref_number,
           courseName: courseShortName(course.course_type ?? 'custom', null),

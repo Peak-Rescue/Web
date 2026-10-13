@@ -3,12 +3,15 @@
 import { useState, useTransition } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { type ChainLink, type InvoiceRequest } from '@/lib/billing'
+import { numberSoFar, type ChainLink, type InvoiceRequest } from '@/lib/billing'
+import { type BillableQuoteOption } from '@/lib/billing-handoff'
+import { QUOTE_STATUS } from '@/components/StatusChip'
+import { fmtMoney } from '@/lib/expenses'
 import InfoHint from '@/components/InfoHint'
 import InvoiceRequestCard from '@/components/InvoiceRequestCard'
 import { btn } from '@/lib/ui'
 import SuggestedNumber from '@/components/SuggestedNumber'
-import { sendInvoiceRequest } from './billing-actions'
+import { chooseBillingQuote, sendInvoiceRequest } from './billing-actions'
 
 // Handing this course to Harken, and what came back.
 //
@@ -35,6 +38,8 @@ export default function BillingSection({
   requests,
   billTo,
   suggested,
+  quotes,
+  quoteId: defaultQuoteId,
   forWhat,
   recipients,
 }: {
@@ -51,6 +56,13 @@ export default function BillingSection({
       figure the page is already showing one fold up, and retyping it by hand
       is how the two come to disagree. */
   suggested: ChainLink | null
+  /** Every quote this could be billed against, newest first, and the one the
+      course is billed against — the last the client received, until somebody
+      says otherwise. On a course quoted back and forth, which quote is being
+      billed is a judgment, so it is made here, where the number goes out, and
+      saved on the course so the rest of the page follows it. */
+  quotes: BillableQuoteOption[]
+  quoteId: string | null
   /** The course as a biller reads it — ref, name, client, dates. Offered as
       what the invoice is for, and editable, because the client's PO calls it
       something else often enough to matter. */
@@ -64,6 +76,15 @@ export default function BillingSection({
   // then owned by this form: the request is a snapshot of what Harken was
   // told, so the moment to correct any of it is before it goes.
   const [amount, setAmount] = useState(suggested === null ? '' : String(suggested.total))
+  const [quoteId, setQuoteId] = useState(defaultQuoteId)
+  // What the amount is offered from: the chain's own answer while the quote
+  // is the one it picked, else the chosen quote speaking for itself.
+  const linkFor = (id: string | null): ChainLink | null => {
+    if (id === defaultQuoteId) return suggested
+    const q = quotes.find((o) => o.id === id)
+    return q ? numberSoFar({ quote: q }) : null
+  }
+  const link = linkFor(quoteId)
   const [name, setName] = useState(billTo?.name ?? '')
   const [email, setEmail] = useState(billTo?.email ?? '')
   const [description, setDescription] = useState(forWhat)
@@ -73,6 +94,9 @@ export default function BillingSection({
   const [sendTo, setSendTo] = useState<string[]>(() => recipients.map((r) => r.id))
   const [error, setError] = useState<string | null>(null)
   const [pending, start] = useTransition()
+  // Its own transition, so saving a choice of quote does not make the button
+  // say "Sending…" about a request nobody has sent.
+  const [, startChoice] = useTransition()
   const router = useRouter()
 
   // What actually stops a request going out: nobody to bill, or nobody to
@@ -92,6 +116,26 @@ export default function BillingSection({
   const withdrawn = requests.filter((r) => r.status === 'cancelled')
   const alreadySent = live.length > 0
 
+  // Choosing a quote brings its figure with it, unless the box holds a number
+  // somebody typed — a deposit stays a deposit, and the note beside the box
+  // offers the quote's total instead. The choice is saved on the course as it
+  // is made. "No quote" is not: that is a fact about one request, not a
+  // different answer to which quote the course runs on.
+  function chooseQuote(id: string | null) {
+    const typed = Number(amount.replace(/[$,\s]/g, '')) || 0
+    const untouched = amount.trim() === '' || (link !== null && Math.abs(typed - link.total) < 0.005)
+    const next = linkFor(id)
+    setQuoteId(id)
+    if (untouched && next) setAmount(String(next.total))
+    if (id === null) return
+    setError(null)
+    startChoice(async () => {
+      const res = await chooseBillingQuote(instanceId, id)
+      if (res.ok) router.refresh()
+      else setError(res.error)
+    })
+  }
+
   function send() {
     if (alreadySent && !confirm('This course has already been sent to Harken. Send a second request?')) return
     setError(null)
@@ -103,13 +147,14 @@ export default function BillingSection({
         billToEmail: email,
         description,
         recipientIds: sendTo,
+        quoteId,
       })
       if (res.ok) {
         setNote('')
         // Back to what the chain suggests, not to blank. A second request is
         // usually the same course for a different slice of the same money,
         // and an empty box reads as though the first send lost the figure.
-        setAmount(suggested === null ? '' : String(suggested.total))
+        setAmount(link === null ? '' : String(link.total))
         router.refresh()
       } else setError(res.error)
     })
@@ -165,6 +210,25 @@ export default function BillingSection({
            sentences were all true and none of them were the thing you came
            here to do. */
         <div className="space-y-2.5">
+          {/* Only when there is a choice to make. One quote is stamped as it
+              always was; two is a question nobody but the sender can answer. */}
+          {quotes.length > 1 && (
+            <Field label="Quote">
+              <select
+                value={quoteId ?? ''}
+                onChange={(e) => chooseQuote(e.target.value || null)}
+                className={box}
+              >
+                {quotes.map((q) => (
+                  <option key={q.id} value={q.id}>
+                    {q.number} · {fmtMoney(q.total)} · {QUOTE_STATUS[q.status]?.label ?? q.status}
+                  </option>
+                ))}
+                <option value="">No quote</option>
+              </select>
+            </Field>
+          )}
+
           <Field label="Amount">
             <span className="text-zinc-500 text-sm">$</span>
             <input
@@ -175,7 +239,7 @@ export default function BillingSection({
               className={`${box} w-32 text-right`}
             />
             <SuggestedNumber
-              link={suggested}
+              link={link}
               current={Number(amount.replace(/[$,\s]/g, '')) || 0}
               onUse={(total) => setAmount(String(total))}
             />
