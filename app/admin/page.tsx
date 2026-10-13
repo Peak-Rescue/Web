@@ -54,7 +54,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   const CAL_COLS =
     'id, ref_number, course_type, course_category, custom_title, custom_categories, client_name, location, starts_at, ends_at, status, internal, start_time, video_url, all_staff, instance_instructors(role, instructors(name))'
   // Profile gate + personalized data in one parallel round.
-  const [{ data: profile }, { data: assignmentRows }, myTasks, myDoneTasks, allInstancesRes, { data: inviteRows }, { data: capRow }, { data: hoursRow }, { data: allStaffRows }] = await Promise.all([
+  const [{ data: profile }, { data: assignmentRows }, myTasks, myDoneTasks, allInstancesRes, { data: inviteRows }, { data: capRow }, { data: hoursRow }, { data: allStaffRows }, { data: meetingInviteRows }] = await Promise.all([
     admin.from('profiles').select('role, first_name, last_name, email').eq('id', user.id).single(),
     admin
       .from('instance_instructors')
@@ -88,6 +88,13 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     showAllCourses
       ? Promise.resolve({ data: null })
       : admin.from('course_instances').select(CAL_COLS).eq('all_staff', true).neq('status', 'cancelled'),
+    // And the ones the viewer was named on, which neither scope would find:
+    // they are not on the crew, and an internal course is nobody else's.
+    admin
+      .from('meeting_invites')
+      .select(`course_instances!inner(${CAL_COLS}), instructors!inner(profile_id)`)
+      .eq('instructors.profile_id', user.id)
+      .neq('course_instances.status', 'cancelled'),
   ])
 
   if (!['admin', 'instructor'].includes(profile?.role ?? '')) redirect('/dashboard')
@@ -185,6 +192,8 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   const myCategories = new Set(
     ((capRow?.instructor_capabilities ?? []) as { category: string }[]).map((c) => c.category)
   )
+  const invitedRows = (meetingInviteRows ?? []).map((r) => r.course_instances as unknown as InstRow)
+  const invitedIds = new Set(invitedRows.map((i) => i.id))
   // Internal courses (instructor development, CE) are the exception to the
   // expertise rule: a canyon course laid on for three people would otherwise
   // show to every canyon-qualified instructor, who then wonders why they
@@ -194,15 +203,18 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         (i) =>
           showAsAdmin ||
           assignedIds.has(i.id) ||
-          // Said to be for everyone, which is the one thing that outranks
-          // the rule about internal courses below.
+          // Said to be for everyone, or for the viewer by name — the two
+          // things that outrank the rule about internal courses below.
           i.all_staff ||
+          invitedIds.has(i.id) ||
           (!i.internal &&
             courseCapabilityCategories(i.course_type, i.custom_categories).some((c) => myCategories.has(c)))
       )
     : [
         ...(assignmentRows ?? []).map((a) => a.course_instances as unknown as InstRow),
-        ...((allStaffRows ?? []) as unknown as InstRow[]).filter((i) => !assignedIds.has(i.id)),
+        ...[...((allStaffRows ?? []) as unknown as InstRow[]), ...invitedRows].filter(
+          (i, n, all) => !assignedIds.has(i.id) && all.findIndex((x) => x.id === i.id) === n
+        ),
       ]
   // Chip labels mirror the Google Calendar event titles: name — client —
   // location — crew first names, whoever is running it first.
@@ -224,7 +236,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       href: showAsAdmin || assignedIds.has(i.id) ? `/portal/${i.id}` : undefined,
       // The course page is the crew's; everyone else gets the one thing they
       // came for.
-      joinHref: i.all_staff && i.video_url ? i.video_url : undefined,
+      joinHref: (i.all_staff || invitedIds.has(i.id)) && i.video_url ? i.video_url : undefined,
       category: i.course_category ?? null,
       internal: !!i.internal,
       name: courseShortName(i.course_type, i.custom_title),

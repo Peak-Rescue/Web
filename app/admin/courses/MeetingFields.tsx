@@ -117,7 +117,7 @@ export default function MeetingFields({
           >
             {applying ? 'Applying…' : 'Apply to all upcoming weeks'}
           </button>
-          <InfoHint text="Copies the times, the video link, who sees it and the location to every week of this series that has not happened yet. Each week keeps its own name, crew and notes." />
+          <InfoHint text="Copies the times, the video link, who sees it, the invite list and the location to every week of this series that has not happened yet. Each week keeps its own name, crew and notes." />
           {applied !== null && !applying && (
             <span className="text-xs text-zinc-400">{applied === 1 ? '1 week updated' : `${applied} weeks updated`}</span>
           )}

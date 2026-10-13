@@ -24,6 +24,44 @@ async function requireAdmin() {
   return user
 }
 
+// Who a meeting is for, set as a whole list. The picker sends everybody it
+// has ticked, so the action makes the table match rather than being told what
+// changed — two people editing the same list then end on one of their two
+// answers instead of on a blend of both.
+export async function setMeetingInvites(instanceId: string, instructorIds: string[]): Promise<void> {
+  await requireAdmin()
+  const admin = createAdminClient()
+  const wanted = [...new Set(instructorIds)].slice(0, 500)
+
+  const { data: existing, error: readError } = await admin
+    .from('meeting_invites')
+    .select('instructor_id')
+    .eq('instance_id', instanceId)
+  if (readError) throw new Error(readError.message)
+
+  const gone = (existing ?? []).map((r) => r.instructor_id as string).filter((id) => !wanted.includes(id))
+  if (gone.length > 0) {
+    const { error } = await admin
+      .from('meeting_invites')
+      .delete()
+      .eq('instance_id', instanceId)
+      .in('instructor_id', gone)
+    if (error) throw new Error(error.message)
+  }
+  if (wanted.length > 0) {
+    const { error } = await admin
+      .from('meeting_invites')
+      .upsert(
+        wanted.map((instructor_id) => ({ instance_id: instanceId, instructor_id })),
+        { onConflict: 'instance_id,instructor_id', ignoreDuplicates: true }
+      )
+    if (error) throw new Error(error.message)
+  }
+
+  revalidatePath(`/portal/${instanceId}`)
+  revalidatePath('/admin')
+}
+
 const fmtLong = (d: string) =>
   new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
 

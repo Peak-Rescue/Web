@@ -470,8 +470,8 @@ export async function updateInstanceDetails(id: string, formData: FormData) {
 // Takes the values off the form rather than off the saved row: the details
 // form auto-saves on a delay, so the row can be a second behind what is on
 // screen, and copying a stale link to every week is worse than copying none.
-// Only what is the same every week travels. A week's name and crew are that
-// week's, and a week that has already happened is left as it was.
+// Only what is the same every week travels — the invite list included. A
+// week's name and crew are that week's, and a week that has already happened is left as it was.
 export async function applySessionToSeries(id: string, formData: FormData): Promise<number> {
   await requireAdmin()
   const admin = createAdminClient()
@@ -491,6 +491,21 @@ export async function applySessionToSeries(id: string, formData: FormData): Prom
     .gte('ends_at', todayHere())
     .select('id')
   if (error) throw new Error(error.message)
+
+  // Who it is for travels with the rest. The list is saved the moment it is
+  // changed, unlike the form above, so the row is the truth here.
+  const others = (rows ?? []).map((r) => r.id as string)
+  if (others.length > 0) {
+    const { data: invited } = await admin.from('meeting_invites').select('instructor_id').eq('instance_id', id)
+    const { error: clearError } = await admin.from('meeting_invites').delete().in('instance_id', others)
+    if (clearError) throw new Error(clearError.message)
+    if ((invited ?? []).length > 0) {
+      const { error: copyError } = await admin.from('meeting_invites').insert(
+        others.flatMap((instance_id) => (invited ?? []).map((i) => ({ instance_id, instructor_id: i.instructor_id })))
+      )
+      if (copyError) throw new Error(copyError.message)
+    }
+  }
 
   after(async () => {
     for (const row of rows ?? []) await syncCourseCalendar(admin, row.id)

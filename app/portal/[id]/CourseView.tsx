@@ -14,6 +14,7 @@ import CourseCurriculumEditor, { type CurriculumModule } from '@/app/admin/cours
 import CourseGear from '@/app/admin/courses/CourseGear'
 import CourseDetailsEditor from '@/app/admin/courses/CourseDetailsEditor'
 import CourseStaffingEditor from '@/app/admin/courses/CourseStaffingEditor'
+import MeetingInviteSection from '@/app/admin/courses/MeetingInviteSection'
 import CourseStudentsEditor from '@/app/admin/courses/CourseStudentsEditor'
 import StudentInviteSection from '@/app/admin/courses/StudentInviteSection'
 import CoursePricingEditor from '@/app/admin/courses/CoursePricingEditor'
@@ -1814,6 +1815,15 @@ export default async function CourseView({
             </div>
           )}
           </EditInPlace>
+                </div>
+              )}
+              {/* Who a meeting is for, when it is not for everyone. Only then:
+                  beside "all staff see it" a list of names would be a second
+                  answer to a question already answered. */}
+              {showAsAdmin && session && !inst.all_staff && (
+                <div className={BETWEEN_BLOCKS}>
+                  <SubHead title="Invited" />
+                  <MeetingInviteSection instanceId={id} />
                 </div>
               )}
               {/* Who is on it. Enrolment does come late in the build, but a
