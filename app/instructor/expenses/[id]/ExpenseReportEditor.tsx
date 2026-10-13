@@ -192,6 +192,7 @@ export default function ExpenseReportEditor({
 
   const [stagedFiles, setStagedFiles] = useState<File[]>([])
   const stagedRef = useRef<File[]>([])
+  const [stagedUploading, setStagedUploading] = useState(false)
   const bgSaves = useRef(0) // detached saves still in flight (line handed off via "Add another"/"Done")
   const stagedInputRef = useRef<HTMLInputElement>(null)
   const [uploadingFor, setUploadingFor] = useState<string | null>(null)
@@ -297,7 +298,14 @@ export default function ExpenseReportEditor({
     try {
       const saved = await saveItem(report.id, itemId, toPayload(f))
       upsertLocalItem(optimisticFromForm(f, saved.id))
-      if (staged.length > 0) await uploadReceipts(saved.id, staged)
+      if (staged.length > 0) {
+        setUploadingFor(saved.id)
+        try {
+          await uploadReceipts(saved.id, staged)
+        } finally {
+          setUploadingFor(null)
+        }
+      }
       router.refresh()
     } catch (e) {
       alert(
@@ -329,10 +337,21 @@ export default function ExpenseReportEditor({
       setEditingId(saved.id)
       upsertLocalItem(optimisticFromForm(f, saved.id))
       if (stagedRef.current.length > 0) {
+        // The ref empties first so nothing else picks these files up; the
+        // chips stay on screen until the receipts they become are on the line.
         const files = stagedRef.current
         stagedRef.current = []
-        setStagedFiles([])
-        await uploadReceipts(saved.id, files)
+        setStagedUploading(true)
+        try {
+          await uploadReceipts(saved.id, files)
+          setStagedFiles(stagedRef.current)
+        } catch (e) {
+          stagedRef.current = [...files, ...stagedRef.current]
+          setStagedFiles(stagedRef.current)
+          throw e
+        } finally {
+          setStagedUploading(false)
+        }
       }
       setItemStatus('saved')
       router.refresh()
@@ -474,7 +493,16 @@ export default function ExpenseReportEditor({
       if (error) throw new Error(`Upload failed for "${files[i].name}": ${error.message}`)
       uploads.push({ path: targets[i].path, filename: files[i].name })
     }
-    await finalizeReceipts(report.id, itemId, uploads)
+    const added = await finalizeReceipts(report.id, itemId, uploads)
+    // Onto the line now; the refresh that follows only confirms it. Matched by
+    // id because that refresh may already have brought the same rows.
+    setLocalItems((prev) =>
+      prev.map((i) =>
+        i.id === itemId
+          ? { ...i, receipts: [...i.receipts, ...added.filter((a) => !i.receipts.some((r) => r.id === a.id))] }
+          : i
+      )
+    )
   }
 
   // Files picked inside the form: upload immediately if the line is already
@@ -684,7 +712,7 @@ export default function ExpenseReportEditor({
                         sitting there with its name on it, and a line that could
                         not have one, mileage or per diem, says nothing at all
                         because there is nothing to say. */}
-                    {itemNeedsReceipt(item) && item.receipts.length === 0 && (
+                    {itemNeedsReceipt(item) && item.receipts.length === 0 && uploadingFor !== item.id && (
                       <span className="text-xs text-amber-400">No receipt</span>
                     )}
                     <button
@@ -1027,17 +1055,21 @@ export default function ExpenseReportEditor({
                     {stagedFiles.map((f, i) => (
                       <span key={`${f.name}-${i}`} className="inline-flex items-center gap-1.5 px-2 py-1 bg-zinc-800 rounded text-xs text-zinc-300">
                         <span className="max-w-40 truncate">{f.name}</span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const next = stagedFiles.filter((_, j) => j !== i)
-                            setStagedFiles(next)
-                            stagedRef.current = next
-                          }}
-                          className="text-zinc-500 hover:text-pr-red-light"
-                        >
-                          <TrashIcon />
-                        </button>
+                        {stagedUploading ? (
+                          <span className="text-zinc-500">Uploading…</span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const next = stagedFiles.filter((_, j) => j !== i)
+                              setStagedFiles(next)
+                              stagedRef.current = next
+                            }}
+                            className="text-zinc-500 hover:text-pr-red-light"
+                          >
+                            <TrashIcon />
+                          </button>
+                        )}
                       </span>
                     ))}
                     <button

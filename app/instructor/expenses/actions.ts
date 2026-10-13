@@ -246,11 +246,27 @@ export async function finalizeReceipts(
   const rows = uploads
     .filter((u) => u.path.startsWith(prefix))
     .map((u) => ({ item_id: itemId, path: u.path, filename: u.filename.slice(0, 200) }))
-  if (rows.length === 0) return
+  if (rows.length === 0) return []
 
-  const { error } = await admin.from('expense_receipts').insert(rows)
+  const { data: inserted, error } = await admin
+    .from('expense_receipts')
+    .insert(rows)
+    .select('id, path, filename')
   if (error) throw new Error(error.message)
+
+  // Handed back signed, in the shape the page loads them in, so the editor can
+  // show the receipt on its line without waiting for the refresh.
+  const { data: signed } = await admin.storage
+    .from(BUCKET)
+    .createSignedUrls((inserted ?? []).map((r) => r.path), 3600)
+  const urlByPath = new Map((signed ?? []).map((s) => [s.path, s.signedUrl]))
+
   revalidateReport(reportId)
+  return (inserted ?? []).map((r) => ({
+    id: r.id as string,
+    filename: (r.filename as string | null) ?? 'receipt',
+    url: urlByPath.get(r.path) ?? '#',
+  }))
 }
 
 export async function deleteReceipt(reportId: string, receiptId: string) {
