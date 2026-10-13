@@ -37,7 +37,7 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
   const { data: profile } = await admin.from('profiles').select('role').eq('id', user.id).single()
   if (profile?.role !== 'admin') redirect('/dashboard')
 
-  const [{ data: raw }, { data: venueRows }, { data: allOffDays }] = await Promise.all([
+  const [{ data: raw }, { data: venueRows }, { data: allOffDays }, { data: rosterRows }] = await Promise.all([
     admin
       .from('course_instances')
       .select(`
@@ -53,6 +53,8 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
     // and without the breaks the chain would cry double-booked at a crew who are
     // genuinely free. One small query, and it saves a per-row one.
     admin.from('instance_off_days').select('instance_id, off_date, end_date'),
+    // Who a new meeting can be for, when it is not for everyone.
+    admin.from('instructors').select('id, name').eq('active', true).order('name'),
   ])
 
   // Who could be driving a course, for the pill on every row and the filter
@@ -189,7 +191,7 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
             </div>
           </summary>
           <form action={createInstance} className="mt-4 p-6 bg-zinc-900 rounded-lg border border-zinc-800 grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <NewCourseKind>
+            <NewCourseKind people={(rosterRows ?? []) as { id: string; name: string }[]}>
 
             <div>
               <label className="block text-xs text-zinc-400 mb-1">Status</label>

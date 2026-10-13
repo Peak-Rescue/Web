@@ -329,6 +329,20 @@ export async function createInstance(formData: FormData) {
   const data = [...(made ?? [])].sort((a, b) => (a.starts_at ?? '').localeCompare(b.starts_at ?? ''))[0]
   if (!data) throw new Error('The course was not created')
 
+  // Who a meeting is for, when it is not for everyone — on every week of it.
+  // The courses exist by now, so a failure here is logged rather than thrown:
+  // throwing would send the form back as if nothing had been made, and the
+  // list is one click to set again on the meeting's page.
+  const inviteIds = internal && !session.all_staff
+    ? [...new Set(formData.getAll('invite_ids') as string[])].filter(Boolean).slice(0, 500)
+    : []
+  if (inviteIds.length > 0) {
+    const { error: inviteError } = await admin.from('meeting_invites').insert(
+      (made ?? []).flatMap((row) => inviteIds.map((instructor_id) => ({ instance_id: row.id, instructor_id })))
+    )
+    if (inviteError) console.error('Saving the meeting invite list failed:', inviteError.message)
+  }
+
   // One after another: twenty-five events at once is a burst Google is
   // entitled to refuse, and nobody is waiting on this.
   after(async () => {

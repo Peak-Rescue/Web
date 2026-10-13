@@ -16,7 +16,14 @@ const FIELD =
  *  The course fields arrive as children, already rendered by the page, and
  *  are simply not mounted for a meeting — so they are not submitted either.
  */
-export default function NewCourseKind({ children }: { children: React.ReactNode }) {
+export default function NewCourseKind({
+  people,
+  children,
+}: {
+  /** Every active instructor, for a meeting's invite list. */
+  people: { id: string; name: string }[]
+  children: React.ReactNode
+}) {
   const [meeting, setMeeting] = useState(false)
 
   return (
@@ -27,7 +34,7 @@ export default function NewCourseKind({ children }: { children: React.ReactNode 
       ) : (
         <>
           <input type="hidden" name="status" value="confirmed" />
-          <MeetingFields withType={false} repeat>
+          <MeetingFields withType={false} repeat people={people}>
             <div className="sm:col-span-2">
               <label className="block text-xs text-zinc-400 mb-1">Date *</label>
               <input name="starts_at" type="date" required className={FIELD} />

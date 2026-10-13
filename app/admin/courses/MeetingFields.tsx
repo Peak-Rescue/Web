@@ -29,6 +29,7 @@ export default function MeetingFields({
   defaultVideoUrl = '',
   defaultAllStaff = true,
   repeat = false,
+  people,
   applyToSeries,
   children,
 }: {
@@ -46,6 +47,10 @@ export default function MeetingFields({
   defaultAllStaff?: boolean
   /** Offer to make one a week. Only a form that creates can. */
   repeat?: boolean
+  /** Every active instructor. Given on the form that creates, so the list of
+      who it is for can be chosen in the same breath as saying it is not for
+      everyone; an existing meeting keeps its list on its own page. */
+  people?: { id: string; name: string }[]
   /** Set on a week of a repeating meeting: copies what is on the form to the
       weeks still to come, and answers with how many it changed. */
   applyToSeries?: (formData: FormData) => Promise<number>
@@ -54,6 +59,9 @@ export default function MeetingFields({
 }) {
   const [applying, startApplying] = useTransition()
   const [applied, setApplied] = useState<number | null>(null)
+  const [allStaff, setAllStaff] = useState(defaultAllStaff)
+  const [invited, setInvited] = useState<Set<string>>(() => new Set())
+  const everyone = (people ?? []).length > 0 && (people ?? []).every((p) => invited.has(p.id))
 
   return (
     <div className="sm:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -89,10 +97,52 @@ export default function MeetingFields({
         <input name="video_url" type="url" defaultValue={defaultVideoUrl} placeholder="https://meet.google.com/…" className={FIELD} />
       </div>
       <label className="sm:col-span-2 flex items-center gap-1.5 text-sm text-zinc-300 cursor-pointer">
-        <input type="checkbox" name="all_staff" defaultChecked={defaultAllStaff} className="accent-red-600" />
+        <input type="checkbox" name="all_staff" checked={allStaff} onChange={(e) => setAllStaff(e.target.checked)} className="accent-red-600" />
         All staff see it
         <InfoHint text="Puts it on every instructor’s calendar without adding them to the crew. For anyone not on the crew, clicking it there opens the video link. Unticked, only the people added to it see it." />
       </label>
+      {people && !allStaff && (
+        <div className="sm:col-span-2">
+          <label className="block text-xs text-zinc-400 mb-1">
+            Invited
+            <InfoHint text="Who sees it instead of everyone. It goes on their calendar without adding them to the crew, and on every week if it repeats. The list can be changed later on the meeting’s page." />
+          </label>
+          <div className="p-3 bg-zinc-800/50 border border-zinc-700 rounded">
+            <label className="flex items-center gap-2.5 px-2 py-1.5 mb-1 border-b border-zinc-700 text-sm text-zinc-400 cursor-pointer">
+              <input
+                ref={(el) => { if (el) el.indeterminate = !everyone && invited.size > 0 }}
+                type="checkbox"
+                checked={everyone}
+                onChange={() => setInvited(everyone ? new Set() : new Set(people.map((p) => p.id)))}
+                className="accent-red-600"
+              />
+              All
+            </label>
+            <div className="space-y-1 max-h-64 overflow-y-auto pr-1">
+              {people.map((p) => (
+                <label key={p.id} className="flex items-center gap-2.5 px-2 py-1.5 rounded text-sm text-zinc-300 cursor-pointer hover:bg-zinc-800/60">
+                  <input
+                    type="checkbox"
+                    name="invite_ids"
+                    value={p.id}
+                    checked={invited.has(p.id)}
+                    onChange={() =>
+                      setInvited((prev) => {
+                        const next = new Set(prev)
+                        if (next.has(p.id)) next.delete(p.id)
+                        else next.add(p.id)
+                        return next
+                      })
+                    }
+                    className="accent-red-600"
+                  />
+                  {p.name}
+                </label>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
       {repeat && (
         <div>
           <label className="block text-xs text-zinc-400 mb-1">
