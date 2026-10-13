@@ -3,11 +3,12 @@ import AutoSaveForm from '@/components/AutoSaveForm'
 import TrashIcon from '@/components/TrashIcon'
 import InfoHint from '@/components/InfoHint'
 import { CourseTypeSelect } from './CourseTypeSelect'
+import MeetingFields from './MeetingFields'
 import CourseLocationFields from '@/components/CourseLocationFields'
 import CourseContactsEditor from '@/components/CourseContactsEditor'
 import CourseDatePainter, { type OtherCourse } from '@/components/CourseDatePainter'
 import { courseZone, todayIn } from '@/lib/course-clock'
-import { computeBlocks } from '@/lib/courses'
+import { computeBlocks, isSession } from '@/lib/courses'
 
 /** An off day as this screen needs it: the range for the arithmetic, and the
     id, because the list next to it removes them. */
@@ -82,6 +83,10 @@ export default function CourseDetailsEditor({
   kind?: 'course' | 'job'
 }) {
   const updateDetails = updateInstanceDetails.bind(null, instanceId)
+  // A meeting is edited through the short form it was made with. The client,
+  // the contact, the headcount and the crew plan are left off rather than
+  // emptied: the action writes only the fields a form carries.
+  const meeting = isSession({ ...course, internal })
   const addOffDayHere = addOffDay.bind(null, instanceId)
 
   const blocks = course.starts_at && course.ends_at
@@ -92,19 +97,26 @@ export default function CourseDetailsEditor({
     <div>
       <div className="bg-zinc-900 rounded-lg border border-zinc-800">
       <AutoSaveForm action={updateDetails} className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-6">
-        <CourseTypeSelect
-          defaultCategory={course.course_category ?? undefined}
-          defaultType={course.course_type ?? undefined}
-          defaultCustomTitle={course.custom_title ?? ''}
-          defaultCustomCategories={course.custom_categories ?? []}
-          defaultInternal={internal}
-          session="edit"
-          defaultStartTime={course.start_time ?? ''}
-          defaultEndTime={course.end_time ?? ''}
-          applyToSeries={course.series_id ? applySessionToSeries.bind(null, instanceId) : undefined}
-          defaultVideoUrl={course.video_url ?? ''}
-          defaultAllStaff={Boolean(course.all_staff)}
-        />
+        {meeting ? (
+          <MeetingFields
+            defaultName={course.custom_title ?? ''}
+            defaultCategory={course.course_category ?? undefined}
+            defaultCustomCategories={course.custom_categories ?? []}
+            defaultStartTime={course.start_time ?? ''}
+            defaultEndTime={course.end_time ?? ''}
+            defaultVideoUrl={course.video_url ?? ''}
+            defaultAllStaff={Boolean(course.all_staff)}
+            applyToSeries={course.series_id ? applySessionToSeries.bind(null, instanceId) : undefined}
+          />
+        ) : (
+          <CourseTypeSelect
+            defaultCategory={course.course_category ?? undefined}
+            defaultType={course.course_type ?? undefined}
+            defaultCustomTitle={course.custom_title ?? ''}
+            defaultCustomCategories={course.custom_categories ?? []}
+            defaultInternal={internal}
+          />
+        )}
         <div>
           <label className="block text-xs text-zinc-400 mb-1">Status</label>
           <select name="status" defaultValue={course.status} className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500">
@@ -119,21 +131,25 @@ export default function CourseDetailsEditor({
           <label className="block text-xs text-zinc-400 mb-1">Location</label>
           <input name="location" defaultValue={course.location ?? ''} className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
         </div>
-        <CourseLocationFields
-          venues={venues}
-          defaultRegion={course.region}
-          defaultVenueId={course.venue_id}
-        />
-        <div>
-          <label className="block text-xs text-zinc-400 mb-1">Client / organization</label>
-          <input name="client_name" defaultValue={course.client_name ?? ''} className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
-        </div>
-        <CourseContactsEditor initial={contacts} />
+        {!meeting && (
+          <>
+            <CourseLocationFields
+              venues={venues}
+              defaultRegion={course.region}
+              defaultVenueId={course.venue_id}
+            />
+            <div>
+              <label className="block text-xs text-zinc-400 mb-1">Client / organization</label>
+              <input name="client_name" defaultValue={course.client_name ?? ''} className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
+            </div>
+            <CourseContactsEditor initial={contacts} />
+          </>
+        )}
         {/* Nobody enrols on a job, so there is no headcount to set. Left in
             the data where it was already set, because a gear list built for
             ten before somebody changed the type should not quietly re-price
             itself. */}
-        {kind === 'course' && (
+        {kind === 'course' && !meeting && (
           <div>
             <label className="block text-xs text-zinc-400 mb-1">Max students</label>
             <input name="max_students" type="number" min="1" defaultValue={course.max_students ?? ''} className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
@@ -164,6 +180,7 @@ export default function CourseDetailsEditor({
             asked to work the week wants to know, and the thing that decides
             whether they can say yes at all. The total follows from the boxes
             rather than being a fourth box to keep in step. */}
+        {!meeting && (
         <div>
           <label className="block text-xs text-zinc-400 mb-1">
             {kind === 'job' ? 'Crew' : 'Crew plan'}
@@ -193,6 +210,7 @@ export default function CourseDetailsEditor({
             </div>
           </div>
         </div>
+        )}
       </AutoSaveForm>
 
       <div className="p-6 pt-5 border-t border-zinc-800">

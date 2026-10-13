@@ -31,7 +31,7 @@ import { unseenSections, lastPushToStudents, behindOnPush, type Push } from '@/l
 import { GEAR_ENTRIES_SELECT, KIT_LABEL } from '@/lib/gear'
 import { courseCapabilityCategories } from '@/lib/capabilities'
 import { GEAR_ENTRY_COLUMNS, gearLabel, gearQuantity, isChoice, placeSets, productName } from '@/lib/gear'
-import { courseDisplayName, computeBlocks, courseDates, courseEventTitle, isJob, isSession, startTimeLabel, workNoun, WorkNoun } from '@/lib/courses'
+import { courseDisplayName, computeBlocks, courseDates, courseEventTitle, isJob, isSession, sessionTimeLabel, startTimeLabel, workNoun, WorkNoun } from '@/lib/courses'
 import { crewOrder, crewPlanOf, crewPlanSummary } from '@/lib/staffing-roles'
 import CourseTasksPanel, { type CourseTask, type TaskPerson } from '@/components/CourseTasksPanel'
 import PdfLink from '@/components/PdfLink'
@@ -435,7 +435,8 @@ export default async function CourseView({
   // session is the exception — an hour's class has no gear list to start and
   // no quote to write — so there an empty section is simply not there. One
   // that somebody did fill in still shows, on that week alone.
-  const staffSeeEmpty = showTasks && !isSession(inst)
+  const session = isSession(inst)
+  const staffSeeEmpty = showTasks && !session
   // And the word for one, for the copy that has to name it.
   const noun = workNoun(inst.course_type as string)
   const Noun = WorkNoun(inst.course_type as string)
@@ -1315,7 +1316,7 @@ export default async function CourseView({
     // and a student who has never seen it does not know announcements happen.
     // An empty feed is a real answer here, unlike an empty state reporting
     // that nothing needs doing.
-    (Boolean(userId) && !isSession(inst)) ||
+    (Boolean(userId) && !session) ||
     // The album lives in here now, and a course can have one before anybody
     // has posted a word.
     hasAlbum
@@ -1328,8 +1329,12 @@ export default async function CourseView({
   // No students on a job — it is a staff job, and the client's own people are
   // not on a roster. A waiver still brings the block back if one was somehow
   // attached, because a signature that exists has to be visible.
-  const hasRoster =
-    showTasks && (!inst.internal || roster.length > 0 || waiverOnCourse) && (!jobNotCourse || roster.length > 0 || waiverOnCourse)
+  // A meeting least of all: everyone who comes is staff, and every course is
+  // born with the default waiver attached, so "a waiver is on it" says nothing
+  // there. Only somebody actually enrolled brings either block back.
+  const hasRoster = session
+    ? showTasks && roster.length > 0
+    : showTasks && (!inst.internal || roster.length > 0 || waiverOnCourse) && (!jobNotCourse || roster.length > 0 || waiverOnCourse)
   // Notes moved to Details, so the Tasks section stands or falls on tasks —
   // it no longer appears because somebody wrote a note.
   const hasTasks = showTasks && (tasks.length > 0 || canManageTasks)
@@ -1371,7 +1376,7 @@ export default async function CourseView({
   // walk-up QR code, and the unmatched signatures it produces. Those have to
   // be reachable on a course where nobody has enrolled yet, because that is
   // exactly the course somebody walks up to.
-  const showWaiver = Boolean(waiver) || staffSeeEmpty || (showTasks && waiverOnCourse)
+  const showWaiver = session ? roster.length > 0 && (Boolean(waiver) || showTasks) : Boolean(waiver) || showTasks
   // Staff see the crew whether or not anyone is on it yet — an unstaffed
   // course is the one that needs the section.
   const showStaffing = (instructors ?? []).length > 0 || showTasks
@@ -1511,7 +1516,7 @@ export default async function CourseView({
 
           {/* A staff session's hour and where to call in. Nearly every course
               has neither and draws nothing here. */}
-          {(startTimeLabel(inst.start_time) || inst.video_url) && (
+          {(sessionTimeLabel(inst) || inst.video_url) && (
             <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2">
               {/* The one thing somebody out of town opens this page for, so
                   it is a button and it is first. */}
@@ -1528,7 +1533,7 @@ export default async function CourseView({
                   Join video call
                 </a>
               )}
-              {startTimeLabel(inst.start_time) && (
+              {sessionTimeLabel(inst) && (
                 <span className="text-base text-zinc-300">
                   {[startTimeLabel(inst.start_time), startTimeLabel(inst.end_time)].filter(Boolean).join('–')} Mountain
                 </span>

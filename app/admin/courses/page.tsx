@@ -4,9 +4,10 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createInstance } from './actions'
 import CreateCourseButton from './CreateCourseButton'
+import NewCourseKind from './NewCourseKind'
 import CancelNewCourseButton from './CancelNewCourseButton'
 import { CourseTypeSelect } from './CourseTypeSelect'
-import { courseShortName, courseEventTitle, crewFirstNames, startTimeLabel } from '@/lib/courses'
+import { courseShortName, courseEventTitle, crewFirstNames, sessionTimeLabel } from '@/lib/courses'
 import CourseCalendar, { type CalendarCourse } from '@/components/CourseCalendar'
 import NewCourseDates from '@/components/NewCourseDates'
 import CourseContactsEditor from '@/components/CourseContactsEditor'
@@ -189,7 +190,8 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
             </div>
           </summary>
           <form action={createInstance} className="mt-4 p-6 bg-zinc-900 rounded-lg border border-zinc-800 grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <CourseTypeSelect session="new" />
+            <NewCourseKind>
+            <CourseTypeSelect />
 
             <div>
               <label className="block text-xs text-zinc-400 mb-1">Status</label>
@@ -236,9 +238,11 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
               </div>
             </div>
 
+            </NewCourseKind>
+
             <div className="sm:col-span-2">
               <label className="block text-xs text-zinc-400 mb-1">Notes</label>
-              <textarea name="notes" rows={3} placeholder="What they asked for, rough timing, budget signals, follow-ups…" className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm resize-y focus:outline-none focus:border-zinc-500" />
+              <textarea name="notes" rows={3} className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm resize-y focus:outline-none focus:border-zinc-500" />
             </div>
 
             {/* A way out, beside the way in. The form opens from a summary
@@ -271,7 +275,7 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
                       .filter((r) => r.instructors)
                       .map((r) => ({ role: r.role, name: r.instructors!.name }))
                   )
-                  const time = startTimeLabel(i.start_time)
+                  const time = sessionTimeLabel(i)
                   return {
                     id: i.id,
                     // Mirrors the Google Calendar event title convention.

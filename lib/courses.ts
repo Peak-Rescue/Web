@@ -296,7 +296,18 @@ export function isSession(c: {
   starts_at?: string | null
   ends_at?: string | null
 }): boolean {
-  return Boolean(c.internal && startTimeLabel(c.start_time) && c.starts_at && (!c.ends_at || c.ends_at === c.starts_at))
+  return Boolean(c.internal && sessionTimeLabel(c))
+}
+
+/** The hour to print beside a course, which only a one-day one has. A start
+    time left on a course whose dates were later stretched to a week says when
+    nothing in particular happens, so it is not shown. */
+export function sessionTimeLabel(c: {
+  start_time?: string | null
+  starts_at?: string | null
+  ends_at?: string | null
+}): string | null {
+  return c.starts_at && (!c.ends_at || c.ends_at === c.starts_at) ? startTimeLabel(c.start_time) : null
 }
 
 // Whoever is running it first, first names only — the team's long-standing

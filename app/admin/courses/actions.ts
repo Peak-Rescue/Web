@@ -249,6 +249,10 @@ export async function createInstance(formData: FormData) {
   // course without both ends, so leaving the second box empty used to make a
   // course that was on the books and on no calendar.
   const ends_at          = (formData.get('ends_at') as string) || starts_at
+  // An hour belongs to a single day. A week-long course says when each day
+  // starts in its schedule, and a second answer up here is one to disagree
+  // with it.
+  if (ends_at !== starts_at) Object.assign(session, { start_time: null, end_time: null })
 
   // A course identical to one made moments ago is a double submit, not a second
   // course. Two MARSOC jungle courses in Oahu on the same dates were created

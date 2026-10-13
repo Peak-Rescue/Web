@@ -6,7 +6,7 @@ import MyTasksList from '@/components/MyTasksList'
 import { loadMyOpenTasks, loadMyDoneTasks } from '@/lib/course-tasks'
 import CourseCalendar, { type CalendarCourse } from '@/components/CourseCalendar'
 import StaffingInterestList from '@/components/StaffingInterestList'
-import { courseShortName, courseEventTitle, crewFirstNames, startTimeLabel } from '@/lib/courses'
+import { courseShortName, courseEventTitle, crewFirstNames, sessionTimeLabel } from '@/lib/courses'
 import { courseCapabilityCategories } from '@/lib/capabilities'
 import { todayHere } from '@/lib/course-clock'
 import { slotsToStaff } from '@/lib/course-readiness'
@@ -216,8 +216,8 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     .filter((i) => i && i.status !== 'cancelled' && i.starts_at && i.ends_at)
     .map((i) => ({
       id: i.id,
-      label: [startTimeLabel(i.start_time), courseEventTitle(i, chipCrew(i))].filter(Boolean).join(' '),
-      time: startTimeLabel(i.start_time),
+      label: [sessionTimeLabel(i), courseEventTitle(i, chipCrew(i))].filter(Boolean).join(' '),
+      time: sessionTimeLabel(i),
       status: i.status,
       starts_at: i.starts_at!,
       ends_at: i.ends_at! >= i.starts_at! ? i.ends_at! : i.starts_at!,
