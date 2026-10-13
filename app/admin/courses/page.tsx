@@ -6,7 +6,6 @@ import { createInstance } from './actions'
 import CreateCourseButton from './CreateCourseButton'
 import NewCourseKind from './NewCourseKind'
 import CancelNewCourseButton from './CancelNewCourseButton'
-import { CourseTypeSelect } from './CourseTypeSelect'
 import { courseShortName, courseEventTitle, crewFirstNames, sessionTimeLabel } from '@/lib/courses'
 import CourseCalendar, { type CalendarCourse } from '@/components/CourseCalendar'
 import NewCourseDates from '@/components/NewCourseDates'
@@ -191,7 +190,6 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
           </summary>
           <form action={createInstance} className="mt-4 p-6 bg-zinc-900 rounded-lg border border-zinc-800 grid grid-cols-1 sm:grid-cols-2 gap-4">
             <NewCourseKind>
-            <CourseTypeSelect />
 
             <div>
               <label className="block text-xs text-zinc-400 mb-1">Status</label>

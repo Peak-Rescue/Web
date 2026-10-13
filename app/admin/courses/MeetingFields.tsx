@@ -22,6 +22,7 @@ const FIELD =
 export default function MeetingFields({
   defaultName = '',
   defaultCategory = 'specialty',
+  withType = true,
   defaultCustomCategories = [],
   defaultStartTime = '',
   defaultEndTime = '',
@@ -32,9 +33,12 @@ export default function MeetingFields({
   children,
 }: {
   defaultName?: string
-  /** Every course has one and the column is not null. A meeting made here
-      gets Specialty; one being edited keeps whatever it already had. */
+  /** Every course has one and the column is not null. One being edited keeps whatever it already had. */
   defaultCategory?: string
+  /** False where the category and type selects are already on the form
+      above, which is the new-course form: two fields of one name would send
+      the first, and it is better not to rely on which that is. */
+  withType?: boolean
   defaultCustomCategories?: string[]
   defaultStartTime?: string
   defaultEndTime?: string
@@ -53,8 +57,12 @@ export default function MeetingFields({
 
   return (
     <div className="sm:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
-      <input type="hidden" name="course_category" value={defaultCategory} />
-      <input type="hidden" name="course_type" value="custom" />
+      {withType && (
+        <>
+          <input type="hidden" name="course_category" value={defaultCategory} />
+          <input type="hidden" name="course_type" value="custom" />
+        </>
+      )}
       <input type="hidden" name="internal" value="on" />
       {defaultCustomCategories.map((c) => (
         <input key={c} type="hidden" name="custom_categories" value={c} />

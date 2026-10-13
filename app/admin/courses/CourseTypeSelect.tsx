@@ -11,12 +11,22 @@ export function CourseTypeSelect({
   defaultCustomTitle = '',
   defaultCustomCategories = [],
   defaultInternal = false,
+  meeting = false,
+  onMeetingChange,
 }: {
   defaultCategory?: string
   defaultType?: string
   defaultCustomTitle?: string
   defaultCustomCategories?: string[]
   defaultInternal?: boolean
+  /** The new-course form's fork, asked only once somebody has said Custom:
+      a course of our own making, or a meeting of our own people. Asked here
+      rather than at the top of the form because nearly everything made there
+      is a course, and a question that is answered the same way nine times in
+      ten is one to keep out of the way. While it is a meeting the name and the
+      custom-event box are left to the meeting's own fields. */
+  meeting?: boolean
+  onMeetingChange?: (meeting: boolean) => void
 }) {
   const [category, setCategory] = useState(defaultCategory)
   const [courseType, setCourseType] = useState(defaultType)
@@ -44,7 +54,7 @@ export function CourseTypeSelect({
           name="course_category"
           required
           value={category}
-          onChange={e => { setCategory(e.target.value); setCourseType('') }}
+          onChange={e => { setCategory(e.target.value); setCourseType(''); onMeetingChange?.(false) }}
           className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500"
         >
           <option value="" disabled>Select a category…</option>
@@ -62,7 +72,7 @@ export function CourseTypeSelect({
           required
           value={courseType}
           disabled={!category}
-          onChange={e => setCourseType(e.target.value)}
+          onChange={e => { setCourseType(e.target.value); if (e.target.value !== 'custom') onMeetingChange?.(false) }}
           className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500 disabled:opacity-40"
         >
           <option value="" disabled>{category ? 'Select a course…' : '← Pick a category first'}</option>
@@ -73,8 +83,31 @@ export function CourseTypeSelect({
         </select>
       </div>
 
+      {isCustom && onMeetingChange && (
+        <div className="sm:col-span-2 flex gap-1 text-xs">
+          {([
+            [false, 'Course or job'],
+            [true, 'Internal meeting'],
+          ] as const).map(([value, label]) => (
+            <button
+              key={label}
+              type="button"
+              aria-pressed={meeting === value}
+              onClick={() => onMeetingChange(value)}
+              className={`px-2.5 py-1 rounded-full border transition-colors ${
+                meeting === value
+                  ? 'bg-zinc-800 border-zinc-600 text-white'
+                  : 'border-zinc-800 text-zinc-500 hover:text-zinc-300'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Step 3 — custom name (only if custom selected) */}
-      {isCustom && (
+      {isCustom && !meeting && (
         <div className="sm:col-span-2">
           <label className="block text-xs text-zinc-400 mb-1">Custom course name *</label>
           <input
@@ -95,7 +128,7 @@ export function CourseTypeSelect({
           consultation, and this block is already on screen the moment you say
           custom. It stays on screen for a typed course already marked, so no
           change of type can quietly drop the flag. */}
-      {(isCustom || internal) && (
+      {(isCustom || internal) && !meeting && (
         <div className="sm:col-span-2">
           <label className="block text-xs text-zinc-400 mb-1">Custom event</label>
           <div className="flex flex-wrap gap-x-4 gap-y-2 p-3 bg-zinc-800/50 border border-zinc-700 rounded">
