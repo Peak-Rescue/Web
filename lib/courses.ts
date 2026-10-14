@@ -264,13 +264,24 @@ export function courseShortName(course_type: string, custom_title: string | null
 // calendars so an event reads the same in both:
 // "Name — Client — Location — Crew first names".
 export function courseEventTitle(
-  c: { course_type: string; custom_title: string | null; client_name?: string | null; location?: string | null },
+  c: {
+    course_type: string
+    custom_title: string | null
+    client_name?: string | null
+    location?: string | null
+    internal?: boolean | null
+    start_time?: string | null
+    starts_at?: string | null
+    ends_at?: string | null
+  },
   crewNames: string[]
 ): string {
   return [
     courseShortName(c.course_type, c.custom_title),
     c.client_name,
-    c.location,
+    // A meeting is at the facility every week, and its event has a location
+    // field that says so. In the title it was the same words twice.
+    isSession(c) ? null : c.location,
     crewNames.join(', ') || null,
   ]
     .filter(Boolean)

@@ -58,7 +58,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     admin.from('profiles').select('role, first_name, last_name, email').eq('id', user.id).single(),
     admin
       .from('instance_instructors')
-      .select('role, in_charge, course_instances!inner(id, ref_number, course_type, course_category, custom_title, client_name, location, starts_at, ends_at, status, start_time, instance_instructors(role, in_charge, instructors(name))), instructors!inner(profile_id)')
+      .select('role, in_charge, course_instances!inner(id, ref_number, course_type, course_category, custom_title, client_name, location, starts_at, ends_at, status, internal, start_time, instance_instructors(role, in_charge, instructors(name))), instructors!inner(profile_id)')
       .eq('instructors.profile_id', user.id),
     loadMyOpenTasks(admin, user.id),
     loadMyDoneTasks(admin, user.id, today),
