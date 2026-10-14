@@ -18,6 +18,11 @@ export type CalendarCourse = {
   // Where a chip with no href goes instead: the call-in link of an all-staff
   // session, for the people who see it without being on its crew.
   joinHref?: string
+  /** The viewer's answer to a meeting: going, not, or not yet. Absent on
+      anything that is not a meeting. */
+  rsvp?: boolean | null
+  /** A meeting week nobody has signed up to teach. */
+  noClass?: boolean
   // Optional structured fields for the hover tooltip (falls back to label).
   name?: string
   client?: string | null
@@ -29,7 +34,7 @@ function chipStyle(c: CalendarCourse): string {
   const s = CATEGORY_STYLE[sectorOf(c)]
   // The internal hatch rides along with whatever the status draws — a
   // tentative internal day is dashed and hatched, both facts at once.
-  const mark = isOurs(c) ? ` ${OURS_MARK}` : ''
+  const mark = (isOurs(c) ? ` ${OURS_MARK}` : '') + (c.noClass ? ' border-dashed opacity-60' : '')
   switch (c.status) {
     case 'tentative':
       return `${s.outline} border-dashed${mark}`

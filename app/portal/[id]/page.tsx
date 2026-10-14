@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import CourseView, { type Viewer } from './CourseView'
 import { readViewAs, viewAsSelf } from '@/lib/view-as'
+import { isForMeeting } from '@/lib/meetings'
 
 // The course page for people who are on the course. All it does is work out
 // who is asking and what that entitles them to — the page itself is
@@ -43,7 +44,12 @@ export default async function PortalPage({
   ])
 
   const isAdmin = profile?.role === 'admin'
-  const isInstructor = !!instructorAssignment
+  // A meeting is also open to everyone it is for — all staff, or its invite
+  // list — without their being on its crew. Asked only when nothing else let
+  // them in, so it costs a course page nothing.
+  const audienceOnly =
+    !isAdmin && !instructorAssignment && !enrollment && (await isForMeeting(admin, user.id, id))
+  const isInstructor = !!instructorAssignment || audienceOnly
   if (!(isAdmin || isInstructor || enrollment)) redirect('/dashboard')
 
   // An admin can preview the page as a student or as an instructor who is not
@@ -66,6 +72,7 @@ export default async function PortalPage({
     // on the gear list rather than on wherever you were last.
     openSection: open ?? null,
     lastSeenAt: lastView?.last_seen_at ?? null,
+    audienceOnly,
   }
 
   return <CourseView id={id} viewer={viewer} />

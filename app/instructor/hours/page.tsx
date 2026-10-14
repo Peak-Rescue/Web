@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { workEmail } from '@/lib/contacts'
 import { listUpcomingEvents } from '@/lib/google-calendar'
-import { courseShortName, dayShift } from '@/lib/courses'
+import { courseShortName, dayShift, isSession } from '@/lib/courses'
 import { draftRows, periodEndFromDue, periodFor, shiftPeriod, stateFor, type Period, type TimesheetCourse, type TimesheetRow } from '@/lib/timesheet'
 import TimesheetEditor from './TimesheetEditor'
 import { saveTimesheet, markTimesheetSent } from './actions'
@@ -71,7 +71,7 @@ export default async function HoursPage({
     const [{ data: instances }, { data: offDays }, { data: rates }] = await Promise.all([
       admin
         .from('course_instances')
-        .select('id, course_type, course_category, custom_title, client_name, internal, location, region, status, starts_at, ends_at')
+        .select('id, course_type, course_category, custom_title, client_name, internal, location, region, status, starts_at, ends_at, start_time')
         .in('id', ids)
         .neq('status', 'cancelled')
         // A course either side of the period can still put a travel day
@@ -86,7 +86,8 @@ export default async function HoursPage({
         .eq('instructor_id', instructor.id),
     ])
     const own = new Map((rates ?? []).map((r) => [r.instance_id, r]))
-    courses = (instances ?? []).map((c) => ({
+    // A meeting pays nobody, so teaching one puts nothing on a timesheet.
+    courses = (instances ?? []).filter((c) => !isSession(c)).map((c) => ({
       ...c,
       off_days: (offDays ?? []).filter((o) => o.instance_id === c.id),
       own_starts_at: own.get(c.id)?.starts_at ?? null,

@@ -17,7 +17,8 @@
 
 import { type createAdminClient } from '@/lib/supabase/admin'
 import { CERT_GROUPS, CERT_META, type CertType } from '@/lib/certs'
-import { courseShortName } from '@/lib/courses'
+import { courseShortName, isSession, sessionTimeLabel } from '@/lib/courses'
+import { meetingAudience } from '@/lib/meetings'
 import {
   findCalendarDrift,
   listUpcomingEvents,
@@ -283,10 +284,12 @@ export async function runHoursReminders(
 
   const { data: instanceRows } = await admin
     .from('course_instances')
-    .select('id, course_type, custom_title, client_name, starts_at, ends_at, status')
+    .select('id, course_type, custom_title, client_name, starts_at, ends_at, status, internal, start_time')
     .neq('status', 'cancelled')
     .not('starts_at', 'is', null)
-  const allInstances = (instanceRows ?? []) as (CourseRef & { status: string })[]
+  // A meeting pays nobody, so teaching one is no reason to be reminded about hours.
+  const allInstances = ((instanceRows ?? []) as (CourseRef & { status: string; internal: boolean | null; start_time: string | null })[])
+    .filter((c) => !isSession(c))
 
   let sent = 0
   for (const dueDate of dueDates) {
@@ -396,4 +399,70 @@ export async function runCalendarDriftSweep(
     if (a.email) await sendEmail(a.email as string, subject, text)
   }
   return { checked: report.checked, repaired: report.drift.length }
+}
+
+// ─── Meeting reminders ──────────────────────────────────────────────────────
+
+// The day before a meeting — the Tuesday before the Wednesday class — everyone
+// it is for hears that it is on: what, who is teaching, when, and where to
+// call in. Only a week somebody has signed up to teach: a week with no primary
+// is "no class yet", and a reminder about it would be a reminder about nothing.
+// Anyone who has already said they can't make it is left off; anyone who
+// hasn't answered is asked to.
+export async function runMeetingReminders(admin: Admin): Promise<{ meetings: number; sent: number }> {
+  const tomorrow = addDaysISO(todayISO(), 1)
+  const { data: rows } = await admin
+    .from('course_instances')
+    .select('id, course_type, custom_title, status, internal, start_time, starts_at, ends_at, location, video_url, all_staff, instance_instructors(in_charge, topic, instructors(name))')
+    .eq('starts_at', tomorrow)
+    .eq('internal', true)
+    .neq('status', 'cancelled')
+    .not('start_time', 'is', null)
+
+  type Row = {
+    id: string; course_type: string; custom_title: string | null; status: string; internal: boolean | null
+    start_time: string | null; starts_at: string | null; ends_at: string | null; location: string | null
+    video_url: string | null; all_staff: boolean | null
+    instance_instructors: { in_charge: boolean | null; topic: string | null; instructors: { name: string } | null }[]
+  }
+  const meetings = ((rows ?? []) as unknown as Row[]).filter(
+    (m) => isSession(m) && m.instance_instructors.some((c) => c.in_charge)
+  )
+
+  let sent = 0
+  for (const m of meetings) {
+    const [audience, { data: declined }] = await Promise.all([
+      meetingAudience(admin, m),
+      admin.from('meeting_rsvps').select('instructor_id').eq('instance_id', m.id).eq('going', false),
+    ])
+    const out = new Set((declined ?? []).map((r) => r.instructor_id as string))
+    const title = courseShortName(m.course_type, m.custom_title)
+    const time = sessionTimeLabel(m)
+    const teaching = [...m.instance_instructors]
+      .sort((a, b) => Number(Boolean(b.in_charge)) - Number(Boolean(a.in_charge)))
+      .map((c) => `${c.instructors?.name ?? 'Instructor'}${c.topic ? ` — ${c.topic}` : ''}`)
+    const page = `${siteUrl()}/portal/${m.id}`
+
+    for (const person of audience) {
+      if (!person.email || out.has(person.id)) continue
+      if (!(await claim(admin, 'meeting_reminder', `${m.id}:${person.id}`))) continue
+      const ok = await sendEmail(
+        person.email,
+        `Tomorrow${time ? ` ${time}` : ''}: ${title}`,
+        [
+          `${person.name.split(' ')[0]}, a reminder that ${title} is tomorrow, ${friendlyDate(m.starts_at!)}${time ? ` at ${time} Mountain` : ''}.`,
+          '',
+          m.location ? `Where: ${m.location}` : null,
+          `Teaching: ${teaching.join('; ')}`,
+          m.video_url ? `Join by video: ${m.video_url}` : null,
+          '',
+          `Let us know whether you're coming: ${page}`,
+        ]
+          .filter((l) => l !== null)
+          .join('\n')
+      )
+      if (ok) sent++
+    }
+  }
+  return { meetings: meetings.length, sent }
 }

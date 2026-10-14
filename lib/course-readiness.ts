@@ -236,7 +236,8 @@ export function courseSteps(
   settleDays: number = DEFAULT_SETTLE_DAYS
 ): Step[] {
   const billing = billingStep(inst, x, today)
-  const books = booksStep(inst, x, today, settleDays)
+  // A meeting costs nothing and pays nobody, so it has no books to close.
+  const books = inst.crewOptional ? null : booksStep(inst, x, today, settleDays)
 
   // A course that has run is done being built, and done being staffed.
   // Whether its curriculum was ever written down is history; whether it was

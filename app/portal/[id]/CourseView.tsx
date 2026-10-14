@@ -15,6 +15,8 @@ import CourseGear from '@/app/admin/courses/CourseGear'
 import CourseDetailsEditor from '@/app/admin/courses/CourseDetailsEditor'
 import CourseStaffingEditor from '@/app/admin/courses/CourseStaffingEditor'
 import MeetingInviteSection from '@/app/admin/courses/MeetingInviteSection'
+import MeetingAttendance from './MeetingAttendance'
+import Link from 'next/link'
 import CourseStudentsEditor from '@/app/admin/courses/CourseStudentsEditor'
 import StudentInviteSection from '@/app/admin/courses/StudentInviteSection'
 import CoursePricingEditor from '@/app/admin/courses/CoursePricingEditor'
@@ -156,6 +158,10 @@ export type Viewer = {
   /** A door named in the link, so a mail can send somebody to one. */
   openSection?: string | null
   lastSeenAt: string | null
+  /** Here because a meeting is for them, not because they are on it. They read
+      what the crew reads and answer whether they are coming; what the crew can
+      change, they cannot. */
+  audienceOnly?: boolean
 }
 
 // A share link's viewer. Named rather than written inline at the call site so
@@ -231,6 +237,9 @@ export default async function CourseView({
 
   // Everything else in a second parallel round (roles known, filters set).
   const showTasks = showAsAdmin || showAsInstructor
+  // What the crew may change, which somebody here only because a meeting is
+  // for them may read but not touch.
+  const staffCanEdit = showTasks && !viewer.audienceOnly
   const audienceFilter = showTasks ? null : ['student', 'both']
 
   let modulesQuery = admin
@@ -365,7 +374,7 @@ export default async function CourseView({
         .order('off_date'),
       modulesQuery,
       admin.from('instance_instructors')
-        .select('role, in_charge, instructors(name, email, profile_id, slug, active, title, avatar, avatar_position, avatar_scale, show_phone, show_email, profiles(phone))')
+        .select('role, in_charge, topic, instructors(name, email, profile_id, slug, active, title, avatar, avatar_position, avatar_scale, show_phone, show_email, profiles(phone))')
         .eq('instance_id', id),
       showTasks ? loadTasksWithDocs(admin, id) : Promise.resolve([]),
       showTasks
@@ -907,6 +916,15 @@ export default async function CourseView({
 
   // Only tasks assigned to someone show on the course page, for everyone.
   const tasks: CourseTask[] = taskRows.filter((t) => t.assigned_to)
+  // A meeting's teachers, primary first, each with what they are teaching.
+  const meetingTeachers = session
+    ? [...(instructors ?? [])]
+        .sort((a, b) => Number(Boolean(b.in_charge)) - Number(Boolean(a.in_charge)))
+        .map((r) => ({
+          name: (r.instructors as unknown as { name?: string } | null)?.name ?? 'Instructor',
+          topic: ((r as { topic?: string | null }).topic ?? null) as string | null,
+        }))
+    : []
   const staffedProfileIds = new Set(
     (instructors ?? [])
       .map((r) => (r.instructors as unknown as { profile_id: string | null } | null)?.profile_id)
@@ -1542,6 +1560,30 @@ export default async function CourseView({
             </div>
           )}
 
+          {/* Who is teaching what, and who is coming. Everyone a meeting is for
+              reads this; a week nobody has signed up to teach says so, which
+              is also the week no reminder goes out for. */}
+          {session && (
+            <div className="mt-4 space-y-3">
+              <p className="text-sm text-zinc-300">
+                {meetingTeachers.length > 0 ? (
+                  <>
+                    <span className="text-zinc-500">Teaching: </span>
+                    {meetingTeachers.map((t) => (t.topic ? `${t.name} — ${t.topic}` : t.name)).join(' · ')}
+                  </>
+                ) : (
+                  <span className="text-amber-300">No class yet</span>
+                )}
+                {inst.series_id && (
+                  <Link href={`/portal/series/${inst.series_id}`} className="ml-3 underline underline-offset-2 text-zinc-400 hover:text-white">
+                    Teaching sign-up
+                  </Link>
+                )}
+              </p>
+              <MeetingAttendance instanceId={id} allStaff={Boolean(inst.all_staff)} userId={userId} />
+            </div>
+          )}
+
           {/* Only when the course breaks around off days, where "Aug 24 – 28"
               would be telling you it runs on days it does not. */}
           {blocks.length > 1 && (
@@ -1686,7 +1728,7 @@ export default async function CourseView({
               {hasNotes && (
                 <div className={BETWEEN_BLOCKS}>
                   <SubHead title="Notes" />
-                  <CourseNotes instanceId={id} notes={inst.notes} canEdit={showTasks} />
+                  <CourseNotes instanceId={id} notes={inst.notes} canEdit={staffCanEdit} />
                 </div>
               )}
               {/* The structured half of the same workspace. Freeform above,
@@ -1713,7 +1755,7 @@ export default async function CourseView({
                 <EditInPlace
                   label="Edit files"
                   title="Files"
-                  editor={showTasks ? <CourseFilesSection instanceId={id} files={editableFiles} /> : null}
+                  editor={staffCanEdit ? <CourseFilesSection instanceId={id} files={editableFiles} /> : null}
                 >
                 {courseDocs.length === 0 && (
                   <p className="text-xs text-zinc-600">Nothing attached yet.</p>
@@ -2752,7 +2794,7 @@ export default async function CourseView({
                                 ...a,
                                 url: daySignedByPath.get(a.path) ?? '#',
                               }))}
-                              canEdit={showTasks}
+                              canEdit={staffCanEdit}
                               notifyCounts={notifyCounts}
                               announcedDates={showTasks ? ((inst.meeting_announced_dates as string[] | null) ?? []) : []}
                               // An empty day never opens itself: it is a way

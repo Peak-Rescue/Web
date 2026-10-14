@@ -6,7 +6,8 @@ import MyTasksList from '@/components/MyTasksList'
 import { loadMyOpenTasks, loadMyDoneTasks } from '@/lib/course-tasks'
 import CourseCalendar, { type CalendarCourse } from '@/components/CourseCalendar'
 import StaffingInterestList from '@/components/StaffingInterestList'
-import { courseShortName, courseEventTitle, crewFirstNames, sessionTimeLabel } from '@/lib/courses'
+import { courseShortName, courseEventTitle, crewFirstNames, isSession, sessionTimeLabel } from '@/lib/courses'
+import MeetingRsvp from '@/components/MeetingRsvp'
 import { courseCapabilityCategories } from '@/lib/capabilities'
 import { todayHere } from '@/lib/course-clock'
 import { slotsToStaff } from '@/lib/course-readiness'
@@ -47,18 +48,19 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     start_time?: string | null
     video_url?: string | null
     all_staff?: boolean | null
-    instance_instructors?: { role: string; in_charge?: boolean | null; instructors: { name: string } | null }[] | null
+    series_id?: string | null
+    instance_instructors?: { role: string; in_charge?: boolean | null; topic?: string | null; instructors: { name: string } | null }[] | null
   }
   // What a calendar chip is drawn from, for the two reads that fetch courses
   // nobody assigned the viewer to.
   const CAL_COLS =
-    'id, ref_number, course_type, course_category, custom_title, custom_categories, client_name, location, starts_at, ends_at, status, internal, start_time, video_url, all_staff, instance_instructors(role, instructors(name))'
+    'id, ref_number, course_type, course_category, custom_title, custom_categories, client_name, location, starts_at, ends_at, status, internal, start_time, video_url, all_staff, series_id, instance_instructors(role, in_charge, topic, instructors(name))'
   // Profile gate + personalized data in one parallel round.
-  const [{ data: profile }, { data: assignmentRows }, myTasks, myDoneTasks, allInstancesRes, { data: inviteRows }, { data: capRow }, { data: hoursRow }, { data: allStaffRows }, { data: meetingInviteRows }] = await Promise.all([
+  const [{ data: profile }, { data: assignmentRows }, myTasks, myDoneTasks, allInstancesRes, { data: inviteRows }, { data: capRow }, { data: hoursRow }, { data: allStaffRows }, { data: meetingInviteRows }, { data: rsvpRows }] = await Promise.all([
     admin.from('profiles').select('role, first_name, last_name, email').eq('id', user.id).single(),
     admin
       .from('instance_instructors')
-      .select('role, in_charge, course_instances!inner(id, ref_number, course_type, course_category, custom_title, client_name, location, starts_at, ends_at, status, internal, start_time, instance_instructors(role, in_charge, instructors(name))), instructors!inner(profile_id)')
+      .select('role, in_charge, course_instances!inner(id, ref_number, course_type, course_category, custom_title, client_name, location, starts_at, ends_at, status, internal, start_time, all_staff, video_url, series_id, instance_instructors(role, in_charge, topic, instructors(name))), instructors!inner(profile_id)')
       .eq('instructors.profile_id', user.id),
     loadMyOpenTasks(admin, user.id),
     loadMyDoneTasks(admin, user.id, today),
@@ -81,7 +83,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     // Almost nobody has this on, and the tile below is the only thing that
     // reads it — but it rides along in the round that is already happening
     // rather than costing a trip of its own.
-    admin.from('instructors').select('hours_via_admin').eq('profile_id', user.id).maybeSingle(),
+    admin.from('instructors').select('id, active, hours_via_admin').eq('profile_id', user.id).maybeSingle(),
     // The sessions everyone is welcome at, which "My courses" would otherwise
     // hide from everybody but whoever is teaching that week. "All courses"
     // already has them in its own read.
@@ -95,6 +97,11 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       .select(`course_instances!inner(${CAL_COLS}), instructors!inner(profile_id)`)
       .eq('instructors.profile_id', user.id)
       .neq('course_instances.status', 'cancelled'),
+    // The viewer's own answers, for the mark on each meeting and the card.
+    admin
+      .from('meeting_rsvps')
+      .select('instance_id, going, instructors!inner(profile_id)')
+      .eq('instructors.profile_id', user.id),
   ])
 
   if (!['admin', 'instructor'].includes(profile?.role ?? '')) redirect('/dashboard')
@@ -192,6 +199,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   const myCategories = new Set(
     ((capRow?.instructor_capabilities ?? []) as { category: string }[]).map((c) => c.category)
   )
+  const myRsvp = new Map((rsvpRows ?? []).map((r) => [r.instance_id as string, r.going as boolean]))
   const invitedRows = (meetingInviteRows ?? []).map((r) => r.course_instances as unknown as InstRow)
   const invitedIds = new Set(invitedRows.map((i) => i.id))
   // Internal courses (instructor development, CE) are the exception to the
@@ -233,10 +241,14 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       status: i.status,
       starts_at: i.starts_at!,
       ends_at: i.ends_at! >= i.starts_at! ? i.ends_at! : i.starts_at!,
-      href: showAsAdmin || assignedIds.has(i.id) ? `/portal/${i.id}` : undefined,
-      // The course page is the crew's; everyone else gets the one thing they
-      // came for.
-      joinHref: (i.all_staff || invitedIds.has(i.id)) && i.video_url ? i.video_url : undefined,
+      // A meeting's page is open to everyone it is for, so its chip goes there
+      // like any course the viewer is on — the Join button and the answer
+      // are both on it.
+      href: showAsAdmin || assignedIds.has(i.id) || (isSession(i) && (i.all_staff || invitedIds.has(i.id)))
+        ? `/portal/${i.id}`
+        : undefined,
+      rsvp: isSession(i) ? myRsvp.get(i.id) ?? null : undefined,
+      noClass: isSession(i) && !(i.instance_instructors ?? []).some((r) => r.in_charge),
       category: i.course_category ?? null,
       internal: !!i.internal,
       name: courseShortName(i.course_type, i.custom_title),
@@ -246,6 +258,16 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     }))
 
   const calMonth = /^\d{4}-\d{2}$/.test(cal ?? '') ? cal! : today.slice(0, 7)
+
+  // The next meeting the viewer is expected at, for the card above the
+  // calendar — the one meeting nearly everybody is asking about.
+  const nextMeeting = calendarSource
+    .filter((i) => i && i.status !== 'cancelled' && i.starts_at && i.starts_at >= today && isSession(i))
+    .sort((a, b) => a.starts_at!.localeCompare(b.starts_at!) || (a.start_time ?? '').localeCompare(b.start_time ?? ''))[0]
+  const nextTeachers = [...(nextMeeting?.instance_instructors ?? [])]
+    .filter((r) => r.instructors)
+    .sort((a, b) => Number(Boolean(b.in_charge)) - Number(Boolean(a.in_charge)))
+  const canAnswer = Boolean(hoursRow?.id && hoursRow.active !== false)
 
   const homeHref = ({ all = showAllCourses, month = cal }: { all?: boolean; month?: string } = {}) => {
     const q = new URLSearchParams()
@@ -502,6 +524,45 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         {/* Open on arrival. The month is the thing most often being checked
             against, and a fold that has to be opened every visit is a fold
             everyone opens every visit. It still closes if you want it gone. */}
+        {nextMeeting && (
+          <section className="mb-10 p-4 bg-zinc-900 border border-zinc-800 rounded-lg">
+            <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+              <h2 className="text-sm font-medium text-zinc-500 uppercase tracking-wide">Next meeting</h2>
+              {nextMeeting.series_id && (
+                <Link href={`/portal/series/${nextMeeting.series_id}`} className="text-xs text-zinc-400 underline underline-offset-2 hover:text-white">
+                  Teaching sign-up
+                </Link>
+              )}
+            </div>
+            <Link href={`/portal/${nextMeeting.id}`} className="block mt-2 font-semibold text-white hover:underline">
+              {courseShortName(nextMeeting.course_type, nextMeeting.custom_title)}
+            </Link>
+            <p className="text-sm text-zinc-300 mt-0.5">
+              {new Date(`${nextMeeting.starts_at}T00:00:00Z`).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', timeZone: 'UTC' })}
+              {sessionTimeLabel(nextMeeting) && ` · ${sessionTimeLabel(nextMeeting)} Mountain`}
+              {nextMeeting.location && ` · ${nextMeeting.location}`}
+            </p>
+            <p className="text-sm mt-1">
+              {nextTeachers.length > 0 ? (
+                <span className="text-zinc-300">
+                  <span className="text-zinc-500">Teaching: </span>
+                  {nextTeachers.map((t) => (t.topic ? `${t.instructors!.name} — ${t.topic}` : t.instructors!.name)).join(' · ')}
+                </span>
+              ) : (
+                <span className="text-amber-300">No class yet</span>
+              )}
+            </p>
+            <div className="mt-3 flex flex-wrap items-center gap-3">
+              {canAnswer && <MeetingRsvp instanceId={nextMeeting.id} mine={myRsvp.get(nextMeeting.id) ?? null} />}
+              {nextMeeting.video_url && (
+                <a href={nextMeeting.video_url} target="_blank" rel="noopener noreferrer" className="text-sm text-zinc-300 underline underline-offset-2 hover:text-white">
+                  Join video call
+                </a>
+              )}
+            </div>
+          </section>
+        )}
+
         <details open className="mb-10 group">
           <summary className="cursor-pointer list-none flex items-center gap-2 text-sm font-medium text-zinc-500 uppercase tracking-wide select-none">
             <span className="text-zinc-600 text-xs transition-transform group-open:rotate-90">▶</span>

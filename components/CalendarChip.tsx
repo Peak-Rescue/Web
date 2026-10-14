@@ -86,8 +86,14 @@ export default function CalendarChip({
             {ours && <span>· Internal</span>}
             <span className="capitalize">· {course.status}</span>
           </p>
-          {course.internal && (
+          {course.internal && course.rsvp === undefined && (
             <p className="text-zinc-500 mt-0.5">No students</p>
+          )}
+          {course.noClass && <p className="text-amber-300 mt-1">No class yet — nobody has signed up to teach</p>}
+          {course.rsvp !== undefined && (
+            <p className="text-zinc-300 mt-1">
+              {course.rsvp === true ? 'You’re going' : course.rsvp === false ? 'You can’t make it' : 'You haven’t answered yet'}
+            </p>
           )}
           {!course.href && course.joinHref && (
             <p className="text-zinc-300 mt-1.5">Click to join the video call</p>
@@ -97,19 +103,25 @@ export default function CalendarChip({
       document.body
     )
 
+  // Your answer, as one character at the front of the bar: enough to scan a
+  // month for the weeks you have not answered, without a control in a strip
+  // a few pixels tall that is also a link.
+  const answer = course.rsvp === true ? '✓ ' : course.rsvp === false ? '✗ ' : ''
+  const label = `${answer}${course.label}${course.noClass ? ' · no class yet' : ''}`
+
   return course.href ? (
     <Link key={course.id} href={course.href} {...chipProps}>
-      {course.label}
+      {label}
       {tooltip}
     </Link>
   ) : course.joinHref ? (
     <a key={course.id} href={course.joinHref} target="_blank" rel="noopener noreferrer" {...chipProps}>
-      {course.label}
+      {label}
       {tooltip}
     </a>
   ) : (
     <span key={course.id} {...chipProps}>
-      {course.label}
+      {label}
       {tooltip}
     </span>
   )

@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { runCalendarDriftSweep, runCertSweep, runHoursReminders } from '@/lib/notifications'
+import { runCalendarDriftSweep, runCertSweep, runHoursReminders, runMeetingReminders } from '@/lib/notifications'
 
 // Daily sweep, hit by the scheduled GitHub Action (see
 // .github/workflows/reminder-emails.yml): medical-cert gaps, ADP hours
-// reminders, and the Google Calendar mirror check, which repairs any course
+// reminders, the day-before reminder for an internal meeting, and the Google
+// Calendar mirror check, which repairs any course
 // event that has drifted and emails the admins about what it had to fix.
 // Every job dedupes via notification_log, so extra invocations are harmless.
 export async function POST(request: Request) {
@@ -14,10 +15,11 @@ export async function POST(request: Request) {
   }
 
   const admin = createAdminClient()
-  const [certs, hours, calendar] = await Promise.all([
+  const [certs, hours, calendar, meetings] = await Promise.all([
     runCertSweep(admin),
     runHoursReminders(admin),
     runCalendarDriftSweep(admin),
+    runMeetingReminders(admin),
   ])
-  return NextResponse.json({ certs, hours, calendar })
+  return NextResponse.json({ certs, hours, calendar, meetings })
 }
