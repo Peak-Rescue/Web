@@ -4,6 +4,7 @@ import TrashIcon from '@/components/TrashIcon'
 import InfoHint from '@/components/InfoHint'
 import { CourseTypeSelect } from './CourseTypeSelect'
 import MeetingFields from './MeetingFields'
+import MeetingInviteSection from './MeetingInviteSection'
 import CourseLocationFields from '@/components/CourseLocationFields'
 import CourseContactsEditor from '@/components/CourseContactsEditor'
 import CourseDatePainter, { type OtherCourse } from '@/components/CourseDatePainter'
@@ -106,6 +107,7 @@ export default function CourseDetailsEditor({
             defaultEndTime={course.end_time ?? ''}
             defaultVideoUrl={course.video_url ?? ''}
             defaultAllStaff={Boolean(course.all_staff)}
+            inviteList={<MeetingInviteSection instanceId={instanceId} />}
             applyToSeries={course.series_id ? applySessionToSeries.bind(null, instanceId) : undefined}
           />
         ) : (

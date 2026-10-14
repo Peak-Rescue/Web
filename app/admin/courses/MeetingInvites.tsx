@@ -12,6 +12,9 @@ import TrashIcon from '@/components/TrashIcon'
  *  choosing people off the roster for one thing on the calendar. It differs
  *  in what it does not do. Nobody is emailed and nobody answers; being on the
  *  list puts the meeting on that person's calendar and nothing else.
+ *
+ *  Its buttons say type="button" because it is also drawn inside the details
+ *  form, where a bare one would submit the form around it.
  */
 export default function MeetingInvites({
   instanceId,
@@ -52,6 +55,7 @@ export default function MeetingInvites({
   return (
     <div>
       <button
+        type="button"
         onClick={() => { setShowPicker((v) => !v); setSelected(new Set(invited)); setMessage(null) }}
         className="inline-flex items-center text-xs px-2.5 py-1.5 rounded border border-zinc-700 text-zinc-300 hover:text-white hover:border-zinc-500 transition-colors"
       >
@@ -97,6 +101,7 @@ export default function MeetingInvites({
             ))}
           </div>
           <button
+            type="button"
             onClick={() => save([...selected])}
             disabled={busy}
             className="mt-3 px-4 py-2 bg-pr-red hover:bg-pr-red-dark text-white rounded text-sm font-medium transition-colors disabled:opacity-40"
@@ -112,6 +117,7 @@ export default function MeetingInvites({
             <span key={id} className="inline-flex items-center gap-2 px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-sm">
               {nameOf.get(id) ?? 'Former instructor'}
               <button
+                type="button"
                 onClick={() => save(invited.filter((x) => x !== id))}
                 disabled={busy}
                 aria-label={`Remove ${nameOf.get(id) ?? 'this person'} from the invite list`}

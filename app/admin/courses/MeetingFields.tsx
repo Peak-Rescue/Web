@@ -30,6 +30,7 @@ export default function MeetingFields({
   defaultAllStaff = true,
   repeat = false,
   people,
+  inviteList,
   applyToSeries,
   children,
 }: {
@@ -51,6 +52,11 @@ export default function MeetingFields({
       who it is for can be chosen in the same breath as saying it is not for
       everyone; an existing meeting keeps its list on its own page. */
   people?: { id: string; name: string }[]
+  /** The same choice on a meeting that already exists: its saved invite list,
+      which keeps itself rather than riding on this form. Drawn where the
+      picker above is drawn, so unticking the box answers the same way on
+      both forms. */
+  inviteList?: React.ReactNode
   /** Set on a week of a repeating meeting: copies what is on the form to the
       weeks still to come, and answers with how many it changed. */
   applyToSeries?: (formData: FormData) => Promise<number>
@@ -141,6 +147,12 @@ export default function MeetingFields({
               ))}
             </div>
           </div>
+        </div>
+      )}
+      {inviteList && !allStaff && (
+        <div className="sm:col-span-2">
+          <label className="block text-xs text-zinc-400 mb-1">Invited</label>
+          {inviteList}
         </div>
       )}
       {repeat && (
