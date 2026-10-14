@@ -26,7 +26,7 @@ type MeetingRow = {
     sign-ups from its start time, not from midnight: signing up to teach a
     class that started this morning is writing history, not volunteering. */
 export function meetingStarted(
-  m: { starts_at: string | null; start_time: string | null },
+  m: { starts_at?: string | null; start_time?: string | null },
   now: Date = new Date()
 ): boolean {
   if (!m.starts_at) return false

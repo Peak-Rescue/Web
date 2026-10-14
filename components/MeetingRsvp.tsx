@@ -8,9 +8,12 @@ import { setMeetingRsvp } from '@/app/portal/[id]/meeting-actions'
 export default function MeetingRsvp({
   instanceId,
   mine,
+  compact = false,
 }: {
   instanceId: string
   mine: boolean | null
+  /** Smaller pills, for a row of other actions. */
+  compact?: boolean
 }) {
   const [answer, setAnswer] = useState(mine)
   const [failed, setFailed] = useState(false)
@@ -32,7 +35,7 @@ export default function MeetingRsvp({
   }
 
   const pill = (on: boolean, tone: 'yes' | 'no') =>
-    `px-3 py-1.5 rounded-full border text-sm transition-colors ${
+    `${compact ? 'px-2.5 py-1 text-xs' : 'px-3 py-1.5 text-sm'} rounded-full border transition-colors ${
       on
         ? tone === 'yes'
           ? 'bg-teal-900/40 border-teal-600 text-teal-200'

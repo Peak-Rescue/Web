@@ -8,6 +8,7 @@ import CourseCalendar, { type CalendarCourse } from '@/components/CourseCalendar
 import StaffingInterestList from '@/components/StaffingInterestList'
 import { courseShortName, courseEventTitle, crewFirstNames, isSession, sessionTimeLabel } from '@/lib/courses'
 import MeetingRsvp from '@/components/MeetingRsvp'
+import { meetingStarted } from '@/lib/meetings'
 import { courseCapabilityCategories } from '@/lib/capabilities'
 import { todayHere } from '@/lib/course-clock'
 import { slotsToStaff } from '@/lib/course-readiness'
@@ -262,7 +263,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   // The next meeting the viewer is expected at, for the card above the
   // calendar — the one meeting nearly everybody is asking about.
   const nextMeeting = calendarSource
-    .filter((i) => i && i.status !== 'cancelled' && i.starts_at && i.starts_at >= today && isSession(i))
+    .filter((i) => i && i.status !== 'cancelled' && i.starts_at && i.starts_at >= today && isSession(i) && !meetingStarted(i))
     .sort((a, b) => a.starts_at!.localeCompare(b.starts_at!) || (a.start_time ?? '').localeCompare(b.start_time ?? ''))[0]
   const nextTeachers = [...(nextMeeting?.instance_instructors ?? [])]
     .filter((r) => r.instructors)
@@ -525,41 +526,42 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
             against, and a fold that has to be opened every visit is a fold
             everyone opens every visit. It still closes if you want it gone. */}
         {nextMeeting && (
-          <section className="mb-10 p-4 bg-zinc-900 border border-zinc-800 rounded-lg">
-            <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-              <h2 className="text-sm font-medium text-zinc-500 uppercase tracking-wide">Next meeting</h2>
-              {nextMeeting.series_id && (
-                <Link href={`/portal/series/${nextMeeting.series_id}`} className="text-xs text-zinc-400 underline underline-offset-2 hover:text-white">
-                  Teaching sign-up
-                </Link>
-              )}
+          <section className="mb-10 px-4 py-3 bg-zinc-900 border border-zinc-800 rounded-lg">
+            {/* Two rows: everything you can do about it beside the heading —
+                answer, join, sign up to teach — and what and when beneath. */}
+            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+              <h2 className="text-xs font-medium text-zinc-500 uppercase tracking-wide">Next meeting</h2>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                {canAnswer && <MeetingRsvp instanceId={nextMeeting.id} mine={myRsvp.get(nextMeeting.id) ?? null} compact />}
+                {nextMeeting.video_url && (
+                  <a href={nextMeeting.video_url} target="_blank" rel="noopener noreferrer" className="text-xs text-zinc-300 underline underline-offset-2 hover:text-white">
+                    Join video call
+                  </a>
+                )}
+                {nextMeeting.series_id && (
+                  <Link href={`/portal/series/${nextMeeting.series_id}`} className="text-xs text-zinc-400 underline underline-offset-2 hover:text-white">
+                    Teaching sign-up
+                  </Link>
+                )}
+              </div>
             </div>
-            <Link href={`/portal/${nextMeeting.id}`} className="block mt-2 font-semibold text-white hover:underline">
-              {courseShortName(nextMeeting.course_type, nextMeeting.custom_title)}
-            </Link>
-            <p className="text-sm text-zinc-300 mt-0.5">
-              {new Date(`${nextMeeting.starts_at}T00:00:00Z`).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', timeZone: 'UTC' })}
+            <p className="mt-1.5 text-sm text-zinc-400">
+              <Link href={`/portal/${nextMeeting.id}`} className="font-semibold text-white hover:underline">
+                {courseShortName(nextMeeting.course_type, nextMeeting.custom_title)}
+              </Link>
+              {' · '}
+              {new Date(`${nextMeeting.starts_at}T00:00:00Z`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' })}
               {sessionTimeLabel(nextMeeting) && ` · ${sessionTimeLabel(nextMeeting)} Mountain`}
               {nextMeeting.location && ` · ${nextMeeting.location}`}
-            </p>
-            <p className="text-sm mt-1">
+              {' · '}
               {nextTeachers.length > 0 ? (
                 <span className="text-zinc-300">
-                  <span className="text-zinc-500">Teaching: </span>
                   {nextTeachers.map((t) => (t.topic ? `${t.instructors!.name} — ${t.topic}` : t.instructors!.name)).join(' · ')}
                 </span>
               ) : (
                 <span className="text-amber-300">No class yet</span>
               )}
             </p>
-            <div className="mt-3 flex flex-wrap items-center gap-3">
-              {canAnswer && <MeetingRsvp instanceId={nextMeeting.id} mine={myRsvp.get(nextMeeting.id) ?? null} />}
-              {nextMeeting.video_url && (
-                <a href={nextMeeting.video_url} target="_blank" rel="noopener noreferrer" className="text-sm text-zinc-300 underline underline-offset-2 hover:text-white">
-                  Join video call
-                </a>
-              )}
-            </div>
           </section>
         )}
 
