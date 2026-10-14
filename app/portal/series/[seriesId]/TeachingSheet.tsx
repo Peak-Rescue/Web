@@ -71,58 +71,68 @@ export default function TeachingSheet({
     })
   }
 
+  const upcoming = weeks.filter((w) => !w.past)
+  // Newest first: the week just gone is the one anybody looks back for.
+  const earlier = weeks.filter((w) => w.past).reverse()
+
+  const row = (w: SheetWeek) => {
+    const others = w.teachers.filter((t) => !t.mine)
+    const me = mine.get(w.id)
+    return (
+      <div key={w.id} className={`px-4 py-3 bg-zinc-900 ${w.past ? 'text-zinc-500' : ''}`}>
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <Link href={`/portal/${w.id}`} className={`font-medium text-sm hover:underline w-28 shrink-0 ${w.past ? 'text-zinc-400' : 'text-white'}`}>
+            {fmt(w.date)}
+          </Link>
+          <div className="flex-1 min-w-0 text-sm">
+            {w.teachers.length === 0 && !me?.on ? (
+              <span className={w.past ? 'text-zinc-600' : 'text-amber-300'}>{w.past ? 'No class' : 'No class yet'}</span>
+            ) : (
+              (w.past ? w.teachers : others).map((t, i) => (
+                <span key={i} className={`block ${w.past ? 'text-zinc-400' : 'text-zinc-300'}`}>
+                  {t.name}
+                  {t.topic && <span className="text-zinc-500"> — {t.topic}</span>}
+                </span>
+              ))
+            )}
+          </div>
+        </div>
+        {!w.past && canSignUp && me && (
+          <div className="mt-2 flex items-center gap-2.5 sm:pl-[7.75rem]">
+            <label className="flex items-center gap-2 text-sm text-zinc-300 cursor-pointer shrink-0">
+              <input
+                type="checkbox"
+                checked={me.on}
+                onChange={(e) => set(w.id, { on: e.target.checked })}
+                className="accent-red-600"
+              />
+              I’ll teach
+            </label>
+            {me.on && (
+              <input
+                value={me.topic}
+                onChange={(e) => set(w.id, { topic: e.target.value })}
+                placeholder="What you’ll teach"
+                maxLength={200}
+                className={FIELD}
+              />
+            )}
+          </div>
+        )}
+      </div>
+    )
+  }
+
   return (
     <div className="mt-6">
-      <div className="divide-y divide-zinc-800 border border-zinc-800 rounded-lg overflow-hidden">
-        {weeks.map((w) => {
-          const others = w.teachers.filter((t) => !t.mine)
-          const me = mine.get(w.id)
-          return (
-            <div key={w.id} className={`px-4 py-3 bg-zinc-900 ${w.past ? 'opacity-50' : ''}`}>
-              <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                <Link href={`/portal/${w.id}`} className="font-medium text-sm text-white hover:underline w-28 shrink-0">
-                  {fmt(w.date)}
-                </Link>
-                <div className="flex-1 min-w-0 text-sm">
-                  {w.teachers.length === 0 && !me?.on ? (
-                    <span className="text-amber-300">No class yet</span>
-                  ) : (
-                    (w.past ? w.teachers : others).map((t, i) => (
-                      <span key={i} className="block text-zinc-300">
-                        {t.name}
-                        {t.topic && <span className="text-zinc-500"> — {t.topic}</span>}
-                      </span>
-                    ))
-                  )}
-                </div>
-              </div>
-              {!w.past && canSignUp && me && (
-                <div className="mt-2 flex items-center gap-2.5 sm:pl-[7.75rem]">
-                  <label className="flex items-center gap-2 text-sm text-zinc-300 cursor-pointer shrink-0">
-                    <input
-                      type="checkbox"
-                      checked={me.on}
-                      onChange={(e) => set(w.id, { on: e.target.checked })}
-                      className="accent-red-600"
-                    />
-                    I’ll teach
-                  </label>
-                  {me.on && (
-                    <input
-                      value={me.topic}
-                      onChange={(e) => set(w.id, { topic: e.target.value })}
-                      placeholder="What you’ll teach"
-                      maxLength={200}
-                      className={FIELD}
-                    />
-                  )}
-                </div>
-              )}
-            </div>
-          )
-        })}
-      </div>
-      {canSignUp && (
+      {upcoming.length > 0 ? (
+        <div className="divide-y divide-zinc-800 border border-zinc-800 rounded-lg overflow-hidden">
+          {upcoming.map(row)}
+        </div>
+      ) : (
+        <p className="text-sm text-zinc-500">Every week of this series has happened.</p>
+      )}
+      {canSignUp && upcoming.length > 0 && (
         <div className="mt-4 flex items-center gap-3">
           <button
             type="button"
@@ -134,6 +144,19 @@ export default function TeachingSheet({
           </button>
           {message && <span className={`text-sm ${message === 'Saved' ? 'text-teal-300' : 'text-red-400'}`}>{message}</span>}
         </div>
+      )}
+      {/* The record, which the spreadsheet kept too: who taught what. Folded,
+          because nobody signs up from it. */}
+      {earlier.length > 0 && (
+        <details className="mt-8 group">
+          <summary className="cursor-pointer list-none text-sm text-zinc-500 hover:text-zinc-300 select-none">
+            <span className="inline-block text-xs mr-1.5 transition-transform group-open:rotate-90">▶</span>
+            Earlier weeks ({earlier.length})
+          </summary>
+          <div className="mt-3 divide-y divide-zinc-800 border border-zinc-800 rounded-lg overflow-hidden">
+            {earlier.map(row)}
+          </div>
+        </details>
       )}
     </div>
   )

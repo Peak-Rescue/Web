@@ -7,6 +7,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { isSession } from '@/lib/courses'
+import { nowHere } from '@/lib/course-clock'
 
 const MEETING_COLS = 'id, status, internal, start_time, starts_at, ends_at, all_staff, series_id'
 
@@ -19,6 +20,17 @@ type MeetingRow = {
   ends_at: string | null
   all_staff: boolean | null
   series_id: string | null
+}
+
+/** Whether a meeting has begun, on the office clock. A week is closed to
+    sign-ups from its start time, not from midnight: signing up to teach a
+    class that started this morning is writing history, not volunteering. */
+export function meetingStarted(
+  m: { starts_at: string | null; start_time: string | null },
+  now: Date = new Date()
+): boolean {
+  if (!m.starts_at) return false
+  return `${m.starts_at}T${(m.start_time ?? '00:00').slice(0, 5)}` <= nowHere(now)
 }
 
 /** The viewer's own roster row, if they have one. Answering and teaching are

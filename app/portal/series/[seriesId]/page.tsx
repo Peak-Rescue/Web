@@ -3,8 +3,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { courseShortName, isSession, sessionTimeLabel } from '@/lib/courses'
-import { todayHere } from '@/lib/course-clock'
-import { isForMeeting, rosterIdFor } from '@/lib/meetings'
+import { isForMeeting, meetingStarted, rosterIdFor } from '@/lib/meetings'
 import TeachingSheet, { type SheetWeek } from './TeachingSheet'
 
 // The teaching sign-up sheet for a repeating meeting — what the spreadsheet
@@ -42,9 +41,8 @@ export default async function SeriesPage({ params }: { params: Promise<{ seriesI
 
   // Open to whoever the meeting is for; one week answers for the series,
   // since "Apply to all upcoming weeks" keeps every week for the same people.
-  const today = todayHere()
   const isAdmin = profile?.role === 'admin'
-  const sample = weeks.find((w) => w.starts_at! >= today) ?? weeks[weeks.length - 1]
+  const sample = weeks.find((w) => !meetingStarted(w)) ?? weeks[weeks.length - 1]
   const onCrew = Boolean(rosterId) && weeks.some((w) => w.instance_instructors.some((c) => c.instructor_id === rosterId))
   if (!isAdmin && !onCrew && !(await isForMeeting(admin, user.id, sample.id))) redirect('/admin')
 
@@ -52,7 +50,7 @@ export default async function SeriesPage({ params }: { params: Promise<{ seriesI
     id: w.id,
     date: w.starts_at!,
     time: sessionTimeLabel(w),
-    past: w.starts_at! < today,
+    past: meetingStarted(w),
     teachers: [...w.instance_instructors]
       .sort((a, b) => Number(Boolean(b.in_charge)) - Number(Boolean(a.in_charge)))
       .map((c) => ({

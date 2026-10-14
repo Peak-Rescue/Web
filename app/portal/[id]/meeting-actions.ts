@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { isSession } from '@/lib/courses'
 import { todayHere } from '@/lib/course-clock'
-import { isForMeeting, rosterIdFor } from '@/lib/meetings'
+import { isForMeeting, meetingStarted, rosterIdFor } from '@/lib/meetings'
 import { syncCourseCalendar } from '@/lib/google-calendar'
 
 const MAX_TOPIC = 200
@@ -85,7 +85,8 @@ export async function saveMyTeaching(
     .gte('starts_at', today)
   if (weeksError) throw new Error(weeksError.message)
   const open = ((weeks ?? []) as { id: string; status: string; internal: boolean | null; start_time: string | null; starts_at: string | null; ends_at: string | null }[])
-    .filter((w) => isSession(w))
+    // A week that has started is closed — neither joined nor left from here.
+    .filter((w) => isSession(w) && !meetingStarted(w))
   if (open.length === 0) return
   // One check stands for the series: every week of it is for the same people,
   // which "Apply to all upcoming weeks" keeps true.

@@ -120,6 +120,18 @@ export function todayHere(now: Date = new Date()): string {
   return todayIn(HOME_ZONE, now)
 }
 
+/** The time at the office now, as yyyy-mm-ddThh:mm — comparable as a string
+    with a stored date and time of day, which is how a meeting asks whether it
+    has started. */
+export function nowHere(now: Date = new Date()): string {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: HOME_ZONE, year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+  }).formatToParts(now)
+  const at = (type: string) => parts.find((p) => p.type === type)!.value
+  return `${at('year')}-${at('month')}-${at('day')}T${at('hour')}:${at('minute')}`
+}
+
 /** The day a timestamp fell on, at the office. For printing "closed on …" off
     a timestamptz: the instant is the fact, the date is a question about where
     you are standing, and the office is who is asking. */
