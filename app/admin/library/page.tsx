@@ -76,7 +76,17 @@ export default async function LibraryPage({
   const onShelf = Boolean(bucket)
   const landing = !bucket && !q && !discipline && !kind && !venue && !audience && status === 'published'
   const showDocs = !isTemplateShelf(bucket) && !landing
-  const showTemplates = (!bucket || isTemplateShelf(bucket)) && !docOnlyFilter && !landing
+  // Review status is a document's state, not a template's: there is nothing
+  // to approve about a kit list you wrote yourself, so the pending and
+  // archived tabs — which are documents being worked through — leave them
+  // out. The comment above has always said so; the condition did not, and
+  // every course setup turned up under Pending review looking like work.
+  // Asking for a template shelf by name still shows it, since hiding it
+  // there would leave the shelf reading as empty.
+  const statusHidesTemplates =
+    (status === 'pending' || status === 'archived') && !isTemplateShelf(bucket)
+  const showTemplates =
+    (!bucket || isTemplateShelf(bucket)) && !docOnlyFilter && !landing && !statusHidesTemplates
   const shelves: TemplateShelf[] = isTemplateShelf(bucket) ? [bucket] : TEMPLATE_SHELF_ORDER
 
   // A page of results, not the whole shelf. The reference page learned this —

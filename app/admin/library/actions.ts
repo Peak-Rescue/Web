@@ -300,6 +300,24 @@ export async function setLibraryAudience(ids: string[], audience: 'internal' | '
   revalidate()
 }
 
+// Expertise for a whole section at once. The Classroom topic a batch arrives
+// under is usually the discipline answer for every item in it — "Standards
+// Topics" is not thirteen separate judgements — and tagging them one at a time
+// is the step that was being skipped, which leaves items on the shelf that no
+// course will ever suggest.
+//
+// Sets rather than merges, like the audience control beside it: the group is
+// the unit being judged, and a half-applied tag read as a group that disagreed
+// with itself.
+export async function setLibraryDisciplines(ids: string[], disciplines: string[]) {
+  const admin = await requireAdmin()
+  if (ids.length === 0) return
+  const clean = [...new Set(disciplines)].filter((d) => VALID_DISCIPLINES.has(d))
+  const { error } = await admin.from('library_items').update({ disciplines: clean }).in('id', ids)
+  if (error) throw new Error(error.message)
+  revalidate()
+}
+
 export async function rejectLibraryItems(ids: string[]) {
   const admin = await requireAdmin()
   if (ids.length === 0) return
