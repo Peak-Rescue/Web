@@ -23,6 +23,8 @@ export default function ScheduleDayCard({
   day,
   sites = [],
   venueId = null,
+  region = null,
+  location = null,
   order,
   onRemoving,
   onRemoveFailed,
@@ -31,6 +33,11 @@ export default function ScheduleDayCard({
   day: ScheduleDay
   sites?: SiteOption[]
   venueId?: string | null
+  /** The course's state and the location as it was typed. A venue is set on
+      five courses in eighty; these are set on nearly all of them, and they
+      point at the same answer. */
+  region?: string | null
+  location?: string | null
   /** Where this day sits in the running order, so the card can offer to move
       it. Required, and `'unordered'` is the deliberate no: these were two
       optional booleans, and a caller that passed neither got a card with no
@@ -74,7 +81,18 @@ export default function ScheduleDayCard({
   // dropdown, so the ordering is the only thing making a Maui course feel like
   // it knows it's on Maui.
   const siteGroups = useMemo(() => {
-    const here = sites.filter((s) => venueId && s.venue_id === venueId)
+    // Where this course is, by whatever it actually says. The venue is the
+    // exact answer and is set on five courses in eighty; the state and the
+    // typed location are set on nearly all of them and point the same way. A
+    // list that leads with the right canyons only for the courses that filled
+    // in the rarest field is a list that leads with nothing.
+    const loc = (location ?? '').toLowerCase().trim()
+    const here = sites.filter((s) => {
+      if (venueId) return s.venue_id === venueId
+      if (region && s.venue_region === region) return true
+      const venue = (s.venue_name ?? '').toLowerCase()
+      return Boolean(loc && venue && (loc.includes(venue) || venue.includes(loc)))
+    })
     const rest = sites.filter((s) => !here.includes(s))
     const restBy = new Map<string, SiteOption[]>()
     for (const s of rest) {
@@ -82,10 +100,10 @@ export default function ScheduleDayCard({
       restBy.set(k, [...(restBy.get(k) ?? []), s])
     }
     return [
-      ...(here.length ? [{ name: 'This course’s venue', sites: here }] : []),
+      ...(here.length ? [{ name: venueId ? 'This course’s venue' : 'Where this course is', sites: here }] : []),
       ...[...restBy.entries()].map(([name, sites]) => ({ name, sites })),
     ]
-  }, [sites, venueId])
+  }, [sites, venueId, region, location])
 
   return (
     <>

@@ -26,6 +26,9 @@ export type SiteOption = {
   usual_meeting_time?: string | null
   venue_id?: string | null
   venue_name?: string | null
+  /** The state the venue is in, for a course that has a region but no venue —
+      which is most of them. */
+  venue_region?: string | null
 }
 
 export type ScheduleDay = {

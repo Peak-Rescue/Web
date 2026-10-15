@@ -554,7 +554,7 @@ export default async function CourseView({
         // Canyons and crags with beta already written, so a day points at one
         // instead of retyping the place.
         admin.from('sites')
-          .select('id, name, kind, beta, meeting_point_id, usual_meeting_time, venue_id, venues(name)')
+          .select('id, name, kind, beta, meeting_point_id, usual_meeting_time, venue_id, region_code, venues(name, region_code)')
           .eq('active', true)
           .order('name'),
         // Where a day can be told to gather instead of the site's usual.
@@ -1074,11 +1074,13 @@ export default async function CourseView({
   const [{ data: schedSiteRows }, { data: schedPointRows }] = await schedSetupPromise
 
   const schedSites = ((schedSiteRows ?? []) as unknown as {
-    id: string; name: string; kind: string | null; beta: string | null; meeting_point_id: string | null; usual_meeting_time: string | null; venue_id: string | null; venues: { name: string } | null
+    id: string; name: string; kind: string | null; beta: string | null; meeting_point_id: string | null; usual_meeting_time: string | null; venue_id: string | null; region_code: string | null; venues: { name: string; region_code: string | null } | null
   }[]).map((s) => ({
     id: s.id, name: s.name, kind: s.kind, beta: s.beta,
     meeting_point_id: s.meeting_point_id, usual_meeting_time: s.usual_meeting_time,
     venue_id: s.venue_id, venue_name: s.venues?.name ?? null,
+    // The venue's state, or the site's own when it sits under no venue.
+    venue_region: s.venues?.region_code ?? s.region_code ?? null,
   }))
 
   const schedMeetingPoints = ((schedPointRows ?? []) as unknown as
@@ -2840,6 +2842,8 @@ export default async function CourseView({
                             day={editableDay}
                             sites={schedSites}
                             venueId={inst.venue_id}
+                            region={inst.region}
+                            location={inst.location}
                             order={{ isFirst: di === 0, isLast: di === schedDays.length - 1 }}
                           />
                         ) : null

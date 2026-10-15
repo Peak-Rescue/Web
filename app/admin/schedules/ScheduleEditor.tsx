@@ -24,6 +24,8 @@ export default function ScheduleEditor({
   canTemplate,
   sites = [],
   venueId = null,
+  region = null,
+  location = null,
 }: {
   schedule: Schedule
   courseType?: string | null
@@ -44,6 +46,8 @@ export default function ScheduleEditor({
   // in Washington to find Emerald, so the venue's own sites come first and the
   // rest sit under a heading you have to mean to reach.
   venueId?: string | null
+  region?: string | null
+  location?: string | null
 }) {
   const router = useRouter()
   const [busy, setBusy] = useState(false)
@@ -119,6 +123,8 @@ export default function ScheduleEditor({
           day={day}
           sites={sites}
           venueId={venueId}
+          region={region}
+          location={location}
           // The card offers reordering only where something can say which day
           // sits where, and this screen lays them out in order, so it can. It
           // went without for as long as the arrows were a portal-only control:
