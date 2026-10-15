@@ -408,6 +408,7 @@ export default function SitesShelf({
                 scope={{ venueId: g.venue.id }}
                 place={`venue:${g.venue.id}`}
                 placeName={g.venue.name}
+                points={points}
               />
             )}
             </div>

@@ -54,12 +54,18 @@ export async function createSite(formData: FormData) {
     meeting_point_id: ((formData.get('meeting_point_id') as string) || '') || null,
     usual_meeting_time: ((formData.get('usual_meeting_time') as string) || '').trim() || null,
     coords: ((formData.get('coords') as string) || '').trim() || null,
-    // Beta is written here and also lives on ropewiki as often as not, and
-    // the two are the same answer. Offered on the same form so adding both
-    // does not mean adding the canyon and then going back for its link.
+    // Beta is written here and also lives on ropewiki as often as not, and a
+    // canyon usually has three links rather than one — the route page, the
+    // gauge, the driving pin. Taken on the same form so adding a canyon does
+    // not mean adding it and then going back for everything about it.
     links: (() => {
-      const url = ((formData.get('link') as string) || '').trim()
-      return /^https?:\/\//i.test(url) ? [{ url: url.slice(0, 500), label: 'route page' }] : []
+      const urls = formData.getAll('link_url') as string[]
+      const labels = formData.getAll('link_label') as string[]
+      return urls
+        .map((u, i) => ({ url: (u ?? '').trim(), label: (labels[i] ?? '').trim() }))
+        .filter((l) => /^https?:\/\//i.test(l.url))
+        .map((l) => ({ url: l.url.slice(0, 500), label: (l.label || 'link').slice(0, 80) }))
+        .slice(0, 10)
     })(),
   }).select('id').single()
   if (error) throw new Error(error.message)

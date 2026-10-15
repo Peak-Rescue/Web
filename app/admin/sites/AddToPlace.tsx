@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createSite, addPlaceLink, addPlaceContact, type PlaceScope } from './actions'
+import { SITE_KINDS, type MeetingPointRecord } from '@/lib/sites'
 import { createLibraryItem } from '@/app/admin/library/actions'
 import { errorFrom } from '@/lib/action-result'
 
@@ -22,13 +23,18 @@ type Kind = 'map' | 'beta' | 'weather' | 'contact'
 
 const input =
   'w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-xs focus:outline-none focus:border-zinc-500'
+const label = 'block text-[11px] text-zinc-500 mb-1'
 
 export default function AddToPlace({
   scope,
   place,
   placeName,
+  points = [],
 }: {
   scope: PlaceScope
+  /** Meetups this canyon could use, so the morning is answered while the
+      canyon is being written rather than on a second visit. */
+  points?: MeetingPointRecord[]
   /** `venue:<id>` or `region:<code>`, for the library forms that take a place. */
   place: string
   placeName: string
@@ -36,6 +42,13 @@ export default function AddToPlace({
   const router = useRouter()
   const [kind, setKind] = useState<Kind | null>(null)
   const [busy, setBusy] = useState(false)
+  // A canyon has a route page, a gauge and a driving pin far more often than
+  // it has one link, so the form starts with room for the three.
+  const [links, setLinks] = useState([
+    { label: 'ropewiki', url: '' },
+    { label: 'water gauge', url: '' },
+    { label: 'trailhead', url: '' },
+  ])
   const [error, setError] = useState<string | null>(null)
 
   // Written beta is a canyon with a write-up on it, and a canyon belongs to a
@@ -117,16 +130,67 @@ export default function AddToPlace({
           first question. */}
       {kind === 'beta' && (
         atVenue ? (
+          // The same fields the canyon's own row carries, so what you fill in
+          // here is what you will see when you open it. The venue is not
+          // asked for: the form is standing in it.
           <form action={createSite} className="space-y-2">
             <input type="hidden" name="venue_id" value={(scope as { venueId: string }).venueId} />
-            <input type="hidden" name="kind" value="canyon" />
             <div className="grid gap-2 sm:grid-cols-2">
-              <input name="name" required autoFocus className={input} placeholder="Keyhole Canyon" />
-              <input name="usual_meeting_time" className={input} placeholder="Usual meeting time — 0530" />
+              <div>
+                <label className={label}>Name</label>
+                <input name="name" required autoFocus className={input} placeholder="Keyhole Canyon" />
+              </div>
+              <div>
+                <label className={label}>Kind</label>
+                <input name="kind" list="add-site-kinds" defaultValue="canyon" className={input} />
+                <datalist id="add-site-kinds">
+                  {SITE_KINDS.map((k) => <option key={k} value={k} />)}
+                </datalist>
+              </div>
+              <div>
+                <label className={label}>Usual meeting time</label>
+                <input name="usual_meeting_time" className={input} placeholder="0530" />
+              </div>
+              <div>
+                <label className={label}>Usual meeting point</label>
+                <select name="meeting_point_id" className={input} defaultValue="">
+                  <option value="">— none —</option>
+                  {points.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+              </div>
+              <div className="sm:col-span-2">
+                <label className={label}>Coordinates — of the canyon itself</label>
+                <input name="coords" className={input} placeholder="20.8071, -156.1136" />
+              </div>
             </div>
-            <textarea name="beta" rows={4} className={`${input} resize-y`}
-                      placeholder="Approach, raps, exit, hazards. The first line is the scope line — what tells this canyon apart from the next one." />
-            <input name="link" className={`${input} font-mono`} placeholder="ropewiki or another write-up (optional)" />
+
+            <div>
+              <label className={label}>Beta — approach, raps, exit, hazards. The breaks are kept.</label>
+              <textarea name="beta" rows={5} className={`${input} resize-y`}
+                        placeholder={'Approach:\npark in the small turn-off…\n\nRoute:\n…'} />
+            </div>
+
+            <div>
+              <label className={label}>Links — route page, gauge, driving pin</label>
+              <div className="space-y-1.5">
+                {links.map((l, i) => (
+                  <div key={i} className="grid grid-cols-[7.5rem_1fr_1.25rem] gap-2 items-center">
+                    <input name="link_label" value={l.label} className={input}
+                           onChange={(e) => setLinks(links.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))} />
+                    <input name="link_url" value={l.url} spellCheck={false} className={`${input} font-mono`} placeholder="https://…"
+                           onChange={(e) => setLinks(links.map((x, j) => (j === i ? { ...x, url: e.target.value } : x)))} />
+                    <button type="button" onClick={() => setLinks(links.filter((_, j) => j !== i))}
+                            aria-label="Remove link"
+                            className="text-xs text-zinc-600 hover:text-red-400 transition-colors">✕</button>
+                  </div>
+                ))}
+                <button type="button" onClick={() => setLinks([...links, { label: '', url: '' }])}
+                        className="text-[11px] text-zinc-500 hover:text-zinc-300 transition-colors">
+                  + Add link
+                </button>
+              </div>
+            </div>
+
             <div className="flex items-center gap-3">
               <button className="text-[11px] px-2 py-1 rounded border border-zinc-700 text-zinc-300 hover:border-zinc-500 hover:text-white transition-colors">
                 Add beta
