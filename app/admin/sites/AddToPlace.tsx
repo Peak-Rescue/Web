@@ -152,7 +152,7 @@ export default function AddToPlace({
               <label className={label}>Links</label>
               <div className="space-y-1.5">
                 {links.map((l, i) => (
-                  <div key={i} className="grid grid-cols-[7.5rem_1fr_1.25rem] gap-2 items-center">
+                  <div key={i} className="grid grid-cols-[minmax(9rem,1fr)_minmax(0,1.6fr)_1.25rem] gap-2 items-center">
                     <input name="link_label" value={l.label} placeholder="ropewiki, Mountain Project…" className={input}
                            onChange={(e) => setLinks(links.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))} />
                     <input name="link_url" value={l.url} spellCheck={false} className={`${input} font-mono`} placeholder="https://…"

@@ -90,14 +90,14 @@ export default function VenueRow({ venue, itemCount }: { venue: Venue; itemCount
             <label className={label}>Links — weather, permits, hospital, getting there</label>
             <div className="space-y-1.5">
               {links.length > 0 && (
-                <div className="grid grid-cols-[6rem_7.5rem_1fr_1.25rem] gap-2 px-0.5">
+                <div className="grid grid-cols-[6rem_minmax(9rem,1fr)_minmax(0,1.6fr)_1.25rem] gap-2 px-0.5">
                   <span className="text-[10px] uppercase tracking-wide text-zinc-600">Block</span>
                   <span className="text-[10px] uppercase tracking-wide text-zinc-600">Forecast, permit portal…</span>
                   <span className="text-[10px] uppercase tracking-wide text-zinc-600">Address</span>
                 </div>
               )}
               {links.map((l, i) => (
-                <div key={i} className="grid grid-cols-[6rem_7.5rem_1fr_1.25rem] gap-2 items-center">
+                <div key={i} className="grid grid-cols-[6rem_minmax(9rem,1fr)_minmax(0,1.6fr)_1.25rem] gap-2 items-center">
                   <select
                     className={input}
                     value={l.kind ?? 'other'}

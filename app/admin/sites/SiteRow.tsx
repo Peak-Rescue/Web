@@ -125,13 +125,13 @@ export default function SiteRow({
                 inputs are free to stay w-full inside them. */}
             <div className="space-y-1.5">
               {links.length > 0 && (
-                <div className="grid grid-cols-[7.5rem_1fr_1.25rem] gap-2 px-0.5">
+                <div className="grid grid-cols-[minmax(9rem,1fr)_minmax(0,1.6fr)_1.25rem] gap-2 px-0.5">
                   <span className="text-[10px] uppercase tracking-wide text-zinc-600">ropewiki, Mountain Project…</span>
                   <span className="text-[10px] uppercase tracking-wide text-zinc-600">Address</span>
                 </div>
               )}
               {links.map((l, i) => (
-                <div key={i} className="grid grid-cols-[7.5rem_1fr_1.25rem] gap-2 items-center">
+                <div key={i} className="grid grid-cols-[minmax(9rem,1fr)_minmax(0,1.6fr)_1.25rem] gap-2 items-center">
                   <input
                     className={input}
                     value={l.label}
