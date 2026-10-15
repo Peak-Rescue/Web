@@ -154,6 +154,12 @@ export default async function LibraryPage({
   // behind is browsed with the ordinary shelf — group moves, per-item edit and
   // all — rather than needing a screen of its own.
   if (topic) query = query.contains('topics', [topic])
+  // A photo album has a card of its own now, so it stops appearing on the
+  // document shelves — nobody opening Reference is looking for the Coco Cay
+  // pictures, and seeing them there with no way to move them was the whole
+  // confusion. Videos are deliberately not excluded: a clip chosen for the
+  // curriculum is curriculum, and it belongs with the teaching material.
+  if (!kind) query = query.neq('kind', 'media')
 
   // Templates take the same search box and discipline tags the documents use.
   // They have no review status, so the status tabs pass them by — there's
@@ -692,21 +698,49 @@ export default async function LibraryPage({
         {/* ── Items ────────────────────────────────────────────────────── */}
         {/* ── The shelves ──────────────────────────────────────────────── */}
         {landing && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {SHELF_ORDER.map((shelf) => (
-              <Link
-                key={shelf}
-                href={href({ bucket: shelf })}
-                className="p-4 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-pr-red transition-colors"
-              >
-                <div className="flex items-baseline justify-between gap-3">
-                  <h2 className="font-semibold">{shelfLabel(shelf)}</h2>
-                  <span className="text-xs text-zinc-500 shrink-0 tabular-nums">{countByShelf.get(shelf) ?? 0}</span>
-                </div>
-                <p className="text-xs text-zinc-500 mt-1">{shelfHint(shelf)}</p>
-              </Link>
-            ))}
-          </div>
+          <>
+            {/* Two kinds of card, and they were drawn identically — which read
+                as "anything can be moved to anything". A document can be filed
+                onto the first four; the rest hold things that are made
+                elsewhere, so an equipment list cannot become a gear list and a
+                photo album cannot become a schedule. Saying so on the page is
+                cheaper than saying it every time somebody tries. */}
+            <p className="text-[11px] uppercase tracking-wide text-zinc-600 mb-2">Shelves — where a document is filed</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {SHELF_ORDER.filter((sh) => BUCKET_ORDER.includes(sh as LibraryBucket) && sh !== 'map').map((shelf) => (
+                <Link
+                  key={shelf}
+                  href={href({ bucket: shelf })}
+                  className="p-4 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-pr-red transition-colors"
+                >
+                  <div className="flex items-baseline justify-between gap-3">
+                    <h2 className="font-semibold">{shelfLabel(shelf)}</h2>
+                    <span className="text-xs text-zinc-500 shrink-0 tabular-nums">{countByShelf.get(shelf) ?? 0}</span>
+                  </div>
+                  <p className="text-xs text-zinc-500 mt-1">{shelfHint(shelf)}</p>
+                </Link>
+              ))}
+            </div>
+
+            <p className="text-[11px] uppercase tracking-wide text-zinc-600 mt-6 mb-2">
+              Built elsewhere — not somewhere a document is moved to
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {SHELF_ORDER.filter((sh) => !BUCKET_ORDER.includes(sh as LibraryBucket)).map((shelf) => (
+                <Link
+                  key={shelf}
+                  href={href({ bucket: shelf })}
+                  className="p-4 rounded-lg bg-zinc-900/60 border border-zinc-800 hover:border-zinc-600 transition-colors"
+                >
+                  <div className="flex items-baseline justify-between gap-3">
+                    <h2 className="font-semibold">{shelfLabel(shelf)}</h2>
+                    <span className="text-xs text-zinc-500 shrink-0 tabular-nums">{countByShelf.get(shelf) ?? 0}</span>
+                  </div>
+                  <p className="text-xs text-zinc-500 mt-1">{shelfHint(shelf)}</p>
+                </Link>
+              ))}
+            </div>
+          </>
         )}
 
         {/* ── Items ────────────────────────────────────────────────────── */}
@@ -836,9 +870,13 @@ export default async function LibraryPage({
         {onMedia && mediaShelf && (
           <MediaShelf
             albums={mediaShelf.albums.filter((a) => albumMatches(a, discipline, q))}
+            linked={mediaShelf.linked}
+            venues={venues}
+            sites={siteOptions}
             discipline={discipline}
             hrefFor={(d) => href({ discipline: d })}
             canUpload={realAdmin || profile?.role === 'instructor'}
+            canEdit={isAdmin}
           />
         )}
 

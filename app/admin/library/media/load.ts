@@ -4,19 +4,36 @@ import {
   albumSubtitle, albumTitle, inheritedDisciplines,
   type AlbumCourse, type MediaAlbum,
 } from '@/lib/media'
+import type { LibraryItem } from '@/lib/library'
 
 /** Every album there is: one per course that has anything in it, plus the
     general one. Counts come from the rows rather than from Drive — Drive is
     asked for the pictures themselves only once an album is opened, and asking
     it fifteen times to render a list of fifteen names would make the list the
     slowest page in the portal. */
-export async function loadMediaShelf(): Promise<{ albums: MediaAlbum[]; generalFolder: string | null }> {
+export async function loadMediaShelf(): Promise<{
+  albums: MediaAlbum[]
+  /** Albums that live somewhere else — a Google Photos link, a Drive folder
+      somebody pasted in before the portal grew its own. They are library rows
+      rather than course_photos, and they belong on this card rather than on a
+      document shelf: nobody browsing Reference is looking for the Coco Cay
+      pictures. Teaching videos are deliberately not here; a clip chosen for
+      the curriculum is curriculum. */
+  linked: LibraryItem[]
+  generalFolder: string | null
+}> {
   const admin = createAdminClient()
 
-  const [{ data: photoRows }, { data: linkRows }, { data: folder }] = await Promise.all([
+  const [{ data: photoRows }, { data: linkRows }, { data: folder }, { data: linkedRows }] = await Promise.all([
     admin.from('course_photos').select('instance_id, created_at, disciplines, topics'),
     admin.from('course_links').select('instance_id, url, drive_folder_id').eq('purpose', 'photos'),
     admin.from('media_folders').select('drive_folder_id').eq('slug', 'general').maybeSingle(),
+    admin
+      .from('library_items')
+      .select('id, title, description, source_type, url, edit_url, drive_file_id, kind, audience, disciplines, topics, admin_only, venue_id, site_id, expires_at, status, bucket, region, source_class, source_topic, source_item, library_item_links(id, url, access, audience)')
+      .eq('kind', 'media')
+      .eq('status', 'published')
+      .order('title'),
   ])
 
   const photos = (photoRows ?? []) as {
@@ -91,5 +108,8 @@ export async function loadMediaShelf(): Promise<{ albums: MediaAlbum[]; generalF
     return (b.startsAt ?? b.latest ?? '').localeCompare(a.startsAt ?? a.latest ?? '')
   })
 
-  return { albums, generalFolder: folder?.drive_folder_id ?? null }
+  const linked = ((linkedRows ?? []) as unknown as (LibraryItem & { library_item_links?: LibraryItem['links'] })[])
+    .map((r) => ({ ...r, links: r.library_item_links ?? [] }) as LibraryItem)
+
+  return { albums, linked, generalFolder: folder?.drive_folder_id ?? null }
 }

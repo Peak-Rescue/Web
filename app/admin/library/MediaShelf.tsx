@@ -5,6 +5,9 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { startGeneralUploads, recordGeneralUpload } from './media/actions'
 import { disciplineLabels, type MediaAlbum } from '@/lib/media'
+import LibraryRow from './LibraryRow'
+import type { LibraryItem, Venue } from '@/lib/library'
+import { type SiteOption } from '@/app/admin/schedules/types'
 import { CAPABILITY_META, CAPABILITY_ORDER } from '@/lib/capabilities'
 import { errorFrom } from '@/lib/action-result'
 
@@ -15,15 +18,24 @@ import { errorFrom } from '@/lib/action-result'
 // courses.
 export default function MediaShelf({
   albums,
+  linked,
+  venues,
+  sites,
   discipline,
   hrefFor,
   canUpload,
+  canEdit,
 }: {
   albums: MediaAlbum[]
+  /** Albums kept somewhere else — Google Photos links, pasted Drive folders. */
+  linked: LibraryItem[]
+  venues: Venue[]
+  sites: SiteOption[]
   discipline?: string | null
   /** Filter links, built by the page so they keep the rest of the query. */
   hrefFor: (d: string | undefined) => string
   canUpload: boolean
+  canEdit: boolean
 }) {
   const router = useRouter()
   const file = useRef<HTMLInputElement>(null)
@@ -129,6 +141,29 @@ export default function MediaShelf({
           </p>
         )}
       </div>
+
+      {linked.length > 0 && (
+        <details className="group/linked rounded-lg border border-zinc-800 bg-zinc-900/60">
+          <summary className="cursor-pointer list-none px-3 py-2.5 text-sm text-zinc-300 hover:text-white transition-colors flex items-center gap-2">
+            <span className="text-zinc-600 inline-block transition-transform group-open/linked:rotate-90">▶</span>
+            Albums kept somewhere else
+            <span className="text-zinc-600 text-xs">{linked.length}</span>
+            <span className="text-[11px] text-zinc-600 font-normal">Google Photos and pasted Drive folders</span>
+          </summary>
+          <div className="px-3 pb-3 space-y-2">
+            {linked.map((i) =>
+              canEdit
+                ? <LibraryRow key={i.id} item={i} venues={venues} sites={sites} />
+                : (
+                  <a key={i.id} href={i.url ?? '#'} target="_blank" rel="noopener noreferrer"
+                     className="block text-sm text-zinc-300 hover:text-white transition-colors truncate">
+                    {i.title}
+                  </a>
+                )
+            )}
+          </div>
+        </details>
+      )}
 
       {canUpload && (
         <details className="group rounded-lg border border-zinc-800 bg-zinc-900/60">
