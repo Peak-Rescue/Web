@@ -143,7 +143,9 @@ export default function CourseMapsSection({
                   useful if it also gets you there. */}
               {m.fromLibrary ? (
                 <Link
-                  href="/admin/library?status=all&bucket=map"
+                  // To the row, not to the shelf it is on: the reason to go
+                  // is to change this one map.
+                  href={`/admin/library?status=all&bucket=map&q=${encodeURIComponent(m.label ?? '')}`}
                   className={`text-[11px] transition-colors ${
                     (m.libraryAudience === 'internal')
                       ? 'text-amber-600/80 hover:text-amber-400'
@@ -252,12 +254,15 @@ export default function CourseMapsSection({
             meant as an edit to that entry, and until there was a way through
             to it the only door out of this section made a duplicate. Opens in
             its own tab: it is an errand beside this page, not away from it. */}
+        {/* Maps stopped having a shelf of their own when they moved in with
+            the places they are about — nobody goes looking for a map, they go
+            looking for where they are going. This went to the old one. */}
         <Link
-          href="/admin/library?status=all&bucket=map"
+          href="/admin/library?bucket=venue"
           target="_blank"
           className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors ml-auto"
         >
-          Map library ↗
+          Venue information ↗
         </Link>
       </div>
 
