@@ -990,6 +990,10 @@ export async function addLibraryItems(instanceId: string, moduleId: string, item
     .select('id, title')
     .in('id', itemIds)
     .eq('status', 'published')
+    // Belt to the picker's braces: the only ids reaching here came from a
+    // list this flag was already filtered out of, and a hand-posted id should
+    // not be the way around that.
+    .eq('admin_only', false)
 
   const rows = (lib ?? []).filter((l) => !have.has(l.id)).map((l) => ({
     module_id: moduleId,
@@ -1019,6 +1023,10 @@ export async function loadPickerItems(instanceId: string) {
       .from('library_items')
       .select('id, title, url, kind, audience, disciplines, topics, venue_id, region, bucket, source_class, venues(name)')
       .eq('status', 'published')
+      // Permits, MOUs, COIs. Company paperwork is not course material, so it
+      // is not offered to a course — which also means nothing downstream of
+      // here has to know the flag exists.
+      .eq('admin_only', false)
       .order('title')
       .limit(1000),
   ])
@@ -1211,6 +1219,7 @@ export async function applyLibrarySelection(
     .select('id, title')
     .in('id', [...new Set(wanted.flatMap((g) => g.items.map((i) => i.id)))])
     .eq('status', 'published')
+    .eq('admin_only', false)
   const libById = new Map((lib ?? []).map((l) => [l.id as string, l.title as string]))
 
   const newModules: { id: string; instance_id: string; title: string; audience: string; order: number }[] = []

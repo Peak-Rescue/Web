@@ -96,6 +96,8 @@ export async function loadMapLibrary(instanceId: string): Promise<MapPickerItem[
       .select('id, title, url, audience, region, venue_id, site_id, disciplines, venues(name), sites(name)')
       .eq('bucket', 'map')
       .neq('status', 'archived')
+      // Company paperwork is not course material. See 235.
+      .eq('admin_only', false)
       .order('title')
       .limit(300),
     admin.from('course_maps').select('library_item_id').eq('instance_id', instanceId),

@@ -97,6 +97,8 @@ export async function loadResourceLibrary(instanceId: string): Promise<ResourceP
       .select('id, title, url, kind, audience, region, venue_id, disciplines, venues(name)')
       .eq('bucket', 'resource')
       .eq('status', 'published')
+      // Company paperwork is not course material. See 235.
+      .eq('admin_only', false)
       .order('title')
       .limit(300),
     admin.from('course_resources').select('library_item_id').eq('instance_id', instanceId),

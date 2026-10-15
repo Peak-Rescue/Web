@@ -49,6 +49,7 @@ export type LibraryPatch = {
   edit_url?: string | null
   kind?: string
   audience?: 'internal' | 'shared'
+  admin_only?: boolean
   disciplines?: string[]
   topicsRaw?: string
   /** `venue:<id>` or `site:<id>`. The venue is derived when a site is named,
@@ -71,6 +72,13 @@ export async function updateLibraryItem(id: string, patch: LibraryPatch) {
   if (patch.edit_url !== undefined) update.edit_url = patch.edit_url?.trim() || null
   if (patch.kind !== undefined && VALID_KINDS.has(patch.kind)) update.kind = patch.kind
   if (patch.audience !== undefined) update.audience = patch.audience
+  // Never shared and admin-only at once: the flag adds a restriction on top of
+  // the ladder, so the rung underneath it has to be the restrictive one or the
+  // two disagree about the same row.
+  if (patch.admin_only !== undefined) {
+    update.admin_only = patch.admin_only
+    if (patch.admin_only) update.audience = 'internal'
+  }
   if (patch.disciplines !== undefined) {
     update.disciplines = patch.disciplines.filter((d) => VALID_DISCIPLINES.has(d))
   }
@@ -149,6 +157,7 @@ export async function createLibraryItem(formData: FormData) {
     bucket: isMap ? 'map' : VALID_BUCKETS.has(bucket) ? bucket : 'resource',
     region: isValidRegion(formData.get('region') as string) ? (formData.get('region') as string) : null,
     audience: (formData.get('audience') as string) === 'shared' ? 'shared' : 'internal',
+    admin_only: (formData.get('audience') as string) === 'admin',
     disciplines: (formData.getAll('disciplines') as string[]).filter((d) => VALID_DISCIPLINES.has(d)),
     topics: cleanTags((formData.get('topics') as string) || ''),
     venue_id: place.venue_id,

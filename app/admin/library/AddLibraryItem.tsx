@@ -45,6 +45,10 @@ export default function AddLibraryItem({ venues, sites }: { venues: Venue[]; sit
         <select name="audience" className={input} defaultValue="internal">
           <option value="internal">Instructors only</option>
           <option value="shared">Students &amp; instructors</option>
+          {/* Permits, MOUs, COIs, operational plans. Stored as its own flag
+              rather than a third audience, so it can only add a restriction —
+              but it is plainly the third rung to whoever is setting it. */}
+          <option value="admin">Admins only — and never on a course</option>
         </select>
       </div>
 

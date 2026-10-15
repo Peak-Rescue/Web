@@ -110,7 +110,7 @@ export default async function LibraryPage({
 
   let query = admin
     .from('library_items')
-    .select('id, title, description, source_type, url, edit_url, drive_file_id, kind, audience, disciplines, topics, venue_id, site_id, expires_at, status, bucket, region, source_class, source_topic, source_item, library_item_links(id, url, access, audience)')
+    .select('id, title, description, source_type, url, edit_url, drive_file_id, kind, audience, disciplines, topics, admin_only, venue_id, site_id, expires_at, status, bucket, region, source_class, source_topic, source_item, library_item_links(id, url, access, audience)')
     // The review queue is a queue: oldest problems first is the wrong way
     // round, and it is read top to bottom rather than looked up. Every other
     // view is looked up, so it goes in the order a shelf goes in.
@@ -126,6 +126,11 @@ export default async function LibraryPage({
     .range(offset, offset + PAGE)
 
   if (status !== 'all') query = query.eq('status', status)
+  // The five admins see the permits, MOUs and COIs; nobody else does, and an
+  // admin previewing the page as an instructor is nobody else — the whole
+  // point of that preview is to see what they see. `isAdmin` already folds
+  // view-as in, which is why the gate reads it rather than the real role.
+  if (!isAdmin) query = query.eq('admin_only', false)
   if (discipline) query = query.contains('disciplines', [discipline])
   if (kind) query = query.eq('kind', kind)
   if (audience) query = query.eq('audience', audience)
@@ -173,7 +178,7 @@ export default async function LibraryPage({
     showTemplates && shelves.includes('setup')
       ? (() => {
           let c = admin.from('course_templates')
-            .select('id, name, description, course_type, disciplines, course_template_sections(id, title, sort_order, course_template_items(id, sort_order, library_items(id, title, description, source_type, url, edit_url, drive_file_id, kind, audience, disciplines, topics, venue_id, site_id, expires_at, status, bucket, region, source_class, source_topic, source_item, library_item_links(id, url, access, audience))))')
+            .select('id, name, description, course_type, disciplines, course_template_sections(id, title, sort_order, course_template_items(id, sort_order, library_items(id, title, description, source_type, url, edit_url, drive_file_id, kind, audience, disciplines, topics, admin_only, venue_id, site_id, expires_at, status, bucket, region, source_class, source_topic, source_item, library_item_links(id, url, access, audience))))')
             .eq('active', true)
             .order('name')
           if (q) c = c.ilike('name', `%${q}%`)
@@ -199,14 +204,15 @@ export default async function LibraryPage({
     // you pick it, get nothing, and learn nothing about why. Cheap: two
     // columns for one shelf, and only while standing on one.
     onShelf && !isTemplateShelf(bucket) && !onPlaces && !onSort
-      ? admin.from('library_items').select('kind, disciplines').eq('bucket', bucket).eq('status', status === 'all' ? 'published' : status).limit(2000)
+      ? admin.from('library_items').select('kind, disciplines').eq('bucket', bucket).eq('status', status === 'all' ? 'published' : status)
+          .or(isAdmin ? 'admin_only.is.true,admin_only.is.false' : 'admin_only.is.false').limit(2000)
       : Promise.resolve({ data: null }),
     // The whole shelf, because the question is about all of it. Columns enough
     // to render the ordinary row, since one wrong guess is corrected in place.
     onSort
       ? admin
           .from('library_items')
-          .select('id, title, description, source_type, url, edit_url, drive_file_id, kind, audience, disciplines, topics, venue_id, site_id, expires_at, status, bucket, region, source_class, source_topic, source_item, library_item_links(id, url, access, audience)')
+          .select('id, title, description, source_type, url, edit_url, drive_file_id, kind, audience, disciplines, topics, admin_only, venue_id, site_id, expires_at, status, bucket, region, source_class, source_topic, source_item, library_item_links(id, url, access, audience)')
           .eq('status', 'published')
           .order('title')
           .limit(2000)

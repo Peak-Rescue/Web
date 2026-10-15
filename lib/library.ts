@@ -269,6 +269,12 @@ export type LibraryItem = {
   audience: LibraryAudience
   disciplines: string[]
   topics: string[]
+  /** Only the five admins may see it, and it is never offered to a course.
+      Sits on top of `audience` rather than replacing it: an admin-only item
+      is also `internal`, so every check that already hides internal material
+      from students goes on working, and a read path that forgets this gate
+      fails back to instructors-only rather than to the world. */
+  admin_only: boolean
   venue_id: string | null
   /** The specific canyon this is about, when it is about one. `venue_id` is
       still set, derived from the site, so the matching that reads the venue

@@ -32,6 +32,7 @@ export default function LibraryRow({ item, venues, sites = [], hideProvenance = 
     disciplines: item.disciplines,
     topicsRaw: item.topics.join(', '),
     place: placeValue(item.venue_id, item.site_id),
+    admin_only: item.admin_only,
     region: item.region ?? '',
     expires_at: item.expires_at ?? '',
   })
@@ -118,6 +119,14 @@ export default function LibraryRow({ item, venues, sites = [], hideProvenance = 
               {KIND_META[item.kind as keyof typeof KIND_META] ?? item.kind}
             </span>
             <AudiencePills audience={item.audience} />
+            {item.admin_only && (
+              <span
+                title="Only the admins see this, and it is never offered to a course"
+                className="text-[10px] px-1.5 py-0.5 rounded bg-red-950/60 text-red-300"
+              >
+                Admin only
+              </span>
+            )}
             {site
               ? <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-900/40 text-blue-300">{site.name}</span>
               : venue && <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-900/40 text-blue-300">{venue.name}</span>}
@@ -209,9 +218,22 @@ export default function LibraryRow({ item, venues, sites = [], hideProvenance = 
           </div>
           <div>
             <label className={label}>Who can see it</label>
-            <select className={input} value={form.audience} onChange={(e) => setForm({ ...form, audience: e.target.value as 'internal' | 'shared' })}>
+            <select
+              className={input}
+              value={form.admin_only ? 'admin' : form.audience}
+              onChange={(e) =>
+                e.target.value === 'admin'
+                  ? setForm({ ...form, admin_only: true, audience: 'internal' })
+                  : setForm({ ...form, admin_only: false, audience: e.target.value as 'internal' | 'shared' })
+              }
+            >
               <option value="internal">{AUDIENCE_META.internal.choice}</option>
               <option value="shared">{AUDIENCE_META.shared.choice}</option>
+              {/* One ladder in the UI, two fields underneath. Admin-only is
+                  stored as its own flag so it can only ever add a restriction,
+                  but to the person setting it this is plainly the third rung:
+                  students, then instructors, then us. */}
+              <option value="admin">Admins only — and never on a course</option>
             </select>
           </div>
           {/* One question at either level — the area, or the canyon inside
