@@ -188,13 +188,16 @@ export default function SitesShelf({
             venue had and had to leave to give it anything. */}
         {countries.map((c) => (
           <div key={c.country || '_none'}>
-            <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-500 mb-2">{c.label}</h2>
+            <h2 className="text-base font-semibold text-zinc-100 mb-2 pb-1 border-b border-zinc-800">{c.label}</h2>
             {c.subs.map((sub) => (
               <div key={sub.code || '_nosub'} className="mb-3">
                 {/* Plain text, not another disclosure: two levels to open
                     before reaching a venue is one more click than a list this
                     length deserves. */}
-                <p className="text-[10px] uppercase tracking-wide text-zinc-700 mb-1.5 pl-0.5">
+                {/* The headings were the smallest, faintest text on a page
+                    whose whole job is grouping by them. A heading quieter than
+                    the rows under it is not a heading. */}
+                <p className="text-sm font-medium text-zinc-300 mb-1.5 pl-0.5">
                   {sub.label || 'No state set'}
                 </p>
                 <div className="space-y-2">

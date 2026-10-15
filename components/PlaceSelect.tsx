@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createPlaceInline } from '@/app/admin/library/actions'
 import { type SiteOption } from '@/app/admin/schedules/types'
 import { type Venue } from '@/lib/library'
-import { countryName, regionLabel, splitRegion } from '@/lib/regions'
+import { countryName, regionLabel, splitRegion, SUBDIVISIONS } from '@/lib/regions'
 
 /** One field for "where is this about", at whatever level is known.
  *
@@ -76,6 +76,15 @@ export default function PlaceSelect({
   for (const code of byRegion.keys()) {
     const { country } = splitRegion(code)
     byCountry.set(country, [...(byCountry.get(country) ?? []), code])
+  }
+  // Every state of a country already in use, not only the ones that already
+  // hold a venue. Listing just the latter was a chicken-and-egg: filing the
+  // first thing in Nevada meant Nevada was not on the list, so four states
+  // got invented as venues to get round it. A state is not a venue.
+  for (const [country, codes] of byCountry) {
+    for (const sub of SUBDIVISIONS[country] ?? []) {
+      if (!codes.includes(sub.code)) codes.push(sub.code)
+    }
   }
   const countries = [...byCountry.entries()]
     .map(([country, codes]) => ({
