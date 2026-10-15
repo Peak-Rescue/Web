@@ -395,6 +395,9 @@ export async function updateInstanceDetails(id: string, formData: FormData) {
   const venue_id         = (formData.get('venue_id') as string) || null
   const client_name      = (formData.get('client_name') as string) || null
   const contactsRaw      = formData.get('contacts_json')
+  // Who to ring about the place, as opposed to about the client. Same jsonb
+  // treatment, different list, and never the one a quote is sent from.
+  const placeContactsRaw = formData.get('place_contacts')
   const notes            = (formData.get('notes') as string) || null
   const max_students     = formData.get('max_students') ? Number(formData.get('max_students')) : null
   const crewPlan         = crewPlanFromForm(formData)
@@ -440,6 +443,23 @@ export async function updateInstanceDetails(id: string, formData: FormData) {
         : {}),
       ...(formData.has('owner_id') ? { owner_id } : {}),
       ...(contactsRaw !== null ? { contacts: contactsFromForm(contactsRaw) } : {}),
+      ...(placeContactsRaw !== null
+        ? {
+            place_contacts: (() => {
+              try {
+                const rows = JSON.parse(String(placeContactsRaw)) as { name?: string; phone?: string; email?: string }[]
+                return (Array.isArray(rows) ? rows : [])
+                  .map((r) => ({
+                    name: String(r.name ?? '').trim().slice(0, 120),
+                    phone: String(r.phone ?? '').trim().slice(0, 40) || undefined,
+                    email: String(r.email ?? '').trim().slice(0, 120) || undefined,
+                  }))
+                  .filter((r) => r.name)
+                  .slice(0, 12)
+              } catch { return [] }
+            })(),
+          }
+        : {}),
     })
     .eq('id', id)
 

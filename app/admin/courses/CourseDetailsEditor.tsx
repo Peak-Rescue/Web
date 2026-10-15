@@ -15,6 +15,7 @@ import { computeBlocks, isSession } from '@/lib/courses'
     id, because the list next to it removes them. */
 export type CourseOffDay = { id: string; off_date: string; end_date: string | null }
 import { type CoursePOC } from '@/lib/contacts'
+import CoursePlaceContacts, { type PlaceContact } from '@/components/CoursePlaceContacts'
 import { type CourseOwner } from '@/lib/course-owner'
 import { type Venue } from '@/lib/library'
 import { CREW_SEAT_FIELDS, ROLE_TEXT } from '@/lib/staffing-roles'
@@ -60,6 +61,7 @@ export default function CourseDetailsEditor({
   instanceId,
   course,
   contacts,
+  placeContacts = [],
   venues,
   offDays,
   others,
@@ -70,6 +72,7 @@ export default function CourseDetailsEditor({
   instanceId: string
   course: CourseDetailsRow
   contacts: CoursePOC[]
+  placeContacts?: PlaceContact[]
   venues: Venue[]
   offDays: CourseOffDay[]
   /** Everything else on the books, for the painter's overlay. */
@@ -144,7 +147,11 @@ export default function CourseDetailsEditor({
               <label className="block text-xs text-zinc-400 mb-1">Client / organization</label>
               <input name="client_name" defaultValue={course.client_name ?? ''} className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
             </div>
-            <CourseContactsEditor initial={contacts} instanceId={instanceId} />
+            <CourseContactsEditor initial={contacts} />
+            {/* The locals, kept apart from the client's people above: a
+                landowner in that list is a landowner a quote could be
+                addressed to. */}
+            <CoursePlaceContacts initial={placeContacts} instanceId={instanceId} />
           </>
         )}
         {/* Nobody enrols on a job, so there is no headcount to set. Left in
