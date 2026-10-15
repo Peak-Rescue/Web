@@ -46,7 +46,7 @@ export default async function VenuesPage({
           Venues
           <InfoHint text="Maps, permits, lodging and rescue plans attach here once — setting a course's venue pulls them in automatically." />
         </h1>
-        <p className="text-zinc-400 mt-1 mb-2">Places you run courses, and standing client sites.</p>
+        <p className="text-zinc-400 mt-1 mb-2">Places you run courses.</p>
         {/* A venue is the region a course is sold against; the canyon it
             actually runs in lives a level down. Naming the other screen
             without a way to reach it is how the same beta gets typed twice. */}
@@ -83,10 +83,6 @@ export default async function VenuesPage({
             <div>
               <label className={label}>State / country</label>
               <RegionSelect name="region_code" className={input} />
-            </div>
-            <div className="sm:col-span-2">
-              <label className={label}>Client (for standing client sites)</label>
-              <input name="client_name" className={input} placeholder="e.g. Icy Straight Point" />
             </div>
             <div className="sm:col-span-2">
               <label className={label}>Notes</label>

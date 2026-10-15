@@ -18,9 +18,6 @@ export default function VenueRow({ venue, itemCount }: { venue: Venue; itemCount
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-sm font-medium">{venue.name}</span>
-            {venue.client_name && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-900/40 text-blue-300">{venue.client_name}</span>
-            )}
             {!venue.active && <span className="text-[10px] text-zinc-600">inactive</span>}
           </div>
           <p className="text-[11px] text-zinc-600 mt-0.5">

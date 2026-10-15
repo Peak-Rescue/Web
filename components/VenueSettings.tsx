@@ -11,8 +11,13 @@ const label = 'block text-[11px] text-zinc-500 mb-1'
 
 // What a venue is, as opposed to what is in it.
 //
-// Its name, which state it sits in, whose site it is, its standing links and
-// the locals to ring. Lifted out of the venues page so the places shelf can
+// Its name, which state it sits in, its standing links and the locals to ring.
+//
+// Not who the client is. A venue is a place; a client is somebody we work for,
+// and the two were conflated here because CocoCay belongs to Royal Caribbean
+// and the field was the nearest hook. Royal Caribbean is also Labadee, and
+// will be a row of its own — at which point a venue pointing at a typed name
+// would be the second copy. Lifted out of the venues page so the places shelf can
 // carry it too: renaming a venue was the one thing about a venue that could
 // only be done on a second screen, which is the kind of door the rest of this
 // restructure spent its time closing.
@@ -33,7 +38,6 @@ export default function VenueSettings({
     name: venue.name,
     region: venue.region ?? '',
     region_code: venue.region_code ?? '',
-    client_name: venue.client_name ?? '',
     notes: venue.notes ?? '',
   })
   const [links, setLinks] = useState<VenueLink[]>(venue.links ?? [])
@@ -66,15 +70,6 @@ export default function VenueSettings({
             onChange={(code) => setForm({ ...form, region_code: code })}
           />
         </div>
-        <div className="sm:col-span-2">
-          <label className={label}>Client</label>
-          <input className={input} value={form.client_name} onChange={(e) => setForm({ ...form, client_name: e.target.value })} />
-        </div>
-        {/* The region's standing links. Weather, the permit portal, the
-            hospital, the drive from the airport — one URL and a label each,
-            none of it teaching material, and before this they were typed
-            onto a course as an update and died with it. The canyon's own
-            route page and gauge stay on the site. */}
         <div className="sm:col-span-2">
           <label className={label}>Links — weather, permits, hospital, getting there</label>
           <div className="space-y-1.5">

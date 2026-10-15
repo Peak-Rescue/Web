@@ -371,6 +371,11 @@ export type Venue = {
   name: string
   region: string | null
   region_code: string | null
+  /** Who the venue belongs to, where it is somebody's site — CocoCay is Royal
+      Caribbean's, and so is Labadee. Nothing writes this any more: a client is
+      somebody we work for rather than a fact about a place, and it is becoming
+      a row of its own. Kept so the six names that are in it survive to be read
+      by whatever takes them. */
   client_name: string | null
   notes: string | null
   /** Standing links for the region: weather, permit portal, hospital, the
