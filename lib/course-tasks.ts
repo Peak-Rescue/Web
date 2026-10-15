@@ -13,14 +13,15 @@ export type LoadedTask = {
 // Tasks for one instance with their attached documents resolved to signed
 // URLs (private bucket) — one batched signing call for the whole list.
 // External-link attachments carry their own URL and skip signing.
+// A null instanceId loads the general tasks, the ones on no course.
 export async function loadTasksWithDocs(
   admin: ReturnType<typeof createAdminClient>,
-  instanceId: string
+  instanceId: string | null
 ): Promise<LoadedTask[]> {
   const { data } = await admin
     .from('course_tasks')
     .select('id, title, notes, assigned_to, assigned_by, status, course_task_documents(id, path, filename, url)')
-    .eq('instance_id', instanceId)
+    .filter('instance_id', instanceId ? 'eq' : 'is', instanceId)
     .order('sort_order')
     .order('created_at')
 
@@ -52,7 +53,8 @@ export async function loadTasksWithDocs(
 
 export type MyOpenTask = {
   id: string
-  instance_id: string
+  /** Null on a general task, which belongs to no course. */
+  instance_id: string | null
   title: string
   notes: string | null
   /** When it was ticked, on the ones that have been. */
@@ -70,7 +72,8 @@ export type MyOpenTask = {
 
 // A user's open tasks across courses, with notes and signed document URLs —
 // the same task data the course pages show, surfaced on the portal home.
-// Sorted by course start date so the list groups cleanly by course.
+// Sorted by course start date so the list groups cleanly by course, with the
+// general tasks ahead of them all: they have no date to wait behind.
 export async function loadMyOpenTasks(
   admin: ReturnType<typeof createAdminClient>,
   userId: string
@@ -98,8 +101,9 @@ export async function loadMyOpenTasks(
       const ia = a.course_instances as unknown as InstRow | null
       const ib = b.course_instances as unknown as InstRow | null
       return (
+        Number(a.instance_id !== null) - Number(b.instance_id !== null) ||
         (ia?.starts_at ?? '9999').localeCompare(ib?.starts_at ?? '9999') ||
-        a.instance_id.localeCompare(b.instance_id) ||
+        (a.instance_id ?? '').localeCompare(b.instance_id ?? '') ||
         (a.created_at as string).localeCompare(b.created_at as string)
       )
     })
@@ -160,7 +164,7 @@ async function shapeMyTasks(
     const inst = r.course_instances as unknown as InstRow | null
     return {
       id: r.id as string,
-      instance_id: r.instance_id as string,
+      instance_id: (r.instance_id as string | null) ?? null,
       title: r.title as string,
       notes: (r.notes as string | null) ?? null,
       completedAt: (r.completed_at as string | null) ?? null,
@@ -189,8 +193,10 @@ async function shapeMyTasks(
 // Bounded twice, on purpose. Only courses that haven't happened yet, because
 // once a course has run there is nothing left to revisit — the task is history
 // in the useless sense. And 15, because this is a fold on a page about what is
-// coming, not an audit log.
+// coming, not an audit log. A general task has no course to run out, so it
+// stays for a month after the tick instead.
 const DONE_LIMIT = 15
+const GENERAL_DONE_DAYS = 30
 
 export async function loadMyDoneTasks(
   admin: ReturnType<typeof createAdminClient>,
@@ -209,7 +215,9 @@ export async function loadMyDoneTasks(
     // are really the 15 most recent.
     .limit(DONE_LIMIT * 6)
 
+  const generalSince = new Date(Date.now() - GENERAL_DONE_DAYS * 86_400_000).toISOString()
   return shapeMyTasks(admin, (data ?? []).filter((r) => {
+    if (!r.instance_id) return (r.completed_at ?? '') >= generalSince
     const inst = r.course_instances as unknown as { status: string; ends_at: string | null } | null
     return inst && inst.status !== 'cancelled' && (!inst.ends_at || inst.ends_at >= today)
   }).slice(0, DONE_LIMIT), userId)

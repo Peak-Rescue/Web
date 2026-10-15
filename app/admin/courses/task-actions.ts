@@ -23,28 +23,40 @@ async function getCaller() {
 // question as who is on lead wage — a course can carry three people on the lead
 // rate, and handing all three the power to close everyone's tasks was only ever
 // right because there used to be one of them.
-async function isPrimaryOf(admin: ReturnType<typeof createAdminClient>, instanceId: string, profileId: string) {
+async function isPrimaryOf(admin: ReturnType<typeof createAdminClient>, instanceId: string | null, profileId: string) {
+  // A general task has no course and so no primary: it is admins' alone.
+  if (!instanceId) return false
   const { data } = await admin
     .from('instance_instructors')
     .select('id, instructors!inner(profile_id)')
-    .eq('instance_id', instanceId)
+    .filter('instance_id', instanceId ? 'eq' : 'is', instanceId)
     .eq('in_charge', true)
     .eq('instructors.profile_id', profileId)
     .maybeSingle()
   return Boolean(data)
 }
 
-async function requireManager(instanceId: string) {
+async function requireManager(instanceId: string | null) {
   const { user, admin, isAdmin } = await getCaller()
   if (!isAdmin && !(await isPrimaryOf(admin, instanceId, user.id))) {
-    throw new Error('Only admins and primary instructors can manage this course\'s tasks')
+    throw new Error(instanceId
+      ? 'Only admins and primary instructors can manage this course\'s tasks'
+      : 'Only admins can manage general tasks')
   }
   return { user, admin }
 }
 
-function revalidateTaskViews(instanceId: string) {
-  revalidatePath(`/admin/courses/${instanceId}`)
-  revalidatePath(`/portal/${instanceId}`)
+// instanceId null is a general task — one that belongs to no course. Every
+// query below pins the task to its place with
+// `.filter('instance_id', instanceId ? 'eq' : 'is', instanceId)`, because
+// `eq null` matches nothing and the general case has to say `is null`.
+function revalidateTaskViews(instanceId: string | null) {
+  if (instanceId) {
+    revalidatePath(`/admin/courses/${instanceId}`)
+    revalidatePath(`/portal/${instanceId}`)
+  } else {
+    revalidatePath('/admin/tasks')
+  }
   revalidatePath('/admin')
 }
 
@@ -52,7 +64,7 @@ function revalidateTaskViews(instanceId: string) {
 async function notifyAssignee(
   admin: ReturnType<typeof createAdminClient>,
   taskTitle: string,
-  instanceId: string,
+  instanceId: string | null,
   assigneeId: string,
   actorId: string
 ) {
@@ -61,16 +73,18 @@ async function notifyAssignee(
     const [{ data: assignee }, { data: actor }, { data: inst }] = await Promise.all([
       admin.from('profiles').select('email, first_name').eq('id', assigneeId).single(),
       admin.from('profiles').select('first_name, last_name').eq('id', actorId).single(),
-      admin.from('course_instances').select('course_type, custom_title, client_name, starts_at').eq('id', instanceId).single(),
+      instanceId
+        ? admin.from('course_instances').select('course_type, custom_title, client_name, starts_at').eq('id', instanceId).single()
+        : Promise.resolve({ data: null }),
     ])
-    if (!assignee?.email || !inst) return
-    const courseName = courseShortName(inst.course_type, inst.custom_title)
+    if (!assignee?.email || (instanceId && !inst)) return
+    const courseName = inst ? courseShortName(inst.course_type, inst.custom_title) : null
     const actorName = [actor?.first_name, actor?.last_name].filter(Boolean).join(' ').trim()
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://peak-rescue.com'
     await sendMail({
       from: 'Peak Rescue Portal <noreply@peak-rescue.com>',
       to: [assignee.email],
-      subject: `Task assigned — ${courseName}: ${taskTitle}`,
+      subject: courseName ? `Task assigned — ${courseName}: ${taskTitle}` : `Task assigned: ${taskTitle}`,
       text: [
         // Named rather than passive: the first question a task raises is who
         // wants it, and this mail is where most of them are first read. Falls
@@ -80,10 +94,13 @@ async function notifyAssignee(
           ? `${assignee.first_name ?? 'Hi'}, ${actorName} assigned you a task in the portal.`
           : `${assignee.first_name ?? 'Hi'}, you've been assigned a task in the portal.`,
         '',
-        `Course: ${courseName}${inst.client_name ? ` · ${inst.client_name}` : ''}${inst.starts_at ? ` · starts ${inst.starts_at}` : ''}`,
+        ...(inst
+          ? [`Course: ${courseName}${inst.client_name ? ` · ${inst.client_name}` : ''}${inst.starts_at ? ` · starts ${inst.starts_at}` : ''}`]
+          : []),
         `Task: ${taskTitle}`,
         '',
-        `View the course: ${siteUrl}/portal/${instanceId}`,
+        // A general task lives on the portal home, in the assignee's own list.
+        inst ? `View the course: ${siteUrl}/portal/${instanceId}` : `View your tasks: ${siteUrl}/admin`,
       ].join('\n'),
     })
   } catch (e) {
@@ -97,7 +114,7 @@ export type TaskInput = {
   notes: string | null
 }
 
-export async function addTask(instanceId: string, input: TaskInput) {
+export async function addTask(instanceId: string | null, input: TaskInput) {
   const { user, admin } = await requireManager(instanceId)
   const title = input.title.trim()
   if (!title) throw new Error('Task title is required')
@@ -128,7 +145,7 @@ export async function addTask(instanceId: string, input: TaskInput) {
 // Bulk add from the suggestions picker. Template sort_order keeps the
 // checklist in its canonical order regardless of when tasks were added.
 export async function addTasks(
-  instanceId: string,
+  instanceId: string | null,
   items: { title: string; assigned_to: string | null; sort_order?: number }[]
 ) {
   const { user, admin } = await requireManager(instanceId)
@@ -157,7 +174,7 @@ export async function addTasks(
 }
 
 export async function updateTask(
-  instanceId: string,
+  instanceId: string | null,
   taskId: string,
   patch: { assigned_to: string | null }
 ) {
@@ -167,7 +184,7 @@ export async function updateTask(
     .from('course_tasks')
     .select('title, assigned_to')
     .eq('id', taskId)
-    .eq('instance_id', instanceId)
+    .filter('instance_id', instanceId ? 'eq' : 'is', instanceId)
     .single()
   if (!before) throw new Error('Task not found')
 
@@ -179,7 +196,7 @@ export async function updateTask(
       ...(assigneeChanged ? { assigned_by: patch.assigned_to ? user.id : null } : {}),
     })
     .eq('id', taskId)
-    .eq('instance_id', instanceId)
+    .filter('instance_id', instanceId ? 'eq' : 'is', instanceId)
   if (error) throw new Error(error.message)
 
   const newAssignee = patch.assigned_to
@@ -189,14 +206,14 @@ export async function updateTask(
   revalidateTaskViews(instanceId)
 }
 
-export async function setTaskStatus(instanceId: string, taskId: string, done: boolean) {
+export async function setTaskStatus(instanceId: string | null, taskId: string, done: boolean) {
   const { user, admin, isAdmin } = await getCaller()
 
   const { data: task } = await admin
     .from('course_tasks')
     .select('assigned_to')
     .eq('id', taskId)
-    .eq('instance_id', instanceId)
+    .filter('instance_id', instanceId ? 'eq' : 'is', instanceId)
     .single()
   if (!task) throw new Error('Task not found')
 
@@ -213,14 +230,14 @@ export async function setTaskStatus(instanceId: string, taskId: string, done: bo
 
 // Notes are working state ("called hotel, waiting on callback") — editable by
 // managers and by the task's assignee.
-export async function updateTaskNotes(instanceId: string, taskId: string, notes: string) {
+export async function updateTaskNotes(instanceId: string | null, taskId: string, notes: string) {
   const { user, admin, isAdmin } = await getCaller()
 
   const { data: task } = await admin
     .from('course_tasks')
     .select('assigned_to')
     .eq('id', taskId)
-    .eq('instance_id', instanceId)
+    .filter('instance_id', instanceId ? 'eq' : 'is', instanceId)
     .single()
   if (!task) throw new Error('Task not found')
 
@@ -242,13 +259,13 @@ export async function updateTaskNotes(instanceId: string, taskId: string, notes:
 const DOC_BUCKET = 'task-documents'
 const MAX_DOC_BYTES = 20 * 1024 * 1024
 
-async function requireTaskParticipant(instanceId: string, taskId: string) {
+async function requireTaskParticipant(instanceId: string | null, taskId: string) {
   const { user, admin, isAdmin } = await getCaller()
   const { data: task } = await admin
     .from('course_tasks')
     .select('assigned_to')
     .eq('id', taskId)
-    .eq('instance_id', instanceId)
+    .filter('instance_id', instanceId ? 'eq' : 'is', instanceId)
     .single()
   if (!task) throw new Error('Task not found')
   const allowed = isAdmin || task.assigned_to === user.id || (await isPrimaryOf(admin, instanceId, user.id))
@@ -257,7 +274,7 @@ async function requireTaskParticipant(instanceId: string, taskId: string) {
 }
 
 export async function createTaskDocUploadTargets(
-  instanceId: string,
+  instanceId: string | null,
   taskId: string,
   files: { name: string; size: number }[]
 ): Promise<{ path: string; token: string }[]> {
@@ -268,7 +285,7 @@ export async function createTaskDocUploadTargets(
   for (const file of files) {
     if (file.size > MAX_DOC_BYTES) throw new Error(`"${file.name}" is over the 20 MB limit`)
     const ext = (file.name.split('.').pop() ?? 'pdf').toLowerCase().replace(/[^a-z0-9]/g, '') || 'pdf'
-    const path = `tasks/${instanceId}/${taskId}/${randomUUID()}.${ext}`
+    const path = `tasks/${instanceId ?? 'general'}/${taskId}/${randomUUID()}.${ext}`
     const { data, error } = await admin.storage.from(DOC_BUCKET).createSignedUploadUrl(path)
     if (error || !data) throw new Error(error?.message ?? 'Could not create upload URL')
     targets.push({ path: data.path, token: data.token })
@@ -277,12 +294,12 @@ export async function createTaskDocUploadTargets(
 }
 
 export async function finalizeTaskDocs(
-  instanceId: string,
+  instanceId: string | null,
   taskId: string,
   uploads: { path: string; filename: string }[]
 ) {
   const { user, admin } = await requireTaskParticipant(instanceId, taskId)
-  const prefix = `tasks/${instanceId}/${taskId}/`
+  const prefix = `tasks/${instanceId ?? 'general'}/${taskId}/`
   const rows = uploads
     .filter((u) => u.path.startsWith(prefix))
     .map((u) => ({ task_id: taskId, path: u.path, filename: u.filename.slice(0, 200), uploaded_by: user.id }))
@@ -294,7 +311,7 @@ export async function finalizeTaskDocs(
 
 // A task attachment can also be an external link (Google Drive, Dropbox…) —
 // same table and chips, url instead of a storage path.
-export async function addTaskDocLink(instanceId: string, taskId: string, url: string, title: string) {
+export async function addTaskDocLink(instanceId: string | null, taskId: string, url: string, title: string) {
   const { user, admin } = await requireTaskParticipant(instanceId, taskId)
   const link = normalizeDocLink(url, title)
   const { error } = await admin.from('course_task_documents').insert({
@@ -307,7 +324,7 @@ export async function addTaskDocLink(instanceId: string, taskId: string, url: st
   revalidateTaskViews(instanceId)
 }
 
-export async function renameTaskDoc(instanceId: string, taskId: string, docId: string, filename: string) {
+export async function renameTaskDoc(instanceId: string | null, taskId: string, docId: string, filename: string) {
   const { admin } = await requireTaskParticipant(instanceId, taskId)
   const name = filename.trim().slice(0, 200)
   if (!name) throw new Error('File name cannot be empty')
@@ -320,7 +337,7 @@ export async function renameTaskDoc(instanceId: string, taskId: string, docId: s
   revalidateTaskViews(instanceId)
 }
 
-export async function deleteTaskDoc(instanceId: string, taskId: string, docId: string) {
+export async function deleteTaskDoc(instanceId: string | null, taskId: string, docId: string) {
   const { admin } = await requireTaskParticipant(instanceId, taskId)
   const { data: doc } = await admin
     .from('course_task_documents')
@@ -335,9 +352,9 @@ export async function deleteTaskDoc(instanceId: string, taskId: string, docId: s
   revalidateTaskViews(instanceId)
 }
 
-export async function deleteTask(instanceId: string, taskId: string) {
+export async function deleteTask(instanceId: string | null, taskId: string) {
   const { admin } = await requireManager(instanceId)
-  const { error } = await admin.from('course_tasks').delete().eq('id', taskId).eq('instance_id', instanceId)
+  const { error } = await admin.from('course_tasks').delete().eq('id', taskId).filter('instance_id', instanceId ? 'eq' : 'is', instanceId)
   if (error) throw new Error(error.message)
   revalidateTaskViews(instanceId)
 }

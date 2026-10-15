@@ -37,14 +37,14 @@ export default function MyTasksList({ tasks, done = [] }: { tasks: MyOpenTask[];
   const [notesStatus, setNotesStatus] = useState<'idle' | 'pending' | 'saving' | 'saved' | 'error'>('idle')
   const notesTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  function scheduleNotes(instId: string, taskId: string, value: string) {
+  function scheduleNotes(instId: string | null, taskId: string, value: string) {
     setNotesDraft(value)
     setNotesStatus('pending')
     if (notesTimer.current) clearTimeout(notesTimer.current)
     notesTimer.current = setTimeout(() => void flushNotes(instId, taskId, value), 800)
   }
 
-  async function flushNotes(instId: string, taskId: string, value: string) {
+  async function flushNotes(instId: string | null, taskId: string, value: string) {
     setNotesStatus('saving')
     try {
       await updateTaskNotes(instId, taskId, value)
@@ -164,7 +164,7 @@ export default function MyTasksList({ tasks, done = [] }: { tasks: MyOpenTask[];
 
   // Tasks arrive sorted by course start date, so consecutive rows for the
   // same course collapse into one header group.
-  const groups: { instanceId: string; first: MyOpenTask; items: MyOpenTask[] }[] = []
+  const groups: { instanceId: string | null; first: MyOpenTask; items: MyOpenTask[] }[] = []
   for (const t of tasks) {
     const last = groups[groups.length - 1]
     if (last && last.instanceId === t.instance_id) last.items.push(t)
@@ -197,7 +197,9 @@ export default function MyTasksList({ tasks, done = [] }: { tasks: MyOpenTask[];
               </p>
               {ticked && (
                 <p className="text-[11px] text-zinc-600 truncate">
-                  {[t.courseName, t.clientName, fmtRange(t)].filter(Boolean).join(' · ')}
+                  {t.instance_id
+                    ? [t.courseName, t.clientName, fmtRange(t)].filter(Boolean).join(' · ')
+                    : 'General'}
                 </p>
               )}
             </button>
@@ -250,9 +252,11 @@ export default function MyTasksList({ tasks, done = [] }: { tasks: MyOpenTask[];
                 >
                   + Add link
                 </button>
-                <Link href={`/portal/${t.instance_id}`} prefetch={false} className="ml-auto text-xs text-zinc-500 underline hover:text-zinc-300">
-                  Open course →
-                </Link>
+                {t.instance_id && (
+                  <Link href={`/portal/${t.instance_id}`} prefetch={false} className="ml-auto text-xs text-zinc-500 underline hover:text-zinc-300">
+                    Open course →
+                  </Link>
+                )}
               </div>
               <TaskNotesField
                 ref={notesFieldRef}
@@ -290,7 +294,12 @@ export default function MyTasksList({ tasks, done = [] }: { tasks: MyOpenTask[];
         onCancel={() => !linkBusy && setLinkTask(null)}
       />
       {groups.map((g) => (
-        <div key={g.instanceId} className="divide-y divide-zinc-800">
+        <div key={g.instanceId ?? 'general'} className="divide-y divide-zinc-800">
+          {g.instanceId === null ? (
+            <div className="px-4 py-2 bg-zinc-950/50">
+              <span className="text-xs font-semibold uppercase tracking-wide text-zinc-300">General</span>
+            </div>
+          ) : (
           <div className="px-4 py-2 bg-zinc-950/50 flex items-baseline gap-x-2 flex-wrap">
             <Link
               href={`/portal/${g.instanceId}`}
@@ -306,6 +315,7 @@ export default function MyTasksList({ tasks, done = [] }: { tasks: MyOpenTask[];
               {[g.first.clientName, g.first.location, fmtRange(g.first)].filter(Boolean).join(' · ')}
             </span>
           </div>
+          )}
           {g.items.map((t) => renderTask(t))}
         </div>
       ))}
@@ -314,7 +324,9 @@ export default function MyTasksList({ tasks, done = [] }: { tasks: MyOpenTask[];
           <summary className="cursor-pointer list-none px-4 py-2 flex items-center gap-2 text-xs text-zinc-600 hover:text-zinc-400 transition-colors select-none">
             <span aria-hidden className="transition-transform group-open:rotate-90">▶</span>
             {done.length} done
-            <span className="text-zinc-700">on courses still to come</span>
+            <span className="text-zinc-700">
+              {done.some((t) => !t.instance_id) ? 'recently or on courses still to come' : 'on courses still to come'}
+            </span>
           </summary>
           <div className="divide-y divide-zinc-800 border-t border-zinc-800">
             {done.map((t) => renderTask(t, true))}

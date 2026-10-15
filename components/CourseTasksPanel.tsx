@@ -44,6 +44,8 @@ export type TaskSuggestion = { id: string; title: string; default_line: boolean;
 // Checklist for one course instance. `canManage` (admin or lead instructor)
 // unlocks assignment, add/delete, and the suggestions dropdown;
 // everyone on the course can see it, and assignees can check off their own.
+// With a null instanceId it is the general list — tasks on no course, which
+// only admins manage (/admin/tasks).
 export default function CourseTasksPanel({
   instanceId,
   tasks,
@@ -53,7 +55,7 @@ export default function CourseTasksPanel({
   suggestions = [],
   completedOpen = false,
 }: {
-  instanceId: string
+  instanceId: string | null
   tasks: CourseTask[]
   people: TaskPerson[]
   canManage: boolean
@@ -86,7 +88,7 @@ export default function CourseTasksPanel({
   const notesSeq = useRef(0)
   const dirtyNotes = useRef<{ taskId: string; value: string } | null>(null)
 
-  function scheduleNotes(instId: string, taskId: string, value: string) {
+  function scheduleNotes(instId: string | null, taskId: string, value: string) {
     setNotesDraft(value)
     setNotesStatus('pending')
     notesSeq.current++
@@ -95,7 +97,7 @@ export default function CourseTasksPanel({
     notesTimer.current = setTimeout(() => void flushNotes(instId, taskId, value), 800)
   }
 
-  async function flushNotes(instId: string, taskId: string, value: string) {
+  async function flushNotes(instId: string | null, taskId: string, value: string) {
     const seq = notesSeq.current
     setNotesStatus('saving')
     try {
@@ -508,7 +510,7 @@ export default function CourseTasksPanel({
                 <input
                   value={newTitle}
                   onChange={(e) => setNewTitle(e.target.value)}
-                  placeholder="e.g. Confirm range access with client"
+                  placeholder={instanceId ? 'e.g. Confirm range access with client' : 'e.g. Renew the liability policy'}
                   className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500"
                 />
               </div>
@@ -706,7 +708,7 @@ export default function CourseTasksPanel({
                 </button>
               )}
               <button onClick={() => setAdding(true)} className="text-sm text-zinc-400 hover:text-white transition-colors">
-                + Add custom task
+                {instanceId ? '+ Add custom task' : '+ Add task'}
               </button>
             </div>
           )}

@@ -378,6 +378,17 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       ),
     },
     {
+      title: 'Tasks',
+      desc: 'Assign work that belongs to no course',
+      href: '/admin/tasks',
+      section: 'admin',
+      icon: (
+        <svg {...svgProps}>
+          <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+        </svg>
+      ),
+    },
+    {
       title: 'Expense Admin',
       desc: "Everyone's reports, rates, and per-course spending",
       href: '/admin/expenses',
