@@ -370,23 +370,19 @@ export default function SitesShelf({
               </div>
             )}
 
-            <div className="space-y-2">
-              {g.sites.map((s) => (
-                <SiteRow key={s.id} site={s} venues={venues} points={points} dayCount={dayCount.get(s.id) ?? 0} />
-              ))}
-            </div>
-
-            {/* Open, like the canyons above them. They were folded on the
-                theory that maps are the long part of a venue — which is not
-                true of a shelf holding four sites and twenty-three maps,
-                where the biggest venue has four of either. Folding one and
-                not the other just read as a rule nobody could see. If this
-                grows to where a venue is a screenful, fold then, and fold
-                both. */}
-            {g.beta.length > 0 && (
+            {/* One Beta block, both shapes in it. A canyon with a write-up and
+                a link to somebody else's write-up are the same answer to the
+                same question, and they were in two places on the page: the
+                canyons in an unlabelled list, the links under a heading. Which
+                shape a given one happens to be is not a reason to look
+                somewhere else for it. */}
+            {(g.sites.length > 0 || g.beta.length > 0) && (
               <div className="mt-2">
                 <p className="text-[10px] uppercase tracking-wide text-zinc-700 mb-1.5">Beta</p>
                 <div className="space-y-2">
+                  {g.sites.map((s) => (
+                    <SiteRow key={s.id} site={s} venues={venues} points={points} dayCount={dayCount.get(s.id) ?? 0} />
+                  ))}
                   {g.beta.map((b) => (
                     <LibraryRow key={b.id} item={b} venues={venues} sites={siteOptions} />
                   ))}
