@@ -45,7 +45,12 @@ export type TemplateShelf = 'gear' | 'schedule' | 'setup'
 // looking for a region, they go looking for the canyon in it. So it is a
 // heading on this shelf and a door at the bottom of it.
 export type PlaceShelf = 'venue'
-export type LibraryShelf = LibraryBucket | TemplateShelf | PlaceShelf
+
+// And the captured stuff: what came off a course, plus what was shot for no
+// course in particular. Not the teaching videos — those were chosen, and a
+// chosen clip is curriculum. This is the shoebox.
+export type MediaShelfKey = 'media'
+export type LibraryShelf = LibraryBucket | TemplateShelf | PlaceShelf | MediaShelfKey
 
 export const PLACE_SHELF_META: Record<PlaceShelf, { label: string; hint: string }> = {
   venue: {
@@ -58,6 +63,10 @@ export const PLACE_SHELF_META: Record<PlaceShelf, { label: string; hint: string 
 // moved in with them, which is the shape they were always read in — you do not
 // go looking for a map, you go looking for where you are going — so the shelf
 // is the place now and the old name still opens it.
+export function isMediaShelf(v: string | undefined): v is MediaShelfKey {
+  return v === 'media'
+}
+
 export function isPlaceShelf(v: string | undefined): v is PlaceShelf {
   return v === 'venue' || v === 'site'
 }
@@ -86,14 +95,16 @@ export const TEMPLATE_SHELF_ORDER: TemplateShelf[] = ['gear', 'schedule', 'setup
 // with the beta and the weather, rather than beside it as a second answer to
 // the same question. The map shelf still exists as a filter and a bucket;
 // it just isn't a door.
-export const SHELF_ORDER: LibraryShelf[] = ['teaching', 'resource', 'venue', 'instructor', 'documents', ...TEMPLATE_SHELF_ORDER]
+export const SHELF_ORDER: LibraryShelf[] = ['teaching', 'resource', 'venue', 'instructor', 'documents', 'media', ...TEMPLATE_SHELF_ORDER]
 
 export function shelfLabel(v: LibraryShelf): string {
+  if (isMediaShelf(v)) return 'Photos & video'
   if (isPlaceShelf(v)) return PLACE_SHELF_META[v].label
   return isTemplateShelf(v) ? TEMPLATE_SHELF_META[v].label : BUCKET_META[v].label
 }
 
 export function shelfHint(v: LibraryShelf): string {
+  if (isMediaShelf(v)) return 'What we shot — by the course it came from, and searchable across all of them'
   if (isPlaceShelf(v)) return PLACE_SHELF_META[v].hint
   return isTemplateShelf(v) ? TEMPLATE_SHELF_META[v].hint : BUCKET_META[v].hint
 }

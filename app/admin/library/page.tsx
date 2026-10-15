@@ -5,7 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import {
   KIND_META, LIBRARY_KINDS, BUCKET_META, BUCKET_ORDER,
   TEMPLATE_SHELF_META, TEMPLATE_SHELF_ORDER, SHELF_ORDER, isTemplateShelf, isPlaceShelf,
-  shelfLabel, shelfHint, proposedBucket,
+  shelfLabel, shelfHint, proposedBucket, isMediaShelf,
   type LibraryItem, type LibraryShelf, type LibraryBucket, type TemplateShelf, type TemplateSummary, type Venue,
 } from '@/lib/library'
 import { type GearItem, type GearList } from '@/app/admin/gear/GearListEditor'
@@ -22,6 +22,9 @@ import CourseSetupRow from './CourseSetupRow'
 import CourseSetupReadOnly from './CourseSetupReadOnly'
 import InfoHint from '@/components/InfoHint'
 import SortQueue from './SortQueue'
+import MediaShelf from './MediaShelf'
+import { loadMediaShelf } from './media/load'
+import { albumMatches } from '@/lib/media'
 import SitesShelf from '@/app/admin/sites/SitesShelf'
 import { loadSitesShelf } from '@/app/admin/sites/load'
 import { CAPABILITY_META, CAPABILITY_ORDER, type CapabilityCategory } from '@/lib/capabilities'
@@ -82,11 +85,12 @@ export default async function LibraryPage({
   // document filters (type, who-can-see, review status) mean nothing to a
   // canyon. It is only ever shown when it is the shelf asked for.
   const onPlaces = isPlaceShelf(bucket)
+  const onMedia = isMediaShelf(bucket)
   // Resorting is a view of the whole shelf at once, so it owns the page while
   // it is open — a paginated list of sixty is the wrong unit for a claim about
   // eight hundred.
   const onSort = isAdmin && sort === '1'
-  const showDocs = !isTemplateShelf(bucket) && !onPlaces && !onSort && !landing
+  const showDocs = !isTemplateShelf(bucket) && !onPlaces && !onMedia && !onSort && !landing
   // Review status is a document's state, not a template's: there is nothing
   // to approve about a kit list you wrote yourself, so the pending and
   // archived tabs — which are documents being worked through — leave them
@@ -97,7 +101,7 @@ export default async function LibraryPage({
   const statusHidesTemplates =
     (status === 'pending' || status === 'archived') && !isTemplateShelf(bucket)
   const showTemplates =
-    (!bucket || isTemplateShelf(bucket)) && !docOnlyFilter && !landing && !statusHidesTemplates && !onPlaces && !onSort
+    (!bucket || isTemplateShelf(bucket)) && !docOnlyFilter && !landing && !statusHidesTemplates && !onPlaces && !onMedia && !onSort
   const shelves: TemplateShelf[] = isTemplateShelf(bucket) ? [bucket] : TEMPLATE_SHELF_ORDER
 
   // A page of results, not the whole shelf. The reference page learned this —
@@ -141,7 +145,7 @@ export default async function LibraryPage({
   // Templates take the same search box and discipline tags the documents use.
   // They have no review status, so the status tabs pass them by — there's
   // nothing to approve about a kit list you wrote yourself.
-  const [{ data: itemRows }, { data: venueRows }, { data: siteRows }, gearRes, scheduleRes, setupRes, catalogRes, { count: pendingCount }, placesShelf, { data: facetRows }, { data: sortRows }, shelfCounts] = await Promise.all([
+  const [{ data: itemRows }, { data: venueRows }, { data: siteRows }, gearRes, scheduleRes, setupRes, catalogRes, { count: pendingCount }, placesShelf, mediaShelf, { data: facetRows }, { data: sortRows }, shelfCounts] = await Promise.all([
     showDocs ? query : Promise.resolve({ data: [] }),
     admin.from('venues').select('id, name, region, region_code, client_name, notes, links, active').order('name'),
     // A per-region template pins its canyons here, so the courses started from
@@ -199,6 +203,7 @@ export default async function LibraryPage({
     // the landing — a number on a card is the difference between picking a
     // shelf and guessing at one.
     onPlaces ? loadSitesShelf() : Promise.resolve(null),
+    onMedia ? loadMediaShelf() : Promise.resolve(null),
     // What is actually on this shelf, for the filters above it. Offering
     // "Video" on a shelf holding no video is a dead end dressed as a choice —
     // you pick it, get nothing, and learn nothing about why. Cheap: two
@@ -233,6 +238,10 @@ export default async function LibraryPage({
           // once you are through it.
           admin.from('venues').select('id', { count: 'exact', head: true }).eq('active', true)
             .then((r) => ['venue', r.count ?? 0] as [LibraryShelf, number]),
+          // Photos and clips, not albums: the number says how much there is,
+          // and four albums reads as less than it is.
+          admin.from('course_photos').select('id', { count: 'exact', head: true })
+            .then((r) => ['media', r.count ?? 0] as [LibraryShelf, number]),
         ])
       : Promise.resolve([] as [LibraryShelf, number][]),
   ])
@@ -681,6 +690,16 @@ export default async function LibraryPage({
             </p>
             <SortQueue groups={sortGroups} unguessed={sortUnguessed} venues={venues} sites={siteOptions} />
           </section>
+        )}
+
+        {/* ── Photos & video ───────────────────────────────────────────── */}
+        {onMedia && mediaShelf && (
+          <MediaShelf
+            albums={mediaShelf.albums.filter((a) => albumMatches(a, discipline, q))}
+            discipline={discipline}
+            hrefFor={(d) => href({ discipline: d })}
+            canUpload={realAdmin || profile?.role === 'instructor'}
+          />
         )}
 
         {/* ── Venue information ────────────────────────────────────────── */}
