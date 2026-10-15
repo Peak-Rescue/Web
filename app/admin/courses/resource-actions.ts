@@ -421,3 +421,55 @@ export async function removeCourseResource(instanceId: string, resourceId: strin
   if (error) throw new Error(error.message)
   revalidate(instanceId)
 }
+
+/** The contacts the course's place already knows about — its venue's, and its
+ *  state's — offered for the Details form to drop in.
+ *
+ *  Copied rather than pointed at, unlike beta and weather. The ranger district
+ *  belongs to Zion, but the person a given course actually deals with is often
+ *  a name for that week, and editing it should not rewrite Zion for everyone.
+ *  So the place is the starting point and the course owns what it takes.
+ */
+export async function placeContactsFor(instanceId: string): Promise<
+  { from: string; name: string; phones: string[]; emails: string[] }[]
+> {
+  const { admin } = await requireTeam(instanceId)
+  const { data: inst } = await admin
+    .from('course_instances')
+    .select('venue_id, region')
+    .eq('id', instanceId)
+    .single()
+  if (!inst) return []
+
+  const [{ data: venue }, { data: regions }] = await Promise.all([
+    inst.venue_id
+      ? admin.from('venues').select('name, region_code, contacts').eq('id', inst.venue_id).maybeSingle()
+      : Promise.resolve({ data: null }),
+    admin.from('region_info').select('region_code, contacts'),
+  ])
+
+  // Read upward, the way the day reads its weather: the venue, then the state
+  // the venue is in — falling back to the course's own region when it has no
+  // venue, which is most of them.
+  const code = venue?.region_code ?? inst.region ?? null
+  const region = ((regions ?? []) as { region_code: string; contacts: unknown[] }[])
+    .find((r) => r.region_code === code)
+
+  type PlaceContact = { name?: string; role?: string; phone?: string; email?: string }
+  const take = (rows: unknown[] | null | undefined, from: string) =>
+    ((rows ?? []) as PlaceContact[])
+      .filter((c) => c.name)
+      .map((c) => ({
+        from,
+        // The role is kept in the name, because a course contact has nowhere
+        // else to put it and "Ranger district" alone does not say what for.
+        name: c.role ? `${c.name} (${c.role})` : String(c.name),
+        phones: c.phone ? [c.phone] : [],
+        emails: c.email ? [c.email] : [],
+      }))
+
+  return [
+    ...take(venue?.contacts as unknown[], venue?.name ?? 'this venue'),
+    ...take(region?.contacts, regionLabel(code) || 'the state'),
+  ]
+}

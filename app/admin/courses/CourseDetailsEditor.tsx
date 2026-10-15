@@ -144,7 +144,7 @@ export default function CourseDetailsEditor({
               <label className="block text-xs text-zinc-400 mb-1">Client / organization</label>
               <input name="client_name" defaultValue={course.client_name ?? ''} className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
             </div>
-            <CourseContactsEditor initial={contacts} />
+            <CourseContactsEditor initial={contacts} instanceId={instanceId} />
           </>
         )}
         {/* Nobody enrols on a job, so there is no headcount to set. Left in

@@ -3,6 +3,7 @@
 import { useRef, useState } from 'react'
 import type { CoursePOC } from '@/lib/contacts'
 import TrashIcon from '@/components/TrashIcon'
+import { placeContactsFor } from '@/app/admin/courses/resource-actions'
 
 const inputCls =
   'w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500'
@@ -71,7 +72,14 @@ function labelFor(pocs: CoursePOC[], i: number) {
 // State is serialized into a hidden contacts_json input, so it works in both
 // the plain create form and AutoSaveForm (typing bubbles input events; line
 // removals dispatch one manually so the auto-save notices).
-export default function CourseContactsEditor({ initial }: { initial: CoursePOC[] }) {
+export default function CourseContactsEditor({
+  initial,
+  instanceId,
+}: {
+  initial: CoursePOC[]
+  /** When given, the place's own contacts can be dropped in. */
+  instanceId?: string
+}) {
   const [pocs, setPocs] = useState<CoursePOC[]>(() =>
     (initial.length ? initial : [{ name: '', phones: [], emails: [] }]).map((p) => ({
       name: p.name,
@@ -80,6 +88,12 @@ export default function CourseContactsEditor({ initial }: { initial: CoursePOC[]
     }))
   )
   const hiddenRef = useRef<HTMLInputElement>(null)
+  // Offered, not applied. The venue's ranger district is the starting point;
+  // the person this course actually deals with is often a name for that week,
+  // and editing it here must not rewrite the venue for everyone — so these are
+  // copied in and then the course's own.
+  const [offered, setOffered] = useState<{ from: string; name: string; phones: string[]; emails: string[] }[] | null>(null)
+  const [looking, setLooking] = useState(false)
   const hasBilling = pocs.some((p) => p.role === 'billing')
 
   const cleaned = pocs
@@ -201,6 +215,61 @@ export default function CourseContactsEditor({ initial }: { initial: CoursePOC[]
         />
         Bill someone other than the point of contact
       </label>
+
+      {/* Whoever the place already knows about. A course at Zion starts from
+          Zion's ranger district rather than from a blank row and somebody's
+          memory. */}
+      {instanceId && (
+        <div className="mt-3">
+          {offered === null ? (
+            <button
+              type="button"
+              disabled={looking}
+              onClick={async () => {
+                setLooking(true)
+                try { setOffered(await placeContactsFor(instanceId)) } finally { setLooking(false) }
+              }}
+              className="text-xs text-zinc-500 hover:text-white transition-colors"
+            >
+              {looking ? 'Looking…' : '+ Contacts from where this course is'}
+            </button>
+          ) : offered.length === 0 ? (
+            <p className="text-xs text-zinc-600">
+              Nowhere this course is has a contact on it yet. They are added on the venue.
+            </p>
+          ) : (
+            <div className="rounded border border-zinc-800 bg-zinc-900/60 p-2 space-y-1">
+              {offered.map((c, i) => {
+                const already = pocs.some((p) => p.name.trim().toLowerCase() === c.name.toLowerCase())
+                return (
+                  <button
+                    key={i}
+                    type="button"
+                    disabled={already}
+                    onClick={() =>
+                      update((n) => {
+                        // A blank first row is what the form opens with; filling
+                        // it beats leaving an empty POC above the one just added.
+                        const blank = n.findIndex((p) => !p.name.trim() && !p.phones.some(Boolean) && !p.emails.some(Boolean))
+                        const row = { name: c.name, phones: c.phones.length ? c.phones : [''], emails: c.emails.length ? c.emails : [''] }
+                        if (blank === -1) n.push(row)
+                        else n[blank] = row
+                      }, { notify: true })
+                    }
+                    className="w-full text-left text-xs px-1.5 py-1 rounded hover:bg-zinc-800/70 transition-colors disabled:opacity-40 disabled:hover:bg-transparent"
+                  >
+                    <span className="text-zinc-200">{c.name}</span>
+                    <span className="text-zinc-600">
+                      {' · '}{[...c.phones, ...c.emails].join(', ') || 'no number'}{' · from '}{c.from}
+                    </span>
+                    {already && <span className="text-zinc-600"> · already here</span>}
+                  </button>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
