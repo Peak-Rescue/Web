@@ -7,7 +7,7 @@ import { type LibraryItem, type Venue, type VenueContact, type VenueLink } from 
 export async function loadSitesShelf() {
   const admin = createAdminClient()
   const [{ data: siteRows }, { data: venueRows }, { data: dayRows }, { data: pointRows }, { data: mapRows }, { data: regionRows }] = await Promise.all([
-    admin.from('sites').select('id, venue_id, name, kind, beta, meeting_point_id, usual_meeting_time, coords, links, active').order('name'),
+    admin.from('sites').select('id, venue_id, region_code, name, kind, beta, meeting_point_id, usual_meeting_time, coords, links, active').order('name'),
     admin.from('venues').select('id, name, region, region_code, client_name, notes, links, contacts, active').order('name'),
     admin.from('schedule_days').select('site_id').not('site_id', 'is', null),
     admin.from('meeting_points').select('id, name, venue_id, directions, coords, links, active').order('name'),

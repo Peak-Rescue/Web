@@ -129,12 +129,17 @@ export default function AddToPlace({
           asking which before you start made the form's own plumbing into the
           first question. */}
       {kind === 'beta' && (
-        atVenue ? (
-          // The same fields the canyon's own row carries, so what you fill in
-          // here is what you will see when you open it. The venue is not
-          // asked for: the form is standing in it.
-          <form action={createSite} className="space-y-2">
-            <input type="hidden" name="venue_id" value={(scope as { venueId: string }).venueId} />
+        // The same fields the canyon's own row carries, so what you fill in
+        // here is what you will see when you open it — at every level, because
+        // beta is one shape and which level it hangs off is not a reason to
+        // ask for less of it. The place is not asked for: the form is standing
+        // in it.
+        <form action={createSite} className="space-y-2">
+            {atVenue ? (
+              <input type="hidden" name="venue_id" value={(scope as { venueId: string }).venueId} />
+            ) : (
+              <input type="hidden" name="region_code" value={(scope as { regionCode: string }).regionCode} />
+            )}
             <div className="grid gap-2 sm:grid-cols-2">
               <div>
                 <label className={label}>Name</label>
@@ -198,26 +203,6 @@ export default function AddToPlace({
               {back}
             </div>
           </form>
-        ) : (
-          // Above a venue there is no canyon to hang a write-up on, so it is a
-          // library row — which carries a description, so the long form has
-          // somewhere to go here too.
-          <form action={createLibraryItem} className="space-y-2">
-            <input type="hidden" name="kind" value="route" />
-            <input type="hidden" name="place" value={place} />
-            <input type="hidden" name="audience" value="internal" />
-            <input name="title" required autoFocus className={input} placeholder="What the write-up is called" />
-            <textarea name="description" rows={4} className={`${input} resize-y`}
-                      placeholder="Approach, raps, exit, hazards — written here rather than linked, if there is nowhere to link to." />
-            <input name="url" className={`${input} font-mono`} placeholder="https://ropewiki.com/… (optional)" />
-            <div className="flex items-center gap-3">
-              <button className="text-[11px] px-2 py-1 rounded border border-zinc-700 text-zinc-300 hover:border-zinc-500 hover:text-white transition-colors">
-                Add beta
-              </button>
-              {back}
-            </div>
-          </form>
-        )
       )}
 
       {kind === 'weather' && (

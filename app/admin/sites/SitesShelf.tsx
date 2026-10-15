@@ -48,7 +48,14 @@ export default function SitesShelf({
   // Grouped by venue, because that's how you go looking: "what have we got on
   // Maui?" rather than "show me every canyon we've ever run".
   const byVenue = new Map<string, Site[]>()
+  // A canyon with no venue over it names its state instead, and is read under
+  // that state rather than falling into the unfiled pile.
+  const sitesAtRegion = new Map<string, Site[]>()
   for (const s of sites) {
+    if (!s.venue_id && s.region_code) {
+      sitesAtRegion.set(s.region_code, [...(sitesAtRegion.get(s.region_code) ?? []), s])
+      continue
+    }
     const k = s.venue_id ?? ''
     byVenue.set(k, [...(byVenue.get(k) ?? []), s])
   }
@@ -152,6 +159,7 @@ export default function SitesShelf({
   const RegionBlocks = ({ code }: { code: string }) => {
     const items = atRegion.get(code) ?? []
     const info = regionInfo.get(code)
+    const canyons = sitesAtRegion.get(code) ?? []
     const beta = items.filter((i) => i.kind === 'route')
     const maps = items.filter((i) => i.kind !== 'route')
     const weather = (info?.links ?? []).filter((l) => l.kind === 'weather')
@@ -197,10 +205,13 @@ export default function SitesShelf({
             ))}
           </div>
         )}
-        {beta.length > 0 && (
+        {(canyons.length > 0 || beta.length > 0) && (
           <div>
             <p className="text-[10px] uppercase tracking-wide text-zinc-700 mb-1.5">Beta</p>
             <div className="space-y-2">
+              {canyons.map((x) => (
+                <SiteRow key={x.id} site={x} venues={venues} points={points} dayCount={dayCount.get(x.id) ?? 0} />
+              ))}
               {beta.map((b) => <LibraryRow key={b.id} item={b} venues={venues} sites={siteOptions} />)}
             </div>
           </div>
@@ -213,7 +224,7 @@ export default function SitesShelf({
             </div>
           </div>
         )}
-        <AddToPlace scope={{ regionCode: code }} place={`region:${code}`} placeName={regionLabel(code) || code} />
+        <AddToPlace scope={{ regionCode: code }} place={`region:${code}`} placeName={regionLabel(code) || code} points={points} />
       </div>
     )
   }

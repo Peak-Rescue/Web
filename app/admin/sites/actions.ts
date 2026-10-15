@@ -50,6 +50,11 @@ export async function createSite(formData: FormData) {
   const { data, error } = await admin.from('sites').insert({
     name: name.slice(0, 160),
     venue_id: ((formData.get('venue_id') as string) || '') || null,
+    // Set when there is no venue over it; the venue answers for the state
+    // when there is one.
+    region_code: isValidRegion(formData.get('region_code') as string)
+      ? (formData.get('region_code') as string)
+      : null,
     kind: ((formData.get('kind') as string) || '').trim() || null,
     beta: ((formData.get('beta') as string) || '').trim() || null,
     meeting_point_id: ((formData.get('meeting_point_id') as string) || '') || null,

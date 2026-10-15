@@ -16,6 +16,8 @@ export type SiteLink = { url: string; label: string }
 export type Site = {
   id: string
   venue_id: string | null
+  /** The state it sits in when no venue does. */
+  region_code?: string | null
   name: string
   kind: string | null
   beta: string | null
