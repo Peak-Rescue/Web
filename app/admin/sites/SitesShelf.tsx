@@ -6,7 +6,7 @@ import MeetingPointRow from './MeetingPointRow'
 import JumpToNewRow from '@/components/JumpToNewRow'
 import { SITE_KINDS, type Site, type MeetingPointRecord } from '@/lib/sites'
 import { type LibraryItem, type Venue } from '@/lib/library'
-import { countryName, regionLabel, splitRegion } from '@/lib/regions'
+import { countryName, regionLabel, splitRegion, SUBDIVISIONS } from '@/lib/regions'
 import LibraryRow from '@/app/admin/library/LibraryRow'
 import { type SiteOption } from '@/app/admin/schedules/types'
 import InfoHint from '@/components/InfoHint'
@@ -120,6 +120,10 @@ export default function SitesShelf({
       // Unfiled last, under its own heading rather than pretending to be a
       // country called "".
       label: country ? countryName(country) : 'No country set',
+      // Bahamas has no states, so "No state set" under it is not a gap worth
+      // reporting — it is a level that country does not have. The line is
+      // only drawn where a state was expected and is missing.
+      hasStates: Boolean(SUBDIVISIONS[country]),
       subs: subs.sort((a, b) => (a.label || '\uffff').localeCompare(b.label || '\uffff')),
     }))
     .sort((a, b) => (a.country ? 0 : 1) - (b.country ? 0 : 1) || a.label.localeCompare(b.label))
