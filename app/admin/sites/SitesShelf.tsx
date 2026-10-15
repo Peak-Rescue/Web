@@ -3,7 +3,7 @@ import SiteRow from './SiteRow'
 import JumpToNewRow from '@/components/JumpToNewRow'
 import AddToPlace from './AddToPlace'
 import AddLevel from './AddLevel'
-import RenameVenue from './RenameVenue'
+import EditVenue from './EditVenue'
 import { type Site } from '@/lib/sites'
 import { type LibraryItem, type Venue, type VenueContact, type VenueLink } from '@/lib/library'
 import { countryName, regionLabel, splitRegion, SUBDIVISIONS } from '@/lib/regions'
@@ -267,7 +267,7 @@ export default function SitesShelf({
             <summary className="cursor-pointer list-none flex items-center gap-2 px-3 py-2.5 hover:bg-zinc-800/60 transition-colors">
               <span aria-hidden className="text-zinc-600 text-xs transition-transform group-open/venue:rotate-90">▶</span>
               <span className="text-sm font-medium text-zinc-200">{g.name}</span>
-              {g.venue && <RenameVenue id={g.venue.id} name={g.venue.name} />}
+              {g.venue && <EditVenue id={g.venue.id} name={g.venue.name} />}
               <span className="text-[11px] text-zinc-600">
                 {[
                   g.sites.length && `${g.sites.length} site${g.sites.length === 1 ? '' : 's'}`,
@@ -351,9 +351,10 @@ export default function SitesShelf({
 
             {g.maps.length > 0 && (
               <div className="mt-2">
-                {(g.sites.length > 0 || g.beta.length > 0) && (
-                  <p className="text-[10px] uppercase tracking-wide text-zinc-700 mb-1.5">Maps</p>
-                )}
+                {/* Always labelled. The heading used to appear only when
+                    something else was above it, so a venue holding one map and
+                    nothing else showed a bare row and no word for what it was. */}
+                <p className="text-[10px] uppercase tracking-wide text-zinc-700 mb-1.5">Maps</p>
                 <div className="space-y-2">
                   {g.maps.map((m) => (
                     <LibraryRow key={m.id} item={m} venues={venues} sites={siteOptions} />

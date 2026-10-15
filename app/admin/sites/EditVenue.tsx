@@ -4,15 +4,15 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { updateVenue } from '@/app/admin/library/actions'
 
-/** Renaming a venue, and nothing else.
+/** Editing a venue. Today that is its name and nothing else.
  *
- * The full settings panel was on here for a moment and asked for things this
- * page has already answered: which state it is in is the heading above it, its
- * links and its contacts are added with the buttons below it. What was left
- * was a form of mostly-empty fields around the one line anybody came to
- * change. Everything else about a venue is still on the venues page.
+ * Called Edit rather than Rename because what a venue needs changing about it
+ * will grow, and the control should not have to be renamed when it does. The
+ * settings panel that was briefly here asked for things this page has already
+ * answered — which state it is in is the heading above it, its links and
+ * contacts are the buttons below it — so it went, not the idea of editing.
  */
-export default function RenameVenue({ id, name }: { id: string; name: string }) {
+export default function EditVenue({ id, name }: { id: string; name: string }) {
   const router = useRouter()
   const [editing, setEditing] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -39,7 +39,7 @@ export default function RenameVenue({ id, name }: { id: string; name: string }) 
         onClick={(e) => { e.preventDefault(); e.stopPropagation(); setEditing(true) }}
         className="text-[11px] text-zinc-700 hover:text-zinc-300 transition-colors"
       >
-        Rename
+        Edit
       </button>
     )
   }
