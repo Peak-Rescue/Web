@@ -95,6 +95,7 @@ export async function updateLibraryItem(id: string, patch: LibraryPatch) {
     const place = await resolvePlace(admin, patch.place)
     update.venue_id = place.venue_id
     update.site_id = place.site_id
+    update.region = place.region
   } else if (patch.venue_id !== undefined) {
     update.venue_id = patch.venue_id || null
   }
@@ -124,13 +125,35 @@ export async function updateLibraryItem(id: string, patch: LibraryPatch) {
 async function resolvePlace(
   admin: ReturnType<typeof createAdminClient>,
   raw: string
-): Promise<{ venue_id: string | null; site_id: string | null }> {
-  const [level, id] = raw.split(':')
-  if (!id) return { venue_id: null, site_id: null }
-  if (level === 'venue') return { venue_id: id, site_id: null }
-  if (level !== 'site') return { venue_id: null, site_id: null }
-  const { data } = await admin.from('sites').select('venue_id').eq('id', id).maybeSingle()
-  return { venue_id: data?.venue_id ?? null, site_id: id }
+): Promise<{ venue_id: string | null; site_id: string | null; region: string | null }> {
+  const i = raw.indexOf(':')
+  const level = i === -1 ? '' : raw.slice(0, i)
+  const id = i === -1 ? '' : raw.slice(i + 1)
+  if (!id) return { venue_id: null, site_id: null, region: null }
+
+  // A state or a country on its own is a real answer — a map of Washington is
+  // a map of Washington — so it is stored as the region with no venue under
+  // it, rather than being refused for not naming somewhere smaller.
+  if (level === 'region') {
+    return { venue_id: null, site_id: null, region: isValidRegion(id) ? id : null }
+  }
+
+  if (level === 'venue') {
+    const { data } = await admin.from('venues').select('region_code').eq('id', id).maybeSingle()
+    return { venue_id: id, site_id: null, region: data?.region_code ?? null }
+  }
+
+  if (level !== 'site') return { venue_id: null, site_id: null, region: null }
+  // Everything above the site, filled in from the site: it answers for its
+  // venue and its venue answers for the state, so the three can never
+  // contradict each other.
+  const { data } = await admin
+    .from('sites')
+    .select('venue_id, venues(region_code)')
+    .eq('id', id)
+    .maybeSingle()
+  const venue = data?.venues as unknown as { region_code: string | null } | null
+  return { venue_id: data?.venue_id ?? null, site_id: id, region: venue?.region_code ?? null }
 }
 
 export async function createLibraryItem(formData: FormData) {
@@ -168,13 +191,13 @@ export async function createLibraryItem(formData: FormData) {
     source_type: driveMatch ? 'drive' : youtube ? 'youtube' : 'link',
     kind: VALID_KINDS.has(kind) ? kind : 'reference',
     bucket: isMap ? 'map' : VALID_BUCKETS.has(bucket) ? bucket : 'resource',
-    region: isValidRegion(formData.get('region') as string) ? (formData.get('region') as string) : null,
     audience: (formData.get('audience') as string) === 'shared' ? 'shared' : 'internal',
     admin_only: (formData.get('audience') as string) === 'admin',
     disciplines: (formData.getAll('disciplines') as string[]).filter((d) => VALID_DISCIPLINES.has(d)),
     topics: cleanTags((formData.get('topics') as string) || ''),
     venue_id: place.venue_id,
     site_id: place.site_id,
+    region: place.region,
     expires_at: ((formData.get('expires_at') as string) || '') || null,
     status: 'published',
   }).select('id').single()

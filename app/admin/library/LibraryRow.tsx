@@ -7,7 +7,6 @@ import { errorFrom, type ActionResult } from '@/lib/action-result'
 import { KIND_META, KIND_GROUPS, AUDIENCE_META, BUCKET_META, BUCKET_ORDER, bucketForKind, type LibraryBucket, type LibraryItem, type Venue } from '@/lib/library'
 import { AudiencePills } from '@/components/AudiencePills'
 import { CAPABILITY_META, CAPABILITY_ORDER } from '@/lib/capabilities'
-import RegionSelect from '@/components/RegionSelect'
 import MapLinks from './MapLinks'
 import { NEEDS_SORTING } from '@/lib/sorting'
 import PlaceSelect, { placeValue } from '@/components/PlaceSelect'
@@ -36,9 +35,8 @@ export default function LibraryRow({ item, venues, sites = [], hideProvenance = 
     // to remember to delete before saving. It comes off by itself when the
     // row says where it belongs.
     topicsRaw: item.topics.filter((t) => t !== NEEDS_SORTING).join(', '),
-    place: placeValue(item.venue_id, item.site_id),
+    place: placeValue(item.region, item.venue_id, item.site_id),
     admin_only: item.admin_only,
-    region: item.region ?? '',
     expires_at: item.expires_at ?? '',
   })
 
@@ -102,7 +100,6 @@ export default function LibraryRow({ item, venues, sites = [], hideProvenance = 
       // sending these too would let a stale box overwrite them.
       ...(form.kind === 'map' ? {} : { url, edit_url }),
       place,
-      region: form.region || null,
       expires_at: form.expires_at || null,
     })
     setOpen(false)
@@ -205,21 +202,6 @@ export default function LibraryRow({ item, venues, sites = [], hideProvenance = 
               <input className={input} value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} />
             </div>
           )}
-          {/* The state, which narrows the place picker below it and is a
-              match of its own on the course side: a map of the state outranks
-              nothing in particular, and loses to one of the venue. Only maps
-              carry it — everything else answers the place question directly
-              or not at all. */}
-          {form.kind === 'map' && (
-          <div>
-            <label className={label}>State / country</label>
-            <RegionSelect
-              defaultValue={form.region}
-              className={input}
-              onChange={(code) => setForm({ ...form, region: code })}
-            />
-          </div>
-          )}
           {/* A map has one shelf and the type already named it. For everything
               else this now follows the type and is only touched to disagree
               with it. */}
@@ -280,7 +262,7 @@ export default function LibraryRow({ item, venues, sites = [], hideProvenance = 
               about a place at all. */}
           <div className={form.kind === 'map' ? 'sm:col-span-2' : ''}>
             <label className={label}>
-              {form.kind === 'map' ? 'Where it is * — the area, or the canyon itself' : 'Place'}
+              {form.kind === 'map' ? 'Where it is *' : 'Place'}
             </label>
             <PlaceSelect
               name="place"
@@ -289,7 +271,6 @@ export default function LibraryRow({ item, venues, sites = [], hideProvenance = 
               value={form.place}
               onChange={(v) => setForm({ ...form, place: v })}
               required={form.kind === 'map'}
-              region={form.region || null}
               className={input}
             />
           </div>

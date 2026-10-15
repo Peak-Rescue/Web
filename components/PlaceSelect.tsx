@@ -5,20 +5,35 @@ import { useRouter } from 'next/navigation'
 import { createPlaceInline } from '@/app/admin/library/actions'
 import { type SiteOption } from '@/app/admin/schedules/types'
 import { type Venue } from '@/lib/library'
-import { regionLabel } from '@/lib/regions'
+import { countryName, regionLabel, splitRegion } from '@/lib/regions'
 
-/** One field for "where is this about", at either level.
+/** One field for "where is this about", at whatever level is known.
  *
- * A map is about a place or it is not a map anybody can find: filed nowhere it
- * is offered to no course, which is how eleven of twenty-three ended up
- * unfiled without anyone noticing. So this is one required question rather
- * than two optional ones — an area, or the canyon inside it.
+ * It used to be two: a state picker and, under it, a place picker that the
+ * state narrowed. Two dropdowns for one question, and the answer could be
+ * split across them — a map filed to Washington and to nothing else read as
+ * unplaced on the venue shelf while insisting it had a region.
  *
- * The value is `venue:<id>` or `site:<id>`. The server derives the venue from
- * the site when a site is picked, so the two levels can never disagree.
+ * So: one list, nested the way the venue shelf is. Country, the states inside
+ * it, the venues inside those, the canyons inside those — and every line is
+ * selectable, because a map of Washington is a real answer and so is a map of
+ * one drainage.
+ *
+ * The value is `region:<code>`, `venue:<id>` or `site:<id>`. The server fills
+ * in everything above whichever level was picked: a site answers for its venue
+ * and its state, so the levels can never contradict each other.
+ *
+ * Only regions that something is already filed under are listed. The full
+ * country list is a different control for a reason — a native select's
+ * type-ahead only jumps within one list, so a flat list of states and
+ * countries makes "F" land on Florida with no key that reaches France.
+ * Somewhere genuinely new is made with the button underneath.
  */
-export const placeValue = (venueId: string | null, siteId: string | null) =>
-  siteId ? `site:${siteId}` : venueId ? `venue:${venueId}` : ''
+export const placeValue = (
+  region: string | null,
+  venueId: string | null,
+  siteId: string | null
+) => (siteId ? `site:${siteId}` : venueId ? `venue:${venueId}` : region ? `region:${region}` : '')
 
 export default function PlaceSelect({
   name,
@@ -29,7 +44,6 @@ export default function PlaceSelect({
   onChange,
   required,
   className,
-  region,
 }: {
   name: string
   venues: Venue[]
@@ -39,59 +53,46 @@ export default function PlaceSelect({
   onChange?: (v: string) => void
   required?: boolean
   className?: string
-  /** The state or country already chosen, when the form asked. Narrows this to
-      the handful of places in it rather than every place the company has
-      worked — the same bargain the course form makes, for the same reason. */
-  region?: string | null
 }) {
-  // Sites under the venue they belong to, so the list reads the way the place
-  // does — "Maui, and these canyons on it" — rather than as two flat lists
-  // that happen to be in the same box.
-  const byVenue = new Map<string, SiteOption[]>()
-  for (const s of sites) {
-    if (!s.venue_id) continue
-    byVenue.set(s.venue_id, [...(byVenue.get(s.venue_id) ?? []), s])
-  }
-  const orphans = sites.filter((s) => !s.venue_id)
-
-  // In the chosen state first, then the ones filed under no state at all, then
-  // everywhere else. Moved down, never hidden: a venue you cannot pick is
-  // worse than a longer list, because it is the moment someone gives up and
-  // leaves the map filed nowhere.
-  const here = region ? venues.filter((v) => v.region_code === region) : venues
-  const unfiled = region ? venues.filter((v) => !v.region_code) : []
-  const elsewhere = region ? venues.filter((v) => v.region_code && v.region_code !== region) : []
-
-  const indent = '  '
-  const group = (list: Venue[], heading?: string) =>
-    list.length === 0 ? null : (
-      <optgroup label={heading ?? ' '}>
-        {list.flatMap((v) => [
-          <option key={v.id} value={`venue:${v.id}`}>{v.name} — the whole area</option>,
-          ...(byVenue.get(v.id) ?? []).map((s) => (
-            <option key={s.id} value={`site:${s.id}`}>
-              {indent}{s.name}{s.kind ? ` · ${s.kind}` : ''}
-            </option>
-          )),
-        ])}
-      </optgroup>
-    )
-
   const router = useRouter()
   const [making, setMaking] = useState(false)
   const [fresh, setFresh] = useState<{ id: string; name: string } | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  const sitesOf = new Map<string, SiteOption[]>()
+  for (const s of sites) {
+    if (!s.venue_id) continue
+    sitesOf.set(s.venue_id, [...(sitesOf.get(s.venue_id) ?? []), s])
+  }
+
+  // Grouped the way the venue shelf groups: country, then state, then what is
+  // in it. A venue with no region sits under "No country set" rather than
+  // being dropped — unfiled is a state of things, not a reason to hide them.
+  const byRegion = new Map<string, Venue[]>()
+  for (const v of venues) byRegion.set(v.region_code ?? '', [...(byRegion.get(v.region_code ?? '') ?? []), v])
+
+  const byCountry = new Map<string, string[]>()
+  for (const code of byRegion.keys()) {
+    const { country } = splitRegion(code)
+    byCountry.set(country, [...(byCountry.get(country) ?? []), code])
+  }
+  const countries = [...byCountry.entries()]
+    .map(([country, codes]) => ({
+      country,
+      label: country ? countryName(country) : 'No country set',
+      codes: codes.sort((a, b) => regionLabel(a).localeCompare(regionLabel(b))),
+    }))
+    .sort((a, b) => (a.country ? 0 : 1) - (b.country ? 0 : 1) || a.label.localeCompare(b.label))
+
+  const indent = '  '
+
   async function make(typed: string) {
     setBusy(true)
     setError(null)
     try {
-      const r = await createPlaceInline(typed, region ?? null)
+      const r = await createPlaceInline(typed, null)
       if ('error' in r) { setError(r.error); return }
-      // Selected on the spot. The list it came from is server-rendered, so the
-      // new row is held here until the refresh catches up — without it the
-      // picker would snap back to nothing having just been told to pick it.
       setFresh(r)
       onChange?.(`venue:${r.id}`)
       setMaking(false)
@@ -100,8 +101,6 @@ export default function PlaceSelect({
       setBusy(false)
     }
   }
-
-  const controlled = value !== undefined
 
   if (making) {
     return (
@@ -118,50 +117,68 @@ export default function PlaceSelect({
           className={className}
         />
         <p className="text-[11px] text-zinc-600">
-          Enter to add{region ? ` in ${regionLabel(region)}` : ''}, Escape to go back. The rest of
-          what a venue knows is filled in on the venues screen.
+          Enter to add, Escape to go back. Which state it is in is set on the venues screen.
         </p>
         {error && <p className="text-[11px] text-pr-red">{error}</p>}
       </div>
     )
   }
 
+  const controlled = value !== undefined
   return (
     <>
-    <select
-      name={name}
-      required={required}
-      className={className}
-      {...(controlled ? { value } : { defaultValue: defaultValue ?? '' })}
-      onChange={(e) => onChange?.(e.target.value)}
-    >
-      <option value="">{required ? '— pick a place —' : '— none —'}</option>
-      {/* Held locally until the server list catches up. */}
-      {fresh && !venues.some((v) => v.id === fresh.id) && (
-        <option value={`venue:${fresh.id}`}>{fresh.name} — the whole area</option>
-      )}
-      {group(here, region ? regionLabel(region) || 'Here' : undefined)}
-      {group(unfiled, 'No state set')}
-      {group(elsewhere, region ? `Outside ${regionLabel(region) || 'there'}` : undefined)}
-      {orphans.length > 0 && (
-        <optgroup label="Sites with no venue">
-          {orphans.map((s) => (
-            <option key={s.id} value={`site:${s.id}`}>{s.name}</option>
-          ))}
-        </optgroup>
-      )}
-    </select>
-    {/* Somewhere new is not an edge case — it is every first course at a
-        place. Without this, filing a map of somewhere the list has never
-        heard of means abandoning the half-typed map to go and make the venue
-        on another screen. */}
-    <button
-      type="button"
-      onClick={() => setMaking(true)}
-      className="mt-1 text-[11px] text-zinc-500 hover:text-white transition-colors"
-    >
-      + Somewhere not on the list
-    </button>
+      <select
+        name={name}
+        required={required}
+        className={className}
+        {...(controlled ? { value } : { defaultValue: defaultValue ?? '' })}
+        onChange={(e) => onChange?.(e.target.value)}
+      >
+        <option value="">{required ? '— pick a place —' : '— none —'}</option>
+        {/* Held locally until the server list catches up. */}
+        {fresh && !venues.some((v) => v.id === fresh.id) && (
+          <option value={`venue:${fresh.id}`}>{fresh.name}</option>
+        )}
+        {countries.map((c) => (
+          <optgroup key={c.country || '_none'} label={c.label}>
+            {c.country && <option value={`region:${c.country}`}>{c.label} — anywhere in it</option>}
+            {c.codes.flatMap((code) => {
+              const stateName = code.includes('-') ? regionLabel(code).split(',')[0] : ''
+              return [
+                ...(stateName
+                  ? [<option key={code} value={`region:${code}`}>{indent}{stateName} — anywhere in it</option>]
+                  : []),
+                ...(byRegion.get(code) ?? []).flatMap((v) => [
+                  <option key={v.id} value={`venue:${v.id}`}>{indent}{indent}{v.name}</option>,
+                  ...(sitesOf.get(v.id) ?? []).map((s) => (
+                    <option key={s.id} value={`site:${s.id}`}>
+                      {indent}{indent}{indent}{s.name}{s.kind ? ` · ${s.kind}` : ''}
+                    </option>
+                  )),
+                ]),
+              ]
+            })}
+          </optgroup>
+        ))}
+        {sites.filter((s) => !s.venue_id).length > 0 && (
+          <optgroup label="Canyons with no venue">
+            {sites.filter((s) => !s.venue_id).map((s) => (
+              <option key={s.id} value={`site:${s.id}`}>{s.name}</option>
+            ))}
+          </optgroup>
+        )}
+      </select>
+      {/* Somewhere new is not an edge case — it is every first course at a
+          place. Without this, filing a map of somewhere the list has never
+          heard of means abandoning the half-typed map to go and make the
+          venue on another screen. */}
+      <button
+        type="button"
+        onClick={() => setMaking(true)}
+        className="mt-1 text-[11px] text-zinc-500 hover:text-white transition-colors"
+      >
+        + Somewhere not on the list
+      </button>
     </>
   )
 }

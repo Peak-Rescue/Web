@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import RegionSelect from '@/components/RegionSelect'
 import { CAPABILITY_META, CAPABILITY_ORDER } from '@/lib/capabilities'
 import {
   ACCESS_META, LINK_AUDIENCE_META, KIND_META, KIND_GROUPS,
@@ -37,10 +36,6 @@ export default function AddLibraryItem({
   defaultBucket?: string
 }) {
   const [kind, setKind] = useState('reference')
-  // Asked before the place and held here, so choosing a state narrows the
-  // place picker under it — the order the course form already asks in:
-  // country, then state, then the place inside it.
-  const [region, setRegion] = useState('')
   const [bucket, setBucket] = useState(defaultBucket ?? 'resource')
   const isMap = kind === 'map'
   const isPermit = kind === 'permit'
@@ -118,22 +113,14 @@ export default function AddLibraryItem({
           noticing. So for a map the question is required and takes either
           level — the area, or the canyon inside it. Everything else is filed
           by place only when it happens to be about one. */}
-      {isMap && (
-        <div>
-          <label className={label}>State / country</label>
-          <RegionSelect name="region" className={input} onChange={setRegion} />
-          <p className="text-xs text-zinc-500 mt-1">Narrows the places below.</p>
-        </div>
-      )}
 
-      <div className={isMap ? '' : 'sm:col-span-2'}>
-        <label className={label}>{isMap ? 'Where it is *' : 'Place'}</label>
+      <div className="sm:col-span-2">
+        <label className={label}>{isMap ? 'Where it is * — country, state, venue or canyon' : 'Place'}</label>
         <PlaceSelect
           name="place"
           venues={venues}
           sites={sites}
           required={isMap}
-          region={region || null}
           className={input}
         />
       </div>
