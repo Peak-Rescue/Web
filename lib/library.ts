@@ -8,7 +8,7 @@ import { CAPABILITY_META, courseCapabilityCategories, type CapabilityCategory } 
 export type LibraryAudience = 'internal' | 'shared'
 export type LibrarySourceType = 'drive' | 'link' | 'youtube' | 'file'
 export type LibraryStatus = 'pending' | 'published' | 'archived'
-export type LibraryBucket = 'teaching' | 'resource' | 'map' | 'instructor'
+export type LibraryBucket = 'teaching' | 'resource' | 'map' | 'instructor' | 'documents'
 
 // Four libraries rather than one pile. Only teaching material is carried by a
 // course template — maps come from the venue, resources and instructor
@@ -19,8 +19,13 @@ export const BUCKET_META: Record<LibraryBucket, { label: string; hint: string }>
   resource:   { label: 'Reference',         hint: 'Manuals, tech notes, standards, med plans' },
   map:        { label: 'Maps',              hint: 'CalTopo, SARTopo and other maps' },
   instructor: { label: 'Instructor material', hint: 'Guides, outlines and teaching notes — never shown to students' },
+  // The company rather than the course. Everything here was living in
+  // whichever teaching shelf it least embarrassed — eighteen logo files under
+  // instructor material, the employee handbook beside rope technique — on the
+  // grounds that it had to go somewhere. Nobody looks a logo up.
+  documents:  { label: 'Documents',          hint: 'JPRs, risk and evac plans, equipment logs, and Peak paperwork' },
 }
-export const BUCKET_ORDER: LibraryBucket[] = ['teaching', 'resource', 'map', 'instructor']
+export const BUCKET_ORDER: LibraryBucket[] = ['teaching', 'resource', 'map', 'instructor', 'documents']
 
 // Two more shelves, browsed beside the four above but stored in their own
 // tables: a gear list and a schedule are structured rows, not links, so
@@ -74,7 +79,7 @@ export const TEMPLATE_SHELF_META: Record<TemplateShelf, { label: string; hint: s
 export const TEMPLATE_SHELF_ORDER: TemplateShelf[] = ['gear', 'schedule', 'setup']
 // Sites sit with the maps, not with the templates: both answer "where", and
 // the two are read together when a course is being built.
-export const SHELF_ORDER: LibraryShelf[] = ['teaching', 'resource', 'map', 'site', 'instructor', ...TEMPLATE_SHELF_ORDER]
+export const SHELF_ORDER: LibraryShelf[] = ['teaching', 'resource', 'map', 'site', 'instructor', 'documents', ...TEMPLATE_SHELF_ORDER]
 
 export function shelfLabel(v: LibraryShelf): string {
   if (isPlaceShelf(v)) return PLACE_SHELF_META[v].label
@@ -307,4 +312,53 @@ export function cleanTopic(raw: string): string {
 
 export function isDisciplineList(v: string[]): v is CapabilityCategory[] {
   return Array.isArray(v)
+}
+
+
+// ─── Where a thing probably belongs ─────────────────────────────────────────
+//
+// 822 items arrived from Classroom filed by which class they were posted in,
+// which says nothing about what they are: logos and rope technique sit on the
+// same shelf because they were posted to the same room.
+//
+// This is a first guess, never a move. What it is beats where it came from —
+// a permit is paperwork wherever it was posted — and the Classroom topic is
+// only consulted when the kind is the catch-all, which is 49 of them.
+//
+// Returns null when there is no confident guess, which is the honest answer
+// more often than it is comfortable: a wrong guess accepted in bulk is worse
+// than no guess, because nobody re-checks a shelf that looks sorted.
+
+const PAPERWORK = /\b(logo|letterhead|handbook|incident|welcome letter|expectation|jpr|evac|risk assessment|equipment log|roster|waiver|sign.?up|employee|invoice|w-?9|coi\b)/i
+
+export function proposedBucket(item: {
+  kind: string
+  bucket: LibraryBucket | null
+  title: string
+  source_topic?: string | null
+}): LibraryBucket | null {
+  // Paperwork by type, whatever room it was posted in.
+  if (item.kind === 'permit' || item.kind === 'form' || item.kind === 'rescue_plan') return 'documents'
+  // A map's shelf is its type; nothing here should ever move one.
+  if (item.kind === 'map') return 'map'
+  if (item.kind === 'standard' || item.kind === 'tech_note' || item.kind === 'manual') return 'resource'
+  if (item.kind === 'presentation' || item.kind === 'skill_sheet') return 'teaching'
+  if (item.kind === 'outline') return 'instructor'
+  // Photos and video are their own question, answered on the media shelf
+  // rather than by shuffling them between the teaching ones.
+  if (item.kind === 'video' || item.kind === 'media') return null
+
+  // Catch-all kinds: fall back to what the thing is called, then to the
+  // Classroom topic it was posted under.
+  const topic = (item.source_topic ?? '').replace(/\(DO NOT POST\)/i, '').trim()
+  // Pre-course information and the pre-course survey are things a student is
+  // given, so they are teaching material — even though the room they were
+  // posted in was the scheduling one and the word "survey" reads like
+  // paperwork. Checked before the paperwork rules for exactly that reason.
+  if (/pre.?course/i.test(item.title)) return 'teaching'
+  if (PAPERWORK.test(item.title) || PAPERWORK.test(topic)) return 'documents'
+  if (/peak documents|employee information|scheduling/i.test(topic)) return 'documents'
+  if (/standards|product manual|tech note/i.test(topic)) return 'resource'
+  if (/class notes|instructor/i.test(topic)) return 'instructor'
+  return null
 }

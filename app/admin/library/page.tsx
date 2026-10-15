@@ -5,8 +5,8 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import {
   KIND_META, LIBRARY_KINDS, BUCKET_META, BUCKET_ORDER,
   TEMPLATE_SHELF_META, TEMPLATE_SHELF_ORDER, SHELF_ORDER, isTemplateShelf, isPlaceShelf,
-  shelfLabel, shelfHint,
-  type LibraryItem, type LibraryShelf, type TemplateShelf, type TemplateSummary, type Venue,
+  shelfLabel, shelfHint, proposedBucket,
+  type LibraryItem, type LibraryShelf, type LibraryBucket, type TemplateShelf, type TemplateSummary, type Venue,
 } from '@/lib/library'
 import { type GearItem, type GearList } from '@/app/admin/gear/GearListEditor'
 import { GEAR_ENTRIES_SELECT } from '@/lib/gear'
@@ -21,6 +21,7 @@ import TemplateReadOnly from './TemplateReadOnly'
 import CourseSetupRow from './CourseSetupRow'
 import CourseSetupReadOnly from './CourseSetupReadOnly'
 import InfoHint from '@/components/InfoHint'
+import SortQueue from './SortQueue'
 import SitesShelf from '@/app/admin/sites/SitesShelf'
 import { loadSitesShelf } from '@/app/admin/sites/load'
 import { CAPABILITY_META, CAPABILITY_ORDER, type CapabilityCategory } from '@/lib/capabilities'
@@ -32,13 +33,13 @@ const input = 'w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-
 export default async function LibraryPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; discipline?: string; kind?: string; audience?: string; venue?: string; bucket?: string; q?: string; template?: string; open?: string; page?: string }>
+  searchParams: Promise<{ status?: string; discipline?: string; kind?: string; audience?: string; venue?: string; bucket?: string; q?: string; template?: string; open?: string; page?: string; sort?: string }>
 }) {
   // Published is the library. Pending review is a queue that Google Classroom
   // imports drop into, and landing on it meant the shelf you came to look at
   // read as empty — an item added by hand is published the moment it's added,
   // so the queue is usually empty and the answer usually isn't there.
-  const { status: askedStatus, discipline, kind, audience, venue, bucket, q, template, open, page } = await searchParams
+  const { status: askedStatus, discipline, kind, audience, venue, bucket, q, template, open, page, sort } = await searchParams
 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -76,12 +77,16 @@ export default async function LibraryPage({
   // Which shelf you are standing on, if it is one shelf rather than a search
   // across all of them.
   const onShelf = Boolean(bucket)
-  const landing = !bucket && !q && !discipline && !kind && !venue && !audience && status === 'published'
+  const landing = !sort && !bucket && !q && !discipline && !kind && !venue && !audience && status === 'published'
   // The places shelf is its own thing: not documents, not templates, and the
   // document filters (type, who-can-see, review status) mean nothing to a
   // canyon. It is only ever shown when it is the shelf asked for.
   const onPlaces = isPlaceShelf(bucket)
-  const showDocs = !isTemplateShelf(bucket) && !onPlaces && !landing
+  // Resorting is a view of the whole shelf at once, so it owns the page while
+  // it is open — a paginated list of sixty is the wrong unit for a claim about
+  // eight hundred.
+  const onSort = isAdmin && sort === '1'
+  const showDocs = !isTemplateShelf(bucket) && !onPlaces && !onSort && !landing
   // Review status is a document's state, not a template's: there is nothing
   // to approve about a kit list you wrote yourself, so the pending and
   // archived tabs — which are documents being worked through — leave them
@@ -92,7 +97,7 @@ export default async function LibraryPage({
   const statusHidesTemplates =
     (status === 'pending' || status === 'archived') && !isTemplateShelf(bucket)
   const showTemplates =
-    (!bucket || isTemplateShelf(bucket)) && !docOnlyFilter && !landing && !statusHidesTemplates && !onPlaces
+    (!bucket || isTemplateShelf(bucket)) && !docOnlyFilter && !landing && !statusHidesTemplates && !onPlaces && !onSort
   const shelves: TemplateShelf[] = isTemplateShelf(bucket) ? [bucket] : TEMPLATE_SHELF_ORDER
 
   // A page of results, not the whole shelf. The reference page learned this —
@@ -131,7 +136,7 @@ export default async function LibraryPage({
   // Templates take the same search box and discipline tags the documents use.
   // They have no review status, so the status tabs pass them by — there's
   // nothing to approve about a kit list you wrote yourself.
-  const [{ data: itemRows }, { data: venueRows }, { data: siteRows }, gearRes, scheduleRes, setupRes, catalogRes, { count: pendingCount }, placesShelf, shelfCounts] = await Promise.all([
+  const [{ data: itemRows }, { data: venueRows }, { data: siteRows }, gearRes, scheduleRes, setupRes, catalogRes, { count: pendingCount }, placesShelf, { data: sortRows }, shelfCounts] = await Promise.all([
     showDocs ? query : Promise.resolve({ data: [] }),
     admin.from('venues').select('id, name, region, region_code, client_name, notes, links, active').order('name'),
     // A per-region template pins its canyons here, so the courses started from
@@ -189,6 +194,16 @@ export default async function LibraryPage({
     // the landing — a number on a card is the difference between picking a
     // shelf and guessing at one.
     onPlaces ? loadSitesShelf() : Promise.resolve(null),
+    // The whole shelf, because the question is about all of it. Columns enough
+    // to render the ordinary row, since one wrong guess is corrected in place.
+    onSort
+      ? admin
+          .from('library_items')
+          .select('id, title, description, source_type, url, edit_url, drive_file_id, kind, audience, disciplines, topics, venue_id, site_id, expires_at, status, bucket, region, source_class, source_topic, source_item, library_item_links(id, url, access, audience)')
+          .eq('status', 'published')
+          .order('title')
+          .limit(2000)
+      : Promise.resolve({ data: [] }),
     landing
       ? Promise.all([
           ...BUCKET_ORDER.map(async (b) => [b, (await admin
@@ -265,6 +280,28 @@ export default async function LibraryPage({
         }
       }),
   }))
+  // Grouped by the move itself, which is the unit the claim can be agreed
+  // with: "78 things on the instructor shelf look like reference" is checkable
+  // at a glance in a way that 187 individual rows is not.
+  const sortGroups: { from: LibraryBucket; to: LibraryBucket; items: LibraryItem[] }[] = []
+  let sortUnguessed = 0
+  if (onSort) {
+    const byMove = new Map<string, LibraryItem[]>()
+    for (const raw of (sortRows ?? []) as unknown as (LibraryItem & { library_item_links?: LibraryItem['links'] })[]) {
+      const row = { ...raw, links: raw.library_item_links ?? [] } as LibraryItem
+      const to = proposedBucket(row)
+      if (!to) { sortUnguessed++; continue }
+      if (to === row.bucket) continue
+      const k = `${row.bucket}:${to}`
+      byMove.set(k, [...(byMove.get(k) ?? []), row])
+    }
+    for (const [k, items] of byMove) {
+      const [from, to] = k.split(':') as [LibraryBucket, LibraryBucket]
+      sortGroups.push({ from, to, items })
+    }
+    sortGroups.sort((a, b) => b.items.length - a.items.length)
+  }
+
   const catalog = (catalogRes.data ?? []) as unknown as GearItem[]
 
   const summarize = (
@@ -297,7 +334,7 @@ export default async function LibraryPage({
   // carries the page, which is why it isn't in the merge.
   const href = (patch: Record<string, string | undefined>) => {
     const p = new URLSearchParams()
-    const merged = { status, discipline, kind, audience, venue, bucket, q, ...patch }
+    const merged = { status, discipline, kind, audience, venue, bucket, q, sort, ...patch }
     for (const [k, v] of Object.entries(merged)) if (v) p.set(k, v)
     return `/admin/library?${p.toString()}`
   }
@@ -367,6 +404,17 @@ export default async function LibraryPage({
                   : 'Everything we teach from and look things up in — teaching material, manuals, standards, maps, kit lists and running orders.'}
             </p>
           </div>
+          {/* The one console about the library rather than in it. Not a
+              shelf: it is a pass you make over the shelves, and when the
+              filing is right it has nothing to say. */}
+          {isAdmin && !onSort && (
+            <Link
+              href={href({ sort: '1', bucket: undefined, q: undefined })}
+              className="text-xs px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded transition-colors shrink-0"
+            >
+              Check the filing
+            </Link>
+          )}
           {/* The three buttons that used to sit here were exits from a page
               people came to for content: Coverage, Venues, Sites. Sites is a
               shelf now, which is where it was always being looked for, and it
@@ -537,6 +585,22 @@ export default async function LibraryPage({
               </div>
             )}
           </>
+        )}
+
+        {/* ── Resorting ────────────────────────────────────────────────── */}
+        {onSort && (
+          <section className="mb-8">
+            <h2 className="flex items-center gap-2 text-lg font-semibold mb-1">
+              Check the filing
+              <InfoHint text="A first guess at where each thing belongs, from what it is rather than which Classroom room it was posted in. Nothing moves until you say so — an auto-sorted shelf looks exactly like a sorted one, and nobody re-checks the second." />
+            </h2>
+            <p className="text-xs text-zinc-500 mb-4">
+              <Link href={href({ sort: undefined })} className="underline hover:text-zinc-300 transition-colors">
+                ← back to the library
+              </Link>
+            </p>
+            <SortQueue groups={sortGroups} unguessed={sortUnguessed} venues={venues} sites={siteOptions} />
+          </section>
         )}
 
         {/* ── Sites & routes ───────────────────────────────────────────── */}

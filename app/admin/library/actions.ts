@@ -357,6 +357,23 @@ export async function setLibraryDisciplines(ids: string[], disciplines: string[]
   revalidate()
 }
 
+// Moving a batch to the shelf it belongs on. The counterpart to
+// proposedBucket: that works out where something probably goes, this is a
+// person agreeing. Nothing moves itself — a guess accepted in bulk by a
+// machine is indistinguishable from a sorted shelf, and nobody re-checks one
+// of those.
+export async function setLibraryBucket(ids: string[], bucket: string) {
+  const admin = await requireAdmin()
+  if (ids.length === 0) return
+  if (!VALID_BUCKETS.has(bucket)) throw new Error(`Not a shelf: ${bucket}`)
+  const { error } = await admin
+    .from('library_items')
+    .update({ bucket, updated_at: new Date().toISOString() })
+    .in('id', ids)
+  if (error) throw new Error(error.message)
+  revalidate()
+}
+
 export async function rejectLibraryItems(ids: string[]) {
   const admin = await requireAdmin()
   if (ids.length === 0) return
