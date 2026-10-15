@@ -3,7 +3,6 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createSite, addPlaceLink, addPlaceContact, type PlaceScope } from './actions'
-import { SITE_KINDS, type MeetingPointRecord } from '@/lib/sites'
 import { createLibraryItem } from '@/app/admin/library/actions'
 import { errorFrom } from '@/lib/action-result'
 
@@ -29,12 +28,8 @@ export default function AddToPlace({
   scope,
   place,
   placeName,
-  points = [],
 }: {
   scope: PlaceScope
-  /** Meetups this canyon could use, so the morning is answered while the
-      canyon is being written rather than on a second visit. */
-  points?: MeetingPointRecord[]
   /** `venue:<id>` or `region:<code>`, for the library forms that take a place. */
   place: string
   placeName: string
@@ -42,13 +37,10 @@ export default function AddToPlace({
   const router = useRouter()
   const [kind, setKind] = useState<Kind | null>(null)
   const [busy, setBusy] = useState(false)
-  // A canyon has a route page, a gauge and a driving pin far more often than
-  // it has one link, so the form starts with room for the three.
-  const [links, setLinks] = useState([
-    { label: 'ropewiki', url: '' },
-    { label: 'water gauge', url: '' },
-    { label: 'trailhead', url: '' },
-  ])
+  // One blank row. Three suggested labels made this a canyon form — a
+  // ropewiki page and a water gauge are not what every place has — and this
+  // is the only shape there is for beta, at every level.
+  const [links, setLinks] = useState([{ label: '', url: '' }])
   const [error, setError] = useState<string | null>(null)
 
   // Written beta is a canyon with a write-up on it, and a canyon belongs to a
@@ -143,44 +135,25 @@ export default function AddToPlace({
             <div className="grid gap-2 sm:grid-cols-2">
               <div>
                 <label className={label}>Name</label>
-                <input name="name" required autoFocus className={input} placeholder="Keyhole Canyon" />
+                <input name="name" required autoFocus className={input} />
               </div>
               <div>
-                <label className={label}>Kind</label>
-                <input name="kind" list="add-site-kinds" defaultValue="canyon" className={input} />
-                <datalist id="add-site-kinds">
-                  {SITE_KINDS.map((k) => <option key={k} value={k} />)}
-                </datalist>
-              </div>
-              <div>
-                <label className={label}>Usual meeting time</label>
-                <input name="usual_meeting_time" className={input} placeholder="0530" />
-              </div>
-              <div>
-                <label className={label}>Usual meeting point</label>
-                <select name="meeting_point_id" className={input} defaultValue="">
-                  <option value="">— none —</option>
-                  {points.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </select>
-              </div>
-              <div className="sm:col-span-2">
-                <label className={label}>Coordinates — of the canyon itself</label>
-                <input name="coords" className={input} placeholder="20.8071, -156.1136" />
+                <label className={label}>Coordinates</label>
+                <input name="coords" className={input} />
               </div>
             </div>
 
             <div>
               <label className={label}>Beta — approach, raps, exit, hazards. The breaks are kept.</label>
-              <textarea name="beta" rows={5} className={`${input} resize-y`}
-                        placeholder={'Approach:\npark in the small turn-off…\n\nRoute:\n…'} />
+              <textarea name="beta" rows={5} className={`${input} resize-y`} />
             </div>
 
             <div>
-              <label className={label}>Links — route page, gauge, driving pin</label>
+              <label className={label}>Links</label>
               <div className="space-y-1.5">
                 {links.map((l, i) => (
                   <div key={i} className="grid grid-cols-[7.5rem_1fr_1.25rem] gap-2 items-center">
-                    <input name="link_label" value={l.label} className={input}
+                    <input name="link_label" value={l.label} placeholder="Shown as" className={input}
                            onChange={(e) => setLinks(links.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))} />
                     <input name="link_url" value={l.url} spellCheck={false} className={`${input} font-mono`} placeholder="https://…"
                            onChange={(e) => setLinks(links.map((x, j) => (j === i ? { ...x, url: e.target.value } : x)))} />

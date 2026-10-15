@@ -224,7 +224,7 @@ export default function SitesShelf({
             </div>
           </div>
         )}
-        <AddToPlace scope={{ regionCode: code }} place={`region:${code}`} placeName={regionLabel(code) || code} points={points} />
+        <AddToPlace scope={{ regionCode: code }} place={`region:${code}`} placeName={regionLabel(code) || code} />
       </div>
     )
   }
@@ -367,7 +367,6 @@ export default function SitesShelf({
                 scope={{ venueId: g.venue.id }}
                 place={`venue:${g.venue.id}`}
                 placeName={g.venue.name}
-                points={points}
               />
             )}
             </div>
