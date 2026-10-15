@@ -65,6 +65,11 @@ export default function SitesShelf({
   const mapsByVenue = new Map<string, LibraryItem[]>()
   const betaByVenue = new Map<string, LibraryItem[]>()
   for (const m of maps) {
+    // Filed to a state rather than a venue is still filed. These are drawn
+    // under their state by RegionBlocks, and grouping them here as well put
+    // them under "Nowhere yet" at the same time — the same item in two
+    // places, one of them saying it was lost.
+    if (!m.venue_id && !m.site_id && m.region) continue
     const k = m.venue_id ?? ''
     const into = m.kind === 'route' ? betaByVenue : mapsByVenue
     into.set(k, [...(into.get(k) ?? []), m])
@@ -88,7 +93,7 @@ export default function SitesShelf({
     ...(byVenue.has('') || mapsByVenue.has('') || betaByVenue.has('')
       ? [{
           key: '_none',
-          name: 'Nowhere yet',
+          name: 'Not filed anywhere yet',
           venue: null,
           sites: byVenue.get('') ?? [],
           maps: mapsByVenue.get('') ?? [],
