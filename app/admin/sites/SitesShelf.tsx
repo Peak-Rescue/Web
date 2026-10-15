@@ -3,7 +3,7 @@ import SiteRow from './SiteRow'
 import JumpToNewRow from '@/components/JumpToNewRow'
 import AddToPlace from './AddToPlace'
 import AddLevel from './AddLevel'
-import { type Site, type MeetingPointRecord } from '@/lib/sites'
+import { type Site } from '@/lib/sites'
 import { type LibraryItem, type Venue, type VenueContact, type VenueLink } from '@/lib/library'
 import { countryName, regionLabel, splitRegion, SUBDIVISIONS } from '@/lib/regions'
 import LibraryRow from '@/app/admin/library/LibraryRow'
@@ -26,7 +26,6 @@ import { type SiteOption } from '@/app/admin/schedules/types'
 export default function SitesShelf({
   sites,
   venues,
-  points,
   maps,
   regionInfo,
   dayCount,
@@ -34,7 +33,6 @@ export default function SitesShelf({
 }: {
   sites: Site[]
   venues: Venue[]
-  points: MeetingPointRecord[]
   /** The maps, read beside the places they are about rather than on a shelf
       of their own answering the same question differently. */
   maps: LibraryItem[]
@@ -210,7 +208,7 @@ export default function SitesShelf({
             <p className="text-[10px] uppercase tracking-wide text-zinc-700 mb-1.5">Beta</p>
             <div className="space-y-2">
               {canyons.map((x) => (
-                <SiteRow key={x.id} site={x} venues={venues} points={points} dayCount={dayCount.get(x.id) ?? 0} />
+                <SiteRow key={x.id} site={x} venues={venues} dayCount={dayCount.get(x.id) ?? 0} />
               ))}
               {beta.map((b) => <LibraryRow key={b.id} item={b} venues={venues} sites={siteOptions} />)}
             </div>
@@ -340,7 +338,7 @@ export default function SitesShelf({
                 <p className="text-[10px] uppercase tracking-wide text-zinc-700 mb-1.5">Beta</p>
                 <div className="space-y-2">
                   {g.sites.map((s) => (
-                    <SiteRow key={s.id} site={s} venues={venues} points={points} dayCount={dayCount.get(s.id) ?? 0} />
+                    <SiteRow key={s.id} site={s} venues={venues} dayCount={dayCount.get(s.id) ?? 0} />
                   ))}
                   {g.beta.map((b) => (
                     <LibraryRow key={b.id} item={b} venues={venues} sites={siteOptions} />

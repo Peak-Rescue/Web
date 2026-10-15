@@ -3,7 +3,7 @@
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import { useRouter } from 'next/navigation'
 import { updateSite, deleteSite } from './actions'
-import { SITE_KINDS, type Site, type SiteLink, type MeetingPointRecord } from '@/lib/sites'
+import { type Site, type SiteLink } from '@/lib/sites'
 import { type Venue } from '@/lib/library'
 import CloseButton from '@/components/CloseButton'
 import TrashIcon from '@/components/TrashIcon'
@@ -12,13 +12,12 @@ const input = 'w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 tex
 const label = 'block text-[11px] text-zinc-500 mb-1'
 
 export default function SiteRow({
-  site, venues, points, dayCount,
+  site, venues, dayCount,
 }: {
   site: Site
   venues: Venue[]
   /** The meetups to choose from — shared rows, because a trailhead often
       serves several canyons and we as often meet where there is parking. */
-  points: MeetingPointRecord[]
   dayCount: number
 }) {
   const router = useRouter()
@@ -42,7 +41,6 @@ export default function SiteRow({
   const [form, setForm] = useState({
     name: site.name,
     venue_id: site.venue_id ?? '',
-    kind: site.kind ?? '',
     beta: site.beta ?? '',
     meeting_point_id: site.meeting_point_id ?? '',
     usual_meeting_time: site.usual_meeting_time ?? '',
@@ -72,7 +70,6 @@ export default function SiteRow({
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-sm font-medium">{site.name}</span>
-            {site.kind && <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400">{site.kind}</span>}
             {!site.active && <span className="text-[10px] text-zinc-600">inactive</span>}
           </div>
           <p className="text-[11px] text-zinc-600 mt-0.5 truncate">
@@ -92,7 +89,10 @@ export default function SiteRow({
       {open && (
         <div className="px-3 pb-3 pt-1 border-t border-zinc-800 grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
-            <label className={label}>Name</label>
+            {/* Kind was a field and is a nudge: it only ever helped if
+                everybody used the same few words, and in four rows it was
+                "canyon" four times. The name carries it. */}
+            <label className={label}>Name — route, canyon, site…</label>
             <input className={input} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
           </div>
           <div>
@@ -103,30 +103,8 @@ export default function SiteRow({
             </select>
           </div>
           <div>
-            <label className={label}>Kind</label>
-            <input list="site-kinds" className={input} value={form.kind} onChange={(e) => setForm({ ...form, kind: e.target.value })} placeholder="canyon" />
-          </div>
-          <div>
-            <label className={label}>Usual meeting time</label>
-            <input className={input} value={form.usual_meeting_time} onChange={(e) => setForm({ ...form, usual_meeting_time: e.target.value })} placeholder="0530" />
-          </div>
-          {/* Picked, not typed: the same lot serves Emerald Upper and Lower,
-              and two copies of one sentence is two places to correct a gate
-              code. Edit the meetup itself in the section above. */}
-          <div>
-            <label className={label}>Usual meeting point</label>
-            <select
-              className={input}
-              value={form.meeting_point_id}
-              onChange={(e) => setForm({ ...form, meeting_point_id: e.target.value })}
-            >
-              <option value="">— none —</option>
-              {points.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className={label}>Coordinates — of the canyon itself</label>
-            <input className={input} value={form.coords} onChange={(e) => setForm({ ...form, coords: e.target.value })} placeholder="20.7988, -156.1193" />
+            <label className={label}>Coordinates</label>
+            <input className={input} value={form.coords} onChange={(e) => setForm({ ...form, coords: e.target.value })} />
           </div>
           <div className="sm:col-span-2">
             <label className={label}>Beta — approach, raps, exit, hazards. One blank-free line per fact; the breaks are kept.</label>
@@ -211,9 +189,6 @@ export default function SiteRow({
           </div>
         </div>
       )}
-      <datalist id="site-kinds">
-        {SITE_KINDS.map((k) => <option key={k} value={k} />)}
-      </datalist>
     </div>
   )
 }

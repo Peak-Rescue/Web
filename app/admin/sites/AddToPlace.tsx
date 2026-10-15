@@ -134,7 +134,7 @@ export default function AddToPlace({
             )}
             <div className="grid gap-2 sm:grid-cols-2">
               <div>
-                <label className={label}>Name</label>
+                <label className={label}>Name — route, canyon, site…</label>
                 <input name="name" required autoFocus className={input} />
               </div>
               <div>
