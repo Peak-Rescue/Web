@@ -3,6 +3,7 @@ import SiteRow from './SiteRow'
 import JumpToNewRow from '@/components/JumpToNewRow'
 import AddToPlace from './AddToPlace'
 import AddLevel from './AddLevel'
+import VenueSettings from '@/components/VenueSettings'
 import { type Site } from '@/lib/sites'
 import { type LibraryItem, type Venue, type VenueContact, type VenueLink } from '@/lib/library'
 import { countryName, regionLabel, splitRegion, SUBDIVISIONS } from '@/lib/regions'
@@ -277,6 +278,19 @@ export default function SitesShelf({
               </span>
             </summary>
             <div className="px-3 pb-3 pt-1">
+              {/* What the venue IS, as opposed to what is in it: its name,
+                  which state it sits in, whose site it is, its links and its
+                  locals. Renaming a venue was the last thing about a venue
+                  that could only be done on a second screen. */}
+              {g.venue && (
+                <details className="group/settings mb-2 rounded border border-zinc-800/80">
+                  <summary className="cursor-pointer list-none px-2 py-1.5 text-[11px] text-zinc-500 hover:text-zinc-300 transition-colors">
+                    <span className="inline-block transition-transform group-open/settings:rotate-90 mr-1.5 text-zinc-600">▶</span>
+                    Venue settings — name, state, client, links, contacts
+                  </summary>
+                  <VenueSettings venue={g.venue} itemCount={g.maps.length + g.beta.length} />
+                </details>
+              )}
 
             {/* Four blocks, because a venue answers four questions and they
                 are not asked together: what the ground looks like, what the
