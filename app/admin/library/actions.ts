@@ -515,7 +515,7 @@ export async function createVenue(formData: FormData) {
   redirect(`/admin/venues?added=${data.id}`)
 }
 
-export async function updateVenue(id: string, patch: { name?: string; region?: string | null; region_code?: string | null; client_name?: string | null; notes?: string | null; links?: { url: string; label: string }[]; active?: boolean }) {
+export async function updateVenue(id: string, patch: { name?: string; region?: string | null; region_code?: string | null; client_name?: string | null; notes?: string | null; links?: { url: string; label: string; kind?: string }[]; contacts?: Record<string, string>[]; active?: boolean }) {
   const admin = await requireAdmin()
   const update: Record<string, unknown> = {}
   if (patch.name !== undefined) update.name = patch.name.trim().slice(0, 120)
@@ -530,7 +530,27 @@ export async function updateVenue(id: string, patch: { name?: string; region?: s
     update.links = patch.links
       .map((l) => ({ url: String(l?.url ?? '').trim(), label: String(l?.label ?? '').trim() }))
       .filter((l) => /^https?:\/\//i.test(l.url))
-      .map((l) => ({ url: l.url.slice(0, 500), label: (l.label || venueLinkHost(l.url)).slice(0, 80) }))
+      .map((l, i) => ({
+        url: l.url.slice(0, 500),
+        label: (l.label || venueLinkHost(l.url)).slice(0, 80),
+        kind: ['weather', 'access', 'other'].includes(patch.links![i]?.kind ?? '')
+          ? patch.links![i].kind
+          : 'other',
+      }))
+      .slice(0, 12)
+  }
+  // A contact with no name is a phone number nobody can place, so it is
+  // dropped rather than saved as a blank row somebody has to work out later.
+  if (patch.contacts !== undefined) {
+    update.contacts = patch.contacts
+      .map((c) => ({
+        name: String(c.name ?? '').trim().slice(0, 120),
+        role: String(c.role ?? '').trim().slice(0, 80) || undefined,
+        phone: String(c.phone ?? '').trim().slice(0, 40) || undefined,
+        email: String(c.email ?? '').trim().slice(0, 120) || undefined,
+        note: String(c.note ?? '').trim().slice(0, 300) || undefined,
+      }))
+      .filter((c) => c.name)
       .slice(0, 12)
   }
   if (patch.active !== undefined) update.active = patch.active

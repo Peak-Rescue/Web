@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { updateLibraryItem, deleteLibraryItem, libraryItemUses, type LibraryItemUses } from './actions'
 import { errorFrom, type ActionResult } from '@/lib/action-result'
-import { KIND_META, LIBRARY_KINDS, AUDIENCE_META, BUCKET_META, BUCKET_ORDER, type LibraryBucket, type LibraryItem, type Venue } from '@/lib/library'
+import { KIND_META, KIND_GROUPS, AUDIENCE_META, BUCKET_META, BUCKET_ORDER, type LibraryBucket, type LibraryItem, type Venue } from '@/lib/library'
 import { AudiencePills } from '@/components/AudiencePills'
 import { CAPABILITY_META, CAPABILITY_ORDER } from '@/lib/capabilities'
 import RegionSelect from '@/components/RegionSelect'
@@ -232,7 +232,11 @@ export default function LibraryRow({ item, venues, sites = [], hideProvenance = 
           <div>
             <label className={label}>Type</label>
             <select className={input} value={form.kind} onChange={(e) => setForm({ ...form, kind: e.target.value })}>
-              {LIBRARY_KINDS.map((k) => <option key={k} value={k}>{KIND_META[k]}</option>)}
+              {KIND_GROUPS.map((g) => (
+                <optgroup key={g.label} label={g.label}>
+                  {g.kinds.map((k) => <option key={k} value={k}>{KIND_META[k]}</option>)}
+                </optgroup>
+              ))}
             </select>
           </div>
           <div>

@@ -8,16 +8,17 @@ export async function loadSitesShelf() {
   const admin = createAdminClient()
   const [{ data: siteRows }, { data: venueRows }, { data: dayRows }, { data: pointRows }, { data: mapRows }] = await Promise.all([
     admin.from('sites').select('id, venue_id, name, kind, beta, meeting_point_id, usual_meeting_time, coords, links, active').order('name'),
-    admin.from('venues').select('id, name, region, region_code, client_name, notes, links, active').order('name'),
+    admin.from('venues').select('id, name, region, region_code, client_name, notes, links, contacts, active').order('name'),
     admin.from('schedule_days').select('site_id').not('site_id', 'is', null),
     admin.from('meeting_points').select('id, name, venue_id, directions, coords, links, active').order('name'),
-    // The maps belong here. A map is about a place and the place is what
-    // anyone is looking for, so they are read beside the beta rather than on
-    // a shelf of their own that answers the same question differently.
+    // The maps and the route write-ups. Both are about a place and nothing
+    // else, which is why they are read here rather than on a shelf of their
+    // own. Not everything filed to a venue — 147 items carry a venue and most
+    // are course material that happened to be taught there.
     admin
       .from('library_items')
       .select('id, title, description, source_type, url, edit_url, drive_file_id, kind, audience, disciplines, topics, admin_only, venue_id, site_id, expires_at, status, bucket, region, source_class, source_topic, source_item, library_item_links(id, url, access, audience)')
-      .eq('bucket', 'map')
+      .in('kind', ['map', 'route'])
       .neq('status', 'archived')
       .order('title'),
   ])

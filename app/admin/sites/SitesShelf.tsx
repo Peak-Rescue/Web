@@ -56,30 +56,36 @@ export default function SitesShelf({
     const k = s.venue_id ?? ''
     byVenue.set(k, [...(byVenue.get(k) ?? []), s])
   }
+  // Two blocks, because they answer different questions about the same place:
+  // a map shows you the ground, beta tells you what the descent is like.
   const mapsByVenue = new Map<string, LibraryItem[]>()
+  const betaByVenue = new Map<string, LibraryItem[]>()
   for (const m of maps) {
     const k = m.venue_id ?? ''
-    mapsByVenue.set(k, [...(mapsByVenue.get(k) ?? []), m])
+    const into = m.kind === 'route' ? betaByVenue : mapsByVenue
+    into.set(k, [...(into.get(k) ?? []), m])
   }
   // A venue earns a heading by having anything under it at all — its own
   // links, a canyon, or a map.
   const groups = [
     ...venues
-      .filter((v) => byVenue.has(v.id) || mapsByVenue.has(v.id) || (v.links ?? []).length > 0)
+      .filter((v) => byVenue.has(v.id) || mapsByVenue.has(v.id) || betaByVenue.has(v.id) || (v.links ?? []).length > 0)
       .map((v) => ({
         key: v.id,
         name: v.name,
         venue: v as Venue | null,
         sites: byVenue.get(v.id) ?? [],
         maps: mapsByVenue.get(v.id) ?? [],
+        beta: betaByVenue.get(v.id) ?? [],
       })),
-    ...(byVenue.has('') || mapsByVenue.has('')
+    ...(byVenue.has('') || mapsByVenue.has('') || betaByVenue.has('')
       ? [{
           key: '_none',
           name: 'Nowhere yet',
           venue: null,
           sites: byVenue.get('') ?? [],
           maps: mapsByVenue.get('') ?? [],
+          beta: betaByVenue.get('') ?? [],
         }]
       : []),
   ]
@@ -154,25 +160,57 @@ export default function SitesShelf({
                 {[
                   g.sites.length && `${g.sites.length} site${g.sites.length === 1 ? '' : 's'}`,
                   g.maps.length && `${g.maps.length} map${g.maps.length === 1 ? '' : 's'}`,
+                  g.beta.length && `${g.beta.length} beta`,
                   g.venue && (g.venue.links ?? []).length && `${g.venue.links.length} link${g.venue.links.length === 1 ? '' : 's'}`,
+                  g.venue && (g.venue.contacts ?? []).length && `${g.venue.contacts.length} contact${g.venue.contacts.length === 1 ? '' : 's'}`,
                 ].filter(Boolean).join(' · ') || 'nothing yet'}
               </span>
             </summary>
             <div className="px-3 pb-3 pt-1">
 
-            {/* What is true of the whole area: the weather, the permit
-                portal, the hospital, the drive in. Set on the venue itself —
-                this is where they are read. */}
-            {g.venue && (g.venue.links ?? []).length > 0 && (
+            {/* Four blocks, because a venue answers four questions and they
+                are not asked together: what the ground looks like, what the
+                descent is like, what the water and sky are doing, and who to
+                ring. Weather is first — it is the one read at 0500. */}
+            {g.venue && (g.venue.links ?? []).filter((l) => l.kind === 'weather').length > 0 && (
+              <div className="mb-2">
+                <p className="text-[10px] uppercase tracking-wide text-zinc-700 mb-1.5">Weather</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {g.venue.links.filter((l) => l.kind === 'weather').map((l, i) => (
+                    <a key={i} href={l.url} target="_blank" rel="noopener noreferrer"
+                       className="text-[11px] px-2 py-1 rounded border border-sky-900/60 bg-sky-950/30 text-sky-300 hover:text-white hover:border-sky-700 transition-colors">
+                      {l.label}
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {g.venue && (g.venue.contacts ?? []).length > 0 && (
+              <div className="mb-2">
+                <p className="text-[10px] uppercase tracking-wide text-zinc-700 mb-1.5">Contacts</p>
+                <div className="flex flex-wrap gap-x-4 gap-y-1">
+                  {g.venue.contacts.map((c, i) => (
+                    <span key={i} className="text-[11px] text-zinc-400">
+                      {c.name}
+                      {c.role && <span className="text-zinc-600"> · {c.role}</span>}
+                      {(c.phone || c.email) && (
+                        <a href={c.phone ? `tel:${c.phone}` : `mailto:${c.email}`}
+                           className="ml-1.5 text-zinc-300 hover:text-white underline underline-offset-2">
+                          {c.phone || c.email}
+                        </a>
+                      )}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {g.venue && (g.venue.links ?? []).filter((l) => l.kind !== 'weather').length > 0 && (
               <div className="flex flex-wrap gap-1.5 mb-2">
-                {g.venue.links.map((l, i) => (
-                  <a
-                    key={i}
-                    href={l.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-[11px] px-2 py-1 rounded border border-zinc-800 bg-zinc-900 text-zinc-400 hover:text-white hover:border-zinc-600 transition-colors"
-                  >
+                {g.venue.links.filter((l) => l.kind !== 'weather').map((l, i) => (
+                  <a key={i} href={l.url} target="_blank" rel="noopener noreferrer"
+                     className="text-[11px] px-2 py-1 rounded border border-zinc-800 bg-zinc-900 text-zinc-400 hover:text-white hover:border-zinc-600 transition-colors">
                     {l.label}
                   </a>
                 ))}
@@ -192,9 +230,20 @@ export default function SitesShelf({
                 not the other just read as a rule nobody could see. If this
                 grows to where a venue is a screenful, fold then, and fold
                 both. */}
+            {g.beta.length > 0 && (
+              <div className="mt-2">
+                <p className="text-[10px] uppercase tracking-wide text-zinc-700 mb-1.5">Beta</p>
+                <div className="space-y-2">
+                  {g.beta.map((b) => (
+                    <LibraryRow key={b.id} item={b} venues={venues} sites={siteOptions} />
+                  ))}
+                </div>
+              </div>
+            )}
+
             {g.maps.length > 0 && (
               <div className="mt-2">
-                {g.sites.length > 0 && (
+                {(g.sites.length > 0 || g.beta.length > 0) && (
                   <p className="text-[10px] uppercase tracking-wide text-zinc-700 mb-1.5">Maps</p>
                 )}
                 <div className="space-y-2">

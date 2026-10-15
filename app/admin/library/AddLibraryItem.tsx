@@ -4,7 +4,7 @@ import { useState } from 'react'
 import RegionSelect from '@/components/RegionSelect'
 import { CAPABILITY_META, CAPABILITY_ORDER } from '@/lib/capabilities'
 import {
-  ACCESS_META, LINK_AUDIENCE_META, KIND_META, LIBRARY_KINDS,
+  ACCESS_META, LINK_AUDIENCE_META, KIND_META, KIND_GROUPS,
   BUCKET_META, BUCKET_ORDER, type Venue,
 } from '@/lib/library'
 import { createLibraryItem } from './actions'
@@ -52,7 +52,11 @@ export default function AddLibraryItem({
       <div>
         <label className={label}>Type</label>
         <select name="kind" value={kind} onChange={(e) => setKind(e.target.value)} className={input}>
-          {LIBRARY_KINDS.map((k) => <option key={k} value={k}>{KIND_META[k]}</option>)}
+          {KIND_GROUPS.map((g) => (
+            <optgroup key={g.label} label={g.label}>
+              {g.kinds.map((k) => <option key={k} value={k}>{KIND_META[k]}</option>)}
+            </optgroup>
+          ))}
         </select>
       </div>
       <div>

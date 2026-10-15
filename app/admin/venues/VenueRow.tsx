@@ -4,7 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { updateVenue, deleteVenue } from '../library/actions'
-import { type Venue, type VenueLink } from '@/lib/library'
+import { type Venue, type VenueLink, type VenueContact, type VenueLinkKind } from '@/lib/library'
 import RegionSelect from '@/components/RegionSelect'
 import { regionLabel } from '@/lib/regions'
 import CloseButton from '@/components/CloseButton'
@@ -24,6 +24,7 @@ export default function VenueRow({ venue, itemCount }: { venue: Venue; itemCount
     notes: venue.notes ?? '',
   })
   const [links, setLinks] = useState<VenueLink[]>(venue.links ?? [])
+  const [contacts, setContacts] = useState<VenueContact[]>(venue.contacts ?? [])
 
   async function run(fn: () => Promise<void>) {
     setBusy(true)
@@ -89,13 +90,23 @@ export default function VenueRow({ venue, itemCount }: { venue: Venue; itemCount
             <label className={label}>Links — weather, permits, hospital, getting there</label>
             <div className="space-y-1.5">
               {links.length > 0 && (
-                <div className="grid grid-cols-[7.5rem_1fr_1.25rem] gap-2 px-0.5">
+                <div className="grid grid-cols-[6rem_7.5rem_1fr_1.25rem] gap-2 px-0.5">
+                  <span className="text-[10px] uppercase tracking-wide text-zinc-600">Block</span>
                   <span className="text-[10px] uppercase tracking-wide text-zinc-600">Shown as</span>
                   <span className="text-[10px] uppercase tracking-wide text-zinc-600">Address</span>
                 </div>
               )}
               {links.map((l, i) => (
-                <div key={i} className="grid grid-cols-[7.5rem_1fr_1.25rem] gap-2 items-center">
+                <div key={i} className="grid grid-cols-[6rem_7.5rem_1fr_1.25rem] gap-2 items-center">
+                  <select
+                    className={input}
+                    value={l.kind ?? 'other'}
+                    onChange={(e) => setLinks(links.map((x, j) => (j === i ? { ...x, kind: e.target.value as VenueLinkKind } : x)))}
+                  >
+                    <option value="weather">Weather</option>
+                    <option value="access">Access</option>
+                    <option value="other">Other</option>
+                  </select>
                   <input
                     className={input}
                     value={l.label}
@@ -127,9 +138,49 @@ export default function VenueRow({ venue, itemCount }: { venue: Venue; itemCount
             <label className={label}>Notes</label>
             <textarea rows={2} className={`${input} resize-y`} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
           </div>
+          {/* Not links. The ranger district, the landowner, whoever holds the
+              gate code — a name and a number, which squeezed into a URL field
+              ends up in somebody's phone and nowhere else. */}
+          <div className="sm:col-span-2">
+            <label className={label}>Contacts — who to ring about this place</label>
+            <div className="space-y-1.5">
+              {contacts.length > 0 && (
+                <div className="grid grid-cols-[1fr_1fr_1fr_1.25rem] gap-2 px-0.5">
+                  <span className="text-[10px] uppercase tracking-wide text-zinc-600">Who</span>
+                  <span className="text-[10px] uppercase tracking-wide text-zinc-600">Role</span>
+                  <span className="text-[10px] uppercase tracking-wide text-zinc-600">Phone or email</span>
+                </div>
+              )}
+              {contacts.map((c, i) => (
+                <div key={i} className="grid grid-cols-[1fr_1fr_1fr_1.25rem] gap-2 items-center">
+                  <input className={input} value={c.name} placeholder="Ranger district"
+                    onChange={(e) => setContacts(contacts.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))} />
+                  <input className={input} value={c.role ?? ''} placeholder="permits"
+                    onChange={(e) => setContacts(contacts.map((x, j) => (j === i ? { ...x, role: e.target.value } : x)))} />
+                  <input className={input} value={c.phone || c.email || ''} placeholder="307…"
+                    onChange={(e) => {
+                      const v = e.target.value
+                      const isEmail = v.includes('@')
+                      setContacts(contacts.map((x, j) => (j === i ? { ...x, phone: isEmail ? '' : v, email: isEmail ? v : '' } : x)))
+                    }} />
+                  <button
+                    onClick={() => setContacts(contacts.filter((_, j) => j !== i))}
+                    aria-label={`Remove ${c.name || 'contact'}`}
+                    className="text-xs text-zinc-600 hover:text-red-400 transition-colors"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+              <button onClick={() => setContacts([...contacts, { name: '' }])} className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">
+                + Add contact
+              </button>
+            </div>
+          </div>
+
           <div className="sm:col-span-2 flex items-center gap-3">
             <button
-              onClick={() => run(async () => { await updateVenue(venue.id, { ...form, links }); setOpen(false) })}
+              onClick={() => run(async () => { await updateVenue(venue.id, { ...form, links, contacts }); setOpen(false) })}
               disabled={busy}
               className="px-3 py-1.5 rounded bg-pr-red hover:bg-pr-red-dark text-white text-sm font-medium transition-colors disabled:opacity-40"
             >

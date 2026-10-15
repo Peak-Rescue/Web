@@ -204,6 +204,7 @@ export const LIBRARY_KINDS = [
   'presentation',
   'video',
   'map',
+  'route',
   'permit',
   'rescue_plan',
   'standard',
@@ -215,12 +216,39 @@ export const LIBRARY_KINDS = [
 ] as const
 export type LibraryKind = (typeof LIBRARY_KINDS)[number]
 
+// The type list, grouped the way the cards are.
+//
+// Fourteen types in one flat dropdown asked people to remember which card each
+// one ends up on, when the answer is already drawn on the landing page. Picked
+// this way the question reads as it is meant to: Venue information, then Route
+// / beta under it.
+//
+// This is which card a type belongs to, not which shelf the row sits on —
+// `bucket` still says that, and the sorting pass still proposes it. A manual
+// is reference material wherever someone filed it.
+export const KIND_GROUPS: { label: string; kinds: LibraryKind[] }[] = [
+  { label: 'Teaching material', kinds: ['presentation', 'skill_sheet', 'video'] },
+  { label: 'Reference',         kinds: ['manual', 'tech_note', 'standard'] },
+  { label: 'Instructor material', kinds: ['outline'] },
+  { label: 'Documents',         kinds: ['permit', 'form', 'rescue_plan'] },
+  { label: 'Venue information', kinds: ['map', 'route'] },
+  { label: 'Photos & video',    kinds: ['media'] },
+  // Last, and named for what it is. A thing that has not been typed yet is
+  // not a type of thing.
+  { label: 'Not said yet',      kinds: ['reference'] },
+]
+
 export const KIND_META: Record<LibraryKind, string> = {
   manual: 'Manual',
   tech_note: 'Tech note / product doc',
   presentation: 'Presentation',
   video: 'Video',
   map: 'Map',
+  // A ropewiki page is not a map. It is somebody's write-up of the descent —
+  // raps, approach, exit — which is beta, and forcing it onto the map shelf
+  // made it claim a place it did not have: the ropewiki region index was
+  // filed to Taiwan because being a map demanded a venue.
+  route: 'Route / beta',
   permit: 'Permit',
   rescue_plan: 'Rescue plan',
   standard: 'Standard',
@@ -309,7 +337,21 @@ export type LibraryItem = {
   source_item: string | null
 }
 
-export type VenueLink = { url: string; label: string }
+/** `weather` is its own block on the venue — the gauge and the forecast are
+    what someone is looking for at 0500 and read differently from a permit
+    portal. Anything unlabelled is just a link. */
+export type VenueLinkKind = 'weather' | 'access' | 'other'
+export type VenueLink = { url: string; label: string; kind?: VenueLinkKind }
+
+/** Not a link: a name and a number, sometimes an email, sometimes a sentence
+    about when to ring. The ranger district, the landowner, the gate code. */
+export type VenueContact = {
+  name: string
+  role?: string
+  phone?: string
+  email?: string
+  note?: string
+}
 
 export type Venue = {
   id: string
@@ -323,6 +365,7 @@ export type Venue = {
       table already draws — the canyon's own route page and gauge belong to
       the site, what is true of the whole region belongs here. */
   links: VenueLink[]
+  contacts: VenueContact[]
   active: boolean
 }
 

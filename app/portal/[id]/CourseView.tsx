@@ -284,7 +284,7 @@ export default async function CourseView({
     : Promise.resolve([{ data: null }, { data: null }] as const))
 
   const venuesPromise = keep(showAsAdmin
-    ? admin.from('venues').select('id, name, region, region_code, client_name, notes, links, active').order('name')
+    ? admin.from('venues').select('id, name, region, region_code, client_name, notes, links, contacts, active').order('name')
     : Promise.resolve({ data: null }))
 
   // Who this course can be pinned on. Admins only, and only for an admin —
