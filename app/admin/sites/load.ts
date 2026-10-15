@@ -1,12 +1,12 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { type Site, type MeetingPointRecord } from '@/lib/sites'
-import { type LibraryItem, type Venue } from '@/lib/library'
+import { type LibraryItem, type Venue, type VenueContact, type VenueLink } from '@/lib/library'
 
 /** Everything the sites shelf renders, loaded once so its two doors — its own
     page and the library shelf — cannot drift apart. */
 export async function loadSitesShelf() {
   const admin = createAdminClient()
-  const [{ data: siteRows }, { data: venueRows }, { data: dayRows }, { data: pointRows }, { data: mapRows }] = await Promise.all([
+  const [{ data: siteRows }, { data: venueRows }, { data: dayRows }, { data: pointRows }, { data: mapRows }, { data: regionRows }] = await Promise.all([
     admin.from('sites').select('id, venue_id, name, kind, beta, meeting_point_id, usual_meeting_time, coords, links, active').order('name'),
     admin.from('venues').select('id, name, region, region_code, client_name, notes, links, contacts, active').order('name'),
     admin.from('schedule_days').select('site_id').not('site_id', 'is', null),
@@ -21,6 +21,7 @@ export async function loadSitesShelf() {
       .in('kind', ['map', 'route'])
       .neq('status', 'archived')
       .order('title'),
+    admin.from('region_info').select('region_code, links, contacts, notes'),
   ])
 
   const sites = (siteRows ?? []) as Site[]
@@ -40,5 +41,12 @@ export async function loadSitesShelf() {
     dayCount.set(k, (dayCount.get(k) ?? 0) + 1)
   }
 
-  return { sites, venues, points, maps, siteCount, dayCount }
+  // Keyed by code, so a state's weather is looked up the same way a venue's
+  // is: by the thing the items are already filed under.
+  const regionInfo = new Map<string, { links: VenueLink[]; contacts: VenueContact[]; notes: string | null }>()
+  for (const r of (regionRows ?? []) as { region_code: string; links: VenueLink[]; contacts: VenueContact[]; notes: string | null }[]) {
+    regionInfo.set(r.region_code, { links: r.links ?? [], contacts: r.contacts ?? [], notes: r.notes })
+  }
+
+  return { sites, venues, points, maps, regionInfo, siteCount, dayCount }
 }

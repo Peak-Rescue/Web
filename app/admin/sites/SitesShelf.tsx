@@ -5,7 +5,7 @@ import SiteRow from './SiteRow'
 import MeetingPointRow from './MeetingPointRow'
 import JumpToNewRow from '@/components/JumpToNewRow'
 import { SITE_KINDS, type Site, type MeetingPointRecord } from '@/lib/sites'
-import { type LibraryItem, type Venue } from '@/lib/library'
+import { type LibraryItem, type Venue, type VenueContact, type VenueLink } from '@/lib/library'
 import { countryName, regionLabel, splitRegion, SUBDIVISIONS } from '@/lib/regions'
 import LibraryRow from '@/app/admin/library/LibraryRow'
 import { type SiteOption } from '@/app/admin/schedules/types'
@@ -32,6 +32,7 @@ export default function SitesShelf({
   venues,
   points,
   maps,
+  regionInfo,
   siteCount,
   dayCount,
   added,
@@ -42,6 +43,8 @@ export default function SitesShelf({
   /** The maps, read beside the places they are about rather than on a shelf
       of their own answering the same question differently. */
   maps: LibraryItem[]
+  /** Weather, contacts and notes held against a state or a country. */
+  regionInfo: Map<string, { links: VenueLink[]; contacts: VenueContact[]; notes: string | null }>
   /** How many canyons meet at each point — the number that says why a meetup
       is its own row rather than a sentence typed twice. */
   siteCount: Map<string, number>
@@ -102,6 +105,16 @@ export default function SitesShelf({
   // The state headings are plain text, not another thing to open. Two levels
   // of disclosure to reach a venue would be one more click than the list is
   // long enough to deserve, and the venues themselves already fold.
+  // Filed to a state or a country rather than to a venue — a map of
+  // Washington, the ropewiki index for Nevada. These were being loaded and
+  // then rendered nowhere: every block on this page hung off a venue, so
+  // anything filed above one simply vanished.
+  const atRegion = new Map<string, LibraryItem[]>()
+  for (const m of maps) {
+    if (m.venue_id || m.site_id || !m.region) continue
+    atRegion.set(m.region, [...(atRegion.get(m.region) ?? []), m])
+  }
+
   const venueOf = new Map(venues.map((v) => [v.id, v]))
   const regions = new Map<string, typeof groups>()
   for (const g of groups) {
@@ -133,6 +146,99 @@ export default function SitesShelf({
   const siteOptions: SiteOption[] = sites.map((x) => ({
     id: x.id, name: x.name, kind: x.kind, beta: x.beta, venue_id: x.venue_id,
   }))
+
+
+  // The same four blocks a venue has, for a state or a country. Maps and beta
+  // are library rows filed to the code; weather and contacts are region_info,
+  // which is keyed by the same code so there is no second list of states to
+  // keep in step.
+  const RegionBlocks = ({ code }: { code: string }) => {
+    const items = atRegion.get(code) ?? []
+    const info = regionInfo.get(code)
+    const beta = items.filter((i) => i.kind === 'route')
+    const maps = items.filter((i) => i.kind !== 'route')
+    const weather = (info?.links ?? []).filter((l) => l.kind === 'weather')
+    const other = (info?.links ?? []).filter((l) => l.kind !== 'weather')
+    const contacts = info?.contacts ?? []
+    // Always rendered, because the add forms live here too: a state with
+    // nothing in it is exactly where something is about to be put.
+    return (
+      <div className="mb-2 space-y-2">
+        {weather.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {weather.map((l, i) => (
+              <a key={i} href={l.url} target="_blank" rel="noopener noreferrer"
+                 className="text-[11px] px-2 py-1 rounded border border-sky-900/60 bg-sky-950/30 text-sky-300 hover:text-white hover:border-sky-700 transition-colors">
+                {l.label}
+              </a>
+            ))}
+          </div>
+        )}
+        {contacts.length > 0 && (
+          <div className="flex flex-wrap gap-x-4 gap-y-1">
+            {contacts.map((c, i) => (
+              <span key={i} className="text-[11px] text-zinc-400">
+                {c.name}
+                {c.role && <span className="text-zinc-600"> · {c.role}</span>}
+                {(c.phone || c.email) && (
+                  <a href={c.phone ? `tel:${c.phone}` : `mailto:${c.email}`}
+                     className="ml-1.5 text-zinc-300 hover:text-white underline underline-offset-2">
+                    {c.phone || c.email}
+                  </a>
+                )}
+              </span>
+            ))}
+          </div>
+        )}
+        {other.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {other.map((l, i) => (
+              <a key={i} href={l.url} target="_blank" rel="noopener noreferrer"
+                 className="text-[11px] px-2 py-1 rounded border border-zinc-800 bg-zinc-900 text-zinc-400 hover:text-white hover:border-zinc-600 transition-colors">
+                {l.label}
+              </a>
+            ))}
+          </div>
+        )}
+        {beta.length > 0 && (
+          <div>
+            <p className="text-[10px] uppercase tracking-wide text-zinc-700 mb-1.5">Beta</p>
+            <div className="space-y-2">
+              {beta.map((b) => <LibraryRow key={b.id} item={b} venues={venues} sites={siteOptions} />)}
+            </div>
+          </div>
+        )}
+        {maps.length > 0 && (
+          <div>
+            <p className="text-[10px] uppercase tracking-wide text-zinc-700 mb-1.5">Maps</p>
+            <div className="space-y-2">
+              {maps.map((m) => <LibraryRow key={m.id} item={m} venues={venues} sites={siteOptions} />)}
+            </div>
+          </div>
+        )}
+        <RegionAdd code={code} />
+      </div>
+    )
+  }
+
+  // Added here, filed here — the level is already answered by where the form
+  // is, the same bargain the venue forms make.
+  const RegionAdd = ({ code }: { code: string }) => (
+    <div className="grid gap-2 sm:grid-cols-2">
+      {(['map', 'route'] as const).map((kind) => (
+        <form key={kind} action={createLibraryItem} className="flex items-center gap-1.5">
+          <input type="hidden" name="kind" value={kind} />
+          <input type="hidden" name="place" value={`region:${code}`} />
+          <input type="hidden" name="audience" value="internal" />
+          <input name="title" required placeholder={kind === 'map' ? 'Add a map here' : 'Add beta here'}
+                 className="flex-1 min-w-0 bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-xs focus:outline-none focus:border-zinc-500" />
+          <input name="url" required placeholder="https://…"
+                 className="flex-1 min-w-0 bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-xs font-mono focus:outline-none focus:border-zinc-500" />
+          <button className="shrink-0 text-[11px] px-2 py-1 rounded border border-zinc-700 text-zinc-300 hover:border-zinc-500 hover:text-white transition-colors">Add</button>
+        </form>
+      ))}
+    </div>
+  )
 
   return (
     <>
@@ -193,6 +299,7 @@ export default function SitesShelf({
         {countries.map((c) => (
           <div key={c.country || '_none'}>
             <h2 className="text-base font-semibold text-zinc-100 mb-2 pb-1 border-b border-zinc-800">{c.label}</h2>
+            {c.country && <RegionBlocks code={c.country} />}
             {c.subs.map((sub) => (
               <div key={sub.code || '_nosub'} className="mb-3">
                 {/* Plain text, not another disclosure: two levels to open
@@ -319,6 +426,16 @@ export default function SitesShelf({
                   <input type="hidden" name="kind" value="canyon" />
                   <input name="name" required placeholder={`Add a canyon in ${g.venue.name}`}
                          className="flex-1 min-w-0 bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-xs focus:outline-none focus:border-zinc-500" />
+                  <button className="shrink-0 text-[11px] px-2 py-1 rounded border border-zinc-700 text-zinc-300 hover:border-zinc-500 hover:text-white transition-colors">Add</button>
+                </form>
+                <form action={createLibraryItem} className="flex items-center gap-1.5">
+                  <input type="hidden" name="kind" value="route" />
+                  <input type="hidden" name="place" value={`venue:${g.venue.id}`} />
+                  <input type="hidden" name="audience" value="internal" />
+                  <input name="title" required placeholder="Add beta — what it is called"
+                         className="flex-1 min-w-0 bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-xs focus:outline-none focus:border-zinc-500" />
+                  <input name="url" required placeholder="https://…"
+                         className="flex-1 min-w-0 bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-xs font-mono focus:outline-none focus:border-zinc-500" />
                   <button className="shrink-0 text-[11px] px-2 py-1 rounded border border-zinc-700 text-zinc-300 hover:border-zinc-500 hover:text-white transition-colors">Add</button>
                 </form>
                 <form action={createLibraryItem} className="flex items-center gap-1.5">
