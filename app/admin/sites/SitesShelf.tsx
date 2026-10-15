@@ -6,6 +6,7 @@ import MeetingPointRow from './MeetingPointRow'
 import JumpToNewRow from '@/components/JumpToNewRow'
 import { SITE_KINDS, type Site, type MeetingPointRecord } from '@/lib/sites'
 import { type LibraryItem, type Venue } from '@/lib/library'
+import { countryName, regionLabel, splitRegion } from '@/lib/regions'
 import LibraryRow from '@/app/admin/library/LibraryRow'
 import { type SiteOption } from '@/app/admin/schedules/types'
 import InfoHint from '@/components/InfoHint'
@@ -67,7 +68,10 @@ export default function SitesShelf({
   }
   // A venue earns a heading by having anything under it at all — its own
   // links, a canyon, or a map.
-  const groups = [
+  const groups: {
+    key: string; name: string; venue: Venue | null
+    sites: Site[]; maps: LibraryItem[]; beta: LibraryItem[]
+  }[] = [
     ...venues
       .filter((v) => byVenue.has(v.id) || mapsByVenue.has(v.id) || betaByVenue.has(v.id) || (v.links ?? []).length > 0)
       .map((v) => ({
@@ -89,6 +93,37 @@ export default function SitesShelf({
         }]
       : []),
   ]
+  // Venues sit at three different scales — a country (Taiwan), a state, a
+  // named area inside one — so the list is grouped by where they are rather
+  // than alphabetically across all of them. Country, then state: looking for
+  // Dingford means knowing it is in Washington long before remembering how it
+  // is spelled.
+  //
+  // The state headings are plain text, not another thing to open. Two levels
+  // of disclosure to reach a venue would be one more click than the list is
+  // long enough to deserve, and the venues themselves already fold.
+  const venueOf = new Map(venues.map((v) => [v.id, v]))
+  const regions = new Map<string, typeof groups>()
+  for (const g of groups) {
+    const v = g.venue ? venueOf.get(g.venue.id) : null
+    regions.set(v?.region_code ?? '', [...(regions.get(v?.region_code ?? '') ?? []), g])
+  }
+  const byCountry = new Map<string, { code: string; label: string; groups: typeof groups }[]>()
+  for (const [code, gs] of regions) {
+    const { country } = splitRegion(code)
+    const label = code.includes('-') ? regionLabel(code).split(',')[0] : ''
+    byCountry.set(country, [...(byCountry.get(country) ?? []), { code, label, groups: gs }])
+  }
+  const countries = [...byCountry.entries()]
+    .map(([country, subs]) => ({
+      country,
+      // Unfiled last, under its own heading rather than pretending to be a
+      // country called "".
+      label: country ? countryName(country) : 'No country set',
+      subs: subs.sort((a, b) => (a.label || '\uffff').localeCompare(b.label || '\uffff')),
+    }))
+    .sort((a, b) => (a.country ? 0 : 1) - (b.country ? 0 : 1) || a.label.localeCompare(b.label))
+
   // Sites under their venue carry the venue onto the map rows, so a map filed
   // to a canyon reads as that canyon rather than as its region.
   const siteOptions: SiteOption[] = sites.map((x) => ({
@@ -145,13 +180,25 @@ export default function SitesShelf({
         <JumpToNewRow key={added} targetId={`site-${added}`} />
       )}
 
-      <div className="space-y-2 mb-8">
+      <div className="space-y-6 mb-8">
         {/* A place is the unit you scan, so a place is what folds. Open it and
             everything about it is there — the links that are true of the whole
             area, its canyons, its maps — and so is the way to add more of any
             of them, which is the thing that was missing: you could see what a
             venue had and had to leave to give it anything. */}
-        {groups.map((g) => (
+        {countries.map((c) => (
+          <div key={c.country || '_none'}>
+            <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-500 mb-2">{c.label}</h2>
+            {c.subs.map((sub) => (
+              <div key={sub.code || '_nosub'} className="mb-3">
+                {/* Plain text, not another disclosure: two levels to open
+                    before reaching a venue is one more click than a list this
+                    length deserves. */}
+                <p className="text-[10px] uppercase tracking-wide text-zinc-700 mb-1.5 pl-0.5">
+                  {sub.label || 'No state set'}
+                </p>
+                <div className="space-y-2">
+        {sub.groups.map((g) => (
           <details key={g.key} className="group/venue rounded-lg border border-zinc-800 bg-zinc-900/40">
             <summary className="cursor-pointer list-none flex items-center gap-2 px-3 py-2.5 hover:bg-zinc-900/60 transition-colors">
               <span aria-hidden className="text-zinc-600 text-xs transition-transform group-open/venue:rotate-90">▶</span>
@@ -281,6 +328,11 @@ export default function SitesShelf({
             )}
             </div>
           </details>
+        ))}
+                </div>
+              </div>
+            ))}
+          </div>
         ))}
         {sites.length === 0 && maps.length === 0 && <p className="text-sm text-zinc-500">Nothing filed by place yet.</p>}
       </div>

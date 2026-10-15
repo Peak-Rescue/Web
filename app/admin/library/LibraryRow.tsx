@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { updateLibraryItem, deleteLibraryItem, libraryItemUses, type LibraryItemUses } from './actions'
 import { errorFrom, type ActionResult } from '@/lib/action-result'
-import { KIND_META, KIND_GROUPS, AUDIENCE_META, BUCKET_META, BUCKET_ORDER, type LibraryBucket, type LibraryItem, type Venue } from '@/lib/library'
+import { KIND_META, KIND_GROUPS, AUDIENCE_META, BUCKET_META, BUCKET_ORDER, bucketForKind, type LibraryBucket, type LibraryItem, type Venue } from '@/lib/library'
 import { AudiencePills } from '@/components/AudiencePills'
 import { CAPABILITY_META, CAPABILITY_ORDER } from '@/lib/capabilities'
 import RegionSelect from '@/components/RegionSelect'
@@ -220,10 +220,12 @@ export default function LibraryRow({ item, venues, sites = [], hideProvenance = 
             />
           </div>
           )}
-          {/* A map has one shelf and the type already named it. */}
+          {/* A map has one shelf and the type already named it. For everything
+              else this now follows the type and is only touched to disagree
+              with it. */}
           {form.kind !== 'map' && (
             <div>
-              <label className={label}>Library</label>
+              <label className={label}>Shelf</label>
               <select className={input} value={form.bucket} onChange={(e) => setForm({ ...form, bucket: e.target.value as LibraryBucket })}>
                 {BUCKET_ORDER.map((b) => <option key={b} value={b}>{BUCKET_META[b].label}</option>)}
               </select>
@@ -231,7 +233,20 @@ export default function LibraryRow({ item, venues, sites = [], hideProvenance = 
           )}
           <div>
             <label className={label}>Type</label>
-            <select className={input} value={form.kind} onChange={(e) => setForm({ ...form, kind: e.target.value })}>
+            {/* Picking a type has already said which shelf — it is listed
+                under that shelf's name — so the shelf follows rather than
+                being asked for again on the next line. It stays changeable
+                underneath, because a manual can legitimately be teaching
+                material on one course and reference on another. */}
+            <select
+              className={input}
+              value={form.kind}
+              onChange={(e) => {
+                const kind = e.target.value
+                const shelf = bucketForKind(kind)
+                setForm({ ...form, kind, ...(shelf ? { bucket: shelf } : {}) })
+              }}
+            >
               {KIND_GROUPS.map((g) => (
                 <optgroup key={g.label} label={g.label}>
                   {g.kinds.map((k) => <option key={k} value={k}>{KIND_META[k]}</option>)}

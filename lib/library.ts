@@ -67,6 +67,19 @@ export function isMediaShelf(v: string | undefined): v is MediaShelfKey {
   return v === 'media'
 }
 
+/** The shelf a type belongs on, from the group it is listed under. Choosing
+    "Permit" has already said Documents; asking again on the next line is the
+    same question twice, and the two answers could disagree. Null for the
+    untyped catch-all and for the types whose card is not a shelf — a map and a
+    photo album are read from the venue and the media card, and their bucket is
+    bookkeeping. */
+export function bucketForKind(kind: string): LibraryBucket | null {
+  if (kind === 'map') return 'map'
+  const group = KIND_GROUPS.find((g) => (g.kinds as string[]).includes(kind))
+  const match = BUCKET_ORDER.find((b) => BUCKET_META[b].label === group?.label)
+  return match ?? null
+}
+
 export function isPlaceShelf(v: string | undefined): v is PlaceShelf {
   return v === 'venue' || v === 'site'
 }

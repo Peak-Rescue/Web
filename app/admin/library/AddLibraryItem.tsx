@@ -5,7 +5,7 @@ import RegionSelect from '@/components/RegionSelect'
 import { CAPABILITY_META, CAPABILITY_ORDER } from '@/lib/capabilities'
 import {
   ACCESS_META, LINK_AUDIENCE_META, KIND_META, KIND_GROUPS,
-  BUCKET_META, BUCKET_ORDER, type Venue,
+  BUCKET_META, BUCKET_ORDER, bucketForKind, type Venue,
 } from '@/lib/library'
 import { createLibraryItem } from './actions'
 import PlaceSelect from '@/components/PlaceSelect'
@@ -41,6 +41,7 @@ export default function AddLibraryItem({
   // place picker under it — the order the course form already asks in:
   // country, then state, then the place inside it.
   const [region, setRegion] = useState('')
+  const [bucket, setBucket] = useState(defaultBucket ?? 'resource')
   const isMap = kind === 'map'
   const isPermit = kind === 'permit'
 
@@ -51,7 +52,16 @@ export default function AddLibraryItem({
     >
       <div>
         <label className={label}>Type</label>
-        <select name="kind" value={kind} onChange={(e) => setKind(e.target.value)} className={input}>
+        <select
+          name="kind"
+          value={kind}
+          onChange={(e) => {
+            setKind(e.target.value)
+            const shelf = bucketForKind(e.target.value)
+            if (shelf) setBucket(shelf)
+          }}
+          className={input}
+        >
           {KIND_GROUPS.map((g) => (
             <optgroup key={g.label} label={g.label}>
               {g.kinds.map((k) => <option key={k} value={k}>{KIND_META[k]}</option>)}
@@ -129,10 +139,19 @@ export default function AddLibraryItem({
       </div>
 
       {/* A map has one shelf and the type already named it. */}
+      {/* Follows the type, which is listed under the shelf's own name — the
+          two were the same question asked twice, and could disagree. Still
+          changeable, because a manual can be teaching material on one course
+          and reference on another. */}
       {!isMap && (
         <div>
-          <label className={label}>Library</label>
-          <select name="bucket" className={input} defaultValue={defaultBucket ?? 'resource'}>
+          <label className={label}>Shelf</label>
+          <select
+            name="bucket"
+            className={input}
+            value={bucket}
+            onChange={(e) => setBucket(e.target.value)}
+          >
             {BUCKET_ORDER.map((b) => <option key={b} value={b}>{BUCKET_META[b].label}</option>)}
           </select>
         </div>

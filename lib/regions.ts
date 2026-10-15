@@ -161,7 +161,7 @@ const COUNTRY_NAMES: Record<string, string> = {
 
 const COUNTRY_CODES = Object.keys(COUNTRY_NAMES).join(',')
 
-function countryName(code: string): string {
+export function countryName(code: string): string {
   return COUNTRY_NAMES[code] ?? code
 }
 

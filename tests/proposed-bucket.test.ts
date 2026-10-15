@@ -58,3 +58,22 @@ describe('proposedBucket — the exceptions worth writing down', () => {
     ).toBe('teaching')
   })
 })
+
+describe('bucketForKind', () => {
+  it('reads the shelf off the group the type is listed under', async () => {
+    const { bucketForKind } = await import('@/lib/library')
+    expect(bucketForKind('permit')).toBe('documents')
+    expect(bucketForKind('standard')).toBe('resource')
+    expect(bucketForKind('skill_sheet')).toBe('teaching')
+    expect(bucketForKind('outline')).toBe('instructor')
+    expect(bucketForKind('map')).toBe('map')
+  })
+
+  it('says nothing for the types whose card is not a shelf', async () => {
+    const { bucketForKind } = await import('@/lib/library')
+    // A photo album is read from the media card and the untyped catch-all has
+    // not said anything yet; neither should drag a row onto a shelf.
+    expect(bucketForKind('media')).toBeNull()
+    expect(bucketForKind('reference')).toBeNull()
+  })
+})
