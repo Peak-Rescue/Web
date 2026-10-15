@@ -99,7 +99,7 @@ export default function MeetingPointRow({
             <div className="space-y-1.5">
               {links.length > 0 && (
                 <div className="grid grid-cols-[7.5rem_1fr_1.25rem] gap-2 px-0.5">
-                  <span className="text-[10px] uppercase tracking-wide text-zinc-600">Shown as</span>
+                  <span className="text-[10px] uppercase tracking-wide text-zinc-600">Driving pin, gate code…</span>
                   <span className="text-[10px] uppercase tracking-wide text-zinc-600">Address</span>
                 </div>
               )}

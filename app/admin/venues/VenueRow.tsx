@@ -92,7 +92,7 @@ export default function VenueRow({ venue, itemCount }: { venue: Venue; itemCount
               {links.length > 0 && (
                 <div className="grid grid-cols-[6rem_7.5rem_1fr_1.25rem] gap-2 px-0.5">
                   <span className="text-[10px] uppercase tracking-wide text-zinc-600">Block</span>
-                  <span className="text-[10px] uppercase tracking-wide text-zinc-600">Shown as</span>
+                  <span className="text-[10px] uppercase tracking-wide text-zinc-600">Forecast, permit portal…</span>
                   <span className="text-[10px] uppercase tracking-wide text-zinc-600">Address</span>
                 </div>
               )}

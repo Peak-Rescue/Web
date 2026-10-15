@@ -144,7 +144,7 @@ export default function AddToPlace({
             </div>
 
             <div>
-              <label className={label}>Beta — approach, raps, exit, hazards. The breaks are kept.</label>
+              <label className={label}>Beta — approach, raps, exit, hazards</label>
               <textarea name="beta" rows={5} className={`${input} resize-y`} />
             </div>
 
@@ -153,7 +153,7 @@ export default function AddToPlace({
               <div className="space-y-1.5">
                 {links.map((l, i) => (
                   <div key={i} className="grid grid-cols-[7.5rem_1fr_1.25rem] gap-2 items-center">
-                    <input name="link_label" value={l.label} placeholder="Shown as" className={input}
+                    <input name="link_label" value={l.label} placeholder="ropewiki, Mountain Project…" className={input}
                            onChange={(e) => setLinks(links.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))} />
                     <input name="link_url" value={l.url} spellCheck={false} className={`${input} font-mono`} placeholder="https://…"
                            onChange={(e) => setLinks(links.map((x, j) => (j === i ? { ...x, url: e.target.value } : x)))} />

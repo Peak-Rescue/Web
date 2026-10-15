@@ -107,7 +107,7 @@ export default function SiteRow({
             <input className={input} value={form.coords} onChange={(e) => setForm({ ...form, coords: e.target.value })} />
           </div>
           <div className="sm:col-span-2">
-            <label className={label}>Beta — approach, raps, exit, hazards. One blank-free line per fact; the breaks are kept.</label>
+            <label className={label}>Beta — approach, raps, exit, hazards</label>
             <textarea
               rows={10}
               className={`${input} resize-y leading-relaxed`}
@@ -126,7 +126,7 @@ export default function SiteRow({
             <div className="space-y-1.5">
               {links.length > 0 && (
                 <div className="grid grid-cols-[7.5rem_1fr_1.25rem] gap-2 px-0.5">
-                  <span className="text-[10px] uppercase tracking-wide text-zinc-600">Shown as</span>
+                  <span className="text-[10px] uppercase tracking-wide text-zinc-600">ropewiki, Mountain Project…</span>
                   <span className="text-[10px] uppercase tracking-wide text-zinc-600">Address</span>
                 </div>
               )}
