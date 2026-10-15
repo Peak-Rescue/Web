@@ -705,38 +705,19 @@ export default async function LibraryPage({
         {/* ── The shelves ──────────────────────────────────────────────── */}
         {landing && (
           <>
-            {/* Two kinds of card, and they were drawn identically — which read
-                as "anything can be moved to anything". A document can be filed
-                onto the first four; the rest hold things that are made
-                elsewhere, so an equipment list cannot become a gear list and a
-                photo album cannot become a schedule. Saying so on the page is
-                cheaper than saying it every time somebody tries. */}
-            <p className="text-[11px] uppercase tracking-wide text-zinc-600 mb-2">Shelves — where a document is filed</p>
+            {/* One grid. The cards were split into "shelves" and "built
+                elsewhere" to stop a document being dragged at Gear lists, but
+                the line stopped being true the moment Venue information
+                started holding maps and beta — which are library rows filed
+                to a place. The constraint belongs on the control that moves
+                things, where it already is: the group move offers the four
+                shelves and nothing else. */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {SHELF_ORDER.filter((sh) => BUCKET_ORDER.includes(sh as LibraryBucket) && sh !== 'map').map((shelf) => (
+              {SHELF_ORDER.map((shelf) => (
                 <Link
                   key={shelf}
                   href={href({ bucket: shelf })}
                   className="p-4 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-pr-red transition-colors"
-                >
-                  <div className="flex items-baseline justify-between gap-3">
-                    <h2 className="font-semibold">{shelfLabel(shelf)}</h2>
-                    <span className="text-xs text-zinc-500 shrink-0 tabular-nums">{countByShelf.get(shelf) ?? 0}</span>
-                  </div>
-                  <p className="text-xs text-zinc-500 mt-1">{shelfHint(shelf)}</p>
-                </Link>
-              ))}
-            </div>
-
-            <p className="text-[11px] uppercase tracking-wide text-zinc-600 mt-6 mb-2">
-              Built elsewhere — not somewhere a document is moved to
-            </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {SHELF_ORDER.filter((sh) => !BUCKET_ORDER.includes(sh as LibraryBucket)).map((shelf) => (
-                <Link
-                  key={shelf}
-                  href={href({ bucket: shelf })}
-                  className="p-4 rounded-lg bg-zinc-900/60 border border-zinc-800 hover:border-zinc-600 transition-colors"
                 >
                   <div className="flex items-baseline justify-between gap-3">
                     <h2 className="font-semibold">{shelfLabel(shelf)}</h2>

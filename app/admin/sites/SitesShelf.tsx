@@ -62,6 +62,7 @@ export default function SitesShelf({
   // a map shows you the ground, beta tells you what the descent is like.
   const mapsByVenue = new Map<string, LibraryItem[]>()
   const betaByVenue = new Map<string, LibraryItem[]>()
+  const plansByVenue = new Map<string, LibraryItem[]>()
   for (const m of maps) {
     // Filed to a state rather than a venue is still filed. These are drawn
     // under their state by RegionBlocks, and grouping them here as well put
@@ -69,14 +70,14 @@ export default function SitesShelf({
     // places, one of them saying it was lost.
     if (!m.venue_id && !m.site_id && m.region) continue
     const k = m.venue_id ?? ''
-    const into = m.kind === 'route' ? betaByVenue : mapsByVenue
+    const into = m.kind === 'route' ? betaByVenue : m.kind === 'rescue_plan' ? plansByVenue : mapsByVenue
     into.set(k, [...(into.get(k) ?? []), m])
   }
   // A venue earns a heading by having anything under it at all — its own
   // links, a canyon, or a map.
   const groups: {
     key: string; name: string; venue: Venue | null
-    sites: Site[]; maps: LibraryItem[]; beta: LibraryItem[]
+    sites: Site[]; maps: LibraryItem[]; beta: LibraryItem[]; plans: LibraryItem[]
   }[] = [
     ...venues
       .filter((v) => byVenue.has(v.id) || mapsByVenue.has(v.id) || betaByVenue.has(v.id) || (v.links ?? []).length > 0)
@@ -87,6 +88,7 @@ export default function SitesShelf({
         sites: byVenue.get(v.id) ?? [],
         maps: mapsByVenue.get(v.id) ?? [],
         beta: betaByVenue.get(v.id) ?? [],
+        plans: plansByVenue.get(v.id) ?? [],
       })),
     ...(byVenue.has('') || mapsByVenue.has('') || betaByVenue.has('')
       ? [{
@@ -96,6 +98,7 @@ export default function SitesShelf({
           sites: byVenue.get('') ?? [],
           maps: mapsByVenue.get('') ?? [],
           beta: betaByVenue.get('') ?? [],
+          plans: plansByVenue.get('') ?? [],
         }]
       : []),
   ]
@@ -160,7 +163,8 @@ export default function SitesShelf({
     const info = regionInfo.get(code)
     const canyons = sitesAtRegion.get(code) ?? []
     const beta = items.filter((i) => i.kind === 'route')
-    const maps = items.filter((i) => i.kind !== 'route')
+    const plans = items.filter((i) => i.kind === 'rescue_plan')
+    const maps = items.filter((i) => i.kind !== 'route' && i.kind !== 'rescue_plan')
     const weather = (info?.links ?? []).filter((l) => l.kind === 'weather')
     const other = (info?.links ?? []).filter((l) => l.kind !== 'weather')
     const contacts = info?.contacts ?? []
@@ -212,6 +216,14 @@ export default function SitesShelf({
                 <SiteRow key={x.id} site={x} venues={venues} dayCount={dayCount.get(x.id) ?? 0} />
               ))}
               {beta.map((b) => <LibraryRow key={b.id} item={b} venues={venues} sites={siteOptions} />)}
+            </div>
+          </div>
+        )}
+        {plans.length > 0 && (
+          <div>
+            <p className="text-[10px] uppercase tracking-wide text-zinc-700 mb-1.5">Plans</p>
+            <div className="space-y-2">
+              {plans.map((x) => <LibraryRow key={x.id} item={x} venues={venues} sites={siteOptions} />)}
             </div>
           </div>
         )}
@@ -273,6 +285,7 @@ export default function SitesShelf({
                   g.sites.length && `${g.sites.length} site${g.sites.length === 1 ? '' : 's'}`,
                   g.maps.length && `${g.maps.length} map${g.maps.length === 1 ? '' : 's'}`,
                   g.beta.length && `${g.beta.length} beta`,
+                  g.plans.length && `${g.plans.length} plan${g.plans.length === 1 ? '' : 's'}`,
                   g.venue && (g.venue.links ?? []).length && `${g.venue.links.length} link${g.venue.links.length === 1 ? '' : 's'}`,
                   g.venue && (g.venue.contacts ?? []).length && `${g.venue.contacts.length} contact${g.venue.contacts.length === 1 ? '' : 's'}`,
                 ].filter(Boolean).join(' · ') || 'nothing yet'}
@@ -344,6 +357,17 @@ export default function SitesShelf({
                   ))}
                   {g.beta.map((b) => (
                     <LibraryRow key={b.id} item={b} venues={venues} sites={siteOptions} />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {g.plans.length > 0 && (
+              <div className="mt-2">
+                <p className="text-[10px] uppercase tracking-wide text-zinc-700 mb-1.5">Plans</p>
+                <div className="space-y-2">
+                  {g.plans.map((x) => (
+                    <LibraryRow key={x.id} item={x} venues={venues} sites={siteOptions} />
                   ))}
                 </div>
               </div>

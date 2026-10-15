@@ -11,14 +11,16 @@ export async function loadSitesShelf() {
     admin.from('venues').select('id, name, region, region_code, client_name, notes, links, contacts, active').order('name'),
     admin.from('schedule_days').select('site_id').not('site_id', 'is', null),
     admin.from('meeting_points').select('id, name, venue_id, directions, coords, links, active').order('name'),
-    // The maps and the route write-ups. Both are about a place and nothing
-    // else, which is why they are read here rather than on a shelf of their
-    // own. Not everything filed to a venue — 147 items carry a venue and most
+    // Maps, route write-ups and the rescue and evac plans. All three are
+    // about a place and nothing else, which is why they are read here rather
+    // than on shelves of their own — a venue's evac plan was filed under
+    // Documents with the company's blank templates, which is where you would
+    // look for it only if you already knew. Not everything filed to a venue — 147 items carry a venue and most
     // are course material that happened to be taught there.
     admin
       .from('library_items')
       .select('id, title, description, source_type, url, edit_url, drive_file_id, kind, audience, disciplines, topics, admin_only, venue_id, site_id, expires_at, status, bucket, region, source_class, source_topic, source_item, library_item_links(id, url, access, audience)')
-      .in('kind', ['map', 'route'])
+      .in('kind', ['map', 'route', 'rescue_plan'])
       .neq('status', 'archived')
       .order('title'),
     admin.from('region_info').select('region_code, links, contacts, notes'),
