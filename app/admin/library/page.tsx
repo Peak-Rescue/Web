@@ -612,7 +612,13 @@ export default async function LibraryPage({
         {/* Published / archived / pending are the states of the filing, not
             of the material. Only the people who can move a row between them
             are offered them. */}
-        {isAdmin && (
+        {/* Published, archived and pending are states of a document's filing.
+            A venue has none of them, and neither does a photo album — the
+            places shelf ignores the parameter entirely, so these tabs were
+            four controls that did nothing on the page they were sitting on.
+            The pending queue is still reached from the sorting list and from
+            the landing. */}
+        {isAdmin && !onPlaces && !onMedia && !onSort && (
           <div className="flex items-center gap-1 mb-3 flex-wrap">
             {/* The shelves first, in the order you'd read them; the import queue
                 last, where an exception belongs, carrying its own count. */}
