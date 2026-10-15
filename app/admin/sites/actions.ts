@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { type SiteLink } from '@/lib/sites'
 import { refuse, type ActionResult } from '@/lib/action-result'
+import { isValidRegion } from '@/lib/regions'
 
 async function requireAdmin() {
   const supabase = await createClient()
@@ -247,6 +248,21 @@ export async function addPlaceContact(
     )
     if (error) throw new Error(error.message)
   }
+  revalidate()
+  revalidatePath('/admin/library')
+}
+
+/** Makes a country or a state exist on the places page before anything is in
+ *  it. A region is not a row anywhere — it is a code other things carry — so
+ *  until something was filed under it there was no heading to file anything
+ *  under. An empty `region_info` row is that heading. */
+export async function addRegion(code: string): Promise<ActionResult> {
+  const admin = await requireAdmin()
+  if (!isValidRegion(code)) return refuse('That is not a country or state we know.')
+  const { error } = await admin
+    .from('region_info')
+    .upsert({ region_code: code }, { onConflict: 'region_code', ignoreDuplicates: true })
+  if (error) throw new Error(error.message)
   revalidate()
   revalidatePath('/admin/library')
 }
