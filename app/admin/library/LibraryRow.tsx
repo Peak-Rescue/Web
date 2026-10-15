@@ -9,6 +9,7 @@ import { AudiencePills } from '@/components/AudiencePills'
 import { CAPABILITY_META, CAPABILITY_ORDER } from '@/lib/capabilities'
 import RegionSelect from '@/components/RegionSelect'
 import MapLinks from './MapLinks'
+import { NEEDS_SORTING } from '@/lib/sorting'
 import PlaceSelect, { placeValue } from '@/components/PlaceSelect'
 import { type SiteOption } from '@/app/admin/schedules/types'
 import CloseButton from '@/components/CloseButton'
@@ -136,6 +137,17 @@ export default function LibraryRow({ item, venues, sites = [], hideProvenance = 
                 className="text-[10px] px-1.5 py-0.5 rounded bg-yellow-900/40 text-yellow-300"
               >
                 needs a place
+              </span>
+            )}
+            {/* Left by the sorting pass rather than guessed at. The badge is
+                the admission: a shelf that looks sorted never gets checked
+                again, so the ones it could not place say so. */}
+            {item.topics.includes(NEEDS_SORTING) && (
+              <span
+                title="The sorting pass couldn’t tell what this is — it is where it was, not where it belongs"
+                className="text-[10px] px-1.5 py-0.5 rounded bg-amber-900/40 text-amber-300"
+              >
+                needs sorting
               </span>
             )}
             {item.topics.includes('needs-link-check') && (

@@ -48,3 +48,4 @@ supabase/.temp/
 
 # One-off debugging scripts. These have been committed by accident twice.
 *.tmp.mjs
+.sorting.mjs

@@ -28,6 +28,7 @@ import ShelfGroupMove from './ShelfGroupMove'
 import MediaShelf from './MediaShelf'
 import { loadMediaShelf } from './media/load'
 import { albumMatches } from '@/lib/media'
+import { NEEDS_SORTING } from '@/lib/sorting'
 import SitesShelf from '@/app/admin/sites/SitesShelf'
 import { loadSitesShelf } from '@/app/admin/sites/load'
 import { CAPABILITY_META, CAPABILITY_ORDER, type CapabilityCategory } from '@/lib/capabilities'
@@ -39,13 +40,13 @@ const input = 'w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-
 export default async function LibraryPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; discipline?: string; kind?: string; audience?: string; venue?: string; bucket?: string; q?: string; template?: string; open?: string; page?: string; sort?: string }>
+  searchParams: Promise<{ status?: string; discipline?: string; kind?: string; audience?: string; venue?: string; bucket?: string; q?: string; template?: string; open?: string; page?: string; sort?: string; topic?: string }>
 }) {
   // Published is the library. Pending review is a queue that Google Classroom
   // imports drop into, and landing on it meant the shelf you came to look at
   // read as empty — an item added by hand is published the moment it's added,
   // so the queue is usually empty and the answer usually isn't there.
-  const { status: askedStatus, discipline, kind, audience, venue, bucket, q, template, open, page, sort } = await searchParams
+  const { status: askedStatus, discipline, kind, audience, venue, bucket, q, template, open, page, sort, topic } = await searchParams
 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -74,7 +75,7 @@ export default async function LibraryPage({
   // tables — so which of the two lists below runs depends on the shelf picked.
   // Filters that only a document can answer (type, venue, who-can-see, review
   // status) rule the template shelves out rather than showing them unfiltered.
-  const docOnlyFilter = Boolean(kind || venue || audience)
+  const docOnlyFilter = Boolean(kind || venue || audience || topic)
   // Nothing asked for yet: the shelves themselves are the answer. 700 items
   // behind four doors, and the old page opened straight onto the first 500 of
   // them ordered by when they were imported — which is the one order nobody
@@ -83,7 +84,7 @@ export default async function LibraryPage({
   // Which shelf you are standing on, if it is one shelf rather than a search
   // across all of them.
   const onShelf = Boolean(bucket)
-  const landing = !sort && !bucket && !q && !discipline && !kind && !venue && !audience && status === 'published'
+  const landing = !sort && !topic && !bucket && !q && !discipline && !kind && !venue && !audience && status === 'published'
   // The places shelf is its own thing: not documents, not templates, and the
   // document filters (type, who-can-see, review status) mean nothing to a
   // canyon. It is only ever shown when it is the shelf asked for.
@@ -148,6 +149,11 @@ export default async function LibraryPage({
   if (venue) query = query.eq('venue_id', venue)
   if (bucket && !isTemplateShelf(bucket)) query = query.eq('bucket', bucket)
   if (q) query = query.ilike('title', `%${q}%`)
+  // Topic tags were already how `needs-link-check` marks a row; the sorting
+  // pass marks what it would not guess at the same way, so the pile it leaves
+  // behind is browsed with the ordinary shelf — group moves, per-item edit and
+  // all — rather than needing a screen of its own.
+  if (topic) query = query.contains('topics', [topic])
 
   // Templates take the same search box and discipline tags the documents use.
   // They have no review status, so the status tabs pass them by — there's
@@ -239,6 +245,7 @@ export default async function LibraryPage({
           admin.from('library_items').select('id', { count: 'exact', head: true }).eq('status', 'published').eq('kind', 'map').is('venue_id', null).is('site_id', null),
           admin.from('library_items').select('id', { count: 'exact', head: true }).eq('status', 'published').eq('kind', 'permit').eq('admin_only', false),
           admin.from('course_templates').select('id', { count: 'exact', head: true }).eq('active', true).is('course_type', null),
+          admin.from('library_items').select('id', { count: 'exact', head: true }).eq('status', 'published').contains('topics', [NEEDS_SORTING]),
           admin.from('library_items').select('kind, bucket, title, source_topic').eq('status', 'published').limit(2000),
         ])
       : Promise.resolve(null),
@@ -376,7 +383,7 @@ export default async function LibraryPage({
 
   const href = (patch: Record<string, string | undefined>) => {
     const p = new URLSearchParams()
-    const merged = { status, discipline, kind, audience, venue, bucket, q, sort, ...patch }
+    const merged = { status, discipline, kind, audience, venue, bucket, q, sort, topic, ...patch }
     for (const [k, v] of Object.entries(merged)) if (v) p.set(k, v)
     return `/admin/library?${p.toString()}`
   }
@@ -384,7 +391,7 @@ export default async function LibraryPage({
   // What is left, in the order it has to be done in.
   const checks: SortingCheck[] = []
   if (inboxCounts) {
-    const [pend, untyped, unplaced, permits, untypedSetups, { data: allPub }] = inboxCounts
+    const [pend, untyped, unplaced, permits, untypedSetups, unsure, { data: allPub }] = inboxCounts
     const moves = ((allPub ?? []) as { kind: string; bucket: LibraryBucket; title: string; source_topic: string | null }[])
       .filter((r) => { const p = proposedBucket(r); return p && p !== r.bucket }).length
     checks.push(
@@ -413,6 +420,15 @@ export default async function LibraryPage({
         href: href({ sort: 'shelf', bucket: undefined, status: undefined }),
         action: 'Review moves',
         after: 'types, because what a thing is decides its shelf',
+      },
+      {
+        key: 'unsure',
+        title: 'Confirm what the pass wasn’t sure of',
+        why: 'The sorting pass filed what said plainly what it was and left these. Most are Drive links named “Reference” or “Company Information”, which nothing can place from the outside — and the rest were left alone because a course is already using them.',
+        count: unsure.count ?? 0,
+        href: href({ topic: NEEDS_SORTING, sort: undefined, bucket: undefined, status: undefined }),
+        action: 'Open the pile',
+        after: 'the automatic pass has run',
       },
       {
         key: 'permits',
