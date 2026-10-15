@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ACCESS_META, LINK_AUDIENCE_META, type MapLink } from '@/lib/library'
-import { removeMapLink, setMapLink } from './actions'
+import { removeMapLink, setMapLink, updateMapLink } from './actions'
 
 // The ways into one map.
 //
@@ -47,6 +47,12 @@ export default function MapLinks({ itemId, links }: { itemId: string; links: Map
   const [access, setAccess] = useState<MapLink['access']>('read')
   const [audience, setAudience] = useState<MapLink['audience']>('students')
 
+  /** Unwraps a refusal into the error line rather than throwing it. */
+  async function save(p: Promise<{ error: string } | void>) {
+    const r = await p
+    if (r && 'error' in r) throw new Error(r.error)
+  }
+
   async function run(fn: () => Promise<void>) {
     setBusy(true)
     setError(null)
@@ -71,27 +77,49 @@ export default function MapLinks({ itemId, links }: { itemId: string; links: Map
 
       {links.length > 0 && (
         <div className="bg-zinc-950/40 border border-zinc-800 rounded divide-y divide-zinc-800 mb-2">
+          {/* Editable, because this is the edit form. A link that can only be
+              removed and retyped is a link you retype to fix a typo, and the
+              two dropdowns beside it were the only way to say what it is —
+              set once when it was added and then frozen. */}
           {links.map((l) => (
-            <div key={l.id} className="flex items-center gap-3 px-3 py-2">
-              <span
-                className={`text-[10px] px-1.5 py-0.5 rounded shrink-0 ${
-                  l.audience === 'students'
-                    ? 'bg-teal-950/60 text-teal-300'
-                    : 'bg-amber-950/60 text-amber-400'
+            <div key={l.id} className="flex items-center gap-2 px-3 py-2">
+              <select
+                value={l.audience}
+                disabled={busy}
+                onChange={(e) => run(() => save(updateMapLink(l.id, { audience: e.target.value as MapLink['audience'] })))}
+                className={`text-[11px] rounded px-1.5 py-1 border border-transparent focus:outline-none focus:border-zinc-600 shrink-0 ${
+                  l.audience === 'students' ? 'bg-teal-950/60 text-teal-300' : 'bg-amber-950/60 text-amber-400'
                 }`}
               >
-                {LINK_AUDIENCE_META[l.audience]}
-              </span>
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400 shrink-0">
-                {ACCESS_META[l.access]}
-              </span>
+                {AUDIENCES.map((a) => <option key={a} value={a}>{LINK_AUDIENCE_META[a]}</option>)}
+              </select>
+              <select
+                value={l.access}
+                disabled={busy}
+                onChange={(e) => run(() => save(updateMapLink(l.id, { access: e.target.value as MapLink['access'] })))}
+                className="text-[11px] rounded px-1.5 py-1 bg-zinc-800 text-zinc-400 border border-transparent focus:outline-none focus:border-zinc-600 shrink-0"
+              >
+                {ACCESSES.map((a) => <option key={a} value={a}>{ACCESS_META[a]}</option>)}
+              </select>
+              {/* Uncontrolled and saved on blur: a controlled box here would
+                  round-trip every keystroke. */}
+              <input
+                defaultValue={l.url}
+                disabled={busy}
+                spellCheck={false}
+                onBlur={(e) => {
+                  if (e.target.value.trim() !== l.url) run(() => save(updateMapLink(l.id, { url: e.target.value })))
+                }}
+                className="flex-1 min-w-0 bg-transparent border border-transparent hover:border-zinc-800 focus:border-zinc-600 rounded px-1.5 py-1 text-xs text-zinc-400 focus:text-zinc-200 focus:outline-none"
+              />
               <a
                 href={l.url}
                 target="_blank"
                 rel="noreferrer"
-                className="text-xs text-zinc-400 hover:text-zinc-200 truncate min-w-0"
+                title="Open this map"
+                className="shrink-0 text-xs text-zinc-600 hover:text-zinc-300 transition-colors"
               >
-                {l.url}
+                ↗
               </a>
               {/* The URL is on screen, so this is recoverable by pasting it
                   back — but it is still a destructive first click, and the

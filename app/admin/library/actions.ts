@@ -546,6 +546,46 @@ export async function setMapLink(itemId: string, link: MapLinkInput): Promise<vo
   revalidate()
 }
 
+/** Changing a link that is already there — its address, what it opens as, or
+    who it is for. `setMapLink` upserts on (access, audience), so it can only
+    ever correct a URL in place; changing the access would quietly leave the
+    old row behind and add a second one. This updates the row itself. */
+export async function updateMapLink(
+  linkId: string,
+  patch: Partial<MapLinkInput>
+): Promise<ActionResult> {
+  const admin = await requireAdmin()
+
+  const update: Record<string, unknown> = {}
+  if (patch.url !== undefined) {
+    const url = patch.url.trim()
+    if (!url) return refuse('A link needs a URL.')
+    if (!/^https?:\/\//i.test(url)) {
+      return refuse('That doesn’t look like a link — it should start with https://')
+    }
+    update.url = url
+  }
+  if (patch.access !== undefined) {
+    if (!['read', 'edit'].includes(patch.access)) throw new Error('Unknown access')
+    update.access = patch.access
+  }
+  if (patch.audience !== undefined) {
+    if (!['students', 'instructors'].includes(patch.audience)) throw new Error('Unknown audience')
+    update.audience = patch.audience
+  }
+  if (Object.keys(update).length === 0) return
+
+  const { error } = await admin.from('library_item_links').update(update).eq('id', linkId)
+  // One map holds one link per access-and-audience pair; asking for a pair
+  // that is taken is a request to have two of the same thing, and the other
+  // row is the one on screen directly above or below.
+  if (error?.code === '23505') {
+    return refuse('This map already has a link for that access and audience.')
+  }
+  if (error) throw new Error(error.message)
+  revalidate()
+}
+
 export async function removeMapLink(linkId: string): Promise<void> {
   const admin = await requireAdmin()
   const { error } = await admin.from('library_item_links').delete().eq('id', linkId)
