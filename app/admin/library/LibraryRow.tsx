@@ -201,8 +201,11 @@ export default function LibraryRow({ item, venues, sites = [], hideProvenance = 
               <input className={input} value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} />
             </div>
           )}
-          {/* Only maps are filed by place — it's how a course finds the ones
-              that belong where it's running. */}
+          {/* The state, which narrows the place picker below it and is a
+              match of its own on the course side: a map of the state outranks
+              nothing in particular, and loses to one of the venue. Only maps
+              carry it — everything else answers the place question directly
+              or not at all. */}
           {form.kind === 'map' && (
           <div>
             <label className={label}>State / country</label>
@@ -263,6 +266,7 @@ export default function LibraryRow({ item, venues, sites = [], hideProvenance = 
               value={form.place}
               onChange={(v) => setForm({ ...form, place: v })}
               required={form.kind === 'map'}
+              region={form.region || null}
               className={input}
             />
           </div>

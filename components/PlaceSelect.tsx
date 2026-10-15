@@ -2,6 +2,7 @@
 
 import { type SiteOption } from '@/app/admin/schedules/types'
 import { type Venue } from '@/lib/library'
+import { regionLabel } from '@/lib/regions'
 
 /** One field for "where is this about", at either level.
  *
@@ -25,6 +26,7 @@ export default function PlaceSelect({
   onChange,
   required,
   className,
+  region,
 }: {
   name: string
   venues: Venue[]
@@ -34,6 +36,10 @@ export default function PlaceSelect({
   onChange?: (v: string) => void
   required?: boolean
   className?: string
+  /** The state or country already chosen, when the form asked. Narrows this to
+      the handful of places in it rather than every place the company has
+      worked — the same bargain the course form makes, for the same reason. */
+  region?: string | null
 }) {
   // Sites under the venue they belong to, so the list reads the way the place
   // does — "Maui, and these canyons on it" — rather than as two flat lists
@@ -45,6 +51,29 @@ export default function PlaceSelect({
   }
   const orphans = sites.filter((s) => !s.venue_id)
 
+  // In the chosen state first, then the ones filed under no state at all, then
+  // everywhere else. Moved down, never hidden: a venue you cannot pick is
+  // worse than a longer list, because it is the moment someone gives up and
+  // leaves the map filed nowhere.
+  const here = region ? venues.filter((v) => v.region_code === region) : venues
+  const unfiled = region ? venues.filter((v) => !v.region_code) : []
+  const elsewhere = region ? venues.filter((v) => v.region_code && v.region_code !== region) : []
+
+  const indent = '  '
+  const group = (list: Venue[], heading?: string) =>
+    list.length === 0 ? null : (
+      <optgroup label={heading ?? ' '}>
+        {list.flatMap((v) => [
+          <option key={v.id} value={`venue:${v.id}`}>{v.name} — the whole area</option>,
+          ...(byVenue.get(v.id) ?? []).map((s) => (
+            <option key={s.id} value={`site:${s.id}`}>
+              {indent}{s.name}{s.kind ? ` · ${s.kind}` : ''}
+            </option>
+          )),
+        ])}
+      </optgroup>
+    )
+
   const controlled = value !== undefined
   return (
     <select
@@ -55,16 +84,9 @@ export default function PlaceSelect({
       onChange={(e) => onChange?.(e.target.value)}
     >
       <option value="">{required ? '— pick a place —' : '— none —'}</option>
-      {venues.map((v) => (
-        <optgroup key={v.id} label={v.name}>
-          <option value={`venue:${v.id}`}>{v.name} — the whole area</option>
-          {(byVenue.get(v.id) ?? []).map((s) => (
-            <option key={s.id} value={`site:${s.id}`}>
-              {'  '}{s.name}{s.kind ? ` · ${s.kind}` : ''}
-            </option>
-          ))}
-        </optgroup>
-      ))}
+      {group(here, region ? regionLabel(region) || 'Here' : undefined)}
+      {group(unfiled, 'No state set')}
+      {group(elsewhere, region ? `Outside ${regionLabel(region) || 'there'}` : undefined)}
       {orphans.length > 0 && (
         <optgroup label="Sites with no venue">
           {orphans.map((s) => (
