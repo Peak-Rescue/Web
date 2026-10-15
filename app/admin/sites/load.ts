@@ -21,6 +21,12 @@ export async function loadSitesShelf() {
       .from('library_items')
       .select('id, title, description, source_type, url, edit_url, drive_file_id, kind, audience, disciplines, topics, admin_only, venue_id, site_id, expires_at, status, bucket, region, source_class, source_topic, source_item, library_item_links(id, url, access, audience)')
       .in('kind', ['map', 'route', 'rescue_plan', 'permit'])
+      // Only the ones that are about somewhere. A blank "New Rescue Plan" and
+      // a confined-space entry permit are templates — the kind is right and
+      // there is no place, because there is no place to have. Without this
+      // they pile into "Not filed anywhere yet" and read as twenty-one things
+      // somebody forgot to file.
+      .or('venue_id.not.is.null,site_id.not.is.null,region.not.is.null')
       .neq('status', 'archived')
       .order('title'),
     admin.from('region_info').select('region_code, links, contacts, notes'),
