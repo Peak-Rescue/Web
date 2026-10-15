@@ -297,26 +297,31 @@ export default function SitesShelf({
             of them, which is the thing that was missing: you could see what a
             venue had and had to leave to give it anything. */}
         {countries.map((c) => (
-          <div key={c.country || '_none'}>
-            <h2 className="text-base font-semibold text-zinc-100 mb-2 pb-1 border-b border-zinc-800">{c.label}</h2>
+          // Three levels, told apart three ways at once: size, colour and how
+          // far in they start. Weight alone was not enough to read at a
+          // glance, which is the only thing this page is for.
+          <div key={c.country || '_none'} className="rounded-lg border border-zinc-800/80 bg-zinc-950/40 p-3">
+            <h2 className="text-lg font-bold text-white mb-3 pb-2 border-b border-zinc-700">{c.label}</h2>
             {c.country && <RegionBlocks code={c.country} />}
             {c.subs.map((sub) => (
-              <div key={sub.code || '_nosub'} className="mb-3">
-                {/* Plain text, not another disclosure: two levels to open
-                    before reaching a venue is one more click than a list this
-                    length deserves. */}
-                {/* The headings were the smallest, faintest text on a page
-                    whose whole job is grouping by them. A heading quieter than
-                    the rows under it is not a heading. */}
-                <p className="text-sm font-medium text-zinc-300 mb-1.5 pl-0.5">
-                  {sub.label || 'No state set'}
-                </p>
+              // A state heading only where a state is a thing that country
+              // has. Bahamas has none, so "No state set" under it reported a
+              // gap that cannot exist.
+              <div
+                key={sub.code || '_nosub'}
+                className={sub.label || c.hasStates ? 'mb-4 pl-3 border-l-2 border-zinc-700' : 'mb-4'}
+              >
+                {(sub.label || c.hasStates) && (
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-pr-red-light/80 mb-2">
+                    {sub.label || 'No state set'}
+                  </p>
+                )}
                 <div className="space-y-2">
         {sub.groups.map((g) => (
-          <details key={g.key} className="group/venue rounded-lg border border-zinc-800 bg-zinc-900/40">
-            <summary className="cursor-pointer list-none flex items-center gap-2 px-3 py-2.5 hover:bg-zinc-900/60 transition-colors">
+          <details key={g.key} className="group/venue rounded-lg border border-zinc-800 bg-zinc-900">
+            <summary className="cursor-pointer list-none flex items-center gap-2 px-3 py-2.5 hover:bg-zinc-800/60 transition-colors">
               <span aria-hidden className="text-zinc-600 text-xs transition-transform group-open/venue:rotate-90">▶</span>
-              <span className="text-sm font-medium">{g.name}</span>
+              <span className="text-sm font-medium text-zinc-200">{g.name}</span>
               <span className="text-[11px] text-zinc-600">
                 {[
                   g.sites.length && `${g.sites.length} site${g.sites.length === 1 ? '' : 's'}`,
