@@ -21,11 +21,29 @@ const AUDIENCES = ['students', 'instructors'] as const
 
 const input = 'w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-zinc-500'
 
+// Two links to one CalTopo map are the same address with a different token on
+// the end — the map id is shared and the token is the only part that says what
+// you may do with it. Typing the whole thing again to add the read-only
+// version is work the screen already has the answer to, so the box starts at
+// the part that cannot change and waits for the token.
+const SHARED = /^(https?:\/\/(?:www\.)?(?:caltopo|sartopo)\.com\/m\/[A-Za-z0-9_-]+)(?:\/.*)?$/i
+
+function sharedPrefix(links: MapLink[]): string {
+  for (const l of links) {
+    const m = (l.url ?? '').match(SHARED)
+    if (m) return `${m[1]}/`
+  }
+  return ''
+}
+
 export default function MapLinks({ itemId, links }: { itemId: string; links: MapLink[] }) {
   const router = useRouter()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [url, setUrl] = useState('')
+  // Lazily, so clearing the box stays cleared rather than refilling itself on
+  // the next render.
+  const seed = sharedPrefix(links)
+  const [url, setUrl] = useState(seed)
   const [access, setAccess] = useState<MapLink['access']>('read')
   const [audience, setAudience] = useState<MapLink['audience']>('students')
 
@@ -95,11 +113,18 @@ export default function MapLinks({ itemId, links }: { itemId: string; links: Map
         </div>
       )}
 
+      {seed && (
+        <p className="text-[11px] text-zinc-600 mb-1">
+          Same map, different token — paste the one for the link you&rsquo;re adding.
+        </p>
+      )}
+
       <div className="flex flex-wrap items-end gap-2">
         <input
           value={url}
           onChange={(e) => setUrl(e.target.value)}
-          placeholder="https://sartopo.com/m/…"
+          placeholder={seed ? `${seed}…` : 'https://sartopo.com/m/…'}
+          spellCheck={false}
           className={`${input} flex-1 min-w-[14rem]`}
         />
         <select
@@ -117,8 +142,10 @@ export default function MapLinks({ itemId, links }: { itemId: string; links: Map
           {AUDIENCES.map((a) => <option key={a} value={a}>{LINK_AUDIENCE_META[a]}</option>)}
         </select>
         <button
-          onClick={() => run(async () => { await setMapLink(itemId, { url, access, audience }); setUrl('') })}
-          disabled={busy || !url.trim()}
+          onClick={() => run(async () => { await setMapLink(itemId, { url, access, audience }); setUrl(seed) })}
+          // The seeded prefix on its own is not a link, so it does not arm the
+          // button — it is the start of one.
+          disabled={busy || !url.trim() || url.trim() === seed}
           className="px-3 py-1.5 rounded text-xs font-medium bg-zinc-700 hover:bg-zinc-600 text-zinc-200 disabled:opacity-40 transition-colors"
         >
           {taken ? 'Replace' : 'Add link'}
