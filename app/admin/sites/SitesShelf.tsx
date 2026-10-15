@@ -168,19 +168,24 @@ export default function SitesShelf({
               ))}
             </div>
 
+            {/* Open, like the canyons above them. They were folded on the
+                theory that maps are the long part of a venue — which is not
+                true of a shelf holding four sites and twenty-three maps,
+                where the biggest venue has four of either. Folding one and
+                not the other just read as a rule nobody could see. If this
+                grows to where a venue is a screenful, fold then, and fold
+                both. */}
             {g.maps.length > 0 && (
-              <details className="group/maps mt-2">
-                <summary className="cursor-pointer list-none flex items-center gap-2 text-xs text-zinc-500 hover:text-zinc-300 transition-colors py-1">
-                  <span aria-hidden className="text-zinc-600 text-[10px] transition-transform group-open/maps:rotate-90">▶</span>
-                  Maps
-                  <span className="text-zinc-600">{g.maps.length}</span>
-                </summary>
-                <div className="space-y-2 pt-1.5">
+              <div className="mt-2">
+                {g.sites.length > 0 && (
+                  <p className="text-[10px] uppercase tracking-wide text-zinc-700 mb-1.5">Maps</p>
+                )}
+                <div className="space-y-2">
                   {g.maps.map((m) => (
                     <LibraryRow key={m.id} item={m} venues={venues} sites={siteOptions} />
                   ))}
                 </div>
-              </details>
+              </div>
             )}
           </div>
         ))}
