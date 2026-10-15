@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import {
   KIND_META, LIBRARY_KINDS, BUCKET_META, BUCKET_ORDER,
-  TEMPLATE_SHELF_META, TEMPLATE_SHELF_ORDER, SHELF_ORDER, isTemplateShelf,
+  TEMPLATE_SHELF_META, TEMPLATE_SHELF_ORDER, SHELF_ORDER, isTemplateShelf, isPlaceShelf,
   shelfLabel, shelfHint,
   type LibraryItem, type LibraryShelf, type TemplateShelf, type TemplateSummary, type Venue,
 } from '@/lib/library'
@@ -21,6 +21,8 @@ import TemplateReadOnly from './TemplateReadOnly'
 import CourseSetupRow from './CourseSetupRow'
 import CourseSetupReadOnly from './CourseSetupReadOnly'
 import InfoHint from '@/components/InfoHint'
+import SitesShelf from '@/app/admin/sites/SitesShelf'
+import { loadSitesShelf } from '@/app/admin/sites/load'
 import { CAPABILITY_META, CAPABILITY_ORDER, type CapabilityCategory } from '@/lib/capabilities'
 import { readViewAs, viewAsSelf } from '@/lib/view-as'
 import ViewAsMenu from '@/components/ViewAsMenu'
@@ -75,7 +77,11 @@ export default async function LibraryPage({
   // across all of them.
   const onShelf = Boolean(bucket)
   const landing = !bucket && !q && !discipline && !kind && !venue && !audience && status === 'published'
-  const showDocs = !isTemplateShelf(bucket) && !landing
+  // The places shelf is its own thing: not documents, not templates, and the
+  // document filters (type, who-can-see, review status) mean nothing to a
+  // canyon. It is only ever shown when it is the shelf asked for.
+  const onPlaces = isPlaceShelf(bucket)
+  const showDocs = !isTemplateShelf(bucket) && !onPlaces && !landing
   // Review status is a document's state, not a template's: there is nothing
   // to approve about a kit list you wrote yourself, so the pending and
   // archived tabs — which are documents being worked through — leave them
@@ -86,7 +92,7 @@ export default async function LibraryPage({
   const statusHidesTemplates =
     (status === 'pending' || status === 'archived') && !isTemplateShelf(bucket)
   const showTemplates =
-    (!bucket || isTemplateShelf(bucket)) && !docOnlyFilter && !landing && !statusHidesTemplates
+    (!bucket || isTemplateShelf(bucket)) && !docOnlyFilter && !landing && !statusHidesTemplates && !onPlaces
   const shelves: TemplateShelf[] = isTemplateShelf(bucket) ? [bucket] : TEMPLATE_SHELF_ORDER
 
   // A page of results, not the whole shelf. The reference page learned this —
@@ -125,7 +131,7 @@ export default async function LibraryPage({
   // Templates take the same search box and discipline tags the documents use.
   // They have no review status, so the status tabs pass them by — there's
   // nothing to approve about a kit list you wrote yourself.
-  const [{ data: itemRows }, { data: venueRows }, { data: siteRows }, gearRes, scheduleRes, setupRes, catalogRes, { count: pendingCount }, shelfCounts] = await Promise.all([
+  const [{ data: itemRows }, { data: venueRows }, { data: siteRows }, gearRes, scheduleRes, setupRes, catalogRes, { count: pendingCount }, placesShelf, shelfCounts] = await Promise.all([
     showDocs ? query : Promise.resolve({ data: [] }),
     admin.from('venues').select('id, name, region, region_code, client_name, notes, links, active').order('name'),
     // A per-region template pins its canyons here, so the courses started from
@@ -182,6 +188,7 @@ export default async function LibraryPage({
     // What is behind each door, for the cards. Head-only counts, and only on
     // the landing — a number on a card is the difference between picking a
     // shelf and guessing at one.
+    onPlaces ? loadSitesShelf() : Promise.resolve(null),
     landing
       ? Promise.all([
           ...BUCKET_ORDER.map(async (b) => [b, (await admin
@@ -193,6 +200,8 @@ export default async function LibraryPage({
             .then((r) => ['schedule', r.count ?? 0] as [LibraryShelf, number]),
           admin.from('course_templates').select('id', { count: 'exact', head: true }).eq('active', true)
             .then((r) => ['setup', r.count ?? 0] as [LibraryShelf, number]),
+          admin.from('sites').select('id', { count: 'exact', head: true }).eq('active', true)
+            .then((r) => ['site', r.count ?? 0] as [LibraryShelf, number]),
         ])
       : Promise.resolve([] as [LibraryShelf, number][]),
   ])
@@ -358,23 +367,11 @@ export default async function LibraryPage({
                   : 'Everything we teach from and look things up in — teaching material, manuals, standards, maps, kit lists and running orders.'}
             </p>
           </div>
-          {/* Three consoles about the library rather than in it, so they sit
-              in the header and only for the people who run them. */}
-          {isAdmin && (
-            <div className="flex items-center gap-2">
-              <Link href="/admin/library/overview" className="text-xs px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded transition-colors">
-                Coverage
-              </Link>
-              <Link href="/admin/venues" className="text-xs px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded transition-colors">
-                Venues
-              </Link>
-              {/* Routes are shelved next to the maps and permits they go with —
-                  a canyon's beta is library material, it just isn't a link. */}
-              <Link href="/admin/sites" className="text-xs px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded transition-colors">
-                Sites
-              </Link>
-            </div>
-          )}
+          {/* The three buttons that used to sit here were exits from a page
+              people came to for content: Coverage, Venues, Sites. Sites is a
+              shelf now, which is where it was always being looked for, and it
+              carries the door to venues. Coverage answered "what is missing
+              from a venue pack", a question nobody was asking. */}
         </div>
 
         {/* ── Review queue ─────────────────────────────────────────────── */}
@@ -407,7 +404,7 @@ export default async function LibraryPage({
           </div>
         )}
 
-        <form className="grid grid-cols-2 sm:grid-cols-6 gap-2 mb-6" action="/admin/library">
+        <form className={`grid grid-cols-2 sm:grid-cols-6 gap-2 mb-6 ${onPlaces ? 'hidden' : ''}`} action="/admin/library">
           {isAdmin && <input type="hidden" name="status" value={status} />}
           <input name="q" defaultValue={q ?? ''} placeholder="Search title…" className={input} />
           <select name="bucket" defaultValue={bucket ?? ''} className={input}>
@@ -540,6 +537,34 @@ export default async function LibraryPage({
               </div>
             )}
           </>
+        )}
+
+        {/* ── Sites & routes ───────────────────────────────────────────── */}
+        {onPlaces && placesShelf && (
+          isAdmin ? (
+            <SitesShelf {...placesShelf} />
+          ) : (
+            // The beta is worth reading to anyone teaching off it; setting up
+            // a canyon is not their errand, so they get the rows and none of
+            // the forms.
+            <div className="space-y-8">
+              {placesShelf.sites.filter((x) => x.active).map((x) => (
+                <div key={x.id} className="rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2.5">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-medium">{x.name}</span>
+                    {x.kind && <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400">{x.kind}</span>}
+                    <span className="text-[11px] text-zinc-600">
+                      {placesShelf.venues.find((v) => v.id === x.venue_id)?.name ?? 'no venue'}
+                    </span>
+                  </div>
+                  {x.beta && (
+                    <p className="text-xs text-zinc-400 whitespace-pre-line leading-relaxed mt-1.5 max-w-prose">{x.beta}</p>
+                  )}
+                </div>
+              ))}
+              {placesShelf.sites.length === 0 && <p className="text-sm text-zinc-500">No sites yet.</p>}
+            </div>
+          )
         )}
 
         {/* ── Reusable shelves ─────────────────────────────────────────── */}

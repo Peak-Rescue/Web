@@ -28,7 +28,30 @@ export const BUCKET_ORDER: LibraryBucket[] = ['teaching', 'resource', 'map', 'in
 // the vocabulary — a name, what it's for, disciplines, topics — and one place
 // to find them.
 export type TemplateShelf = 'gear' | 'schedule' | 'setup'
-export type LibraryShelf = LibraryBucket | TemplateShelf
+
+// And one more that is neither a document nor a template: the places
+// themselves. A canyon's beta is material someone comes here looking for — it
+// just isn't a link, so it could never be a library_item — and while it lived
+// on a screen of its own, the only way to find it was to already know that
+// screen existed.
+//
+// Venues are deliberately not a shelf beside it. A venue groups sites and
+// files a course, which is work done underneath something else: nobody goes
+// looking for a region, they go looking for the canyon in it. So it is a
+// heading on this shelf and a door at the bottom of it.
+export type PlaceShelf = 'site'
+export type LibraryShelf = LibraryBucket | TemplateShelf | PlaceShelf
+
+export const PLACE_SHELF_META: Record<PlaceShelf, { label: string; hint: string }> = {
+  site: {
+    label: 'Sites & routes',
+    hint: 'Canyons, crags and towers — approach, raps, exit, written once',
+  },
+}
+
+export function isPlaceShelf(v: string | undefined): v is PlaceShelf {
+  return v === 'site'
+}
 
 export const TEMPLATE_SHELF_META: Record<TemplateShelf, { label: string; hint: string; noun: string }> = {
   gear: {
@@ -49,13 +72,17 @@ export const TEMPLATE_SHELF_META: Record<TemplateShelf, { label: string; hint: s
 }
 
 export const TEMPLATE_SHELF_ORDER: TemplateShelf[] = ['gear', 'schedule', 'setup']
-export const SHELF_ORDER: LibraryShelf[] = [...BUCKET_ORDER, ...TEMPLATE_SHELF_ORDER]
+// Sites sit with the maps, not with the templates: both answer "where", and
+// the two are read together when a course is being built.
+export const SHELF_ORDER: LibraryShelf[] = ['teaching', 'resource', 'map', 'site', 'instructor', ...TEMPLATE_SHELF_ORDER]
 
 export function shelfLabel(v: LibraryShelf): string {
+  if (isPlaceShelf(v)) return PLACE_SHELF_META[v].label
   return isTemplateShelf(v) ? TEMPLATE_SHELF_META[v].label : BUCKET_META[v].label
 }
 
 export function shelfHint(v: LibraryShelf): string {
+  if (isPlaceShelf(v)) return PLACE_SHELF_META[v].hint
   return isTemplateShelf(v) ? TEMPLATE_SHELF_META[v].hint : BUCKET_META[v].hint
 }
 
