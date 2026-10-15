@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import {
   addTask,
   addTasks,
-  updateTask,
+  setTaskAssignees,
   setTaskStatus,
   deleteTask,
   updateTaskNotes,
@@ -29,9 +29,11 @@ export type CourseTask = {
   id: string
   title: string
   notes: string | null
-  assigned_to: string | null
-  assigned_by: string | null
+  /** Everyone it is on, each with who put them there. Shared: any one of
+   *  them ticking it closes it for all. */
+  assignees: { id: string; by: string | null }[]
   status: 'open' | 'done'
+  completed_by: string | null
   documents: { id: string; filename: string; url: string; external?: boolean }[]
 }
 
@@ -71,7 +73,7 @@ export default function CourseTasksPanel({
   // Suggestion id -> assignee profile id ('' = checked but nobody picked yet)
   const [picks, setPicks] = useState<Record<string, string>>({})
   const [newTitle, setNewTitle] = useState('')
-  const [newAssignee, setNewAssignee] = useState('')
+  const [newAssignees, setNewAssignees] = useState<string[]>([])
   const [newNotes, setNewNotes] = useState('')
   // Attachments chosen on the creation form, held until there is a task id.
   const [newDocs, setNewDocs] = useState<{ file: File; name: string }[]>([])
@@ -163,8 +165,9 @@ export default function CourseTasksPanel({
   const NEW_TASK = '__new__'
   const [showAllPeople, setShowAllPeople] = useState(false)
   const hasMorePeople = people.some((p) => !p.onCourse)
-  const assigneeOptions = (currentId?: string | null) => {
-    const shown = showAllPeople ? people : people.filter((p) => p.onCourse || p.id === currentId)
+  const assigneeOptions = (currentId?: string | null, exclude: string[] = []) => {
+    const shown = (showAllPeople ? people : people.filter((p) => p.onCourse || p.id === currentId))
+      .filter((p) => !exclude.includes(p.id))
     return (
       <>
         {shown.map((p) => (
@@ -174,6 +177,42 @@ export default function CourseTasksPanel({
       </>
     )
   }
+
+  const isOn = (t: CourseTask) => t.assignees.some((a) => a.id === currentUserId)
+  const namesOf = (t: CourseTask) =>
+    t.assignees.map((a) => personName(a.id)).filter(Boolean).join(', ') || 'unassigned'
+
+  // Chips for the people a task is on, × to take one off, and a dropdown to
+  // put another on. Used both on a saved task and on the creation form.
+  const assigneeEditor = (ids: string[], onChange: (next: string[]) => void, disabled = false) => (
+    <div className="flex items-center flex-wrap gap-1.5">
+      {ids.map((id) => (
+        <span key={id} className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-300">
+          {personName(id) ?? 'Unknown'}
+          <button
+            onClick={() => onChange(ids.filter((x) => x !== id))}
+            disabled={disabled}
+            title="Take off this task"
+            className="px-1 text-zinc-500 hover:text-pr-red-light disabled:opacity-40"
+          >
+            ×
+          </button>
+        </span>
+      ))}
+      <select
+        value=""
+        disabled={disabled}
+        onChange={(e) => {
+          if (e.target.value === SHOW_ALL) return setShowAllPeople(true)
+          if (e.target.value) onChange([...ids, e.target.value])
+        }}
+        className="bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-xs text-zinc-300 max-w-40"
+      >
+        <option value="">{ids.length === 0 ? 'Assign to…' : '+ Add person…'}</option>
+        {assigneeOptions(null, ids)}
+      </select>
+    </div>
+  )
 
   const open = tasks.filter((t) => t.status === 'open')
   const done = tasks.filter((t) => t.status === 'done')
@@ -275,13 +314,13 @@ export default function CourseTasksPanel({
     try {
       const taskId = await addTask(instanceId, {
         title,
-        assigned_to: newAssignee || null,
+        assignees: newAssignees,
         notes: newNotes || null,
       })
       if (newDocs.length > 0) await uploadDocs(taskId, newDocs)
       for (const l of newLinks) await addTaskDocLink(instanceId, taskId, l.url, l.name)
       setNewTitle('')
-      setNewAssignee('')
+      setNewAssignees([])
       setNewNotes('')
       setNewDocs([])
       setNewLinks([])
@@ -317,7 +356,7 @@ export default function CourseTasksPanel({
 
   function openAttachments(t: CourseTask) {
     openDetails(t)
-    const canEdit = canManage || t.assigned_to === currentUserId
+    const canEdit = canManage || isOn(t)
     if (t.documents.length === 0 && canEdit) {
       docTaskRef.current = t.id
       docInputRef.current?.click()
@@ -326,8 +365,8 @@ export default function CourseTasksPanel({
 
   function renderTaskRow(t: CourseTask) {
     const isDone = t.status === 'done'
-    const canToggle = canManage || t.assigned_to === currentUserId
-    const canEditNotes = canManage || t.assigned_to === currentUserId
+    const canToggle = canManage || isOn(t)
+    const canEditNotes = canManage || isOn(t)
     const detailsOpen = openDetailsId === t.id
     return (
       <div key={t.id} className="px-4 py-2.5">
@@ -362,44 +401,51 @@ export default function CourseTasksPanel({
           <PaperclipIcon />
           {t.documents.length > 0 && <span className="text-[10px]">{t.documents.length}</span>}
         </button>
-        {canManage ? (
-          <>
-            <select
-              value={t.assigned_to ?? ''}
-              disabled={busyId === t.id}
-              onChange={(e) => {
-                if (e.target.value === SHOW_ALL) return setShowAllPeople(true)
-                run(() => updateTask(instanceId, t.id, { assigned_to: e.target.value || null }), t.id)
-              }}
-              className="bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-xs text-zinc-300 shrink-0 max-w-32"
-            >
-              <option value="">unassigned</option>
-              {assigneeOptions(t.assigned_to)}
-            </select>
-            <button
-              onClick={() => {
-                if (confirm(`Delete task "${t.title}"?`)) run(() => deleteTask(instanceId, t.id), t.id)
-              }}
-              disabled={busyId === t.id}
-              className="text-xs text-zinc-600 hover:text-pr-red-light transition-colors shrink-0"
-            >
-              <TrashIcon />
-            </button>
-          </>
-        ) : (
-          <span className="text-xs text-zinc-500 shrink-0">
-            {personName(t.assigned_to) ?? 'unassigned'}
-          </span>
+        {/* Names on the row; who is on it is changed inside, where there is
+            room for more than one. */}
+        <button
+          onClick={() => toggleDetails(t)}
+          title={namesOf(t)}
+          className="text-xs text-zinc-500 hover:text-zinc-300 shrink-0 max-w-40 truncate"
+        >
+          {namesOf(t)}
+        </button>
+        {canManage && (
+          <button
+            onClick={() => {
+              if (confirm(`Delete task "${t.title}"?`)) run(() => deleteTask(instanceId, t.id), t.id)
+            }}
+            disabled={busyId === t.id}
+            className="text-xs text-zinc-600 hover:text-pr-red-light transition-colors shrink-0"
+          >
+            <TrashIcon />
+          </button>
         )}
       </div>
 
       {detailsOpen && (
         <div className="mt-2 ml-7 mr-1">
-          <p className="text-xs text-zinc-500 mb-2">
-            {t.assigned_to
-              ? `Assigned to ${personName(t.assigned_to) ?? 'someone'}${t.assigned_by ? ` by ${personName(t.assigned_by)}` : ''}`
-              : 'Unassigned'}
-          </p>
+          {canManage ? (
+            <div className="mb-2">
+              {assigneeEditor(
+                t.assignees.map((a) => a.id),
+                (next) => run(() => setTaskAssignees(instanceId, t.id, next), t.id),
+                busyId === t.id
+              )}
+            </div>
+          ) : (
+            <p className="text-xs text-zinc-500 mb-2">
+              {t.assignees.length > 0 ? `Assigned to ${namesOf(t)}` : 'Unassigned'}
+              {(() => {
+                // Who handed it out, when it was one person for everybody.
+                const by = [...new Set(t.assignees.map((a) => a.by))]
+                return by.length === 1 && by[0] ? ` by ${personName(by[0])}` : ''
+              })()}
+            </p>
+          )}
+          {isDone && t.completed_by && (
+            <p className="text-xs text-zinc-500 mb-2">Ticked by {personName(t.completed_by) ?? 'someone'}</p>
+          )}
           <div className="flex items-center flex-wrap gap-2 mb-2">
             {t.documents.map((d) => (
               <TaskDocChip
@@ -514,19 +560,9 @@ export default function CourseTasksPanel({
                   className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500"
                 />
               </div>
-              <div>
+              <div className="w-full">
                 <label className="block text-xs text-zinc-500 mb-1">Assign to</label>
-                <select
-                  value={newAssignee}
-                  onChange={(e) => {
-                    if (e.target.value === SHOW_ALL) return setShowAllPeople(true)
-                    setNewAssignee(e.target.value)
-                  }}
-                  className="bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm"
-                >
-                  <option value="">unassigned</option>
-                  {assigneeOptions(newAssignee)}
-                </select>
+                {assigneeEditor(newAssignees, setNewAssignees, creatingTask)}
               </div>
               <div className="w-full">
                 <label className="block text-xs text-zinc-500 mb-1">Notes (optional)</label>
@@ -674,7 +710,7 @@ export default function CourseTasksPanel({
                             instanceId,
                             checked.map((s) => ({
                               title: s.title,
-                              assigned_to: picks[s.id] || null,
+                              assignees: picks[s.id] ? [picks[s.id]] : [],
                               sort_order: s.sort_order,
                             }))
                           )

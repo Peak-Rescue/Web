@@ -915,7 +915,7 @@ export default async function CourseView({
     : []
 
   // Only tasks assigned to someone show on the course page, for everyone.
-  const tasks: CourseTask[] = taskRows.filter((t) => t.assigned_to)
+  const tasks: CourseTask[] = taskRows.filter((t) => t.assignees.length > 0)
   // A meeting's teachers, primary first, each with what they are teaching.
   const meetingTeachers = session
     ? [...(instructors ?? [])]

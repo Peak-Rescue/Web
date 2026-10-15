@@ -110,14 +110,21 @@ async function notifyAssignee(
 
 export type TaskInput = {
   title: string
-  assigned_to: string | null
+  /** Everyone it is on. Shared: any one of them ticking it closes it for all. */
+  assignees: string[]
   notes: string | null
 }
+
+// The people on a task live in course_task_assignees. assigned_to is the old
+// single-assignee column, kept only until the previous build is gone; writes
+// here null it so the mirror trigger in 233 stays quiet and it can't go stale.
+const uniq = (ids: string[]) => [...new Set(ids.filter(Boolean))]
 
 export async function addTask(instanceId: string | null, input: TaskInput) {
   const { user, admin } = await requireManager(instanceId)
   const title = input.title.trim()
   if (!title) throw new Error('Task title is required')
+  const assignees = uniq(input.assignees)
 
   // The id comes back because attachments chosen while writing the task can
   // only be filed once the row they hang off exists.
@@ -127,8 +134,6 @@ export async function addTask(instanceId: string | null, input: TaskInput) {
       instance_id: instanceId,
       title,
       notes: input.notes?.trim() || null,
-      assigned_to: input.assigned_to || null,
-      assigned_by: input.assigned_to ? user.id : null,
       created_by: user.id,
       sort_order: 1000, // custom tasks after the template checklist
     })
@@ -136,8 +141,14 @@ export async function addTask(instanceId: string | null, input: TaskInput) {
     .single()
   if (error) throw new Error(error.message)
 
-  const assignee = input.assigned_to
-  if (assignee) after(() => notifyAssignee(admin, title, instanceId, assignee, user.id))
+  if (assignees.length > 0) {
+    const { error: aErr } = await admin
+      .from('course_task_assignees')
+      .insert(assignees.map((p) => ({ task_id: created.id, profile_id: p, assigned_by: user.id })))
+    if (aErr) throw new Error(aErr.message)
+  }
+
+  for (const p of assignees) after(() => notifyAssignee(admin, title, instanceId, p, user.id))
   revalidateTaskViews(instanceId)
   return created.id as string
 }
@@ -146,104 +157,101 @@ export async function addTask(instanceId: string | null, input: TaskInput) {
 // checklist in its canonical order regardless of when tasks were added.
 export async function addTasks(
   instanceId: string | null,
-  items: { title: string; assigned_to: string | null; sort_order?: number }[]
+  items: { title: string; assignees: string[]; sort_order?: number }[]
 ) {
   const { user, admin } = await requireManager(instanceId)
   const rows = items
-    .map((i) => ({ ...i, title: i.title.trim() }))
+    .map((i) => ({ ...i, title: i.title.trim(), assignees: uniq(i.assignees) }))
     .filter((i) => i.title)
   if (rows.length === 0) throw new Error('No tasks selected')
 
-  const { error } = await admin.from('course_tasks').insert(
-    rows.map((i) => ({
-      instance_id: instanceId,
-      title: i.title,
-      assigned_to: i.assigned_to || null,
-      assigned_by: i.assigned_to ? user.id : null,
-      created_by: user.id,
-      sort_order: i.sort_order ?? 1000,
-    }))
-  )
+  const { data: created, error } = await admin
+    .from('course_tasks')
+    .insert(
+      rows.map((i) => ({
+        instance_id: instanceId,
+        title: i.title,
+        created_by: user.id,
+        sort_order: i.sort_order ?? 1000,
+      }))
+    )
+    .select('id')
   if (error) throw new Error(error.message)
 
+  // Inserted rows come back in the order they were sent.
+  const links = (created ?? []).flatMap((c, n) =>
+    rows[n].assignees.map((p) => ({ task_id: c.id as string, profile_id: p, assigned_by: user.id }))
+  )
+  if (links.length > 0) {
+    const { error: aErr } = await admin.from('course_task_assignees').insert(links)
+    if (aErr) throw new Error(aErr.message)
+  }
+
   for (const i of rows) {
-    const assignee = i.assigned_to
-    if (assignee) after(() => notifyAssignee(admin, i.title, instanceId, assignee, user.id))
+    for (const p of i.assignees) after(() => notifyAssignee(admin, i.title, instanceId, p, user.id))
   }
   revalidateTaskViews(instanceId)
 }
 
-export async function updateTask(
-  instanceId: string | null,
-  taskId: string,
-  patch: { assigned_to: string | null }
-) {
+// Replaces who a task is on. Only the people newly added hear about it, and
+// the ones who stay keep their original "assigned by".
+export async function setTaskAssignees(instanceId: string | null, taskId: string, assignees: string[]) {
   const { user, admin } = await requireManager(instanceId)
+  const next = uniq(assignees)
 
   const { data: before } = await admin
     .from('course_tasks')
-    .select('title, assigned_to')
+    .select('title, course_task_assignees(profile_id)')
     .eq('id', taskId)
     .filter('instance_id', instanceId ? 'eq' : 'is', instanceId)
     .single()
   if (!before) throw new Error('Task not found')
 
-  const assigneeChanged = (patch.assigned_to || null) !== before.assigned_to
-  const { error } = await admin
-    .from('course_tasks')
-    .update({
-      assigned_to: patch.assigned_to || null,
-      ...(assigneeChanged ? { assigned_by: patch.assigned_to ? user.id : null } : {}),
-    })
-    .eq('id', taskId)
-    .filter('instance_id', instanceId ? 'eq' : 'is', instanceId)
-  if (error) throw new Error(error.message)
+  const had = new Set(
+    ((before.course_task_assignees ?? []) as { profile_id: string }[]).map((a) => a.profile_id)
+  )
+  const added = next.filter((p) => !had.has(p))
+  const removed = [...had].filter((p) => !next.includes(p))
 
-  const newAssignee = patch.assigned_to
-  if (newAssignee && newAssignee !== before.assigned_to) {
-    after(() => notifyAssignee(admin, before.title, instanceId, newAssignee, user.id))
+  if (removed.length > 0) {
+    const { error } = await admin
+      .from('course_task_assignees')
+      .delete()
+      .eq('task_id', taskId)
+      .in('profile_id', removed)
+    if (error) throw new Error(error.message)
   }
+  if (added.length > 0) {
+    const { error } = await admin
+      .from('course_task_assignees')
+      .insert(added.map((p) => ({ task_id: taskId, profile_id: p, assigned_by: user.id })))
+    if (error) throw new Error(error.message)
+  }
+  await admin.from('course_tasks').update({ assigned_to: null, assigned_by: null }).eq('id', taskId)
+
+  for (const p of added) after(() => notifyAssignee(admin, before.title, instanceId, p, user.id))
   revalidateTaskViews(instanceId)
 }
 
+// Shared: whoever ticks it closes it for everyone on it, and is named for it.
 export async function setTaskStatus(instanceId: string | null, taskId: string, done: boolean) {
-  const { user, admin, isAdmin } = await getCaller()
-
-  const { data: task } = await admin
-    .from('course_tasks')
-    .select('assigned_to')
-    .eq('id', taskId)
-    .filter('instance_id', instanceId ? 'eq' : 'is', instanceId)
-    .single()
-  if (!task) throw new Error('Task not found')
-
-  const allowed = isAdmin || task.assigned_to === user.id || (await isPrimaryOf(admin, instanceId, user.id))
-  if (!allowed) throw new Error('Not authorized')
-
+  const { user, admin } = await requireTaskParticipant(instanceId, taskId)
   const { error } = await admin
     .from('course_tasks')
-    .update({ status: done ? 'done' : 'open', completed_at: done ? new Date().toISOString() : null })
+    .update({
+      status: done ? 'done' : 'open',
+      completed_at: done ? new Date().toISOString() : null,
+      completed_by: done ? user.id : null,
+    })
     .eq('id', taskId)
   if (error) throw new Error(error.message)
   revalidateTaskViews(instanceId)
 }
 
 // Notes are working state ("called hotel, waiting on callback") — editable by
-// managers and by the task's assignee.
+// managers and by anyone the task is on.
 export async function updateTaskNotes(instanceId: string | null, taskId: string, notes: string) {
-  const { user, admin, isAdmin } = await getCaller()
-
-  const { data: task } = await admin
-    .from('course_tasks')
-    .select('assigned_to')
-    .eq('id', taskId)
-    .filter('instance_id', instanceId ? 'eq' : 'is', instanceId)
-    .single()
-  if (!task) throw new Error('Task not found')
-
-  const allowed = isAdmin || task.assigned_to === user.id || (await isPrimaryOf(admin, instanceId, user.id))
-  if (!allowed) throw new Error('Not authorized')
-
+  const { admin } = await requireTaskParticipant(instanceId, taskId)
   const { error } = await admin
     .from('course_tasks')
     .update({ notes: notes.trim() || null })
@@ -253,22 +261,24 @@ export async function updateTaskNotes(instanceId: string | null, taskId: string,
 }
 
 // ─── Task documents (signed contracts, permits, confirmations…) ─────────────
-// Managers and the task's assignee can attach files. Uploads go direct to the
+// Managers and anyone the task is on can attach files. Uploads go direct to the
 // private task-documents bucket via server-minted signed URLs.
 
 const DOC_BUCKET = 'task-documents'
 const MAX_DOC_BYTES = 20 * 1024 * 1024
 
+// Admins, the course's primary, and anyone the task is on.
 async function requireTaskParticipant(instanceId: string | null, taskId: string) {
   const { user, admin, isAdmin } = await getCaller()
   const { data: task } = await admin
     .from('course_tasks')
-    .select('assigned_to')
+    .select('id, course_task_assignees(profile_id)')
     .eq('id', taskId)
     .filter('instance_id', instanceId ? 'eq' : 'is', instanceId)
     .single()
   if (!task) throw new Error('Task not found')
-  const allowed = isAdmin || task.assigned_to === user.id || (await isPrimaryOf(admin, instanceId, user.id))
+  const onIt = ((task.course_task_assignees ?? []) as { profile_id: string }[]).some((a) => a.profile_id === user.id)
+  const allowed = isAdmin || onIt || (await isPrimaryOf(admin, instanceId, user.id))
   if (!allowed) throw new Error('Not authorized')
   return { user, admin }
 }

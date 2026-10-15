@@ -4,9 +4,11 @@ export type LoadedTask = {
   id: string
   title: string
   notes: string | null
-  assigned_to: string | null
-  assigned_by: string | null
+  /** Everyone it is on, each with who put them there. */
+  assignees: { id: string; by: string | null }[]
   status: 'open' | 'done'
+  /** Who ticked it — on a shared task, not necessarily you. */
+  completed_by: string | null
   documents: { id: string; filename: string; url: string; external: boolean }[]
 }
 
@@ -20,7 +22,7 @@ export async function loadTasksWithDocs(
 ): Promise<LoadedTask[]> {
   const { data } = await admin
     .from('course_tasks')
-    .select('id, title, notes, assigned_to, assigned_by, status, course_task_documents(id, path, filename, url)')
+    .select('id, title, notes, status, completed_by, course_task_assignees(profile_id, assigned_by, created_at), course_task_documents(id, path, filename, url)')
     .filter('instance_id', instanceId ? 'eq' : 'is', instanceId)
     .order('sort_order')
     .order('created_at')
@@ -39,9 +41,11 @@ export async function loadTasksWithDocs(
     id: r.id,
     title: r.title,
     notes: r.notes,
-    assigned_to: r.assigned_to,
-    assigned_by: r.assigned_by,
+    assignees: ((r.course_task_assignees ?? []) as { profile_id: string; assigned_by: string | null; created_at: string }[])
+      .sort((a, b) => a.created_at.localeCompare(b.created_at))
+      .map((a) => ({ id: a.profile_id, by: a.assigned_by })),
     status: r.status as 'open' | 'done',
+    completed_by: (r.completed_by as string | null) ?? null,
     documents: ((r.course_task_documents ?? []) as DocRow[]).map((d) => ({
       id: d.id,
       filename: d.filename ?? 'document',
@@ -50,6 +54,12 @@ export async function loadTasksWithDocs(
     })),
   }))
 }
+
+// `mine` is the viewer's own assignment row — the inner join is what makes it
+// their list, and it carries who assigned them. `everyone` is the same table
+// again, unfiltered, for the people they share it with.
+const MY_TASK_COLS =
+  'id, instance_id, title, notes, created_at, completed_at, completed_by, mine:course_task_assignees!inner(profile_id, assigned_by), everyone:course_task_assignees(profile_id), course_instances(course_type, custom_title, status, client_name, location, starts_at, ends_at), course_task_documents(id, path, filename, url)'
 
 export type MyOpenTask = {
   id: string
@@ -61,6 +71,10 @@ export type MyOpenTask = {
   completedAt?: string | null
   /** Who put it on your plate, when that was somebody other than you. */
   assignedByName: string | null
+  /** The others it is on — any of whom can close it for you. */
+  sharedWith: string[]
+  /** Who ticked it, when that was somebody other than you. */
+  completedByName: string | null
   courseName: string | null
   courseStatus: string | null
   clientName: string | null
@@ -80,8 +94,8 @@ export async function loadMyOpenTasks(
 ): Promise<MyOpenTask[]> {
   const { data } = await admin
     .from('course_tasks')
-    .select('id, instance_id, title, notes, assigned_by, created_at, completed_at, course_instances(course_type, custom_title, status, client_name, location, starts_at, ends_at), course_task_documents(id, path, filename, url)')
-    .eq('assigned_to', userId)
+    .select(MY_TASK_COLS)
+    .eq('mine.profile_id', userId)
     .eq('status', 'open')
     .order('created_at', { ascending: true })
     .limit(20)
@@ -135,9 +149,15 @@ async function shapeMyTasks(
   // Who assigned each one. Your own name is not the answer to "who put this on
   // my plate", so a task you assigned yourself reads as unattributed — the same
   // as one from before the column existed, which is most of the old ones.
+  // The same goes for who ticked it and who else is on it.
+  type AssignRow = { profile_id: string; assigned_by?: string | null }
+  const assignedBy = (r: Record<string, unknown>) =>
+    ((r.mine ?? []) as AssignRow[])[0]?.assigned_by ?? null
+  const others = (r: Record<string, unknown>) =>
+    ((r.everyone ?? []) as AssignRow[]).map((a) => a.profile_id).filter((id) => id !== userId)
   const assignerIds = [...new Set(
     rows
-      .map((r) => r.assigned_by as string | null)
+      .flatMap((r) => [assignedBy(r), r.completed_by as string | null, ...others(r)])
       .filter((id): id is string => Boolean(id) && id !== userId)
   )]
   // Asked together: the names have nothing to do with the signing and no
@@ -168,7 +188,9 @@ async function shapeMyTasks(
       title: r.title as string,
       notes: (r.notes as string | null) ?? null,
       completedAt: (r.completed_at as string | null) ?? null,
-      assignedByName: assignerName.get(r.assigned_by as string) ?? null,
+      assignedByName: assignerName.get(assignedBy(r) as string) ?? null,
+      sharedWith: others(r).map((id) => assignerName.get(id)).filter((n): n is string => Boolean(n)),
+      completedByName: assignerName.get(r.completed_by as string) ?? null,
       courseName: inst ? courseShortName(inst.course_type, inst.custom_title) : null,
       courseStatus: inst?.status ?? null,
       clientName: inst?.client_name ?? null,
@@ -206,8 +228,8 @@ export async function loadMyDoneTasks(
 ): Promise<MyOpenTask[]> {
   const { data } = await admin
     .from('course_tasks')
-    .select('id, instance_id, title, notes, assigned_by, created_at, completed_at, course_instances(course_type, custom_title, status, client_name, location, starts_at, ends_at), course_task_documents(id, path, filename, url)')
-    .eq('assigned_to', userId)
+    .select(MY_TASK_COLS)
+    .eq('mine.profile_id', userId)
     .eq('status', 'done')
     .order('completed_at', { ascending: false, nullsFirst: false })
     // Whether a course is still ahead can't be asked of the joined row here,

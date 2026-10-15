@@ -222,8 +222,15 @@ export default function MyTasksList({ tasks, done = [] }: { tasks: MyOpenTask[];
 
           {openId === t.id && (
             <div className="mt-2 ml-7 mr-1">
-              {t.assignedByName && (
-                <p className="text-xs text-zinc-500 mb-2">Assigned by {t.assignedByName}</p>
+              {(t.assignedByName || t.sharedWith.length > 0 || t.completedByName) && (
+                <p className="text-xs text-zinc-500 mb-2">
+                  {[
+                    t.assignedByName && `Assigned by ${t.assignedByName}`,
+                    // Shared: any of them ticking it closes it for you too.
+                    t.sharedWith.length > 0 && `with ${t.sharedWith.join(', ')}`,
+                    ticked && t.completedByName && `ticked by ${t.completedByName}`,
+                  ].filter(Boolean).join(' · ').replace(/^./, (c) => c.toUpperCase())}
+                </p>
               )}
               <div className="flex items-center flex-wrap gap-2 mb-2">
                 {t.documents.map((d) => (
