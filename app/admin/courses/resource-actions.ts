@@ -7,6 +7,7 @@ import { normalizeDocLink } from '@/lib/doc-links'
 import { type LibraryAudience } from '@/lib/library'
 import { regionLabel } from '@/lib/regions'
 import { refuse, type ActionResult } from '@/lib/action-result'
+import { classify, NEEDS_SORTING } from '@/lib/sorting'
 import { courseCapabilityCategories, CAPABILITY_META, type CapabilityCategory } from '@/lib/capabilities'
 
 // Reference attached to a course, set alongside its location for the same
@@ -323,7 +324,7 @@ async function promoteToLibrary(
       .eq('id', resourceId)
       .eq('instance_id', instanceId)
       .single(),
-    admin.from('course_instances').select('region, venue_id').eq('id', instanceId).single(),
+    admin.from('course_instances').select('region, venue_id, course_type, custom_categories').eq('id', instanceId).single(),
   ])
   if (!row) return refuse('That document is no longer on this course')
   if (row.library_item_id) return refuse('That document is already in the library')
@@ -338,21 +339,43 @@ async function promoteToLibrary(
     .limit(1)
     .maybeSingle()
 
+  // Filed by what it is, not by the door it came through: something added on
+  // a course because it was missing there is usually what the library was
+  // missing too, and a permit pasted onto a course is a permit however it
+  // arrived. Same classifier the sorting pass uses, so the two cannot disagree
+  // about the same document.
+  const title = row.label ?? 'Document'
+  const verdict = classify({ title, url: row.url, kind: 'reference', bucket: 'resource', source_topic: null })
+
   let libraryItemId = existing?.id
   if (!libraryItemId) {
     const { data: created, error: createError } = await admin
       .from('library_items')
       .insert({
-        title: row.label ?? 'Document',
+        title,
         url: row.url,
         source_type: 'link',
-        kind: 'reference',
-        bucket: 'resource',
+        // Filed by what it is, not by the door it came through. Something
+        // added on a course because it was missing there is usually the thing
+        // the library was missing too — and a permit pasted onto a course is a
+        // permit, not a reference, however it arrived. Same classifier the
+        // sorting pass uses, so the two cannot disagree.
+        kind: verdict.confident ? verdict.kind ?? 'reference' : 'reference',
+        bucket: verdict.confident ? verdict.bucket ?? 'resource' : 'resource',
+        admin_only: verdict.confident ? verdict.adminOnly ?? false : false,
         audience: row.audience === 'shared' ? 'shared' : 'internal',
         region: inst?.region ?? null,
         venue_id: inst?.venue_id ?? null,
-        disciplines: [],
-        topics: [],
+        // The course already says what kind of work this is, so the thing
+        // arrives tagged rather than joining the 5 published items that are
+        // tagged with nothing.
+        disciplines: inst
+          ? (courseCapabilityCategories(inst.course_type, inst.custom_categories) as string[])
+          : [],
+        // Not obvious from a pasted link and a typed label, which most are: it
+        // lands on the shelf it came through, wearing the tag that says
+        // somebody should look. The same pile the sorting pass leaves.
+        topics: verdict.confident ? [] : [NEEDS_SORTING],
         status: 'published',
       })
       .select('id')

@@ -24,7 +24,18 @@ import { type SiteOption } from '@/app/admin/schedules/types'
 const input = 'w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500'
 const label = 'block text-[11px] text-zinc-500 mb-1'
 
-export default function AddLibraryItem({ venues, sites }: { venues: Venue[]; sites: SiteOption[] }) {
+export default function AddLibraryItem({
+  venues,
+  sites,
+  defaultBucket,
+}: {
+  venues: Venue[]
+  sites: SiteOption[]
+  /** The shelf being stood on. The button has said "Add to Reference" since it
+      was written and then opened a form defaulted to something else, so the
+      first thing added to a shelf landed on a different one. */
+  defaultBucket?: string
+}) {
   const [kind, setKind] = useState('reference')
   const isMap = kind === 'map'
   const isPermit = kind === 'permit'
@@ -105,7 +116,7 @@ export default function AddLibraryItem({ venues, sites }: { venues: Venue[]; sit
       {!isMap && (
         <div>
           <label className={label}>Library</label>
-          <select name="bucket" className={input} defaultValue="resource">
+          <select name="bucket" className={input} defaultValue={defaultBucket ?? 'resource'}>
             {BUCKET_ORDER.map((b) => <option key={b} value={b}>{BUCKET_META[b].label}</option>)}
           </select>
         </div>

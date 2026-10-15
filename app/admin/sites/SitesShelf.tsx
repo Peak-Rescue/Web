@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { createSite, createMeetingPoint } from './actions'
+import { createLibraryItem } from '@/app/admin/library/actions'
 import SiteRow from './SiteRow'
 import MeetingPointRow from './MeetingPointRow'
 import JumpToNewRow from '@/components/JumpToNewRow'
@@ -138,10 +139,26 @@ export default function SitesShelf({
         <JumpToNewRow key={added} targetId={`site-${added}`} />
       )}
 
-      <div className="space-y-8 mb-8">
+      <div className="space-y-2 mb-8">
+        {/* A place is the unit you scan, so a place is what folds. Open it and
+            everything about it is there — the links that are true of the whole
+            area, its canyons, its maps — and so is the way to add more of any
+            of them, which is the thing that was missing: you could see what a
+            venue had and had to leave to give it anything. */}
         {groups.map((g) => (
-          <div key={g.key}>
-            <h2 className="text-[11px] uppercase tracking-wide text-zinc-600 mb-2">{g.name}</h2>
+          <details key={g.key} className="group/venue rounded-lg border border-zinc-800 bg-zinc-900/40">
+            <summary className="cursor-pointer list-none flex items-center gap-2 px-3 py-2.5 hover:bg-zinc-900/60 transition-colors">
+              <span aria-hidden className="text-zinc-600 text-xs transition-transform group-open/venue:rotate-90">▶</span>
+              <span className="text-sm font-medium">{g.name}</span>
+              <span className="text-[11px] text-zinc-600">
+                {[
+                  g.sites.length && `${g.sites.length} site${g.sites.length === 1 ? '' : 's'}`,
+                  g.maps.length && `${g.maps.length} map${g.maps.length === 1 ? '' : 's'}`,
+                  g.venue && (g.venue.links ?? []).length && `${g.venue.links.length} link${g.venue.links.length === 1 ? '' : 's'}`,
+                ].filter(Boolean).join(' · ') || 'nothing yet'}
+              </span>
+            </summary>
+            <div className="px-3 pb-3 pt-1">
 
             {/* What is true of the whole area: the weather, the permit
                 portal, the hospital, the drive in. Set on the venue itself —
@@ -187,7 +204,34 @@ export default function SitesShelf({
                 </div>
               </div>
             )}
-          </div>
+
+            {/* Added here, filed here. The venue is already answered, so it is
+                not asked for — the commonest way a map ends up filed nowhere
+                is a form that made the place optional on a screen that already
+                knew it. */}
+            {g.venue && (
+              <div className="mt-3 pt-3 border-t border-zinc-800 grid gap-2 sm:grid-cols-2">
+                <form action={createSite} className="flex items-center gap-1.5">
+                  <input type="hidden" name="venue_id" value={g.venue.id} />
+                  <input type="hidden" name="kind" value="canyon" />
+                  <input name="name" required placeholder={`Add a canyon in ${g.venue.name}`}
+                         className="flex-1 min-w-0 bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-xs focus:outline-none focus:border-zinc-500" />
+                  <button className="shrink-0 text-[11px] px-2 py-1 rounded border border-zinc-700 text-zinc-300 hover:border-zinc-500 hover:text-white transition-colors">Add</button>
+                </form>
+                <form action={createLibraryItem} className="flex items-center gap-1.5">
+                  <input type="hidden" name="kind" value="map" />
+                  <input type="hidden" name="place" value={`venue:${g.venue.id}`} />
+                  <input type="hidden" name="audience" value="internal" />
+                  <input name="title" required placeholder="Add a map — what it is called"
+                         className="flex-1 min-w-0 bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-xs focus:outline-none focus:border-zinc-500" />
+                  <input name="url" required placeholder="https://…"
+                         className="flex-1 min-w-0 bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-xs font-mono focus:outline-none focus:border-zinc-500" />
+                  <button className="shrink-0 text-[11px] px-2 py-1 rounded border border-zinc-700 text-zinc-300 hover:border-zinc-500 hover:text-white transition-colors">Add</button>
+                </form>
+              </div>
+            )}
+            </div>
+          </details>
         ))}
         {sites.length === 0 && maps.length === 0 && <p className="text-sm text-zinc-500">Nothing filed by place yet.</p>}
       </div>

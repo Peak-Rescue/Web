@@ -683,7 +683,7 @@ export default async function LibraryPage({
               <span className="hidden text-base leading-none text-zinc-500 group-open:inline">−</span>
               {onShelf ? `Add to ${shelfLabel(bucket as LibraryShelf)}` : 'Add an item'}
             </summary>
-            <AddLibraryItem venues={venues} sites={siteOptions} />
+            <AddLibraryItem venues={venues} sites={siteOptions} defaultBucket={bucket} />
           </details>
         )}
 
