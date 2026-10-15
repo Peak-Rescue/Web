@@ -31,6 +31,7 @@ export type SortableItem = {
   url: string | null
   kind: string
   bucket: LibraryBucket | null
+  admin_only?: boolean
   source_topic: string | null
   /** True when something already points at it — a course, a setup, a section.
       Whatever it is, somebody found it where it is. */
@@ -159,7 +160,10 @@ export function changesFor(item: SortableItem, v: Verdict): Partial<SortableItem
   const out: Partial<SortableItem> & { admin_only?: boolean } = {}
   if (v.bucket && v.bucket !== item.bucket) out.bucket = v.bucket
   if (v.kind && v.kind !== item.kind) out.kind = v.kind
-  if (v.adminOnly) out.admin_only = true
+  // Compared, like the other two. Reporting a change to what something
+  // already is makes a finished pass look unfinished, and a second run look
+  // like the first one failed.
+  if (v.adminOnly && !item.admin_only) out.admin_only = true
   return out
 }
 

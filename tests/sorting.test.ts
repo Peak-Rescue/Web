@@ -56,3 +56,12 @@ describe('changesFor', () => {
     expect(changesFor(i, { kind: 'form', bucket: 'documents', reason: '' })).toEqual({ kind: 'form', bucket: 'documents' })
   })
 })
+
+describe('changesFor — admin-only is compared too', () => {
+  it('does not report locking down something already locked down', () => {
+    // Left uncompared, every re-run reported the same seven permits as
+    // outstanding, which made a finished pass look unfinished.
+    const locked = item({ title: '2026 Permits', admin_only: true })
+    expect(changesFor(locked, { adminOnly: true, reason: '' })).toEqual({})
+  })
+})
