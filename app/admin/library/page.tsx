@@ -162,7 +162,7 @@ export default async function LibraryPage({
     showTemplates && shelves.includes('setup')
       ? (() => {
           let c = admin.from('course_templates')
-            .select('id, name, description, course_type, disciplines, course_template_sections(title, sort_order, course_template_items(sort_order, library_items(id, title, description, source_type, url, edit_url, drive_file_id, kind, audience, disciplines, topics, venue_id, expires_at, status, bucket, region, source_class, source_topic, source_item, library_item_links(id, url, access, audience))))')
+            .select('id, name, description, course_type, disciplines, course_template_sections(id, title, sort_order, course_template_items(id, sort_order, library_items(id, title, description, source_type, url, edit_url, drive_file_id, kind, audience, disciplines, topics, venue_id, expires_at, status, bucket, region, source_class, source_topic, source_item, library_item_links(id, url, access, audience))))')
             .eq('active', true)
             .order('name')
           if (q) c = c.ilike('name', `%${q}%`)
@@ -220,9 +220,9 @@ export default async function LibraryPage({
     id: string; name: string; description: string | null; course_type: string | null
     disciplines: string[] | null
     course_template_sections: {
-      title: string; sort_order: number
+      id: string; title: string; sort_order: number
       course_template_items: {
-        sort_order: number
+        id: string; sort_order: number
         library_items: (LibraryItem & { library_item_links?: LibraryItem['links'] }) | null
       }[]
     }[]
@@ -237,11 +237,17 @@ export default async function LibraryPage({
       .map((sec) => {
         const rows = [...(sec.course_template_items ?? [])].sort((a, b) => a.sort_order - b.sort_order)
         return {
+          id: sec.id,
           title: sec.title,
+          // The row id travels with the item: taking something out of a setup
+          // deletes the reference, not the material, and the reference is what
+          // this id names.
           items: rows
-            .map((i) => i.library_items)
-            .filter((i): i is LibraryItem & { library_item_links?: LibraryItem['links'] } => Boolean(i))
-            .map((i) => ({ ...i, links: i.library_item_links ?? [] }) as LibraryItem),
+            .filter((r) => r.library_items)
+            .map((r) => ({
+              rowId: r.id,
+              item: { ...r.library_items!, links: r.library_items!.library_item_links ?? [] } as LibraryItem,
+            })),
           // A section can point at material that has since been deleted. It
           // used to read as a row saying "material since deleted", which looked
           // like something you could go and fix; it is a dangling reference and

@@ -451,3 +451,122 @@ export async function updateCourseSetup(
   if (error) throw new Error(error.message)
   revalidate()
 }
+
+/** A setup's contents.
+ *
+ * These were frozen in the shape Classroom imported them: 091 called a setup
+ * "the section structure of a Classroom class", and every screen since has
+ * repeated that its material is built elsewhere. There was nowhere else. The
+ * import filled eleven setups with 152 items and the library has 822, so the
+ * other 670 belonged to no course type and no hand could put them in one.
+ *
+ * A setup holds references, never copies — adding an item here points at the
+ * library row, so the same document sits in Canyon Mobility and Class C Canyon
+ * Rescue as one row that is corrected once.
+ */
+export async function addCourseSetupSection(templateId: string, title: string) {
+  const admin = await requireAdmin()
+  const name = title.trim().slice(0, 120)
+  if (!name) return refuse('A section needs a name.')
+  // Appended, not sorted: the order of a class is the order it is taught in.
+  const { data: last } = await admin
+    .from('course_template_sections')
+    .select('sort_order')
+    .eq('template_id', templateId)
+    .order('sort_order', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  const { error } = await admin.from('course_template_sections').insert({
+    template_id: templateId,
+    title: name,
+    sort_order: (last?.sort_order ?? -1) + 1,
+  })
+  if (error) throw new Error(error.message)
+  revalidate()
+  return { ok: true as const }
+}
+
+export async function renameCourseSetupSection(sectionId: string, title: string) {
+  const admin = await requireAdmin()
+  const name = title.trim().slice(0, 120)
+  if (!name) return refuse('A section needs a name.')
+  const { error } = await admin
+    .from('course_template_sections')
+    .update({ title: name })
+    .eq('id', sectionId)
+  if (error) throw new Error(error.message)
+  revalidate()
+  return { ok: true as const }
+}
+
+/** Only an empty one. A section with material in it is a thing someone built;
+    emptying it first makes that a decision rather than a side effect. */
+export async function deleteCourseSetupSection(sectionId: string) {
+  const admin = await requireAdmin()
+  const { count } = await admin
+    .from('course_template_items')
+    .select('id', { count: 'exact', head: true })
+    .eq('section_id', sectionId)
+  if ((count ?? 0) > 0) {
+    return refuse(`This section still holds ${count} item${count === 1 ? '' : 's'}. Take them out first.`)
+  }
+  const { error } = await admin.from('course_template_sections').delete().eq('id', sectionId)
+  if (error) throw new Error(error.message)
+  revalidate()
+  return { ok: true as const }
+}
+
+export async function addCourseSetupItems(sectionId: string, itemIds: string[]) {
+  const admin = await requireAdmin()
+  if (itemIds.length === 0) return { ok: true as const }
+  const { data: last } = await admin
+    .from('course_template_items')
+    .select('sort_order')
+    .eq('section_id', sectionId)
+    .order('sort_order', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  let next = (last?.sort_order ?? -1) + 1
+  // The table already refuses the same item twice in one section; ignoring the
+  // conflict means adding a batch that overlaps what is there does the useful
+  // half instead of failing whole.
+  const { error } = await admin
+    .from('course_template_items')
+    .upsert(
+      itemIds.map((item_id) => ({ section_id: sectionId, item_id, sort_order: next++ })),
+      { onConflict: 'section_id,item_id', ignoreDuplicates: true }
+    )
+  if (error) throw new Error(error.message)
+  revalidate()
+  return { ok: true as const }
+}
+
+/** Takes the reference out of the setup. The library keeps the item — this is
+    the row that said "this material belongs on this kind of course", and it is
+    only that claim being withdrawn. */
+export async function removeCourseSetupItem(rowId: string) {
+  const admin = await requireAdmin()
+  const { error } = await admin.from('course_template_items').delete().eq('id', rowId)
+  if (error) throw new Error(error.message)
+  revalidate()
+  return { ok: true as const }
+}
+
+/** Candidates for a section, searched rather than listed: the shelf is 822
+    rows and the question is always "where is this one document". Published
+    only — pending material has not been sorted yet, and putting it on a course
+    type is a judgement that comes after the one in the review queue. */
+export async function searchLibraryForSetup(q: string, limit = 25) {
+  const admin = await requireAdmin()
+  const term = q.trim()
+  if (term.length < 2) return []
+  const { data, error } = await admin
+    .from('library_items')
+    .select('id, title, kind, bucket, audience, disciplines, source_class')
+    .eq('status', 'published')
+    .ilike('title', `%${term}%`)
+    .order('title')
+    .limit(limit)
+  if (error) throw new Error(error.message)
+  return data ?? []
+}

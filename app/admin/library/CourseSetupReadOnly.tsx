@@ -50,8 +50,8 @@ export default function CourseSetupReadOnly({ setup, venues }: { setup: CourseSe
                 makes this worth opening: a title cannot be read, and the
                 material here is the point of the setup. */}
             <div className="mt-0.5 divide-y divide-zinc-800/60 rounded border border-zinc-800/60">
-              {s.items.map((it) => (
-                <ItemRow key={it.id} item={it} venueName={venues.find((v) => v.id === it.venue_id)?.name} />
+              {s.items.map(({ rowId, item }) => (
+                <ItemRow key={rowId} item={item} venueName={venues.find((v) => v.id === item.venue_id)?.name} />
               ))}
               {s.items.length === 0 && (
                 <p className="px-4 py-2.5 text-[11px] text-zinc-700">nothing in this section</p>

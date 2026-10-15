@@ -2,7 +2,12 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { updateCourseSetup } from './actions'
+import {
+  updateCourseSetup, addCourseSetupSection, renameCourseSetupSection,
+  deleteCourseSetupSection, addCourseSetupItems, removeCourseSetupItem,
+} from './actions'
+import SetupItemPicker from './SetupItemPicker'
+import { errorFrom, type ActionResult } from '@/lib/action-result'
 import { COURSE_TYPE_OPTIONS, courseShortName } from '@/lib/courses'
 import { CAPABILITY_META, CAPABILITY_ORDER, courseCapabilityCategories } from '@/lib/capabilities'
 import type { LibraryItem, Venue } from '@/lib/library'
@@ -16,7 +21,7 @@ export type CourseSetup = {
   description: string | null
   course_type: string | null
   disciplines: string[]
-  sections: { title: string; items: LibraryItem[]; missing: number }[]
+  sections: { id: string; title: string; items: { rowId: string; item: LibraryItem }[]; missing: number }[]
 }
 
 // A course setup on its shelf.
@@ -47,9 +52,18 @@ export default function CourseSetupRow({ setup, venues }: { setup: CourseSetup; 
   const input = 'w-full bg-zinc-800 border border-zinc-700 rounded px-2.5 py-1.5 text-sm focus:outline-none focus:border-zinc-500'
 
   async function patch(p: Parameters<typeof updateCourseSetup>[1]) {
+    await run(() => updateCourseSetup(setup.id, p))
+  }
+
+  // Contents, as opposed to tags. A refusal here is a sentence worth reading —
+  // a section that still holds material says so rather than silently not going.
+  async function run(fn: () => Promise<ActionResult | { ok: true }>) {
     setBusy(true); setError(null)
-    try { await updateCourseSetup(setup.id, p); router.refresh() }
-    catch (e) { setError(e instanceof Error ? e.message : 'That didn’t save') }
+    try {
+      const r = await fn()
+      router.refresh()
+      if (r && 'error' in r) setError(r.error)
+    } catch (e) { setError(errorFrom(e, 'That didn’t save')) }
     finally { setBusy(false) }
   }
 
@@ -195,15 +209,32 @@ export default function CourseSetupRow({ setup, venues }: { setup: CourseSetup; 
           <div className="px-3 py-3 mt-3 border-t border-zinc-800">
             <p className="text-[11px] uppercase tracking-widest text-zinc-600 mb-2">What it puts on a course</p>
             <div className="space-y-2 max-h-[32rem] overflow-y-auto">
-              {setup.sections.map((s, i) => (
-                <details key={i} className="group">
+              {setup.sections.map((s) => (
+                <details key={s.id} className="group">
                   <summary className="cursor-pointer list-none flex items-center gap-2 text-sm text-zinc-300">
                     <span aria-hidden className="text-zinc-600 text-[10px] transition-transform group-open:rotate-90">▶</span>
                     {s.title}
                     <span className="text-[10px] text-zinc-600">{s.items.length}</span>
                   </summary>
                   <div className="mt-1.5 pl-6 space-y-1.5">
-                    {s.items.map((it) => <LibraryRow key={it.id} item={it} venues={venues} />)}
+                    {s.items.map(({ rowId, item }) => (
+                      <div key={rowId} className="flex items-start gap-1.5">
+                        <div className="min-w-0 flex-1">
+                          <LibraryRow item={item} venues={venues} />
+                        </div>
+                        {/* Takes the reference out, not the document. Worded
+                            that way in the title because "delete" beside a
+                            library row has meant the other thing once already. */}
+                        <button
+                          onClick={() => run(() => removeCourseSetupItem(rowId))}
+                          disabled={busy}
+                          title={`Take "${item.title}" out of ${s.title} — the library keeps it`}
+                          className="mt-2.5 shrink-0 px-1.5 text-xs text-zinc-700 hover:text-red-400 transition-colors disabled:opacity-40"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
                     {s.missing > 0 && (
                       <p className="text-[11px] text-zinc-700">
                         {s.missing} item{s.missing === 1 ? '' : 's'} here point at material that has been deleted
@@ -212,12 +243,60 @@ export default function CourseSetupRow({ setup, venues }: { setup: CourseSetup; 
                     {s.items.length === 0 && s.missing === 0 && (
                       <p className="text-[11px] text-zinc-700">nothing in this section</p>
                     )}
+                    <SetupItemPicker
+                      sectionTitle={s.title}
+                      already={s.items.map(({ item }) => item.id)}
+                      onAdd={(ids) => run(() => addCourseSetupItems(s.id, ids))}
+                    />
+                    <div className="flex items-center gap-3 pt-0.5">
+                      <button
+                        onClick={() => {
+                          const next = prompt('Rename this section', s.title)
+                          if (next && next !== s.title) run(() => renameCourseSetupSection(s.id, next))
+                        }}
+                        disabled={busy}
+                        className="text-[10px] text-zinc-700 hover:text-zinc-400 transition-colors"
+                      >
+                        Rename section
+                      </button>
+                      {s.items.length === 0 && (
+                        <button
+                          onClick={() => run(() => deleteCourseSetupSection(s.id))}
+                          disabled={busy}
+                          className="text-[10px] text-zinc-700 hover:text-red-400 transition-colors"
+                        >
+                          Remove section
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </details>
               ))}
               {setup.sections.length === 0 && (
                 <p className="text-[11px] text-zinc-600">This setup has no sections yet.</p>
               )}
+              {/* A setup with no sections has nowhere to put anything, and two
+                  of the eleven arrived that way. */}
+              <form
+                className="flex items-center gap-2 pt-1"
+                onSubmit={(e) => {
+                  e.preventDefault()
+                  const el = (e.currentTarget.elements.namedItem('title') as HTMLInputElement)
+                  const title = el.value.trim()
+                  if (!title) return
+                  el.value = ''
+                  run(() => addCourseSetupSection(setup.id, title))
+                }}
+              >
+                <input
+                  name="title"
+                  placeholder="New section — the heading it becomes on a course"
+                  className="flex-1 bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-xs focus:outline-none focus:border-zinc-500"
+                />
+                <button disabled={busy} className="text-[11px] px-2 py-1 rounded border border-zinc-700 text-zinc-300 hover:border-zinc-500 hover:text-white transition-colors disabled:opacity-40">
+                  Add section
+                </button>
+              </form>
             </div>
           </div>
         </div>
