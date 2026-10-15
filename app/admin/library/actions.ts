@@ -361,7 +361,7 @@ export async function createVenue(formData: FormData) {
   redirect(`/admin/venues?added=${data.id}`)
 }
 
-export async function updateVenue(id: string, patch: { name?: string; region?: string | null; region_code?: string | null; client_name?: string | null; notes?: string | null; active?: boolean }) {
+export async function updateVenue(id: string, patch: { name?: string; region?: string | null; region_code?: string | null; client_name?: string | null; notes?: string | null; links?: { url: string; label: string }[]; active?: boolean }) {
   const admin = await requireAdmin()
   const update: Record<string, unknown> = {}
   if (patch.name !== undefined) update.name = patch.name.trim().slice(0, 120)
@@ -369,10 +369,24 @@ export async function updateVenue(id: string, patch: { name?: string; region?: s
   if (patch.region_code !== undefined) update.region_code = isValidRegion(patch.region_code) ? patch.region_code : null
   if (patch.client_name !== undefined) update.client_name = patch.client_name?.trim() || null
   if (patch.notes !== undefined) update.notes = patch.notes?.trim() || null
+  // Same cleaning a site's links get: an http(s) address or it is not a link,
+  // a label that falls back to the host, and a ceiling so a paste cannot turn
+  // a venue into a link farm.
+  if (patch.links !== undefined) {
+    update.links = patch.links
+      .map((l) => ({ url: String(l?.url ?? '').trim(), label: String(l?.label ?? '').trim() }))
+      .filter((l) => /^https?:\/\//i.test(l.url))
+      .map((l) => ({ url: l.url.slice(0, 500), label: (l.label || venueLinkHost(l.url)).slice(0, 80) }))
+      .slice(0, 12)
+  }
   if (patch.active !== undefined) update.active = patch.active
   const { error } = await admin.from('venues').update(update).eq('id', id)
   if (error) throw new Error(error.message)
   revalidate()
+}
+
+function venueLinkHost(url: string) {
+  try { return new URL(url).hostname.replace(/^www\./, '') } catch { return 'link' }
 }
 
 export async function deleteVenue(id: string) {

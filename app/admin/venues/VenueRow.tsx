@@ -4,7 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { updateVenue, deleteVenue } from '../library/actions'
-import { type Venue } from '@/lib/library'
+import { type Venue, type VenueLink } from '@/lib/library'
 import RegionSelect from '@/components/RegionSelect'
 import { regionLabel } from '@/lib/regions'
 import CloseButton from '@/components/CloseButton'
@@ -23,6 +23,7 @@ export default function VenueRow({ venue, itemCount }: { venue: Venue; itemCount
     client_name: venue.client_name ?? '',
     notes: venue.notes ?? '',
   })
+  const [links, setLinks] = useState<VenueLink[]>(venue.links ?? [])
 
   async function run(fn: () => Promise<void>) {
     setBusy(true)
@@ -45,6 +46,7 @@ export default function VenueRow({ venue, itemCount }: { venue: Venue; itemCount
             <Link href={`/admin/library?status=all&venue=${venue.id}`} className="hover:text-zinc-400 transition-colors underline">
               {itemCount} item{itemCount === 1 ? '' : 's'}
             </Link>
+            {venue.links.length > 0 && ` · ${venue.links.length} link${venue.links.length === 1 ? '' : 's'}`}
           </p>
         </div>
         {open ? (
@@ -78,13 +80,56 @@ export default function VenueRow({ venue, itemCount }: { venue: Venue; itemCount
             <label className={label}>Client</label>
             <input className={input} value={form.client_name} onChange={(e) => setForm({ ...form, client_name: e.target.value })} />
           </div>
+          {/* The region's standing links. Weather, the permit portal, the
+              hospital, the drive from the airport — one URL and a label each,
+              none of it teaching material, and before this they were typed
+              onto a course as an update and died with it. The canyon's own
+              route page and gauge stay on the site. */}
+          <div className="sm:col-span-2">
+            <label className={label}>Links — weather, permits, hospital, getting there</label>
+            <div className="space-y-1.5">
+              {links.length > 0 && (
+                <div className="grid grid-cols-[7.5rem_1fr_1.25rem] gap-2 px-0.5">
+                  <span className="text-[10px] uppercase tracking-wide text-zinc-600">Shown as</span>
+                  <span className="text-[10px] uppercase tracking-wide text-zinc-600">Address</span>
+                </div>
+              )}
+              {links.map((l, i) => (
+                <div key={i} className="grid grid-cols-[7.5rem_1fr_1.25rem] gap-2 items-center">
+                  <input
+                    className={input}
+                    value={l.label}
+                    placeholder="area weather"
+                    onChange={(e) => setLinks(links.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))}
+                  />
+                  <input
+                    className={`${input} font-mono text-[12px]`}
+                    value={l.url}
+                    placeholder="https://…"
+                    spellCheck={false}
+                    onChange={(e) => setLinks(links.map((x, j) => (j === i ? { ...x, url: e.target.value } : x)))}
+                  />
+                  <button
+                    onClick={() => setLinks(links.filter((_, j) => j !== i))}
+                    aria-label={`Remove ${l.label || 'link'}`}
+                    className="text-xs text-zinc-600 hover:text-red-400 transition-colors"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+              <button onClick={() => setLinks([...links, { url: '', label: '' }])} className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">
+                + Add link
+              </button>
+            </div>
+          </div>
           <div className="sm:col-span-2">
             <label className={label}>Notes</label>
             <textarea rows={2} className={`${input} resize-y`} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
           </div>
           <div className="sm:col-span-2 flex items-center gap-3">
             <button
-              onClick={() => run(async () => { await updateVenue(venue.id, form); setOpen(false) })}
+              onClick={() => run(async () => { await updateVenue(venue.id, { ...form, links }); setOpen(false) })}
               disabled={busy}
               className="px-3 py-1.5 rounded bg-pr-red hover:bg-pr-red-dark text-white text-sm font-medium transition-colors disabled:opacity-40"
             >

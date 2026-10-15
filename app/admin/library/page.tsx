@@ -127,7 +127,7 @@ export default async function LibraryPage({
   // nothing to approve about a kit list you wrote yourself.
   const [{ data: itemRows }, { data: venueRows }, { data: siteRows }, gearRes, scheduleRes, setupRes, catalogRes, { count: pendingCount }, shelfCounts] = await Promise.all([
     showDocs ? query : Promise.resolve({ data: [] }),
-    admin.from('venues').select('id, name, region, region_code, client_name, notes, active').order('name'),
+    admin.from('venues').select('id, name, region, region_code, client_name, notes, links, active').order('name'),
     // A per-region template pins its canyons here, so the courses started from
     // it arrive with the beta already attached.
     admin.from('sites').select('id, name, kind, beta, venue_id, venues(name)').eq('active', true).order('name'),

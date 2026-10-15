@@ -249,6 +249,8 @@ export type LibraryItem = {
   source_item: string | null
 }
 
+export type VenueLink = { url: string; label: string }
+
 export type Venue = {
   id: string
   name: string
@@ -256,6 +258,11 @@ export type Venue = {
   region_code: string | null
   client_name: string | null
   notes: string | null
+  /** Standing links for the region: weather, permit portal, hospital, the
+      drive in. Same shape as a site's, and the division is the one the site
+      table already draws — the canyon's own route page and gauge belong to
+      the site, what is true of the whole region belongs here. */
+  links: VenueLink[]
   active: boolean
 }
 
