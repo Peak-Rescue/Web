@@ -4,7 +4,9 @@ import SiteRow from './SiteRow'
 import MeetingPointRow from './MeetingPointRow'
 import JumpToNewRow from '@/components/JumpToNewRow'
 import { SITE_KINDS, type Site, type MeetingPointRecord } from '@/lib/sites'
-import { type Venue } from '@/lib/library'
+import { type LibraryItem, type Venue } from '@/lib/library'
+import LibraryRow from '@/app/admin/library/LibraryRow'
+import { type SiteOption } from '@/app/admin/schedules/types'
 import InfoHint from '@/components/InfoHint'
 
 const input = 'w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500'
@@ -27,6 +29,7 @@ export default function SitesShelf({
   sites,
   venues,
   points,
+  maps,
   siteCount,
   dayCount,
   added,
@@ -34,6 +37,9 @@ export default function SitesShelf({
   sites: Site[]
   venues: Venue[]
   points: MeetingPointRecord[]
+  /** The maps, read beside the places they are about rather than on a shelf
+      of their own answering the same question differently. */
+  maps: LibraryItem[]
   /** How many canyons meet at each point — the number that says why a meetup
       is its own row rather than a sentence typed twice. */
   siteCount: Map<string, number>
@@ -49,10 +55,38 @@ export default function SitesShelf({
     const k = s.venue_id ?? ''
     byVenue.set(k, [...(byVenue.get(k) ?? []), s])
   }
+  const mapsByVenue = new Map<string, LibraryItem[]>()
+  for (const m of maps) {
+    const k = m.venue_id ?? ''
+    mapsByVenue.set(k, [...(mapsByVenue.get(k) ?? []), m])
+  }
+  // A venue earns a heading by having anything under it at all — its own
+  // links, a canyon, or a map.
   const groups = [
-    ...venues.filter((v) => byVenue.has(v.id)).map((v) => ({ name: v.name, sites: byVenue.get(v.id)! })),
-    ...(byVenue.has('') ? [{ name: 'No venue', sites: byVenue.get('')! }] : []),
+    ...venues
+      .filter((v) => byVenue.has(v.id) || mapsByVenue.has(v.id) || (v.links ?? []).length > 0)
+      .map((v) => ({
+        key: v.id,
+        name: v.name,
+        venue: v as Venue | null,
+        sites: byVenue.get(v.id) ?? [],
+        maps: mapsByVenue.get(v.id) ?? [],
+      })),
+    ...(byVenue.has('') || mapsByVenue.has('')
+      ? [{
+          key: '_none',
+          name: 'Nowhere yet',
+          venue: null,
+          sites: byVenue.get('') ?? [],
+          maps: mapsByVenue.get('') ?? [],
+        }]
+      : []),
   ]
+  // Sites under their venue carry the venue onto the map rows, so a map filed
+  // to a canyon reads as that canyon rather than as its region.
+  const siteOptions: SiteOption[] = sites.map((x) => ({
+    id: x.id, name: x.name, kind: x.kind, beta: x.beta, venue_id: x.venue_id,
+  }))
 
   return (
     <>
@@ -106,16 +140,51 @@ export default function SitesShelf({
 
       <div className="space-y-8 mb-8">
         {groups.map((g) => (
-          <div key={g.name}>
+          <div key={g.key}>
             <h2 className="text-[11px] uppercase tracking-wide text-zinc-600 mb-2">{g.name}</h2>
+
+            {/* What is true of the whole area: the weather, the permit
+                portal, the hospital, the drive in. Set on the venue itself —
+                this is where they are read. */}
+            {g.venue && (g.venue.links ?? []).length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mb-2">
+                {g.venue.links.map((l, i) => (
+                  <a
+                    key={i}
+                    href={l.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[11px] px-2 py-1 rounded border border-zinc-800 bg-zinc-900 text-zinc-400 hover:text-white hover:border-zinc-600 transition-colors"
+                  >
+                    {l.label}
+                  </a>
+                ))}
+              </div>
+            )}
+
             <div className="space-y-2">
               {g.sites.map((s) => (
                 <SiteRow key={s.id} site={s} venues={venues} points={points} dayCount={dayCount.get(s.id) ?? 0} />
               ))}
             </div>
+
+            {g.maps.length > 0 && (
+              <details className="group/maps mt-2">
+                <summary className="cursor-pointer list-none flex items-center gap-2 text-xs text-zinc-500 hover:text-zinc-300 transition-colors py-1">
+                  <span aria-hidden className="text-zinc-600 text-[10px] transition-transform group-open/maps:rotate-90">▶</span>
+                  Maps
+                  <span className="text-zinc-600">{g.maps.length}</span>
+                </summary>
+                <div className="space-y-2 pt-1.5">
+                  {g.maps.map((m) => (
+                    <LibraryRow key={m.id} item={m} venues={venues} sites={siteOptions} />
+                  ))}
+                </div>
+              </details>
+            )}
           </div>
         ))}
-        {sites.length === 0 && <p className="text-sm text-zinc-500">No sites yet.</p>}
+        {sites.length === 0 && maps.length === 0 && <p className="text-sm text-zinc-500">Nothing filed by place yet.</p>}
       </div>
 
       <details className="group">

@@ -44,18 +44,22 @@ export type TemplateShelf = 'gear' | 'schedule' | 'setup'
 // files a course, which is work done underneath something else: nobody goes
 // looking for a region, they go looking for the canyon in it. So it is a
 // heading on this shelf and a door at the bottom of it.
-export type PlaceShelf = 'site'
+export type PlaceShelf = 'venue'
 export type LibraryShelf = LibraryBucket | TemplateShelf | PlaceShelf
 
 export const PLACE_SHELF_META: Record<PlaceShelf, { label: string; hint: string }> = {
-  site: {
-    label: 'Sites & routes',
-    hint: 'Canyons, crags and towers — approach, raps, exit, written once',
+  venue: {
+    label: 'Venue information',
+    hint: 'Maps, beta, weather and contacts — everything filed by where it is',
   },
 }
 
+// `site` was this shelf's first name, back when it held only the canyons. Maps
+// moved in with them, which is the shape they were always read in — you do not
+// go looking for a map, you go looking for where you are going — so the shelf
+// is the place now and the old name still opens it.
 export function isPlaceShelf(v: string | undefined): v is PlaceShelf {
-  return v === 'site'
+  return v === 'venue' || v === 'site'
 }
 
 export const TEMPLATE_SHELF_META: Record<TemplateShelf, { label: string; hint: string; noun: string }> = {
@@ -77,9 +81,12 @@ export const TEMPLATE_SHELF_META: Record<TemplateShelf, { label: string; hint: s
 }
 
 export const TEMPLATE_SHELF_ORDER: TemplateShelf[] = ['gear', 'schedule', 'setup']
-// Sites sit with the maps, not with the templates: both answer "where", and
-// the two are read together when a course is being built.
-export const SHELF_ORDER: LibraryShelf[] = ['teaching', 'resource', 'map', 'site', 'instructor', 'documents', ...TEMPLATE_SHELF_ORDER]
+// No card for maps of their own. A map is about a place, and the place is what
+// anybody is actually looking for — so the maps are inside Venue information
+// with the beta and the weather, rather than beside it as a second answer to
+// the same question. The map shelf still exists as a filter and a bucket;
+// it just isn't a door.
+export const SHELF_ORDER: LibraryShelf[] = ['teaching', 'resource', 'venue', 'instructor', 'documents', ...TEMPLATE_SHELF_ORDER]
 
 export function shelfLabel(v: LibraryShelf): string {
   if (isPlaceShelf(v)) return PLACE_SHELF_META[v].label

@@ -228,8 +228,11 @@ export default async function LibraryPage({
             .then((r) => ['schedule', r.count ?? 0] as [LibraryShelf, number]),
           admin.from('course_templates').select('id', { count: 'exact', head: true }).eq('active', true)
             .then((r) => ['setup', r.count ?? 0] as [LibraryShelf, number]),
-          admin.from('sites').select('id', { count: 'exact', head: true }).eq('active', true)
-            .then((r) => ['site', r.count ?? 0] as [LibraryShelf, number]),
+          // The card counts the places, not the maps on them: "15 venues" is
+          // what the door is behind, and the maps are one of the things found
+          // once you are through it.
+          admin.from('venues').select('id', { count: 'exact', head: true }).eq('active', true)
+            .then((r) => ['venue', r.count ?? 0] as [LibraryShelf, number]),
         ])
       : Promise.resolve([] as [LibraryShelf, number][]),
   ])
@@ -680,7 +683,7 @@ export default async function LibraryPage({
           </section>
         )}
 
-        {/* ── Sites & routes ───────────────────────────────────────────── */}
+        {/* ── Venue information ────────────────────────────────────────── */}
         {onPlaces && placesShelf && (
           isAdmin ? (
             <SitesShelf {...placesShelf} />

@@ -32,13 +32,13 @@ export default async function SitesPage({
   return (
     <main className="min-h-screen bg-zinc-950 text-white pt-16 md:pt-20">
       <div className="max-w-3xl mx-auto px-4 py-10">
-        <Link href="/admin/library?bucket=site" className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors mb-6 inline-block">← Library</Link>
+        <Link href="/admin/library?bucket=venue" className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors mb-6 inline-block">← Library</Link>
 
         <h1 className="flex items-center gap-2 text-2xl font-bold">
-          Sites &amp; routes
+          Venue information
           <InfoHint text="A site's beta is written once and shown live on every schedule day that points at it — correcting a rap count here corrects it everywhere. What's only true of one day stays in that day's notes." />
         </h1>
-        <p className="text-zinc-400 mt-1 mb-8">The canyons, crags and towers a day actually happens at.</p>
+        <p className="text-zinc-400 mt-1 mb-8">The canyons, crags and towers a day happens at — with the maps, weather and contacts for the areas they sit in.</p>
 
         <SitesShelf {...shelf} added={added} />
       </div>
