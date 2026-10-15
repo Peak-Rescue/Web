@@ -342,8 +342,14 @@ export default async function CourseView({
   // right on the next load rather than needing a hand.
   const schedRowsPromise = keep(admin
     .from('course_schedules')
-    .select('id, name, overview, objectives, created_at, schedule_days(id, title, location, site_id, notes, objectives, meeting_point, meeting_point_id, meeting_time, meeting_links, meeting_attachments, sort_order, meeting_points(id, name, directions, coords, links), sites(id, name, beta, usual_meeting_time, coords, links, meeting_points(id, name, directions, coords, links)), schedule_blocks(id, parent_id, title, time_label, location, sort_order))')
+    .select('id, name, overview, objectives, created_at, schedule_days(id, title, location, site_id, notes, objectives, meeting_point, meeting_point_id, meeting_time, meeting_links, meeting_attachments, sort_order, meeting_points(id, name, directions, coords, links), sites(id, name, beta, usual_meeting_time, coords, links, venue_id, venues(name, region_code, links), meeting_points(id, name, directions, coords, links)), schedule_blocks(id, parent_id, title, time_label, location, sort_order))')
     .eq('instance_id', id))
+
+  // Weather for a whole state or country, for the days whose place is one.
+  // Tiny — one row per region anyone has put anything on — and read in this
+  // round rather than after the schedule, because a day's weather is drawn
+  // beside its beta and a second round for it would cost the page a trip.
+  const regionInfoPromise = keep(admin.from('region_info').select('region_code, links'))
 
   // What has been sent to this course, for the dot on the door it is behind.
   const pushesPromise = keep(admin
@@ -466,10 +472,30 @@ export default async function CourseView({
   // filtered updates are unpacked here rather than where they are read
   // because the reads they gate (signing a morning's files, signing an
   // update's attachments) belong in this round with the rest.
-  const { data: schedRows } = await schedRowsPromise
+  const [{ data: schedRows }, { data: regionInfoRows }] = await Promise.all([schedRowsPromise, regionInfoPromise])
+
+  // Weather for a region, keyed by code. A day inherits it from the place it
+  // is at — the canyon's venue, then that venue's state — rather than anyone
+  // pinning the same forecast onto five days of the same course.
+  const regionWeather = new Map<string, { url: string; label: string }[]>()
+  for (const r of (regionInfoRows ?? []) as { region_code: string; links: { url: string; label: string; kind?: string }[] | null }[]) {
+    const w = (r.links ?? []).filter((l) => l.kind === 'weather')
+    if (w.length) regionWeather.set(r.region_code, w)
+  }
+
+  /** What a day's place says the weather is, read upward: the venue the
+      canyon sits in, then the state that venue sits in. Live, not copied —
+      a gauge that moves is fixed once. */
+  const weatherFor = (site: SchedSite | null): { url: string; label: string }[] => {
+    const venue = site?.venues ?? null
+    const own = (venue?.links ?? []).filter((l) => l.kind === 'weather')
+    const region = venue?.region_code ? regionWeather.get(venue.region_code) ?? [] : []
+    return [...own, ...region]
+  }
+
   type SchedBlock = { id: string; parent_id: string | null; title: string; time_label: string | null; location: string | null; sort_order: number }
   type SchedMeetup = { id: string; name: string; directions: string | null; coords: string | null; links: { url: string; label: string }[] | null }
-  type SchedSite = { id: string; name: string; beta: string | null; usual_meeting_time: string | null; coords: string | null; links: { url: string; label: string }[] | null; meeting_points: SchedMeetup | null }
+  type SchedSite = { id: string; name: string; beta: string | null; usual_meeting_time: string | null; coords: string | null; links: { url: string; label: string }[] | null; venue_id: string | null; venues: { name: string; region_code: string | null; links: { url: string; label: string; kind?: string }[] | null } | null; meeting_points: SchedMeetup | null }
   type SchedDay = { id: string; title: string; location: string | null; site_id: string | null; sites: SchedSite | null; notes: string | null; objectives: string[] | null; meeting_point: string | null; meeting_point_id: string | null; meeting_points: SchedMeetup | null; meeting_time: string | null; meeting_links: { url: string; label: string }[] | null; meeting_attachments: { path: string; filename: string }[] | null; sort_order: number; schedule_blocks: SchedBlock[] }
   const sched = ((schedRows ?? []) as unknown as {
     id: string; name: string; overview: string | null; objectives: string[]; created_at: string; schedule_days: SchedDay[]
@@ -2884,6 +2910,17 @@ export default async function CourseView({
                           {(d.sites.links ?? []).length > 0 && (
                             <div className="mt-2">
                               <ChipRow links={d.sites.links ?? []} />
+                            </div>
+                          )}
+                          {/* The venue's weather, and its state's. Inherited
+                              rather than pinned onto the day: it is the same
+                              forecast five mornings running, and a gauge that
+                              moves should be fixed once rather than on every
+                              course that ever went there. */}
+                          {weatherFor(d.sites).length > 0 && (
+                            <div className="mt-2">
+                              <p className="text-[10px] uppercase tracking-wide text-zinc-600 mb-1">Weather</p>
+                              <ChipRow links={weatherFor(d.sites)} />
                             </div>
                           )}
                         </details>
