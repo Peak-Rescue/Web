@@ -223,11 +223,18 @@ export default function CourseSetupRow({ setup, venues, sites }: { setup: Course
                         <div className="min-w-0 flex-1">
                           <LibraryRow item={item} venues={venues} sites={sites} />
                         </div>
-                        {/* Takes the reference out, not the document. Worded
-                            that way in the title because "delete" beside a
-                            library row has meant the other thing once already. */}
+                        {/* Takes the reference out, not the document — but a
+                            ✕ one row away from an Edit button, acting on the
+                            first click, took one out by accident within a day
+                            of being built. It is cheap to restore and that is
+                            not the point: nothing here is urgent enough to be
+                            worth doing before you meant to. */}
                         <button
-                          onClick={() => run(() => removeCourseSetupItem(rowId))}
+                          onClick={() => {
+                            if (confirm(`Take "${item.title}" out of ${s.title}?\n\nIt stays in the library — this only says it no longer belongs on this kind of course.`)) {
+                              run(() => removeCourseSetupItem(rowId))
+                            }
+                          }}
                           disabled={busy}
                           title={`Take "${item.title}" out of ${s.title} — the library keeps it`}
                           className="mt-2.5 shrink-0 px-1.5 text-xs text-zinc-700 hover:text-red-400 transition-colors disabled:opacity-40"
@@ -262,7 +269,11 @@ export default function CourseSetupRow({ setup, venues, sites }: { setup: Course
                       </button>
                       {s.items.length === 0 && (
                         <button
-                          onClick={() => run(() => deleteCourseSetupSection(s.id))}
+                          onClick={() => {
+                            if (confirm(`Remove the "${s.title}" section from this setup?`)) {
+                              run(() => deleteCourseSetupSection(s.id))
+                            }
+                          }}
                           disabled={busy}
                           className="text-[10px] text-zinc-700 hover:text-red-400 transition-colors"
                         >
