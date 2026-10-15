@@ -1,5 +1,8 @@
 'use client'
 
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { createPlaceInline } from '@/app/admin/library/actions'
 import { type SiteOption } from '@/app/admin/schedules/types'
 import { type Venue } from '@/lib/library'
 import { regionLabel } from '@/lib/regions'
@@ -74,8 +77,57 @@ export default function PlaceSelect({
       </optgroup>
     )
 
+  const router = useRouter()
+  const [making, setMaking] = useState(false)
+  const [fresh, setFresh] = useState<{ id: string; name: string } | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function make(typed: string) {
+    setBusy(true)
+    setError(null)
+    try {
+      const r = await createPlaceInline(typed, region ?? null)
+      if ('error' in r) { setError(r.error); return }
+      // Selected on the spot. The list it came from is server-rendered, so the
+      // new row is held here until the refresh catches up — without it the
+      // picker would snap back to nothing having just been told to pick it.
+      setFresh(r)
+      onChange?.(`venue:${r.id}`)
+      setMaking(false)
+      router.refresh()
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const controlled = value !== undefined
+
+  if (making) {
+    return (
+      <div className="space-y-1">
+        <input
+          autoFocus
+          disabled={busy}
+          placeholder="Name of the place — Fremont Canyon"
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') { e.preventDefault(); make((e.target as HTMLInputElement).value) }
+            if (e.key === 'Escape') setMaking(false)
+          }}
+          onBlur={(e) => { if (e.target.value.trim()) make(e.target.value); else setMaking(false) }}
+          className={className}
+        />
+        <p className="text-[11px] text-zinc-600">
+          Enter to add{region ? ` in ${regionLabel(region)}` : ''}, Escape to go back. The rest of
+          what a venue knows is filled in on the venues screen.
+        </p>
+        {error && <p className="text-[11px] text-pr-red">{error}</p>}
+      </div>
+    )
+  }
+
   return (
+    <>
     <select
       name={name}
       required={required}
@@ -84,6 +136,10 @@ export default function PlaceSelect({
       onChange={(e) => onChange?.(e.target.value)}
     >
       <option value="">{required ? '— pick a place —' : '— none —'}</option>
+      {/* Held locally until the server list catches up. */}
+      {fresh && !venues.some((v) => v.id === fresh.id) && (
+        <option value={`venue:${fresh.id}`}>{fresh.name} — the whole area</option>
+      )}
       {group(here, region ? regionLabel(region) || 'Here' : undefined)}
       {group(unfiled, 'No state set')}
       {group(elsewhere, region ? `Outside ${regionLabel(region) || 'there'}` : undefined)}
@@ -95,5 +151,17 @@ export default function PlaceSelect({
         </optgroup>
       )}
     </select>
+    {/* Somewhere new is not an edge case — it is every first course at a
+        place. Without this, filing a map of somewhere the list has never
+        heard of means abandoning the half-typed map to go and make the venue
+        on another screen. */}
+    <button
+      type="button"
+      onClick={() => setMaking(true)}
+      className="mt-1 text-[11px] text-zinc-500 hover:text-white transition-colors"
+    >
+      + Somewhere not on the list
+    </button>
+    </>
   )
 }

@@ -7,7 +7,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { LIBRARY_KINDS, BUCKET_ORDER } from '@/lib/library'
 import { isValidRegion } from '@/lib/regions'
 import { CAPABILITY_ORDER } from '@/lib/capabilities'
-import { refuse, type ActionResult } from '@/lib/action-result'
+import { refuse, type ActionRefusal, type ActionResult } from '@/lib/action-result'
 
 async function requireAdmin() {
   const supabase = await createClient()
@@ -455,6 +455,46 @@ export async function publishPendingFromClass(sourceClass: string) {
 }
 
 // ─── Venues ─────────────────────────────────────────────────────────────────
+
+/** A place made from inside whichever form needed it, returning the id so the
+ *  picker can select it on the spot.
+ *
+ *  Without this, filing a map of somewhere new means abandoning the half-typed
+ *  map, going to another screen, making the venue, and coming back to start
+ *  again — which is how a map ends up filed nowhere, the one thing the
+ *  required place field exists to prevent.
+ *
+ *  Only a name and a state: everything else about a venue can be filled in
+ *  later, on the screen that is actually about venues, and asking for it here
+ *  would rebuild that screen inside a dropdown.
+ */
+export async function createPlaceInline(
+  name: string,
+  regionCode: string | null
+): Promise<{ id: string; name: string } | ActionRefusal> {
+  const admin = await requireAdmin()
+  const clean = name.trim().slice(0, 120)
+  if (!clean) return refuse('A place needs a name.')
+
+  // Already there under that name, probably typed because the list was long
+  // rather than because it is missing. Hand back the one that exists.
+  const { data: existing } = await admin
+    .from('venues')
+    .select('id, name')
+    .ilike('name', clean)
+    .limit(1)
+    .maybeSingle()
+  if (existing) return existing
+
+  const { data, error } = await admin
+    .from('venues')
+    .insert({ name: clean, region_code: isValidRegion(regionCode ?? '') ? regionCode : null })
+    .select('id, name')
+    .single()
+  if (error) throw new Error(error.message)
+  revalidate()
+  return data
+}
 
 export async function createVenue(formData: FormData) {
   const admin = await requireAdmin()
