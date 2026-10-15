@@ -105,7 +105,7 @@ export default async function LibraryPage({
 
   let query = admin
     .from('library_items')
-    .select('id, title, description, source_type, url, edit_url, drive_file_id, kind, audience, disciplines, topics, venue_id, expires_at, status, bucket, region, source_class, source_topic, source_item, library_item_links(id, url, access, audience)')
+    .select('id, title, description, source_type, url, edit_url, drive_file_id, kind, audience, disciplines, topics, venue_id, site_id, expires_at, status, bucket, region, source_class, source_topic, source_item, library_item_links(id, url, access, audience)')
     // The review queue is a queue: oldest problems first is the wrong way
     // round, and it is read top to bottom rather than looked up. Every other
     // view is looked up, so it goes in the order a shelf goes in.
@@ -168,7 +168,7 @@ export default async function LibraryPage({
     showTemplates && shelves.includes('setup')
       ? (() => {
           let c = admin.from('course_templates')
-            .select('id, name, description, course_type, disciplines, course_template_sections(id, title, sort_order, course_template_items(id, sort_order, library_items(id, title, description, source_type, url, edit_url, drive_file_id, kind, audience, disciplines, topics, venue_id, expires_at, status, bucket, region, source_class, source_topic, source_item, library_item_links(id, url, access, audience))))')
+            .select('id, name, description, course_type, disciplines, course_template_sections(id, title, sort_order, course_template_items(id, sort_order, library_items(id, title, description, source_type, url, edit_url, drive_file_id, kind, audience, disciplines, topics, venue_id, site_id, expires_at, status, bucket, region, source_class, source_topic, source_item, library_item_links(id, url, access, audience))))')
             .eq('active', true)
             .order('name')
           if (q) c = c.ilike('name', `%${q}%`)
@@ -442,7 +442,7 @@ export default async function LibraryPage({
               <span className="hidden text-base leading-none text-zinc-500 group-open:inline">−</span>
               {onShelf ? `Add to ${shelfLabel(bucket as LibraryShelf)}` : 'Add an item'}
             </summary>
-            <AddLibraryItem venues={venues} />
+            <AddLibraryItem venues={venues} sites={siteOptions} />
           </details>
         )}
 
@@ -483,7 +483,7 @@ export default async function LibraryPage({
                 : `Showing ${offset + 1}–${offset + items.length}`}
             </p>
             {status === 'pending' && items.length > 0 ? (
-              <ReviewQueue items={items} venues={venues} />
+              <ReviewQueue items={items} venues={venues} sites={siteOptions} />
             ) : (
               <div className="space-y-8">
                 {grouped.map(([cat, rows]) => (
@@ -497,7 +497,7 @@ export default async function LibraryPage({
                         else gets the row. */}
                     {isAdmin ? (
                       <div className="space-y-2">
-                        {rows.map((it) => <LibraryRow key={it.id} item={it} venues={venues} />)}
+                        {rows.map((it) => <LibraryRow key={it.id} item={it} venues={venues} sites={siteOptions} />)}
                       </div>
                     ) : (
                       <div className="border border-zinc-800 rounded-lg divide-y divide-zinc-800/70">
@@ -632,7 +632,7 @@ export default async function LibraryPage({
                 ))}
                 {shelf === 'setup' && courseSetups.map((t) => (
                   isAdmin
-                    ? <CourseSetupRow key={t.id} setup={t} venues={venues} />
+                    ? <CourseSetupRow key={t.id} setup={t} venues={venues} sites={siteOptions} />
                     : <CourseSetupReadOnly key={t.id} setup={t} venues={venues} />
                 ))}
                 {rows.length === 0 && (

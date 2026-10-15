@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { approveLibraryItems, setLibraryAudience, setLibraryDisciplines, rejectLibraryItems } from './actions'
 import LibraryRow from './LibraryRow'
 import { AUDIENCE_META, type LibraryItem, type Venue } from '@/lib/library'
+import { type SiteOption } from '@/app/admin/schedules/types'
 import { CAPABILITY_META, CAPABILITY_ORDER } from '@/lib/capabilities'
 
 // Imported material, grouped by the Classroom topic it came from — which is
@@ -14,9 +15,11 @@ import { CAPABILITY_META, CAPABILITY_ORDER } from '@/lib/capabilities'
 export default function ReviewQueue({
   items,
   venues,
+  sites,
 }: {
   items: LibraryItem[]
   venues: Venue[]
+  sites: SiteOption[]
 }) {
   const router = useRouter()
   const [busy, setBusy] = useState<string | null>(null)
@@ -190,7 +193,7 @@ export default function ReviewQueue({
                     ) : (
                       <div className="p-2 space-y-2 bg-zinc-950/40">
                         {group.map((i) => (
-                          <LibraryRow key={i.id} item={i} venues={venues} hideProvenance />
+                          <LibraryRow key={i.id} item={i} venues={venues} sites={sites} hideProvenance />
                         ))}
                       </div>
                     )}

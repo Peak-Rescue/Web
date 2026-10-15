@@ -265,6 +265,10 @@ export type LibraryItem = {
   disciplines: string[]
   topics: string[]
   venue_id: string | null
+  /** The specific canyon this is about, when it is about one. `venue_id` is
+      still set, derived from the site, so the matching that reads the venue
+      never has to know whether the filing was precise. */
+  site_id: string | null
   region: string | null
   expires_at: string | null
   status: LibraryStatus

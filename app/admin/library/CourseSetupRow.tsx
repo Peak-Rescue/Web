@@ -11,6 +11,7 @@ import { errorFrom, type ActionResult } from '@/lib/action-result'
 import { COURSE_TYPE_OPTIONS, courseShortName } from '@/lib/courses'
 import { CAPABILITY_META, CAPABILITY_ORDER, courseCapabilityCategories } from '@/lib/capabilities'
 import type { LibraryItem, Venue } from '@/lib/library'
+import { type SiteOption } from '@/app/admin/schedules/types'
 import LibraryRow from './LibraryRow'
 
 /** A curriculum setup as this shelf lists it: what it says about itself, and
@@ -37,7 +38,7 @@ export type CourseSetup = {
 // answer the only question worth asking of it — is this the right material,
 // and is it filed where it should be. So each one is the ordinary library row,
 // openable and taggable in place.
-export default function CourseSetupRow({ setup, venues }: { setup: CourseSetup; venues: Venue[] }) {
+export default function CourseSetupRow({ setup, venues, sites }: { setup: CourseSetup; venues: Venue[]; sites: SiteOption[] }) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -220,7 +221,7 @@ export default function CourseSetupRow({ setup, venues }: { setup: CourseSetup; 
                     {s.items.map(({ rowId, item }) => (
                       <div key={rowId} className="flex items-start gap-1.5">
                         <div className="min-w-0 flex-1">
-                          <LibraryRow item={item} venues={venues} />
+                          <LibraryRow item={item} venues={venues} sites={sites} />
                         </div>
                         {/* Takes the reference out, not the document. Worded
                             that way in the title because "delete" beside a

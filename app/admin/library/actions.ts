@@ -51,6 +51,9 @@ export type LibraryPatch = {
   audience?: 'internal' | 'shared'
   disciplines?: string[]
   topicsRaw?: string
+  /** `venue:<id>` or `site:<id>`. The venue is derived when a site is named,
+      so the two levels cannot contradict each other. */
+  place?: string
   venue_id?: string | null
   expires_at?: string | null
   status?: 'pending' | 'published' | 'archived'
@@ -72,7 +75,13 @@ export async function updateLibraryItem(id: string, patch: LibraryPatch) {
     update.disciplines = patch.disciplines.filter((d) => VALID_DISCIPLINES.has(d))
   }
   if (patch.topicsRaw !== undefined) update.topics = cleanTags(patch.topicsRaw)
-  if (patch.venue_id !== undefined) update.venue_id = patch.venue_id || null
+  if (patch.place !== undefined) {
+    const place = await resolvePlace(admin, patch.place)
+    update.venue_id = place.venue_id
+    update.site_id = place.site_id
+  } else if (patch.venue_id !== undefined) {
+    update.venue_id = patch.venue_id || null
+  }
   if (patch.bucket !== undefined && VALID_BUCKETS.has(patch.bucket)) update.bucket = patch.bucket
   if (patch.region !== undefined) update.region = isValidRegion(patch.region) ? patch.region : null
   if (patch.expires_at !== undefined) update.expires_at = patch.expires_at || null
@@ -85,6 +94,22 @@ export async function updateLibraryItem(id: string, patch: LibraryPatch) {
   const { error } = await admin.from('library_items').update(update).eq('id', id)
   if (error) throw new Error(error.message)
   revalidate()
+}
+
+/** `venue:<id>` or `site:<id>` from a PlaceSelect, resolved to the pair stored
+    on the row. A site answers for its venue too — the matching that offers a
+    map to a course reads the venue, and nothing should have to know whether
+    the filing happened to be precise. */
+async function resolvePlace(
+  admin: ReturnType<typeof createAdminClient>,
+  raw: string
+): Promise<{ venue_id: string | null; site_id: string | null }> {
+  const [level, id] = raw.split(':')
+  if (!id) return { venue_id: null, site_id: null }
+  if (level === 'venue') return { venue_id: id, site_id: null }
+  if (level !== 'site') return { venue_id: null, site_id: null }
+  const { data } = await admin.from('sites').select('venue_id').eq('id', id).maybeSingle()
+  return { venue_id: data?.venue_id ?? null, site_id: id }
 }
 
 export async function createLibraryItem(formData: FormData) {
@@ -100,6 +125,19 @@ export async function createLibraryItem(formData: FormData) {
   // and this doesn't trust an answer it didn't get.
   const isMap = kind === 'map'
 
+  // Where it is, at whichever level was picked. A map must answer; everything
+  // else may. The venue is derived when a site is named rather than asked for
+  // twice, so the two levels cannot contradict each other — which they already
+  // had: Mineral Creek, in the Alpine Lakes, was filed to Dingford Creek.
+  const place = await resolvePlace(admin, (formData.get('place') as string) || '')
+  // Thrown, not returned: this is a plain `action=` form whose signature is
+  // void, and the field is `required`, so the normal path cannot reach here.
+  // Only a submit that went around the form can — which is a fault, not a
+  // person making a mistake.
+  if (isMap && !place.venue_id && !place.site_id) {
+    throw new Error('A map needs a place — pick the area or the canyon it is about.')
+  }
+
   const { data: created, error } = await admin.from('library_items').insert({
     title: ((formData.get('title') as string) || '').trim().slice(0, 200) || 'Untitled',
     description: ((formData.get('description') as string) || '').trim() || null,
@@ -113,7 +151,8 @@ export async function createLibraryItem(formData: FormData) {
     audience: (formData.get('audience') as string) === 'shared' ? 'shared' : 'internal',
     disciplines: (formData.getAll('disciplines') as string[]).filter((d) => VALID_DISCIPLINES.has(d)),
     topics: cleanTags((formData.get('topics') as string) || ''),
-    venue_id: ((formData.get('venue_id') as string) || '') || null,
+    venue_id: place.venue_id,
+    site_id: place.site_id,
     expires_at: ((formData.get('expires_at') as string) || '') || null,
     status: 'published',
   }).select('id').single()

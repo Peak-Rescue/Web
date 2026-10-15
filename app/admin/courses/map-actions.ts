@@ -76,7 +76,7 @@ export type MapPickerItem = {
   venueName: string | null
   regionLabel: string | null
   suggested: boolean
-  matchedOn: 'venue' | 'region' | 'discipline' | null
+  matchedOn: 'site' | 'venue' | 'region' | 'discipline' | null
   /** The expertise it shares with the course, when that is why it is offered. */
   disciplineLabel: string | null
   alreadyAdded: boolean
@@ -89,22 +89,33 @@ export type MapPickerItem = {
 export async function loadMapLibrary(instanceId: string): Promise<MapPickerItem[]> {
   const { admin } = await requireTeam(instanceId)
 
-  const [{ data: inst }, { data: rows }, { data: existing }] = await Promise.all([
+  const [{ data: inst }, { data: rows }, { data: existing }, { data: dayRows }] = await Promise.all([
     admin.from('course_instances').select('location, region, venue_id, course_type, custom_categories').eq('id', instanceId).single(),
     admin
       .from('library_items')
-      .select('id, title, url, audience, region, venue_id, disciplines, venues(name)')
+      .select('id, title, url, audience, region, venue_id, site_id, disciplines, venues(name), sites(name)')
       .eq('bucket', 'map')
       .neq('status', 'archived')
       .order('title')
       .limit(300),
     admin.from('course_maps').select('library_item_id').eq('instance_id', instanceId),
+    // The canyons this course is actually going into. A day that names a site
+    // is the most specific thing a course ever says about where it is — more
+    // specific than the venue, and set on days where the venue never was.
+    admin
+      .from('schedule_days')
+      .select('site_id, course_schedules!inner(instance_id)')
+      .eq('course_schedules.instance_id', instanceId)
+      .not('site_id', 'is', null),
   ])
 
   const added = new Set((existing ?? []).map((r) => r.library_item_id).filter(Boolean))
   const loc = (inst?.location ?? '').toLowerCase().trim()
   const courseRegion = inst?.region ?? null
   const courseVenue = inst?.venue_id ?? null
+  const courseSites = new Set(
+    (dayRows ?? []).map((d) => d.site_id as string).filter(Boolean)
+  )
   // What kind of work this course is. A map is about a place first, but an
   // overview drawn for canyon work is still canyon work, and a course with no
   // venue set yet had nothing else to go on — it was offered the whole shelf.
@@ -117,6 +128,10 @@ export async function loadMapLibrary(instanceId: string): Promise<MapPickerItem[
     const venueLower = (venueName ?? '').toLowerCase()
     // Venue set on the course → exact match. Otherwise fall back to the old
     // name compare so courses not yet given a venue still get suggestions.
+    // The canyon this course is going into beats the region it sits in: a map
+    // of Mineral Creek is not what a Dingford course wants, even though both
+    // are in the same venue.
+    const siteHit = Boolean(r.site_id && courseSites.has(r.site_id))
     const venueHit = courseVenue
       ? r.venue_id === courseVenue
       : Boolean(loc && venueLower && (loc.includes(venueLower) || venueLower.includes(loc)))
@@ -127,10 +142,10 @@ export async function loadMapLibrary(instanceId: string): Promise<MapPickerItem[
       title: r.title,
       url: r.url,
       audience: r.audience as LibraryAudience,
-      venueName,
+      venueName: (r.sites as unknown as { name: string } | null)?.name ?? venueName,
       regionLabel: regionLabel(r.region),
-      suggested: venueHit || regionHit || shared.length > 0,
-      matchedOn: venueHit ? 'venue' : regionHit ? 'region' : shared.length > 0 ? 'discipline' : null,
+      suggested: siteHit || venueHit || regionHit || shared.length > 0,
+      matchedOn: siteHit ? 'site' : venueHit ? 'venue' : regionHit ? 'region' : shared.length > 0 ? 'discipline' : null,
       disciplineLabel: shared.map((d) => CAPABILITY_META[d as CapabilityCategory]?.label ?? d).join(', ') || null,
       alreadyAdded: added.has(r.id),
     }

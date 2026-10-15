@@ -8,6 +8,8 @@ import {
   BUCKET_META, BUCKET_ORDER, type Venue,
 } from '@/lib/library'
 import { createLibraryItem } from './actions'
+import PlaceSelect from '@/components/PlaceSelect'
+import { type SiteOption } from '@/app/admin/schedules/types'
 
 // Adding something to the library, asking what that thing needs and nothing
 // else.
@@ -22,7 +24,7 @@ import { createLibraryItem } from './actions'
 const input = 'w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500'
 const label = 'block text-[11px] text-zinc-500 mb-1'
 
-export default function AddLibraryItem({ venues }: { venues: Venue[] }) {
+export default function AddLibraryItem({ venues, sites }: { venues: Venue[]; sites: SiteOption[] }) {
   const [kind, setKind] = useState('reference')
   const isMap = kind === 'map'
   const isPermit = kind === 'permit'
@@ -77,22 +79,23 @@ export default function AddLibraryItem({ venues }: { venues: Venue[] }) {
         </>
       )}
 
-      {/* Only maps are filed by place: it's how a course finds the ones that
-          belong where it's running. */}
+      {/* A map is about a place or it is not a map anyone can find: filed
+          nowhere it is offered to no course, which is how eleven of the
+          twenty-three already on the shelf ended up unfiled without anyone
+          noticing. So for a map the question is required and takes either
+          level — the area, or the canyon inside it. Everything else is filed
+          by place only when it happens to be about one. */}
+      <div className={isMap ? 'sm:col-span-2' : ''}>
+        <label className={label}>{isMap ? 'Where it is * — the area, or the canyon itself' : 'Place'}</label>
+        <PlaceSelect name="place" venues={venues} sites={sites} required={isMap} className={input} />
+      </div>
+
       {isMap && (
         <div>
           <label className={label}>State / country</label>
           <RegionSelect name="region" className={input} />
         </div>
       )}
-
-      <div>
-        <label className={label}>Venue</label>
-        <select name="venue_id" className={input}>
-          <option value="">— none —</option>
-          {venues.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
-        </select>
-      </div>
 
       {/* A map has one shelf and the type already named it. */}
       {!isMap && (

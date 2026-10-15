@@ -9,13 +9,15 @@ import { AudiencePills } from '@/components/AudiencePills'
 import { CAPABILITY_META, CAPABILITY_ORDER } from '@/lib/capabilities'
 import RegionSelect from '@/components/RegionSelect'
 import MapLinks from './MapLinks'
+import PlaceSelect, { placeValue } from '@/components/PlaceSelect'
+import { type SiteOption } from '@/app/admin/schedules/types'
 import CloseButton from '@/components/CloseButton'
 
 const input =
   'w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-zinc-500'
 const label = 'block text-[11px] text-zinc-500 mb-1'
 
-export default function LibraryRow({ item, venues, hideProvenance = false }: { item: LibraryItem; venues: Venue[]; hideProvenance?: boolean }) {
+export default function LibraryRow({ item, venues, sites = [], hideProvenance = false }: { item: LibraryItem; venues: Venue[]; sites?: SiteOption[]; hideProvenance?: boolean }) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -29,13 +31,17 @@ export default function LibraryRow({ item, venues, hideProvenance = false }: { i
     audience: item.audience,
     disciplines: item.disciplines,
     topicsRaw: item.topics.join(', '),
-    venue_id: item.venue_id ?? '',
+    place: placeValue(item.venue_id, item.site_id),
     region: item.region ?? '',
     expires_at: item.expires_at ?? '',
   })
 
   const venue = venues.find((v) => v.id === item.venue_id)
+  const site = sites.find((x) => x.id === item.site_id)
   const pending = item.status === 'pending'
+  // A map filed nowhere is offered to nobody. Eleven of the twenty-three on
+  // the shelf are in that state and nothing ever said so.
+  const unplaced = item.kind === 'map' && !item.venue_id && !item.site_id
 
   // An expected refusal comes back as a value and is shown as it was written;
   // anything thrown is a fault, and errorFrom keeps its digest.
@@ -80,13 +86,16 @@ export default function LibraryRow({ item, venues, hideProvenance = false }: { i
   }
 
   const save = () => run(async () => {
-    const { url, edit_url, ...rest } = form
+    if (form.kind === 'map' && !form.place) {
+      return { error: 'A map needs a place — pick the area or the canyon it is about.' }
+    }
+    const { url, edit_url, place, ...rest } = form
     await updateLibraryItem(item.id, {
       ...rest,
       // A map's links live in their own table and are saved as they're edited;
       // sending these too would let a stale box overwrite them.
       ...(form.kind === 'map' ? {} : { url, edit_url }),
-      venue_id: form.venue_id || null,
+      place,
       region: form.region || null,
       expires_at: form.expires_at || null,
     })
@@ -109,7 +118,17 @@ export default function LibraryRow({ item, venues, hideProvenance = false }: { i
               {KIND_META[item.kind as keyof typeof KIND_META] ?? item.kind}
             </span>
             <AudiencePills audience={item.audience} />
-            {venue && <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-900/40 text-blue-300">{venue.name}</span>}
+            {site
+              ? <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-900/40 text-blue-300">{site.name}</span>
+              : venue && <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-900/40 text-blue-300">{venue.name}</span>}
+            {unplaced && (
+              <span
+                title="Nothing will offer this map to a course until it says where it is"
+                className="text-[10px] px-1.5 py-0.5 rounded bg-yellow-900/40 text-yellow-300"
+              >
+                needs a place
+              </span>
+            )}
             {item.topics.includes('needs-link-check') && (
               <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-900/40 text-red-300">link may be dead</span>
             )}
@@ -195,12 +214,23 @@ export default function LibraryRow({ item, venues, hideProvenance = false }: { i
               <option value="shared">{AUDIENCE_META.shared.choice}</option>
             </select>
           </div>
-          <div>
-            <label className={label}>Venue</label>
-            <select className={input} value={form.venue_id} onChange={(e) => setForm({ ...form, venue_id: e.target.value })}>
-              <option value="">— none —</option>
-              {venues.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
-            </select>
+          {/* One question at either level — the area, or the canyon inside
+              it. Required for a map, because a map filed nowhere is offered to
+              no course; optional for everything else, which is only sometimes
+              about a place at all. */}
+          <div className={form.kind === 'map' ? 'sm:col-span-2' : ''}>
+            <label className={label}>
+              {form.kind === 'map' ? 'Where it is * — the area, or the canyon itself' : 'Place'}
+            </label>
+            <PlaceSelect
+              name="place"
+              venues={venues}
+              sites={sites}
+              value={form.place}
+              onChange={(v) => setForm({ ...form, place: v })}
+              required={form.kind === 'map'}
+              className={input}
+            />
           </div>
           {/* In 820 items this has never once been filled in, including on
               every permit in there. It stays for the kind it was built for and
