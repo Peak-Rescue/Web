@@ -118,9 +118,8 @@ export async function loadMapLibrary(instanceId: string): Promise<MapPickerItem[
   const courseSites = new Set(
     (dayRows ?? []).map((d) => d.site_id as string).filter(Boolean)
   )
-  // What kind of work this course is. A map is about a place first, but an
-  // overview drawn for canyon work is still canyon work, and a course with no
-  // venue set yet had nothing else to go on — it was offered the whole shelf.
+  // Kept for the label on the row — "canyon", beside a map, is worth seeing.
+  // It is not a reason to offer one: see the note at the return below.
   const courseDisciplines = inst
     ? (courseCapabilityCategories(inst.course_type, inst.custom_categories) as string[])
     : []
@@ -138,6 +137,13 @@ export async function loadMapLibrary(instanceId: string): Promise<MapPickerItem[
       ? r.venue_id === courseVenue
       : Boolean(loc && venueLower && (loc.includes(venueLower) || venueLower.includes(loc)))
     const regionHit = Boolean(courseRegion && r.region && r.region === courseRegion)
+    // Shown on the row, never a reason to offer it. A map is about where it
+    // is, and the discipline on one is an accident of the Classroom course it
+    // was drawn for — all twenty-three carry one. Letting it suggest meant an
+    // unplaced map called "Basic Mountain Operator" was offered to every
+    // mountain course anywhere, which is the offering deciding the location.
+    // They are independent: BMO runs in many places, and a place hosts many
+    // offerings. Where a course is going is the only thing that picks a map.
     const shared = ((r.disciplines ?? []) as string[]).filter((d) => courseDisciplines.includes(d))
     return {
       id: r.id,
@@ -146,8 +152,8 @@ export async function loadMapLibrary(instanceId: string): Promise<MapPickerItem[
       audience: r.audience as LibraryAudience,
       venueName: (r.sites as unknown as { name: string } | null)?.name ?? venueName,
       regionLabel: regionLabel(r.region),
-      suggested: siteHit || venueHit || regionHit || shared.length > 0,
-      matchedOn: siteHit ? 'site' : venueHit ? 'venue' : regionHit ? 'region' : shared.length > 0 ? 'discipline' : null,
+      suggested: siteHit || venueHit || regionHit,
+      matchedOn: siteHit ? 'site' : venueHit ? 'venue' : regionHit ? 'region' : null,
       disciplineLabel: shared.map((d) => CAPABILITY_META[d as CapabilityCategory]?.label ?? d).join(', ') || null,
       alreadyAdded: added.has(r.id),
     }
