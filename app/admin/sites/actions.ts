@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { type SiteLink } from '@/lib/sites'
+import { refuse, type ActionResult } from '@/lib/action-result'
 
 async function requireAdmin() {
   const supabase = await createClient()
@@ -153,4 +154,86 @@ export async function deleteMeetingPoint(id: string) {
   const { error } = await admin.from('meeting_points').delete().eq('id', id)
   if (error) throw new Error(error.message)
   revalidate()
+}
+
+// ─── Adding to a place, at whatever level it was opened from ─────────────────
+//
+// A place holds four things and they are four different shapes: a map is
+// links, beta is either a canyon with a write-up or somebody else's write-up
+// on ropewiki, weather is a link, and a contact is a person with a number.
+// One "add" that took a title and a URL could only ever make two of them.
+//
+// The scope is the level the form was opened at — a venue, or a state or
+// country code. It is never asked for, because the form is standing in it.
+
+export type PlaceScope = { venueId: string } | { regionCode: string }
+
+/** Weather, access, and whatever else is a link about a whole area. */
+export async function addPlaceLink(
+  scope: PlaceScope,
+  link: { url: string; label: string; kind: 'weather' | 'access' | 'other' }
+): Promise<ActionResult> {
+  const admin = await requireAdmin()
+  const url = link.url.trim()
+  if (!/^https?:\/\//i.test(url)) return refuse('That needs to start with https://')
+  const row = {
+    url: url.slice(0, 500),
+    label: (link.label.trim() || url.replace(/^https?:\/\/(www\.)?/, '').split('/')[0]).slice(0, 80),
+    kind: link.kind,
+  }
+
+  if ('venueId' in scope) {
+    const { data } = await admin.from('venues').select('links').eq('id', scope.venueId).single()
+    const { error } = await admin
+      .from('venues')
+      .update({ links: [...((data?.links as typeof row[]) ?? []), row].slice(0, 12) })
+      .eq('id', scope.venueId)
+    if (error) throw new Error(error.message)
+  } else {
+    const { data } = await admin
+      .from('region_info').select('links').eq('region_code', scope.regionCode).maybeSingle()
+    const { error } = await admin.from('region_info').upsert(
+      { region_code: scope.regionCode, links: [...((data?.links as typeof row[]) ?? []), row].slice(0, 12), updated_at: new Date().toISOString() },
+      { onConflict: 'region_code' }
+    )
+    if (error) throw new Error(error.message)
+  }
+  revalidate()
+  revalidatePath('/admin/library')
+}
+
+/** The local someone we actually ring about this area. */
+export async function addPlaceContact(
+  scope: PlaceScope,
+  contact: { name: string; role?: string; phone?: string; email?: string; note?: string }
+): Promise<ActionResult> {
+  const admin = await requireAdmin()
+  const name = contact.name.trim()
+  if (!name) return refuse('A contact needs a name.')
+  const row = {
+    name: name.slice(0, 120),
+    role: contact.role?.trim().slice(0, 80) || undefined,
+    phone: contact.phone?.trim().slice(0, 40) || undefined,
+    email: contact.email?.trim().slice(0, 120) || undefined,
+    note: contact.note?.trim().slice(0, 300) || undefined,
+  }
+
+  if ('venueId' in scope) {
+    const { data } = await admin.from('venues').select('contacts').eq('id', scope.venueId).single()
+    const { error } = await admin
+      .from('venues')
+      .update({ contacts: [...((data?.contacts as typeof row[]) ?? []), row].slice(0, 12) })
+      .eq('id', scope.venueId)
+    if (error) throw new Error(error.message)
+  } else {
+    const { data } = await admin
+      .from('region_info').select('contacts').eq('region_code', scope.regionCode).maybeSingle()
+    const { error } = await admin.from('region_info').upsert(
+      { region_code: scope.regionCode, contacts: [...((data?.contacts as typeof row[]) ?? []), row].slice(0, 12), updated_at: new Date().toISOString() },
+      { onConflict: 'region_code' }
+    )
+    if (error) throw new Error(error.message)
+  }
+  revalidate()
+  revalidatePath('/admin/library')
 }

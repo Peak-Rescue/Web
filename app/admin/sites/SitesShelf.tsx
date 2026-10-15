@@ -1,9 +1,9 @@
 import Link from 'next/link'
 import { createSite, createMeetingPoint } from './actions'
-import { createLibraryItem } from '@/app/admin/library/actions'
 import SiteRow from './SiteRow'
 import MeetingPointRow from './MeetingPointRow'
 import JumpToNewRow from '@/components/JumpToNewRow'
+import AddToPlace from './AddToPlace'
 import { SITE_KINDS, type Site, type MeetingPointRecord } from '@/lib/sites'
 import { type LibraryItem, type Venue, type VenueContact, type VenueLink } from '@/lib/library'
 import { countryName, regionLabel, splitRegion, SUBDIVISIONS } from '@/lib/regions'
@@ -216,29 +216,11 @@ export default function SitesShelf({
             </div>
           </div>
         )}
-        <RegionAdd code={code} />
+        <AddToPlace scope={{ regionCode: code }} place={`region:${code}`} placeName={regionLabel(code) || code} />
       </div>
     )
   }
 
-  // Added here, filed here — the level is already answered by where the form
-  // is, the same bargain the venue forms make.
-  const RegionAdd = ({ code }: { code: string }) => (
-    <div className="grid gap-2 sm:grid-cols-2">
-      {(['map', 'route'] as const).map((kind) => (
-        <form key={kind} action={createLibraryItem} className="flex items-center gap-1.5">
-          <input type="hidden" name="kind" value={kind} />
-          <input type="hidden" name="place" value={`region:${code}`} />
-          <input type="hidden" name="audience" value="internal" />
-          <input name="title" required placeholder={kind === 'map' ? 'Add a map here' : 'Add beta here'}
-                 className="flex-1 min-w-0 bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-xs focus:outline-none focus:border-zinc-500" />
-          <input name="url" required placeholder="https://…"
-                 className="flex-1 min-w-0 bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-xs font-mono focus:outline-none focus:border-zinc-500" />
-          <button className="shrink-0 text-[11px] px-2 py-1 rounded border border-zinc-700 text-zinc-300 hover:border-zinc-500 hover:text-white transition-colors">Add</button>
-        </form>
-      ))}
-    </div>
-  )
 
   return (
     <>
@@ -420,40 +402,12 @@ export default function SitesShelf({
               </div>
             )}
 
-            {/* Added here, filed here. The venue is already answered, so it is
-                not asked for — the commonest way a map ends up filed nowhere
-                is a form that made the place optional on a screen that already
-                knew it. */}
             {g.venue && (
-              <div className="mt-3 pt-3 border-t border-zinc-800 grid gap-2 sm:grid-cols-2">
-                <form action={createSite} className="flex items-center gap-1.5">
-                  <input type="hidden" name="venue_id" value={g.venue.id} />
-                  <input type="hidden" name="kind" value="canyon" />
-                  <input name="name" required placeholder={`Add a canyon in ${g.venue.name}`}
-                         className="flex-1 min-w-0 bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-xs focus:outline-none focus:border-zinc-500" />
-                  <button className="shrink-0 text-[11px] px-2 py-1 rounded border border-zinc-700 text-zinc-300 hover:border-zinc-500 hover:text-white transition-colors">Add</button>
-                </form>
-                <form action={createLibraryItem} className="flex items-center gap-1.5">
-                  <input type="hidden" name="kind" value="route" />
-                  <input type="hidden" name="place" value={`venue:${g.venue.id}`} />
-                  <input type="hidden" name="audience" value="internal" />
-                  <input name="title" required placeholder="Add beta — what it is called"
-                         className="flex-1 min-w-0 bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-xs focus:outline-none focus:border-zinc-500" />
-                  <input name="url" required placeholder="https://…"
-                         className="flex-1 min-w-0 bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-xs font-mono focus:outline-none focus:border-zinc-500" />
-                  <button className="shrink-0 text-[11px] px-2 py-1 rounded border border-zinc-700 text-zinc-300 hover:border-zinc-500 hover:text-white transition-colors">Add</button>
-                </form>
-                <form action={createLibraryItem} className="flex items-center gap-1.5">
-                  <input type="hidden" name="kind" value="map" />
-                  <input type="hidden" name="place" value={`venue:${g.venue.id}`} />
-                  <input type="hidden" name="audience" value="internal" />
-                  <input name="title" required placeholder="Add a map — what it is called"
-                         className="flex-1 min-w-0 bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-xs focus:outline-none focus:border-zinc-500" />
-                  <input name="url" required placeholder="https://…"
-                         className="flex-1 min-w-0 bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-xs font-mono focus:outline-none focus:border-zinc-500" />
-                  <button className="shrink-0 text-[11px] px-2 py-1 rounded border border-zinc-700 text-zinc-300 hover:border-zinc-500 hover:text-white transition-colors">Add</button>
-                </form>
-              </div>
+              <AddToPlace
+                scope={{ venueId: g.venue.id }}
+                place={`venue:${g.venue.id}`}
+                placeName={g.venue.name}
+              />
             )}
             </div>
           </details>
