@@ -21,29 +21,19 @@ const AUDIENCES = ['students', 'instructors'] as const
 
 const input = 'w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-zinc-500'
 
-// Two links to one CalTopo map are the same address with a different token on
-// the end — the map id is shared and the token is the only part that says what
-// you may do with it. Typing the whole thing again to add the read-only
-// version is work the screen already has the answer to, so the box starts at
-// the part that cannot change and waits for the token.
-const SHARED = /^(https?:\/\/(?:www\.)?(?:caltopo|sartopo)\.com\/m\/[A-Za-z0-9_-]+)(?:\/.*)?$/i
-
-function sharedPrefix(links: MapLink[]): string {
-  for (const l of links) {
-    const m = (l.url ?? '').match(SHARED)
-    if (m) return `${m[1]}/`
-  }
-  return ''
-}
 
 export default function MapLinks({ itemId, links }: { itemId: string; links: MapLink[] }) {
   const router = useRouter()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  // Lazily, so clearing the box stays cleared rather than refilling itself on
-  // the next render.
-  const seed = sharedPrefix(links)
-  const [url, setUrl] = useState(seed)
+  const [url, setUrl] = useState('')
+  // The blank row is behind a button. Shown always, its two dropdowns sat
+  // there reading as a description of the map — "Read-only / Students" beside
+  // a map that is neither — because nothing distinguished a row describing a
+  // link that exists from a row waiting for one that does not. The fix is not
+  // to label the empty row better; it is for there not to be one until it is
+  // asked for.
+  const [adding, setAdding] = useState(false)
   const [access, setAccess] = useState<MapLink['access']>('read')
   const [audience, setAudience] = useState<MapLink['audience']>('students')
 
@@ -141,17 +131,20 @@ export default function MapLinks({ itemId, links }: { itemId: string; links: Map
         </div>
       )}
 
-      {seed && (
-        <p className="text-[11px] text-zinc-600 mb-1">
-          Same map, different token — paste the one for the link you&rsquo;re adding.
-        </p>
-      )}
-
+      {!adding ? (
+        <button
+          onClick={() => setAdding(true)}
+          className="text-[11px] text-zinc-500 hover:text-white transition-colors"
+        >
+          + Add a link
+        </button>
+      ) : (
       <div className="flex flex-wrap items-end gap-2">
         <input
           value={url}
           onChange={(e) => setUrl(e.target.value)}
-          placeholder={seed ? `${seed}…` : 'https://sartopo.com/m/…'}
+          placeholder="https://caltopo.com/m/…"
+          autoFocus
           spellCheck={false}
           className={`${input} flex-1 min-w-[14rem]`}
         />
@@ -170,16 +163,26 @@ export default function MapLinks({ itemId, links }: { itemId: string; links: Map
           {AUDIENCES.map((a) => <option key={a} value={a}>{LINK_AUDIENCE_META[a]}</option>)}
         </select>
         <button
-          onClick={() => run(async () => { await setMapLink(itemId, { url, access, audience }); setUrl(seed) })}
-          // The seeded prefix on its own is not a link, so it does not arm the
-          // button — it is the start of one.
-          disabled={busy || !url.trim() || url.trim() === seed}
+          onClick={() => run(async () => {
+            await setMapLink(itemId, { url, access, audience })
+            setUrl('')
+            setAdding(false)
+          })}
+          disabled={busy || !url.trim()}
           className="px-3 py-1.5 rounded text-xs font-medium bg-zinc-700 hover:bg-zinc-600 text-zinc-200 disabled:opacity-40 transition-colors"
         >
           {taken ? 'Replace' : 'Add link'}
         </button>
+        <button
+          onClick={() => { setAdding(false); setUrl('') }}
+          disabled={busy}
+          className="text-[11px] text-zinc-600 hover:text-zinc-300 transition-colors"
+        >
+          Cancel
+        </button>
       </div>
-      {taken && (
+      )}
+      {adding && taken && (
         <p className="text-[11px] text-amber-400 mt-1.5">
           There is already a {ACCESS_META[access].toLowerCase()} link for {LINK_AUDIENCE_META[audience].toLowerCase()} — adding this replaces it.
         </p>
