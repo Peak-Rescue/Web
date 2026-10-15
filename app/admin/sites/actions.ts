@@ -54,6 +54,13 @@ export async function createSite(formData: FormData) {
     meeting_point_id: ((formData.get('meeting_point_id') as string) || '') || null,
     usual_meeting_time: ((formData.get('usual_meeting_time') as string) || '').trim() || null,
     coords: ((formData.get('coords') as string) || '').trim() || null,
+    // Beta is written here and also lives on ropewiki as often as not, and
+    // the two are the same answer. Offered on the same form so adding both
+    // does not mean adding the canyon and then going back for its link.
+    links: (() => {
+      const url = ((formData.get('link') as string) || '').trim()
+      return /^https?:\/\//i.test(url) ? [{ url: url.slice(0, 500), label: 'route page' }] : []
+    })(),
   }).select('id').single()
   if (error) throw new Error(error.message)
   revalidate()

@@ -19,11 +19,6 @@ import { errorFrom } from '@/lib/action-result'
 
 type Kind = 'map' | 'beta' | 'weather' | 'contact'
 
-// Beta comes two ways and they are the same thing: what the descent is like.
-// Sometimes that is a paragraph someone here wrote, sometimes it is a link to
-// ropewiki. Splitting them into two buttons made the shape of the answer into
-// a question you had to answer first.
-type BetaShape = 'written' | 'link'
 
 const input =
   'w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-xs focus:outline-none focus:border-zinc-500'
@@ -40,7 +35,6 @@ export default function AddToPlace({
 }) {
   const router = useRouter()
   const [kind, setKind] = useState<Kind | null>(null)
-  const [shape, setShape] = useState<BetaShape>('link')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -48,7 +42,6 @@ export default function AddToPlace({
   // venue. At state level there is nothing for it to hang off, so only the
   // link shape is offered there.
   const atVenue = 'venueId' in scope
-  const betaShape: BetaShape = atVenue ? shape : 'link'
 
   const choices: { k: Kind; label: string }[] = [
     { k: 'map', label: 'Map' },
@@ -118,62 +111,50 @@ export default function AddToPlace({
         </form>
       )}
 
+      {/* One shape, whether or not it ends up with a link on it. Beta is
+          what the descent is like: a paragraph, an address, usually both, and
+          asking which before you start made the form's own plumbing into the
+          first question. */}
       {kind === 'beta' && (
-        <div className="space-y-2">
-          {atVenue && (
-            <div className="flex items-center gap-1.5">
-              {([['written', 'Written here'], ['link', 'A link']] as const).map(([v, l]) => (
-                <button
-                  key={v}
-                  type="button"
-                  onClick={() => setShape(v)}
-                  className={`text-[11px] px-2 py-1 rounded border transition-colors ${
-                    betaShape === v
-                      ? 'border-zinc-500 bg-zinc-800 text-white'
-                      : 'border-zinc-800 text-zinc-500 hover:text-zinc-300'
-                  }`}
-                >
-                  {l}
-                </button>
-              ))}
+        atVenue ? (
+          <form action={createSite} className="space-y-2">
+            <input type="hidden" name="venue_id" value={(scope as { venueId: string }).venueId} />
+            <input type="hidden" name="kind" value="canyon" />
+            <div className="grid gap-2 sm:grid-cols-2">
+              <input name="name" required autoFocus className={input} placeholder="Keyhole Canyon" />
+              <input name="usual_meeting_time" className={input} placeholder="Usual meeting time — 0530" />
             </div>
-          )}
-
-          {betaShape === 'link' ? (
-            <form action={createLibraryItem} className="grid gap-2 sm:grid-cols-[1fr_1fr_auto_auto] items-center">
-              <input type="hidden" name="kind" value="route" />
-              <input type="hidden" name="place" value={place} />
-              <input type="hidden" name="audience" value="internal" />
-              <input name="title" required autoFocus className={input} placeholder="What the write-up is called" />
-              <input name="url" required className={`${input} font-mono`} placeholder="https://ropewiki.com/…" />
+            <textarea name="beta" rows={4} className={`${input} resize-y`}
+                      placeholder="Approach, raps, exit, hazards. The first line is the scope line — what tells this canyon apart from the next one." />
+            <input name="link" className={`${input} font-mono`} placeholder="ropewiki or another write-up (optional)" />
+            <div className="flex items-center gap-3">
               <button className="text-[11px] px-2 py-1 rounded border border-zinc-700 text-zinc-300 hover:border-zinc-500 hover:text-white transition-colors">
                 Add beta
               </button>
               {back}
-            </form>
-          ) : (
-            // Written beta is the canyon itself — the paragraph that does not
-            // change between courses, on the row it describes.
-            <form action={createSite} className="space-y-2">
-              <input type="hidden" name="venue_id" value={(scope as { venueId: string }).venueId} />
-              <input type="hidden" name="kind" value="canyon" />
-              <div className="grid gap-2 sm:grid-cols-2">
-                <input name="name" required autoFocus className={input} placeholder="Keyhole Canyon" />
-                <input name="usual_meeting_time" className={input} placeholder="Usual meeting time — 0530" />
-              </div>
-              <textarea name="beta" rows={3} className={`${input} resize-y`}
-                        placeholder="Approach, raps, exit, hazards. The first line is the scope line — what tells this canyon apart from the next one." />
-              <div className="flex items-center gap-3">
-                <button className="text-[11px] px-2 py-1 rounded border border-zinc-700 text-zinc-300 hover:border-zinc-500 hover:text-white transition-colors">
-                  Add beta
-                </button>
-                {back}
-              </div>
-            </form>
-          )}
-        </div>
+            </div>
+          </form>
+        ) : (
+          // Above a venue there is no canyon to hang a write-up on, so it is a
+          // library row — which carries a description, so the long form has
+          // somewhere to go here too.
+          <form action={createLibraryItem} className="space-y-2">
+            <input type="hidden" name="kind" value="route" />
+            <input type="hidden" name="place" value={place} />
+            <input type="hidden" name="audience" value="internal" />
+            <input name="title" required autoFocus className={input} placeholder="What the write-up is called" />
+            <textarea name="description" rows={4} className={`${input} resize-y`}
+                      placeholder="Approach, raps, exit, hazards — written here rather than linked, if there is nowhere to link to." />
+            <input name="url" className={`${input} font-mono`} placeholder="https://ropewiki.com/… (optional)" />
+            <div className="flex items-center gap-3">
+              <button className="text-[11px] px-2 py-1 rounded border border-zinc-700 text-zinc-300 hover:border-zinc-500 hover:text-white transition-colors">
+                Add beta
+              </button>
+              {back}
+            </div>
+          </form>
+        )
       )}
-
 
       {kind === 'weather' && (
         <form
