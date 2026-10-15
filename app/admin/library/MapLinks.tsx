@@ -75,8 +75,16 @@ export default function MapLinks({ itemId, links }: { itemId: string; links: Map
               >
                 {l.url}
               </a>
+              {/* The URL is on screen, so this is recoverable by pasting it
+                  back — but it is still a destructive first click, and the
+                  access and audience beside it are not written anywhere the
+                  person could read them back off afterwards. */}
               <button
-                onClick={() => run(() => removeMapLink(l.id))}
+                onClick={() => {
+                  if (confirm(`Remove this ${LINK_AUDIENCE_META[l.audience].toLowerCase()} link from the map?\n\n${l.url}`)) {
+                    run(() => removeMapLink(l.id))
+                  }
+                }}
                 disabled={busy}
                 className="ml-auto shrink-0 text-xs text-zinc-500 hover:text-pr-red-light disabled:opacity-40 transition-colors"
               >
