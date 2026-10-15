@@ -136,7 +136,7 @@ export default async function LibraryPage({
   // Templates take the same search box and discipline tags the documents use.
   // They have no review status, so the status tabs pass them by — there's
   // nothing to approve about a kit list you wrote yourself.
-  const [{ data: itemRows }, { data: venueRows }, { data: siteRows }, gearRes, scheduleRes, setupRes, catalogRes, { count: pendingCount }, placesShelf, { data: sortRows }, shelfCounts] = await Promise.all([
+  const [{ data: itemRows }, { data: venueRows }, { data: siteRows }, gearRes, scheduleRes, setupRes, catalogRes, { count: pendingCount }, placesShelf, { data: facetRows }, { data: sortRows }, shelfCounts] = await Promise.all([
     showDocs ? query : Promise.resolve({ data: [] }),
     admin.from('venues').select('id, name, region, region_code, client_name, notes, links, active').order('name'),
     // A per-region template pins its canyons here, so the courses started from
@@ -194,6 +194,13 @@ export default async function LibraryPage({
     // the landing — a number on a card is the difference between picking a
     // shelf and guessing at one.
     onPlaces ? loadSitesShelf() : Promise.resolve(null),
+    // What is actually on this shelf, for the filters above it. Offering
+    // "Video" on a shelf holding no video is a dead end dressed as a choice —
+    // you pick it, get nothing, and learn nothing about why. Cheap: two
+    // columns for one shelf, and only while standing on one.
+    onShelf && !isTemplateShelf(bucket) && !onPlaces && !onSort
+      ? admin.from('library_items').select('kind, disciplines').eq('bucket', bucket).eq('status', status === 'all' ? 'published' : status).limit(2000)
+      : Promise.resolve({ data: null }),
     // The whole shelf, because the question is about all of it. Columns enough
     // to render the ordinary row, since one wrong guess is corrected in place.
     onSort
@@ -302,6 +309,16 @@ export default async function LibraryPage({
     sortGroups.sort((a, b) => b.items.length - a.items.length)
   }
 
+  // The facets of the shelf being stood on: which types and which expertise
+  // are actually represented, and how many of each.
+  const facetKinds = new Map<string, number>()
+  const facetDisciplines = new Map<string, number>()
+  for (const r of (facetRows ?? []) as { kind: string; disciplines: string[] | null }[]) {
+    facetKinds.set(r.kind, (facetKinds.get(r.kind) ?? 0) + 1)
+    for (const d of r.disciplines ?? []) facetDisciplines.set(d, (facetDisciplines.get(d) ?? 0) + 1)
+  }
+  const hasFacets = facetRows !== null
+
   const catalog = (catalogRes.data ?? []) as unknown as GearItem[]
 
   const summarize = (
@@ -339,22 +356,39 @@ export default async function LibraryPage({
     return `/admin/library?${p.toString()}`
   }
 
-  // Documents on the current page, under the first expertise each is tagged
-  // with. The reference page listed an item once per discipline it carried,
-  // which read fine until you were looking at the same row twice; the filter
-  // above still matches on any of them, so nothing is unreachable for being
-  // grouped under one.
+  // Grouping follows where you are standing.
+  //
+  // On a shelf, by what each thing IS — manuals, standards, tech notes, skill
+  // sheets. That is the list someone draws when asked what is on the shelf,
+  // and it is the only axis on which "Reference" reads as four things rather
+  // than fifty-nine.
+  //
+  // Searching across shelves, by expertise instead: the question there is
+  // "what have we got on canyons", and the answer sorted by document type is
+  // no answer at all. An item is listed under the first discipline it carries
+  // rather than once per discipline — the filter still matches on any of
+  // them, so nothing is unreachable for being grouped under one.
+  const groupBy: 'kind' | 'discipline' = onShelf ? 'kind' : 'discipline'
   const grouped = (() => {
     const by = new Map<string, LibraryItem[]>()
     for (const i of items) {
-      const k = i.disciplines[0] ?? '_untagged'
+      const k = groupBy === 'kind' ? i.kind : (i.disciplines[0] ?? '_untagged')
       by.set(k, [...(by.get(k) ?? []), i])
+    }
+    if (groupBy === 'kind') {
+      return LIBRARY_KINDS.filter((k) => by.has(k)).map((k) => [k as string, by.get(k)!] as const)
     }
     return [
       ...CAPABILITY_ORDER.filter((c) => by.has(c)).map((c) => [c as string, by.get(c)!] as const),
       ...(by.has('_untagged') ? [['_untagged', by.get('_untagged')!] as const] : []),
     ]
   })()
+  const groupLabel = (cat: string) =>
+    groupBy === 'kind'
+      ? KIND_META[cat as keyof typeof KIND_META] ?? cat
+      : cat === '_untagged'
+        ? 'Not tied to an expertise'
+        : CAPABILITY_META[cat as CapabilityCategory].label
 
   const tab = (key: string, text: string, badge?: number) => (
     <Link
@@ -454,7 +488,12 @@ export default async function LibraryPage({
 
         <form className={`grid grid-cols-2 sm:grid-cols-6 gap-2 mb-6 ${onPlaces ? 'hidden' : ''}`} action="/admin/library">
           {isAdmin && <input type="hidden" name="status" value={status} />}
-          <input name="q" defaultValue={q ?? ''} placeholder="Search title…" className={input} />
+          <input
+            name="q"
+            defaultValue={q ?? ''}
+            placeholder={onShelf ? `Search ${shelfLabel(bucket as LibraryShelf).toLowerCase()}…` : 'Search every shelf…'}
+            className={input}
+          />
           <select name="bucket" defaultValue={bucket ?? ''} className={input}>
             <option value="">All libraries</option>
             {BUCKET_ORDER.map((b) => <option key={b} value={b}>{BUCKET_META[b].label}</option>)}
@@ -462,14 +501,31 @@ export default async function LibraryPage({
               {TEMPLATE_SHELF_ORDER.map((s) => <option key={s} value={s}>{TEMPLATE_SHELF_META[s].label}</option>)}
             </optgroup>
           </select>
-          <select name="discipline" defaultValue={discipline ?? ''} className={input}>
-            <option value="">All disciplines</option>
-            {CAPABILITY_ORDER.map((c) => <option key={c} value={c}>{CAPABILITY_META[c].label}</option>)}
-          </select>
-          <select name="kind" defaultValue={kind ?? ''} className={input}>
-            <option value="">All types</option>
-            {LIBRARY_KINDS.map((k) => <option key={k} value={k}>{KIND_META[k]}</option>)}
-          </select>
+          {/* Standing on a shelf, these offer what that shelf holds and say
+              how much of it. Offering "Video" where there is no video is a
+              dead end dressed as a choice: you pick it, get nothing back, and
+              learn nothing about why. Across the whole library they stay the
+              full vocabulary, because there the question is open. */}
+          {(!hasFacets || facetDisciplines.size > 0) && (
+            <select name="discipline" defaultValue={discipline ?? ''} className={input}>
+              <option value="">All disciplines</option>
+              {(hasFacets ? CAPABILITY_ORDER.filter((c) => facetDisciplines.has(c)) : CAPABILITY_ORDER).map((c) => (
+                <option key={c} value={c}>
+                  {CAPABILITY_META[c].label}{hasFacets ? ` (${facetDisciplines.get(c)})` : ''}
+                </option>
+              ))}
+            </select>
+          )}
+          {(!hasFacets || facetKinds.size > 1) && (
+            <select name="kind" defaultValue={kind ?? ''} className={input}>
+              <option value="">All types</option>
+              {(hasFacets ? LIBRARY_KINDS.filter((k) => facetKinds.has(k)) : LIBRARY_KINDS).map((k) => (
+                <option key={k} value={k}>
+                  {KIND_META[k]}{hasFacets ? ` (${facetKinds.get(k)})` : ''}
+                </option>
+              ))}
+            </select>
+          )}
           <select name="venue" defaultValue={venue ?? ''} className={input}>
             <option value="">All venues</option>
             {venues.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
@@ -533,13 +589,27 @@ export default async function LibraryPage({
             {status === 'pending' && items.length > 0 ? (
               <ReviewQueue items={items} venues={venues} sites={siteOptions} />
             ) : (
-              <div className="space-y-8">
+              <div className="space-y-2">
                 {grouped.map(([cat, rows]) => (
-                  <section key={cat}>
-                    <h2 className="text-sm font-semibold text-zinc-400 mb-2">
-                      {cat === '_untagged' ? 'Not tied to an expertise' : CAPABILITY_META[cat as CapabilityCategory].label}
-                      <span className="text-zinc-600 font-normal ml-2">{rows.length}</span>
-                    </h2>
+                  // Folded, because the headings are the point: what a shelf
+                  // holds is the list of kinds on it, and reading that list
+                  // should not mean scrolling past sixty rows to reach the
+                  // second one. One group means nothing to choose between,
+                  // so it opens.
+                  <details key={cat} open={grouped.length === 1} className="group/kind">
+                    <summary className="cursor-pointer list-none flex items-center gap-2 text-sm font-semibold text-zinc-400 hover:text-zinc-200 transition-colors py-1.5">
+                      <span aria-hidden className="text-zinc-600 text-xs transition-transform group-open/kind:rotate-90">▶</span>
+                      {groupLabel(cat)}
+                      {/* The page holds sixty; the shelf holds what it holds.
+                          A bare count beside a folded group reads as the whole
+                          group, so when they differ both are said. */}
+                      <span className="text-zinc-600 font-normal">
+                        {groupBy === 'kind' && hasFacets && (facetKinds.get(cat) ?? 0) > rows.length
+                          ? `${rows.length} of ${facetKinds.get(cat)}`
+                          : rows.length}
+                      </span>
+                    </summary>
+                    <div className="pt-1 pb-3">
                     {/* The same rows either way. An admin gets the editor,
                         which is a row that can be opened and changed; everyone
                         else gets the row. */}
@@ -554,7 +624,8 @@ export default async function LibraryPage({
                         ))}
                       </div>
                     )}
-                  </section>
+                    </div>
+                  </details>
                 ))}
                 {items.length === 0 && (
                   <p className="text-sm text-zinc-500">
