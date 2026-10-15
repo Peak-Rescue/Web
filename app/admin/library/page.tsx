@@ -22,6 +22,8 @@ import CourseSetupRow from './CourseSetupRow'
 import CourseSetupReadOnly from './CourseSetupReadOnly'
 import InfoHint from '@/components/InfoHint'
 import SortQueue from './SortQueue'
+import TypeQueue from './TypeQueue'
+import SortingInbox, { type SortingCheck } from './SortingInbox'
 import MediaShelf from './MediaShelf'
 import { loadMediaShelf } from './media/load'
 import { albumMatches } from '@/lib/media'
@@ -89,7 +91,11 @@ export default async function LibraryPage({
   // Resorting is a view of the whole shelf at once, so it owns the page while
   // it is open — a paginated list of sixty is the wrong unit for a claim about
   // eight hundred.
-  const onSort = isAdmin && sort === '1'
+  // The sorting view has three faces: the list of what is left, and the two
+  // tools that are not a per-item edit. Everything else on the list is fixed
+  // where the item already lives.
+  const onSort = isAdmin && Boolean(sort)
+  const sortView = sort === 'shelf' ? 'shelf' : sort === 'type' ? 'type' : 'inbox'
   const showDocs = !isTemplateShelf(bucket) && !onPlaces && !onMedia && !onSort && !landing
   // Review status is a document's state, not a template's: there is nothing
   // to approve about a kit list you wrote yourself, so the pending and
@@ -145,7 +151,7 @@ export default async function LibraryPage({
   // Templates take the same search box and discipline tags the documents use.
   // They have no review status, so the status tabs pass them by — there's
   // nothing to approve about a kit list you wrote yourself.
-  const [{ data: itemRows }, { data: venueRows }, { data: siteRows }, gearRes, scheduleRes, setupRes, catalogRes, { count: pendingCount }, placesShelf, mediaShelf, { data: facetRows }, { data: sortRows }, shelfCounts] = await Promise.all([
+  const [{ data: itemRows }, { data: venueRows }, { data: siteRows }, gearRes, scheduleRes, setupRes, catalogRes, { count: pendingCount }, placesShelf, mediaShelf, { data: facetRows }, { data: sortRows }, inboxCounts, shelfCounts] = await Promise.all([
     showDocs ? query : Promise.resolve({ data: [] }),
     admin.from('venues').select('id, name, region, region_code, client_name, notes, links, active').order('name'),
     // A per-region template pins its canyons here, so the courses started from
@@ -214,7 +220,7 @@ export default async function LibraryPage({
       : Promise.resolve({ data: null }),
     // The whole shelf, because the question is about all of it. Columns enough
     // to render the ordinary row, since one wrong guess is corrected in place.
-    onSort
+    onSort && sortView !== 'inbox'
       ? admin
           .from('library_items')
           .select('id, title, description, source_type, url, edit_url, drive_file_id, kind, audience, disciplines, topics, admin_only, venue_id, site_id, expires_at, status, bucket, region, source_class, source_topic, source_item, library_item_links(id, url, access, audience)')
@@ -222,6 +228,19 @@ export default async function LibraryPage({
           .order('title')
           .limit(2000)
       : Promise.resolve({ data: [] }),
+    // The counts behind the list of what is left. Head-only where it can be,
+    // and the two that need a rule run over every row are only paid for on
+    // the page that shows them.
+    onSort && sortView === 'inbox'
+      ? Promise.all([
+          admin.from('library_items').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
+          admin.from('library_items').select('id', { count: 'exact', head: true }).eq('status', 'published').eq('kind', 'reference'),
+          admin.from('library_items').select('id', { count: 'exact', head: true }).eq('status', 'published').eq('kind', 'map').is('venue_id', null).is('site_id', null),
+          admin.from('library_items').select('id', { count: 'exact', head: true }).eq('status', 'published').eq('kind', 'permit').eq('admin_only', false),
+          admin.from('course_templates').select('id', { count: 'exact', head: true }).eq('active', true).is('course_type', null),
+          admin.from('library_items').select('kind, bucket, title, source_topic').eq('status', 'published').limit(2000),
+        ])
+      : Promise.resolve(null),
     landing
       ? Promise.all([
           ...BUCKET_ORDER.map(async (b) => [b, (await admin
@@ -310,7 +329,7 @@ export default async function LibraryPage({
   // at a glance in a way that 187 individual rows is not.
   const sortGroups: { from: LibraryBucket; to: LibraryBucket; items: LibraryItem[] }[] = []
   let sortUnguessed = 0
-  if (onSort) {
+  if (onSort && sortView === 'shelf') {
     const byMove = new Map<string, LibraryItem[]>()
     for (const raw of (sortRows ?? []) as unknown as (LibraryItem & { library_item_links?: LibraryItem['links'] })[]) {
       const row = { ...raw, links: raw.library_item_links ?? [] } as LibraryItem
@@ -336,6 +355,90 @@ export default async function LibraryPage({
     for (const d of r.disciplines ?? []) facetDisciplines.set(d, (facetDisciplines.get(d) ?? 0) + 1)
   }
   const hasFacets = facetRows !== null
+
+  // Untyped items, grouped by the room they were posted in — things posted
+  // together are usually the same kind of thing, which is the only reason 420
+  // of them is a tractable afternoon rather than a week.
+  const typeGroups: { key: string; label: string; items: LibraryItem[] }[] = []
+  if (onSort && sortView === 'type') {
+    const by = new Map<string, LibraryItem[]>()
+    for (const raw of (sortRows ?? []) as unknown as (LibraryItem & { library_item_links?: LibraryItem['links'] })[]) {
+      if (raw.kind !== 'reference') continue
+      const row = { ...raw, links: raw.library_item_links ?? [] } as LibraryItem
+      const topic = (row.source_topic ?? '').replace(/\(DO NOT POST\)/i, '').trim()
+      const k = `${row.source_class ?? 'Added in the portal'} · ${topic || 'Ungrouped'}`
+      by.set(k, [...(by.get(k) ?? []), row])
+    }
+    for (const [k, items] of by) typeGroups.push({ key: k, label: k, items })
+    typeGroups.sort((a, b) => b.items.length - a.items.length)
+  }
+
+  const href = (patch: Record<string, string | undefined>) => {
+    const p = new URLSearchParams()
+    const merged = { status, discipline, kind, audience, venue, bucket, q, sort, ...patch }
+    for (const [k, v] of Object.entries(merged)) if (v) p.set(k, v)
+    return `/admin/library?${p.toString()}`
+  }
+
+  // What is left, in the order it has to be done in.
+  const checks: SortingCheck[] = []
+  if (inboxCounts) {
+    const [pend, untyped, unplaced, permits, untypedSetups, { data: allPub }] = inboxCounts
+    const moves = ((allPub ?? []) as { kind: string; bucket: LibraryBucket; title: string; source_topic: string | null }[])
+      .filter((r) => { const p = proposedBucket(r); return p && p !== r.bucket }).length
+    checks.push(
+      {
+        key: 'pending',
+        title: 'Sort the import queue',
+        why: 'Nothing pending is visible on a shelf, in a course picker, or to an instructor. Tag each section with the expertise it belongs to, then approve — approving first files them away untagged, where nothing will ever suggest them.',
+        count: pend.count ?? 0,
+        href: href({ status: 'pending', sort: undefined, bucket: undefined }),
+        action: 'Open the queue',
+      },
+      {
+        key: 'type',
+        title: 'Say what things are',
+        why: 'These carry the catch-all type, which is all the import could tell from a file name. Until they say what they are, every shelf groups into one pile called “Reference” and the headings mean nothing.',
+        count: untyped.count ?? 0,
+        href: href({ sort: 'type', bucket: undefined, status: undefined }),
+        action: 'Set types',
+        after: 'the import queue, so the newly approved ones are in this pass too',
+      },
+      {
+        key: 'shelf',
+        title: 'Check the filing',
+        why: 'Filed by which Classroom room they were posted in, which says nothing about what they are. A first guess is proposed for each; nothing moves until you agree.',
+        count: moves,
+        href: href({ sort: 'shelf', bucket: undefined, status: undefined }),
+        action: 'Review moves',
+        after: 'types, because what a thing is decides its shelf',
+      },
+      {
+        key: 'permits',
+        title: 'Lock the permits down',
+        why: 'Permits readable by all twenty-two instructors. Marking them admin-only hides them from everyone but the five of you and keeps them off courses.',
+        count: permits.count ?? 0,
+        href: href({ kind: 'permit', sort: undefined, bucket: undefined, status: undefined }),
+        action: 'Open permits',
+      },
+      {
+        key: 'maps',
+        title: 'Put the maps somewhere',
+        why: 'A map filed nowhere is offered to no course — the venue is what the course-side matching reads. Each is badged “needs a place” until it has one.',
+        count: unplaced.count ?? 0,
+        href: href({ bucket: 'map', sort: undefined, status: undefined }),
+        action: 'Open maps',
+      },
+      {
+        key: 'setups',
+        title: 'Give the course setups an offering',
+        why: 'A setup with no course type can never be matched to a course, so nothing will ever offer it.',
+        count: untypedSetups.count ?? 0,
+        href: href({ bucket: 'setup', sort: undefined, status: undefined }),
+        action: 'Open setups',
+      },
+    )
+  }
 
   const catalog = (catalogRes.data ?? []) as unknown as GearItem[]
 
@@ -367,13 +470,6 @@ export default async function LibraryPage({
 
   // Changing what you're looking at puts you back on page one; only paging
   // carries the page, which is why it isn't in the merge.
-  const href = (patch: Record<string, string | undefined>) => {
-    const p = new URLSearchParams()
-    const merged = { status, discipline, kind, audience, venue, bucket, q, sort, ...patch }
-    for (const [k, v] of Object.entries(merged)) if (v) p.set(k, v)
-    return `/admin/library?${p.toString()}`
-  }
-
   // Grouping follows where you are standing.
   //
   // On a shelf, by what each thing IS — manuals, standards, tech notes, skill
@@ -464,7 +560,7 @@ export default async function LibraryPage({
               href={href({ sort: '1', bucket: undefined, q: undefined })}
               className="text-xs px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded transition-colors shrink-0"
             >
-              Check the filing
+              What needs sorting
             </Link>
           )}
           {/* The three buttons that used to sit here were exits from a page
@@ -676,19 +772,34 @@ export default async function LibraryPage({
           </>
         )}
 
-        {/* ── Resorting ────────────────────────────────────────────────── */}
+        {/* ── Sorting ──────────────────────────────────────────────────── */}
         {onSort && (
           <section className="mb-8">
             <h2 className="flex items-center gap-2 text-lg font-semibold mb-1">
-              Check the filing
-              <InfoHint text="A first guess at where each thing belongs, from what it is rather than which Classroom room it was posted in. Nothing moves until you say so — an auto-sorted shelf looks exactly like a sorted one, and nobody re-checks the second." />
+              {sortView === 'inbox' ? 'What needs sorting' : sortView === 'type' ? 'Say what things are' : 'Check the filing'}
+              <InfoHint
+                text={
+                  sortView === 'inbox'
+                    ? 'Six jobs that were six screens, in the order they have to be done in — approving the import queue before tagging it files things away untagged, and moving something to a shelf before anyone has said what it is means reading it twice.'
+                    : sortView === 'type'
+                      ? 'The type is what the shelves group by, so until things say what they are, every shelf is one pile called Reference. Grouped by the room each batch was posted in: things posted together are usually the same kind of thing.'
+                      : 'A first guess at where each thing belongs, from what it is rather than which Classroom room it was posted in. Nothing moves until you say so — an auto-sorted shelf looks exactly like a sorted one, and nobody re-checks the second.'
+                }
+              />
             </h2>
             <p className="text-xs text-zinc-500 mb-4">
-              <Link href={href({ sort: undefined })} className="underline hover:text-zinc-300 transition-colors">
-                ← back to the library
+              <Link
+                href={sortView === 'inbox' ? href({ sort: undefined }) : href({ sort: '1' })}
+                className="underline hover:text-zinc-300 transition-colors"
+              >
+                {sortView === 'inbox' ? '← back to the library' : '← back to what needs sorting'}
               </Link>
             </p>
-            <SortQueue groups={sortGroups} unguessed={sortUnguessed} venues={venues} sites={siteOptions} />
+            {sortView === 'inbox' && <SortingInbox checks={checks} />}
+            {sortView === 'shelf' && (
+              <SortQueue groups={sortGroups} unguessed={sortUnguessed} venues={venues} sites={siteOptions} />
+            )}
+            {sortView === 'type' && <TypeQueue groups={typeGroups} venues={venues} sites={siteOptions} />}
           </section>
         )}
 

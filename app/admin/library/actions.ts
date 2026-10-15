@@ -383,6 +383,39 @@ export async function setLibraryBucket(ids: string[], bucket: string) {
   revalidate()
 }
 
+// What a thing IS, for a whole group at once. 420 published items carry the
+// catch-all type, which is what the Classroom import could tell from a file
+// name — and while that is the type, the shelves group into one pile called
+// "Reference" and the bullets everyone drew on paper mean nothing.
+//
+// Grouped the same way the review queue groups: by the room it was posted in.
+// Things posted together are usually the same kind of thing, which is the only
+// reason any of this is tractable.
+export async function setLibraryKind(ids: string[], kind: string) {
+  const admin = await requireAdmin()
+  if (ids.length === 0) return
+  if (!VALID_KINDS.has(kind)) throw new Error(`Not a type: ${kind}`)
+  const { error } = await admin
+    .from('library_items')
+    .update({ kind, updated_at: new Date().toISOString() })
+    .in('id', ids)
+  if (error) throw new Error(error.message)
+  revalidate()
+}
+
+// Permits, COIs and MOUs, flagged together. Eighteen permits sit on the
+// instructor shelf readable by twenty-two people, which is the kind of thing
+// that is obvious once and then never looked at again.
+export async function setLibraryAdminOnly(ids: string[], adminOnly: boolean) {
+  const admin = await requireAdmin()
+  if (ids.length === 0) return
+  const update: Record<string, unknown> = { admin_only: adminOnly, updated_at: new Date().toISOString() }
+  if (adminOnly) update.audience = 'internal'
+  const { error } = await admin.from('library_items').update(update).in('id', ids)
+  if (error) throw new Error(error.message)
+  revalidate()
+}
+
 export async function rejectLibraryItems(ids: string[]) {
   const admin = await requireAdmin()
   if (ids.length === 0) return
