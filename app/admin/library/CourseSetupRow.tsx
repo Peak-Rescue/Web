@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation'
 import { updateCourseSetup } from './actions'
 import { COURSE_TYPE_OPTIONS, courseShortName } from '@/lib/courses'
 import { CAPABILITY_META, CAPABILITY_ORDER, courseCapabilityCategories } from '@/lib/capabilities'
+import type { LibraryItem, Venue } from '@/lib/library'
+import LibraryRow from './LibraryRow'
 
 /** A curriculum setup as this shelf lists it: what it says about itself, and
     what it would put on a course. */
@@ -14,7 +16,7 @@ export type CourseSetup = {
   description: string | null
   course_type: string | null
   disciplines: string[]
-  sections: { title: string; items: string[] }[]
+  sections: { title: string; items: LibraryItem[]; missing: number }[]
 }
 
 // A course setup on its shelf.
@@ -24,10 +26,13 @@ export type CourseSetup = {
 // the ones that fit it first, and "fits" is read off the two fields here — so
 // an untagged setup was one nobody could ever be shown on purpose.
 //
-// What it is made of stays read-only. The sections and the material in them
-// are the shape of a class, edited where that material lives; the errand here
-// is saying what kind of course this shape is for.
-export default function CourseSetupRow({ setup }: { setup: CourseSetup }) {
+// The sections are the shape of a class and stay as the import left them. The
+// material in them does not: a setup is the closest thing the library has to a
+// shelf per course type, and a list of titles you could not open was unable to
+// answer the only question worth asking of it — is this the right material,
+// and is it filed where it should be. So each one is the ordinary library row,
+// openable and taggable in place.
+export default function CourseSetupRow({ setup, venues }: { setup: CourseSetup; venues: Venue[] }) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -184,12 +189,12 @@ export default function CourseSetupRow({ setup }: { setup: CourseSetup }) {
             </div>
           </div>
 
-          {/* What it would add, so tagging it is not done blind. Read-only:
-              the material itself is the library's, and the sections are the
-              shape the class was imported with. */}
+          {/* What it would add — and the place to put it right. Checking a
+              setup means reading the material under it, which means opening
+              it, which means the row that can. */}
           <div className="px-3 py-3 mt-3 border-t border-zinc-800">
             <p className="text-[11px] uppercase tracking-widest text-zinc-600 mb-2">What it puts on a course</p>
-            <div className="space-y-2 max-h-72 overflow-y-auto">
+            <div className="space-y-2 max-h-[32rem] overflow-y-auto">
               {setup.sections.map((s, i) => (
                 <details key={i} className="group">
                   <summary className="cursor-pointer list-none flex items-center gap-2 text-sm text-zinc-300">
@@ -197,10 +202,17 @@ export default function CourseSetupRow({ setup }: { setup: CourseSetup }) {
                     {s.title}
                     <span className="text-[10px] text-zinc-600">{s.items.length}</span>
                   </summary>
-                  <ul className="mt-1 pl-6 space-y-0.5">
-                    {s.items.map((t, j) => <li key={j} className="text-[11px] text-zinc-500">{t}</li>)}
-                    {s.items.length === 0 && <li className="text-[11px] text-zinc-700">nothing in this section</li>}
-                  </ul>
+                  <div className="mt-1.5 pl-6 space-y-1.5">
+                    {s.items.map((it) => <LibraryRow key={it.id} item={it} venues={venues} />)}
+                    {s.missing > 0 && (
+                      <p className="text-[11px] text-zinc-700">
+                        {s.missing} item{s.missing === 1 ? '' : 's'} here point at material that has been deleted
+                      </p>
+                    )}
+                    {s.items.length === 0 && s.missing === 0 && (
+                      <p className="text-[11px] text-zinc-700">nothing in this section</p>
+                    )}
+                  </div>
                 </details>
               ))}
               {setup.sections.length === 0 && (

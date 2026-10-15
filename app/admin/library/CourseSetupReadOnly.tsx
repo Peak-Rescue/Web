@@ -2,6 +2,8 @@ import { CAPABILITY_META } from '@/lib/capabilities'
 import { courseCapabilityCategories } from '@/lib/capabilities'
 import { courseShortName } from '@/lib/courses'
 import type { CourseSetup } from './CourseSetupRow'
+import type { Venue } from '@/lib/library'
+import ItemRow from './ItemRow'
 
 // A course setup on its shelf, for someone who can't change it — the same
 // bargain TemplateReadOnly makes for the other two shelves. What a standard
@@ -9,7 +11,7 @@ import type { CourseSetup } from './CourseSetupRow'
 // are admin's to set, so none of the form comes along.
 //
 // A <details>, not a client component: opening a row is the browser's job.
-export default function CourseSetupReadOnly({ setup }: { setup: CourseSetup }) {
+export default function CourseSetupReadOnly({ setup, venues }: { setup: CourseSetup; venues: Venue[] }) {
   const offering = setup.course_type ? courseShortName(setup.course_type, null) : null
   const tags = [...new Set([
     ...courseCapabilityCategories(setup.course_type ?? '', null) as string[],
@@ -44,9 +46,17 @@ export default function CourseSetupReadOnly({ setup }: { setup: CourseSetup }) {
             <p className="text-sm text-zinc-300">
               {s.title} <span className="text-[10px] text-zinc-600">{s.items.length}</span>
             </p>
-            <ul className="mt-0.5 pl-4 space-y-0.5">
-              {s.items.map((t, j) => <li key={j} className="text-[11px] text-zinc-500">{t}</li>)}
-            </ul>
+            {/* The same rows the shelf gives an instructor — which is what
+                makes this worth opening: a title cannot be read, and the
+                material here is the point of the setup. */}
+            <div className="mt-0.5 divide-y divide-zinc-800/60 rounded border border-zinc-800/60">
+              {s.items.map((it) => (
+                <ItemRow key={it.id} item={it} venueName={venues.find((v) => v.id === it.venue_id)?.name} />
+              ))}
+              {s.items.length === 0 && (
+                <p className="px-4 py-2.5 text-[11px] text-zinc-700">nothing in this section</p>
+              )}
+            </div>
           </div>
         ))}
         {setup.sections.length === 0 && (

@@ -153,13 +153,16 @@ export default async function LibraryPage({
           return s
         })()
       : Promise.resolve({ data: [] }),
-    // The curriculum shelf. Its rows are read-only shapes — sections holding
-    // references to library material — so what comes back is enough to say
-    // what one would put on a course, and no more.
+    // The curriculum shelf. A setup is the nearest thing the library has to a
+    // course type's own shelf, so what it holds has to be openable and
+    // taggable where it is listed — reading back a title was enough to say
+    // what a setup *would* put on a course and nothing else, which left the
+    // one view organised by course type unable to answer whether the material
+    // under it was even filed right. Same columns the shelf itself reads.
     showTemplates && shelves.includes('setup')
       ? (() => {
           let c = admin.from('course_templates')
-            .select('id, name, description, course_type, disciplines, course_template_sections(title, sort_order, course_template_items(sort_order, library_items(title)))')
+            .select('id, name, description, course_type, disciplines, course_template_sections(title, sort_order, course_template_items(sort_order, library_items(id, title, description, source_type, url, edit_url, drive_file_id, kind, audience, disciplines, topics, venue_id, expires_at, status, bucket, region, source_class, source_topic, source_item, library_item_links(id, url, access, audience))))')
             .eq('active', true)
             .order('name')
           if (q) c = c.ilike('name', `%${q}%`)
@@ -218,7 +221,10 @@ export default async function LibraryPage({
     disciplines: string[] | null
     course_template_sections: {
       title: string; sort_order: number
-      course_template_items: { sort_order: number; library_items: { title: string } | null }[]
+      course_template_items: {
+        sort_order: number
+        library_items: (LibraryItem & { library_item_links?: LibraryItem['links'] }) | null
+      }[]
     }[]
   }[]).map((t) => ({
     id: t.id,
@@ -228,12 +234,21 @@ export default async function LibraryPage({
     disciplines: t.disciplines ?? [],
     sections: [...(t.course_template_sections ?? [])]
       .sort((a, b) => a.sort_order - b.sort_order)
-      .map((sec) => ({
-        title: sec.title,
-        items: [...(sec.course_template_items ?? [])]
-          .sort((a, b) => a.sort_order - b.sort_order)
-          .map((i) => i.library_items?.title ?? 'material since deleted'),
-      })),
+      .map((sec) => {
+        const rows = [...(sec.course_template_items ?? [])].sort((a, b) => a.sort_order - b.sort_order)
+        return {
+          title: sec.title,
+          items: rows
+            .map((i) => i.library_items)
+            .filter((i): i is LibraryItem & { library_item_links?: LibraryItem['links'] } => Boolean(i))
+            .map((i) => ({ ...i, links: i.library_item_links ?? [] }) as LibraryItem),
+          // A section can point at material that has since been deleted. It
+          // used to read as a row saying "material since deleted", which looked
+          // like something you could go and fix; it is a dangling reference and
+          // the honest form of it is a count.
+          missing: rows.filter((i) => !i.library_items).length,
+        }
+      }),
   }))
   const catalog = (catalogRes.data ?? []) as unknown as GearItem[]
 
@@ -586,8 +601,8 @@ export default async function LibraryPage({
                 ))}
                 {shelf === 'setup' && courseSetups.map((t) => (
                   isAdmin
-                    ? <CourseSetupRow key={t.id} setup={t} />
-                    : <CourseSetupReadOnly key={t.id} setup={t} />
+                    ? <CourseSetupRow key={t.id} setup={t} venues={venues} />
+                    : <CourseSetupReadOnly key={t.id} setup={t} venues={venues} />
                 ))}
                 {rows.length === 0 && (
                   <p className="text-sm text-zinc-500">
