@@ -39,8 +39,8 @@ export default function ScheduleEditor({
   // true, so a screen that rendered this editor without thinking about it
   // handed out the shelf, and the build had nothing to say about that.
   canTemplate: boolean
-  // Canyons and crags with beta already written. A day picks one instead of
-  // retyping what the place is like.
+  // Places with beta already written — a canyon, a crag, a tower, a plant.
+  // A day picks one instead of retyping what the place is like.
   sites?: SiteOption[]
   // The course's venue. A Maui course shouldn't have to scroll past every crag
   // in Washington to find Emerald, so the venue's own sites come first and the

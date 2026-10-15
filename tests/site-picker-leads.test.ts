@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { SiteOption } from '@/app/admin/schedules/types'
 
-// The rule the day's canyon picker leads with. Lifted out here because it is
+// The rule the day's beta picker leads with. Lifted out here because it is
 // the judgement, not the dropdown: which sites count as "where this course
 // is" when the course says so three different ways and usually not the exact
 // one.
@@ -25,7 +25,7 @@ const site = (o: Partial<SiteOption>): SiteOption => ({
 const maui = site({ id: 'm', name: 'Emerald', venue_id: 'v-maui', venue_name: 'Maui', venue_region: 'US-HI' })
 const wa = site({ id: 'w', name: 'Dingford', venue_id: 'v-ding', venue_name: 'Dingford Creek', venue_region: 'US-WA' })
 
-describe('what the canyon picker leads with', () => {
+describe('what the beta picker leads with', () => {
   it('uses the venue when the course has one', () => {
     expect(leads([maui, wa], { venueId: 'v-maui' }).map((s) => s.id)).toEqual(['m'])
   })

@@ -84,7 +84,7 @@ export default function ScheduleDayCard({
     // Where this course is, by whatever it actually says. The venue is the
     // exact answer and is set on five courses in eighty; the state and the
     // typed location are set on nearly all of them and point the same way. A
-    // list that leads with the right canyons only for the courses that filled
+    // list that leads with the right places only for the courses that filled
     // in the rarest field is a list that leads with nothing.
     const loc = (location ?? '').toLowerCase().trim()
     const here = sites.filter((s) => {
@@ -192,7 +192,7 @@ export default function ScheduleDayCard({
             className={`w-full pl-7 ${input}`}
           />
         </Marked>
-        {/* Picking the canyon is what stops its beta being retyped per
+        {/* Picking the place is what stops its beta being retyped per
             course. Left unset, the day behaves exactly as it always
             has — a free-text location and its own notes. */}
         {sites.length > 0 && (
@@ -202,7 +202,7 @@ export default function ScheduleDayCard({
               onChange={(e) => run(() => updateScheduleDay(day.id, { site_id: e.target.value || null }))}
               className={`w-full pl-7 ${input} ${day.site_id ? 'text-zinc-200' : 'text-zinc-500'}`}
             >
-              <option value="">No site</option>
+              <option value="">No beta</option>
               {siteGroups.map((g) => (
                 <optgroup key={g.name} label={g.name}>
                   {g.sites.map((s) => (
@@ -248,7 +248,7 @@ export default function ScheduleDayCard({
           </div>
         )
       })()}
-      {/* A day at a canyon carries its beta here — approach, rap count,
+      {/* A day at a place carries its beta here — approach, rap count,
           exit — so this one starts a line tall and grows to whatever got
           pasted in. Sitting half-width beside the location, a paragraph
           of it was a keyhole. */}
