@@ -31,7 +31,11 @@ export default function LibraryRow({ item, venues, sites = [], hideProvenance = 
     bucket: item.bucket ?? 'resource',
     audience: item.audience,
     disciplines: item.disciplines,
-    topicsRaw: item.topics.join(', '),
+    // The sorting mark is the software's, not a tag anyone typed, so it is
+    // not in the box they type tags into — it was turning up there as a word
+    // to remember to delete before saving. It comes off by itself when the
+    // row says where it belongs.
+    topicsRaw: item.topics.filter((t) => t !== NEEDS_SORTING).join(', '),
     place: placeValue(item.venue_id, item.site_id),
     admin_only: item.admin_only,
     region: item.region ?? '',
@@ -303,6 +307,12 @@ export default function LibraryRow({ item, venues, sites = [], hideProvenance = 
           <div className="sm:col-span-2">
             <label className={label}>Topic tags (comma separated)</label>
             <input className={input} value={form.topicsRaw} onChange={(e) => setForm({ ...form, topicsRaw: e.target.value })} />
+            {item.topics.includes(NEEDS_SORTING) && (
+              <p className="text-[11px] text-zinc-600 mt-1">
+                Marked for sorting. Saying what this is, which shelf it is on, or where it
+                is takes that off — a new title on its own does not.
+              </p>
+            )}
           </div>
           <div className="sm:col-span-2 flex items-center gap-3">
             <button onClick={save} disabled={busy} className="px-3 py-1.5 rounded bg-pr-red hover:bg-pr-red-dark text-white text-sm font-medium transition-colors disabled:opacity-40">

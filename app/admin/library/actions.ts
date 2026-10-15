@@ -30,6 +30,14 @@ function revalidate() {
   revalidatePath('/portal/[id]', 'page')
 }
 
+/** Looking at something is what sorting it means, so saying anything about
+    where it belongs takes the mark off. Nobody has to remember to delete a
+    word the software put in their tag box. */
+async function clearSortingMark(admin: ReturnType<typeof createAdminClient>, ids: string[]) {
+  if (ids.length === 0) return
+  await admin.rpc('clear_sorting_mark', { ids })
+}
+
 const VALID_KINDS = new Set<string>(LIBRARY_KINDS)
 const VALID_DISCIPLINES = new Set<string>(CAPABILITY_ORDER)
 const VALID_BUCKETS = new Set<string>(BUCKET_ORDER)
@@ -101,6 +109,11 @@ export async function updateLibraryItem(id: string, patch: LibraryPatch) {
 
   const { error } = await admin.from('library_items').update(update).eq('id', id)
   if (error) throw new Error(error.message)
+  // Saying what it is, where it goes or where it is counts as having looked at
+  // it. Renaming alone does not — a better title is not a filing decision.
+  const classified = ['kind', 'bucket', 'place', 'venue_id', 'admin_only']
+    .some((f) => (patch as Record<string, unknown>)[f] !== undefined)
+  if (classified) await clearSortingMark(admin, [id])
   revalidate()
 }
 
@@ -380,6 +393,7 @@ export async function setLibraryBucket(ids: string[], bucket: string) {
     .update({ bucket, updated_at: new Date().toISOString() })
     .in('id', ids)
   if (error) throw new Error(error.message)
+  await clearSortingMark(admin, ids)
   revalidate()
 }
 
@@ -400,6 +414,7 @@ export async function setLibraryKind(ids: string[], kind: string) {
     .update({ kind, updated_at: new Date().toISOString() })
     .in('id', ids)
   if (error) throw new Error(error.message)
+  await clearSortingMark(admin, ids)
   revalidate()
 }
 
@@ -413,6 +428,7 @@ export async function setLibraryAdminOnly(ids: string[], adminOnly: boolean) {
   if (adminOnly) update.audience = 'internal'
   const { error } = await admin.from('library_items').update(update).in('id', ids)
   if (error) throw new Error(error.message)
+  await clearSortingMark(admin, ids)
   revalidate()
 }
 
