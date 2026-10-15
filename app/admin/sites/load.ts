@@ -20,7 +20,7 @@ export async function loadSitesShelf() {
     admin
       .from('library_items')
       .select('id, title, description, source_type, url, edit_url, drive_file_id, kind, audience, disciplines, topics, admin_only, venue_id, site_id, expires_at, status, bucket, region, source_class, source_topic, source_item, library_item_links(id, url, access, audience)')
-      .in('kind', ['map', 'route', 'rescue_plan'])
+      .in('kind', ['map', 'route', 'rescue_plan', 'permit'])
       .neq('status', 'archived')
       .order('title'),
     admin.from('region_info').select('region_code, links, contacts, notes'),

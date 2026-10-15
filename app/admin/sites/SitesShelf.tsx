@@ -70,7 +70,13 @@ export default function SitesShelf({
     // places, one of them saying it was lost.
     if (!m.venue_id && !m.site_id && m.region) continue
     const k = m.venue_id ?? ''
-    const into = m.kind === 'route' ? betaByVenue : m.kind === 'rescue_plan' ? plansByVenue : mapsByVenue
+    // A permit is a plan's neighbour: both are the paperwork for going
+    // somewhere, both are read when the question is "can we, and how".
+    const into = m.kind === 'route'
+      ? betaByVenue
+      : m.kind === 'rescue_plan' || m.kind === 'permit'
+        ? plansByVenue
+        : mapsByVenue
     into.set(k, [...(into.get(k) ?? []), m])
   }
   // A venue earns a heading by having anything under it at all — its own
@@ -163,8 +169,8 @@ export default function SitesShelf({
     const info = regionInfo.get(code)
     const canyons = sitesAtRegion.get(code) ?? []
     const beta = items.filter((i) => i.kind === 'route')
-    const plans = items.filter((i) => i.kind === 'rescue_plan')
-    const maps = items.filter((i) => i.kind !== 'route' && i.kind !== 'rescue_plan')
+    const plans = items.filter((i) => i.kind === 'rescue_plan' || i.kind === 'permit')
+    const maps = items.filter((i) => !['route', 'rescue_plan', 'permit'].includes(i.kind))
     const weather = (info?.links ?? []).filter((l) => l.kind === 'weather')
     const other = (info?.links ?? []).filter((l) => l.kind !== 'weather')
     const contacts = info?.contacts ?? []
@@ -221,7 +227,7 @@ export default function SitesShelf({
         )}
         {plans.length > 0 && (
           <div>
-            <p className="text-[10px] uppercase tracking-wide text-zinc-700 mb-1.5">Plans</p>
+            <p className="text-[10px] uppercase tracking-wide text-zinc-700 mb-1.5">Plans &amp; permits</p>
             <div className="space-y-2">
               {plans.map((x) => <LibraryRow key={x.id} item={x} venues={venues} sites={siteOptions} />)}
             </div>
@@ -364,7 +370,7 @@ export default function SitesShelf({
 
             {g.plans.length > 0 && (
               <div className="mt-2">
-                <p className="text-[10px] uppercase tracking-wide text-zinc-700 mb-1.5">Plans</p>
+                <p className="text-[10px] uppercase tracking-wide text-zinc-700 mb-1.5">Plans &amp; permits</p>
                 <div className="space-y-2">
                   {g.plans.map((x) => (
                     <LibraryRow key={x.id} item={x} venues={venues} sites={siteOptions} />

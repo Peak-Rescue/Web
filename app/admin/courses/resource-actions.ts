@@ -82,6 +82,9 @@ export type ResourcePickerItem = {
   /** The expertise it shares with the course, when that is why it is offered. */
   disciplineLabel: string | null
   alreadyAdded: boolean
+  /** A plan for somewhere else. Loaded, because the query is one query, and
+      dropped here rather than offered to every course in the company. */
+  hidden?: boolean
 }
 
 // The Resources shelf, with the ones for this course's place floated to the
@@ -95,10 +98,16 @@ export async function loadResourceLibrary(instanceId: string): Promise<ResourceP
     admin.from('course_instances').select('location, region, venue_id, course_type, custom_categories').eq('id', instanceId).single(),
     admin
       .from('library_items')
-      .select('id, title, url, kind, audience, region, venue_id, disciplines, venues(name)')
-      .eq('bucket', 'resource')
+      .select('id, title, url, kind, audience, region, venue_id, bucket, disciplines, venues(name)')
+      // Reference, plus the plans a place has. A venue's evac plan is the
+      // thing somebody goes looking for while building the course that goes
+      // there, and it sits on the Documents shelf — so offering only the
+      // Reference shelf here meant it could not be found from the course at
+      // all. Filtered to this course's place below, like everything else.
+      .in('bucket', ['resource', 'documents'])
       .eq('status', 'published')
-      // Company paperwork is not course material. See 235.
+      // Company paperwork is not course material, and a permit is admin-only
+      // material that never reaches a course. See 235.
       .eq('admin_only', false)
       .order('title')
       .limit(300),
@@ -116,7 +125,7 @@ export async function loadResourceLibrary(instanceId: string): Promise<ResourceP
     ? (courseCapabilityCategories(inst.course_type, inst.custom_categories) as string[])
     : []
 
-  return (rows ?? []).map((r) => {
+  const mapped = (rows ?? []).map((r) => {
     const venueName = (r.venues as unknown as { name: string } | null)?.name ?? null
     const venueLower = (venueName ?? '').toLowerCase()
     const venueHit = courseVenue
@@ -124,6 +133,11 @@ export async function loadResourceLibrary(instanceId: string): Promise<ResourceP
       : Boolean(loc && venueLower && (loc.includes(venueLower) || venueLower.includes(loc)))
     const regionHit = Boolean(courseRegion && r.region && r.region === courseRegion)
     const shared = ((r.disciplines ?? []) as string[]).filter((d) => courseDisciplines.includes(d))
+    // Everything on the Reference shelf is offerable; a Documents row is only
+    // here because it is about where this course is, so it comes with the
+    // place or not at all. Otherwise eight copies of "Company Evac Plans"
+    // would be offered to every course ever built.
+    const placeOnly = r.bucket === 'documents'
     return {
       id: r.id,
       title: r.title,
@@ -132,12 +146,14 @@ export async function loadResourceLibrary(instanceId: string): Promise<ResourceP
       audience: r.audience as LibraryAudience,
       venueName,
       regionLabel: regionLabel(r.region),
-      suggested: venueHit || regionHit || shared.length > 0,
-      matchedOn: venueHit ? 'venue' : regionHit ? 'region' : shared.length > 0 ? 'discipline' : null,
+      suggested: placeOnly ? venueHit || regionHit : venueHit || regionHit || shared.length > 0,
+      hidden: placeOnly && !venueHit && !regionHit,
+      matchedOn: (venueHit ? 'venue' : regionHit ? 'region' : shared.length > 0 ? 'discipline' : null) as ResourcePickerItem['matchedOn'],
       disciplineLabel: shared.map((d) => CAPABILITY_META[d as CapabilityCategory]?.label ?? d).join(', ') || null,
       alreadyAdded: added.has(r.id),
     }
   })
+  return mapped.filter((r) => !r.hidden)
 }
 
 export async function addCourseResourcesFromLibrary(instanceId: string, itemIds: string[]) {

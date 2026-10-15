@@ -73,11 +73,25 @@ export function isMediaShelf(v: string | undefined): v is MediaShelfKey {
     untyped catch-all and for the types whose card is not a shelf — a map and a
     photo album are read from the venue and the media card, and their bucket is
     bookkeeping. */
+// Said outright rather than read off the group a type is listed under. The
+// two came apart when plans and permits moved to the Venue information card:
+// that is where they are read, and Documents is still the shelf they sit on.
+const BUCKET_FOR_KIND: Partial<Record<LibraryKind, LibraryBucket>> = {
+  map: 'map',
+  route: 'map',
+  permit: 'documents',
+  rescue_plan: 'documents',
+  form: 'documents',
+  manual: 'resource',
+  tech_note: 'resource',
+  standard: 'resource',
+  presentation: 'teaching',
+  skill_sheet: 'teaching',
+  outline: 'instructor',
+}
+
 export function bucketForKind(kind: string): LibraryBucket | null {
-  if (kind === 'map') return 'map'
-  const group = KIND_GROUPS.find((g) => (g.kinds as string[]).includes(kind))
-  const match = BUCKET_ORDER.find((b) => BUCKET_META[b].label === group?.label)
-  return match ?? null
+  return BUCKET_FOR_KIND[kind as LibraryKind] ?? null
 }
 
 export function isPlaceShelf(v: string | undefined): v is PlaceShelf {
@@ -243,8 +257,11 @@ export const KIND_GROUPS: { label: string; kinds: LibraryKind[] }[] = [
   { label: 'Teaching material', kinds: ['presentation', 'skill_sheet', 'video'] },
   { label: 'Reference',         kinds: ['manual', 'tech_note', 'standard'] },
   { label: 'Instructor material', kinds: ['outline'] },
-  { label: 'Documents',         kinds: ['permit', 'form', 'rescue_plan'] },
-  { label: 'Venue information', kinds: ['map', 'route'] },
+  { label: 'Documents',         kinds: ['form'] },
+  // A plan and a permit are about one place — Deer Haven's risk eval, the
+  // Snoqualmie permit — so they are listed under the card they are read on.
+  // Which shelf the row sits on is a different question, answered below.
+  { label: 'Venue information', kinds: ['map', 'route', 'rescue_plan', 'permit'] },
   { label: 'Photos & video',    kinds: ['media'] },
   // Last, and named for what it is. A thing that has not been typed yet is
   // not a type of thing.
