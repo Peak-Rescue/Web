@@ -3,7 +3,7 @@ import JumpToNewRow from '@/components/JumpToNewRow'
 import AddToPlace from './AddToPlace'
 import AddLevel from './AddLevel'
 import EditVenue from './EditVenue'
-import VenueSettings from '@/components/VenueSettings'
+import PlaceLinkChip from './PlaceLinkChip'
 import { type Site } from '@/lib/sites'
 import { type LibraryItem, type Venue, type VenueContact, type VenueLink } from '@/lib/library'
 import { countryName, regionLabel, splitRegion, SUBDIVISIONS } from '@/lib/regions'
@@ -193,10 +193,7 @@ export default function SitesShelf({
         {weather.length > 0 && (
           <div className="flex flex-wrap gap-1.5">
             {weather.map((l, i) => (
-              <a key={i} href={l.url} target="_blank" rel="noopener noreferrer"
-                 className="text-[11px] px-2 py-1 rounded border border-sky-900/60 bg-sky-950/30 text-sky-300 hover:text-white hover:border-sky-700 transition-colors">
-                {l.label}
-              </a>
+              <PlaceLinkChip key={i} scope={{ regionCode: code }} link={l} tone="weather" />
             ))}
           </div>
         )}
@@ -219,10 +216,7 @@ export default function SitesShelf({
         {other.length > 0 && (
           <div className="flex flex-wrap gap-1.5">
             {other.map((l, i) => (
-              <a key={i} href={l.url} target="_blank" rel="noopener noreferrer"
-                 className="text-[11px] px-2 py-1 rounded border border-zinc-800 bg-zinc-900 text-zinc-400 hover:text-white hover:border-zinc-600 transition-colors">
-                {l.label}
-              </a>
+              <PlaceLinkChip key={i} scope={{ regionCode: code }} link={l} />
             ))}
           </div>
         )}
@@ -321,10 +315,7 @@ export default function SitesShelf({
                 <p className="text-[10px] uppercase tracking-wide text-zinc-700 mb-1.5">Weather</p>
                 <div className="flex flex-wrap gap-1.5">
                   {g.venue.links.filter((l) => l.kind === 'weather').map((l, i) => (
-                    <a key={i} href={l.url} target="_blank" rel="noopener noreferrer"
-                       className="text-[11px] px-2 py-1 rounded border border-sky-900/60 bg-sky-950/30 text-sky-300 hover:text-white hover:border-sky-700 transition-colors">
-                      {l.label}
-                    </a>
+                    <PlaceLinkChip key={i} scope={{ venueId: g.venue!.id }} link={l} tone="weather" />
                   ))}
                 </div>
               </div>
@@ -353,10 +344,7 @@ export default function SitesShelf({
             {g.venue && (g.venue.links ?? []).filter((l) => l.kind !== 'weather').length > 0 && (
               <div className="flex flex-wrap gap-1.5 mb-2">
                 {g.venue.links.filter((l) => l.kind !== 'weather').map((l, i) => (
-                  <a key={i} href={l.url} target="_blank" rel="noopener noreferrer"
-                     className="text-[11px] px-2 py-1 rounded border border-zinc-800 bg-zinc-900 text-zinc-400 hover:text-white hover:border-zinc-600 transition-colors">
-                    {l.label}
-                  </a>
+                  <PlaceLinkChip key={i} scope={{ venueId: g.venue!.id }} link={l} />
                 ))}
               </div>
             )}
@@ -430,22 +418,6 @@ export default function SitesShelf({
                 place={`venue:${g.venue.id}`}
                 placeName={g.venue.name}
               />
-            )}
-            {/* The rest of a venue's own record: its state, its notes, the
-                links and contacts already on it, and removing it. Rare
-                enough to fold, and down here rather than in the summary,
-                which is a line of text and cannot hold a form. */}
-            {g.venue && (
-              <details className="group/vs mt-3 border-t border-zinc-800 pt-2">
-                <summary className="cursor-pointer list-none text-[11px] text-zinc-600 hover:text-zinc-300 transition-colors">
-                  <span className="inline-block transition-transform group-open/vs:rotate-90 mr-1.5">▶</span>
-                  Venue record
-                </summary>
-                <VenueSettings
-                  venue={g.venue}
-                  itemCount={g.maps.length + g.beta.length + g.plans.length + g.permits.length}
-                />
-              </details>
             )}
             </div>
           </details>

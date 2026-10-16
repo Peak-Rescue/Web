@@ -271,3 +271,34 @@ export async function addRegion(code: string): Promise<ActionResult> {
   revalidate()
   revalidatePath('/admin/library')
 }
+
+/** Taking a link back off a place.
+ *
+ * Lived on the venue record panel, which asked for a state the heading
+ * already shows and notes nobody writes. The panel went; this had to go
+ * somewhere, and the chip it is on is the obvious place — the same bargain
+ * every other row on this page makes.
+ */
+export async function removePlaceLink(scope: PlaceScope, url: string): Promise<ActionResult> {
+  const admin = await requireAdmin()
+  const drop = (rows: { url: string }[] | null | undefined) => (rows ?? []).filter((l) => l.url !== url)
+
+  if ('venueId' in scope) {
+    const { data } = await admin.from('venues').select('links').eq('id', scope.venueId).single()
+    const { error } = await admin
+      .from('venues')
+      .update({ links: drop(data?.links as { url: string }[]) })
+      .eq('id', scope.venueId)
+    if (error) throw new Error(error.message)
+  } else {
+    const { data } = await admin
+      .from('region_info').select('links').eq('region_code', scope.regionCode).maybeSingle()
+    const { error } = await admin
+      .from('region_info')
+      .update({ links: drop(data?.links as { url: string }[]) })
+      .eq('region_code', scope.regionCode)
+    if (error) throw new Error(error.message)
+  }
+  revalidate()
+  revalidatePath('/admin/library')
+}
