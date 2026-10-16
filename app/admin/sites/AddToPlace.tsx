@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createSite, addPlaceLink, addPlaceContact, type PlaceScope } from './actions'
 import { createLibraryItem } from '@/app/admin/library/actions'
 import { errorFrom } from '@/lib/action-result'
+import TrashIcon from '@/components/TrashIcon'
 
 // Adding to a place, asking what it is first.
 //
@@ -174,7 +175,7 @@ export default function AddToPlace({
                            onChange={(e) => setLinks(links.map((x, j) => (j === i ? { ...x, url: e.target.value } : x)))} />
                     <button type="button" onClick={() => setLinks(links.filter((_, j) => j !== i))}
                             aria-label="Remove link"
-                            className="text-xs text-zinc-600 hover:text-red-400 transition-colors">✕</button>
+                            className="text-xs text-zinc-600 hover:text-red-400 transition-colors"><TrashIcon /></button>
                   </div>
                 ))}
                 <button type="button" onClick={() => setLinks([...links, { label: '', url: '' }])}

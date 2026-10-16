@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { updateVenue, deleteVenue } from '@/app/admin/library/actions'
 import { type Venue, type VenueLink, type VenueContact, type VenueLinkKind } from '@/lib/library'
 import RegionSelect from '@/components/RegionSelect'
+import TrashIcon from '@/components/TrashIcon'
 
 const input = 'w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-zinc-500'
 const label = 'block text-[11px] text-zinc-500 mb-1'
@@ -109,7 +110,7 @@ export default function VenueSettings({
                   aria-label={`Remove ${l.label || 'link'}`}
                   className="text-xs text-zinc-600 hover:text-red-400 transition-colors"
                 >
-                  ✕
+                  <TrashIcon />
                 </button>
               </div>
             ))}
@@ -152,7 +153,7 @@ export default function VenueSettings({
                   aria-label={`Remove ${c.name || 'contact'}`}
                   className="text-xs text-zinc-600 hover:text-red-400 transition-colors"
                 >
-                  ✕
+                  <TrashIcon />
                 </button>
               </div>
             ))}

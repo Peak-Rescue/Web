@@ -6,6 +6,7 @@ import InfoHint from '@/components/InfoHint'
 import { PAY_CODES, TRAVEL_CODE, FIELD_CODE } from '@/lib/paycodes'
 import { dayShift } from '@/lib/courses'
 import HoursCalendar, { type CalendarCourse } from './HoursCalendar'
+import TrashIcon from '@/components/TrashIcon'
 import {
   DEFAULT_HOURS,
   rowsAsText,
@@ -349,11 +350,11 @@ export default function TimesheetEditor({
                       </button>
                       <button
                         onClick={() => setRows(rows.filter((_, n) => n !== i))}
-                        className="text-zinc-600 hover:text-red-400 text-xs transition-colors"
+                        className="text-zinc-600 hover:text-red-400 transition-colors"
                         aria-label="Remove this day"
                         title="Remove this day"
                       >
-                        ✕
+                        <TrashIcon />
                       </button>
                     </div>
                   </td>
@@ -381,7 +382,7 @@ export default function TimesheetEditor({
           </button>
           {rows.length > 0 && (
             <span className="text-[11px] text-zinc-600">
-              Remove one with the ✕ on its row, or by clicking its mark on the calendar.
+              Remove one with the bin on its row, or by clicking its mark on the calendar.
             </span>
           )}
           {hasSaved && !sameRows(rows, generated) && (

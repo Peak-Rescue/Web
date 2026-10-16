@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { removeRegion, removeVenue } from './actions'
+import TrashIcon from '@/components/TrashIcon'
 
 // Undoing a level that was added by mistake — picking Nevada when you meant
 // New Mexico, typing a venue twice.
@@ -37,9 +38,9 @@ export default function RemovePlace({
             setBusy(false)
           }
         }}
-        className="text-[11px] text-zinc-700 hover:text-red-400 transition-colors disabled:opacity-40"
+        className="text-zinc-700 hover:text-red-400 transition-colors disabled:opacity-40"
       >
-        ✕
+        <TrashIcon />
       </button>
       {error && <span className="text-[11px] text-pr-red">{error}</span>}
     </>

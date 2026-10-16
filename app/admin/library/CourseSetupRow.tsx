@@ -13,6 +13,7 @@ import { CAPABILITY_META, CAPABILITY_ORDER, courseCapabilityCategories } from '@
 import type { LibraryItem, Venue } from '@/lib/library'
 import { type SiteOption } from '@/app/admin/schedules/types'
 import LibraryRow from './LibraryRow'
+import TrashIcon from '@/components/TrashIcon'
 
 /** A curriculum setup as this shelf lists it: what it says about itself, and
     what it would put on a course. */
@@ -224,7 +225,7 @@ export default function CourseSetupRow({ setup, venues, sites }: { setup: Course
                           <LibraryRow item={item} venues={venues} sites={sites} />
                         </div>
                         {/* Takes the reference out, not the document — but a
-                            ✕ one row away from an Edit button, acting on the
+                            bin one row away from an Edit button, acting on the
                             first click, took one out by accident within a day
                             of being built. It is cheap to restore and that is
                             not the point: nothing here is urgent enough to be
@@ -237,9 +238,9 @@ export default function CourseSetupRow({ setup, venues, sites }: { setup: Course
                           }}
                           disabled={busy}
                           title={`Take "${item.title}" out of ${s.title} — the library keeps it`}
-                          className="mt-2.5 shrink-0 px-1.5 text-xs text-zinc-700 hover:text-red-400 transition-colors disabled:opacity-40"
+                          className="mt-2.5 shrink-0 px-1.5 text-zinc-700 hover:text-red-400 transition-colors disabled:opacity-40"
                         >
-                          ✕
+                          <TrashIcon />
                         </button>
                       </div>
                     ))}

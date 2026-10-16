@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { removePlaceLink, type PlaceScope } from './actions'
 import type { VenueLink } from '@/lib/library'
+import TrashIcon from '@/components/TrashIcon'
 
 // A link on a place, with the way to take it off.
 //
@@ -43,7 +44,7 @@ export default function PlaceLinkChip({
         }}
         className="text-zinc-600 hover:text-red-400 transition-colors disabled:opacity-40 px-0.5"
       >
-        ✕
+        <TrashIcon />
       </button>
     </span>
   )
