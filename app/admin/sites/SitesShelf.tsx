@@ -3,6 +3,7 @@ import JumpToNewRow from '@/components/JumpToNewRow'
 import AddToPlace from './AddToPlace'
 import AddLevel from './AddLevel'
 import EditVenue from './EditVenue'
+import VenueSettings from '@/components/VenueSettings'
 import { type Site } from '@/lib/sites'
 import { type LibraryItem, type Venue, type VenueContact, type VenueLink } from '@/lib/library'
 import { countryName, regionLabel, splitRegion, SUBDIVISIONS } from '@/lib/regions'
@@ -304,18 +305,10 @@ export default function SitesShelf({
             <summary className="cursor-pointer list-none flex items-center gap-2 px-3 py-2.5 hover:bg-zinc-800/60 transition-colors">
               <span aria-hidden className="text-zinc-600 text-xs transition-transform group-open/venue:rotate-90">▶</span>
               <span className="text-sm font-medium text-zinc-200">{g.name}</span>
-              {g.venue && <EditVenue venue={g.venue} itemCount={g.maps.length + g.beta.length + g.plans.length + g.permits.length} />}
-              <span className="text-[11px] text-zinc-600">
-                {[
-                  g.sites.length && `${g.sites.length} site${g.sites.length === 1 ? '' : 's'}`,
-                  g.maps.length && `${g.maps.length} map${g.maps.length === 1 ? '' : 's'}`,
-                  g.beta.length && `${g.beta.length} beta`,
-                  g.plans.length && `${g.plans.length} plan${g.plans.length === 1 ? '' : 's'}`,
-                  g.permits.length && `${g.permits.length} permit${g.permits.length === 1 ? '' : 's'}`,
-                  g.venue && (g.venue.links ?? []).length && `${g.venue.links.length} link${g.venue.links.length === 1 ? '' : 's'}`,
-                  g.venue && (g.venue.contacts ?? []).length && `${g.venue.contacts.length} contact${g.venue.contacts.length === 1 ? '' : 's'}`,
-                ].filter(Boolean).join(' · ') || 'nothing yet'}
-              </span>
+              {g.venue && <EditVenue venue={g.venue} />}
+              {/* No tally. "1 beta · 1 map" told you a venue had something
+                  without telling you what, and you were about to open it
+                  either way. */}
             </summary>
             <div className="px-3 pb-3 pt-1">
 
@@ -424,12 +417,35 @@ export default function SitesShelf({
               </div>
             )}
 
+            {/* Notes on the venue, which three of them have and none of them
+                showed anywhere — written when somebody worked out where the
+                place is, and then invisible. */}
+            {g.venue?.notes && (
+              <p className="mt-2 text-[11px] text-zinc-500 max-w-prose">{g.venue.notes}</p>
+            )}
+
             {g.venue && (
               <AddToPlace
                 scope={{ venueId: g.venue.id }}
                 place={`venue:${g.venue.id}`}
                 placeName={g.venue.name}
               />
+            )}
+            {/* The rest of a venue's own record: its state, its notes, the
+                links and contacts already on it, and removing it. Rare
+                enough to fold, and down here rather than in the summary,
+                which is a line of text and cannot hold a form. */}
+            {g.venue && (
+              <details className="group/vs mt-3 border-t border-zinc-800 pt-2">
+                <summary className="cursor-pointer list-none text-[11px] text-zinc-600 hover:text-zinc-300 transition-colors">
+                  <span className="inline-block transition-transform group-open/vs:rotate-90 mr-1.5">▶</span>
+                  Venue record
+                </summary>
+                <VenueSettings
+                  venue={g.venue}
+                  itemCount={g.maps.length + g.beta.length + g.plans.length + g.permits.length}
+                />
+              </details>
             )}
             </div>
           </details>
