@@ -163,7 +163,7 @@ export default function CourseFilesSection({
         <div>
           <div className="flex items-center gap-2 mb-1">
             <h3 className="text-sm font-semibold text-zinc-300">Files</h3>
-            <InfoHint text="A document students need goes on the Resources shelf below." />
+            <InfoHint text="A document students need goes on the Reference shelf below." />
           </div>
           <p className="text-xs text-zinc-500">Documents and task attachments.</p>
         </div>

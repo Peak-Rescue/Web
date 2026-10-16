@@ -35,6 +35,11 @@ export type CourseResource = {
 // place maps are chosen, because a med plan is answering the same question a
 // map is: what is true about *this* place. Each row carries its own audience;
 // the med plan goes to students, the annex behind it usually doesn't.
+//
+// Called Reference, like the shelf it is drawn from. It was Resources here
+// and Reference there, which read as two different piles — and "resources"
+// says nothing anyway: everything in the library is a resource. The table is
+// still course_resources; renaming that buys nothing and costs a migration.
 export default function CourseResourcesSection({
   instanceId,
   resources,
@@ -109,7 +114,7 @@ export default function CourseResourcesSection({
       try {
         setPicker(await loadResourceLibrary(instanceId))
       } catch (e) {
-        setError(errorFrom(e, 'Could not load the resource library.'))
+        setError(errorFrom(e, 'Could not load the reference library.'))
       } finally {
         setBusy(false)
       }
@@ -153,11 +158,11 @@ export default function CourseResourcesSection({
   return (
     <div className="p-6 pt-5 border-t border-zinc-800">
       <div className="flex items-center gap-1.5 mb-1">
-        <h3 className="text-sm font-semibold text-zinc-300">Resources</h3>
+        <h3 className="text-sm font-semibold text-zinc-300">Reference</h3>
         <InfoHint text="Students meet these in their own section, apart from the curriculum." />
       </div>
       <p className="text-xs text-zinc-500 mb-3">
-        Med plans, permits, tech notes for this place.
+        Manuals, standards and the plans for where this course is.
       </p>
 
       {!medPlan && (
@@ -209,7 +214,7 @@ export default function CourseResourcesSection({
                       what is blocking it, on a link to where it is changed. */}
                   {r.libraryLocked
                     ? 'Instructors-only in the library — change it there to share it'
-                    : 'From the resource library'}
+                    : 'From the reference library'}
                 </Link>
               ) : (
                 <span className="text-[11px] text-zinc-600">Link added for this course</span>
@@ -229,8 +234,8 @@ export default function CourseResourcesSection({
               <button
                 onClick={() => run(() => saveCourseResourceToLibrary(instanceId, r.id))}
                 disabled={busy}
-                title="Save to the resource library so the next course here finds it"
-                aria-label="Save to the resource library"
+                title="Save to the reference library so the next course here finds it"
+                aria-label="Save to the reference library"
                 className="shrink-0 text-zinc-600 hover:text-zinc-200 transition-colors disabled:opacity-40"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
@@ -278,7 +283,7 @@ export default function CourseResourcesSection({
           target="_blank"
           className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors ml-auto"
         >
-          Resource library ↗
+          Reference library ↗
         </Link>
       </div>
 
@@ -367,7 +372,7 @@ export default function CourseResourcesSection({
             ))}
             {picker !== null && available.length === 0 && (
               <p className="text-xs text-zinc-500 px-2.5 py-4">
-                Nothing on the resource shelf yet — add a link below and tick &ldquo;Add to
+                Nothing on the reference shelf yet — add a link below and tick &ldquo;Add to
                 library&rdquo; to put the first one there.
               </p>
             )}

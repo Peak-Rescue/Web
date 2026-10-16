@@ -16,7 +16,7 @@ export type LibraryBucket = 'teaching' | 'resource' | 'map' | 'instructor' | 'do
 // course itself. Mixing them is how one course's travel plans reached another.
 export const BUCKET_META: Record<LibraryBucket, { label: string; hint: string }> = {
   teaching:   { label: 'Teaching material', hint: 'How-tos: technique videos, walkthroughs, skill sheets' },
-  resource:   { label: 'Reference',         hint: 'Manuals, tech notes, standards, med plans' },
+  resource:   { label: 'Reference',         hint: 'Manuals, tech notes, standards, papers' },
   map:        { label: 'Maps',              hint: 'CalTopo, SARTopo and other maps' },
   instructor: { label: 'Instructor material', hint: 'Guides, outlines and teaching notes — never shown to students' },
   // The company rather than the course. Everything here was living in
