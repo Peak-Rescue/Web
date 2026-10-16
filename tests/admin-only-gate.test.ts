@@ -29,3 +29,14 @@ describe('admin-only material', () => {
     expect(actions).toContain("if (patch.admin_only) update.audience = 'internal'")
   })
 })
+
+describe('adding a library item to a course', () => {
+  it('accepts the same shelves the picker offers', () => {
+    // The picker read Reference and Documents; the add read Reference alone,
+    // so a venue's med plan could be ticked and then silently not added.
+    const src = readFileSync('app/admin/courses/resource-actions.ts', 'utf8')
+    const add = src.slice(src.indexOf('export async function addCourseResourcesFromLibrary'))
+    expect(add).toContain("in('bucket', ['resource', 'documents'])")
+    expect(add).toContain("admin_only', false")
+  })
+})

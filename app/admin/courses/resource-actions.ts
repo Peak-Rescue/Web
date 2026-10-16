@@ -162,11 +162,17 @@ export async function addCourseResourcesFromLibrary(instanceId: string, itemIds:
 
   // A library item marked instructors-only cannot be published to students by
   // adding it to a course — the item's own audience is the ceiling.
+  //
+  // The same two shelves the picker reads. It offered the Documents ones —
+  // a venue's med plan and evac plan — while this silently dropped them for
+  // not being Reference, so the row you ticked was added to nothing and the
+  // section came back exactly as it was.
   const { data: items } = await admin
     .from('library_items')
     .select('id, audience')
     .in('id', itemIds)
-    .eq('bucket', 'resource')
+    .in('bucket', ['resource', 'documents'])
+    .eq('admin_only', false)
 
   let sort = await nextSort(admin, instanceId)
   const rows = (items ?? []).map((i) => ({
