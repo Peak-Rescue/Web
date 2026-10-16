@@ -23,7 +23,11 @@ export const BUCKET_META: Record<LibraryBucket, { label: string; hint: string }>
   // whichever teaching shelf it least embarrassed — eighteen logo files under
   // instructor material, the employee handbook beside rope technique — on the
   // grounds that it had to go somewhere. Nobody looks a logo up.
-  documents:  { label: 'Documents',          hint: 'JPRs, risk and evac plans, equipment logs, and Peak paperwork' },
+  //
+  // A place's evac plan is no longer among them. It is read under its venue
+  // with the maps and the beta; what is left here is the blank one it gets
+  // written on.
+  documents:  { label: 'Documents',          hint: 'JPRs, equipment logs, blank forms and Peak paperwork' },
 }
 export const BUCKET_ORDER: LibraryBucket[] = ['teaching', 'resource', 'map', 'instructor', 'documents']
 
