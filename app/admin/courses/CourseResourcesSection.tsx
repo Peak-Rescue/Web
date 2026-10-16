@@ -27,6 +27,10 @@ export type CourseResource = {
   fromLibrary: boolean
   /** The library item's type, where it came from one. */
   kind?: string | null
+  /** The place the library row is filed under, when it is filed under one.
+      Venue material on a course reads in the Venue section; this is how the
+      two tell each other's rows apart. */
+  place?: string | null
   libraryLocked: boolean // library item is instructors-only — can't be shared here
 }
 

@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { errorFrom, type ActionResult } from '@/lib/action-result'
 import AddMapDialog from '@/components/AddMapDialog'
-import { type LibraryAudience, shelfLink } from '@/lib/library'
+import { type LibraryAudience, shelfLink, KIND_META } from '@/lib/library'
 import { AudiencePills } from '@/components/AudiencePills'
 import AudienceToggle from '@/components/AudienceToggle'
 import TrashIcon from '@/components/TrashIcon'
@@ -40,11 +40,16 @@ export type CourseMap = {
 // its own audience because the honest answer is per map: the overview goes to
 // students, the evac plan does not.
 export default function CourseMapsSection({
+  venueResources = [],
   instanceId,
   maps,
   placeLabel,
 }: {
   instanceId: string
+  /** Library rows filed under this course's place — the med plan, the evac
+      plan. They are venue material that happens to be on this course, so
+      they read here rather than with the manuals. */
+  venueResources?: { id: string; label: string; url: string | null; kind?: string | null; place?: string | null }[]
   maps: CourseMap[]
   // Venue name, or the region when there is no venue — what the library would
   // file a map under. Null when the course has neither set yet.
@@ -245,6 +250,35 @@ export default function CourseMapsSection({
             </>
           )}
         </p>
+      )}
+
+      {/* The rest of what this course took from its place: the med plan, the
+          evac plan. They are added through Reference, where every library row
+          is added, and read here, where venue material is read. */}
+      {venueResources.length > 0 && (
+        <div className="mt-4">
+          <p className="text-[10px] uppercase tracking-wide text-zinc-600 mb-1.5">From this place</p>
+          <div className="bg-zinc-950/40 border border-zinc-800 rounded-lg divide-y divide-zinc-800">
+            {venueResources.map((r) => (
+              <div key={r.id} className="flex items-center gap-3 px-4 py-2.5">
+                <span className="min-w-0 flex-1">
+                  {r.url ? (
+                    <a href={r.url} target="_blank" rel="noreferrer" className="text-sm text-zinc-200 hover:text-white truncate block">
+                      {r.label}
+                    </a>
+                  ) : (
+                    <span className="text-sm text-zinc-200 truncate block">{r.label}</span>
+                  )}
+                  <span className="text-[11px] text-zinc-600">
+                    {[r.kind ? KIND_META[r.kind as keyof typeof KIND_META] ?? r.kind : null, r.place]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </span>
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
       )}
 
       <div className="flex items-center gap-2 mt-3">

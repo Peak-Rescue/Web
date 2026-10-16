@@ -405,8 +405,8 @@ export default async function CourseView({
       // Same audience rule as maps, and read the same way: a student sees
       // only the rows shared with them.
       (showTasks
-        ? admin.from('course_resources').select('id, url, label, audience, library_item_id, library_items(id, title, url, kind, audience)').eq('instance_id', id).order('sort_order')
-        : admin.from('course_resources').select('id, url, label, audience, library_item_id, library_items(id, title, url, kind, audience)').eq('instance_id', id).eq('audience', 'shared').order('sort_order')),
+        ? admin.from('course_resources').select('id, url, label, audience, library_item_id, library_items(id, title, url, kind, audience, venue_id, site_id, region, venues(name), sites(name))').eq('instance_id', id).order('sort_order')
+        : admin.from('course_resources').select('id, url, label, audience, library_item_id, library_items(id, title, url, kind, audience, venue_id, site_id, region, venues(name), sites(name))').eq('instance_id', id).eq('audience', 'shared').order('sort_order')),
       // Links added for this delivery — the photo album, the client's
       // paperwork. Same audience rule as maps.
       (showTasks
@@ -761,7 +761,11 @@ export default async function CourseView({
   // where each one came from. Built only for staff, who are the only people
   // the editor is ever handed to.
   const editableResources: CourseResource[] = !showTasks ? [] : (resourceRows ?? []).map((r) => {
-    const item = r.library_items as unknown as { title: string; url: string | null; audience?: string; kind?: string } | null
+    const item = r.library_items as unknown as {
+      title: string; url: string | null; audience?: string; kind?: string
+      venue_id?: string | null; site_id?: string | null; region?: string | null
+      venues?: { name: string } | null; sites?: { name: string } | null
+    } | null
     return {
       id: r.id as string,
       label: item?.title ?? (r.label as string | null) ?? 'Document',
@@ -773,6 +777,11 @@ export default async function CourseView({
       // So the section can say whether the course's med plan is here, which
       // is the one resource every course is supposed to have.
       kind: item?.kind ?? null,
+      // Where the library row is filed, when it is filed somewhere. A med
+      // plan for Maui is venue material that happens to be on this course;
+      // it reads in the Venue section rather than with the manuals.
+      place: item?.sites?.name ?? item?.venues?.name
+        ?? (item?.region ? regionLabel(item.region) || item.region : null),
       libraryLocked: item?.audience === 'internal',
     }
   })
@@ -1085,6 +1094,13 @@ export default async function CourseView({
     // The venue's state, or the site's own when it sits under no venue.
     venue_region: s.venues?.region_code ?? s.region_code ?? null,
   }))
+
+  // The course's sections mirror the library's shelves, so a row filed under
+  // a place reads in the Venue section and a row off the Reference shelf
+  // reads in Reference. Before this, a Maui med plan arrived in a section
+  // named after a shelf it does not live on.
+  const venueResources = editableResources.filter((r) => r.place)
+  const shelfResources = editableResources.filter((r) => !r.place)
 
   const schedMeetingPoints = ((schedPointRows ?? []) as unknown as
     { id: string; name: string; venue_id: string | null }[])
@@ -2557,11 +2573,16 @@ export default async function CourseView({
                 Promoting one into the library stays admin-only inside the
                 component's own actions. */}
             <EditInPlace
-              label="Edit maps"
-              title="Maps"
+              label="Edit venue material"
+              title="Venue"
               editor={
                 showTasks ? (
-                  <CourseMapsSection instanceId={id} maps={editableMaps} placeLabel={coursePlace} />
+                  <CourseMapsSection
+                    instanceId={id}
+                    maps={editableMaps}
+                    placeLabel={coursePlace}
+                    venueResources={venueResources}
+                  />
                 ) : null
               }
             >
@@ -3099,7 +3120,7 @@ export default async function CourseView({
                 showTasks ? (
                   <CourseResourcesSection
                     instanceId={id}
-                    resources={editableResources}
+                    resources={shelfResources}
                     placeLabel={coursePlace}
                   />
                 ) : null
