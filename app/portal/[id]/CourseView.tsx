@@ -2613,7 +2613,8 @@ export default async function CourseView({
                 different kind of thing, which it is not — it is the same
                 library rows, filed somewhere else. */}
             {([
-              ['Plans', ['rescue_plan', 'med_plan']],
+              ['Med plans', ['med_plan']],
+              ['Evac plans', ['rescue_plan']],
               ['Permits', ['permit']],
               ['Beta', ['route']],
               ['Other', ['', 'reference', 'manual', 'tech_note', 'standard', 'form', 'presentation', 'outline', 'skill_sheet', 'video', 'media', 'map']],
@@ -2660,8 +2661,14 @@ export default async function CourseView({
             {showTasks && !jobNotCourse && !venueRead.some((r) => r.rawKind === 'med_plan') && (
               <p className="mt-3 text-xs text-amber-300/90">No med plan on this {noun}.</p>
             )}
+            {/* Headed like every other group here. Unlabelled, the chips read
+                as whatever block happened to be above them — which was Plans,
+                so the map looked like one. */}
             {maps.length > 0 && (
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-2 mt-3">
+              <p className="text-[10px] uppercase tracking-wide text-zinc-600 mb-1.5 mt-3">Maps</p>
+            )}
+            {maps.length > 0 && (
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
                 {maps.map((m) => (
                   // One chip per link, kept closer to each other than to the next
                   // map — a single pill cut in half read as one link that had
