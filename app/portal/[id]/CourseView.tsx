@@ -761,7 +761,7 @@ export default async function CourseView({
   // where each one came from. Built only for staff, who are the only people
   // the editor is ever handed to.
   const editableResources: CourseResource[] = !showTasks ? [] : (resourceRows ?? []).map((r) => {
-    const item = r.library_items as unknown as { title: string; url: string | null; audience?: string } | null
+    const item = r.library_items as unknown as { title: string; url: string | null; audience?: string; kind?: string } | null
     return {
       id: r.id as string,
       label: item?.title ?? (r.label as string | null) ?? 'Document',
@@ -770,6 +770,9 @@ export default async function CourseView({
       // never claim students while the row under it says instructors.
       audience: (item?.audience === 'internal' ? 'internal' : r.audience) as CourseResource['audience'],
       fromLibrary: Boolean(r.library_item_id),
+      // So the section can say whether the course's med plan is here, which
+      // is the one resource every course is supposed to have.
+      kind: item?.kind ?? null,
       libraryLocked: item?.audience === 'internal',
     }
   })

@@ -26,6 +26,8 @@ export type CourseResource = {
   url: string | null
   audience: LibraryAudience
   fromLibrary: boolean
+  /** The library item's type, where it came from one. */
+  kind?: string | null
   libraryLocked: boolean // library item is instructors-only — can't be shared here
 }
 
@@ -117,6 +119,11 @@ export default function CourseResourcesSection({
       ? unadded
       : fitting
   const offCourse = unadded.length - fitting.length
+  // Every course has a med plan, so the slot for it is always drawn — empty
+  // if nobody has put one there. A missing thing that is not on the page is
+  // a thing nobody notices is missing, and this one is noticed at the worst
+  // possible moment.
+  const medPlan = resources.find((r) => r.kind === 'med_plan')
 
   return (
     <div className="p-6 pt-5 border-t border-zinc-800">
@@ -127,6 +134,23 @@ export default function CourseResourcesSection({
       <p className="text-xs text-zinc-500 mb-3">
         Med plans, permits, tech notes for this place.
       </p>
+
+      {!medPlan && (
+        <div className="mb-3 flex items-center gap-3 rounded-lg border border-dashed border-amber-900/60 bg-amber-950/10 px-4 py-3">
+          <span className="text-sm text-amber-300/90">No med plan on this course</span>
+          <span className="text-xs text-zinc-500 min-w-0 flex-1 truncate">
+            {placeLabel
+              ? `Add ${placeLabel}’s, or any other — it is below with the rest of the shelf.`
+              : 'Add one below. Setting where the course is will offer the one for that place.'}
+          </span>
+          <button
+            onClick={() => { setQ('med plan'); openPicker() }}
+            className={`${btn} shrink-0`}
+          >
+            Find one
+          </button>
+        </div>
+      )}
 
       <div className="bg-zinc-950/40 border border-zinc-800 rounded-lg divide-y divide-zinc-800">
         {resources.length === 0 && (
