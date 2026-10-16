@@ -2613,8 +2613,9 @@ export default async function CourseView({
                 different kind of thing, which it is not — it is the same
                 library rows, filed somewhere else. */}
             {([
-              ['Med plans', ['med_plan']],
-              ['Evac plans', ['rescue_plan']],
+              // One block: the med plan and the evac plan answer one
+              // question and are often one document.
+              ['MEDEVAC', ['med_plan', 'rescue_plan']],
               ['Permits', ['permit']],
               ['Beta', ['route']],
               ['Other', ['', 'reference', 'manual', 'tech_note', 'standard', 'form', 'presentation', 'outline', 'skill_sheet', 'video', 'media', 'map']],
@@ -2658,8 +2659,9 @@ export default async function CourseView({
                 change it. Every course has a med plan, and one that is
                 missing is noticed either here or on the morning somebody
                 needs it. */}
-            {showTasks && !jobNotCourse && !venueRead.some((r) => r.rawKind === 'med_plan') && (
-              <p className="mt-3 text-xs text-amber-300/90">No med plan on this {noun}.</p>
+            {showTasks && !jobNotCourse
+              && !venueRead.some((r) => r.rawKind === 'med_plan' || r.rawKind === 'rescue_plan') && (
+              <p className="mt-3 text-xs text-amber-300/90">No MEDEVAC plan on this {noun}.</p>
             )}
             {/* Headed like every other group here. Unlabelled, the chips read
                 as whatever block happened to be above them — which was Plans,

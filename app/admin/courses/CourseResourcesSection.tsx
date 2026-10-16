@@ -148,7 +148,11 @@ export default function CourseResourcesSection({
   // things that already fit this course is the search failing at the one job
   // it was opened for.
   const needle = q.trim().toLowerCase()
-  const byKind = onlyKind ? unadded.filter((i) => i.kind === onlyKind) : unadded
+  // 'medevac' is the block, not a type: it is both of them.
+  const MEDEVAC = ['med_plan', 'rescue_plan']
+  const byKind = onlyKind
+    ? unadded.filter((i) => (onlyKind === 'medevac' ? MEDEVAC.includes(i.kind) : i.kind === onlyKind))
+    : unadded
   // Narrowing to a type is never the whole question — "a med plan" is always
   // "the med plan for where we are going". When this course's place has one,
   // it is the answer and the rest are a fallback behind it.
@@ -165,8 +169,13 @@ export default function CourseResourcesSection({
   // if nobody has put one there. A missing thing that is not on the page is
   // a thing nobody notices is missing, and this one is noticed at the worst
   // possible moment.
-  // Asked for in the Venue section, because that is where a med plan is.
-  const medPlan = scope === 'venue' ? shown.find((r) => r.kind === 'med_plan') : true
+  // Asked for in the Venue section, because that is where a MEDEVAC plan is.
+  // Either type satisfies it: the two are often one document — the Maui one
+  // is called Medical-MEDEVAC-Plan — and a course with an evac plan and no
+  // separate med plan is not a course missing one.
+  const medPlan = scope === 'venue'
+    ? shown.find((r) => r.kind === 'med_plan' || r.kind === 'rescue_plan')
+    : true
 
   return (
     <div className="p-6 pt-5 border-t border-zinc-800">
@@ -175,14 +184,14 @@ export default function CourseResourcesSection({
 
       {!medPlan && (
         <div className="mb-3 flex items-center gap-3 rounded-lg border border-dashed border-amber-900/60 bg-amber-950/10 px-4 py-3">
-          <span className="text-sm text-amber-300/90">No med plan on this course</span>
+          <span className="text-sm text-amber-300/90">No MEDEVAC plan on this course</span>
           <span className="text-xs text-zinc-500 min-w-0 flex-1 truncate">
             {placeLabel
               ? `Add ${placeLabel}’s, or any other — it is below with the rest of the shelf.`
               : 'Add one below. Setting where the course is will offer the one for that place.'}
           </span>
           <button
-            onClick={() => { setQ(''); setOnlyKind('med_plan'); openPicker() }}
+            onClick={() => { setQ(''); setOnlyKind('medevac'); openPicker() }}
             className={`${btn} shrink-0`}
           >
             Find one
@@ -314,8 +323,8 @@ export default function CourseResourcesSection({
           {onlyKind && (
             <p className="text-[11px] text-zinc-500 mb-2">
               {kindHere.length && !showAll
-                ? `Med plans for ${placeLabel || 'where this course is'}.`
-                : 'Med plans, everywhere.'}{' '}
+                ? `MEDEVAC plans for ${placeLabel || 'where this course is'}.`
+                : 'MEDEVAC plans, everywhere.'}{' '}
               {kindHere.length > 0 && byKind.length > kindHere.length && (
                 <button
                   onClick={() => setShowAll((v) => !v)}

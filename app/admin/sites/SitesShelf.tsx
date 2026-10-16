@@ -71,9 +71,14 @@ export default function SitesShelf({
     // places, one of them saying it was lost.
     if (!m.venue_id && !m.site_id && m.region) continue
     const k = m.venue_id ?? ''
-    // Four blocks, not three with two things in one. A plan is read on the
-    // morning of; a permit is read months earlier by somebody deciding whether
-    // the course can run at all. Different questions, different weeks.
+    // The med plan and the evac plan are one answer to one question — where
+    // the hospital is and how you get someone to it — and are often one
+    // document: the Maui one is called Medical-MEDEVAC-Plan. They are two
+    // types because they are sometimes written apart, and one block because
+    // they are always read together.
+    //
+    // A permit is not among them. It is read months earlier by somebody
+    // deciding whether the course can run at all.
     const into = m.kind === 'route'
       ? betaByVenue
       : m.kind === 'rescue_plan' || m.kind === 'med_plan'
@@ -234,7 +239,7 @@ export default function SitesShelf({
         )}
         {plans.length > 0 && (
           <div>
-            <p className="text-[10px] uppercase tracking-wide text-zinc-700 mb-1.5">Plans</p>
+            <p className="text-[10px] uppercase tracking-wide text-zinc-700 mb-1.5">MEDEVAC</p>
             <div className="space-y-2">
               {plans.map((x) => <LibraryRow key={x.id} item={x} venues={venues} sites={siteOptions} />)}
             </div>
@@ -386,7 +391,7 @@ export default function SitesShelf({
 
             {g.plans.length > 0 && (
               <div className="mt-2">
-                <p className="text-[10px] uppercase tracking-wide text-zinc-700 mb-1.5">Plans</p>
+                <p className="text-[10px] uppercase tracking-wide text-zinc-700 mb-1.5">MEDEVAC</p>
                 <div className="space-y-2">
                   {g.plans.map((x) => (
                     <LibraryRow key={x.id} item={x} venues={venues} sites={siteOptions} />
