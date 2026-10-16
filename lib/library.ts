@@ -160,6 +160,19 @@ export function templateShelfHref(shelf: TemplateShelf) {
   return `/admin/library?bucket=${shelf}`
 }
 
+/** The address of a shelf, and what to call it on the way there.
+ *
+ * Both were typed by hand wherever a screen linked out to the library, so a
+ * shelf that changed name or stopped being a card left behind a handful of
+ * buttons still promising the old one — "Map library", "Resource library",
+ * "Sites" — each pointing at an address that happened to still resolve, so
+ * nothing broke loudly enough to be found. They come from here now, and the
+ * name comes from the same table the card is drawn from. */
+export function shelfLink(shelf: LibraryShelf, params?: Record<string, string>) {
+  const q = new URLSearchParams({ bucket: shelf, ...params })
+  return { href: `/admin/library?${q.toString()}`, label: shelfLabel(shelf) }
+}
+
 /** What a course is, as far as picking a template goes: the offering it is,
     and the expertise it draws on. A custom course has no offering slug worth
     matching — every one of them is `custom` — but it does carry the boxes

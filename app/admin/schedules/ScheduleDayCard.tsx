@@ -7,6 +7,7 @@ import DayOutline from './DayOutline'
 import { Grows, Marked, PinIcon, RouteIcon, NoteIcon, TargetIcon, PencilIcon } from './fields'
 import type { ScheduleDay, SiteOption } from './types'
 import { useTrackedSaves } from '@/components/PendingSaves'
+import { shelfLink } from '@/lib/library'
 
 // One day of a running order, as a thing you can edit wherever you meet it.
 //
@@ -234,7 +235,7 @@ export default function ScheduleDayCard({
                   opens the site already expanded rather than dropping
                   you on a list of collapsed rows to hunt through. */}
               <a
-                href={`/admin/library?bucket=venue#site-${site.id}`}
+                href={`${shelfLink('venue').href}#site-${site.id}`}
                 target="_blank"
                 rel="noopener"
                 title={`Edit ${site.name}'s beta — changes it on every course`}

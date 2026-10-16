@@ -65,3 +65,16 @@ describe('changesFor — admin-only is compared too', () => {
     expect(changesFor(locked, { adminOnly: true, reason: '' })).toEqual({})
   })
 })
+
+describe('shelfLink', () => {
+  it('names a shelf from the same table the card is drawn from', async () => {
+    const { shelfLink } = await import('@/lib/library')
+    expect(shelfLink('venue')).toEqual({ href: '/admin/library?bucket=venue', label: 'Venue information' })
+    expect(shelfLink('resource').label).toBe('Reference')
+  })
+
+  it('carries extra params without anyone writing the query by hand', async () => {
+    const { shelfLink } = await import('@/lib/library')
+    expect(shelfLink('resource', { status: 'all' }).href).toBe('/admin/library?bucket=resource&status=all')
+  })
+})

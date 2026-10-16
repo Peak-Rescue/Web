@@ -5,7 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { createVenue } from '../library/actions'
 import VenueRow from './VenueRow'
 import RegionSelect from '@/components/RegionSelect'
-import { type Venue } from '@/lib/library'
+import { type Venue, shelfLink } from '@/lib/library'
 import InfoHint from '@/components/InfoHint'
 import JumpToNewRow from '@/components/JumpToNewRow'
 
@@ -51,8 +51,8 @@ export default async function VenuesPage({
             actually runs in lives a level down. Naming the other screen
             without a way to reach it is how the same beta gets typed twice. */}
         <p className="mb-8">
-          <Link href="/admin/library?bucket=venue" className="text-sm text-zinc-500 hover:text-zinc-300 underline transition-colors">
-            Venue information →
+          <Link href={shelfLink('venue').href} className="text-sm text-zinc-500 hover:text-zinc-300 underline transition-colors">
+            {shelfLink('venue').label} →
           </Link>
           <span className="text-sm text-zinc-600"> everything filed by place: maps, beta, weather, contacts, plans.</span>
         </p>

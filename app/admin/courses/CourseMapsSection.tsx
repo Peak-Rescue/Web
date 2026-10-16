@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { errorFrom, type ActionResult } from '@/lib/action-result'
 import AddMapDialog from '@/components/AddMapDialog'
-import { type LibraryAudience } from '@/lib/library'
+import { type LibraryAudience, shelfLink } from '@/lib/library'
 import { AudiencePills } from '@/components/AudiencePills'
 import AudienceToggle from '@/components/AudienceToggle'
 import TrashIcon from '@/components/TrashIcon'
@@ -258,11 +258,11 @@ export default function CourseMapsSection({
             the places they are about — nobody goes looking for a map, they go
             looking for where they are going. This went to the old one. */}
         <Link
-          href="/admin/library?bucket=venue"
+          href={shelfLink('venue').href}
           target="_blank"
           className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors ml-auto"
         >
-          Venue information ↗
+          {shelfLink('venue').label} ↗
         </Link>
       </div>
 

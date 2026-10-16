@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { errorFrom, type ActionResult } from '@/lib/action-result'
 import AddLinkDialog from '@/components/AddLinkDialog'
-import { KIND_META, type LibraryAudience, type LibraryKind } from '@/lib/library'
+import { KIND_META, shelfLink, type LibraryAudience, type LibraryKind } from '@/lib/library'
 import { AudiencePills } from '@/components/AudiencePills'
 import AudienceToggle from '@/components/AudienceToggle'
 import {
@@ -197,7 +197,7 @@ export default function CourseResourcesSection({
               )}
               {r.fromLibrary ? (
                 <Link
-                  href="/admin/library?status=all&bucket=resource"
+                  href={shelfLink('resource', { status: 'all' }).href}
                   className={`text-[11px] transition-colors ${
                     r.libraryLocked
                       ? 'text-amber-600/80 hover:text-amber-400'
@@ -277,7 +277,7 @@ export default function CourseResourcesSection({
           target="_blank"
           className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors ml-auto"
         >
-          Reference library ↗
+          {shelfLink('resource').label} library ↗
         </Link>
       </div>
 

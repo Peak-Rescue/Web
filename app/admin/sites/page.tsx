@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import SitesShelf from './SitesShelf'
 import { loadSitesShelf } from './load'
 import InfoHint from '@/components/InfoHint'
+import { shelfLink } from '@/lib/library'
 
 // The sites shelf at its own address.
 //
@@ -32,7 +33,7 @@ export default async function SitesPage({
   return (
     <main className="min-h-screen bg-zinc-950 text-white pt-16 md:pt-20">
       <div className="max-w-3xl mx-auto px-4 py-10">
-        <Link href="/admin/library?bucket=venue" className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors mb-6 inline-block">← Library</Link>
+        <Link href={shelfLink('venue').href} className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors mb-6 inline-block">← Library</Link>
 
         <h1 className="flex items-center gap-2 text-2xl font-bold">
           Venue information
