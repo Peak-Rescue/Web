@@ -4,6 +4,7 @@ import AddToPlace from './AddToPlace'
 import AddLevel from './AddLevel'
 import EditVenue from './EditVenue'
 import PlaceLinkChip from './PlaceLinkChip'
+import RemovePlace from './RemovePlace'
 import { type Site } from '@/lib/sites'
 import { type LibraryItem, type Venue, type VenueContact, type VenueLink } from '@/lib/library'
 import { countryName, regionLabel, splitRegion, SUBDIVISIONS } from '@/lib/regions'
@@ -278,7 +279,10 @@ export default function SitesShelf({
           // far in they start. Weight alone was not enough to read at a
           // glance, which is the only thing this page is for.
           <div key={c.country || '_none'} className="rounded-lg border border-zinc-800/80 bg-zinc-950/40 p-3">
-            <h2 className="text-lg font-bold text-white mb-3 pb-2 border-b border-zinc-700">{c.label}</h2>
+            <h2 className="flex items-center gap-2 text-lg font-bold text-white mb-3 pb-2 border-b border-zinc-700">
+              {c.label}
+              {c.country && !c.hasStates && <RemovePlace what={c.label} regionCode={c.country} />}
+            </h2>
             {c.country && <RegionBlocks code={c.country} />}
             {c.subs.map((sub) => (
               // A state heading only where a state is a thing that country
@@ -289,8 +293,9 @@ export default function SitesShelf({
                 className={sub.label || c.hasStates ? 'mb-4 pl-3 border-l-2 border-zinc-700' : 'mb-4'}
               >
                 {(sub.label || c.hasStates) && (
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-pr-red-light/80 mb-2">
+                  <p className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-pr-red-light/80 mb-2">
                     {sub.label || 'No state set'}
+                    {sub.code && <RemovePlace what={sub.label || sub.code} regionCode={sub.code} />}
                   </p>
                 )}
                 <div className="space-y-2">
@@ -300,6 +305,7 @@ export default function SitesShelf({
               <span aria-hidden className="text-zinc-600 text-xs transition-transform group-open/venue:rotate-90">▶</span>
               <span className="text-sm font-medium text-zinc-200">{g.name}</span>
               {g.venue && <EditVenue venue={g.venue} />}
+              {g.venue && <RemovePlace what={g.venue.name} venueId={g.venue.id} />}
               {/* No tally. "1 beta · 1 map" told you a venue had something
                   without telling you what, and you were about to open it
                   either way. */}
@@ -405,12 +411,6 @@ export default function SitesShelf({
               </div>
             )}
 
-            {/* Notes on the venue, which three of them have and none of them
-                showed anywhere — written when somebody worked out where the
-                place is, and then invisible. */}
-            {g.venue?.notes && (
-              <p className="mt-2 text-[11px] text-zinc-500 max-w-prose">{g.venue.notes}</p>
-            )}
 
             {g.venue && (
               <AddToPlace

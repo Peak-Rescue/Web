@@ -302,3 +302,53 @@ export async function removePlaceLink(scope: PlaceScope, url: string): Promise<A
   revalidate()
   revalidatePath('/admin/library')
 }
+
+/** Undoing a place that was added by mistake.
+ *
+ * Every level can be removed and none of them takes anything with it: a
+ * level with something in it refuses and says what, because the thing you
+ * want gone is the empty one you just made by picking the wrong state, and
+ * the thing you would hate to lose is a venue with four canyons on it.
+ */
+export async function removeVenue(id: string): Promise<ActionResult> {
+  const admin = await requireAdmin()
+  const [{ count: sites }, { count: items }, { count: courses }] = await Promise.all([
+    admin.from('sites').select('id', { count: 'exact', head: true }).eq('venue_id', id),
+    admin.from('library_items').select('id', { count: 'exact', head: true }).eq('venue_id', id),
+    admin.from('course_instances').select('id', { count: 'exact', head: true }).eq('venue_id', id),
+  ])
+  const held = [
+    sites && `${sites} canyon${sites === 1 ? '' : 's'}`,
+    items && `${items} document${items === 1 ? '' : 's'}`,
+    courses && `${courses} course${courses === 1 ? '' : 's'}`,
+  ].filter(Boolean).join(', ')
+  if (held) return refuse(`This venue still has ${held}. Move or remove those first.`)
+
+  const { error } = await admin.from('venues').delete().eq('id', id)
+  if (error) throw new Error(error.message)
+  revalidate()
+  revalidatePath('/admin/library')
+}
+
+/** The same for a state or a country. A region is only a heading — the row
+    behind it is `region_info` — so removing it is removing the heading, and
+    it refuses while anything is filed under it. */
+export async function removeRegion(code: string): Promise<ActionResult> {
+  const admin = await requireAdmin()
+  const [{ count: venues }, { count: items }, { count: sites }] = await Promise.all([
+    admin.from('venues').select('id', { count: 'exact', head: true }).eq('region_code', code),
+    admin.from('library_items').select('id', { count: 'exact', head: true }).eq('region', code).is('venue_id', null),
+    admin.from('sites').select('id', { count: 'exact', head: true }).eq('region_code', code).is('venue_id', null),
+  ])
+  const held = [
+    venues && `${venues} venue${venues === 1 ? '' : 's'}`,
+    sites && `${sites} canyon${sites === 1 ? '' : 's'}`,
+    items && `${items} document${items === 1 ? '' : 's'}`,
+  ].filter(Boolean).join(', ')
+  if (held) return refuse(`This still has ${held} in it. Move or remove those first.`)
+
+  const { error } = await admin.from('region_info').delete().eq('region_code', code)
+  if (error) throw new Error(error.message)
+  revalidate()
+  revalidatePath('/admin/library')
+}
