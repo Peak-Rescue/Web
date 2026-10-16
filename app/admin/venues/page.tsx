@@ -51,10 +51,10 @@ export default async function VenuesPage({
             actually runs in lives a level down. Naming the other screen
             without a way to reach it is how the same beta gets typed twice. */}
         <p className="mb-8">
-          <Link href="/admin/sites" className="text-sm text-zinc-500 hover:text-zinc-300 underline transition-colors">
-            Sites →
+          <Link href="/admin/library?bucket=venue" className="text-sm text-zinc-500 hover:text-zinc-300 underline transition-colors">
+            Venue information →
           </Link>
-          <span className="text-sm text-zinc-600"> the canyons and crags inside them, with their beta.</span>
+          <span className="text-sm text-zinc-600"> everything filed by place: maps, beta, weather, contacts, plans.</span>
         </p>
 
         {added && venues.some((v) => v.id === added) && (

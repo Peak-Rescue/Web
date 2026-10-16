@@ -112,7 +112,7 @@ export default function AddMapDialog({
 
         {both ? (
           <p className="mt-3 px-3 py-2.5 rounded border border-zinc-700 bg-zinc-800/50 text-xs text-zinc-400">
-            A map with two links lives in the map library{libraryPlace ? <>, filed under <span className="font-medium text-zinc-300">{libraryPlace}</span></> : null}, so
+            A map with two links lives in the library{libraryPlace ? <>, filed under <span className="font-medium text-zinc-300">{libraryPlace}</span></> : null}, so
             both travel together to the next course in the same place.
           </p>
         ) : libraryPlace ? (

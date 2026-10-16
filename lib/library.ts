@@ -82,7 +82,10 @@ export function isMediaShelf(v: string | undefined): v is MediaShelfKey {
 // that is where they are read, and Documents is still the shelf they sit on.
 const BUCKET_FOR_KIND: Partial<Record<LibraryKind, LibraryBucket>> = {
   map: 'map',
-  route: 'map',
+  // A write-up about a place is a document about a place. It was 'map'
+  // because route used to be a map, and that put it on a shelf whose whole
+  // contents are maps.
+  route: 'documents',
   permit: 'documents',
   rescue_plan: 'documents',
   med_plan: 'documents',

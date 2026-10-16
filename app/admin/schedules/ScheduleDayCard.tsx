@@ -234,7 +234,7 @@ export default function ScheduleDayCard({
                   opens the site already expanded rather than dropping
                   you on a list of collapsed rows to hunt through. */}
               <a
-                href={`/admin/sites#site-${site.id}`}
+                href={`/admin/library?bucket=venue#site-${site.id}`}
                 target="_blank"
                 rel="noopener"
                 title={`Edit ${site.name}'s beta — changes it on every course`}

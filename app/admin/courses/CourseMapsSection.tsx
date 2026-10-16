@@ -210,8 +210,8 @@ export default function CourseMapsSection({
               <button
                 onClick={() => run(() => saveCourseMapToLibrary(instanceId, m.id))}
                 disabled={busy}
-                title="Save to the map library so other courses can use it"
-                aria-label="Save to the map library"
+                title="Save to the library under this place, so the next course here finds it"
+                aria-label="Save to the library"
                 className="shrink-0 text-zinc-600 hover:text-zinc-200 transition-colors disabled:opacity-40"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
@@ -248,7 +248,7 @@ export default function CourseMapsSection({
       )}
 
       <div className="flex items-center gap-2 mt-3">
-        <button onClick={openPicker} disabled={busy} className={btn}>+ Choose from map library</button>
+        <button onClick={openPicker} disabled={busy} className={btn}>+ Choose from the library</button>
         <button onClick={() => setLinkOpen(true)} disabled={busy} className={btn}>+ Add a map</button>
         {/* Adding a second link for a map already on the shelf is usually
             meant as an edit to that entry, and until there was a way through

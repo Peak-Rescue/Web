@@ -139,7 +139,7 @@ export default function AddLibraryItem({
             value={bucket}
             onChange={(e) => setBucket(e.target.value)}
           >
-            {BUCKET_ORDER.map((b) => <option key={b} value={b}>{BUCKET_META[b].label}</option>)}
+            {BUCKET_ORDER.filter((b) => b !== 'map').map((b) => <option key={b} value={b}>{BUCKET_META[b].label}</option>)}
           </select>
         </div>
       )}

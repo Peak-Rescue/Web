@@ -208,8 +208,11 @@ export default function LibraryRow({ item, venues, sites = [], hideProvenance = 
           {form.kind !== 'map' && (
             <div>
               <label className={label}>Shelf</label>
+              {/* Not Maps. A map's shelf is its type and this control is
+                  hidden for one, so offering it here only ever filed
+                  something that is not a map onto the shelf of maps. */}
               <select className={input} value={form.bucket} onChange={(e) => setForm({ ...form, bucket: e.target.value as LibraryBucket })}>
-                {BUCKET_ORDER.map((b) => <option key={b} value={b}>{BUCKET_META[b].label}</option>)}
+                {BUCKET_ORDER.filter((b) => b !== 'map').map((b) => <option key={b} value={b}>{BUCKET_META[b].label}</option>)}
               </select>
             </div>
           )}
