@@ -532,10 +532,9 @@ export async function createVenue(formData: FormData) {
   }).select('id').single()
   if (error) throw new Error(error.message)
   revalidate()
-  // The venues list is alphabetical and the form that fills it sits under the
-  // whole of it, so the new row lands out of sight. Named here, the page can
-  // take the reader to it. (Outside any try: redirect throws.)
-  redirect(`/admin/venues?added=${data.id}`)
+  // To the shelf, which is where venues live now. (Outside any try: redirect
+  // throws.)
+  redirect(`/admin/library?bucket=venue&added=${data.id}`)
 }
 
 export async function updateVenue(id: string, patch: { name?: string; region?: string | null; region_code?: string | null; client_name?: string | null; notes?: string | null; links?: { url: string; label: string; kind?: string }[]; contacts?: Record<string, string>[]; active?: boolean }) {

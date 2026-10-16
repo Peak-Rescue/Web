@@ -3,18 +3,22 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { updateVenue } from '@/app/admin/library/actions'
+import VenueSettings from '@/components/VenueSettings'
+import { type Venue } from '@/lib/library'
 
-/** Editing a venue. Today that is its name and nothing else.
+/** Editing a venue.
  *
- * Called Edit rather than Rename because what a venue needs changing about it
- * will grow, and the control should not have to be renamed when it does. The
- * settings panel that was briefly here asked for things this page has already
- * answered — which state it is in is the heading above it, its links and
- * contacts are the buttons below it — so it went, not the idea of editing.
+ * The name inline, because renaming is most of what anyone comes for and a
+ * panel to change one word is a panel in the way. Everything else — the
+ * state, the notes, the links and contacts already on it, and deleting the
+ * venue — behind "More", which is where it has to be now that this is the
+ * only screen venues have.
  */
-export default function EditVenue({ id, name }: { id: string; name: string }) {
+export default function EditVenue({ venue, itemCount }: { venue: Venue; itemCount: number }) {
+  const { id, name } = venue
   const router = useRouter()
   const [editing, setEditing] = useState(false)
+  const [more, setMore] = useState(false)
   const [busy, setBusy] = useState(false)
 
   async function save(next: string) {
@@ -35,7 +39,7 @@ export default function EditVenue({ id, name }: { id: string; name: string }) {
       <button
         type="button"
         // Inside the venue's <summary>: without this the click opens or closes
-        // the venue instead of starting a rename.
+        // the venue instead of starting an edit.
         onClick={(e) => { e.preventDefault(); e.stopPropagation(); setEditing(true) }}
         className="text-[11px] text-zinc-700 hover:text-zinc-300 transition-colors"
       >
@@ -44,8 +48,17 @@ export default function EditVenue({ id, name }: { id: string; name: string }) {
     )
   }
 
+  if (more) {
+    return (
+      <span onClick={(e) => { e.preventDefault(); e.stopPropagation() }} className="block">
+        <VenueSettings venue={venue} itemCount={itemCount} onDone={() => { setMore(false); setEditing(false) }} />
+      </span>
+    )
+  }
+
   return (
-    <input
+    <span className="inline-flex items-center gap-2" onClick={(e) => { e.preventDefault(); e.stopPropagation() }}>
+      <input
       autoFocus
       defaultValue={name}
       disabled={busy}
@@ -57,6 +70,14 @@ export default function EditVenue({ id, name }: { id: string; name: string }) {
       }}
       onBlur={(e) => save(e.target.value)}
       className="bg-zinc-800 border border-zinc-600 rounded px-2 py-0.5 text-sm text-white focus:outline-none"
-    />
+      />
+      <button
+        type="button"
+        onClick={(e) => { e.preventDefault(); e.stopPropagation(); setMore(true) }}
+        className="text-[11px] text-zinc-600 hover:text-zinc-300 transition-colors"
+      >
+        More…
+      </button>
+    </span>
   )
 }

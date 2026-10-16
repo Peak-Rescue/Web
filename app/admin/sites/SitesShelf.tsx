@@ -1,4 +1,3 @@
-import Link from 'next/link'
 import SiteRow from './SiteRow'
 import JumpToNewRow from '@/components/JumpToNewRow'
 import AddToPlace from './AddToPlace'
@@ -305,7 +304,7 @@ export default function SitesShelf({
             <summary className="cursor-pointer list-none flex items-center gap-2 px-3 py-2.5 hover:bg-zinc-800/60 transition-colors">
               <span aria-hidden className="text-zinc-600 text-xs transition-transform group-open/venue:rotate-90">▶</span>
               <span className="text-sm font-medium text-zinc-200">{g.name}</span>
-              {g.venue && <EditVenue id={g.venue.id} name={g.venue.name} />}
+              {g.venue && <EditVenue venue={g.venue} itemCount={g.maps.length + g.beta.length + g.plans.length + g.permits.length} />}
               <span className="text-[11px] text-zinc-600">
                 {[
                   g.sites.length && `${g.sites.length} site${g.sites.length === 1 ? '' : 's'}`,
@@ -452,15 +451,7 @@ export default function SitesShelf({
         {sites.length === 0 && maps.length === 0 && <p className="text-sm text-zinc-500">Nothing filed by place yet.</p>}
       </div>
 
-      {/* The venue is the region these are grouped under, and the only place
-          it can be created or renamed. Not a shelf of its own — naming it
-          without a way to reach it is how the same region gets typed twice. */}
-      <p className="mt-6">
-        <Link href="/admin/venues" className="text-sm text-zinc-500 hover:text-zinc-300 underline transition-colors">
-          Venues →
-        </Link>
-        <span className="text-sm text-zinc-600"> the regions these sit in, and the links that are true of the whole area.</span>
-      </p>
+
     </>
   )
 }

@@ -1,101 +1,13 @@
 import { redirect } from 'next/navigation'
-import Link from 'next/link'
-import { createClient } from '@/lib/supabase/server'
-import { createAdminClient } from '@/lib/supabase/admin'
-import { createVenue } from '../library/actions'
-import VenueRow from './VenueRow'
-import RegionSelect from '@/components/RegionSelect'
-import { type Venue, shelfLink } from '@/lib/library'
-import InfoHint from '@/components/InfoHint'
-import JumpToNewRow from '@/components/JumpToNewRow'
+import { shelfLink } from '@/lib/library'
 
-const input = 'w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500'
-const label = 'block text-xs text-zinc-400 mb-1'
-
-export default async function VenuesPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ added?: string }>
-}) {
-  const { added } = await searchParams
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
-  const admin = createAdminClient()
-  const { data: profile } = await admin.from('profiles').select('role').eq('id', user.id).single()
-  if (profile?.role !== 'admin') redirect('/dashboard')
-
-  const [{ data: venueRows }, { data: counts }] = await Promise.all([
-    admin.from('venues').select('id, name, region, region_code, client_name, notes, links, contacts, active').order('name'),
-    admin.from('library_items').select('venue_id').not('venue_id', 'is', null),
-  ])
-
-  const venues = (venueRows ?? []) as Venue[]
-  const itemCount = new Map<string, number>()
-  for (const r of counts ?? []) {
-    const k = r.venue_id as string
-    itemCount.set(k, (itemCount.get(k) ?? 0) + 1)
-  }
-
-  return (
-    <main className="min-h-screen bg-zinc-950 text-white pt-16 md:pt-20">
-      <div className="max-w-3xl mx-auto px-4 py-10">
-        <Link href="/admin/library?status=all" className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors mb-6 inline-block">← Library</Link>
-
-        <h1 className="flex items-center gap-2 text-2xl font-bold">
-          Venues
-          <InfoHint text="Maps, permits, lodging and rescue plans attach here once — setting a course's venue pulls them in automatically." />
-        </h1>
-        <p className="text-zinc-400 mt-1 mb-2">Places you run courses.</p>
-        {/* A venue is the region a course is sold against; the canyon it
-            actually runs in lives a level down. Naming the other screen
-            without a way to reach it is how the same beta gets typed twice. */}
-        <p className="mb-8">
-          <Link href={shelfLink('venue').href} className="text-sm text-zinc-500 hover:text-zinc-300 underline transition-colors">
-            {shelfLink('venue').label} →
-          </Link>
-          <span className="text-sm text-zinc-600"> everything filed by place: maps, beta, weather, contacts, plans.</span>
-        </p>
-
-        {added && venues.some((v) => v.id === added) && (
-          <JumpToNewRow key={added} targetId={`venue-${added}`} />
-        )}
-
-        <div className="space-y-2 mb-10">
-          {venues.map((v) => <VenueRow key={v.id} venue={v} itemCount={itemCount.get(v.id) ?? 0} />)}
-          {venues.length === 0 && <p className="text-sm text-zinc-500">No venues yet.</p>}
-        </div>
-
-        <details className="group">
-          <summary className="cursor-pointer list-none text-sm text-zinc-400 hover:text-zinc-200 transition-colors">
-            <span className="text-zinc-600 mr-2 inline-block transition-transform group-open:rotate-90">▶</span>
-            Add a venue
-          </summary>
-          <form action={createVenue} className="mt-3 p-4 bg-zinc-900 border border-zinc-800 rounded-lg grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className={label}>Name *</label>
-              <input name="name" required className={input} placeholder="Dingford Creek" />
-            </div>
-            <div>
-              <label className={label}>Region</label>
-              <input name="region" className={input} placeholder="North Bend, WA" />
-            </div>
-            <div>
-              <label className={label}>State / country</label>
-              <RegionSelect name="region_code" className={input} />
-            </div>
-            <div className="sm:col-span-2">
-              <label className={label}>Notes</label>
-              <textarea name="notes" rows={2} className={`${input} resize-y`} />
-            </div>
-            <div className="sm:col-span-2">
-              <button className="px-4 py-2 bg-pr-red hover:bg-pr-red-dark text-white rounded text-sm font-medium transition-colors">
-                Add venue
-              </button>
-            </div>
-          </form>
-        </details>
-      </div>
-    </main>
-  )
+// Venues had a screen of their own back when a venue was a row with a name
+// and a region on it. Everything it offered is on the places shelf now —
+// grouped by country and state, with each venue's maps, beta, MEDEVAC plans,
+// permits, weather and contacts under it, and Edit → More for the rest.
+//
+// A redirect rather than a delete: the address is in links, in bookmarks, and
+// in the sentence somebody wrote in a comment explaining where venues live.
+export default function VenuesPage() {
+  redirect(shelfLink('venue').href)
 }
