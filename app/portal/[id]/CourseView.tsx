@@ -745,17 +745,30 @@ export default async function CourseView({
   // rather than out to Google — the same rule the curriculum follows, and the
   // only reason a student can open one at all: Drive would send them to the
   // request-access screen.
-  const resources = (resourceRows ?? []).map((r) => {
-    const item = r.library_items as unknown as { id: string; title: string; url: string | null; kind: string; audience?: string } | null
+  const allResources = (resourceRows ?? []).map((r) => {
+    const item = r.library_items as unknown as {
+      id: string; title: string; url: string | null; kind: string; audience?: string
+      venue_id?: string | null; site_id?: string | null; region?: string | null
+      venues?: { name: string } | null; sites?: { name: string } | null
+    } | null
     const isDrive = /drive\.google\.com|docs\.google\.com/.test(item?.url ?? '')
     return {
       id: r.id,
       label: item?.title ?? r.label ?? 'Document',
+      rawKind: item?.kind ?? null,
       kind: item ? KIND_META[item.kind as LibraryKind] ?? null : null,
       url: item && isDrive ? `/api/library/${item.id}` : item?.url ?? r.url,
       internal: r.audience !== 'shared' || item?.audience === 'internal',
+      place: item?.sites?.name ?? item?.venues?.name
+        ?? (item?.region ? regionLabel(item.region) || item.region : null),
     }
   }).filter((r) => r.url && (showTasks || !r.internal))
+
+  // Split the same way the editors are. The read view was not, so the Maui
+  // med plan was listed under Venue and again under Reference — one row, two
+  // sections, which is the page disagreeing with itself.
+  const venueRead = allResources.filter((r) => r.place)
+  const resources = allResources.filter((r) => !r.place)
 
   // The same rows in the shape the editor wants — unfiltered, and carrying
   // where each one came from. Built only for staff, who are the only people
@@ -2595,30 +2608,56 @@ export default async function CourseView({
             {maps.length === 0 && showTasks && (
               <p className="text-xs text-zinc-600">No maps yet.</p>
             )}
-            {/* What the course took from its place, read beside the maps it
-                took from the same place. */}
-            {venueResources.length > 0 && (
-              <ul className="mt-3 space-y-1">
-                {venueResources.map((r) => (
-                  <li key={r.id} className="text-xs">
-                    <a
-                      href={r.url ?? '#'}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-zinc-300 hover:text-white transition-colors"
-                    >
-                      {r.label}
-                    </a>
-                    {r.place && <span className="text-zinc-600"> · {r.place}</span>}
-                  </li>
-                ))}
-              </ul>
-            )}
+            {/* Grouped the way the venue itself is, and in the same rows
+                Reference uses. One flat list in a second style read as a
+                different kind of thing, which it is not — it is the same
+                library rows, filed somewhere else. */}
+            {([
+              ['Plans', ['rescue_plan', 'med_plan']],
+              ['Permits', ['permit']],
+              ['Beta', ['route']],
+              ['Other', ['', 'reference', 'manual', 'tech_note', 'standard', 'form', 'presentation', 'outline', 'skill_sheet', 'video', 'media', 'map']],
+            ] as const).map(([heading, kinds]) => {
+              const rows = venueRead.filter((r) => (kinds as readonly string[]).includes(r.rawKind ?? ''))
+              if (rows.length === 0) return null
+              return (
+                <div key={heading} className="mt-3">
+                  <p className="text-[10px] uppercase tracking-wide text-zinc-600 mb-1.5">{heading}</p>
+                  <ul className="space-y-1.5">
+                    {rows.map((r) => (
+                      <li key={r.id}>
+                        <a
+                          href={r.url!}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg border border-zinc-800 bg-zinc-900 hover:border-zinc-600 transition-colors group"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-zinc-400">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M16 13H8M16 17H8" />
+                          </svg>
+                          <span className="text-sm text-zinc-200 group-hover:text-white transition-colors min-w-0 truncate">
+                            {r.label}
+                          </span>
+                          {r.place && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-900/40 text-blue-300 shrink-0">
+                              {r.place}
+                            </span>
+                          )}
+                          {showTasks && r.internal && (
+                            <AudiencePills audience="internal" className="ml-auto shrink-0" />
+                          )}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )
+            })}
             {/* Said on the page you read, not only on the form you open to
                 change it. Every course has a med plan, and one that is
                 missing is noticed either here or on the morning somebody
                 needs it. */}
-            {showTasks && !jobNotCourse && !venueResources.some((r) => r.kind === 'med_plan') && (
+            {showTasks && !jobNotCourse && !venueRead.some((r) => r.rawKind === 'med_plan') && (
               <p className="mt-3 text-xs text-amber-300/90">No med plan on this {noun}.</p>
             )}
             {maps.length > 0 && (
