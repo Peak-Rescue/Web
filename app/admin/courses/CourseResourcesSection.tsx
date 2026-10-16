@@ -118,11 +118,17 @@ export default function CourseResourcesSection({
   // it was opened for.
   const needle = q.trim().toLowerCase()
   const byKind = onlyKind ? unadded.filter((i) => i.kind === onlyKind) : unadded
+  // Narrowing to a type is never the whole question — "a med plan" is always
+  // "the med plan for where we are going". When this course's place has one,
+  // it is the answer and the rest are a fallback behind it.
+  const kindHere = onlyKind ? byKind.filter((i) => i.suggested) : []
   const available = needle
     ? byKind.filter((i) => i.title.toLowerCase().includes(needle))
-    : onlyKind || showAll || fitting.length === 0
-      ? byKind
-      : fitting
+    : onlyKind
+      ? (kindHere.length && !showAll ? kindHere : byKind)
+      : showAll || fitting.length === 0
+        ? unadded
+        : fitting
   const offCourse = unadded.length - fitting.length
   // Every course has a med plan, so the slot for it is always drawn — empty
   // if nobody has put one there. A missing thing that is not on the page is
@@ -276,8 +282,18 @@ export default function CourseResourcesSection({
           />
           {onlyKind && (
             <p className="text-[11px] text-zinc-500 mb-2">
-              Showing med plans only.{' '}
-              <button onClick={() => setOnlyKind(null)} className="underline hover:text-zinc-300 transition-colors">
+              {kindHere.length && !showAll
+                ? `Med plans for ${placeLabel || 'where this course is'}.`
+                : 'Med plans, everywhere.'}{' '}
+              {kindHere.length > 0 && byKind.length > kindHere.length && (
+                <button
+                  onClick={() => setShowAll((v) => !v)}
+                  className="underline hover:text-zinc-300 transition-colors"
+                >
+                  {showAll ? 'Just this place' : `All ${byKind.length}`}
+                </button>
+              )}{' '}
+              <button onClick={() => { setOnlyKind(null); setShowAll(false) }} className="underline hover:text-zinc-300 transition-colors">
                 Show everything
               </button>
             </p>
