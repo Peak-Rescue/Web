@@ -134,8 +134,7 @@ export default function AddLinkDialog({
               onChange={(e) => setKind(e.target.value)}
               className="mt-1 w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-zinc-200 focus:outline-none focus:border-zinc-500"
             >
-              <option value="med_plan">Med plan</option>
-              <option value="rescue_plan">Evac plan</option>
+              <option value="medevac">MEDEVAC plan</option>
               <option value="permit">Permit</option>
               <option value="map">Map</option>
               <option value="route">Beta</option>

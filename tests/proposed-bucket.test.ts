@@ -13,7 +13,7 @@ describe('proposedBucket', () => {
   it('files paperwork by what it is, whatever room it came from', () => {
     expect(proposedBucket(item({ kind: 'permit', source_topic: 'Canyon Course — Taiwan' }))).toBe('documents')
     expect(proposedBucket(item({ kind: 'form' }))).toBe('documents')
-    expect(proposedBucket(item({ kind: 'rescue_plan' }))).toBe('documents')
+    expect(proposedBucket(item({ kind: 'medevac' }))).toBe('documents')
   })
 
   it('never moves a map off the map shelf', () => {

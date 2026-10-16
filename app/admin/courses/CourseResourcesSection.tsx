@@ -149,10 +149,7 @@ export default function CourseResourcesSection({
   // it was opened for.
   const needle = q.trim().toLowerCase()
   // 'medevac' is the block, not a type: it is both of them.
-  const MEDEVAC = ['med_plan', 'rescue_plan']
-  const byKind = onlyKind
-    ? unadded.filter((i) => (onlyKind === 'medevac' ? MEDEVAC.includes(i.kind) : i.kind === onlyKind))
-    : unadded
+  const byKind = onlyKind ? unadded.filter((i) => i.kind === onlyKind) : unadded
   // Narrowing to a type is never the whole question — "a med plan" is always
   // "the med plan for where we are going". When this course's place has one,
   // it is the answer and the rest are a fallback behind it.
@@ -173,9 +170,7 @@ export default function CourseResourcesSection({
   // Either type satisfies it: the two are often one document — the Maui one
   // is called Medical-MEDEVAC-Plan — and a course with an evac plan and no
   // separate med plan is not a course missing one.
-  const medPlan = scope === 'venue'
-    ? shown.find((r) => r.kind === 'med_plan' || r.kind === 'rescue_plan')
-    : true
+  const medPlan = scope === 'venue' ? shown.find((r) => r.kind === 'medevac') : true
 
   return (
     <div className="p-6 pt-5 border-t border-zinc-800">

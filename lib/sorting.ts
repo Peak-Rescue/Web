@@ -59,7 +59,7 @@ const BY_TITLE: { re: RegExp; v: Verdict }[] = [
   },
   {
     re: /\b(evac|evacuation|rescue|med|medical) plans?\b|\brisk assessments?\b/i,
-    v: { kind: 'rescue_plan', bucket: 'documents', reason: 'a plan for when it goes wrong' },
+    v: { kind: 'medevac', bucket: 'documents', reason: 'a plan for when it goes wrong' },
   },
   {
     re: /\b(logos?|letterhead|employee handbook|incident report|worker incident|welcome letter|instructor expectation)/i,

@@ -2615,7 +2615,7 @@ export default async function CourseView({
             {([
               // One block: the med plan and the evac plan answer one
               // question and are often one document.
-              ['MEDEVAC', ['med_plan', 'rescue_plan']],
+              ['MEDEVAC', ['medevac']],
               ['Permits', ['permit']],
               ['Beta', ['route']],
               ['Other', ['', 'reference', 'manual', 'tech_note', 'standard', 'form', 'presentation', 'outline', 'skill_sheet', 'video', 'media', 'map']],
@@ -2660,7 +2660,7 @@ export default async function CourseView({
                 missing is noticed either here or on the morning somebody
                 needs it. */}
             {showTasks && !jobNotCourse
-              && !venueRead.some((r) => r.rawKind === 'med_plan' || r.rawKind === 'rescue_plan') && (
+              && !venueRead.some((r) => r.rawKind === 'medevac') && (
               <p className="mt-3 text-xs text-amber-300/90">No MEDEVAC plan on this {noun}.</p>
             )}
             {/* Headed like every other group here. Unlabelled, the chips read

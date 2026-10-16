@@ -29,7 +29,7 @@ type Row = {
 const VENUE_EXPECTED: { kind: LibraryKind; label: string }[] = [
   { kind: 'map', label: 'Map' },
   { kind: 'permit', label: 'Permits' },
-  { kind: 'rescue_plan', label: 'Rescue plan' },
+  { kind: 'medevac', label: 'Rescue plan' },
   { kind: 'reference', label: 'Local info' },
 ]
 

@@ -81,7 +81,7 @@ export default function SitesShelf({
     // deciding whether the course can run at all.
     const into = m.kind === 'route'
       ? betaByVenue
-      : m.kind === 'rescue_plan' || m.kind === 'med_plan'
+      : m.kind === 'medevac'
         ? plansByVenue
         : m.kind === 'permit'
           ? permitsByVenue
@@ -180,9 +180,9 @@ export default function SitesShelf({
     const info = regionInfo.get(code)
     const canyons = sitesAtRegion.get(code) ?? []
     const beta = items.filter((i) => i.kind === 'route')
-    const plans = items.filter((i) => i.kind === 'rescue_plan' || i.kind === 'med_plan')
+    const plans = items.filter((i) => i.kind === 'medevac')
     const permits = items.filter((i) => i.kind === 'permit')
-    const maps = items.filter((i) => !['route', 'rescue_plan', 'med_plan', 'permit'].includes(i.kind))
+    const maps = items.filter((i) => !['route', 'medevac', 'permit'].includes(i.kind))
     const weather = (info?.links ?? []).filter((l) => l.kind === 'weather')
     const other = (info?.links ?? []).filter((l) => l.kind !== 'weather')
     const contacts = info?.contacts ?? []

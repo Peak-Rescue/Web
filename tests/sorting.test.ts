@@ -14,7 +14,7 @@ describe('what it will file without asking', () => {
   it('knows paperwork by name', () => {
     expect(classify(item({ title: 'Course Waiver' }))).toMatchObject({ confident: true, kind: 'form', bucket: 'documents' })
     expect(classify(item({ title: 'Logos' }))).toMatchObject({ confident: true, bucket: 'documents' })
-    expect(classify(item({ title: 'Company Evac Plans' }))).toMatchObject({ confident: true, kind: 'rescue_plan' })
+    expect(classify(item({ title: 'Company Evac Plans' }))).toMatchObject({ confident: true, kind: 'medevac' })
   })
 
   it('locks a permit down wherever it is', () => {
