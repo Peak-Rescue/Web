@@ -61,6 +61,20 @@ export default function CourseResourcesSection({
   // Maui-Canyoning-Medical-MEDEVAC-Plan — the thing it was opened to find.
   const [onlyKind, setOnlyKind] = useState<string | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
+  // Rows that are already written but not yet on the page the server sends.
+  // Adding one costs a full rebuild of the course page — about a second — and
+  // for that second the section looked exactly as it had before the click,
+  // which reads as the add having failed. It is the one thing a write must
+  // never look like.
+  const [justAdded, setJustAdded] = useState<CourseResource[]>([])
+
+  // Dropped as soon as the server's own copy arrives, so the row does not
+  // appear twice. Matched on the title rather than the id: the id a pending
+  // row carries is invented here and the one the server gives it is the
+  // course_resources row's, so the two could never meet.
+  const serverLabels = new Set(resources.map((r) => r.label))
+  const pending = justAdded.filter((r) => !serverLabels.has(r.label))
+  const shown = [...resources, ...pending]
 
   // An expected refusal comes back as a value and is shown as it was written;
   // anything thrown is a fault, and errorFrom keeps its digest so the log entry
@@ -134,7 +148,7 @@ export default function CourseResourcesSection({
   // if nobody has put one there. A missing thing that is not on the page is
   // a thing nobody notices is missing, and this one is noticed at the worst
   // possible moment.
-  const medPlan = resources.find((r) => r.kind === 'med_plan')
+  const medPlan = shown.find((r) => r.kind === 'med_plan')
 
   return (
     <div className="p-6 pt-5 border-t border-zinc-800">
@@ -164,11 +178,11 @@ export default function CourseResourcesSection({
       )}
 
       <div className="bg-zinc-950/40 border border-zinc-800 rounded-lg divide-y divide-zinc-800">
-        {resources.length === 0 && (
+        {shown.length === 0 && (
           <p className="text-xs text-zinc-600 px-4 py-4">No reference material yet.</p>
         )}
 
-        {resources.map((r) => (
+        {shown.map((r) => (
           <div key={r.id} className="flex items-center gap-3 px-4 py-3">
             <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-zinc-500">
               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M16 13H8M16 17H8" />
@@ -380,10 +394,26 @@ export default function CourseResourcesSection({
             <button
               onClick={() =>
                 run(async () => {
-                  await addCourseResourcesFromLibrary(instanceId, [...selected])
+                  const ids = [...selected]
+                  // On screen before the round trip, from what the picker
+                  // already knows about each row.
+                  const chosen = (picker ?? []).filter((i) => ids.includes(i.id))
+                  setJustAdded((prev) => [
+                    ...prev,
+                    ...chosen.map((i) => ({
+                      id: `pending:${i.id}`,
+                      label: i.title,
+                      url: i.url,
+                      audience: i.audience,
+                      fromLibrary: true,
+                      kind: i.kind,
+                      libraryLocked: i.audience === 'internal',
+                    })),
+                  ])
                   setSelected(new Set())
                   setPickerOpen(false)
                   setPicker(null)
+                  await addCourseResourcesFromLibrary(instanceId, ids)
                 })
               }
               disabled={busy || selected.size === 0}
