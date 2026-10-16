@@ -25,7 +25,8 @@ export default function AddLinkDialog({
   // The venue or region this course sits in, when it has one. Null hides the
   // offer — there is nowhere to file the document against.
   libraryPlace?: string | null
-  onSubmit: (name: string, url: string, audience: LibraryAudience, toLibrary: boolean) => void
+  /** `kind` is only meaningful when the link is also being filed. */
+  onSubmit: (name: string, url: string, audience: LibraryAudience, toLibrary: boolean, kind: string) => void
   onCancel: () => void
 }) {
   const [name, setName] = useState('')
@@ -34,6 +35,12 @@ export default function AddLinkDialog({
   // fall back to instructors-only on submit, as they always did.
   const [audience, setAudience] = useState<LibraryAudience | null>(null)
   const [toLibrary, setToLibrary] = useState(false)
+  // Asked only when it is being filed, because it is the filing's question.
+  // A link added to a course and nowhere else is whatever it is; one going
+  // into the library under a place has to say whether it is that place's med
+  // plan, its evac plan, its permit — or it lands as untyped reference and
+  // reads nowhere near where it belongs.
+  const [kind, setKind] = useState('reference')
 
   // Reopening starts a fresh link — reset the drafts during render
   // (React's "adjust state when a prop changes" pattern, no effect needed).
@@ -59,7 +66,7 @@ export default function AddLinkDialog({
   // Where the audience is asked, it is required — an unanswered question must
   // not resolve itself into the more restrictive answer behind your back.
   const canSubmit = !busy && url.trim().length > 0 && (!withAudience || audience !== null)
-  const submit = () => canSubmit && onSubmit(name, url, audience ?? 'internal', toLibrary)
+  const submit = () => canSubmit && onSubmit(name, url, audience ?? 'internal', toLibrary, kind)
 
   return (
     <div
@@ -115,6 +122,25 @@ export default function AddLinkDialog({
             <span>
               Add to library for <span className="font-medium">{libraryPlace}</span>
             </span>
+          </label>
+        )}
+
+        {libraryPlace && toLibrary && (
+          <label className="block mt-2 text-xs text-zinc-400">
+            What it is
+            <select
+              value={kind}
+              disabled={busy}
+              onChange={(e) => setKind(e.target.value)}
+              className="mt-1 w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-zinc-200 focus:outline-none focus:border-zinc-500"
+            >
+              <option value="med_plan">Med plan</option>
+              <option value="rescue_plan">Evac plan</option>
+              <option value="permit">Permit</option>
+              <option value="map">Map</option>
+              <option value="route">Beta</option>
+              <option value="reference">Something else</option>
+            </select>
           </label>
         )}
 

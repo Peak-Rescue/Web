@@ -17,7 +17,6 @@ import {
   setCourseResourceAudience,
   type ResourcePickerItem,
 } from './resource-actions'
-import InfoHint from '@/components/InfoHint'
 import TrashIcon from '@/components/TrashIcon'
 
 export type CourseResource = {
@@ -157,13 +156,8 @@ export default function CourseResourcesSection({
 
   return (
     <div className="p-6 pt-5 border-t border-zinc-800">
-      <div className="flex items-center gap-1.5 mb-1">
-        <h3 className="text-sm font-semibold text-zinc-300">Reference</h3>
-        <InfoHint text="Students meet these in their own section, apart from the curriculum." />
-      </div>
-      <p className="text-xs text-zinc-500 mb-3">
-        Manuals, standards and the plans for where this course is.
-      </p>
+      {/* No heading. The panel this opens in is already called Reference,
+          and saying it twice on one screen reads as two sections. */}
 
       {!medPlan && (
         <div className="mb-3 flex items-center gap-3 rounded-lg border border-dashed border-amber-900/60 bg-amber-950/10 px-4 py-3">
@@ -214,7 +208,7 @@ export default function CourseResourcesSection({
                       what is blocking it, on a link to where it is changed. */}
                   {r.libraryLocked
                     ? 'Instructors-only in the library — change it there to share it'
-                    : 'From the reference library'}
+                    : 'From the library'}
                 </Link>
               ) : (
                 <span className="text-[11px] text-zinc-600">Link added for this course</span>
@@ -272,7 +266,7 @@ export default function CourseResourcesSection({
       )}
 
       <div className="flex items-center gap-2 mt-3">
-        <button onClick={openPicker} disabled={busy} className={btn}>+ Choose from resource library</button>
+        <button onClick={openPicker} disabled={busy} className={btn}>+ Choose from the library</button>
         <button onClick={() => setLinkOpen(true)} disabled={busy} className={btn}>+ Add a link</button>
         {/* Adding a second link for a resource already on the shelf is usually
             meant as an edit to that entry, and until there was a way through
@@ -442,13 +436,13 @@ export default function CourseResourcesSection({
         withAudience
         libraryPlace={placeLabel}
         onCancel={() => setLinkOpen(false)}
-        onSubmit={(name, url, audience, toLibrary) =>
+        onSubmit={(name, url, audience, toLibrary, kind) =>
           run(async () => {
             // Close either way: a refusal ("already in the library") is
             // reported under the section, and a dialog left open would sit
             // on top of the sentence explaining what to do instead.
             try {
-              const result = await addCourseResourceLink(instanceId, url, name, audience, toLibrary)
+              const result = await addCourseResourceLink(instanceId, url, name, audience, toLibrary, kind)
               if (result?.error) return result
               if (toLibrary) setPicker(null) // the shelf just changed
             } finally {

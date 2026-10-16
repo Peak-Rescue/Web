@@ -8,6 +8,7 @@ import { type LibraryAudience } from '@/lib/library'
 import { regionLabel } from '@/lib/regions'
 import { refuse, type ActionResult } from '@/lib/action-result'
 import { classify, NEEDS_SORTING } from '@/lib/sorting'
+import { bucketForKind } from '@/lib/library'
 import { courseCapabilityCategories, CAPABILITY_META, type CapabilityCategory } from '@/lib/capabilities'
 
 // Reference attached to a course, set alongside its location for the same
@@ -200,7 +201,10 @@ export async function addCourseResourceLink(
   url: string,
   label: string,
   audience: LibraryAudience = 'internal',
-  toLibrary = false
+  toLibrary = false,
+  /** What it is, when it is being filed. Answered on the dialog, because the
+      person pasting the link is the only one who knows. */
+  kind?: string
 ): Promise<ActionResult> {
   const { user, admin } = await requireTeam(instanceId)
   const link = normalizeDocLink(url, label)
@@ -279,7 +283,7 @@ export async function addCourseResourceLink(
   // so the promotion reports itself rather than unwinding the add. The page
   // still has to be told about the document that did land, which is why the
   // refusal goes back after the revalidation rather than instead of it.
-  const failed = toLibrary ? await promoteToLibrary(admin, instanceId, row.id) : null
+  const failed = toLibrary ? await promoteToLibrary(admin, instanceId, row.id, kind) : null
 
   revalidate(instanceId)
   if (toLibrary) revalidatePath('/admin/library')
@@ -337,7 +341,10 @@ export async function saveCourseResourceToLibrary(
 async function promoteToLibrary(
   admin: ReturnType<typeof createAdminClient>,
   instanceId: string,
-  resourceId: string
+  resourceId: string,
+  /** Said on the form. Beats the classifier, which is guessing from a pasted
+      link and a typed label and would call a med plan a reference. */
+  told?: string
 ): Promise<{ error: string } | null> {
   const [{ data: row }, { data: inst }] = await Promise.all([
     admin
@@ -367,7 +374,9 @@ async function promoteToLibrary(
   // arrived. Same classifier the sorting pass uses, so the two cannot disagree
   // about the same document.
   const title = row.label ?? 'Document'
-  const verdict = classify({ title, url: row.url, kind: 'reference', bucket: 'resource', source_topic: null })
+  const verdict = told && told !== 'reference'
+    ? { confident: true as const, kind: told, bucket: bucketForKind(told) ?? 'resource', reason: 'said on the form' }
+    : classify({ title, url: row.url, kind: 'reference', bucket: 'resource', source_topic: null })
 
   let libraryItemId = existing?.id
   if (!libraryItemId) {
