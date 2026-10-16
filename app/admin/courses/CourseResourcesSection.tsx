@@ -44,10 +44,18 @@ export type CourseResource = {
 // says nothing anyway: everything in the library is a resource. The table is
 // still course_resources; renaming that buys nothing and costs a migration.
 export default function CourseResourcesSection({
+  scope = 'reference',
   instanceId,
   resources,
   placeLabel,
 }: {
+  /** Which of the course's two sections this is. Venue offers what the
+      library has filed under a place — the med plan, the evac plan, the
+      permit — and Reference offers the rest of the shelf. One component,
+      because adding a library row to a course is one job however the row is
+      filed; two scopes, because the two sections are answering different
+      questions and should not offer each other's rows. */
+  scope?: 'venue' | 'reference'
   instanceId: string
   resources: CourseResource[]
   // Venue name, or the region when there is no venue — what the library would
@@ -129,6 +137,7 @@ export default function CourseResourcesSection({
 
   const unadded = (picker ?? [])
     .filter((i) => !i.alreadyAdded)
+    .filter((i) => (scope === 'venue' ? i.placed : !i.placed))
     .sort((a, b) => Number(b.suggested) - Number(a.suggested) || a.title.localeCompare(b.title))
   // What fits this course — its venue, its region, or its expertise — is what
   // the picker opens on. The rest of the shelf is one press away and says how
@@ -156,7 +165,8 @@ export default function CourseResourcesSection({
   // if nobody has put one there. A missing thing that is not on the page is
   // a thing nobody notices is missing, and this one is noticed at the worst
   // possible moment.
-  const medPlan = shown.find((r) => r.kind === 'med_plan')
+  // Asked for in the Venue section, because that is where a med plan is.
+  const medPlan = scope === 'venue' ? shown.find((r) => r.kind === 'med_plan') : true
 
   return (
     <div className="p-6 pt-5 border-t border-zinc-800">
@@ -182,7 +192,9 @@ export default function CourseResourcesSection({
 
       <div className="bg-zinc-950/40 border border-zinc-800 rounded-lg divide-y divide-zinc-800">
         {shown.length === 0 && (
-          <p className="text-xs text-zinc-600 px-4 py-4">No reference material yet.</p>
+          <p className="text-xs text-zinc-600 px-4 py-4">
+            {scope === 'venue' ? 'Nothing from this place yet.' : 'No reference material yet.'}
+          </p>
         )}
 
         {shown.map((r) => (
@@ -270,7 +282,9 @@ export default function CourseResourcesSection({
       )}
 
       <div className="flex items-center gap-2 mt-3">
-        <button onClick={openPicker} disabled={busy} className={btn}>+ Choose from the library</button>
+        <button onClick={openPicker} disabled={busy} className={btn}>
+          {scope === 'venue' ? '+ Add venue material' : '+ Add reference material'}
+        </button>
         <button onClick={() => setLinkOpen(true)} disabled={busy} className={btn}>+ Add a link</button>
         {/* Adding a second link for a resource already on the shelf is usually
             meant as an edit to that entry, and until there was a way through

@@ -86,6 +86,10 @@ export type ResourcePickerItem = {
   /** A plan for somewhere else. Loaded, because the query is one query, and
       dropped here rather than offered to every course in the company. */
   hidden?: boolean
+  /** Filed under a place in the library. Decides which of the course's two
+      sections offers it: venue material under Venue, the rest under
+      Reference. */
+  placed: boolean
 }
 
 // The Resources shelf, with the ones for this course's place floated to the
@@ -99,7 +103,7 @@ export async function loadResourceLibrary(instanceId: string): Promise<ResourceP
     admin.from('course_instances').select('location, region, venue_id, course_type, custom_categories').eq('id', instanceId).single(),
     admin
       .from('library_items')
-      .select('id, title, url, kind, audience, region, venue_id, bucket, disciplines, venues(name)')
+      .select('id, title, url, kind, audience, region, venue_id, site_id, bucket, disciplines, venues(name)')
       // Reference, plus the plans a place has. A venue's evac plan is the
       // thing somebody goes looking for while building the course that goes
       // there, and it sits on the Documents shelf — so offering only the
@@ -152,6 +156,7 @@ export async function loadResourceLibrary(instanceId: string): Promise<ResourceP
       matchedOn: (venueHit ? 'venue' : regionHit ? 'region' : shared.length > 0 ? 'discipline' : null) as ResourcePickerItem['matchedOn'],
       disciplineLabel: shared.map((d) => CAPABILITY_META[d as CapabilityCategory]?.label ?? d).join(', ') || null,
       alreadyAdded: added.has(r.id),
+      placed: Boolean(r.venue_id || r.site_id || r.region),
     }
   })
   return mapped.filter((r) => !r.hidden)

@@ -2577,17 +2577,49 @@ export default async function CourseView({
               title="Venue"
               editor={
                 showTasks ? (
-                  <CourseMapsSection
-                    instanceId={id}
-                    maps={editableMaps}
-                    placeLabel={coursePlace}
-                    venueResources={venueResources}
-                  />
+                  <>
+                    <CourseMapsSection instanceId={id} maps={editableMaps} placeLabel={coursePlace} />
+                    {/* The same editor Reference uses, scoped to what the
+                        library has filed under a place. Adding venue material
+                        belongs where venue material is read. */}
+                    <CourseResourcesSection
+                      scope="venue"
+                      instanceId={id}
+                      resources={venueResources}
+                      placeLabel={coursePlace}
+                    />
+                  </>
                 ) : null
               }
             >
             {maps.length === 0 && showTasks && (
               <p className="text-xs text-zinc-600">No maps yet.</p>
+            )}
+            {/* What the course took from its place, read beside the maps it
+                took from the same place. */}
+            {venueResources.length > 0 && (
+              <ul className="mt-3 space-y-1">
+                {venueResources.map((r) => (
+                  <li key={r.id} className="text-xs">
+                    <a
+                      href={r.url ?? '#'}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-zinc-300 hover:text-white transition-colors"
+                    >
+                      {r.label}
+                    </a>
+                    {r.place && <span className="text-zinc-600"> · {r.place}</span>}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {/* Said on the page you read, not only on the form you open to
+                change it. Every course has a med plan, and one that is
+                missing is noticed either here or on the morning somebody
+                needs it. */}
+            {showTasks && !jobNotCourse && !venueResources.some((r) => r.kind === 'med_plan') && (
+              <p className="mt-3 text-xs text-amber-300/90">No med plan on this {noun}.</p>
             )}
             {maps.length > 0 && (
               <div className="flex flex-wrap items-center gap-x-3 gap-y-2 mt-3">
@@ -3160,15 +3192,7 @@ export default async function CourseView({
             {resources.length === 0 && showTasks && (
               <p className="text-xs text-zinc-600">{`No reference material on this ${noun} yet.`}</p>
             )}
-            {/* Said on the page you read, not only on the form you open to
-                change it. Every course has a med plan, and one that is
-                missing is noticed either here or on the morning somebody
-                needs it. */}
-            {showTasks && !jobNotCourse && !editableResources.some((r) => r.kind === 'med_plan') && (
-              <p className="mt-2 text-xs text-amber-300/90">
-                No med plan on this {noun}.
-              </p>
-            )}
+
             </EditInPlace>
             </div>
             {/* Whatever a course was given that isn't a map, a document or an
