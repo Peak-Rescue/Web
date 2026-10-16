@@ -3139,6 +3139,15 @@ export default async function CourseView({
             {resources.length === 0 && showTasks && (
               <p className="text-xs text-zinc-600">{`No reference material on this ${noun} yet.`}</p>
             )}
+            {/* Said on the page you read, not only on the form you open to
+                change it. Every course has a med plan, and one that is
+                missing is noticed either here or on the morning somebody
+                needs it. */}
+            {showTasks && !jobNotCourse && !editableResources.some((r) => r.kind === 'med_plan') && (
+              <p className="mt-2 text-xs text-amber-300/90">
+                No med plan on this {noun}.
+              </p>
+            )}
             </EditInPlace>
             </div>
             {/* Whatever a course was given that isn't a map, a document or an

@@ -56,6 +56,10 @@ export default function CourseResourcesSection({
   const [pickerOpen, setPickerOpen] = useState(false)
   const [showAll, setShowAll] = useState(false)
   const [q, setQ] = useState('')
+  // Narrowed to one type rather than to a guessed word. "Find one" used to
+  // put "med plan" in the search box, which matches nothing on a file called
+  // Maui-Canyoning-Medical-MEDEVAC-Plan — the thing it was opened to find.
+  const [onlyKind, setOnlyKind] = useState<string | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
 
   // An expected refusal comes back as a value and is shown as it was written;
@@ -113,10 +117,11 @@ export default function CourseResourcesSection({
   // things that already fit this course is the search failing at the one job
   // it was opened for.
   const needle = q.trim().toLowerCase()
+  const byKind = onlyKind ? unadded.filter((i) => i.kind === onlyKind) : unadded
   const available = needle
-    ? unadded.filter((i) => i.title.toLowerCase().includes(needle))
-    : showAll || fitting.length === 0
-      ? unadded
+    ? byKind.filter((i) => i.title.toLowerCase().includes(needle))
+    : onlyKind || showAll || fitting.length === 0
+      ? byKind
       : fitting
   const offCourse = unadded.length - fitting.length
   // Every course has a med plan, so the slot for it is always drawn — empty
@@ -144,7 +149,7 @@ export default function CourseResourcesSection({
               : 'Add one below. Setting where the course is will offer the one for that place.'}
           </span>
           <button
-            onClick={() => { setQ('med plan'); openPicker() }}
+            onClick={() => { setQ(''); setOnlyKind('med_plan'); openPicker() }}
             className={`${btn} shrink-0`}
           >
             Find one
@@ -269,6 +274,14 @@ export default function CourseResourcesSection({
             placeholder="Search the shelf by title…"
             className="w-full mb-2 bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-zinc-500"
           />
+          {onlyKind && (
+            <p className="text-[11px] text-zinc-500 mb-2">
+              Showing med plans only.{' '}
+              <button onClick={() => setOnlyKind(null)} className="underline hover:text-zinc-300 transition-colors">
+                Show everything
+              </button>
+            </p>
+          )}
           <div className="max-h-64 overflow-y-auto divide-y divide-zinc-800/60 border border-zinc-800 rounded">
             {available.map((i) => (
               <label key={i.id} className="flex items-start gap-2.5 px-2.5 py-2 text-sm cursor-pointer hover:bg-zinc-800/50">
