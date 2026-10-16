@@ -17,7 +17,7 @@ import { errorFrom } from '@/lib/action-result'
 // could make a map and a ropewiki link and nothing else: a canyon's beta is a
 // paragraph somebody writes, and a contact is a person with a number.
 
-type Kind = 'map' | 'beta' | 'plan' | 'permit' | 'weather' | 'contact'
+type Kind = 'map' | 'beta' | 'plan' | 'med' | 'permit' | 'weather' | 'contact'
 
 
 const input =
@@ -54,7 +54,11 @@ export default function AddToPlace({
     // The evac and risk plan for this place. It was filed under Documents
     // with the company's blank templates, which is where you would look for
     // it only if you already knew it was not here.
-    { k: 'plan', label: 'Plan' },
+    { k: 'plan', label: 'Evac plan' },
+    // Where the hospital is and how long the drive is. The same fact every
+    // time a course goes there, and until now written fresh per delivery and
+    // then lost — "we had one last time" with no way back to it.
+    { k: 'med', label: 'Med plan' },
     // Arrives admins-only and never reaches a course. A permit is the one
     // kind of place material where being seen by the wrong person is the
     // failure, so it is not a box anyone has to remember to tick.
@@ -110,18 +114,18 @@ export default function AddToPlace({
     <div className="mt-3 pt-3 border-t border-zinc-800 space-y-2">
       {/* A map and a ropewiki page are both a link with a name, so they share
           a form and differ only in which type is recorded. */}
-      {(kind === 'map' || kind === 'plan' || kind === 'permit') && (
+      {(kind === 'map' || kind === 'plan' || kind === 'med' || kind === 'permit') && (
         <form action={createLibraryItem} className="grid gap-2 sm:grid-cols-[1fr_1fr_auto_auto] items-center">
-          <input type="hidden" name="kind" value={kind === 'map' ? 'map' : kind === 'plan' ? 'rescue_plan' : 'permit'} />
+          <input type="hidden" name="kind" value={{ map: 'map', plan: 'rescue_plan', med: 'med_plan', permit: 'permit' }[kind as 'map' | 'plan' | 'med' | 'permit']} />
           <input type="hidden" name="place" value={place} />
           {/* One field, not two: a form carrying `audience` twice posts the
               first and the second reads as the answer. */}
           <input type="hidden" name="audience" value={kind === 'permit' ? 'admin' : 'internal'} />
           <input name="title" required autoFocus className={input}
-                 placeholder={kind === 'map' ? 'What the map is called' : kind === 'plan' ? 'What the plan is called' : 'What the permit is called'} />
+                 placeholder={{ map: 'What the map is called', plan: 'What the plan is called', med: 'What the med plan is called', permit: 'What the permit is called' }[kind as 'map' | 'plan' | 'med' | 'permit']} />
           <input name="url" required className={`${input} font-mono`} placeholder="https://…" />
           <button className="text-[11px] px-2 py-1 rounded border border-zinc-700 text-zinc-300 hover:border-zinc-500 hover:text-white transition-colors">
-            Add {kind === 'map' ? 'map' : kind === 'plan' ? 'plan' : 'permit'}
+            Add {{ map: 'map', plan: 'plan', med: 'med plan', permit: 'permit' }[kind as 'map' | 'plan' | 'med' | 'permit']}
           </button>
           {back}
         </form>

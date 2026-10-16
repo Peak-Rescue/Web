@@ -53,6 +53,7 @@ export default function CourseResourcesSection({
   const [picker, setPicker] = useState<ResourcePickerItem[] | null>(null)
   const [pickerOpen, setPickerOpen] = useState(false)
   const [showAll, setShowAll] = useState(false)
+  const [q, setQ] = useState('')
   const [selected, setSelected] = useState<Set<string>>(new Set())
 
   // An expected refusal comes back as a value and is shown as it was written;
@@ -105,7 +106,16 @@ export default function CourseResourcesSection({
   // the picker opens on. The rest of the shelf is one press away and says how
   // much of it there is, so nothing is hidden, only stood back from.
   const fitting = unadded.filter((i) => i.suggested)
-  const available = showAll || fitting.length === 0 ? unadded : fitting
+  // Typing searches the whole shelf, not the shortlist. Looking for last
+  // year's Maui med plan by name and being answered only out of the eleven
+  // things that already fit this course is the search failing at the one job
+  // it was opened for.
+  const needle = q.trim().toLowerCase()
+  const available = needle
+    ? unadded.filter((i) => i.title.toLowerCase().includes(needle))
+    : showAll || fitting.length === 0
+      ? unadded
+      : fitting
   const offCourse = unadded.length - fitting.length
 
   return (
@@ -225,6 +235,16 @@ export default function CourseResourcesSection({
 
       {pickerOpen && (
         <div className="mt-3 p-3 bg-zinc-950/60 border border-zinc-700 rounded-lg">
+          {/* Three hundred rows behind a scrollbar is a list you read, and
+              nobody reads one. You come here knowing what you want — last
+              year's Maui med plan — and the only thing that finds it by name
+              is a box to type the name in. */}
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search the shelf by title…"
+            className="w-full mb-2 bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-zinc-500"
+          />
           <div className="max-h-64 overflow-y-auto divide-y divide-zinc-800/60 border border-zinc-800 rounded">
             {available.map((i) => (
               <label key={i.id} className="flex items-start gap-2.5 px-2.5 py-2 text-sm cursor-pointer hover:bg-zinc-800/50">
@@ -285,9 +305,14 @@ export default function CourseResourcesSection({
               </p>
             )}
             {picker === null && <p className="text-xs text-zinc-500 px-2.5 py-4">Loading resources…</p>}
+            {picker !== null && needle && available.length === 0 && (
+              <p className="text-xs text-zinc-500 px-2.5 py-4">
+                Nothing on the shelf is called that.
+              </p>
+            )}
           </div>
 
-          {offCourse > 0 && fitting.length > 0 && (
+          {offCourse > 0 && fitting.length > 0 && !needle && (
             <button
               onClick={() => setShowAll(!showAll)}
               className="mt-2 text-[11px] text-zinc-500 hover:text-zinc-200 transition-colors"

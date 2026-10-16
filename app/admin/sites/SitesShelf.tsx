@@ -76,7 +76,7 @@ export default function SitesShelf({
     // the course can run at all. Different questions, different weeks.
     const into = m.kind === 'route'
       ? betaByVenue
-      : m.kind === 'rescue_plan'
+      : m.kind === 'rescue_plan' || m.kind === 'med_plan'
         ? plansByVenue
         : m.kind === 'permit'
           ? permitsByVenue
@@ -175,9 +175,9 @@ export default function SitesShelf({
     const info = regionInfo.get(code)
     const canyons = sitesAtRegion.get(code) ?? []
     const beta = items.filter((i) => i.kind === 'route')
-    const plans = items.filter((i) => i.kind === 'rescue_plan')
+    const plans = items.filter((i) => i.kind === 'rescue_plan' || i.kind === 'med_plan')
     const permits = items.filter((i) => i.kind === 'permit')
-    const maps = items.filter((i) => !['route', 'rescue_plan', 'permit'].includes(i.kind))
+    const maps = items.filter((i) => !['route', 'rescue_plan', 'med_plan', 'permit'].includes(i.kind))
     const weather = (info?.links ?? []).filter((l) => l.kind === 'weather')
     const other = (info?.links ?? []).filter((l) => l.kind !== 'weather')
     const contacts = info?.contacts ?? []

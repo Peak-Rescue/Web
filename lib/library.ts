@@ -81,6 +81,7 @@ const BUCKET_FOR_KIND: Partial<Record<LibraryKind, LibraryBucket>> = {
   route: 'map',
   permit: 'documents',
   rescue_plan: 'documents',
+  med_plan: 'documents',
   form: 'documents',
   manual: 'resource',
   tech_note: 'resource',
@@ -234,6 +235,7 @@ export const LIBRARY_KINDS = [
   'route',
   'permit',
   'rescue_plan',
+  'med_plan',
   'standard',
   'skill_sheet',
   'outline',
@@ -261,7 +263,7 @@ export const KIND_GROUPS: { label: string; kinds: LibraryKind[] }[] = [
   // A plan and a permit are about one place — Deer Haven's risk eval, the
   // Snoqualmie permit — so they are listed under the card they are read on.
   // Which shelf the row sits on is a different question, answered below.
-  { label: 'Venue information', kinds: ['map', 'route', 'rescue_plan', 'permit'] },
+  { label: 'Venue information', kinds: ['map', 'route', 'rescue_plan', 'med_plan', 'permit'] },
   { label: 'Photos & video',    kinds: ['media'] },
   // Last, and named for what it is. A thing that has not been typed yet is
   // not a type of thing.
@@ -281,6 +283,10 @@ export const KIND_META: Record<LibraryKind, string> = {
   route: 'Route / beta',
   permit: 'Permit',
   rescue_plan: 'Rescue plan',
+  // Where the hospital is, how long the drive is, what the helicopter can do
+  // here. A fact about the place far more than about the delivery, which is
+  // why it is filed with the evac plan and not written fresh per course.
+  med_plan: 'Med plan',
   standard: 'Standard',
   skill_sheet: 'Skill sheet',
   outline: 'Course outline',
