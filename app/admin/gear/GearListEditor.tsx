@@ -1729,6 +1729,10 @@ function Row({
               and clearing is how you take that back. There is no third state to
               get into and no button to find. */}
           <input
+            // Uncontrolled, so a quantity cleared from outside the box — a
+            // rule taking over a typed 8 — must remount it, or the 8 stays
+            // drawn in the box while the row reads the rule.
+            key={`qty:${e.quantity ?? ''}`}
             defaultValue={e.quantity ?? ''}
             onBlur={(ev) => {
               const v = ev.target.value
