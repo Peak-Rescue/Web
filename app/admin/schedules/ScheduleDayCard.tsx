@@ -72,6 +72,7 @@ export default function ScheduleDayCard({
     finally { setBusy(false) }
   }
 
+  const heading = 'text-[10px] uppercase tracking-wide text-zinc-500'
   const input = 'bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-zinc-500'
 
   const site = sites.find((s) => s.id === day.site_id)
@@ -262,7 +263,10 @@ export default function ScheduleDayCard({
         />
       </Marked>
       {/* What the day is for, as opposed to what happens on it — the
-          course objectives are too coarse to teach a Tuesday from. */}
+          course objectives are too coarse to teach a Tuesday from. Headed,
+          like the schedule below it: unlabelled, this was the biggest empty
+          box on the card, and a day's whole running order got pasted into it. */}
+      <p className={heading}>Daily objectives</p>
       <Marked icon={<TargetIcon />} top>
         <textarea
           defaultValue={day.objectives.join('\n')}
@@ -273,12 +277,13 @@ export default function ScheduleDayCard({
             }
           }}
           rows={2}
-          placeholder="Objectives, one per line"
+          placeholder="One per line"
           className={`w-full resize-y pl-7 ${input}`}
         />
       </Marked>
     </div>
 
+    <p className={`${heading} px-3 pt-2`}>Schedule</p>
     <DayOutline dayId={day.id} blocks={day.schedule_blocks} onError={setError} />
   </div>
     </>
