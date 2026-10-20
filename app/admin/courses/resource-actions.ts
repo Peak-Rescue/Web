@@ -8,7 +8,7 @@ import { type LibraryAudience } from '@/lib/library'
 import { regionLabel } from '@/lib/regions'
 import { refuse, type ActionResult } from '@/lib/action-result'
 import { classify, NEEDS_SORTING } from '@/lib/sorting'
-import { bucketForKind } from '@/lib/library'
+import { bucketForKind, KINDS_OFF_BUCKET_SHELVES } from '@/lib/library'
 import { courseCapabilityCategories, CAPABILITY_META, type CapabilityCategory } from '@/lib/capabilities'
 
 // Reference attached to a course, set alongside its location for the same
@@ -110,6 +110,10 @@ export async function loadResourceLibrary(instanceId: string): Promise<ResourceP
       // Reference shelf here meant it could not be found from the course at
       // all. Filtered to this course's place below, like everything else.
       .in('bucket', ['resource', 'documents'])
+      // A kit list is gear, and gear is its own section on the course. Its
+      // bucket is a leftover, so it would otherwise be offered here as a
+      // reference. See KINDS_OFF_BUCKET_SHELVES.
+      .not('kind', 'in', `(${KINDS_OFF_BUCKET_SHELVES.join(',')})`)
       .eq('status', 'published')
       // Company paperwork is not course material, and a permit is admin-only
       // material that never reaches a course. See 235.
@@ -178,6 +182,7 @@ export async function addCourseResourcesFromLibrary(instanceId: string, itemIds:
     .select('id, audience')
     .in('id', itemIds)
     .in('bucket', ['resource', 'documents'])
+    .not('kind', 'in', `(${KINDS_OFF_BUCKET_SHELVES.join(',')})`)
     .eq('admin_only', false)
 
   let sort = await nextSort(admin, instanceId)

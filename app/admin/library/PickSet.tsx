@@ -121,6 +121,7 @@ export default function PickSet({
             <div className="flex items-center gap-1.5">
               <PlaceSelect
                 name="bulk_place"
+                placeholder="Set location…"
                 venues={venues}
                 sites={sites}
                 value={place}

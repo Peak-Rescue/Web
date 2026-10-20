@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { LIBRARY_KINDS, BUCKET_ORDER } from '@/lib/library'
+import { LIBRARY_KINDS, BUCKET_ORDER, bucketForKind } from '@/lib/library'
 import { isValidRegion } from '@/lib/regions'
 import { CAPABILITY_ORDER } from '@/lib/capabilities'
 import { refuse, type ActionRefusal, type ActionResult } from '@/lib/action-result'
@@ -66,7 +66,7 @@ export type LibraryPatch = {
   venue_id?: string | null
   expires_at?: string | null
   status?: 'pending' | 'published' | 'archived'
-  bucket?: string
+  bucket?: string | null
   region?: string | null
 }
 
@@ -99,7 +99,7 @@ export async function updateLibraryItem(id: string, patch: LibraryPatch) {
   } else if (patch.venue_id !== undefined) {
     update.venue_id = patch.venue_id || null
   }
-  if (patch.bucket !== undefined && VALID_BUCKETS.has(patch.bucket)) update.bucket = patch.bucket
+  if (patch.bucket !== undefined && patch.bucket !== null && VALID_BUCKETS.has(patch.bucket)) update.bucket = patch.bucket
   if (patch.region !== undefined) update.region = isValidRegion(patch.region) ? patch.region : null
   if (patch.expires_at !== undefined) update.expires_at = patch.expires_at || null
   if (patch.status !== undefined) {
@@ -432,9 +432,17 @@ export async function setLibraryKind(ids: string[], kind: string) {
   const admin = await requireAdmin()
   if (ids.length === 0) return
   if (!VALID_KINDS.has(kind)) throw new Error(`Not a type: ${kind}`)
+  // And the shelf that type belongs on. The type is the answer to both
+  // questions — saying "kit list" has already said Gear lists — and a row
+  // typed here while its bucket stayed behind is a kit list sitting under
+  // Reference, which is exactly what happened to two of them.
+  // Null for a type whose card is not a bucket shelf; the column is NOT NULL,
+  // so the row keeps the shelf it had and KINDS_OFF_BUCKET_SHELVES keeps that
+  // leftover from listing it.
+  const shelf = bucketForKind(kind)
   const { error } = await admin
     .from('library_items')
-    .update({ kind, updated_at: new Date().toISOString() })
+    .update({ kind, ...(shelf ? { bucket: shelf } : {}), updated_at: new Date().toISOString() })
     .in('id', ids)
   if (error) throw new Error(error.message)
   await clearSortingMark(admin, ids)

@@ -44,6 +44,7 @@ export default function PlaceSelect({
   onChange,
   required,
   className,
+  placeholder,
 }: {
   name: string
   venues: Venue[]
@@ -53,6 +54,9 @@ export default function PlaceSelect({
   onChange?: (v: string) => void
   required?: boolean
   className?: string
+  /** What the blank line says when the field is a control rather than a
+      question already asked — "Set location…" beside "Set type…". */
+  placeholder?: string
 }) {
   const router = useRouter()
   const [making, setMaking] = useState(false)
@@ -143,7 +147,7 @@ export default function PlaceSelect({
         {...(controlled ? { value } : { defaultValue: defaultValue ?? '' })}
         onChange={(e) => onChange?.(e.target.value)}
       >
-        <option value="">{required ? '— pick a place —' : '— none —'}</option>
+        <option value="">{placeholder ?? (required ? '— pick a place —' : '— none —')}</option>
         {/* Held locally until the server list catches up. */}
         {fresh && !venues.some((v) => v.id === fresh.id) && (
           <option value={`venue:${fresh.id}`}>{fresh.name}</option>

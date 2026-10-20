@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { updateLibraryItem, deleteLibraryItem, libraryItemUses, type LibraryItemUses } from './actions'
 import { errorFrom, type ActionResult } from '@/lib/action-result'
-import { KIND_META, KIND_GROUPS, AUDIENCE_META, bucketForKind, type LibraryItem, type Venue } from '@/lib/library'
+import { KIND_META, KIND_GROUPS, AUDIENCE_META, bucketForKind, type LibraryBucket, type LibraryItem, type Venue } from '@/lib/library'
 import { AudiencePills } from '@/components/AudiencePills'
 import { CAPABILITY_META, CAPABILITY_ORDER } from '@/lib/capabilities'
 import MapLinks from './MapLinks'
@@ -12,6 +12,7 @@ import { NEEDS_SORTING } from '@/lib/sorting'
 import PlaceSelect, { placeValue } from '@/components/PlaceSelect'
 import { type SiteOption } from '@/app/admin/schedules/types'
 import CloseButton from '@/components/CloseButton'
+import TrashIcon from '@/components/TrashIcon'
 
 const input =
   'w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-zinc-500'
@@ -27,7 +28,7 @@ export default function LibraryRow({ item, venues, sites = [], hideProvenance = 
     url: item.url ?? '',
     edit_url: item.edit_url ?? '',
     kind: item.kind,
-    bucket: item.bucket ?? 'resource',
+    bucket: item.bucket as LibraryBucket | null,
     audience: item.audience,
     disciplines: item.disciplines,
     // The sorting mark is the software's, not a tag anyone typed, so it is
@@ -180,7 +181,22 @@ export default function LibraryRow({ item, venues, sites = [], hideProvenance = 
           {open ? (
           <CloseButton onClick={() => setOpen((v) => !v)} />
         ) : (
-          <button onClick={() => setOpen((v) => !v)} className="text-xs text-zinc-400 hover:text-white transition-colors">Edit</button>
+          <>
+            <button onClick={() => setOpen((v) => !v)} className="text-xs text-zinc-400 hover:text-white transition-colors">Edit</button>
+            {/* Beside Edit, not only inside it. Throwing a row out is a
+                decision made while reading the list, and opening the editor
+                to reach it meant opening fifty editors to clear fifty rows.
+                Same confirm either way — it still says what is pointing at
+                it before it asks. */}
+            <button
+              onClick={confirmDelete}
+              disabled={busy}
+              aria-label={`Delete ${item.title}`}
+              className="text-xs text-zinc-600 hover:text-red-400 transition-colors disabled:opacity-40"
+            >
+              <TrashIcon />
+            </button>
+          </>
         )}
         </div>
       </div>

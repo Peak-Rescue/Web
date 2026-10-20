@@ -95,9 +95,19 @@ const BUCKET_FOR_KIND: Partial<Record<LibraryKind, LibraryBucket>> = {
   standard: 'resource',
   presentation: 'teaching',
   skill_sheet: 'teaching',
-  kit_list: 'teaching',
+  // No bucket worth naming. A kit list is read from the Gear lists card,
+  // which is a template shelf and not one of these. The column is NOT NULL so
+  // the row keeps whatever it had, and KINDS_OFF_BUCKET_SHELVES is what stops
+  // that leftover putting it on a shelf — which is how two of them came to be
+  // listed under Reference, between the manuals and the standards.
   outline: 'instructor',
 }
+
+/** Types whose card is not a bucket shelf, so a bucket shelf must not list
+    them. Only the written-down gear lists so far: they are read from the Gear
+    lists card beside the structured ones, and the bucket still on the row is
+    the shelf it was filed to before anyone could say it was a kit list. */
+export const KINDS_OFF_BUCKET_SHELVES: LibraryKind[] = ['kit_list']
 
 export function bucketForKind(kind: string): LibraryBucket | null {
   return BUCKET_FOR_KIND[kind as LibraryKind] ?? null

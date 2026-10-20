@@ -5,7 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import {
   KIND_META, LIBRARY_KINDS, BUCKET_META, BUCKET_ORDER,
   TEMPLATE_SHELF_META, TEMPLATE_SHELF_ORDER, SHELF_ORDER, isTemplateShelf, isPlaceShelf,
-  shelfLabel, shelfHint, proposedBucket, isMediaShelf,
+  shelfLabel, shelfHint, proposedBucket, isMediaShelf, KINDS_OFF_BUCKET_SHELVES,
   type LibraryItem, type LibraryShelf, type LibraryBucket, type TemplateShelf, type TemplateSummary, type Venue,
 } from '@/lib/library'
 import { type GearItem, type GearList } from '@/app/admin/gear/GearListEditor'
@@ -147,7 +147,12 @@ export default async function LibraryPage({
   if (kind) query = query.eq('kind', kind)
   if (audience) query = query.eq('audience', audience)
   if (venue) query = query.eq('venue_id', venue)
-  if (bucket && !isTemplateShelf(bucket)) query = query.eq('bucket', bucket)
+  if (bucket && !isTemplateShelf(bucket)) {
+    query = query.eq('bucket', bucket)
+    // A kit list keeps the shelf it was filed to before anyone could say it
+    // was a kit list; it is read from the Gear lists card, not from here.
+    query = query.not('kind', 'in', `(${KINDS_OFF_BUCKET_SHELVES.join(',')})`)
+  }
   if (q) query = query.ilike('title', `%${q}%`)
   // Topic tags were already how `needs-link-check` marks a row; the sorting
   // pass marks what it would not guess at the same way, so the pile it leaves
@@ -240,6 +245,7 @@ export default async function LibraryPage({
     // columns for one shelf, and only while standing on one.
     onShelf && !isTemplateShelf(bucket) && !onPlaces && !onSort
       ? admin.from('library_items').select('kind, disciplines').eq('bucket', bucket).eq('status', status === 'all' ? 'published' : status)
+          .not('kind', 'in', `(${KINDS_OFF_BUCKET_SHELVES.join(',')})`)
           .or(isAdmin ? 'admin_only.is.true,admin_only.is.false' : 'admin_only.is.false').limit(2000)
       : Promise.resolve({ data: null }),
     // The whole shelf, because the question is about all of it. Columns enough
@@ -270,7 +276,8 @@ export default async function LibraryPage({
       ? Promise.all([
           ...BUCKET_ORDER.map(async (b) => [b, (await admin
             .from('library_items').select('id', { count: 'exact', head: true })
-            .eq('status', 'published').eq('bucket', b)).count ?? 0] as [LibraryShelf, number]),
+            .eq('status', 'published').eq('bucket', b)
+            .not('kind', 'in', `(${KINDS_OFF_BUCKET_SHELVES.join(',')})`)).count ?? 0] as [LibraryShelf, number]),
           // Both shapes, because both are gear lists to anyone counting.
           Promise.all([
             admin.from('gear_lists').select('id', { count: 'exact', head: true }).eq('is_template', true),
