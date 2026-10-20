@@ -221,8 +221,13 @@ export default function LibraryRow({ item, venues, sites = [], hideProvenance = 
                 setForm({ ...form, kind, ...(bucketForKind(kind) ? { bucket: bucketForKind(kind)! } : {}) })
               }}
             >
-              <option value="reference">{KIND_META.reference}</option>
-              <option value="reference">{KIND_META.reference}</option>
+              {/* Only while it is still the answer. "Not said yet" is a state
+                  to leave, not one to choose: offered to everything it was a
+                  way to untype something that had been typed, and the list is
+                  long enough without a row nobody should pick. */}
+              {form.kind === 'reference' && (
+                <option value="reference">{KIND_META.reference}</option>
+              )}
           {KIND_GROUPS.map((g) => (
                 <optgroup key={g.label} label={g.label}>
                   {g.kinds.map((k) => <option key={k} value={k}>{KIND_META[k]}</option>)}

@@ -57,7 +57,8 @@ export default function AddLibraryItem({
           }}
           className={input}
         >
-          <option value="reference">{KIND_META.reference}</option>
+          {/* Nothing added by hand needs to arrive unsaid: the person adding
+              it is looking at it. */}
           {KIND_GROUPS.map((g) => (
             <optgroup key={g.label} label={g.label}>
               {g.kinds.map((k) => <option key={k} value={k}>{KIND_META[k]}</option>)}

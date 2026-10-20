@@ -89,6 +89,8 @@ const BUCKET_FOR_KIND: Partial<Record<LibraryKind, LibraryBucket>> = {
   permit: 'documents',
   medevac: 'documents',
   form: 'documents',
+  brand: 'documents',
+  hr: 'documents',
   manual: 'resource',
   tech_note: 'resource',
   standard: 'resource',
@@ -260,6 +262,8 @@ export const LIBRARY_KINDS = [
   'kit_list',
   'outline',
   'form',
+  'brand',
+  'hr',
   'media',
   'reference',
 ] as const
@@ -283,7 +287,7 @@ export const KIND_GROUPS: { label: string; kinds: LibraryKind[] }[] = [
   { label: 'Gear lists',        kinds: ['kit_list'] },
   { label: 'Reference',         kinds: ['manual', 'tech_note', 'standard'] },
   { label: 'Instructor material', kinds: ['outline'] },
-  { label: 'Documents',         kinds: ['form'] },
+  { label: 'Documents',         kinds: ['form', 'brand', 'hr'] },
   // A plan and a permit are about one place — Deer Haven's risk eval, the
   // Snoqualmie permit — so they are listed under the card they are read on.
   // Which shelf the row sits on is a different question, answered below.
@@ -324,6 +328,13 @@ export const KIND_META: Record<LibraryKind, string> = {
   kit_list: 'Kit list',
   outline: 'Course outline',
   form: 'Form / template',
+  // Logos, letterhead, the business card. Not a form and not reference —
+  // nobody looks a logo up, they fetch it — and eighteen of them sat on the
+  // instructor shelf because there was nowhere else.
+  brand: 'Logo / brand asset',
+  // The handbook, instructor expectations, onboarding. Company paperwork
+  // about the people rather than about a course.
+  hr: 'Employee document',
   media: 'Photos / media',
   // Not a type: the absence of one. Named for what it is, so the list does
   // not offer Reference as both a shelf heading and a thing to be.
