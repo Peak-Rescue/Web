@@ -2126,7 +2126,9 @@ export default async function CourseView({
               notifyCounts={notifyCounts}
             />
             {hasAlbum && (
-            <div className={BETWEEN_BLOCKS}>
+            // Named, so a link can land on it: the library's Photos & video
+            // card opens an album here rather than at the top of the course.
+            <div id="album" className={`${BETWEEN_BLOCKS} scroll-mt-28`}>
               {/* No blurb. Who can do what is already on the screen: the add
                   button is there for everyone on the course, and the remove
                   mark only appears for the people who have it. */}

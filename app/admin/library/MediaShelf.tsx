@@ -119,11 +119,14 @@ export default function MediaShelf({
             </>
           )
           // The course album is read on the course, where the lightbox and the
-          // uploading already live. No second gallery; this is the way in.
+          // uploading already live. No second gallery; this is the way in —
+          // but it lands on the album itself, not on the top of the course
+          // behind whichever door was last open. Somebody who clicked an
+          // album wanted the pictures.
           return a.instanceId ? (
             <Link
               key={a.instanceId}
-              href={`/portal/${a.instanceId}`}
+              href={`/portal/${a.instanceId}?open=updates#album`}
               className="p-3 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-pr-red transition-colors"
             >
               {inner}
