@@ -1,7 +1,6 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { updateScheduleDay, removeScheduleDay, moveScheduleDay } from './actions'
 import DayOutline from './DayOutline'
 import { Grows, Marked, PinIcon, RouteIcon, NoteIcon, TargetIcon, PencilIcon } from './fields'
@@ -52,7 +51,6 @@ export default function ScheduleDayCard({
   onRemoveFailed?: (id: string) => void
   onError?: (message: string | null) => void
 }) {
-  const router = useRouter()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -65,9 +63,13 @@ export default function ScheduleDayCard({
   // save keeps the close from re-reading the page before it lands.
   const track = useTrackedSaves()
 
-  async function run(fn: () => Promise<unknown>, opts?: { quiet?: boolean }) {
+  // Every action here revalidates the course, and that already carries the
+  // re-rendered page back with the action's own response. A router.refresh()
+  // after it rendered the whole page a second time, in series — which is most
+  // of why picking a canyon took seconds to land.
+  async function run(fn: () => Promise<unknown>, _opts?: { quiet?: boolean }) {
     setBusy(true); fail(null)
-    try { await track(fn()); if (!opts?.quiet) router.refresh(); return true }
+    try { await track(fn()); return true }
     catch (e) { fail(e instanceof Error ? e.message : 'That didn’t save'); return false }
     finally { setBusy(false) }
   }
@@ -75,7 +77,12 @@ export default function ScheduleDayCard({
   const heading = 'text-[10px] uppercase tracking-wide text-zinc-500'
   const input = 'bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-zinc-500'
 
-  const site = sites.find((s) => s.id === day.site_id)
+  // The pick shows on the change, not on the round trip: the select is
+  // controlled by the server's row, so without this it snapped back to the old
+  // canyon until the page came back.
+  const [pickedSite, setPickedSite] = useState<{ id: string | null } | null>(null)
+  const siteId = pickedSite ? pickedSite.id : day.site_id
+  const site = sites.find((s) => s.id === siteId)
   // What the day falls back to, named rather than left blank: an empty picker
   // that silently means "the lower lot" is a picker nobody trusts.
 
@@ -200,9 +207,13 @@ export default function ScheduleDayCard({
         {sites.length > 0 && (
           <Marked icon={<RouteIcon />}>
             <select
-              value={day.site_id ?? ''}
-              onChange={(e) => run(() => updateScheduleDay(day.id, { site_id: e.target.value || null }))}
-              className={`w-full pl-7 ${input} ${day.site_id ? 'text-zinc-200' : 'text-zinc-500'}`}
+              value={siteId ?? ''}
+              onChange={(e) => {
+                const next = e.target.value || null
+                setPickedSite({ id: next })
+                void run(() => updateScheduleDay(day.id, { site_id: next })).then(() => setPickedSite(null))
+              }}
+              className={`w-full pl-7 ${input} ${siteId ? 'text-zinc-200' : 'text-zinc-500'}`}
             >
               <option value="">No beta</option>
               {siteGroups.map((g) => (
