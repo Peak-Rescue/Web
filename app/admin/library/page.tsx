@@ -24,7 +24,6 @@ import InfoHint from '@/components/InfoHint'
 import SortQueue from './SortQueue'
 import TypeQueue from './TypeQueue'
 import SortingInbox, { type SortingCheck } from './SortingInbox'
-import ShelfGroupMove from './ShelfGroupMove'
 import MediaShelf from './MediaShelf'
 import { loadMediaShelf } from './media/load'
 import { albumMatches } from '@/lib/media'
@@ -777,18 +776,12 @@ export default async function LibraryPage({
                           ? `${rows.length} of ${facetKinds.get(cat)}`
                           : rows.length}
                       </span>
-                      {/* Standing on Reference and seeing seven forms and a
-                          permit is the moment you know they are misfiled. The
-                          sorting pass catches what the rules can guess; this
-                          catches what you can see, which is the larger set. */}
-                      {isAdmin && groupBy === 'kind' && bucket && !isTemplateShelf(bucket) && !isPlaceShelf(bucket) && !isMediaShelf(bucket) && (
-                        <ShelfGroupMove
-                          ids={rows.map((r) => r.id)}
-                          from={bucket as LibraryBucket}
-                          total={facetKinds.get(cat) ?? rows.length}
-                          label={groupLabel(cat)}
-                        />
-                      )}
+                      {/* No group action here. A kind-group is seven things
+                          that share a type, not seven things going to the
+                          same place — "Form 7" is a waiver, a kit list and an
+                          equipment log, and a control that moves all seven is
+                          a control that files five of them wrongly in one
+                          click. They are typed one at a time on the row. */}
                     </summary>
                     <div className="pt-1 pb-3">
                     {/* The same rows either way. An admin gets the editor,

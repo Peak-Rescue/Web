@@ -111,9 +111,11 @@ export default function SetupItemPicker({
               >
                 <span className="flex items-center gap-2 flex-wrap">
                   <span className="text-xs text-zinc-200">{r.title}</span>
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400">
-                    {KIND_META[r.kind as keyof typeof KIND_META] ?? r.kind}
-                  </span>
+                  {KIND_META[r.kind as keyof typeof KIND_META] && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400">
+                      {KIND_META[r.kind as keyof typeof KIND_META]}
+                    </span>
+                  )}
                   {have && <span className="text-[10px] text-zinc-600">already here</span>}
                 </span>
                 <span className="block text-[10px] text-zinc-600 mt-0.5 truncate">

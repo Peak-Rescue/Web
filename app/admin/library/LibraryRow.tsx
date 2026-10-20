@@ -117,9 +117,11 @@ export default function LibraryRow({ item, venues, sites = [], hideProvenance = 
             ) : (
               <span className="text-sm font-medium truncate">{item.title}</span>
             )}
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400">
-              {KIND_META[item.kind as keyof typeof KIND_META] ?? item.kind}
-            </span>
+            {KIND_META[item.kind as keyof typeof KIND_META] && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400">
+                {KIND_META[item.kind as keyof typeof KIND_META]}
+              </span>
+            )}
             <AudiencePills audience={item.audience} />
             {item.admin_only && (
               <span
@@ -221,13 +223,10 @@ export default function LibraryRow({ item, venues, sites = [], hideProvenance = 
                 setForm({ ...form, kind, ...(bucketForKind(kind) ? { bucket: bucketForKind(kind)! } : {}) })
               }}
             >
-              {/* Only while it is still the answer. "Not said yet" is a state
-                  to leave, not one to choose: offered to everything it was a
-                  way to untype something that had been typed, and the list is
-                  long enough without a row nobody should pick. */}
-              {form.kind === 'reference' && (
-                <option value="reference">{KIND_META.reference}</option>
-              )}
+              {/* Blank while nothing has been said, and gone once something
+                  has. A type list that offers "not said yet" as a row reads
+                  as a category, and people filed things under it. */}
+              {form.kind === 'reference' && <option value="reference" />}
           {KIND_GROUPS.map((g) => (
                 <optgroup key={g.label} label={g.label}>
                   {g.kinds.map((k) => <option key={k} value={k}>{KIND_META[k]}</option>)}

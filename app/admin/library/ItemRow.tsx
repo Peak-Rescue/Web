@@ -40,9 +40,11 @@ export default function ItemRow({
           ) : (
             <span className="text-sm font-medium truncate">{item.title}</span>
           )}
-          <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400 shrink-0">
-            {KIND_META[item.kind as keyof typeof KIND_META] ?? item.kind}
-          </span>
+          {KIND_META[item.kind as keyof typeof KIND_META] && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400 shrink-0">
+              {KIND_META[item.kind as keyof typeof KIND_META]}
+            </span>
+          )}
           {venueName && (
             <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-900/40 text-blue-300 shrink-0">
               {venueName}
