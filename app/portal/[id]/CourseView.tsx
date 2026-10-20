@@ -2977,6 +2977,23 @@ export default async function CourseView({
                         the day's own note rather than merged into it: one of
                         these is a standing fact about the place, the other is
                         what's true this morning. */}
+                    {/* No beta written yet still leaves the name to say
+                        which canyon this is. */}
+                    {d.sites && !d.sites.beta && (
+                      <p className="flex items-center gap-1.5 text-xs font-medium text-zinc-300 mt-2">
+                        <svg
+                          aria-hidden
+                          xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24"
+                          fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"
+                          className="shrink-0 text-zinc-600"
+                        >
+                          <circle cx="6" cy="19" r="3" />
+                          <circle cx="18" cy="5" r="3" />
+                          <path d="M9 19h4a4 4 0 0 0 0-8h-2a4 4 0 0 1 0-8h4" />
+                        </svg>
+                        {d.sites.name}
+                      </p>
+                    )}
                     {d.sites?.beta && (
                       <div className="flex gap-1.5 mt-2">
                         <svg
@@ -3003,7 +3020,10 @@ export default async function CourseView({
                         <details open className="group flex-1 min-w-0">
                           <summary className="cursor-pointer list-none flex items-center gap-2 text-xs text-zinc-500 hover:text-zinc-300 transition-colors">
                             <span aria-hidden className="text-zinc-600 shrink-0 inline-block transition-transform group-open:rotate-90">▸</span>
-                            <span className="font-medium text-zinc-400 shrink-0">Route</span>
+                            {/* The canyon by name — "Emerald Canyon (Lower)"
+                                is the answer to "where are we", and "Route"
+                                alone left that only in the editor. */}
+                            <span className="font-medium text-zinc-300 shrink-0">{d.sites.name}</span>
                             {/* The scope line — "Upper Emerald only, to the
                                 footbridge" — is what tells two canyons at one
                                 place apart, so it is the half worth showing
