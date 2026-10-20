@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { CAPABILITY_META, CAPABILITY_ORDER } from '@/lib/capabilities'
 import {
   ACCESS_META, LINK_AUDIENCE_META, KIND_META, KIND_GROUPS,
-  BUCKET_META, BUCKET_ORDER, bucketForKind, type Venue,
+  bucketForKind, type Venue,
 } from '@/lib/library'
 import { createLibraryItem } from './actions'
 import PlaceSelect from '@/components/PlaceSelect'
@@ -126,23 +126,8 @@ export default function AddLibraryItem({
       </div>
 
       {/* A map has one shelf and the type already named it. */}
-      {/* Follows the type, which is listed under the shelf's own name — the
-          two were the same question asked twice, and could disagree. Still
-          changeable, because a manual can be teaching material on one course
-          and reference on another. */}
-      {!isMap && (
-        <div>
-          <label className={label}>Shelf</label>
-          <select
-            name="bucket"
-            className={input}
-            value={bucket}
-            onChange={(e) => setBucket(e.target.value)}
-          >
-            {BUCKET_ORDER.filter((b) => b !== 'map').map((b) => <option key={b} value={b}>{BUCKET_META[b].label}</option>)}
-          </select>
-        </div>
-      )}
+      {/* The type decides it, so it is carried rather than asked for. */}
+      {!isMap && <input type="hidden" name="bucket" value={bucket} />}
 
       {isPermit && (
         <div>

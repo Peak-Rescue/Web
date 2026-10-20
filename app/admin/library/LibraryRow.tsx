@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { updateLibraryItem, deleteLibraryItem, libraryItemUses, type LibraryItemUses } from './actions'
 import { errorFrom, type ActionResult } from '@/lib/action-result'
-import { KIND_META, KIND_GROUPS, AUDIENCE_META, BUCKET_META, BUCKET_ORDER, bucketForKind, type LibraryBucket, type LibraryItem, type Venue } from '@/lib/library'
+import { KIND_META, KIND_GROUPS, AUDIENCE_META, BUCKET_META, bucketForKind, type LibraryBucket, type LibraryItem, type Venue } from '@/lib/library'
 import { AudiencePills } from '@/components/AudiencePills'
 import { CAPABILITY_META, CAPABILITY_ORDER } from '@/lib/capabilities'
 import MapLinks from './MapLinks'
@@ -202,18 +202,20 @@ export default function LibraryRow({ item, venues, sites = [], hideProvenance = 
               <input className={input} value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} />
             </div>
           )}
-          {/* A map has one shelf and the type already named it. For everything
-              else this now follows the type and is only touched to disagree
-              with it. */}
+          {/* No shelf picker. The type already says it — the types are
+              listed under the shelf they belong to — and of the 64 rows whose
+              shelf disagreed with their type, not one was somebody choosing:
+              they were forms on the instructor shelf and manuals on the
+              teaching shelf, which is the import's filing, not a decision.
+              Shown, because where a thing sits is worth knowing; set by the
+              type above it. */}
           {form.kind !== 'map' && (
             <div>
               <label className={label}>Shelf</label>
-              {/* Not Maps. A map's shelf is its type and this control is
-                  hidden for one, so offering it here only ever filed
-                  something that is not a map onto the shelf of maps. */}
-              <select className={input} value={form.bucket} onChange={(e) => setForm({ ...form, bucket: e.target.value as LibraryBucket })}>
-                {BUCKET_ORDER.filter((b) => b !== 'map').map((b) => <option key={b} value={b}>{BUCKET_META[b].label}</option>)}
-              </select>
+              <p className="px-2 py-1.5 text-sm text-zinc-500">
+                {BUCKET_META[(bucketForKind(form.kind) ?? form.bucket) as LibraryBucket]?.label ?? '—'}
+                {!bucketForKind(form.kind) && <span className="text-zinc-600"> · set when it says what it is</span>}
+              </p>
             </div>
           )}
           <div>
@@ -228,8 +230,7 @@ export default function LibraryRow({ item, venues, sites = [], hideProvenance = 
               value={form.kind}
               onChange={(e) => {
                 const kind = e.target.value
-                const shelf = bucketForKind(kind)
-                setForm({ ...form, kind, ...(shelf ? { bucket: shelf } : {}) })
+                setForm({ ...form, kind, ...(bucketForKind(kind) ? { bucket: bucketForKind(kind)! } : {}) })
               }}
             >
               {KIND_GROUPS.map((g) => (
