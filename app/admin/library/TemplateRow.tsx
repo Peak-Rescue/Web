@@ -125,7 +125,12 @@ export default function TemplateRow(props: Props) {
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-sm font-medium truncate">{summary.name}</span>
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400">{meta.label}</span>
+            {/* The noun, not the shelf's name: one row is a gear list, and
+                "Gear lists" on it read as a second type beside "Kit list"
+                rather than as the shape this one is. */}
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400">
+              {meta.noun[0].toUpperCase() + meta.noun.slice(1)}
+            </span>
             {summary.audience && (
               <ForPill audience={summary.audience} />
             )}

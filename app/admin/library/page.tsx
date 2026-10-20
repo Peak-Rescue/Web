@@ -596,7 +596,7 @@ export default async function LibraryPage({
                 ? shelfHint(bucket as LibraryShelf)
                 : isAdmin
                   ? 'Everything we teach from, look things up in, and build courses out of — and where it is added, tagged and retired.'
-                  : 'Everything we teach from and look things up in — teaching material, manuals, standards, maps, kit lists and running orders.'}
+                  : 'Everything we teach from and look things up in — teaching material, manuals, standards, maps, gear lists and running orders.'}
             </p>
           </div>
           {/* The one console about the library rather than in it. Not a

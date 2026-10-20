@@ -120,7 +120,7 @@ export function isPlaceShelf(v: string | undefined): v is PlaceShelf {
 export const TEMPLATE_SHELF_META: Record<TemplateShelf, { label: string; hint: string; noun: string }> = {
   gear: {
     label: 'Gear lists',
-    hint: 'Reusable kit lists — copied onto a course as its starting point',
+    hint: 'Reusable gear lists — copied onto a course as its starting point',
     noun: 'gear list',
   },
   schedule: {
@@ -333,7 +333,11 @@ export const KIND_META: Record<LibraryKind, string> = {
   // was written in, years before there was a structure to hold it — and the
   // two are told apart on the row rather than by living on different
   // shelves.
-  kit_list: 'Kit list',
+  // Named by its shape, because the shelf holds both: this one is a
+  // document somebody wrote, the structured ones are rows built here. A chip
+  // reading "Kit list" beside one reading "Gear lists" said nothing about
+  // which was which — it read as two words for the same thing.
+  kit_list: 'Gear list (doc)',
   outline: 'Course outline',
   form: 'Form / template',
   // Logos, letterhead, the business card. Not a form and not reference —
