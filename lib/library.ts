@@ -276,7 +276,11 @@ export type LibraryKind = (typeof LIBRARY_KINDS)[number]
 // `bucket` still says that, and the sorting pass still proposes it. A manual
 // is reference material wherever someone filed it.
 export const KIND_GROUPS: { label: string; kinds: LibraryKind[] }[] = [
-  { label: 'Teaching material', kinds: ['presentation', 'skill_sheet', 'kit_list', 'video'] },
+  { label: 'Teaching material', kinds: ['presentation', 'skill_sheet', 'video'] },
+  // A kit list reads on the Gear lists shelf beside the structured ones, the
+  // way a MEDEVAC plan reads on the venue. Which shelf the row sits on is a
+  // separate question, answered below.
+  { label: 'Gear lists',        kinds: ['kit_list'] },
   { label: 'Reference',         kinds: ['manual', 'tech_note', 'standard'] },
   { label: 'Instructor material', kinds: ['outline'] },
   { label: 'Documents',         kinds: ['form'] },
@@ -312,10 +316,11 @@ export const KIND_META: Record<LibraryKind, string> = {
   medevac: 'MEDEVAC plan',
   standard: 'Standard',
   skill_sheet: 'Skill sheet',
-  // What a student is told to bring. A document, not a gear list — the Gear
-  // lists shelf holds the structured kind with quantities and ratios on it,
-  // and "Canyon Student Required Equipment list" is a PDF you hand someone.
-  // Filed as a form it read as paperwork, which is not what it is.
+  // What a student is told to bring, as a document. It reads on the Gear
+  // lists shelf with the structured ones — the same answer in the shape it
+  // was written in, years before there was a structure to hold it — and the
+  // two are told apart on the row rather than by living on different
+  // shelves.
   kit_list: 'Kit list',
   outline: 'Course outline',
   form: 'Form / template',

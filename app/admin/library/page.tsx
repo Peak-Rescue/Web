@@ -164,7 +164,7 @@ export default async function LibraryPage({
   // Templates take the same search box and discipline tags the documents use.
   // They have no review status, so the status tabs pass them by — there's
   // nothing to approve about a kit list you wrote yourself.
-  const [{ data: itemRows }, { data: venueRows }, { data: siteRows }, gearRes, scheduleRes, setupRes, catalogRes, { count: pendingCount }, placesShelf, mediaShelf, { data: facetRows }, { data: sortRows }, inboxCounts, shelfCounts] = await Promise.all([
+  const [{ data: itemRows }, { data: venueRows }, { data: siteRows }, gearRes, scheduleRes, setupRes, catalogRes, { count: pendingCount }, { data: kitListRows }, placesShelf, mediaShelf, { data: facetRows }, { data: sortRows }, inboxCounts, shelfCounts] = await Promise.all([
     showDocs ? query : Promise.resolve({ data: [] }),
     admin.from('venues').select('id, name, region, region_code, client_name, notes, links, contacts, active').order('name'),
     // A per-region template pins its canyons here, so the courses started from
@@ -221,6 +221,17 @@ export default async function LibraryPage({
     // What is behind each door, for the cards. Head-only counts, and only on
     // the landing — a number on a card is the difference between picking a
     // shelf and guessing at one.
+    // Kit lists written as documents, read on the gear shelf beside the
+    // structured lists. Everything here predates the structure; a PDF that
+    // says what to bring is a gear list that was written down.
+    showTemplates && shelves.includes('gear')
+      ? admin
+          .from('library_items')
+          .select('id, title, description, source_type, url, edit_url, drive_file_id, kind, audience, disciplines, topics, admin_only, venue_id, site_id, expires_at, status, bucket, region, source_class, source_topic, source_item, library_item_links(id, url, access, audience)')
+          .eq('kind', 'kit_list')
+          .eq('status', 'published')
+          .order('title')
+      : Promise.resolve({ data: [] }),
     onPlaces ? loadSitesShelf() : Promise.resolve(null),
     onMedia ? loadMediaShelf() : Promise.resolve(null),
     // What is actually on this shelf, for the filters above it. Offering
@@ -260,8 +271,11 @@ export default async function LibraryPage({
           ...BUCKET_ORDER.map(async (b) => [b, (await admin
             .from('library_items').select('id', { count: 'exact', head: true })
             .eq('status', 'published').eq('bucket', b)).count ?? 0] as [LibraryShelf, number]),
-          admin.from('gear_lists').select('id', { count: 'exact', head: true }).eq('is_template', true)
-            .then((r) => ['gear', r.count ?? 0] as [LibraryShelf, number]),
+          // Both shapes, because both are gear lists to anyone counting.
+          Promise.all([
+            admin.from('gear_lists').select('id', { count: 'exact', head: true }).eq('is_template', true),
+            admin.from('library_items').select('id', { count: 'exact', head: true }).eq('kind', 'kit_list').eq('status', 'published'),
+          ]).then(([a, b]) => ['gear', (a.count ?? 0) + (b.count ?? 0)] as [LibraryShelf, number]),
           admin.from('course_schedules').select('id', { count: 'exact', head: true }).eq('is_template', true)
             .then((r) => ['schedule', r.count ?? 0] as [LibraryShelf, number]),
           admin.from('course_templates').select('id', { count: 'exact', head: true }).eq('active', true)
@@ -462,6 +476,9 @@ export default async function LibraryPage({
       },
     )
   }
+
+  const kitLists = ((kitListRows ?? []) as unknown as (LibraryItem & { library_item_links?: LibraryItem['links'] })[])
+    .map((r) => ({ ...r, links: r.library_item_links ?? [] }) as LibraryItem)
 
   const catalog = (catalogRes.data ?? []) as unknown as GearItem[]
 
@@ -919,6 +936,14 @@ export default async function LibraryPage({
                 {isAdmin && shelf !== 'setup' && <AddTemplate shelf={shelf} />}
               </div>
               <div className="space-y-2">
+                {/* The written-down kind, first: they are what exists, and
+                    the structured ones are what we have started building. */}
+                {shelf === 'gear' && isAdmin && kitLists.map((it) => (
+                  <LibraryRow key={it.id} item={it} venues={venues} sites={siteOptions} />
+                ))}
+                {shelf === 'gear' && !isAdmin && kitLists.map((it) => (
+                  <ItemRow key={it.id} item={it} venueName={it.venue_id ? venueName.get(it.venue_id) : null} />
+                ))}
                 {shelf === 'gear' && gearTemplates.map((t) => (
                   isAdmin ? (
                     <TemplateRow
