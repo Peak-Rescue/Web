@@ -22,7 +22,7 @@ export default function MediaShelf({
   venues,
   sites,
   discipline,
-  hrefFor,
+  hrefs,
   canUpload,
   canEdit,
 }: {
@@ -32,8 +32,13 @@ export default function MediaShelf({
   venues: Venue[]
   sites: SiteOption[]
   discipline?: string | null
-  /** Filter links, built by the page so they keep the rest of the query. */
-  hrefFor: (d: string | undefined) => string
+  /** Filter links, built by the page so they keep the rest of the query.
+      A map rather than the function that built it: a function cannot cross
+      into a client component, and the one that used to be passed here threw
+      on every render of this shelf — which the build cannot see, because the
+      prop type is satisfied either way. Keyed by discipline, with '' for
+      all albums. */
+  hrefs: Record<string, string>
   canUpload: boolean
   canEdit: boolean
 }) {
@@ -78,7 +83,7 @@ export default function MediaShelf({
       {present.length > 0 && (
         <div className="flex items-center gap-1.5 flex-wrap text-xs">
           <Link
-            href={hrefFor(undefined)}
+            href={hrefs['']}
             scroll={false}
             className={`px-2 py-1 rounded transition-colors ${!discipline ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:text-zinc-300'}`}
           >
@@ -87,7 +92,7 @@ export default function MediaShelf({
           {present.map((c) => (
             <Link
               key={c}
-              href={hrefFor(c)}
+              href={hrefs[c] ?? hrefs['']}
               scroll={false}
               className={`px-2 py-1 rounded transition-colors ${discipline === c ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:text-zinc-300'}`}
             >

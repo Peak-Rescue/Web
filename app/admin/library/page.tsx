@@ -880,7 +880,10 @@ export default async function LibraryPage({
             venues={venues}
             sites={siteOptions}
             discipline={discipline}
-            hrefFor={(d) => href({ discipline: d })}
+            hrefs={{
+              '': href({ discipline: undefined }),
+              ...Object.fromEntries(CAPABILITY_ORDER.map((c) => [c, href({ discipline: c })])),
+            }}
             canUpload={realAdmin || profile?.role === 'instructor'}
             canEdit={isAdmin}
           />
