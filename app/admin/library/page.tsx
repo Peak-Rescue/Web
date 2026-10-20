@@ -12,6 +12,7 @@ import { type GearItem, type GearList } from '@/app/admin/gear/GearListEditor'
 import { GEAR_ENTRIES_SELECT } from '@/lib/gear'
 import { type Schedule } from '@/app/admin/schedules/ScheduleEditor'
 import LibraryRow from './LibraryRow'
+import PickSet from './PickSet'
 import TemplateRow from './TemplateRow'
 import AddTemplate from './AddTemplate'
 import ReviewQueue from './ReviewQueue'
@@ -788,9 +789,10 @@ export default async function LibraryPage({
                         which is a row that can be opened and changed; everyone
                         else gets the row. */}
                     {isAdmin ? (
-                      <div className="space-y-2">
-                        {rows.map((it) => <LibraryRow key={it.id} item={it} venues={venues} sites={siteOptions} />)}
-                      </div>
+                      // Ticked rows, not the group: the heading is a type, and
+                      // a type is not a destination. What a hand-picked set
+                      // can be told is on the bar.
+                      <PickSet items={rows} venues={venues} sites={siteOptions} />
                     ) : (
                       <div className="border border-zinc-800 rounded-lg divide-y divide-zinc-800/70">
                         {rows.map((it) => (

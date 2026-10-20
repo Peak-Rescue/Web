@@ -820,3 +820,63 @@ export async function searchLibraryForSetup(q: string, limit = 25) {
   if (error) throw new Error(error.message)
   return data ?? []
 }
+
+/** Filing a hand-picked set to one place.
+ *
+ * The group move was removed because a kind-group is not a destination —
+ * seven forms are a waiver, a kit list and an equipment log. A set somebody
+ * ticked is a destination: they looked at each row and said these ones.
+ */
+export async function setLibraryPlace(ids: string[], place: string) {
+  const admin = await requireAdmin()
+  if (ids.length === 0) return
+  const resolved = await resolvePlace(admin, place)
+  const { error } = await admin
+    .from('library_items')
+    .update({ ...resolved, updated_at: new Date().toISOString() })
+    .in('id', ids)
+  if (error) throw new Error(error.message)
+  await clearSortingMark(admin, ids)
+  revalidate()
+}
+
+/** Archiving a hand-picked set. Archived rather than deleted: it stays
+    searchable on its own tab and is never suggested, which is what "get rid
+    of it" means for something somebody may have to find once more. */
+export async function archiveLibraryItems(ids: string[]) {
+  const admin = await requireAdmin()
+  if (ids.length === 0) return
+  const { error } = await admin
+    .from('library_items')
+    .update({ status: 'archived', updated_at: new Date().toISOString() })
+    .in('id', ids)
+  if (error) throw new Error(error.message)
+  revalidate()
+}
+
+/** Deleting a hand-picked set, one at a time and under the same guards.
+ *
+ * Deliberately not one `.in('id', …)` delete: each row has its own answer to
+ * "is anything pointing at this", and the refusals are the useful part — a
+ * batch that silently skipped three would read as a batch that deleted
+ * everything. Comes back with what was kept and why.
+ */
+export async function deleteLibraryItems(
+  ids: string[]
+): Promise<{ deleted: number; kept: { title: string; reason: string }[] }> {
+  const admin = await requireAdmin()
+  if (ids.length === 0) return { deleted: 0, kept: [] }
+
+  const { data: rows } = await admin.from('library_items').select('id, title').in('id', ids)
+  const titleOf = new Map((rows ?? []).map((r) => [r.id as string, r.title as string]))
+
+  let deleted = 0
+  const kept: { title: string; reason: string }[] = []
+  for (const id of ids) {
+    const r = await deleteLibraryItem(id)
+    if (r?.error) kept.push({ title: titleOf.get(id) ?? 'An item', reason: r.error })
+    else deleted++
+  }
+  revalidate()
+  return { deleted, kept }
+}
