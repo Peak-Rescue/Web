@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { updateLibraryItem, deleteLibraryItem, libraryItemUses, type LibraryItemUses } from './actions'
 import { errorFrom, type ActionResult } from '@/lib/action-result'
-import { KIND_META, KIND_GROUPS, AUDIENCE_META, BUCKET_META, bucketForKind, type LibraryBucket, type LibraryItem, type Venue } from '@/lib/library'
+import { KIND_META, KIND_GROUPS, AUDIENCE_META, bucketForKind, type LibraryItem, type Venue } from '@/lib/library'
 import { AudiencePills } from '@/components/AudiencePills'
 import { CAPABILITY_META, CAPABILITY_ORDER } from '@/lib/capabilities'
 import MapLinks from './MapLinks'
@@ -202,22 +202,10 @@ export default function LibraryRow({ item, venues, sites = [], hideProvenance = 
               <input className={input} value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} />
             </div>
           )}
-          {/* No shelf picker. The type already says it — the types are
-              listed under the shelf they belong to — and of the 64 rows whose
-              shelf disagreed with their type, not one was somebody choosing:
-              they were forms on the instructor shelf and manuals on the
-              teaching shelf, which is the import's filing, not a decision.
-              Shown, because where a thing sits is worth knowing; set by the
-              type above it. */}
-          {form.kind !== 'map' && (
-            <div>
-              <label className={label}>Shelf</label>
-              <p className="px-2 py-1.5 text-sm text-zinc-500">
-                {BUCKET_META[(bucketForKind(form.kind) ?? form.bucket) as LibraryBucket]?.label ?? '—'}
-                {!bucketForKind(form.kind) && <span className="text-zinc-600"> · set when it says what it is</span>}
-              </p>
-            </div>
-          )}
+          {/* No shelf, picker or otherwise. The type says it — the types
+              are listed under the shelf they belong to — so a second field
+              repeating the answer is a field to read past on a form whose
+              whole job is being quick to fill in. */}
           <div>
             <label className={label}>Type</label>
             {/* Picking a type has already said which shelf — it is listed
