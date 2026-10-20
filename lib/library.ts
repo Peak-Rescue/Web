@@ -283,9 +283,11 @@ export const KIND_GROUPS: { label: string; kinds: LibraryKind[] }[] = [
   // Which shelf the row sits on is a different question, answered below.
   { label: 'Venue information', kinds: ['map', 'route', 'medevac', 'permit'] },
   { label: 'Photos & video',    kinds: ['media'] },
-  // Last, and named for what it is. A thing that has not been typed yet is
-  // not a type of thing.
-  { label: 'Not said yet',      kinds: ['reference'] },
+  // `reference` is deliberately not here. It is the absence of an answer,
+  // and listing it under a heading called "Not said yet" put the word
+  // Reference in this list twice — once as the shelf three types belong to,
+  // once as the type meaning nobody has said. It is rendered on its own, at
+  // the top, where an unanswered question belongs.
 ]
 
 export const KIND_META: Record<LibraryKind, string> = {
@@ -311,7 +313,9 @@ export const KIND_META: Record<LibraryKind, string> = {
   outline: 'Course outline',
   form: 'Form / template',
   media: 'Photos / media',
-  reference: 'Reference',
+  // Not a type: the absence of one. Named for what it is, so the list does
+  // not offer Reference as both a shelf heading and a thing to be.
+  reference: 'Not said yet',
 }
 
 /**
