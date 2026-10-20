@@ -94,6 +94,7 @@ const BUCKET_FOR_KIND: Partial<Record<LibraryKind, LibraryBucket>> = {
   standard: 'resource',
   presentation: 'teaching',
   skill_sheet: 'teaching',
+  kit_list: 'teaching',
   outline: 'instructor',
 }
 
@@ -256,6 +257,7 @@ export const LIBRARY_KINDS = [
   'medevac',
   'standard',
   'skill_sheet',
+  'kit_list',
   'outline',
   'form',
   'media',
@@ -274,7 +276,7 @@ export type LibraryKind = (typeof LIBRARY_KINDS)[number]
 // `bucket` still says that, and the sorting pass still proposes it. A manual
 // is reference material wherever someone filed it.
 export const KIND_GROUPS: { label: string; kinds: LibraryKind[] }[] = [
-  { label: 'Teaching material', kinds: ['presentation', 'skill_sheet', 'video'] },
+  { label: 'Teaching material', kinds: ['presentation', 'skill_sheet', 'kit_list', 'video'] },
   { label: 'Reference',         kinds: ['manual', 'tech_note', 'standard'] },
   { label: 'Instructor material', kinds: ['outline'] },
   { label: 'Documents',         kinds: ['form'] },
@@ -310,6 +312,11 @@ export const KIND_META: Record<LibraryKind, string> = {
   medevac: 'MEDEVAC plan',
   standard: 'Standard',
   skill_sheet: 'Skill sheet',
+  // What a student is told to bring. A document, not a gear list — the Gear
+  // lists shelf holds the structured kind with quantities and ratios on it,
+  // and "Canyon Student Required Equipment list" is a PDF you hand someone.
+  // Filed as a form it read as paperwork, which is not what it is.
+  kit_list: 'Kit list',
   outline: 'Course outline',
   form: 'Form / template',
   media: 'Photos / media',
