@@ -31,6 +31,7 @@ import { CAPABILITY_META, CAPABILITY_ORDER, courseCapabilityCategories, type Cap
 import { COURSE_TYPE_OPTIONS } from '@/lib/courses'
 import { readViewAs, viewAsSelf } from '@/lib/view-as'
 import ViewAsMenu from '@/components/ViewAsMenu'
+import ShelfTypeSelect from '@/components/ShelfTypeSelect'
 
 const input = 'w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500'
 
@@ -520,17 +521,19 @@ export default async function LibraryPage({
               Venue information and Photos & video, it read as "All libraries"
               and quietly threw you back there the moment you searched. Now
               the shelf you are on rides along hidden. */}
-          {onShelf || onMedia || onPlaces ? (
-            <input type="hidden" name="bucket" value={bucket ?? ''} />
-          ) : (
-            <select name="bucket" defaultValue={bucket ?? ''} className={input}>
-              <option value="">All libraries</option>
-              {BUCKET_ORDER.map((b) => <option key={b} value={b}>{BUCKET_META[b].label}</option>)}
-              <optgroup label="Reusable, built here">
-                {TEMPLATE_SHELF_ORDER.map((s) => <option key={s} value={s}>{TEMPLATE_SHELF_META[s].label}</option>)}
-              </optgroup>
-            </select>
-          )}
+          {/* Shelf and type, in one control. They were two, and the types
+              in the second belonged to the shelves in the first — so you
+              could ask for Reference and then for Map and get a list of
+              nothing, with no hint that the two had disagreed. Grouped the
+              way the tagging dropdown groups, with a row per shelf that
+              means the whole shelf, because that is an answer and an
+              optgroup label cannot be one. */}
+          <ShelfTypeSelect
+            bucket={bucket}
+            kind={kind}
+            counts={hasFacets ? facetKinds : null}
+            className={input}
+          />
           {/* Standing on a shelf, these offer what that shelf holds and say
               how much of it. Offering "Video" where there is no video is a
               dead end dressed as a choice: you pick it, get nothing back, and
@@ -542,16 +545,6 @@ export default async function LibraryPage({
               {(hasFacets ? CAPABILITY_ORDER.filter((c) => facetDisciplines.has(c)) : CAPABILITY_ORDER).map((c) => (
                 <option key={c} value={c}>
                   {CAPABILITY_META[c].label}{hasFacets ? ` (${facetDisciplines.get(c)})` : ''}
-                </option>
-              ))}
-            </select>
-          )}
-          {(!hasFacets || facetKinds.size > 1) && (
-            <select name="kind" defaultValue={kind ?? ''} className={input}>
-              <option value="">All types</option>
-              {(hasFacets ? LIBRARY_KINDS.filter((k) => facetKinds.has(k)) : LIBRARY_KINDS).map((k) => (
-                <option key={k} value={k}>
-                  {kindLabel(k)}{hasFacets ? ` (${facetKinds.get(k)})` : ''}
                 </option>
               ))}
             </select>
