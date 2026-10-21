@@ -22,7 +22,6 @@ import TemplateReadOnly from './TemplateReadOnly'
 import CourseSetupRow from './CourseSetupRow'
 import CourseSetupReadOnly from './CourseSetupReadOnly'
 import InfoHint from '@/components/InfoHint'
-import SortingInbox, { type SortingCheck } from './SortingInbox'
 import MediaShelf from './MediaShelf'
 import { loadMediaShelf } from './media/load'
 import { albumMatches } from '@/lib/media'
@@ -39,13 +38,13 @@ const input = 'w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-
 export default async function LibraryPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; discipline?: string; kind?: string; audience?: string; venue?: string; offering?: string; bucket?: string; q?: string; template?: string; open?: string; page?: string; sort?: string; topic?: string }>
+  searchParams: Promise<{ status?: string; discipline?: string; kind?: string; audience?: string; venue?: string; offering?: string; bucket?: string; q?: string; template?: string; open?: string; page?: string; topic?: string }>
 }) {
   // Published is the library. Pending review is a queue that Google Classroom
   // imports drop into, and landing on it meant the shelf you came to look at
   // read as empty — an item added by hand is published the moment it's added,
   // so the queue is usually empty and the answer usually isn't there.
-  const { status: askedStatus, discipline, kind, audience, venue, offering, bucket, q, template, open, page, sort, topic } = await searchParams
+  const { status: askedStatus, discipline, kind, audience, venue, offering, bucket, q, template, open, page, topic } = await searchParams
 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -83,7 +82,7 @@ export default async function LibraryPage({
   // Which shelf you are standing on, if it is one shelf rather than a search
   // across all of them.
   const onShelf = Boolean(bucket)
-  const landing = !sort && !topic && !bucket && !q && !discipline && !kind && !venue && !audience && status === 'published'
+  const landing = !topic && !bucket && !q && !discipline && !kind && !venue && !audience && status === 'published'
   // The places shelf is its own thing: not documents, not templates, and the
   // document filters (type, who-can-see, review status) mean nothing to a
   // canyon. It is only ever shown when it is the shelf asked for.
@@ -95,8 +94,7 @@ export default async function LibraryPage({
   // The sorting view has three faces: the list of what is left, and the two
   // tools that are not a per-item edit. Everything else on the list is fixed
   // where the item already lives.
-  const onSort = isAdmin && Boolean(sort)
-  const showDocs = !isTemplateShelf(bucket) && !onPlaces && !onMedia && !onSort && !landing
+  const showDocs = !isTemplateShelf(bucket) && !onPlaces && !onMedia && !landing
   // Review status is a document's state, not a template's: there is nothing
   // to approve about a kit list you wrote yourself, so the pending and
   // archived tabs — which are documents being worked through — leave them
@@ -107,7 +105,7 @@ export default async function LibraryPage({
   const statusHidesTemplates =
     (status === 'pending' || status === 'archived') && !isTemplateShelf(bucket)
   const showTemplates =
-    (!bucket || isTemplateShelf(bucket)) && !docOnlyFilter && !landing && !statusHidesTemplates && !onPlaces && !onMedia && !onSort
+    (!bucket || isTemplateShelf(bucket)) && !docOnlyFilter && !landing && !statusHidesTemplates && !onPlaces && !onMedia
   const shelves: TemplateShelf[] = isTemplateShelf(bucket) ? [bucket] : TEMPLATE_SHELF_ORDER
 
   // A page of results, not the whole shelf. The reference page learned this —
@@ -253,22 +251,15 @@ export default async function LibraryPage({
     // "Video" on a shelf holding no video is a dead end dressed as a choice —
     // you pick it, get nothing, and learn nothing about why. Cheap: two
     // columns for one shelf, and only while standing on one.
-    onShelf && !isTemplateShelf(bucket) && !onPlaces && !onSort
+    onShelf && !isTemplateShelf(bucket) && !onPlaces
       ? admin.from('library_items').select('kind, disciplines').eq('bucket', bucket).eq('status', status === 'all' ? 'published' : status)
           .not('kind', 'in', `(${KINDS_OFF_BUCKET_SHELVES.join(',')})`)
           .or(isAdmin ? 'admin_only.is.true,admin_only.is.false' : 'admin_only.is.false').limit(2000)
       : Promise.resolve({ data: null }),
-    // The counts behind the list of what is left. Head-only where it can be,
-    // and the two that need a rule run over every row are only paid for on
-    // the page that shows them.
-    onSort
+    // One count, on the landing only: the permits anyone can read.
+    landing && isAdmin
       ? Promise.all([
-          admin.from('library_items').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
-          admin.from('library_items').select('id', { count: 'exact', head: true }).eq('status', 'published').eq('kind', 'reference'),
-          admin.from('library_items').select('id', { count: 'exact', head: true }).eq('status', 'published').eq('kind', 'map').is('venue_id', null).is('site_id', null),
           admin.from('library_items').select('id', { count: 'exact', head: true }).eq('status', 'published').eq('kind', 'permit').eq('admin_only', false),
-          admin.from('course_templates').select('id', { count: 'exact', head: true }).eq('active', true).is('course_type', null),
-          admin.from('library_items').select('id', { count: 'exact', head: true }).eq('status', 'published').contains('topics', [NEEDS_SORTING]),
         ])
       : Promise.resolve(null),
     landing
@@ -371,69 +362,17 @@ export default async function LibraryPage({
 
   const href = (patch: Record<string, string | undefined>) => {
     const p = new URLSearchParams()
-    const merged = { status, discipline, kind, audience, venue, offering, bucket, q, sort, topic, ...patch }
+    const merged = { status, discipline, kind, audience, venue, offering, bucket, q, topic, ...patch }
     for (const [k, v] of Object.entries(merged)) if (v) p.set(k, v)
     return `/admin/library?${p.toString()}`
   }
 
-  // What is left — and only the parts of it a shelf cannot show you.
-  //
-  // This page used to carry two queues of its own, one for typing things and
-  // one for proposed moves, back when an untyped row was invisible: the
-  // shelves grouped everything into one pile called Reference. They are not
-  // invisible any more — every shelf lists its types, "No type yet" among
-  // them, and the needs-sorting badge rides on the row wherever it sits — so
-  // the queues were a second, worse way to do what browsing does, and the one
-  // without the checkboxes.
-  //
-  // What is left here is what no shelf will ever show: rows that are not on
-  // one, and rows that look perfectly normal on the shelf they are on.
-  const checks: SortingCheck[] = []
-  if (inboxCounts) {
-    const [pend, , unplaced, permits, untypedSetups, unsure] = inboxCounts
-    checks.push(
-      {
-        key: 'pending',
-        title: 'Sort the import queue',
-        why: 'Nothing pending is visible on a shelf, in a course picker, or to an instructor. Tag each section with the expertise it belongs to, then approve — approving first files them away untagged, where nothing will ever suggest them.',
-        count: pend.count ?? 0,
-        href: href({ status: 'pending', sort: undefined, bucket: undefined }),
-        action: 'Open the queue',
-      },
-      {
-        key: 'permits',
-        title: 'Lock the permits down',
-        why: 'Permits readable by all twenty-two instructors. Nothing on the shelf looks wrong, which is why this is here rather than found by browsing. Marking them admin-only hides them from everyone but the five of you and keeps them off courses.',
-        count: permits.count ?? 0,
-        href: href({ kind: 'permit', sort: undefined, bucket: undefined, status: undefined }),
-        action: 'Open permits',
-      },
-      {
-        key: 'maps',
-        title: 'Put the maps somewhere',
-        why: 'A map filed nowhere is offered to no course — the venue is what the course-side matching reads. Each is badged “needs a place” until it has one.',
-        count: unplaced.count ?? 0,
-        href: href({ bucket: 'map', sort: undefined, status: undefined }),
-        action: 'Open maps',
-      },
-      {
-        key: 'setups',
-        title: 'Give the course setups an offering',
-        why: 'A setup with no course type can never be matched to a course, so nothing will ever offer it.',
-        count: untypedSetups.count ?? 0,
-        href: href({ bucket: 'setup', sort: undefined, status: undefined }),
-        action: 'Open setups',
-      },
-      {
-        key: 'unsure',
-        title: 'Confirm what the pass wasn’t sure of',
-        why: 'The sorting pass filed what said plainly what it was and left these. They are on their shelves and browsable like anything else — this is the whole pile in one list, with the bulk bar on it.',
-        count: unsure.count ?? 0,
-        href: href({ topic: NEEDS_SORTING, sort: undefined, bucket: undefined, status: undefined }),
-        action: 'Open the pile',
-      },
-    )
-  }
+  // The one check that browsing will never show: a permit readable by all
+  // twenty-two instructors looks exactly like a permit that is not. It is a
+  // line on the landing rather than a page, because a page about the filing
+  // is a page somebody has to remember to open, and this is the only thing it
+  // had left to say.
+  const loosePermits = inboxCounts ? inboxCounts[0].count ?? 0 : 0
 
   const kitLists = ((kitListRows ?? []) as unknown as (LibraryItem & { library_item_links?: LibraryItem['links'] })[])
     .map((r) => ({ ...r, links: r.library_item_links ?? [] }) as LibraryItem)
@@ -563,17 +502,11 @@ export default async function LibraryPage({
                   : 'Everything we teach from and look things up in — teaching material, manuals, standards, maps, gear lists and running orders.'}
             </p>
           </div>
-          {/* The one console about the library rather than in it. Not a
-              shelf: it is a pass you make over the shelves, and when the
-              filing is right it has nothing to say. */}
-          {isAdmin && !onSort && (
-            <Link
-              href={href({ sort: '1', bucket: undefined, q: undefined })}
-              className="text-xs px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded transition-colors shrink-0"
-            >
-              What needs sorting
-            </Link>
-          )}
+          {/* Where "What needs sorting" was. It had become one real check
+              behind a button nobody had a reason to press: everything else on
+              it is visible while browsing — a missing chip, a needs-sorting
+              badge — and the import queue has its own tab. The check that was
+              left shows itself below instead. */}
           {/* The three buttons that used to sit here were exits from a page
               people came to for content: Coverage, Venues, Sites. Sites is a
               shelf now, which is where it was always being looked for, and it
@@ -606,7 +539,7 @@ export default async function LibraryPage({
             four controls that did nothing on the page they were sitting on.
             The pending queue is still reached from the sorting list and from
             the landing. */}
-        {isAdmin && !onPlaces && !onMedia && !onSort && (
+        {isAdmin && !onPlaces && !onMedia && (
           <div className="flex items-center gap-1 mb-3 flex-wrap">
             {/* The shelves first, in the order you'd read them; the import queue
                 last, where an exception belongs, carrying its own count. */}
@@ -716,6 +649,21 @@ export default async function LibraryPage({
 
         {/* ── Items ────────────────────────────────────────────────────── */}
         {/* ── The shelves ──────────────────────────────────────────────── */}
+        {landing && loosePermits > 0 && (
+          // Says itself, and says nothing when the answer is nothing. A
+          // permit readable by every instructor looks exactly like a permit
+          // that is not, so no amount of browsing the shelf will turn it up —
+          // which is the only reason this one line is here and the console it
+          // came from is gone.
+          <Link
+            href={href({ kind: 'permit', bucket: undefined })}
+            className="block mb-4 rounded-lg border border-yellow-900/60 bg-yellow-950/20 px-4 py-3 text-sm text-yellow-200 hover:border-yellow-700 transition-colors"
+          >
+            {loosePermits} {loosePermits === 1 ? 'permit is' : 'permits are'} readable by every instructor.
+            <span className="text-yellow-200/60"> Marking them admins-only keeps them off courses too →</span>
+          </Link>
+        )}
+
         {landing && (
           <>
             {/* One grid. The cards were split into "shelves" and "built
@@ -849,22 +797,6 @@ export default async function LibraryPage({
               </div>
             )}
           </>
-        )}
-
-        {/* ── Sorting ──────────────────────────────────────────────────── */}
-        {onSort && (
-          <section className="mb-8">
-            <h2 className="flex items-center gap-2 text-lg font-semibold mb-1">
-              What needs sorting
-              <InfoHint text="What browsing the shelves will not show you: rows that are on no shelf at all, and rows that look perfectly normal on the shelf they are on. Everything else is sorted where it sits — each shelf lists its types, “No type yet” among them." />
-            </h2>
-            <p className="text-xs text-zinc-500 mb-4">
-              <Link href={href({ sort: undefined })} className="underline hover:text-zinc-300 transition-colors">
-                ← back to the library
-              </Link>
-            </p>
-            <SortingInbox checks={checks} />
-          </section>
         )}
 
         {/* ── Photos & video ───────────────────────────────────────────── */}
