@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { requireAdminUser } from '@/lib/course-access'
-import { clientPath, parseAliases, sameNamedClients, subtreeIds, type ClientRow } from '@/lib/clients'
+import { clientPath, parseAliases, placementProblem, sameNamedClients, type ClientRow } from '@/lib/clients'
 
 type Result =
   | { ok: true }
@@ -19,18 +19,20 @@ const done = (): Result => {
 }
 
 async function allClients(admin: Awaited<ReturnType<typeof requireAdminUser>>['admin']) {
-  const { data } = await admin.from('clients').select('id, parent_id, name, aliases, note, position')
+  const { data } = await admin.from('clients').select('id, parent_id, name, aliases, note, position, is_group')
   return (data ?? []) as ClientRow[]
 }
 
 // The unique index catches a repeat under one parent; this turns its error
 // into something a person can act on.
 const nameTaken = (code: string | undefined) =>
-  code === '23505' ? 'There is already a client with that name here' : 'Something went wrong — please try again'
+  code === '23505' ? 'There is already one with that name here' : 'Something went wrong — please try again'
 
+/** A new sector (top level) or a new client. A client starts unfiled — no
+    parent — and is dragged to where it belongs; deciding where a client goes
+    is easier looking at the tree than at a form. */
 export async function addClient(
-  parentId: string | null,
-  input: { name: string; aliases: string; note: string },
+  input: { name: string; aliases: string; note: string; isGroup: boolean },
   confirmed = false
 ): Promise<Result> {
   const { user, admin } = await requireAdminUser()
@@ -38,18 +40,19 @@ export async function addClient(
   if (!name) return { ok: false, error: 'Give it a name' }
 
   const rows = await allClients(admin)
-  if (!confirmed) {
-    const similar = sameNamedClients(rows, name)
+  if (!confirmed && !input.isGroup) {
+    const similar = sameNamedClients(rows.filter((r) => !r.is_group), name)
     if (similar.length > 0) return { ok: false, similar: similar.map((r) => clientPath(rows, r.id)) }
   }
 
-  const position = parentId === null ? Math.max(0, ...rows.filter((r) => !r.parent_id).map((r) => r.position)) + 1 : 0
+  const sectors = rows.filter((r) => !r.parent_id && r.is_group)
   const { error } = await admin.from('clients').insert({
-    parent_id: parentId,
+    parent_id: null,
+    is_group: input.isGroup,
     name,
-    aliases: parseAliases(input.aliases, name),
+    aliases: input.isGroup ? [] : parseAliases(input.aliases, name),
     note: input.note.trim().slice(0, 500) || null,
-    position,
+    position: input.isGroup ? Math.max(0, ...sectors.map((r) => r.position)) + 1 : 0,
     created_by: user.id,
   })
   if (error) return { ok: false, error: nameTaken(error.code) }
@@ -71,32 +74,41 @@ export async function updateClient(
   return done()
 }
 
-/** Re-file a client, taking everything under it along. Into itself or its
-    own teams is the one move that cannot be allowed — it would cut the
-    branch off the tree. */
+/** File something somewhere else, taking everything under it along. The drag
+    and the Move fallback both end here, and the rules are checked here again
+    whatever the screen allowed. */
 export async function moveClient(id: string, parentId: string | null): Promise<Result> {
   const { admin } = await requireAdminUser()
-  if (parentId) {
-    const rows = await allClients(admin)
-    if (subtreeIds(rows, id).has(parentId)) return { ok: false, error: 'It cannot go inside itself' }
-  }
-  const { error } = await admin.from('clients').update({ parent_id: parentId }).eq('id', id)
+  const rows = await allClients(admin)
+  const problem = placementProblem(rows, id, parentId)
+  if (problem) return { ok: false, error: problem }
+  const node = rows.find((r) => r.id === id)
+  if (!node) return { ok: false, error: 'It no longer exists — reload the page' }
+  if (node.parent_id === parentId) return done()
+  // A group moved to the top level becomes the last sector rather than
+  // sharing a position with one.
+  const position =
+    node.is_group && parentId === null
+      ? Math.max(0, ...rows.filter((r) => !r.parent_id && r.is_group).map((r) => r.position)) + 1
+      : node.position
+  const { error } = await admin.from('clients').update({ parent_id: parentId, position }).eq('id', id)
   if (error) return { ok: false, error: nameTaken(error.code) }
   return done()
 }
 
-/** Remove a client, bin or unit. Whatever is filed under it is never deleted
-    with it: it moves, all at once, to `rehomeTo` — so taking away a bin is
-    one step rather than re-filing each client by hand. `undefined` means the
-    caller expects it to be empty. */
+/** Remove a sector, subsector or client. Whatever is filed under it is never
+    deleted with it: it moves, all at once, to `rehomeTo` — so retiring a
+    sector is one step rather than re-filing each client by hand. `undefined`
+    means the caller expects it to be empty. */
 export async function deleteClient(id: string, rehomeTo?: string | null): Promise<Result> {
   const { admin } = await requireAdminUser()
-  const { count } = await admin.from('clients').select('id', { count: 'exact', head: true }).eq('parent_id', id)
-  if (count) {
+  const rows = await allClients(admin)
+  const children = rows.filter((r) => r.parent_id === id)
+  if (children.length > 0) {
     if (rehomeTo === undefined) return { ok: false, error: 'Say where what is under it should go' }
-    if (rehomeTo) {
-      const rows = await allClients(admin)
-      if (subtreeIds(rows, id).has(rehomeTo)) return { ok: false, error: 'Its clients cannot move inside it' }
+    for (const c of children) {
+      const problem = placementProblem(rows, c.id, rehomeTo)
+      if (problem) return { ok: false, error: `${c.name}: ${problem}` }
     }
     const { error: moveError } = await admin.from('clients').update({ parent_id: rehomeTo }).eq('parent_id', id)
     if (moveError) return { ok: false, error: nameTaken(moveError.code) }
@@ -106,18 +118,18 @@ export async function deleteClient(id: string, rehomeTo?: string | null): Promis
   return done()
 }
 
-/** Swap a bin with its neighbour above or below. */
-export async function shiftBin(id: string, direction: -1 | 1): Promise<Result> {
+/** Swap a sector with its neighbour above or below. */
+export async function shiftSector(id: string, direction: -1 | 1): Promise<Result> {
   const { admin } = await requireAdminUser()
-  const bins = (await allClients(admin))
-    .filter((r) => !r.parent_id)
+  const sectors = (await allClients(admin))
+    .filter((r) => !r.parent_id && r.is_group)
     .sort((a, b) => a.position - b.position || a.name.localeCompare(b.name))
-  const i = bins.findIndex((b) => b.id === id)
+  const i = sectors.findIndex((b) => b.id === id)
   const j = i + direction
-  if (i < 0 || j < 0 || j >= bins.length) return done()
-  // Renumbered in full rather than swapping two values, so bins that once
+  if (i < 0 || j < 0 || j >= sectors.length) return done()
+  // Renumbered in full rather than swapping two values, so sectors that once
   // shared a position settle into a clean order the first time anyone moves one.
-  const order = [...bins]
+  const order = [...sectors]
   ;[order[i], order[j]] = [order[j], order[i]]
   for (const [k, b] of order.entries()) {
     if (b.position !== k + 1) await admin.from('clients').update({ position: k + 1 }).eq('id', b.id)

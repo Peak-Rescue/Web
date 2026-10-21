@@ -1,4 +1,5 @@
-// The client list: a tree of bins, clients and teams (see migration 252).
+// The client list: sectors and subsectors (groupings), and the clients and
+// teams filed in them (see migrations 252 and 253).
 //
 // It is a filing system, not an org chart. What matters is that the client a
 // course belongs to is easy to find, so the same team is not created twice
@@ -12,11 +13,15 @@ export type ClientRow = {
   aliases: string[]
   note: string | null
   position: number
+  /** A sector or subsector — a grouping, never something a course attaches to. */
+  is_group: boolean
 }
 
 export type ClientNode = ClientRow & { children: ClientNode[]; depth: number }
 
-/** Bins in their hand-set order, everything under them by name. */
+/** Sectors in their hand-set order; under any group, its subsectors before
+    its clients, each by name. Top-level rows that are not groups are the
+    clients nobody has filed yet. */
 export function buildClientTree(rows: ClientRow[]): ClientNode[] {
   const byParent = new Map<string | null, ClientRow[]>()
   for (const r of rows) byParent.set(r.parent_id, [...(byParent.get(r.parent_id) ?? []), r])
@@ -24,7 +29,11 @@ export function buildClientTree(rows: ClientRow[]): ClientNode[] {
   const byName = (a: ClientRow, b: ClientRow) => a.name.localeCompare(b.name, undefined, { numeric: true })
   const grow = (parent: string | null, depth: number): ClientNode[] =>
     (byParent.get(parent) ?? [])
-      .sort((a, b) => (parent === null ? a.position - b.position || byName(a, b) : byName(a, b)))
+      .sort((a, b) =>
+        parent === null
+          ? a.position - b.position || byName(a, b)
+          : Number(b.is_group) - Number(a.is_group) || byName(a, b)
+      )
       .map((r) => ({ ...r, depth, children: grow(r.id, depth + 1) }))
   return grow(null, 0)
 }
@@ -56,7 +65,19 @@ export function subtreeIds(rows: ClientRow[], rootId: string): Set<string> {
   return out
 }
 
-/** "PJs › 24 STS › Red Team" */
+/** Why `id` cannot be filed under `parentId` (null = top level), or null if
+    it can. Read by the drag to light only the places a drop would land, and
+    again by the server, which is the one that counts. */
+export function placementProblem(rows: ClientRow[], id: string, parentId: string | null): string | null {
+  if (parentId && subtreeIds(rows, id).has(parentId)) return 'It cannot go inside itself'
+  const node = rows.find((r) => r.id === id)
+  const parent = parentId ? rows.find((r) => r.id === parentId) : null
+  if (parentId && !parent) return 'That place no longer exists — reload the page'
+  if (node?.is_group && parent && !parent.is_group) return 'A sector cannot go inside a client'
+  return null
+}
+
+/** "Military › PJs › 24 STS › Red Team" */
 export function clientPath(rows: ClientRow[], id: string): string {
   const byId = new Map(rows.map((r) => [r.id, r]))
   const parts: string[] = []
@@ -66,7 +87,7 @@ export function clientPath(rows: ClientRow[], id: string): string {
 
 /** Clients anywhere in the tree already called `name`, by name or alias.
     Asked before a new client is made, because the usual duplicate is the
-    same unit filed under a different bin by someone who guessed differently. */
+    same unit filed under a different sector by someone who guessed differently. */
 export function sameNamedClients(rows: ClientRow[], name: string, exceptId?: string): ClientRow[] {
   const n = norm(name)
   if (!n) return []

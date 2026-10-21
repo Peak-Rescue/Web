@@ -18,7 +18,7 @@ export default async function ClientsPage() {
   if (profile?.role !== 'admin') redirect('/dashboard')
 
   const [{ data: clientRows }, { data: signoffRows }] = await Promise.all([
-    admin.from('clients').select('id, parent_id, name, aliases, note, position'),
+    admin.from('clients').select('id, parent_id, name, aliases, note, position, is_group'),
     admin.from('client_signoffs').select('client_id, profile_id, profiles(first_name, last_name)'),
   ])
 

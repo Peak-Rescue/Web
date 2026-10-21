@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { type LibraryAudience } from '@/lib/library'
+import KindOptions from '@/components/KindOptions'
 import { AudienceChoice } from '@/components/AudienceToggle'
 
 // Modal for attaching an external link (Google Drive, Dropbox, CalTopo…)
@@ -134,11 +135,10 @@ export default function AddLinkDialog({
               onChange={(e) => setKind(e.target.value)}
               className="mt-1 w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-zinc-200 focus:outline-none focus:border-zinc-500"
             >
-              <option value="medevac">MEDEVAC plan</option>
-              <option value="permit">Permit</option>
-              <option value="map">Map</option>
-              <option value="route">Beta</option>
-              <option value="reference">Something else</option>
+              {/* The library's own list. Five favourites here meant filing
+                  from a course and filing in the library asked the same
+                  question with different words available. */}
+              <KindOptions />
             </select>
           </label>
         )}

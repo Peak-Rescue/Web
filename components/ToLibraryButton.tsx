@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { errorFrom, type ActionResult } from '@/lib/action-result'
+import KindOptions from '@/components/KindOptions'
 
 // "Keep this" — on a file that arrived through a course.
 //
@@ -11,23 +12,11 @@ import { errorFrom, type ActionResult } from '@/lib/action-result'
 // what will offer it later; asked here, where the person knows the answer,
 // rather than left for whoever opens the sorting pile next week.
 //
-// The kinds offered are the ones a course file actually turns out to be. The
-// long list lives on the library row, where something can be re-typed once
-// somebody has read it.
-const KINDS: { value: string; label: string }[] = [
-  { value: 'medevac', label: 'MEDEVAC plan' },
-  { value: 'permit', label: 'Permit' },
-  { value: 'map', label: 'Map' },
-  { value: 'route', label: 'Beta' },
-  { value: 'kit_list', label: 'Gear list' },
-  { value: 'debrief', label: 'Debrief / AAR' },
-  { value: 'skill_sheet', label: 'Skill sheet' },
-  { value: 'presentation', label: 'Presentation' },
-  { value: 'manual', label: 'Manual' },
-  { value: 'form', label: 'Form' },
-  { value: 'reference', label: 'Something else' },
-]
-
+// The type list is the library's own, not a shortened one. This had its own
+// ten favourites, so filing from a course offered a different vocabulary from
+// filing in the library — and the things it left out (tech note, standard,
+// outline, logo) are exactly the ones somebody would have to go and re-type
+// later.
 export default function ToLibraryButton({
   onAdd,
   label = 'To library',
@@ -79,7 +68,7 @@ export default function ToLibraryButton({
         className="bg-zinc-800 border border-zinc-700 rounded px-1.5 py-1 text-xs text-zinc-200 focus:outline-none focus:border-zinc-500"
       >
         <option value="">{busy ? 'Filing…' : 'What is it?'}</option>
-        {KINDS.map((k) => <option key={k.value} value={k.value}>{k.label}</option>)}
+        <KindOptions />
       </select>
       <button
         onClick={() => { setOpen(false); setError(null) }}
