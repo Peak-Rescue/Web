@@ -363,8 +363,14 @@ export default function LibraryRow({ item, venues, sites = [], hideProvenance = 
               no course; optional for everything else, which is only sometimes
               about a place at all. */}
           <div className={form.kind === 'map' ? 'sm:col-span-2' : ''}>
-            <label className={label}>
-              {form.kind === 'map' ? 'Where it is *' : 'Place'}
+            {/* One word for one field. It said "Place" on most rows and
+                "Where it is" on a map, which is the same question asked
+                twice — and "venue" is deliberately not the word: a row can
+                be about a country, a state, a venue or one canyon inside
+                one, and only one of those is a venue. */}
+            <label className={`${label} flex items-center gap-1.5`}>
+              Place{form.kind === 'map' ? ' *' : ''}
+              <InfoHint text="Country, state, venue or canyon — whichever this is actually about. A map needs one: a map filed nowhere is offered to no course." />
             </label>
             <PlaceSelect
               name="place"

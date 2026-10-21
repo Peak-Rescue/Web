@@ -114,7 +114,9 @@ export default function AddLibraryItem({
           by place only when it happens to be about one. */}
 
       <div className="sm:col-span-2">
-        <label className={label}>{isMap ? 'Where it is * — country, state, venue or canyon' : 'Place'}</label>
+        <label className={label}>
+          {isMap ? 'Place * — country, state, venue or canyon' : 'Place — country, state, venue or canyon'}
+        </label>
         <PlaceSelect
           name="place"
           venues={venues}
