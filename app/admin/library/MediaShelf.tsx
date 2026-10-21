@@ -118,15 +118,14 @@ export default function MediaShelf({
               )}
             </>
           )
-          // The course album is read on the course, where the lightbox and the
-          // uploading already live. No second gallery; this is the way in —
-          // but it lands on the album itself, not on the top of the course
-          // behind whichever door was last open. Somebody who clicked an
-          // album wanted the pictures.
+          // The album, on its own page. It is the course's own gallery
+          // loaded there, so there is still one lightbox and one Add button —
+          // but somebody who clicked an album wanted the pictures, and a
+          // course page scrolled to a heading was still the course page.
           return a.instanceId ? (
             <Link
               key={a.instanceId}
-              href={`/portal/${a.instanceId}?open=updates#album`}
+              href={`/admin/library/media/${a.instanceId}`}
               className="p-3 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-pr-red transition-colors"
             >
               {inner}
