@@ -39,13 +39,13 @@ const input = 'w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-
 export default async function LibraryPage({
   searchParams,
 }: {
-  searchParams: Promise<{ discipline?: string; kind?: string; audience?: string; venue?: string; offering?: string; bucket?: string; q?: string; template?: string; open?: string; page?: string; topic?: string }>
+  searchParams: Promise<{ item?: string; discipline?: string; kind?: string; audience?: string; venue?: string; offering?: string; bucket?: string; q?: string; template?: string; open?: string; page?: string; topic?: string }>
 }) {
   // Published is the library. Pending review is a queue that Google Classroom
   // imports drop into, and landing on it meant the shelf you came to look at
   // read as empty — an item added by hand is published the moment it's added,
   // so the queue is usually empty and the answer usually isn't there.
-  const { discipline, kind, audience, venue, offering, bucket, q, template, open, page, topic } = await searchParams
+  const { item, discipline, kind, audience, venue, offering, bucket, q, template, open, page, topic } = await searchParams
 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -91,7 +91,7 @@ export default async function LibraryPage({
   // Which shelf you are standing on, if it is one shelf rather than a search
   // across all of them.
   const onShelf = Boolean(bucket)
-  const landing = !topic && !bucket && !q && !discipline && !kind && !venue && !audience
+  const landing = !item && !topic && !bucket && !q && !discipline && !kind && !venue && !audience
   // The places shelf is its own thing: not documents, not templates, and the
   // document filters (type, who-can-see, review status) mean nothing to a
   // canyon. It is only ever shown when it is the shelf asked for.
@@ -192,6 +192,10 @@ export default async function LibraryPage({
       // it was a kit list; it is read from the Gear lists card, not here.
       out = out.not('kind', 'in', `(${KINDS_OFF_BUCKET_SHELVES.join(',')})`) as T
     }
+    // One row, named outright. How a course file links to the row it was
+    // filed as: the filing form asks the filing questions, and everything
+    // else about a library row is edited on the row.
+    if (item) out = out.eq('id', item) as T
     if (q) out = out.ilike('title', `%${q}%`) as T
     // Topic tags were already how `needs-link-check` marks a row; the sorting
     // pass marks what it would not guess the same way, so the pile it leaves
@@ -418,7 +422,7 @@ export default async function LibraryPage({
 
   const href = (patch: Record<string, string | undefined>) => {
     const p = new URLSearchParams()
-    const merged = { discipline, kind, audience, venue, offering, bucket, q, topic, ...patch }
+    const merged = { item, discipline, kind, audience, venue, offering, bucket, q, topic, ...patch }
     for (const [k, v] of Object.entries(merged)) if (v) p.set(k, v)
     return `/admin/library?${p.toString()}`
   }
@@ -702,7 +706,7 @@ export default async function LibraryPage({
                       // Ticked rows, not the group: the heading is a type,
                       // and a type is not a destination. What a hand-picked
                       // set can be told is on the bar.
-                      <PickSet items={rows} venues={venues} sites={siteOptions} />
+                      <PickSet items={rows} venues={venues} sites={siteOptions} openId={item} />
                     ) : (
                       <div className="border border-zinc-800 rounded-lg divide-y divide-zinc-800/70">
                         {rows.map((it) => (

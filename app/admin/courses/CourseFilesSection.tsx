@@ -1,6 +1,7 @@
 'use client'
 
 import { useRef, useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { errorFrom } from '@/lib/action-result'
@@ -29,6 +30,11 @@ export type CourseFile = {
   label: string | null
   // External link (Google Drive, Dropbox…) rather than an uploaded file.
   isLink?: boolean
+  /** Set once it has been filed. The course says so, and the link goes to
+      the row — which is where expiry, offerings, the instructors' copy and
+      the topics are edited. This form asks the filing questions; the library
+      row is the whole of it. */
+  libraryItemId?: string | null
 }
 
 // Every file attached anywhere in the course, in one place — general uploads
@@ -253,10 +259,20 @@ export default function CourseFilesSection({
                   is for — prefilled from the course, because that is usually
                   right and never always. */}
               {f.source === 'course' && (
-                <SaveItemToLibrary
-                  onOpen={() => courseDocFilingDraft(instanceId, f.id)}
-                  onFile={(choices) => fileCourseDocToLibrary(instanceId, f.id, choices)}
-                />
+                f.libraryItemId ? (
+                  <Link
+                    href={`/admin/library?item=${f.libraryItemId}`}
+                    title="Open its library row — expiry, offerings, topics, the instructors' copy"
+                    className="text-[10px] text-zinc-500 hover:text-white transition-colors shrink-0"
+                  >
+                    In the library ↗
+                  </Link>
+                ) : (
+                  <SaveItemToLibrary
+                    onOpen={() => courseDocFilingDraft(instanceId, f.id)}
+                    onFile={(choices) => fileCourseDocToLibrary(instanceId, f.id, choices)}
+                  />
+                )
               )}
               {f.source === 'course' && (
                 <>

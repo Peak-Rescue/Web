@@ -41,10 +41,14 @@ export default function PickSet({
   items,
   venues,
   sites,
+  openId,
 }: {
   items: LibraryItem[]
   venues: Venue[]
   sites: SiteOption[]
+  /** Arrived here to look at one row — from a course that filed it, say — so
+      that row opens rather than waiting to be found and clicked. */
+  openId?: string
 }) {
   const router = useRouter()
   const [picked, setPicked] = useState<Set<string>>(new Set())
@@ -305,7 +309,7 @@ export default function PickSet({
             className="mt-3.5 shrink-0 accent-pr-red"
           />
           <div className="min-w-0 flex-1">
-            <LibraryRow item={it} venues={venues} sites={sites} />
+            <LibraryRow item={it} venues={venues} sites={sites} initialOpen={it.id === openId} />
           </div>
         </div>
       ))}

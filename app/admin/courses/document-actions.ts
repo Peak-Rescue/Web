@@ -234,6 +234,11 @@ export async function fileCourseDocToLibrary(
 
   if (choices) await applyChoices(admin, r.id, choices)
 
+  // So the course can say it is filed, and link to the row where the rest of
+  // the editing lives. Without it the answer lived in the button's own state
+  // and lasted until the page reloaded.
+  await admin.from('course_documents').update({ library_item_id: r.id }).eq('id', docId)
+
   revalidatePath(`/admin/courses/${instanceId}`)
   revalidatePath('/admin/library')
 }

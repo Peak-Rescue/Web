@@ -22,9 +22,9 @@ const input =
   'w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-zinc-500'
 const label = 'block text-[11px] text-zinc-500 mb-1'
 
-export default function LibraryRow({ item, venues, sites = [], hideProvenance = false }: { item: LibraryItem; venues: Venue[]; sites?: SiteOption[]; hideProvenance?: boolean }) {
+export default function LibraryRow({ item, venues, sites = [], hideProvenance = false, initialOpen = false }: { item: LibraryItem; venues: Venue[]; sites?: SiteOption[]; hideProvenance?: boolean; initialOpen?: boolean }) {
   const router = useRouter()
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(initialOpen)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [form, setForm] = useState({

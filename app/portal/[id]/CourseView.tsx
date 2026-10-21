@@ -394,7 +394,7 @@ export default async function CourseView({
         ? admin.from('course_task_templates').select('id, title, default_line, sort_order').eq('active', true).order('sort_order')
         : Promise.resolve({ data: [] }),
       showTasks
-        ? admin.from('course_documents').select('id, path, filename, url, created_at').eq('instance_id', id)
+        ? admin.from('course_documents').select('id, path, filename, url, created_at, library_item_id').eq('instance_id', id)
         : Promise.resolve({ data: [] }),
       showTasks
         ? admin.from('course_task_documents').select('id, path, filename, url, created_at, course_tasks!inner(title, instance_id)').eq('course_tasks.instance_id', id)
@@ -842,6 +842,7 @@ export default async function CourseView({
       source: 'course' as const,
       label: null,
       isLink: Boolean(r.url),
+      libraryItemId: (r.library_item_id as string | null) ?? null,
     })),
     ...(taskDocRows ?? []).map((r) => ({
       id: r.id as string,
