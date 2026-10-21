@@ -135,6 +135,15 @@ export async function emailAdminsNewCourse(
       .single()
     if (!course) return
 
+    const { data: creator } = await admin
+      .from('profiles')
+      .select('first_name, last_name, email')
+      .eq('id', createdByUserId)
+      .maybeSingle()
+    const addedBy = creator
+      ? [creator.first_name, creator.last_name].filter(Boolean).join(' ').trim() || creator.email
+      : null
+
     const disciplines = courseCapabilityCategories(course.course_type, course.custom_categories)
     const sector = courseSector(course.course_category)
 
@@ -192,11 +201,12 @@ export async function emailAdminsNewCourse(
       to: recipients,
       subject: `New ${course.status} course — ${name} (${when})`,
       text: [
-        `A course has been added to the portal.`,
+        addedBy ? `${addedBy} added a course to the portal.` : `A course has been added to the portal.`,
         '',
         `Course: ${name}${ref ? ` · ${ref}` : ''}`,
         `Status: ${course.status}${course.internal ? ' · internal' : ''}`,
         `Dates: ${when}`,
+        addedBy ? `Added by: ${addedBy}` : null,
         course.client_name ? `Client: ${course.client_name}` : null,
         course.location ? `Location: ${course.location}` : null,
         `Sector: ${sector}`,

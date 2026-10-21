@@ -15,14 +15,14 @@ async function requireAdmin() {
   const admin = createAdminClient()
   const { data: profile } = await admin.from('profiles').select('role').eq('id', user.id).single()
   if (profile?.role !== 'admin') throw new Error('Not authorized')
-  return admin
+  return { admin, userId: user.id }
 }
 
 // Turns a manual calendar event into a portal course: creates the instance,
 // removes the manual event (where the calendar is writable), and lets the
 // sync engine write the portal-managed replacement to the right calendar.
 export async function importCourseFromEvent(formData: FormData) {
-  const admin = await requireAdmin()
+  const { admin, userId } = await requireAdmin()
 
   const course_category = (formData.get('course_category') as string) || 'tactical'
   const course_type = (formData.get('course_type') as string) || 'custom'
@@ -55,6 +55,7 @@ export async function importCourseFromEvent(formData: FormData) {
       ends_at,
       location,
       client_name,
+      created_by: userId,
       // The event's own notes/attachments come first; the event id line lets
       // the import page recognize already-imported events whose manual copy
       // somehow survives (e.g. deletion failed, or the event was moved).

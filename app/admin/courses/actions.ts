@@ -320,7 +320,7 @@ export async function createInstance(formData: FormData) {
       // The seats are what somebody typed. instructor_slots is not written here
       // or anywhere — the database computes it from these three.
       lead_slots: crewPlan.lead, assist_slots: crewPlan.assist, shadow_slots: crewPlan.shadow,
-      owner_id: creator.id,
+      owner_id: creator.id, created_by: creator.id,
       ...session, series_id, ...o,
     })))
     .select('id, starts_at')

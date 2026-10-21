@@ -53,6 +53,9 @@ export type Instance = {
   crew?: { instructor_id: string; role: string; in_charge?: boolean | null; instructors: { name: string } | null }[] | null
   enrollments: { count: number }[]
   course_estimates?: { count: number }[]
+  created_at?: string | null
+  /** Who put it on the books. Not the owner, who can change hands. */
+  creator?: { first_name: string | null; last_name: string | null } | null
 }
 
 /** The list's row, as the step model reads it.
@@ -148,6 +151,14 @@ function InstanceCard({
             {inst.starts_at && inst.ends_at && <span>{formatDateRange(inst.starts_at, inst.ends_at)}</span>}
             {inst.location && <span>{inst.location}</span>}
             {inst.client_name && <span>{inst.client_name}</span>}
+            {inst.creator && (
+              <span
+                className="text-zinc-500"
+                title={inst.created_at ? `Added ${new Date(inst.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}` : undefined}
+              >
+                Added by {[inst.creator.first_name, inst.creator.last_name].filter(Boolean).join(' ') || 'an admin'}
+              </span>
+            )}
           </div>
         </Link>
       </div>
