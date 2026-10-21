@@ -118,8 +118,69 @@ export async function deleteCourseDoc(instanceId: string, docId: string): Promis
     .eq('instance_id', instanceId)
     .single()
   if (!doc) return refuse('That file is no longer on this course')
-  if (doc.path) await admin.storage.from(DOC_BUCKET).remove([doc.path])
+  // The library may be pointing at this very object — filing a file to the
+  // library shares it rather than copying it, so removing the bytes here
+  // would empty a library row that nobody touched. The course row goes; the
+  // file stays as long as the library wants it.
+  if (doc.path) {
+    const { data: kept } = await admin
+      .from('library_items')
+      .select('id')
+      .eq('storage_path', doc.path)
+      .neq('status', 'archived')
+      .limit(1)
+      .maybeSingle()
+    if (!kept) await admin.storage.from(DOC_BUCKET).remove([doc.path])
+  }
   const { error } = await admin.from('course_documents').delete().eq('id', docId)
   if (error) throw new Error(error.message)
   revalidatePath(`/admin/courses/${instanceId}`)
+}
+
+// Filing a course file to the library, so the next course can reach for it.
+//
+// The uploaded ones are the reason this exists: until now a file added here
+// lived and died with the course, and the only way to reuse it was to find
+// the course it was on. The row points at the same object rather than a copy
+// — see lib/library-file.ts for why.
+export async function addCourseDocToLibrary(
+  instanceId: string,
+  docId: string,
+  kind: string
+): Promise<ActionResult> {
+  const { admin } = await requireTeam(instanceId)
+  const { data: doc } = await admin
+    .from('course_documents')
+    .select('path, url, filename')
+    .eq('id', docId)
+    .eq('instance_id', instanceId)
+    .single()
+  if (!doc) return refuse('That file is no longer on this course')
+
+  const { fileToLibrary } = await import('@/lib/library-file')
+
+  if (doc.path) {
+    const r = await fileToLibrary(admin, {
+      path: doc.path,
+      filename: doc.filename ?? 'Document',
+      instanceId,
+      told: kind,
+    })
+    if ('error' in r) return r
+  } else if (doc.url) {
+    // A pasted link, filed the same way the course's own link box files one.
+    const { addLinkToLibrary } = await import('@/lib/library-file')
+    const r = await addLinkToLibrary(admin, {
+      url: doc.url,
+      title: doc.filename ?? 'Document',
+      instanceId,
+      told: kind,
+    })
+    if ('error' in r) return r
+  } else {
+    return refuse('That row has neither a file nor a link to save')
+  }
+
+  revalidatePath(`/admin/courses/${instanceId}`)
+  revalidatePath('/admin/library')
 }

@@ -253,3 +253,56 @@ export async function startResumableUpload(
   if (!location) throw new Error('Drive upload session returned no location')
   return location
 }
+
+// A file uploaded from the server rather than from a browser: the bytes are
+// already here, so there is nothing to resume and one multipart request does
+// it. Used for the library's second copy, which nobody is watching a progress
+// bar for.
+export async function uploadFileToFolder(
+  folderId: string,
+  name: string,
+  mimeType: string,
+  bytes: ArrayBuffer
+): Promise<string> {
+  const boundary = `pr${Math.random().toString(36).slice(2)}`
+  const meta = JSON.stringify({ name, parents: [folderId] })
+  const head = `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${meta}\r\n--${boundary}\r\nContent-Type: ${mimeType}\r\n\r\n`
+  const tail = `\r\n--${boundary}--`
+
+  const body = new Blob([head, bytes, tail])
+  const res = await fetch(
+    'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true&fields=id',
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${await token()}`,
+        'Content-Type': `multipart/related; boundary=${boundary}`,
+      },
+      body,
+    }
+  )
+  if (!res.ok) throw new Error(`Drive upload failed: ${await res.text()}`)
+  const { id } = (await res.json()) as { id: string }
+  return id
+}
+
+/** A folder under the photos parent, made once and found by name after that.
+    Used for the library's flat backup folder — one folder, no shelves: Drive
+    is where the bytes also are, not a second filing system to keep in step
+    with this one. */
+export async function findOrCreateFolder(name: string): Promise<string> {
+  const parent = process.env.DRIVE_PHOTOS_PARENT
+  if (!parent) throw new Error('Drive not configured: DRIVE_PHOTOS_PARENT')
+
+  const q = encodeURIComponent(
+    `name='${name.replace(/'/g, "\\'")}' and mimeType='${FOLDER_MIME}' and '${parent}' in parents and trashed=false`
+  )
+  const res = await driveFetch(
+    `files?q=${q}&supportsAllDrives=true&includeItemsFromAllDrives=true&fields=files(id)`
+  )
+  if (res.ok) {
+    const { files } = (await res.json()) as { files: { id: string }[] }
+    if (files?.[0]?.id) return files[0].id
+  }
+  return createAlbumFolder(name)
+}

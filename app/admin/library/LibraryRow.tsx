@@ -169,7 +169,11 @@ export default function LibraryRow({ item, venues, sites = [], hideProvenance = 
             )}
           </div>
           <p className="text-[11px] text-zinc-600 mt-1 truncate">
-            {item.url ? new URL(item.url, 'https://x').hostname.replace('www.', '') || 'link' : 'no link'}
+            {item.source_type === 'file'
+              ? 'uploaded file'
+              : item.url
+                ? new URL(item.url, 'https://x').hostname.replace('www.', '') || 'link'
+                : 'no link'}
             {' · '}
             {item.disciplines.map((d) => CAPABILITY_META[d as keyof typeof CAPABILITY_META]?.label ?? d).join(', ') || 'no expertise tag'}
             {!hideProvenance && item.source_class && (

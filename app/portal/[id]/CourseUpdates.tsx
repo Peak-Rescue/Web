@@ -6,8 +6,10 @@ import { linkLabel } from '@/lib/course-links'
 import Composer from './UpdateComposer'
 import {
   postCourseUpdate, editCourseUpdate, deleteCourseUpdate, renotifyCourseUpdate,
+  updateAttachmentToLibrary,
   type UpdateLink, type UpdateAttachment, type UpdateAudience,
 } from './update-actions'
+import ToLibraryButton from '@/components/ToLibraryButton'
 
 export type CourseUpdate = {
   id: string
@@ -194,6 +196,16 @@ export default function CourseUpdates({
                           </svg>
                           {a.filename}
                         </a>
+                      ))}
+                      {/* Kept, rather than left on the update it happened to
+                          be posted with. Staff only: it is a filing decision,
+                          and the library is theirs. */}
+                      {canPost && u.attachments.map((a, i) => (
+                        <ToLibraryButton
+                          key={`al${i}`}
+                          label={`Keep ${a.filename.length > 18 ? 'this file' : a.filename}`}
+                          onAdd={(kind) => updateAttachmentToLibrary(instanceId, a.path, a.filename, kind)}
+                        />
                       ))}
                     </div>
                   )}

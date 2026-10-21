@@ -10,12 +10,14 @@ import {
   addCourseDocLink,
   renameCourseDoc,
   deleteCourseDoc,
+  addCourseDocToLibrary,
 } from './document-actions'
 import { LinkIcon, PencilIcon } from '@/components/TaskIcons'
 import UploadNameDialog from '@/components/UploadNameDialog'
 import AddLinkDialog from '@/components/AddLinkDialog'
 import InfoHint from '@/components/InfoHint'
 import TrashIcon from '@/components/TrashIcon'
+import ToLibraryButton from '@/components/ToLibraryButton'
 
 export type CourseFile = {
   id: string
@@ -244,6 +246,12 @@ export default function CourseFilesSection({
               <span className="text-xs text-zinc-500 truncate flex-1">
                 {f.source === 'course' ? (f.isLink ? 'Link' : 'Course file') : f.source === 'task' ? `Task: ${f.label ?? '—'}` : `Expense receipt${f.label ? ` · ${f.label}` : ''}`}
               </span>
+              {/* A file added here used to live and die with the course: the
+                  only way to use it again was to remember which course it was
+                  on. Asked here, where the person knows what it is. */}
+              {f.source === 'course' && (
+                <ToLibraryButton onAdd={(kind) => addCourseDocToLibrary(instanceId, f.id, kind)} />
+              )}
               {f.source === 'course' && (
                 <>
                   <button

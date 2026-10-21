@@ -855,3 +855,20 @@ export async function courseCrew(instanceId: string): Promise<Askable[]> {
 
   return [...crew, ...others]
 }
+
+/** An attachment on an update, kept. Most updates are news — the gear change
+    posted the night before — but the file on one is often the only copy of
+    something worth having next time, and until now it was reachable only by
+    remembering which update it was on. */
+export async function updateAttachmentToLibrary(
+  instanceId: string,
+  path: string,
+  filename: string,
+  kind: string
+): Promise<{ error: string } | void> {
+  const { admin } = await requireCourseStaff(instanceId)
+  const { fileToLibrary } = await import('@/lib/library-file')
+  const r = await fileToLibrary(admin, { path, filename, instanceId, told: kind })
+  if ('error' in r) return r
+  revalidatePath('/admin/library')
+}
