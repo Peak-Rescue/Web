@@ -20,6 +20,7 @@ const KINDS: { value: string; label: string }[] = [
   { value: 'map', label: 'Map' },
   { value: 'route', label: 'Beta' },
   { value: 'kit_list', label: 'Gear list' },
+  { value: 'debrief', label: 'Debrief / AAR' },
   { value: 'skill_sheet', label: 'Skill sheet' },
   { value: 'presentation', label: 'Presentation' },
   { value: 'manual', label: 'Manual' },

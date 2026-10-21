@@ -70,6 +70,12 @@ const BY_TITLE: { re: RegExp; v: Verdict }[] = [
     v: { kind: 'skill_sheet', bucket: 'teaching', reason: 'a skill sheet' },
   },
   {
+    // Named for what it is called out loud as well as written: "AAR",
+    // "after action", "debrief", "lessons learned".
+    re: /\b(aar|after.?action|debriefs?|lessons learned|post.?course review)\b/i,
+    v: { kind: 'debrief', bucket: 'instructor', reason: 'a debrief from a delivery' },
+  },
+  {
     re: /\boutlines?\b/i,
     v: { kind: 'outline', bucket: 'instructor', reason: 'a course outline' },
   },

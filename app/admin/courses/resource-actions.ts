@@ -109,7 +109,12 @@ export async function loadResourceLibrary(instanceId: string): Promise<ResourceP
       // there, and it sits on the Documents shelf — so offering only the
       // Reference shelf here meant it could not be found from the course at
       // all. Filtered to this course's place below, like everything else.
-      .in('bucket', ['resource', 'documents'])
+      // Instructor material joins them for one type: a debrief is written
+      // after a delivery and is worth exactly one thing, which is reaching
+      // the next course that goes there. It comes with the place or not at
+      // all, like the plans below — and it is instructors-only material, so
+      // the audience ceiling keeps it off a student's page by itself.
+      .in('bucket', ['resource', 'documents', 'instructor'])
       // A kit list is gear, and gear is its own section on the course. Its
       // bucket is a leftover, so it would otherwise be offered here as a
       // reference. See KINDS_OFF_BUCKET_SHELVES.
@@ -146,7 +151,9 @@ export async function loadResourceLibrary(instanceId: string): Promise<ResourceP
     // here because it is about where this course is, so it comes with the
     // place or not at all. Otherwise eight copies of "Company Evac Plans"
     // would be offered to every course ever built.
-    const placeOnly = r.bucket === 'documents'
+    // Everything on the Reference shelf is offerable anywhere; a Documents
+    // row and a debrief are only here because of where this course is.
+    const placeOnly = r.bucket === 'documents' || r.bucket === 'instructor'
     // Tied to one kind of course. The ACA swiftwater materials are for the
     // swiftwater courses and no other, so on anything else they are not a
     // weaker match — they are the wrong thing, and expertise alone would
@@ -188,7 +195,7 @@ export async function addCourseResourcesFromLibrary(instanceId: string, itemIds:
     .from('library_items')
     .select('id, audience')
     .in('id', itemIds)
-    .in('bucket', ['resource', 'documents'])
+    .in('bucket', ['resource', 'documents', 'instructor'])
     .not('kind', 'in', `(${KINDS_OFF_BUCKET_SHELVES.join(',')})`)
     .eq('admin_only', false)
 

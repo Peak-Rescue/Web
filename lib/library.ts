@@ -18,7 +18,7 @@ export const BUCKET_META: Record<LibraryBucket, { label: string; hint: string }>
   teaching:   { label: 'Teaching material', hint: 'How-tos: technique videos, walkthroughs, skill sheets' },
   resource:   { label: 'Reference',         hint: 'Manuals, tech notes, standards, papers' },
   map:        { label: 'Maps',              hint: 'CalTopo, SARTopo and other maps' },
-  instructor: { label: 'Instructor material', hint: 'Guides, outlines and teaching notes — never shown to students' },
+  instructor: { label: 'Instructor material', hint: 'Guides, outlines, debriefs and teaching notes — never shown to students' },
   // The company rather than the course. Everything here was living in
   // whichever teaching shelf it least embarrassed — eighteen logo files under
   // instructor material, the employee handbook beside rope technique — on the
@@ -101,6 +101,7 @@ const BUCKET_FOR_KIND: Partial<Record<LibraryKind, LibraryBucket>> = {
   // that leftover putting it on a shelf — which is how two of them came to be
   // listed under Reference, between the manuals and the standards.
   outline: 'instructor',
+  debrief: 'instructor',
 }
 
 /** Types whose card is not a bucket shelf, so a bucket shelf must not list
@@ -270,6 +271,10 @@ export const LIBRARY_KINDS = [
   'skill_sheet',
   'kit_list',
   'outline',
+  // The write-up after a delivery: what the place asked of us, what we would
+  // do differently. Filed to the place rather than to the course it came off,
+  // because its whole value is to the next course that goes there.
+  'debrief',
   'form',
   'brand',
   'media',
@@ -294,7 +299,7 @@ export const KIND_GROUPS: { label: string; kinds: LibraryKind[] }[] = [
   // separate question, answered below.
   { label: 'Gear lists',        kinds: ['kit_list'] },
   { label: 'Reference',         kinds: ['manual', 'tech_note', 'standard'] },
-  { label: 'Instructor material', kinds: ['outline'] },
+  { label: 'Instructor material', kinds: ['outline', 'debrief'] },
   { label: 'Documents',         kinds: ['form', 'brand'] },
   // A plan and a permit are about one place — Deer Haven's risk eval, the
   // Snoqualmie permit — so they are listed under the card they are read on.
@@ -339,6 +344,7 @@ export const KIND_META: Record<LibraryKind, string> = {
   // which was which — it read as two words for the same thing.
   kit_list: 'Gear list (doc)',
   outline: 'Course outline',
+  debrief: 'Debrief / AAR',
   form: 'Form / template',
   // Logos, letterhead, the business card. Not a form and not reference —
   // nobody looks a logo up, they fetch it — and eighteen of them sat on the

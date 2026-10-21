@@ -34,9 +34,21 @@ describe('adding a library item to a course', () => {
   it('accepts the same shelves the picker offers', () => {
     // The picker read Reference and Documents; the add read Reference alone,
     // so a venue's med plan could be ticked and then silently not added.
+    //
+    // Compared rather than spelled out, because the list has grown twice
+    // since — Documents for the plans, Instructor material for the debriefs
+    // — and each time the literal in this test was the thing that noticed,
+    // which is a test about its own wording rather than about the rule.
     const src = readFileSync('app/admin/courses/resource-actions.ts', 'utf8')
+    const bucketsIn = (fn: string) => {
+      const body = src.slice(src.indexOf(`export async function ${fn}`))
+      return /\.in\('bucket', (\[[^\]]*\])\)/.exec(body)?.[1]
+    }
+    const offered = bucketsIn('loadResourceLibrary')
+    expect(offered).toBeTruthy()
+    expect(bucketsIn('addCourseResourcesFromLibrary')).toBe(offered)
+
     const add = src.slice(src.indexOf('export async function addCourseResourcesFromLibrary'))
-    expect(add).toContain("in('bucket', ['resource', 'documents'])")
     expect(add).toContain("admin_only', false")
   })
 })
