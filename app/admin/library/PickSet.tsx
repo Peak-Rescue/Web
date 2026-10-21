@@ -18,7 +18,7 @@ import {
   setLibraryDisciplines,
   rejectLibraryItems,
   setLibraryKind,
-  setLibraryCourseType,
+  addLibraryOffering,
   setLibraryPlace,
   archiveLibraryItems,
   deleteLibraryItems,
@@ -159,11 +159,11 @@ export default function PickSet({
               onChange={(e) => {
                 const ct = e.target.value
                 e.currentTarget.value = ''
-                if (ct) run(() => setLibraryCourseType(ids, ct), `${n} tied to ${courseShortName(ct, null)}`)
+                if (ct) run(() => addLibraryOffering(ids, ct), `${n} tied to ${courseShortName(ct, null)}`)
               }}
               className="bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-[11px] focus:outline-none focus:border-zinc-500"
             >
-              <option value="">Set offering…</option>
+              <option value="">Add course offering…</option>
               {COURSE_TYPE_OPTIONS.map((g) => (
                 <optgroup key={g.category} label={g.label}>
                   {g.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}

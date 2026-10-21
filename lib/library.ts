@@ -440,11 +440,12 @@ export type LibraryItem = {
   site_id: string | null
   region: string | null
   expires_at: string | null
-  /** The one offering this is for, when it is for one. Null — the usual
-      answer — means it is reached for by discipline and place like everything
-      else; an offering on every row would be a tag that says "most of them".
-      See 242. */
-  course_type: string | null
+  /** The course offerings this is for, when it is for particular ones. Empty
+      — the usual answer — means it is reached for by discipline and place
+      like everything else; an offering on every row would be a tag that says
+      "most of them". Several, because one was always going to be the wrong
+      answer for anything two offerings share. See 242 and 250. */
+  course_types: string[]
   status: LibraryStatus
   bucket: LibraryBucket
   /** Maps only; every other kind has one link in `url`. */

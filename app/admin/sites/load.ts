@@ -19,7 +19,7 @@ export async function loadSitesShelf() {
     // are course material that happened to be taught there.
     admin
       .from('library_items')
-      .select('id, title, description, source_type, url, edit_url, drive_file_id, kind, audience, disciplines, topics, admin_only, venue_id, site_id, expires_at, course_type, status, bucket, region, source_class, source_topic, source_item, library_item_links(id, url, access, audience)')
+      .select('id, title, description, source_type, url, edit_url, drive_file_id, kind, audience, disciplines, topics, admin_only, venue_id, site_id, expires_at, course_types, status, bucket, region, source_class, source_topic, source_item, library_item_links(id, url, access, audience)')
       .in('kind', ['map', 'route', 'medevac', 'permit'])
       // Only the ones that are about somewhere. A blank "New Rescue Plan" and
       // a confined-space entry permit are templates — the kind is right and

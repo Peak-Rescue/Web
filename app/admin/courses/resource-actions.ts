@@ -103,7 +103,7 @@ export async function loadResourceLibrary(instanceId: string): Promise<ResourceP
     admin.from('course_instances').select('location, region, venue_id, course_type, custom_categories').eq('id', instanceId).single(),
     admin
       .from('library_items')
-      .select('id, title, url, kind, audience, region, venue_id, site_id, bucket, disciplines, course_type, venues(name)')
+      .select('id, title, url, kind, audience, region, venue_id, site_id, bucket, disciplines, course_types, venues(name)')
       // Reference, plus the plans a place has. A venue's evac plan is the
       // thing somebody goes looking for while building the course that goes
       // there, and it sits on the Documents shelf — so offering only the
@@ -159,8 +159,9 @@ export async function loadResourceLibrary(instanceId: string): Promise<ResourceP
     // weaker match — they are the wrong thing, and discipline alone would
     // offer them to all four canyon offerings. Null, the usual answer, means
     // it matches on discipline and place like everything else. See 242.
-    const offeringMiss = Boolean(r.course_type && r.course_type !== inst?.course_type)
-    const offeringHit = Boolean(r.course_type && r.course_type === inst?.course_type)
+    const tied = (r.course_types ?? []) as string[]
+    const offeringMiss = tied.length > 0 && !tied.includes(inst?.course_type ?? '')
+    const offeringHit = tied.length > 0 && tied.includes(inst?.course_type ?? '')
     return {
       id: r.id,
       title: r.title,

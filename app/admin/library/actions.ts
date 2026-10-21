@@ -67,7 +67,7 @@ export type LibraryPatch = {
   expires_at?: string | null
   status?: 'pending' | 'published' | 'archived'
   bucket?: string | null
-  course_type?: string | null
+  course_types?: string[]
   region?: string | null
 }
 
@@ -103,9 +103,9 @@ export async function updateLibraryItem(id: string, patch: LibraryPatch) {
   if (patch.bucket !== undefined && patch.bucket !== null && VALID_BUCKETS.has(patch.bucket)) update.bucket = patch.bucket
   if (patch.region !== undefined) update.region = isValidRegion(patch.region) ? patch.region : null
   if (patch.expires_at !== undefined) update.expires_at = patch.expires_at || null
-  // '' is "any offering", which is null on the row — the same answer the
-  // templates store for a list that suits everything.
-  if (patch.course_type !== undefined) update.course_type = patch.course_type || null
+  // An empty list is "any offering its discipline matches", which is what
+  // nearly everything is.
+  if (patch.course_types !== undefined) update.course_types = patch.course_types
   if (patch.status !== undefined) {
     update.status = patch.status
     if (patch.status === 'published') update.reviewed_at = new Date().toISOString()
@@ -806,17 +806,24 @@ export async function setLibraryPlace(ids: string[], place: string) {
   revalidate()
 }
 
-/** The offering a hand-picked set is for, or none. Blank is "any offering",
-    which is what most material is: discipline and place are the broader match
-    and nearly everything wants the broader one. */
-export async function setLibraryCourseType(ids: string[], courseType: string) {
+/** An offering added to a hand-picked set. Added rather than set, because
+    the point of the list is that a row can serve two — and a bulk control
+    that replaced the list would quietly untie the one row in the selection
+    that already said something. Taking one off is done on the row, where you
+    can see what else is on it. */
+export async function addLibraryOffering(ids: string[], courseType: string) {
   const admin = await requireAdmin()
-  if (ids.length === 0) return
-  const { error } = await admin
-    .from('library_items')
-    .update({ course_type: courseType || null, updated_at: new Date().toISOString() })
-    .in('id', ids)
-  if (error) throw new Error(error.message)
+  if (ids.length === 0 || !courseType) return
+  const { data: rows } = await admin.from('library_items').select('id, course_types').in('id', ids)
+  for (const r of rows ?? []) {
+    const have = (r.course_types ?? []) as string[]
+    if (have.includes(courseType)) continue
+    const { error } = await admin
+      .from('library_items')
+      .update({ course_types: [...have, courseType], updated_at: new Date().toISOString() })
+      .eq('id', r.id)
+    if (error) throw new Error(error.message)
+  }
   await clearSortingMark(admin, ids)
   revalidate()
 }

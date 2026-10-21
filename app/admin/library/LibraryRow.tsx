@@ -40,7 +40,7 @@ export default function LibraryRow({ item, venues, sites = [], hideProvenance = 
     // row says where it belongs.
     topicsRaw: item.topics.filter((t) => t !== NEEDS_SORTING).join(', '),
     place: placeValue(item.region, item.venue_id, item.site_id),
-    course_type: item.course_type ?? '',
+    course_types: item.course_types ?? [],
     admin_only: item.admin_only,
     expires_at: item.expires_at ?? '',
   })
@@ -134,14 +134,15 @@ export default function LibraryRow({ item, venues, sites = [], hideProvenance = 
                 {KIND_META[item.kind as keyof typeof KIND_META]}
               </span>
             )}
-            {item.course_type && (
+            {(item.course_types ?? []).map((ct) => (
               <span
+                key={ct}
                 title="Only offered to courses of this kind"
                 className="text-[10px] px-1.5 py-0.5 rounded bg-blue-900/40 text-blue-300"
               >
-                {courseShortName(item.course_type, null)}
+                {courseShortName(ct, null)}
               </span>
-            )}
+            ))}
             <AudiencePills audience={item.audience} />
             {item.admin_only && (
               <span
@@ -287,29 +288,53 @@ export default function LibraryRow({ item, venues, sites = [], hideProvenance = 
 <KindOptions />
             </select>
           </div>
-          {/* For one kind of course and no other: the ACA swiftwater
+          {/* For particular courses and no others: the ACA swiftwater
               materials, a manual for kit only the aerial courses carry.
-              Optional, and blank is the usual answer — discipline is the
-              broader match and most material wants the broader one. */}
+              Optional, and none is the usual answer — a discipline is the
+              broader match and most material wants the broader one.
+              Several, because one was always going to be the wrong answer
+              for anything two offerings share. */}
           <div>
             <label className={label}>
-              Offering <span className="text-zinc-700">— only if it is for one</span>
+              Course offerings <span className="text-zinc-700">— only the ones it is for</span>
             </label>
+            <div className="flex items-center gap-1.5 flex-wrap mb-1.5">
+              {form.course_types.map((ct) => (
+                <span
+                  key={ct}
+                  className="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded bg-blue-900/40 text-blue-300"
+                >
+                  {courseShortName(ct, null)}
+                  <button
+                    type="button"
+                    aria-label={`Not for ${courseShortName(ct, null)}`}
+                    onClick={() => setForm({ ...form, course_types: form.course_types.filter((x) => x !== ct) })}
+                    className="text-blue-300/60 hover:text-white transition-colors"
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+              {form.course_types.length === 0 && (
+                <span className="text-[11px] text-zinc-600">Any offering its discipline matches</span>
+              )}
+            </div>
             <select
               className={input}
-              value={form.course_type}
-              onChange={(e) => setForm({ ...form, course_type: e.target.value })}
+              value=""
+              onChange={(e) => {
+                const ct = e.target.value
+                if (ct && !form.course_types.includes(ct)) {
+                  setForm({ ...form, course_types: [...form.course_types, ct] })
+                }
+              }}
             >
-              <option value="">— any offering —</option>
-              {/* A retired slug still reads on the row that was saved with
-                  it, so changing your mind is not a one-way door. */}
-              {form.course_type &&
-                !COURSE_TYPE_OPTIONS.some((g) => g.options.some((o) => o.value === form.course_type)) && (
-                  <option value={form.course_type}>{courseShortName(form.course_type, null)}</option>
-                )}
+              <option value="">+ Add an offering…</option>
               {COURSE_TYPE_OPTIONS.map((g) => (
-                <optgroup key={g.category} label={g.label}>
-                  {g.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                <optgroup key={g.category} label={g.label.toUpperCase()}>
+                  {g.options
+                    .filter((o) => !form.course_types.includes(o.value))
+                    .map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </optgroup>
               ))}
             </select>

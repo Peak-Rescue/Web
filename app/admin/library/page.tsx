@@ -130,7 +130,7 @@ export default async function LibraryPage({
 
   let query = admin
     .from('library_items')
-    .select('id, title, description, source_type, url, edit_url, drive_file_id, kind, audience, disciplines, topics, admin_only, venue_id, site_id, expires_at, course_type, status, bucket, region, source_class, source_topic, source_item, library_item_links(id, url, access, audience)')
+    .select('id, title, description, source_type, url, edit_url, drive_file_id, kind, audience, disciplines, topics, admin_only, venue_id, site_id, expires_at, course_types, status, bucket, region, source_class, source_topic, source_item, library_item_links(id, url, access, audience)')
     // The review queue is a queue: oldest problems first is the wrong way
     // round, and it is read top to bottom rather than looked up. Every other
     // view is looked up, so it goes in the order a shelf goes in.
@@ -182,8 +182,8 @@ export default async function LibraryPage({
       const implied = courseCapabilityCategories(offering, null) as string[]
       out = out.or(
         implied.length > 0
-          ? `course_type.eq.${offering},and(course_type.is.null,disciplines.ov.{${implied.join(',')}})`
-          : `course_type.eq.${offering}`
+          ? `course_types.cs.{${offering}},and(course_types.eq.{},disciplines.ov.{${implied.join(',')}})`
+          : `course_types.cs.{${offering}}`
       ) as T
     }
     if (bucket && !isTemplateShelf(bucket)) {
@@ -242,7 +242,7 @@ export default async function LibraryPage({
     showTemplates && shelves.includes('setup')
       ? (() => {
           let c = admin.from('course_templates')
-            .select('id, name, description, course_type, disciplines, course_template_sections(id, title, sort_order, course_template_items(id, sort_order, library_items(id, title, description, source_type, url, edit_url, drive_file_id, kind, audience, disciplines, topics, admin_only, venue_id, site_id, expires_at, course_type, status, bucket, region, source_class, source_topic, source_item, library_item_links(id, url, access, audience))))')
+            .select('id, name, description, course_type, disciplines, course_template_sections(id, title, sort_order, course_template_items(id, sort_order, library_items(id, title, description, source_type, url, edit_url, drive_file_id, kind, audience, disciplines, topics, admin_only, venue_id, site_id, expires_at, course_types, status, bucket, region, source_class, source_topic, source_item, library_item_links(id, url, access, audience))))')
             .eq('active', true)
             .order('name')
           if (q) c = c.ilike('name', `%${q}%`)
@@ -261,7 +261,7 @@ export default async function LibraryPage({
     showTemplates && shelves.includes('gear')
       ? admin
           .from('library_items')
-          .select('id, title, description, source_type, url, edit_url, drive_file_id, kind, audience, disciplines, topics, admin_only, venue_id, site_id, expires_at, course_type, status, bucket, region, source_class, source_topic, source_item, library_item_links(id, url, access, audience)')
+          .select('id, title, description, source_type, url, edit_url, drive_file_id, kind, audience, disciplines, topics, admin_only, venue_id, site_id, expires_at, course_types, status, bucket, region, source_class, source_topic, source_item, library_item_links(id, url, access, audience)')
           .eq('kind', 'kit_list')
           .in('status', STATUSES)
           .order('title')
@@ -345,7 +345,7 @@ export default async function LibraryPage({
               (((await narrow(
                 admin
                   .from('library_items')
-                  .select('id, title, description, source_type, url, edit_url, drive_file_id, kind, audience, disciplines, topics, admin_only, venue_id, site_id, expires_at, course_type, status, bucket, region, source_class, source_topic, source_item, library_item_links(id, url, access, audience)')
+                  .select('id, title, description, source_type, url, edit_url, drive_file_id, kind, audience, disciplines, topics, admin_only, venue_id, site_id, expires_at, course_types, status, bucket, region, source_class, source_topic, source_item, library_item_links(id, url, access, audience)')
                   .eq('kind', k)
                   .order('title')
                   .order('id')
@@ -595,7 +595,7 @@ export default async function LibraryPage({
               and the untied ones that discipline matches. */}
           {!onMedia && (
           <select name="offering" defaultValue={offering ?? ''} className={input}>
-            <option value="">All offerings</option>
+            <option value="">All course offerings</option>
             {COURSE_TYPE_OPTIONS.map((g) => (
               <optgroup key={g.category} label={g.label}>
                 {g.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
