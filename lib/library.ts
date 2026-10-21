@@ -105,10 +105,12 @@ const BUCKET_FOR_KIND: Partial<Record<LibraryKind, LibraryBucket>> = {
 }
 
 /** Types whose card is not a bucket shelf, so a bucket shelf must not list
-    them. Only the written-down gear lists so far: they are read from the Gear
-    lists card beside the structured ones, and the bucket still on the row is
-    the shelf it was filed to before anyone could say it was a kit list. */
-export const KINDS_OFF_BUCKET_SHELVES: LibraryKind[] = ['kit_list']
+    them: a written gear list reads on the Gear lists card beside the
+    structured ones, and a photo album on Photos & video. The bucket still on
+    those rows is wherever they were filed before anyone could say what they
+    were — which is how Reference came to have a "Photos / media (3)" heading
+    on a shelf whose own subtitle is "manuals, tech notes, standards". */
+export const KINDS_OFF_BUCKET_SHELVES: LibraryKind[] = ['kit_list', 'media']
 
 /** The shelf a row is actually found on, for the chip that says where it
     lives. Usually its bucket — that is what a bucket shelf lists by — with
