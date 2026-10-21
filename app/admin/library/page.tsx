@@ -177,7 +177,7 @@ export default async function LibraryPage({
   // Templates take the same search box and discipline tags the documents use.
   // They have no review status, so the status tabs pass them by — there's
   // nothing to approve about a kit list you wrote yourself.
-  const [{ data: itemRows }, { data: venueRows }, { data: siteRows }, gearRes, scheduleRes, setupRes, catalogRes, { count: pendingCount }, { data: kitListRows }, placesShelf, mediaShelf, { data: facetRows }, inboxCounts, shelfCounts] = await Promise.all([
+  const [{ data: itemRows }, { data: venueRows }, { data: siteRows }, gearRes, scheduleRes, setupRes, catalogRes, { count: pendingCount }, { data: kitListRows }, placesShelf, mediaShelf, { data: facetRows }, shelfCounts] = await Promise.all([
     showDocs ? query : Promise.resolve({ data: [] }),
     admin.from('venues').select('id, name, region, region_code, client_name, notes, links, contacts, active').order('name'),
     // A per-region template pins its canyons here, so the courses started from
@@ -256,12 +256,6 @@ export default async function LibraryPage({
           .not('kind', 'in', `(${KINDS_OFF_BUCKET_SHELVES.join(',')})`)
           .or(isAdmin ? 'admin_only.is.true,admin_only.is.false' : 'admin_only.is.false').limit(2000)
       : Promise.resolve({ data: null }),
-    // One count, on the landing only: the permits anyone can read.
-    landing && isAdmin
-      ? Promise.all([
-          admin.from('library_items').select('id', { count: 'exact', head: true }).eq('status', 'published').eq('kind', 'permit').eq('admin_only', false),
-        ])
-      : Promise.resolve(null),
     landing
       ? Promise.all([
           ...BUCKET_ORDER.map(async (b) => [b, (await admin
@@ -366,13 +360,6 @@ export default async function LibraryPage({
     for (const [k, v] of Object.entries(merged)) if (v) p.set(k, v)
     return `/admin/library?${p.toString()}`
   }
-
-  // The one check that browsing will never show: a permit readable by all
-  // twenty-two instructors looks exactly like a permit that is not. It is a
-  // line on the landing rather than a page, because a page about the filing
-  // is a page somebody has to remember to open, and this is the only thing it
-  // had left to say.
-  const loosePermits = inboxCounts ? inboxCounts[0].count ?? 0 : 0
 
   const kitLists = ((kitListRows ?? []) as unknown as (LibraryItem & { library_item_links?: LibraryItem['links'] })[])
     .map((r) => ({ ...r, links: r.library_item_links ?? [] }) as LibraryItem)
@@ -649,21 +636,6 @@ export default async function LibraryPage({
 
         {/* ── Items ────────────────────────────────────────────────────── */}
         {/* ── The shelves ──────────────────────────────────────────────── */}
-        {landing && loosePermits > 0 && (
-          // Says itself, and says nothing when the answer is nothing. A
-          // permit readable by every instructor looks exactly like a permit
-          // that is not, so no amount of browsing the shelf will turn it up —
-          // which is the only reason this one line is here and the console it
-          // came from is gone.
-          <Link
-            href={href({ kind: 'permit', bucket: undefined })}
-            className="block mb-4 rounded-lg border border-yellow-900/60 bg-yellow-950/20 px-4 py-3 text-sm text-yellow-200 hover:border-yellow-700 transition-colors"
-          >
-            {loosePermits} {loosePermits === 1 ? 'permit is' : 'permits are'} readable by every instructor.
-            <span className="text-yellow-200/60"> Marking them admins-only keeps them off courses too →</span>
-          </Link>
-        )}
-
         {landing && (
           <>
             {/* One grid. The cards were split into "shelves" and "built
