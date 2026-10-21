@@ -8,6 +8,14 @@ import { normalizeDocLink } from '@/lib/doc-links'
 import { courseDisplayName } from '@/lib/courses'
 import { meetingDayLabel } from '@/lib/meeting-details'
 import { sendMail } from '@/lib/mailer'
+import { classify } from '@/lib/sorting'
+import { courseCapabilityCategories } from '@/lib/capabilities'
+import { type Venue } from '@/lib/library'
+import { type ActionResult } from '@/lib/action-result'
+import {
+  type CurriculumFilingDraft,
+  type CurriculumFilingChoices,
+} from '@/app/admin/courses/actions'
 
 // Updates posted to a course, with an email telling people to come and read
 // them.
@@ -856,19 +864,69 @@ export async function courseCrew(instanceId: string): Promise<Askable[]> {
   return [...crew, ...others]
 }
 
-/** An attachment on an update, kept. Most updates are news — the gear change
-    posted the night before — but the file on one is often the only copy of
-    something worth having next time, and until now it was reachable only by
-    remembering which update it was on. */
-export async function updateAttachmentToLibrary(
+/** An attachment on an update, kept.
+ *
+ * Most updates are news — the gear change posted the night before — but the
+ * file on one is often the only copy of something worth having next time,
+ * and until now it was reachable only by remembering which update it was on.
+ *
+ * Same filing form as everywhere else: the questions do not change because
+ * of the door the file came through.
+ */
+export async function updateAttachmentFilingDraft(
+  instanceId: string,
+  path: string,
+  filename: string
+): Promise<CurriculumFilingDraft> {
+  const { admin } = await requireCourseStaff(instanceId)
+
+  const { data: existing } = await admin
+    .from('library_items')
+    .select('id, title, admin_only')
+    .eq('storage_path', path)
+    .neq('status', 'archived')
+    .limit(1)
+    .maybeSingle()
+  if (existing) {
+    return { existing: { id: existing.id, title: existing.title, adminOnly: existing.admin_only } }
+  }
+
+  const [{ data: inst }, { data: venueRows }, { data: siteRows }] = await Promise.all([
+    admin.from('course_instances').select('region, venue_id, course_type, custom_categories').eq('id', instanceId).single(),
+    admin.from('venues').select('id, name, region, region_code, client_name, notes, links, contacts, active').order('name'),
+    admin.from('sites').select('id, name, kind, beta, venue_id, venues(name)').eq('active', true).order('name'),
+  ])
+
+  const title = (filename || 'Attachment').replace(/\.[a-z0-9]{1,5}$/i, '')
+  const verdict = classify({ title, url: null, kind: 'reference', bucket: 'resource', source_topic: null })
+
+  return {
+    draft: {
+      title,
+      kind: verdict.confident ? verdict.kind ?? 'reference' : 'reference',
+      audience: 'internal',
+      place: inst?.venue_id ? `venue:${inst.venue_id}` : inst?.region ? `region:${inst.region}` : '',
+      disciplines: inst ? (courseCapabilityCategories(inst.course_type, inst.custom_categories) as string[]) : [],
+      topics: '',
+      unsure: !verdict.confident,
+    },
+    venues: (venueRows ?? []) as Venue[],
+    sites: ((siteRows ?? []) as unknown as {
+      id: string; name: string; kind: string | null; beta: string | null; venue_id: string | null; venues: { name: string } | null
+    }[]).map((x) => ({ id: x.id, name: x.name, kind: x.kind, beta: x.beta, venue_id: x.venue_id, venue_name: x.venues?.name ?? null })),
+  }
+}
+
+export async function fileUpdateAttachmentToLibrary(
   instanceId: string,
   path: string,
   filename: string,
-  kind: string
-): Promise<{ error: string } | void> {
+  choices?: CurriculumFilingChoices
+): Promise<ActionResult> {
   const { admin } = await requireCourseStaff(instanceId)
-  const { fileToLibrary } = await import('@/lib/library-file')
-  const r = await fileToLibrary(admin, { path, filename, instanceId, told: kind })
+  const { fileToLibrary, applyChoices } = await import('@/lib/library-file')
+  const r = await fileToLibrary(admin, { path, filename, instanceId, told: choices?.kind })
   if ('error' in r) return r
+  if (choices) await applyChoices(admin, r.id, choices)
   revalidatePath('/admin/library')
 }

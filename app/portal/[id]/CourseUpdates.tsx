@@ -6,10 +6,11 @@ import { linkLabel } from '@/lib/course-links'
 import Composer from './UpdateComposer'
 import {
   postCourseUpdate, editCourseUpdate, deleteCourseUpdate, renotifyCourseUpdate,
-  updateAttachmentToLibrary,
+  updateAttachmentFilingDraft,
+  fileUpdateAttachmentToLibrary,
   type UpdateLink, type UpdateAttachment, type UpdateAudience,
 } from './update-actions'
-import ToLibraryButton from '@/components/ToLibraryButton'
+import SaveItemToLibrary from '@/app/admin/courses/SaveItemToLibrary'
 
 export type CourseUpdate = {
   id: string
@@ -202,10 +203,10 @@ export default function CourseUpdates({
                           be posted with. Staff only: it is a filing decision,
                           and the library is theirs. */}
                       {canPost && u.attachments.map((a, i) => (
-                        <ToLibraryButton
+                        <SaveItemToLibrary
                           key={`al${i}`}
-                          label={`Keep ${a.filename.length > 18 ? 'this file' : a.filename}`}
-                          onAdd={(kind) => updateAttachmentToLibrary(instanceId, a.path, a.filename, kind)}
+                          onOpen={() => updateAttachmentFilingDraft(instanceId, a.path, a.filename)}
+                          onFile={(choices) => fileUpdateAttachmentToLibrary(instanceId, a.path, a.filename, choices)}
                         />
                       ))}
                     </div>
