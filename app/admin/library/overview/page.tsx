@@ -75,11 +75,11 @@ export default async function LibraryOverviewPage() {
 
   // ── Attention list ──────────────────────────────────────────────────────
   const flags = [
-    { label: 'Waiting for review', n: items.filter((i) => i.status === 'pending').length, href: '/admin/library?status=pending' },
-    { label: 'No expertise tag', n: untagged.length, href: '/admin/library?status=all' },
-    { label: 'Link may be dead', n: items.filter((i) => i.topics.includes('needs-link-check')).length, href: '/admin/library?status=all' },
-    { label: 'No link at all', n: items.filter((i) => !i.url).length, href: '/admin/library?status=all' },
-    { label: 'Expired', n: items.filter((i) => i.expires_at && i.expires_at < today).length, href: '/admin/library?status=all&kind=permit' },
+    { label: 'Waiting for review', n: items.filter((i) => i.status === 'pending').length, href: '/admin/library' },
+    { label: 'No expertise tag', n: untagged.length, href: '/admin/library' },
+    { label: 'Link may be dead', n: items.filter((i) => i.topics.includes('needs-link-check')).length, href: '/admin/library' },
+    { label: 'No link at all', n: items.filter((i) => !i.url).length, href: '/admin/library' },
+    { label: 'Expired', n: items.filter((i) => i.expires_at && i.expires_at < today).length, href: '/admin/library?kind=permit' },
   ].filter((f) => f.n > 0)
 
   const card = 'bg-zinc-900 border border-zinc-800 rounded-lg'

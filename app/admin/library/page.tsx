@@ -37,13 +37,13 @@ const input = 'w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-
 export default async function LibraryPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; discipline?: string; kind?: string; audience?: string; venue?: string; offering?: string; bucket?: string; q?: string; template?: string; open?: string; page?: string; topic?: string }>
+  searchParams: Promise<{ discipline?: string; kind?: string; audience?: string; venue?: string; offering?: string; bucket?: string; q?: string; template?: string; open?: string; page?: string; topic?: string }>
 }) {
   // Published is the library. Pending review is a queue that Google Classroom
   // imports drop into, and landing on it meant the shelf you came to look at
   // read as empty — an item added by hand is published the moment it's added,
   // so the queue is usually empty and the answer usually isn't there.
-  const { status: askedStatus, discipline, kind, audience, venue, offering, bucket, q, template, open, page, topic } = await searchParams
+  const { discipline, kind, audience, venue, offering, bucket, q, template, open, page, topic } = await searchParams
 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -66,7 +66,15 @@ export default async function LibraryPage({
   const isAdmin = realAdmin && !viewAs
   // Archived and pending are an admin's working states. Nobody else has a
   // verb that acts on them, so nobody else is offered them.
-  const status = isAdmin ? (askedStatus ?? 'published') : 'published'
+  // No filing-state control. A shelf is everything that belongs on it: what
+  // is on it, what is waiting to go on it, and — for the five people who can
+  // change any of it — what has been retired from it, each saying which it
+  // is on the row. Four tabs asked you to pick a state before you could look
+  // at a shelf, and the answer was almost always "all of them".
+  //
+  // Instructors still see the shelf and nothing else: approved material, and
+  // no sign that the rest exists.
+  const STATUSES = isAdmin ? ['published', 'pending', 'archived'] : ['published']
 
   // Gear lists and schedules are shelves too, but they're rows in their own
   // tables — so which of the two lists below runs depends on the shelf picked.
@@ -81,7 +89,7 @@ export default async function LibraryPage({
   // Which shelf you are standing on, if it is one shelf rather than a search
   // across all of them.
   const onShelf = Boolean(bucket)
-  const landing = !topic && !bucket && !q && !discipline && !kind && !venue && !audience && status === 'published'
+  const landing = !topic && !bucket && !q && !discipline && !kind && !venue && !audience
   // The places shelf is its own thing: not documents, not templates, and the
   // document filters (type, who-can-see, review status) mean nothing to a
   // canyon. It is only ever shown when it is the shelf asked for.
@@ -101,10 +109,8 @@ export default async function LibraryPage({
   // every course setup turned up under Pending review looking like work.
   // Asking for a template shelf by name still shows it, since hiding it
   // there would leave the shelf reading as empty.
-  const statusHidesTemplates =
-    (status === 'pending' || status === 'archived') && !isTemplateShelf(bucket)
   const showTemplates =
-    (!bucket || isTemplateShelf(bucket)) && !docOnlyFilter && !landing && !statusHidesTemplates && !onPlaces && !onMedia
+    (!bucket || isTemplateShelf(bucket)) && !docOnlyFilter && !landing && !onPlaces && !onMedia
   const shelves: TemplateShelf[] = isTemplateShelf(bucket) ? [bucket] : TEMPLATE_SHELF_ORDER
 
   // A page of results, not the whole shelf. The reference page learned this —
@@ -116,7 +122,7 @@ export default async function LibraryPage({
   // are cut in half — "Rappelling (14)" on one page and the rest of
   // Rappelling on the next, each with its own selection. The groups are
   // folded, so the cost is rows in the DOM nobody has opened.
-  const PAGE = status === 'pending' ? 500 : 60
+  const PAGE = 60
   const pageNo = Math.max(0, Number(page ?? '0') || 0)
   const offset = pageNo * PAGE
 
@@ -126,7 +132,7 @@ export default async function LibraryPage({
     // The review queue is a queue: oldest problems first is the wrong way
     // round, and it is read top to bottom rather than looked up. Every other
     // view is looked up, so it goes in the order a shelf goes in.
-    .order(status === 'pending' ? 'created_at' : 'title', { ascending: status !== 'pending' })
+    .order('title')
     // Titles are not unique — 48 of them appear more than once on the teaching
     // shelf alone, "Rope Tech" thirteen times — so ordering by title is not an
     // order at all, and paging through one drops rows and repeats others
@@ -146,9 +152,7 @@ export default async function LibraryPage({
   //
   // Instructors never see one: nothing pending is on a shelf, in a picker or
   // in a course until somebody says so.
-  const showsWaiting = isAdmin && onShelf && status === 'published'
-  if (showsWaiting) query = query.in('status', ['published', 'pending'])
-  else if (status !== 'all') query = query.eq('status', status)
+  query = query.in('status', STATUSES)
   // The five admins see the permits, MOUs and COIs; nobody else does, and an
   // admin previewing the page as an instructor is nobody else — the whole
   // point of that preview is to see what they see. `isAdmin` already folds
@@ -190,9 +194,9 @@ export default async function LibraryPage({
   if (!kind) query = query.neq('kind', 'media')
 
   // Templates take the same search box and discipline tags the documents use.
-  // They have no review status, so the status tabs pass them by — there's
-  // nothing to approve about a kit list you wrote yourself.
-  const [{ data: itemRows }, { data: venueRows }, { data: siteRows }, gearRes, scheduleRes, setupRes, catalogRes, { count: pendingCount }, { data: kitListRows }, placesShelf, mediaShelf, { data: facetRows }, shelfCounts] = await Promise.all([
+  // Nothing to approve about a kit list you wrote yourself, so they have no
+  // filing state at all.
+  const [{ data: itemRows }, { data: venueRows }, { data: siteRows }, gearRes, scheduleRes, setupRes, catalogRes, { data: kitListRows }, placesShelf, mediaShelf, { data: facetRows }, shelfCounts] = await Promise.all([
     showDocs ? query : Promise.resolve({ data: [] }),
     admin.from('venues').select('id, name, region, region_code, client_name, notes, links, contacts, active').order('name'),
     // A per-region template pins its canyons here, so the courses started from
@@ -242,23 +246,6 @@ export default async function LibraryPage({
     showTemplates && shelves.includes('gear')
       ? admin.from('gear_items').select('id, name, brand, info, url, category, parent_id, aliases, disciplines').eq('active', true).order('name')
       : Promise.resolve({ data: [] }),
-    // Counted whatever tab you are on: the queue is no longer the page you
-    // land on, so the only thing keeping an import from rotting there unseen
-    // is the number on the tab.
-    // Scoped to the shelf being stood on, because the tab beside it is: it
-    // read "Pending review 68" on Reference and then showed the thirteen
-    // that are Reference's, which is the same count-says-one-thing,
-    // list-says-another the type facets had.
-    (() => {
-      let q = admin.from('library_items').select('id', { count: 'exact', head: true }).eq('status', 'pending')
-      if (onShelf && !isTemplateShelf(bucket)) {
-        q = q.eq('bucket', bucket).not('kind', 'in', `(${KINDS_OFF_BUCKET_SHELVES.join(',')})`)
-      }
-      return q
-    })(),
-    // What is behind each door, for the cards. Head-only counts, and only on
-    // the landing — a number on a card is the difference between picking a
-    // shelf and guessing at one.
     // Kit lists written as documents, read on the gear shelf beside the
     // structured lists. Everything here predates the structure; a PDF that
     // says what to bring is a gear list that was written down.
@@ -267,7 +254,7 @@ export default async function LibraryPage({
           .from('library_items')
           .select('id, title, description, source_type, url, edit_url, drive_file_id, kind, audience, disciplines, topics, admin_only, venue_id, site_id, expires_at, course_type, status, bucket, region, source_class, source_topic, source_item, library_item_links(id, url, access, audience)')
           .eq('kind', 'kit_list')
-          .eq('status', 'published')
+          .in('status', STATUSES)
           .order('title')
       : Promise.resolve({ data: [] }),
     onPlaces ? loadSitesShelf() : Promise.resolve(null),
@@ -278,7 +265,7 @@ export default async function LibraryPage({
     // columns for one shelf, and only while standing on one.
     onShelf && !isTemplateShelf(bucket) && !onPlaces
       ? admin.from('library_items').select('kind, disciplines').eq('bucket', bucket)
-          .in('status', showsWaiting ? ['published', 'pending'] : [status === 'all' ? 'published' : status])
+          .in('status', STATUSES)
           .not('kind', 'in', `(${KINDS_OFF_BUCKET_SHELVES.join(',')})`)
           .or(isAdmin ? 'admin_only.is.true,admin_only.is.false' : 'admin_only.is.false').limit(2000)
       : Promise.resolve({ data: null }),
@@ -286,12 +273,12 @@ export default async function LibraryPage({
       ? Promise.all([
           ...BUCKET_ORDER.map(async (b) => [b, (await admin
             .from('library_items').select('id', { count: 'exact', head: true })
-            .eq('status', 'published').eq('bucket', b)
+            .in('status', STATUSES).eq('bucket', b)
             .not('kind', 'in', `(${KINDS_OFF_BUCKET_SHELVES.join(',')})`)).count ?? 0] as [LibraryShelf, number]),
           // Both shapes, because both are gear lists to anyone counting.
           Promise.all([
             admin.from('gear_lists').select('id', { count: 'exact', head: true }).eq('is_template', true),
-            admin.from('library_items').select('id', { count: 'exact', head: true }).eq('kind', 'kit_list').eq('status', 'published'),
+            admin.from('library_items').select('id', { count: 'exact', head: true }).eq('kind', 'kit_list').in('status', STATUSES),
           ]).then(([a, b]) => ['gear', (a.count ?? 0) + (b.count ?? 0)] as [LibraryShelf, number]),
           admin.from('course_schedules').select('id', { count: 'exact', head: true }).eq('is_template', true)
             .then((r) => ['schedule', r.count ?? 0] as [LibraryShelf, number]),
@@ -315,7 +302,14 @@ export default async function LibraryPage({
     library_item_links?: LibraryItem['links']
   })[]).map((r) => ({ ...r, links: r.library_item_links ?? [] })) as LibraryItem[]
   const hasMore = fetched.length > PAGE
-  const items = hasMore ? fetched.slice(0, PAGE) : fetched
+  // Waiting first, retired last, alphabetical inside each. A pending row that
+  // sorts to the middle of its type group is a pending row nobody will see,
+  // and the whole reason it is on the shelf is to be seen next to what is
+  // already there.
+  const ORDER: Record<string, number> = { pending: 0, published: 1, archived: 2 }
+  const items = (hasMore ? fetched.slice(0, PAGE) : fetched)
+    .slice()
+    .sort((a, b) => (ORDER[a.status] ?? 1) - (ORDER[b.status] ?? 1))
   const venues = (venueRows ?? []) as Venue[]
   const siteOptions = ((siteRows ?? []) as unknown as {
     id: string; name: string; kind: string | null; beta: string | null; venue_id: string | null; venues: { name: string } | null
@@ -382,7 +376,7 @@ export default async function LibraryPage({
 
   const href = (patch: Record<string, string | undefined>) => {
     const p = new URLSearchParams()
-    const merged = { status, discipline, kind, audience, venue, offering, bucket, q, topic, ...patch }
+    const merged = { discipline, kind, audience, venue, offering, bucket, q, topic, ...patch }
     for (const [k, v] of Object.entries(merged)) if (v) p.set(k, v)
     return `/admin/library?${p.toString()}`
   }
@@ -405,15 +399,6 @@ export default async function LibraryPage({
   const countByShelf = new Map<LibraryShelf, number>(shelfCounts)
   const venueName = new Map(venues.map((v) => [v.id, v.name]))
 
-  // Pending grouped by source class, derived from what we already fetched
-  // rather than a second scan of the table.
-  const pendingByClass = new Map<string, number>()
-  for (const r of items) {
-    if (r.status !== 'pending') continue
-    const k = r.source_class ?? 'Added in portal'
-    pendingByClass.set(k, (pendingByClass.get(k) ?? 0) + 1)
-  }
-
   // Arriving from a course page: which template to open, and on which half —
   // "edit its name" and "show me what's in it" are different errands.
   const openPanel: 'contents' | 'details' = open === 'contents' ? 'contents' : 'details'
@@ -432,26 +417,17 @@ export default async function LibraryPage({
   // no answer at all. An item is listed under the first discipline it carries
   // rather than once per discipline — the filter still matches on any of
   // them, so nothing is unreachable for being grouped under one.
-  // Pending material has no expertise on it yet and often no type, so both
-  // the usual groupings put it in one heap. It does know where it came from:
-  // the Classroom class, and the topic that becomes a section on a course.
-  // "Here is the Rappelling section, and here is who sees it" is the question
-  // worth asking of it.
-  const groupBy: 'kind' | 'discipline' | 'import' =
-    status === 'pending' ? 'import' : onShelf ? 'kind' : 'discipline'
+  // A shelf groups by type; a search across shelves groups by expertise.
+  // There was a third, by the Classroom class a row was imported from, for
+  // the queue that no longer exists — a pending row now sits on its shelf
+  // among the rows it is about to join, which is a better comparison than
+  // the room it was posted in five years ago.
+  const groupBy: 'kind' | 'discipline' = onShelf ? 'kind' : 'discipline'
   const grouped = (() => {
     const by = new Map<string, LibraryItem[]>()
     for (const i of items) {
-      const k =
-        groupBy === 'kind'
-          ? i.kind
-          : groupBy === 'import'
-            ? `${i.source_class ?? 'Added in the portal'} · ${(i.source_topic ?? '').replace(/\(DO NOT POST\)/i, '').trim() || 'Ungrouped'}`
-            : (i.disciplines[0] ?? '_untagged')
+      const k = groupBy === 'kind' ? i.kind : (i.disciplines[0] ?? '_untagged')
       by.set(k, [...(by.get(k) ?? []), i])
-    }
-    if (groupBy === 'import') {
-      return [...by.entries()].sort((a, b) => b[1].length - a[1].length)
     }
     if (groupBy === 'kind') {
       // Every type the shelf holds, not only the ones that landed on this
@@ -475,34 +451,11 @@ export default async function LibraryPage({
   const UNTYPED = 'No type yet'
   const kindLabel = (k: string) => KIND_META[k as keyof typeof KIND_META] || UNTYPED
   const groupLabel = (cat: string) =>
-    groupBy === 'import'
-      ? cat
-      : groupBy === 'kind'
-        ? kindLabel(cat)
+    groupBy === 'kind'
+      ? kindLabel(cat)
       : cat === '_untagged'
         ? 'Not tied to an expertise'
         : CAPABILITY_META[cat as CapabilityCategory].label
-
-  const tab = (key: string, text: string, badge?: number) => (
-    <Link
-      href={href({ status: key })}
-      scroll={false}
-      className={`px-3 py-1.5 rounded text-sm transition-colors inline-flex items-center gap-1.5 ${
-        status === key ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:text-zinc-300'
-      }`}
-    >
-      {text}
-      {/* How many are waiting, not who they are for. It borrowed the
-          instructor pill's classes back when both were amber, and followed
-          that pill to violet when it moved — a count wearing an audience's
-          colour. Amber is right here: it means there is something to do. */}
-      {Boolean(badge) && (
-        <span className="text-[10px] leading-none px-1.5 py-1 rounded bg-amber-950/60 text-amber-400">
-          {badge}
-        </span>
-      )}
-    </Link>
-  )
 
   return (
     <main className="min-h-screen bg-zinc-950 text-white pt-16 md:pt-20">
@@ -547,44 +500,14 @@ export default async function LibraryPage({
               from a venue pack", a question nobody was asking. */}
         </div>
 
-        {/* ── Review queue ─────────────────────────────────────────────── */}
-        {isAdmin && pendingByClass.size > 0 && status === 'pending' && (
-          <section className="mb-6 p-4 bg-zinc-900 border border-zinc-800 rounded-lg">
-            <h2 className="text-sm font-semibold mb-1">What approving does</h2>
-            <ul className="text-xs text-zinc-400 space-y-1 list-disc pl-4">
-              <li>Approved material becomes available to add to courses. It is <em>not</em> published to anyone by
-                approving it — nothing reaches students until you add it to a course.</li>
-              <li>Each group below was a topic in Google Classroom, and becomes a <strong>section</strong> on a course.</li>
-              <li>&ldquo;Who sees this section&rdquo; carries over to the course, where it can still be changed per course.
-                Instructor-only was taken from Classroom: drafts were hidden from students.</li>
-              <li>Skip archives material you don&rsquo;t want — it stays searchable but is never suggested.</li>
-            </ul>
-          </section>
-        )}
-
         {/* ── Filters ──────────────────────────────────────────────────── */}
-        {/* Published / archived / pending are the states of the filing, not
-            of the material. Only the people who can move a row between them
-            are offered them. */}
-        {/* Published, archived and pending are states of a document's filing.
-            A venue has none of them, and neither does a photo album — the
-            places shelf ignores the parameter entirely, so these tabs were
-            four controls that did nothing on the page they were sitting on.
-            The pending queue is still reached from the sorting list and from
-            the landing. */}
-        {isAdmin && !onPlaces && !onMedia && (
-          <div className="flex items-center gap-1 mb-3 flex-wrap">
-            {/* The shelves first, in the order you'd read them; the import queue
-                last, where an exception belongs, carrying its own count. */}
-            {tab('published', 'Published')}
-            {tab('archived', 'Archived')}
-            {tab('all', 'All')}
-            {tab('pending', 'Pending review', pendingCount ?? 0)}
-          </div>
-        )}
-
+        {/* Where the Published / Archived / All / Pending row was. Four tabs
+            asking which filing state you wanted before you could look at a
+            shelf, and the answer was almost always all of them: a shelf is
+            what is on it, what is waiting to go on it and what has been
+            retired from it. Each row says which it is, so the question is
+            answered by looking rather than by choosing. */}
         <form className={`grid grid-cols-2 sm:grid-cols-6 gap-2 mb-6 ${onPlaces ? 'hidden' : ''}`} action="/admin/library">
-          {isAdmin && <input type="hidden" name="status" value={status} />}
           <input
             name="q"
             defaultValue={q ?? ''}

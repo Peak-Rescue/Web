@@ -182,6 +182,16 @@ export default function LibraryRow({ item, venues, sites = [], hideProvenance = 
                 needs sorting
               </StateBadge>
             )}
+            {/* On the shelf and marked, rather than behind a tab. Pending
+                reads as a question — approve it or do not — and archived as
+                a fact about a row that is still here only because something
+                points at it. */}
+            {pending && <StateBadge>pending</StateBadge>}
+            {item.status === 'archived' && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded border border-zinc-700 text-zinc-500">
+                archived
+              </span>
+            )}
             {item.topics.includes('needs-link-check') && (
               <StateBadge tone="broken">link may be dead</StateBadge>
             )}
