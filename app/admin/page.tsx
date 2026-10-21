@@ -444,6 +444,17 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       ),
     },
     {
+      title: 'Clients',
+      desc: 'Who we train, filed so the same team is found again rather than added twice',
+      href: '/admin/clients',
+      section: 'admin',
+      icon: (
+        <svg {...svgProps}>
+          <path d="M3 6h7M3 12h7M3 18h7"/><path d="M14 6h7M17 12h4M17 18h4"/><path d="M14 6v12h3M14 12h3"/>
+        </svg>
+      ),
+    },
+    {
       // Under Your tools rather than Administration: instructors read the
       // library too, and this was two cards sitting in different sections of
       // the same page with the same list of nouns under each.
