@@ -79,7 +79,7 @@ function Row({ r, token }: { r: InvoiceRequest; token: string }) {
       )}
       {r.status === 'paid' && (
         <p className="text-xs text-teal-400 mt-1">
-          Paid{r.amount_received != null ? ` · ${fmtMoney(r.amount_received)}` : ''}
+          Paid{r.payment_id ? ' by card' : ''}{r.amount_received != null ? ` · ${fmtMoney(r.amount_received)}` : ''}
         </p>
       )}
 

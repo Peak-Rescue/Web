@@ -9,6 +9,8 @@ import { quoteNumber, selectionProblem, type QuoteOption } from '@/lib/quotes'
 import { courseShortName } from '@/lib/courses'
 import { sendMail } from '@/lib/mailer'
 import { todayHere } from '@/lib/course-clock'
+import { createPaymentLink, squareConfigured } from '@/lib/square'
+import { cardPaymentBlocker } from '@/lib/payments'
 
 // Public action — authorization is the unguessable token itself.
 // For multi-option quotes, `selected` holds the indexes of the option or
@@ -122,4 +124,72 @@ export async function acceptQuote(
   revalidatePath('/admin/courses')
   revalidatePath('/admin')
   return { ok: true }
+}
+
+// Public action, like accepting: the token is the authorization. Sends the
+// client to Square's own checkout page for the accepted total. Paying always
+// comes after accepting, so the name and title on record are the person who
+// agreed to the price.
+export async function startQuotePayment(
+  token: string
+): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
+  if (!squareConfigured()) return { ok: false, error: 'Card payment is not available right now' }
+  const admin = createAdminClient()
+  const { data: quote } = await admin
+    .from('course_quotes')
+    .select('id, instance_id, status, total, quote_seq')
+    .eq('accept_token', token)
+    .maybeSingle()
+  if (!quote) return { ok: false, error: 'This quote link is no longer valid' }
+
+  const blocker = await cardPaymentBlocker(admin, quote)
+  if (blocker) return { ok: false, error: blocker }
+  const amount = Number(quote.total)
+
+  // Coming back to pay after abandoning checkout reuses the link already made,
+  // as long as it was for the same amount.
+  const { data: open } = await admin
+    .from('payments')
+    .select('id, amount, checkout_url')
+    .eq('quote_id', quote.id)
+    .eq('status', 'open')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (open?.checkout_url && Number(open.amount) === amount) return { ok: true, url: open.checkout_url }
+
+  const { data: inst } = await admin
+    .from('course_instances')
+    .select('ref_number, course_type, custom_title, client_name')
+    .eq('id', quote.instance_id)
+    .single()
+  if (!inst) return { ok: false, error: 'This quote link is no longer valid' }
+
+  const { data: row, error } = await admin
+    .from('payments')
+    .insert({ kind: 'quote', instance_id: quote.instance_id, quote_id: quote.id, amount })
+    .select('id')
+    .single()
+  if (error || !row) return { ok: false, error: 'Something went wrong — please try again' }
+
+  const qNum = quoteNumber(inst.ref_number, quote.quote_seq)
+  const courseName = courseShortName(inst.course_type, inst.custom_title)
+  try {
+    const link = await createPaymentLink({
+      idempotencyKey: row.id,
+      name: `${courseName} · ${qNum}`,
+      amount,
+      redirectUrl: `${process.env.NEXT_PUBLIC_SITE_URL || 'https://peak-rescue.com'}/quote/${token}?paid=1`,
+      note: [qNum, inst.client_name].filter(Boolean).join(' · '),
+    })
+    await admin
+      .from('payments')
+      .update({ square_payment_link_id: link.id, square_order_id: link.orderId, checkout_url: link.url })
+      .eq('id', row.id)
+    return { ok: true, url: link.url }
+  } catch (e) {
+    console.error('Square payment link failed:', e)
+    await admin.from('payments').update({ status: 'cancelled' }).eq('id', row.id)
+    return { ok: false, error: 'Could not open card checkout — please try again, or contact us' }
+  }
 }

@@ -9,6 +9,9 @@ import { services, categoryMeta, type ServiceCategory } from '@/lib/data/service
 import { QUOTE_MISSION, quoteCommitment, QUOTE_CONTACT, quoteNumber, type QuoteOption } from '@/lib/quotes'
 import { fmtMoney } from '@/lib/expenses'
 import AcceptForm from './AcceptForm'
+import PayButton from './PayButton'
+import { squareConfigured } from '@/lib/square'
+import { cardPaymentBlocker, settleOrder } from '@/lib/payments'
 import { todayHere } from '@/lib/course-clock'
 
 // Public, tokenized quote page — the client-facing deliverable. Styled to
@@ -18,10 +21,13 @@ export const metadata = { robots: { index: false, follow: false } }
 
 export default async function QuotePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ token: string }>
+  searchParams: Promise<{ paid?: string }>
 }) {
   const { token } = await params
+  const { paid: backFromCheckout } = await searchParams
   if (!/^[0-9a-f-]{36}$/.test(token)) notFound()
 
   const admin = createAdminClient()
@@ -88,6 +94,34 @@ export default async function QuotePage({
     ? `${fmtLong(inst.starts_at)}${inst.ends_at && inst.ends_at !== inst.starts_at ? ` – ${fmtLong(inst.ends_at)}` : ''}`
     : 'Dates to be confirmed'
 
+  // Back from Square's checkout. The webhook may not have arrived yet, so ask
+  // Square directly rather than tell a client who just paid that they owe.
+  const cardReady = squareConfigured()
+  if (cardReady && backFromCheckout && quote.status === 'accepted') {
+    const { data: open } = await admin
+      .from('payments')
+      .select('square_order_id')
+      .eq('quote_id', quote.id)
+      .eq('status', 'open')
+      .not('square_order_id', 'is', null)
+    for (const p of open ?? []) {
+      try {
+        await settleOrder(admin, p.square_order_id as string)
+      } catch (e) {
+        console.error('Settling on return from checkout failed:', e)
+      }
+    }
+  }
+  const { data: cardPayment } = await admin
+    .from('payments')
+    .select('amount_paid, paid_at, receipt_url')
+    .eq('quote_id', quote.id)
+    .eq('status', 'completed')
+    .order('paid_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  const canPayNow = cardReady && quote.status === 'accepted' && !(await cardPaymentBlocker(admin, quote))
+
   const today = todayHere()
   const expired = quote.status === 'sent' && quote.valid_until && quote.valid_until < today
   const accepted = quote.status === 'accepted'
@@ -147,6 +181,23 @@ export default async function QuotePage({
             ✅ This quote was accepted{quote.accepted_name ? ` by ${quote.accepted_name}` : ''}
             {quote.accepted_at ? ` on ${fmtLong(quote.accepted_at.slice(0, 10))}` : ''}. We&apos;ll be in touch about
             next steps — thank you!
+          </div>
+        )}
+        {cardPayment && (
+          <div className="mt-3 p-4 bg-teal-900/30 border border-teal-800 rounded-lg text-teal-200 text-sm">
+            💳 Paid in full by card{cardPayment.paid_at ? ` on ${fmtLong(cardPayment.paid_at.slice(0, 10))}` : ''}
+            {cardPayment.amount_paid != null ? ` · ${fmtMoney(Number(cardPayment.amount_paid))}` : ''}.{' '}
+            {cardPayment.receipt_url && (
+              <a href={cardPayment.receipt_url} target="_blank" rel="noreferrer" className="underline">
+                View receipt
+              </a>
+            )}
+          </div>
+        )}
+        {!cardPayment && backFromCheckout && accepted && (
+          <div className="mt-3 p-4 bg-zinc-900 border border-zinc-700 rounded-lg text-zinc-300 text-sm">
+            We haven&apos;t received confirmation of a card payment yet. If you completed checkout, it can take a
+            minute. Refresh this page shortly.
           </div>
         )}
         {expired && !accepted && (
@@ -251,7 +302,19 @@ export default async function QuotePage({
               token={token}
               clientName={inst.client_name}
               options={options}
+              canPay={cardReady}
             />
+          </section>
+        )}
+
+        {/* ── Pay by card, once accepted ── */}
+        {canPayNow && (
+          <section className="mt-8 p-8 bg-zinc-900 border border-zinc-800 rounded-xl">
+            <h2 className="text-xl font-bold mb-1">Pay by card</h2>
+            <p className="text-sm text-zinc-400 mb-6">
+              Pay the accepted total of {fmtMoney(Number(quote.total))} now through Square, or wait for our invoice.
+            </p>
+            <PayButton token={token} label={`Pay ${fmtMoney(Number(quote.total))} by card`} />
           </section>
         )}
 

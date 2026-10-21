@@ -33,6 +33,8 @@ export type InvoiceRequest = {
       same claim. */
   invoiced_by_admin: string | null
   paid_by_admin: string | null
+  /** The card payment that raised this request already paid, if one did. */
+  payment_id: string | null
   amount_received: number | null
   biller_note: string | null
   admin_note: string | null

@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { acceptQuote } from './actions'
+import { acceptQuote, startQuotePayment } from './actions'
 import { fmtMoney } from '@/lib/expenses'
 import { optionAvailable, selectionProblem, type QuoteOption } from '@/lib/quotes'
 
@@ -10,8 +10,11 @@ export default function AcceptForm({
   token,
   clientName,
   options,
+  canPay,
 }: {
   token: string
+  /** Square is set up, so the client may pay by card as they accept. */
+  canPay: boolean
   clientName: string | null
   // Multi-option quotes: the client checks the option or options they want;
   // null = classic single-total quote, no picking involved.
@@ -21,7 +24,7 @@ export default function AcceptForm({
   const [title, setTitle] = useState('')
   const [authorized, setAuthorized] = useState(false)
   const [selected, setSelected] = useState<Set<number>>(new Set())
-  const [busy, setBusy] = useState(false)
+  const [busy, setBusy] = useState<null | 'accept' | 'pay'>(null)
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
 
@@ -65,19 +68,30 @@ export default function AcceptForm({
     })
   }
 
-  async function submit() {
+  // Paying is accepting and then checkout: the acceptance stands even if the
+  // client abandons the card page, and the accepted quote offers the button
+  // again when they come back.
+  async function submit(pay: boolean) {
     if (busy || !name.trim() || !authorized || needsPick || problem) return
-    setBusy(true)
+    setBusy(pay ? 'pay' : 'accept')
     setError(null)
     try {
       const result = await acceptQuote(token, { name, title, selected: options ? [...selected] : undefined })
-      if (result.ok) {
-        router.refresh()
-      } else {
+      if (!result.ok) {
         setError(result.error)
+        return
       }
+      if (pay) {
+        const checkout = await startQuotePayment(token)
+        if (checkout.ok) {
+          window.location.href = checkout.url
+          return
+        }
+        setError(`Your quote is accepted, but ${checkout.error.charAt(0).toLowerCase()}${checkout.error.slice(1)}`)
+      }
+      router.refresh()
     } finally {
-      setBusy(false)
+      setBusy(null)
     }
   }
 
@@ -165,17 +179,33 @@ export default function AcceptForm({
       </label>
       {error && <p className="sm:col-span-2 text-sm text-red-400">{error}</p>}
       <div className="sm:col-span-2">
-        <button
-          onClick={submit}
-          disabled={busy || !name.trim() || !authorized || needsPick}
-          className="px-6 py-3 bg-pr-red hover:bg-pr-red-dark text-white rounded font-semibold transition-colors disabled:opacity-40"
-        >
-          {busy
-            ? 'Submitting…'
-            : options
-              ? `Accept ${selected.size > 1 ? `${selected.size} options` : 'selected option'}`
-              : 'Accept this quote'}
-        </button>
+        <div className="flex flex-wrap gap-3">
+          <button
+            onClick={() => submit(false)}
+            disabled={Boolean(busy) || !name.trim() || !authorized || needsPick}
+            className="px-6 py-3 bg-pr-red hover:bg-pr-red-dark text-white rounded font-semibold transition-colors disabled:opacity-40"
+          >
+            {busy === 'accept'
+              ? 'Submitting…'
+              : options
+                ? `Accept ${selected.size > 1 ? `${selected.size} options` : 'selected option'}`
+                : 'Accept this quote'}
+          </button>
+          {canPay && (
+            <button
+              onClick={() => submit(true)}
+              disabled={Boolean(busy) || !name.trim() || !authorized || needsPick}
+              className="px-6 py-3 border border-zinc-600 hover:border-zinc-400 text-white rounded font-semibold transition-colors disabled:opacity-40"
+            >
+              {busy === 'pay' ? 'Opening checkout…' : 'Accept and pay by card'}
+            </button>
+          )}
+        </div>
+        {canPay && (
+          <p className="mt-2 text-xs text-zinc-500">
+            Accept to be invoiced as usual, or pay now by card through Square.
+          </p>
+        )}
         {needsPick && <p className="mt-2 text-xs text-zinc-500">Select at least one option above to accept.</p>}
       </div>
     </div>

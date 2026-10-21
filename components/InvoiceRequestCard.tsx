@@ -122,7 +122,7 @@ export default function InvoiceRequestCard({
             <dt className="text-zinc-600">Paid</dt>
             <dd className="text-zinc-400">
               {fmtMoney(r.amount_received ?? r.amount)} · {shortDate(r.paid_at)}
-              {r.paid_by_admin ? ' · recorded here' : ''}
+              {r.payment_id ? ' · by card' : r.paid_by_admin ? ' · recorded here' : ''}
             </dd>
           </>
         )}
