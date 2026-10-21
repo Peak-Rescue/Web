@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import { KIND_GROUPS, KIND_META, SHELF_ORDER, shelfLabel, type LibraryShelf } from '@/lib/library'
 
 // One control for "which shelf" and "which type", because they were never two
@@ -10,9 +10,11 @@ import { KIND_GROUPS, KIND_META, SHELF_ORDER, shelfLabel, type LibraryShelf } fr
 // that the two had disagreed.
 //
 // Shaped like the tagging dropdown, for the same reason: filing and finding
-// ask the same question. The difference is that here the shelf itself is an
-// answer — "everything on Reference" is a thing you want — which a native
-// optgroup label cannot be, so each group opens with a row that means it.
+// ask the same question. With one difference that changes the shape: here
+// the shelf itself is an answer — "everything on Reference" is a thing you
+// want — and a browser will not let anyone click an optgroup label. So the
+// shelf is a row rather than a heading, in capitals, with its types indented
+// under it.
 //
 // It writes the two parameters the rest of the page already reads rather than
 // inventing a third, so every link built elsewhere keeps working.
@@ -43,19 +45,27 @@ export default function ShelfTypeSelect({
         onChange={(e) => setValue(e.target.value)}
         className={className}
       >
-        <option value="">Everything</option>
+        {/* No optgroups. A browser will not let anyone click an optgroup
+            label, so grouping this list meant a heading and then a row
+            underneath that meant the heading — the same words twice, and the
+            clickable one was the quieter one.
+            So the heading is the row: a shelf in capitals, its types indented
+            under it. One line per shelf, selectable, and it reads as a
+            hierarchy without pretending to be one. */}
+        <option value="">All shelves</option>
         {SHELF_ORDER.map((shelf) => {
           const kinds = kindsOf(shelf).filter((k) => !counts || counts.has(k))
           return (
-            <optgroup key={shelf} label={shelfLabel(shelf).toUpperCase()}>
-              <option value={`b:${shelf}`}>All of {shelfLabel(shelf).toLowerCase()}</option>
+            <Fragment key={shelf}>
+              <option value={`b:${shelf}`}>{shelfLabel(shelf).toUpperCase()}</option>
               {kinds.map((k) => (
                 <option key={k} value={`k:${k}`}>
+                  {'\u00A0\u00A0\u00A0\u00A0'}
                   {KIND_META[k] || 'No type yet'}
                   {counts ? ` (${counts.get(k)})` : ''}
                 </option>
               ))}
-            </optgroup>
+            </Fragment>
           )
         })}
       </select>
