@@ -22,7 +22,7 @@ const inputCls =
 
 // One open form at a time across the whole page, so two half-filled forms
 // never compete. `id: null` is the add form at the top.
-type Open = { id: string; mode: 'edit' | 'move' | 'delete' } | { id: null; mode: 'client' | 'sector' } | null
+type Open = { id: string; mode: 'edit' | 'delete' } | { id: null; mode: 'client' | 'sector' } | null
 
 // Where a drag can end: on a row (file it under that row), in the unfiled
 // tray, or on the strip that makes a group a sector.
@@ -51,8 +51,8 @@ export default function ClientTree({
   // Pointer events, not the browser's drag-and-drop: that one decides for
   // itself whether a gesture counts, and in the gear editor it declined on
   // rows nothing distinguished. A press that travels six pixels is a drag;
-  // what it is over is read from the document at the pointer. Move stays on
-  // every row for when a drag is not the way.
+  // what it is over is read from the document at the pointer. On a touch
+  // screen the handle is what drags, so a row press can still scroll.
   const press = useRef<{ id: string; x: number; y: number; active: boolean } | null>(null)
   const ghost = useRef<HTMLDivElement>(null)
   const [dragId, setDragId] = useState<string | null>(null)
@@ -250,9 +250,6 @@ export default function ClientTree({
             <button type="button" className={btn.quiet} onClick={() => setOpen({ id: n.id, mode: 'edit' })}>
               Edit
             </button>
-            <button type="button" className={btn.quiet} onClick={() => setOpen({ id: n.id, mode: 'move' })}>
-              Move
-            </button>
             {sector && (
               <>
                 <button type="button" className={btn.quiet} disabled={pending} title="Move this sector up" onClick={() => run(() => shiftSector(n.id, -1))}>
@@ -287,23 +284,12 @@ export default function ClientTree({
             onSave={(v) => run(() => updateClient(n.id, v))}
           />
         )}
-        {here === 'move' && (
-          <PlaceForm
-            indent={n.depth * 24 + 28}
-            node={n}
-            rows={rows}
-            pending={pending}
-            onCancel={() => setOpen(null)}
-            onPick={(parentId) => run(() => moveClient(n.id, parentId))}
-          />
-        )}
         {here === 'delete' && (
-          <PlaceForm
+          <RehomeForm
             indent={n.depth * 24 + 28}
             node={n}
             rows={rows}
             pending={pending}
-            deleting
             onCancel={() => setOpen(null)}
             onPick={(parentId) => run(() => deleteClient(n.id, parentId))}
           />
@@ -397,38 +383,42 @@ function ClientForm({
   const [name, setName] = useState(initial?.name ?? '')
   const [aliases, setAliases] = useState(initial?.aliases.join(', ') ?? '')
   const [note, setNote] = useState(initial?.note ?? '')
+  // Labels above the boxes rather than greyed-out text inside them: a hint
+  // that vanishes once the box is filled leaves a row of three unlabelled
+  // values, and which one is the note is exactly what you then can't tell.
+  const label = 'block text-[11px] font-medium text-zinc-500 mb-1'
   return (
     <form
       onSubmit={(e) => {
         e.preventDefault()
         onSave({ name, aliases, note })
       }}
-      className="flex flex-wrap items-center gap-2 py-2"
+      className="flex flex-wrap items-end gap-3 py-2"
       style={{ paddingLeft: `${indent}px` }}
     >
-      <input
-        autoFocus
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        placeholder={group ? 'Sector name' : 'Name'}
-        className={`${inputCls} w-56`}
-      />
+      <label className="w-56">
+        <span className={label}>{group ? 'Sector name' : 'Name'}</span>
+        <input autoFocus value={name} onChange={(e) => setName(e.target.value)} className={`${inputCls} w-full`} />
+      </label>
       {/* Search words belong to clients: nobody books a course "for Industrial". */}
       {!group && (
-        <input
-          value={aliases}
-          onChange={(e) => setAliases(e.target.value)}
-          placeholder="Also called, comma separated"
-          className={`${inputCls} w-72`}
-        />
+        <label className="flex-1 min-w-64">
+          <span className={label}>Also known as (comma separated)</span>
+          <input value={aliases} onChange={(e) => setAliases(e.target.value)} className={`${inputCls} w-full`} />
+        </label>
       )}
-      <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Note" className={`${inputCls} w-56`} />
-      <button type="submit" disabled={pending || !name.trim()} className={btn.secondary}>
-        {submitLabel}
-      </button>
-      <button type="button" onClick={onCancel} className={btn.quiet}>
-        Cancel
-      </button>
+      <label className="w-56">
+        <span className={label}>Note</span>
+        <input value={note} onChange={(e) => setNote(e.target.value)} className={`${inputCls} w-full`} />
+      </label>
+      <span className="flex items-center gap-2 pb-0.5">
+        <button type="submit" disabled={pending || !name.trim()} className={btn.secondary}>
+          {submitLabel}
+        </button>
+        <button type="button" onClick={onCancel} className={btn.quiet}>
+          Cancel
+        </button>
+      </span>
     </form>
   )
 }
@@ -492,14 +482,13 @@ function AddForm({
 
 const CHOOSE = '__choose'
 
-// The no-drag way to file something, and the way Delete says where the
-// contents go. Lists only the places the rules allow.
-function PlaceForm({
+// Where Delete sends what was filed under the thing it removes. Offers only
+// places that can take every one of them.
+function RehomeForm({
   indent,
   node,
   rows,
   pending,
-  deleting = false,
   onPick,
   onCancel,
 }: {
@@ -507,14 +496,11 @@ function PlaceForm({
   node: ClientNode
   rows: ClientRow[]
   pending: boolean
-  deleting?: boolean
   onPick: (parentId: string | null) => void
   onCancel: () => void
 }) {
   const blocked = subtreeIds(rows, node.id)
-  // When deleting, it is the contents that move, so a place is offered if it
-  // can take every one of them.
-  const movers = deleting ? rows.filter((r) => r.parent_id === node.id) : [node]
+  const movers = rows.filter((r) => r.parent_id === node.id)
   const fits = (parentId: string | null) => movers.every((m) => placementProblem(rows, m.id, parentId) === null)
   const places = rows
     .filter((r) => !blocked.has(r.id) && fits(r.id))
@@ -525,22 +511,18 @@ function PlaceForm({
     : movers.every((m) => !m.is_group)
       ? 'Not filed yet'
       : 'Top level / not filed yet'
-  // Deleting starts with nothing chosen: the obvious default for a sector is
-  // "top level", which would unfile every client in it.
-  const [to, setTo] = useState<string>(deleting ? CHOOSE : node.parent_id ?? '')
+  // Starts with nothing chosen: the obvious default for a sector is "top
+  // level", which would unfile every client in it.
+  const [to, setTo] = useState<string>(CHOOSE)
   return (
     <div className="flex flex-wrap items-center gap-2 py-2" style={{ paddingLeft: `${indent}px` }}>
       <span className="text-sm text-zinc-400">
-        {deleting
-          ? `Delete ${node.name} and move its ${movers.length} ${movers.length === 1 ? 'entry' : 'entries'} to`
-          : 'Move under'}
+        Delete {node.name} and move its {movers.length} {movers.length === 1 ? 'entry' : 'entries'} to
       </span>
       <select value={to} onChange={(e) => setTo(e.target.value)} className={`${inputCls} max-w-md`}>
-        {deleting && (
-          <option value={CHOOSE} disabled>
-            Choose where they go
-          </option>
-        )}
+        <option value={CHOOSE} disabled>
+          Choose where they go
+        </option>
         <option value="">{topLabel}</option>
         {places.map((p) => (
           <option key={p.id} value={p.id}>
@@ -548,13 +530,8 @@ function PlaceForm({
           </option>
         ))}
       </select>
-      <button
-        type="button"
-        disabled={pending || to === CHOOSE || (!deleting && to === (node.parent_id ?? ''))}
-        onClick={() => onPick(to || null)}
-        className={deleting ? btn.danger : btn.secondary}
-      >
-        {deleting ? 'Delete' : 'Move'}
+      <button type="button" disabled={pending || to === CHOOSE} onClick={() => onPick(to || null)} className={btn.danger}>
+        Delete
       </button>
       <button type="button" onClick={onCancel} className={btn.quiet}>
         Cancel
