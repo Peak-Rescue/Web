@@ -41,15 +41,10 @@ export default function PickSet({
   items,
   venues,
   sites,
-  pending = false,
 }: {
   items: LibraryItem[]
   venues: Venue[]
   sites: SiteOption[]
-  /** The import queue. The same list and the same bar, plus the two verbs
-      that only mean anything there — nothing pending is on a shelf, in a
-      picker or visible to an instructor until it is approved. */
-  pending?: boolean
 }) {
   const router = useRouter()
   const [picked, setPicked] = useState<Set<string>>(new Set())
@@ -61,6 +56,10 @@ export default function PickSet({
 
   const ids = [...picked]
   const n = ids.length
+  // Read off the selection rather than passed in: pending rows sit among the
+  // published ones on a shelf now, so whether these two verbs apply is a
+  // question about what was ticked, not about which list it was ticked on.
+  const pending = items.some((i) => picked.has(i.id) && i.status === 'pending')
   const all = n > 0 && n === items.length
 
   const toggle = (id: string) =>

@@ -137,7 +137,18 @@ export default async function LibraryPage({
     // costs a full table scan and we only need "is there more".
     .range(offset, offset + PAGE)
 
-  if (status !== 'all') query = query.eq('status', status)
+  // An admin standing on a shelf sees what is waiting for that shelf too.
+  // The review was a separate screen because pending rows were invisible
+  // everywhere else; they do not have to be. A pending row is marked, sits
+  // among the published ones it will join, and is approved from the same bar
+  // — which is also the only way to notice that the shelf already holds two
+  // copies of the thing you are about to approve.
+  //
+  // Instructors never see one: nothing pending is on a shelf, in a picker or
+  // in a course until somebody says so.
+  const showsWaiting = isAdmin && onShelf && status === 'published'
+  if (showsWaiting) query = query.in('status', ['published', 'pending'])
+  else if (status !== 'all') query = query.eq('status', status)
   // The five admins see the permits, MOUs and COIs; nobody else does, and an
   // admin previewing the page as an instructor is nobody else — the whole
   // point of that preview is to see what they see. `isAdmin` already folds
@@ -266,7 +277,8 @@ export default async function LibraryPage({
     // you pick it, get nothing, and learn nothing about why. Cheap: two
     // columns for one shelf, and only while standing on one.
     onShelf && !isTemplateShelf(bucket) && !onPlaces
-      ? admin.from('library_items').select('kind, disciplines').eq('bucket', bucket).eq('status', status === 'all' ? 'published' : status)
+      ? admin.from('library_items').select('kind, disciplines').eq('bucket', bucket)
+          .in('status', showsWaiting ? ['published', 'pending'] : [status === 'all' ? 'published' : status])
           .not('kind', 'in', `(${KINDS_OFF_BUCKET_SHELVES.join(',')})`)
           .or(isAdmin ? 'admin_only.is.true,admin_only.is.false' : 'admin_only.is.false').limit(2000)
       : Promise.resolve({ data: null }),
@@ -752,7 +764,7 @@ export default async function LibraryPage({
                       // Ticked rows, not the group: the heading is a type, and
                       // a type is not a destination. What a hand-picked set
                       // can be told is on the bar.
-                      <PickSet items={rows} venues={venues} sites={siteOptions} pending={status === 'pending'} />
+                      <PickSet items={rows} venues={venues} sites={siteOptions} />
                     ) : (
                       <div className="border border-zinc-800 rounded-lg divide-y divide-zinc-800/70">
                         {rows.map((it) => (
