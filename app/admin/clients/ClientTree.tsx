@@ -11,7 +11,7 @@ import {
   type ClientNode,
   type ClientRow,
 } from '@/lib/clients'
-import { addClient, deleteClient, moveClient, setSignoff, updateClient } from './actions'
+import { addClient, deleteClient, moveClient, setSignoff, shiftBin, updateClient } from './actions'
 
 type Signoff = { profileId: string; initials: string; name: string }
 type Result = Awaited<ReturnType<typeof addClient>>
@@ -21,7 +21,7 @@ const inputCls =
 
 // One row's open form: editing it, adding under it, or moving it. Only one at
 // a time across the whole tree, so two half-filled forms never compete.
-type Open = { id: string | null; mode: 'edit' | 'add' | 'move' } | null
+type Open = { id: string | null; mode: 'edit' | 'add' | 'move' | 'delete' } | null
 
 export default function ClientTree({
   rows,
@@ -142,18 +142,27 @@ export default function ClientTree({
             <button type="button" className={btn.quiet} onClick={() => setOpen({ id: n.id, mode: 'move' })}>
               Move
             </button>
-            {n.children.length === 0 && (
-              <button
-                type="button"
-                className={btn.danger}
-                disabled={pending}
-                onClick={() => {
-                  if (confirm(`Delete ${n.name}?`)) run(() => deleteClient(n.id))
-                }}
-              >
-                Delete
-              </button>
+            {isBin && (
+              <>
+                <button type="button" className={btn.quiet} disabled={pending} title="Move this bin up" onClick={() => run(() => shiftBin(n.id, -1))}>
+                  ↑
+                </button>
+                <button type="button" className={btn.quiet} disabled={pending} title="Move this bin down" onClick={() => run(() => shiftBin(n.id, 1))}>
+                  ↓
+                </button>
+              </>
             )}
+            <button
+              type="button"
+              className={btn.danger}
+              disabled={pending}
+              onClick={() => {
+                if (n.children.length > 0) setOpen({ id: n.id, mode: 'delete' })
+                else if (confirm(`Delete ${n.name}?`)) run(() => deleteClient(n.id))
+              }}
+            >
+              Delete
+            </button>
           </span>
         </div>
 
@@ -174,6 +183,18 @@ export default function ClientTree({
             pending={pending}
             onCancel={() => setOpen(null)}
             onMove={(parentId) => run(() => moveClient(n.id, parentId))}
+          />
+        )}
+        {here === 'delete' && (
+          <MoveForm
+            indent={n.depth * 24 + 28}
+            node={n}
+            rows={rows}
+            pending={pending}
+            label={`Delete ${n.name} and move its ${n.children.length} ${n.children.length === 1 ? 'client' : 'clients'} to`}
+            action="Delete"
+            onCancel={() => setOpen(null)}
+            onMove={(parentId) => run(() => deleteClient(n.id, parentId))}
           />
         )}
         {!shut && (n.children.length > 0 || here === 'add') && (
@@ -316,6 +337,8 @@ function AddForm({
   )
 }
 
+const CHOOSE = '__choose'
+
 // A plain list of places rather than dragging: a drop the browser decides to
 // decline is a move that silently did not happen.
 function MoveForm({
@@ -325,6 +348,8 @@ function MoveForm({
   pending,
   onMove,
   onCancel,
+  label = 'Move under',
+  action = 'Move',
 }: {
   indent: number
   node: ClientNode
@@ -332,17 +357,28 @@ function MoveForm({
   pending: boolean
   onMove: (parentId: string | null) => void
   onCancel: () => void
+  /** The same picker, reused by Delete to say where the contents go. */
+  label?: string
+  action?: string
 }) {
+  const deleting = action !== 'Move'
   const blocked = subtreeIds(rows, node.id)
   const places = rows
     .filter((r) => !blocked.has(r.id))
     .map((r) => ({ id: r.id, path: clientPath(rows, r.id) }))
     .sort((a, b) => a.path.localeCompare(b.path))
-  const [to, setTo] = useState<string>(node.parent_id ?? '')
+  // Deleting starts with nothing chosen: the obvious default for a bin is
+  // "top level", which would turn every client in it into a bin of its own.
+  const [to, setTo] = useState<string>(deleting ? CHOOSE : node.parent_id ?? '')
   return (
     <div className="flex flex-wrap items-center gap-2 py-2" style={{ paddingLeft: `${indent}px` }}>
-      <span className="text-sm text-zinc-400">Move under</span>
+      <span className="text-sm text-zinc-400">{label}</span>
       <select value={to} onChange={(e) => setTo(e.target.value)} className={`${inputCls} max-w-md`}>
+        {deleting && (
+          <option value={CHOOSE} disabled>
+            Choose where they go
+          </option>
+        )}
         <option value="">Top level (a bin)</option>
         {places.map((p) => (
           <option key={p.id} value={p.id}>
@@ -352,11 +388,11 @@ function MoveForm({
       </select>
       <button
         type="button"
-        disabled={pending || to === (node.parent_id ?? '')}
+        disabled={pending || to === CHOOSE || (!deleting && to === (node.parent_id ?? ''))}
         onClick={() => onMove(to || null)}
-        className={btn.secondary}
+        className={deleting ? btn.danger : btn.secondary}
       >
-        Move
+        {action}
       </button>
       <button type="button" onClick={onCancel} className={btn.quiet}>
         Cancel

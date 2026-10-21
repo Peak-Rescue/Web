@@ -85,14 +85,43 @@ export async function moveClient(id: string, parentId: string | null): Promise<R
   return done()
 }
 
-/** Only an empty client can go. Something filed under it has to be moved or
-    deleted first, deliberately, rather than vanish with it. */
-export async function deleteClient(id: string): Promise<Result> {
+/** Remove a client, bin or unit. Whatever is filed under it is never deleted
+    with it: it moves, all at once, to `rehomeTo` — so taking away a bin is
+    one step rather than re-filing each client by hand. `undefined` means the
+    caller expects it to be empty. */
+export async function deleteClient(id: string, rehomeTo?: string | null): Promise<Result> {
   const { admin } = await requireAdminUser()
   const { count } = await admin.from('clients').select('id', { count: 'exact', head: true }).eq('parent_id', id)
-  if (count) return { ok: false, error: 'Move or delete what is under it first' }
+  if (count) {
+    if (rehomeTo === undefined) return { ok: false, error: 'Say where what is under it should go' }
+    if (rehomeTo) {
+      const rows = await allClients(admin)
+      if (subtreeIds(rows, id).has(rehomeTo)) return { ok: false, error: 'Its clients cannot move inside it' }
+    }
+    const { error: moveError } = await admin.from('clients').update({ parent_id: rehomeTo }).eq('parent_id', id)
+    if (moveError) return { ok: false, error: nameTaken(moveError.code) }
+  }
   const { error } = await admin.from('clients').delete().eq('id', id)
   if (error) return { ok: false, error: 'Could not delete it — please try again' }
+  return done()
+}
+
+/** Swap a bin with its neighbour above or below. */
+export async function shiftBin(id: string, direction: -1 | 1): Promise<Result> {
+  const { admin } = await requireAdminUser()
+  const bins = (await allClients(admin))
+    .filter((r) => !r.parent_id)
+    .sort((a, b) => a.position - b.position || a.name.localeCompare(b.name))
+  const i = bins.findIndex((b) => b.id === id)
+  const j = i + direction
+  if (i < 0 || j < 0 || j >= bins.length) return done()
+  // Renumbered in full rather than swapping two values, so bins that once
+  // shared a position settle into a clean order the first time anyone moves one.
+  const order = [...bins]
+  ;[order[i], order[j]] = [order[j], order[i]]
+  for (const [k, b] of order.entries()) {
+    if (b.position !== k + 1) await admin.from('clients').update({ position: k + 1 }).eq('id', b.id)
+  }
   return done()
 }
 
