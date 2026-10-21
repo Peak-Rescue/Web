@@ -153,45 +153,52 @@ export default async function LibraryPage({
   //
   // Instructors never see one: nothing pending is on a shelf, in a picker or
   // in a course until somebody says so.
-  query = query.in('status', STATUSES)
-  // The five admins see the permits, MOUs and COIs; nobody else does, and an
-  // admin previewing the page as an instructor is nobody else — the whole
-  // point of that preview is to see what they see. `isAdmin` already folds
-  // view-as in, which is why the gate reads it rather than the real role.
-  if (!isAdmin) query = query.eq('admin_only', false)
-  if (discipline) query = query.contains('disciplines', [discipline])
-  if (kind) query = query.eq('kind', kind)
-  if (audience) query = query.eq('audience', audience)
-  if (venue) query = query.eq('venue_id', venue)
-  // "What would a Canyon Mobility course reach for": the rows tied to that
-  // offering, plus the untied ones whose discipline it involves. Tying every
-  // row to an offering would be a tag that says "most of them", so untied is
-  // the usual answer and this is what makes it still findable.
-  if (offering) {
-    const implied = courseCapabilityCategories(offering, null) as string[]
-    query = query.or(
-      implied.length > 0
-        ? `course_type.eq.${offering},and(course_type.is.null,disciplines.ov.{${implied.join(',')}})`
-        : `course_type.eq.${offering}`
-    )
+  // Everything that narrows the list, in one function, because the facets
+  // have to be narrowed by exactly the same things. They were not: the facet
+  // query filtered by shelf and status alone, so with a search or a
+  // discipline on, the headings counted the whole shelf while the rows under
+  // them were the filtered few — "No type yet · 0 of 252" over an empty
+  // group that nothing could open.
+  //
+  // `kind` is the exception, and is why this takes an argument: a type facet
+  // narrowed by the type you picked would only ever count that one.
+  const narrow = <T extends typeof query>(b: T, withKind: boolean): T => {
+    let out = b.in('status', STATUSES) as T
+    // The five admins see the permits, MOUs and COIs; nobody else does, and
+    // an admin previewing the page as an instructor is nobody else — the
+    // whole point of that preview is to see what they see. `isAdmin` already
+    // folds view-as in, which is why the gate reads it rather than the role.
+    if (!isAdmin) out = out.eq('admin_only', false) as T
+    if (discipline) out = out.contains('disciplines', [discipline]) as T
+    if (withKind && kind) out = out.eq('kind', kind) as T
+    if (audience) out = out.eq('audience', audience) as T
+    if (venue) out = out.eq('venue_id', venue) as T
+    // "What would a Canyon Mobility course reach for": the rows tied to that
+    // offering, plus the untied ones whose discipline it involves. Tying
+    // every row to an offering would be a tag that says "most of them", so
+    // untied is the usual answer and this is what keeps it findable.
+    if (offering) {
+      const implied = courseCapabilityCategories(offering, null) as string[]
+      out = out.or(
+        implied.length > 0
+          ? `course_type.eq.${offering},and(course_type.is.null,disciplines.ov.{${implied.join(',')}})`
+          : `course_type.eq.${offering}`
+      ) as T
+    }
+    if (bucket && !isTemplateShelf(bucket)) {
+      out = out.eq('bucket', bucket) as T
+      // A kit list keeps the shelf it was filed to before anyone could say
+      // it was a kit list; it is read from the Gear lists card, not here.
+      out = out.not('kind', 'in', `(${KINDS_OFF_BUCKET_SHELVES.join(',')})`) as T
+    }
+    if (q) out = out.ilike('title', `%${q}%`) as T
+    // Topic tags were already how `needs-link-check` marks a row; the sorting
+    // pass marks what it would not guess the same way, so the pile it leaves
+    // is browsed with the ordinary shelf rather than needing a screen.
+    if (topic) out = out.contains('topics', [topic]) as T
+    return out
   }
-  if (bucket && !isTemplateShelf(bucket)) {
-    query = query.eq('bucket', bucket)
-    // A kit list keeps the shelf it was filed to before anyone could say it
-    // was a kit list; it is read from the Gear lists card, not from here.
-    query = query.not('kind', 'in', `(${KINDS_OFF_BUCKET_SHELVES.join(',')})`)
-  }
-  if (q) query = query.ilike('title', `%${q}%`)
-  // Topic tags were already how `needs-link-check` marks a row; the sorting
-  // pass marks what it would not guess at the same way, so the pile it leaves
-  // behind is browsed with the ordinary shelf — group moves, per-item edit and
-  // all — rather than needing a screen of its own.
-  if (topic) query = query.contains('topics', [topic])
-  // A photo album has a card of its own now, so it stops appearing on the
-  // document shelves — nobody opening Reference is looking for the Coco Cay
-  // pictures, and seeing them there with no way to move them was the whole
-  // confusion. Videos are deliberately not excluded: a clip chosen for the
-  // curriculum is curriculum, and it belongs with the teaching material.
+  query = narrow(query, true)
   if (!kind) query = query.neq('kind', 'media')
 
   // Templates take the same search box and discipline tags the documents use.
@@ -265,10 +272,7 @@ export default async function LibraryPage({
     // you pick it, get nothing, and learn nothing about why. Cheap: two
     // columns for one shelf, and only while standing on one.
     onShelf && !isTemplateShelf(bucket) && !onPlaces
-      ? admin.from('library_items').select('kind, disciplines').eq('bucket', bucket)
-          .in('status', STATUSES)
-          .not('kind', 'in', `(${KINDS_OFF_BUCKET_SHELVES.join(',')})`)
-          .or(isAdmin ? 'admin_only.is.true,admin_only.is.false' : 'admin_only.is.false').limit(2000)
+      ? narrow(admin.from('library_items').select('kind, disciplines') as unknown as typeof query, false).limit(2000)
       : Promise.resolve({ data: null }),
     landing
       ? Promise.all([

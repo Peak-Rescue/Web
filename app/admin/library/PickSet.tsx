@@ -93,6 +93,7 @@ export default function PickSet({
 
   return (
     <div className="space-y-2">
+      {items.length > 0 && (
       <div className="flex items-center gap-3 flex-wrap text-[11px] text-zinc-500 px-1">
         <label className="inline-flex items-center gap-1.5 cursor-pointer hover:text-zinc-300 transition-colors">
           <input
@@ -105,6 +106,7 @@ export default function PickSet({
         </label>
         {n > 0 && <span className="text-zinc-300">{n} selected</span>}
       </div>
+      )}
 
       {n > 0 && (
         // Sticky: the set is picked by scrolling, and a bar at the top of a
