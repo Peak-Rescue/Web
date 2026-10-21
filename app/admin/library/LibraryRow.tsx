@@ -146,6 +146,21 @@ export default function LibraryRow({ item, venues, sites = [], hideProvenance = 
             {site
               ? <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-900/40 text-blue-300">{site.name}</span>
               : venue && <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-900/40 text-blue-300">{venue.name}</span>}
+            {/* The expertise, up here with the rest of the tagging rather
+                than in the grey line under it. Whether a row is properly
+                tagged is the question this list is read with, and the answer
+                was the one part of it written in the colour of a footnote.
+                Outlined, because it is a property of the material and not a
+                place, an offering or an audience — the three solid chips it
+                sits beside. */}
+            {item.disciplines.map((d) => (
+              <span
+                key={d}
+                className="text-[10px] px-1.5 py-0.5 rounded border border-zinc-700 text-zinc-400"
+              >
+                {CAPABILITY_META[d as keyof typeof CAPABILITY_META]?.label ?? d}
+              </span>
+            ))}
             {unplaced && (
               <StateBadge title="Nothing will offer this map to a course until it says where it is">
                 needs a place
@@ -169,8 +184,7 @@ export default function LibraryRow({ item, venues, sites = [], hideProvenance = 
               : item.url
                 ? new URL(item.url, 'https://x').hostname.replace('www.', '') || 'link'
                 : 'no link'}
-            {' · '}
-            {item.disciplines.map((d) => CAPABILITY_META[d as keyof typeof CAPABILITY_META]?.label ?? d).join(', ') || 'no expertise tag'}
+            {item.disciplines.length === 0 && ' · no expertise tag'}
             {!hideProvenance && item.source_class && (
               <span className="text-zinc-700"> · from {item.source_class}</span>
             )}

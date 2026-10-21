@@ -1,5 +1,6 @@
 import { KIND_META, materialKind, type LibraryItem } from '@/lib/library'
 import { AudiencePills } from '@/components/AudiencePills'
+import { CAPABILITY_META } from '@/lib/capabilities'
 
 // One library item, read-only.
 //
@@ -50,6 +51,14 @@ export default function ItemRow({
               {venueName}
             </span>
           )}
+          {item.disciplines.map((d) => (
+            <span
+              key={d}
+              className="text-[10px] px-1.5 py-0.5 rounded border border-zinc-700 text-zinc-400 shrink-0"
+            >
+              {CAPABILITY_META[d as keyof typeof CAPABILITY_META]?.label ?? d}
+            </span>
+          ))}
           {item.audience === 'internal' && <AudiencePills audience="internal" className="shrink-0" />}
         </div>
         {(item.description || item.topics.length > 0) && (
