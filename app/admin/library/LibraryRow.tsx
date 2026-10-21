@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { updateLibraryItem, deleteLibraryItem, libraryItemUses, type LibraryItemUses } from './actions'
 import { errorFrom, type ActionResult } from '@/lib/action-result'
-import { KIND_META, KIND_OPTIONS, AUDIENCE_META, bucketForKind, shelfOfRow, shelfLabel, type LibraryBucket, type LibraryItem, type Venue } from '@/lib/library'
+import { KIND_META, AUDIENCE_META, bucketForKind, shelfOfRow, shelfLabel, type LibraryBucket, type LibraryItem, type Venue } from '@/lib/library'
 import { AudiencePills } from '@/components/AudiencePills'
 import { CAPABILITY_META, CAPABILITY_ORDER } from '@/lib/capabilities'
 import MapLinks from './MapLinks'
@@ -15,6 +15,7 @@ import { COURSE_TYPE_OPTIONS, courseShortName } from '@/lib/courses'
 import CloseButton from '@/components/CloseButton'
 import TrashIcon from '@/components/TrashIcon'
 import StateBadge from '@/components/StateBadge'
+import KindOptions from '@/components/KindOptions'
 
 const input =
   'w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-zinc-500'
@@ -273,13 +274,7 @@ export default function LibraryRow({ item, venues, sites = [], hideProvenance = 
                   has. A type list that offers "not said yet" as a row reads
                   as a category, and people filed things under it. */}
               {form.kind === 'reference' && <option value="reference" />}
-              {/* Card and type on one line, because sorting asks both at once
-                  and an optgroup heading is drawn small and grey by the
-                  browser — so the shelf, which is half the decision, was the
-                  quiet half, and invisible once the list was closed. */}
-              {KIND_OPTIONS.map((o) => (
-                <option key={o.kind} value={o.kind}>{o.label}</option>
-              ))}
+<KindOptions />
             </select>
           </div>
           {/* For one kind of course and no other: the ACA swiftwater

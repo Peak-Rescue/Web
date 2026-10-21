@@ -3,12 +3,13 @@
 import { useState } from 'react'
 import { CAPABILITY_META, CAPABILITY_ORDER } from '@/lib/capabilities'
 import {
-  ACCESS_META, LINK_AUDIENCE_META, KIND_META, KIND_OPTIONS,
+  ACCESS_META, LINK_AUDIENCE_META, KIND_META,
   bucketForKind, type Venue,
 } from '@/lib/library'
 import { createLibraryItem } from './actions'
 import PlaceSelect from '@/components/PlaceSelect'
 import { type SiteOption } from '@/app/admin/schedules/types'
+import KindOptions from '@/components/KindOptions'
 
 // Adding something to the library, asking what that thing needs and nothing
 // else.
@@ -59,9 +60,7 @@ export default function AddLibraryItem({
         >
           {/* Nothing added by hand needs to arrive unsaid: the person adding
               it is looking at it. */}
-          {KIND_OPTIONS.map((o) => (
-            <option key={o.kind} value={o.kind}>{o.label}</option>
-          ))}
+<KindOptions />
         </select>
       </div>
       <div>

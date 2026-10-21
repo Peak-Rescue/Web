@@ -368,18 +368,6 @@ export const KIND_META: Record<LibraryKind, string> = {
   reference: '',
 }
 
-/** The type list as a dropdown should read it: the card first, then the
-    type, on one line each — "Teaching material · Presentation".
- *
- * It was an optgroup per card, and an optgroup label is drawn small and grey
- * by the browser with no way to say otherwise. Sorting asks both questions at
- * once — which shelf, and what is it — so the answer the dropdown shows when
- * it is closed has to carry both, and the one the list shows has to carry
- * them with equal weight. Order still groups them; the heading just is not
- * load-bearing any more. */
-export const KIND_OPTIONS: { kind: LibraryKind; label: string }[] = KIND_GROUPS.flatMap((g) =>
-  g.kinds.map((k) => ({ kind: k, label: `${g.label} · ${KIND_META[k]}` }))
-)
 
 /**
  * What a piece of material *is*, for the icon in front of it: something you
