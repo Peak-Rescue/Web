@@ -32,6 +32,7 @@ import { COURSE_TYPE_OPTIONS } from '@/lib/courses'
 import { readViewAs, viewAsSelf } from '@/lib/view-as'
 import ViewAsMenu from '@/components/ViewAsMenu'
 import ShelfTypeSelect from '@/components/ShelfTypeSelect'
+import FoldedGroup from '@/components/FoldedGroup'
 
 const input = 'w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500'
 
@@ -330,11 +331,10 @@ export default async function LibraryPage({
   // titles of the whole shelf — "Video · 1 of 44", one row, and the other
   // forty-three on pages nobody would guess at.
   //
-  // So on a shelf the page is per group: each type brings its own rows, and
-  // the heading's "of 44" is the facet count it was always being compared
-  // with. A second round trip and one small query per type on the shelf,
-  // which is the price of a heading that means what it says.
-  const PER_GROUP = 25
+  // So on a shelf the page is per group: each type brings all of its own
+  // rows. Opening Video shows the forty-four videos, which is what opening
+  // Video should do. One query per type on the shelf and a second round trip,
+  // and the rows are built only when a group is opened — see FoldedGroup.
   const perGroup = onShelf && !kind && hasFacets
   const groupRows = perGroup
     ? Object.fromEntries(
@@ -349,7 +349,7 @@ export default async function LibraryPage({
                   .eq('kind', k)
                   .order('title')
                   .order('id')
-                  .limit(PER_GROUP) as unknown as typeof query,
+                  .limit(2000) as unknown as typeof query,
                 false
               )).data ?? []) as unknown as (LibraryItem & { library_item_links?: LibraryItem['links'] })[])
                 .map((r) => ({ ...r, links: r.library_item_links ?? [] }) as LibraryItem)
@@ -673,7 +673,7 @@ export default async function LibraryPage({
               {items.length === 0
                 ? 'No items'
                 : perGroup
-                  ? `${items.length} shown, ${[...facetKinds.values()].reduce((a, b) => a + b, 0)} on this shelf`
+                  ? `${items.length} on this shelf`
                   : `Showing ${offset + 1}–${offset + items.length}`}
             </p>
             {(
@@ -681,48 +681,27 @@ export default async function LibraryPage({
                 {grouped.map(([cat, rows]) => (
                   // Folded, because the headings are the point: what a shelf
                   // holds is the list of kinds on it, and reading that list
-                  // should not mean scrolling past sixty rows to reach the
-                  // second one. One group means nothing to choose between,
-                  // so it opens.
-                  <details key={cat} open={grouped.length === 1} className="group/kind">
-                    <summary className="cursor-pointer list-none flex items-center gap-2 text-sm font-semibold text-zinc-400 hover:text-zinc-200 transition-colors py-1.5">
-                      <span aria-hidden className="text-zinc-600 text-xs transition-transform group-open/kind:rotate-90">▶</span>
-                      {groupLabel(cat)}
-                      {/* The page holds sixty; the shelf holds what it holds.
-                          A bare count beside a folded group reads as the whole
-                          group, so when they differ both are said. */}
-                      <span className="text-zinc-600 font-normal">
-                        {groupBy === 'kind' && hasFacets && (facetKinds.get(cat) ?? 0) > rows.length
-                          ? `${rows.length} of ${facetKinds.get(cat)}`
-                          : rows.length}
-                      </span>
-                      {/* No group action here. A kind-group is seven things
-                          that share a type, not seven things going to the
-                          same place — "Form 7" is a waiver, a kit list and an
-                          equipment log, and a control that moves all seven is
-                          a control that files five of them wrongly in one
-                          click. They are typed one at a time on the row. */}
-                    </summary>
-                    <div className="pt-1 pb-3">
-                    {/* None of this type on this page — the shelf holds them
-                        further down the alphabet. The heading is still here,
-                        because the shelf still holds them, and this is the
-                        way to the rest. */}
-                    {rows.length === 0 && (
-                      <Link
-                        href={href({ kind: cat, page: undefined })}
-                        className="text-xs text-zinc-500 hover:text-white transition-colors"
-                      >
-                        Show all {facetKinds.get(cat)} →
-                      </Link>
-                    )}
+                  // should not mean scrolling past three hundred rows to
+                  // reach the second heading. One group means nothing to
+                  // choose between, so it opens.
+                  //
+                  // Open, it holds the whole type — not a page of it. That is
+                  // what a group is, and the rows are built only once it is
+                  // opened, which is what makes holding the whole type free
+                  // until somebody wants it.
+                  <FoldedGroup
+                    key={cat}
+                    heading={groupLabel(cat)}
+                    count={rows.length}
+                    defaultOpen={grouped.length === 1}
+                  >
                     {/* The same rows either way. An admin gets the editor,
-                        which is a row that can be opened and changed; everyone
-                        else gets the row. */}
+                        which is a row that can be opened and changed;
+                        everyone else gets the row. */}
                     {isAdmin ? (
-                      // Ticked rows, not the group: the heading is a type, and
-                      // a type is not a destination. What a hand-picked set
-                      // can be told is on the bar.
+                      // Ticked rows, not the group: the heading is a type,
+                      // and a type is not a destination. What a hand-picked
+                      // set can be told is on the bar.
                       <PickSet items={rows} venues={venues} sites={siteOptions} />
                     ) : (
                       <div className="border border-zinc-800 rounded-lg divide-y divide-zinc-800/70">
@@ -731,17 +710,7 @@ export default async function LibraryPage({
                         ))}
                       </div>
                     )}
-                    {/* The rest of them, where the page cut the group off. */}
-                    {rows.length > 0 && groupBy === 'kind' && hasFacets && (facetKinds.get(cat) ?? 0) > rows.length && (
-                      <Link
-                        href={href({ kind: cat, page: undefined })}
-                        className="inline-block mt-2 text-xs text-zinc-500 hover:text-white transition-colors"
-                      >
-                        Show all {facetKinds.get(cat)} →
-                      </Link>
-                    )}
-                    </div>
-                  </details>
+                  </FoldedGroup>
                 ))}
                 {items.length === 0 && (
                   <p className="text-sm text-zinc-500">
