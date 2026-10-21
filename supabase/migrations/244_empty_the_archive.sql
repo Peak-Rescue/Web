@@ -1,0 +1,11 @@
+-- The eight rows in the archive, deleted on Nadav's say-so (Oct 21 2026).
+--
+-- Checked first: no course setup, no course resource and no course map
+-- points at any of them, which is the one thing archiving protects against.
+-- What they are: Leavenworth Airbnb and restaurant links, instructor
+-- lodging, and two class rosters — the noise the import brought with it.
+--
+-- Archiving stays as a mechanism. It is how a row retires without emptying
+-- a template section that references it; it was never a copy of the file,
+-- which is on Drive either way.
+delete from public.library_items where status = 'archived';
