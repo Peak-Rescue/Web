@@ -10,14 +10,15 @@ import {
   addCourseDocLink,
   renameCourseDoc,
   deleteCourseDoc,
-  addCourseDocToLibrary,
+  courseDocFilingDraft,
+  fileCourseDocToLibrary,
 } from './document-actions'
 import { LinkIcon, PencilIcon } from '@/components/TaskIcons'
 import UploadNameDialog from '@/components/UploadNameDialog'
 import AddLinkDialog from '@/components/AddLinkDialog'
 import InfoHint from '@/components/InfoHint'
 import TrashIcon from '@/components/TrashIcon'
-import ToLibraryButton from '@/components/ToLibraryButton'
+import SaveItemToLibrary from './SaveItemToLibrary'
 
 export type CourseFile = {
   id: string
@@ -248,9 +249,14 @@ export default function CourseFilesSection({
               </span>
               {/* A file added here used to live and die with the course: the
                   only way to use it again was to remember which course it was
-                  on. Asked here, where the person knows what it is. */}
+                  on. The form asks what it is, where it is about and who it
+                  is for — prefilled from the course, because that is usually
+                  right and never always. */}
               {f.source === 'course' && (
-                <ToLibraryButton onAdd={(kind) => addCourseDocToLibrary(instanceId, f.id, kind)} />
+                <SaveItemToLibrary
+                  onOpen={() => courseDocFilingDraft(instanceId, f.id)}
+                  onFile={(choices) => fileCourseDocToLibrary(instanceId, f.id, choices)}
+                />
               )}
               {f.source === 'course' && (
                 <>

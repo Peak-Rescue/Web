@@ -199,3 +199,78 @@ export async function addLinkToLibrary(
   if (error) throw new Error(error.message)
   return { id: created.id }
 }
+
+/** A PlaceSelect value — `region:`, `venue:` or `site:` — as the three
+    columns a row stores. A site answers for its venue and the venue for its
+    state, so the levels can never contradict each other. */
+export async function resolvePlaceValue(
+  admin: ReturnType<typeof createAdminClient>,
+  raw: string
+): Promise<{ venue_id: string | null; site_id: string | null; region: string | null }> {
+  const none = { venue_id: null, site_id: null, region: null }
+  const i = raw.indexOf(':')
+  const level = i === -1 ? '' : raw.slice(0, i)
+  const id = i === -1 ? '' : raw.slice(i + 1)
+  if (!id) return none
+
+  if (level === 'region') return { ...none, region: id }
+  if (level === 'venue') {
+    const { data: v } = await admin.from('venues').select('region_code, region').eq('id', id).maybeSingle()
+    return { venue_id: id, site_id: null, region: v?.region_code ?? v?.region ?? null }
+  }
+  if (level === 'site') {
+    const { data: s } = await admin
+      .from('sites')
+      .select('venue_id, region_code, venues(region_code, region)')
+      .eq('id', id)
+      .maybeSingle()
+    const v = s?.venues as unknown as { region_code: string | null; region: string | null } | null
+    return {
+      venue_id: s?.venue_id ?? null,
+      site_id: id,
+      region: v?.region_code ?? v?.region ?? s?.region_code ?? null,
+    }
+  }
+  return none
+}
+
+/** What the filing form fills in, for the two paths that take one. Everything
+    is optional: with nothing said it files the way it always did, from the
+    course and the classifier. */
+export type FilingChoices = {
+  title?: string
+  kind?: string
+  audience?: 'internal' | 'shared' | 'admin'
+  place?: string
+  disciplines?: string[]
+  topics?: string
+}
+
+/** The said-out-loud version of what fileToLibrary and addLinkToLibrary work
+    out for themselves. Applied after the row exists so there is one place
+    that knows how a library row is shaped. */
+export async function applyChoices(
+  admin: ReturnType<typeof createAdminClient>,
+  id: string,
+  choices: FilingChoices
+): Promise<void> {
+  const update: Record<string, unknown> = { updated_at: new Date().toISOString() }
+  if (choices.title?.trim()) update.title = choices.title.trim().slice(0, 300)
+  if (choices.kind) {
+    update.kind = choices.kind
+    const shelf = bucketForKind(choices.kind)
+    if (shelf) update.bucket = shelf
+  }
+  if (choices.audience) {
+    update.admin_only = choices.audience === 'admin'
+    update.audience = choices.audience === 'shared' ? 'shared' : 'internal'
+  }
+  if (choices.disciplines) update.disciplines = choices.disciplines
+  if (choices.topics !== undefined) {
+    update.topics = choices.topics.split(',').map((t) => t.trim()).filter(Boolean)
+  }
+  if (choices.place !== undefined) Object.assign(update, await resolvePlaceValue(admin, choices.place))
+
+  const { error } = await admin.from('library_items').update(update).eq('id', id)
+  if (error) throw new Error(error.message)
+}

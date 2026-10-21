@@ -5,6 +5,10 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { normalizeDocLink } from '@/lib/doc-links'
 import { refuse, type ActionResult } from '@/lib/action-result'
+import { classify } from '@/lib/sorting'
+import { courseCapabilityCategories } from '@/lib/capabilities'
+import { type Venue } from '@/lib/library'
+import { type CurriculumFilingDraft, type CurriculumFilingChoices } from './actions'
 
 // General course documents (contracts, site maps, client paperwork) — files
 // attached to the course itself rather than a task. Same private bucket and
@@ -139,14 +143,66 @@ export async function deleteCourseDoc(instanceId: string, docId: string): Promis
 
 // Filing a course file to the library, so the next course can reach for it.
 //
-// The uploaded ones are the reason this exists: until now a file added here
-// lived and died with the course, and the only way to reuse it was to find
-// the course it was on. The row points at the same object rather than a copy
-// — see lib/library-file.ts for why.
-export async function addCourseDocToLibrary(
+// Asked, not assumed. It used to ask one question — what is it — and work
+// the rest out from the course, so a manual that is only ever about Bridger
+// Bowl arrived with whatever place the course happened to carry, and the
+// only way to say otherwise was to go and find it in the library afterwards.
+//
+// Same form the curriculum and the contacts use, so filing asks the same
+// questions wherever it happens.
+export async function courseDocFilingDraft(
+  instanceId: string,
+  docId: string
+): Promise<CurriculumFilingDraft> {
+  const { admin } = await requireTeam(instanceId)
+  const { data: doc } = await admin
+    .from('course_documents')
+    .select('path, url, filename')
+    .eq('id', docId)
+    .eq('instance_id', instanceId)
+    .single()
+  if (!doc) return { error: 'That file is no longer on this course' }
+
+  // Already filed: there is nothing to ask, and a second copy is what the
+  // dedupe exists to prevent.
+  const { data: existing } = doc.path
+    ? await admin.from('library_items').select('id, title, admin_only').eq('storage_path', doc.path).neq('status', 'archived').limit(1).maybeSingle()
+    : await admin.from('library_items').select('id, title, admin_only').eq('url', doc.url ?? '').neq('status', 'archived').limit(1).maybeSingle()
+  if (existing) {
+    return { existing: { id: existing.id, title: existing.title, adminOnly: existing.admin_only } }
+  }
+
+  const [{ data: inst }, { data: venueRows }, { data: siteRows }] = await Promise.all([
+    admin.from('course_instances').select('region, venue_id, course_type, custom_categories').eq('id', instanceId).single(),
+    admin.from('venues').select('id, name, region, region_code, client_name, notes, links, contacts, active').order('name'),
+    admin.from('sites').select('id, name, kind, beta, venue_id, venues(name)').eq('active', true).order('name'),
+  ])
+
+  const title = (doc.filename ?? 'Document').replace(/\.[a-z0-9]{1,5}$/i, '')
+  const verdict = classify({ title, url: doc.url ?? null, kind: 'reference', bucket: 'resource', source_topic: null })
+
+  return {
+    draft: {
+      title,
+      kind: verdict.confident ? verdict.kind ?? 'reference' : 'reference',
+      audience: 'internal',
+      // The course's place is the guess, not the answer — see above.
+      place: inst?.venue_id ? `venue:${inst.venue_id}` : inst?.region ? `region:${inst.region}` : '',
+      disciplines: inst ? (courseCapabilityCategories(inst.course_type, inst.custom_categories) as string[]) : [],
+      topics: '',
+      unsure: !verdict.confident,
+    },
+    venues: (venueRows ?? []) as Venue[],
+    sites: ((siteRows ?? []) as unknown as {
+      id: string; name: string; kind: string | null; beta: string | null; venue_id: string | null; venues: { name: string } | null
+    }[]).map((x) => ({ id: x.id, name: x.name, kind: x.kind, beta: x.beta, venue_id: x.venue_id, venue_name: x.venues?.name ?? null })),
+  }
+}
+
+export async function fileCourseDocToLibrary(
   instanceId: string,
   docId: string,
-  kind: string
+  choices?: CurriculumFilingChoices
 ): Promise<ActionResult> {
   const { admin } = await requireTeam(instanceId)
   const { data: doc } = await admin
@@ -157,29 +213,26 @@ export async function addCourseDocToLibrary(
     .single()
   if (!doc) return refuse('That file is no longer on this course')
 
-  const { fileToLibrary } = await import('@/lib/library-file')
+  const { fileToLibrary, addLinkToLibrary, applyChoices } = await import('@/lib/library-file')
+  const told = choices?.kind
+  const r = doc.path
+    ? await fileToLibrary(admin, {
+        path: doc.path,
+        filename: doc.filename ?? 'Document',
+        instanceId,
+        told,
+      })
+    : doc.url
+      ? await addLinkToLibrary(admin, {
+          url: doc.url,
+          title: choices?.title || doc.filename || 'Document',
+          instanceId,
+          told,
+        })
+      : refuse('That row has neither a file nor a link to save')
+  if ('error' in r) return r
 
-  if (doc.path) {
-    const r = await fileToLibrary(admin, {
-      path: doc.path,
-      filename: doc.filename ?? 'Document',
-      instanceId,
-      told: kind,
-    })
-    if ('error' in r) return r
-  } else if (doc.url) {
-    // A pasted link, filed the same way the course's own link box files one.
-    const { addLinkToLibrary } = await import('@/lib/library-file')
-    const r = await addLinkToLibrary(admin, {
-      url: doc.url,
-      title: doc.filename ?? 'Document',
-      instanceId,
-      told: kind,
-    })
-    if ('error' in r) return r
-  } else {
-    return refuse('That row has neither a file nor a link to save')
-  }
+  if (choices) await applyChoices(admin, r.id, choices)
 
   revalidatePath(`/admin/courses/${instanceId}`)
   revalidatePath('/admin/library')
