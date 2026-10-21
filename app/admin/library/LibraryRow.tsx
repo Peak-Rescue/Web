@@ -14,6 +14,7 @@ import { type SiteOption } from '@/app/admin/schedules/types'
 import { COURSE_TYPE_OPTIONS, courseShortName } from '@/lib/courses'
 import CloseButton from '@/components/CloseButton'
 import TrashIcon from '@/components/TrashIcon'
+import StateBadge from '@/components/StateBadge'
 
 const input =
   'w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-zinc-500'
@@ -146,26 +147,20 @@ export default function LibraryRow({ item, venues, sites = [], hideProvenance = 
               ? <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-900/40 text-blue-300">{site.name}</span>
               : venue && <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-900/40 text-blue-300">{venue.name}</span>}
             {unplaced && (
-              <span
-                title="Nothing will offer this map to a course until it says where it is"
-                className="text-[10px] px-1.5 py-0.5 rounded bg-yellow-900/40 text-yellow-300"
-              >
+              <StateBadge title="Nothing will offer this map to a course until it says where it is">
                 needs a place
-              </span>
+              </StateBadge>
             )}
             {/* Left by the sorting pass rather than guessed at. The badge is
                 the admission: a shelf that looks sorted never gets checked
                 again, so the ones it could not place say so. */}
             {item.topics.includes(NEEDS_SORTING) && (
-              <span
-                title="The sorting pass couldn’t tell what this is — it is where it was, not where it belongs"
-                className="text-[10px] px-1.5 py-0.5 rounded bg-amber-900/40 text-amber-300"
-              >
+              <StateBadge title="The sorting pass couldn’t tell what this is — it is where it was, not where it belongs">
                 needs sorting
-              </span>
+              </StateBadge>
             )}
             {item.topics.includes('needs-link-check') && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-900/40 text-red-300">link may be dead</span>
+              <StateBadge tone="broken">link may be dead</StateBadge>
             )}
           </div>
           <p className="text-[11px] text-zinc-600 mt-1 truncate">
