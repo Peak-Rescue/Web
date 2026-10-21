@@ -302,6 +302,16 @@ export default async function LibraryPage({
       : Promise.resolve([] as [LibraryShelf, number][]),
   ])
 
+  // The facets of the shelf being stood on: which types and which disciplines
+  // are actually represented, and how many of each.
+  const facetKinds = new Map<string, number>()
+  const facetDisciplines = new Map<string, number>()
+  for (const r of (facetRows ?? []) as { kind: string; disciplines: string[] | null }[]) {
+    facetKinds.set(r.kind, (facetKinds.get(r.kind) ?? 0) + 1)
+    for (const d of r.disciplines ?? []) facetDisciplines.set(d, (facetDisciplines.get(d) ?? 0) + 1)
+  }
+  const hasFacets = facetRows !== null
+
   // The embed comes back under the table's name; the item calls them links.
   const fetched = ((itemRows ?? []) as unknown as (LibraryItem & {
     library_item_links?: LibraryItem['links']
@@ -312,9 +322,45 @@ export default async function LibraryPage({
   // and the whole reason it is on the shelf is to be seen next to what is
   // already there.
   const ORDER: Record<string, number> = { pending: 0, published: 1, archived: 2 }
-  const items = (hasMore ? fetched.slice(0, PAGE) : fetched)
-    .slice()
-    .sort((a, b) => (ORDER[a.status] ?? 1) - (ORDER[b.status] ?? 1))
+  const byState = (rows: LibraryItem[]) =>
+    rows.slice().sort((a, b) => (ORDER[a.status] ?? 1) - (ORDER[b.status] ?? 1))
+
+  // A group has to be a group. Grouping one page of sixty rows meant each
+  // heading showed whichever of its rows happened to fall in the first sixty
+  // titles of the whole shelf — "Video · 1 of 44", one row, and the other
+  // forty-three on pages nobody would guess at.
+  //
+  // So on a shelf the page is per group: each type brings its own rows, and
+  // the heading's "of 44" is the facet count it was always being compared
+  // with. A second round trip and one small query per type on the shelf,
+  // which is the price of a heading that means what it says.
+  const PER_GROUP = 25
+  const perGroup = onShelf && !kind && hasFacets
+  const groupRows = perGroup
+    ? Object.fromEntries(
+        await Promise.all(
+          [...facetKinds.keys()].map(async (k) => [
+            k,
+            byState(
+              (((await narrow(
+                admin
+                  .from('library_items')
+                  .select('id, title, description, source_type, url, edit_url, drive_file_id, kind, audience, disciplines, topics, admin_only, venue_id, site_id, expires_at, course_type, status, bucket, region, source_class, source_topic, source_item, library_item_links(id, url, access, audience)')
+                  .eq('kind', k)
+                  .order('title')
+                  .order('id')
+                  .limit(PER_GROUP) as unknown as typeof query,
+                false
+              )).data ?? []) as unknown as (LibraryItem & { library_item_links?: LibraryItem['links'] })[])
+                .map((r) => ({ ...r, links: r.library_item_links ?? [] }) as LibraryItem)
+            ),
+          ])
+        )
+      ) as Record<string, LibraryItem[]>
+    : null
+  const items = groupRows
+    ? Object.values(groupRows).flat()
+    : byState(hasMore ? fetched.slice(0, PAGE) : fetched)
   const venues = (venueRows ?? []) as Venue[]
   const siteOptions = ((siteRows ?? []) as unknown as {
     id: string; name: string; kind: string | null; beta: string | null; venue_id: string | null; venues: { name: string } | null
@@ -369,15 +415,6 @@ export default async function LibraryPage({
       }),
   }))
   // Grouped by the move itself, which is the unit the claim can be agreed
-  // The facets of the shelf being stood on: which types and which disciplines
-  // are actually represented, and how many of each.
-  const facetKinds = new Map<string, number>()
-  const facetDisciplines = new Map<string, number>()
-  for (const r of (facetRows ?? []) as { kind: string; disciplines: string[] | null }[]) {
-    facetKinds.set(r.kind, (facetKinds.get(r.kind) ?? 0) + 1)
-    for (const d of r.disciplines ?? []) facetDisciplines.set(d, (facetDisciplines.get(d) ?? 0) + 1)
-  }
-  const hasFacets = facetRows !== null
 
   const href = (patch: Record<string, string | undefined>) => {
     const p = new URLSearchParams()
@@ -635,7 +672,9 @@ export default async function LibraryPage({
             <p className="text-xs text-zinc-600 mb-3">
               {items.length === 0
                 ? 'No items'
-                : `Showing ${offset + 1}–${offset + items.length}`}
+                : perGroup
+                  ? `${items.length} shown, ${[...facetKinds.values()].reduce((a, b) => a + b, 0)} on this shelf`
+                  : `Showing ${offset + 1}–${offset + items.length}`}
             </p>
             {(
               <div className="space-y-2">
@@ -712,7 +751,7 @@ export default async function LibraryPage({
               </div>
             )}
 
-            {(hasMore || offset > 0) && (
+            {(hasMore || offset > 0) && !perGroup && (
               <div className="flex items-center gap-3 mt-8">
                 {offset > 0 && (
                   <Link
