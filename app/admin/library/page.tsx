@@ -15,7 +15,6 @@ import LibraryRow from './LibraryRow'
 import PickSet from './PickSet'
 import TemplateRow from './TemplateRow'
 import AddTemplate from './AddTemplate'
-import ReviewQueue from './ReviewQueue'
 import AddLibraryItem from './AddLibraryItem'
 import ItemRow from './ItemRow'
 import TemplateReadOnly from './TemplateReadOnly'
@@ -407,12 +406,26 @@ export default async function LibraryPage({
   // no answer at all. An item is listed under the first discipline it carries
   // rather than once per discipline — the filter still matches on any of
   // them, so nothing is unreachable for being grouped under one.
-  const groupBy: 'kind' | 'discipline' = onShelf ? 'kind' : 'discipline'
+  // Pending material has no expertise on it yet and often no type, so both
+  // the usual groupings put it in one heap. It does know where it came from:
+  // the Classroom class, and the topic that becomes a section on a course.
+  // "Here is the Rappelling section, and here is who sees it" is the question
+  // worth asking of it.
+  const groupBy: 'kind' | 'discipline' | 'import' =
+    status === 'pending' ? 'import' : onShelf ? 'kind' : 'discipline'
   const grouped = (() => {
     const by = new Map<string, LibraryItem[]>()
     for (const i of items) {
-      const k = groupBy === 'kind' ? i.kind : (i.disciplines[0] ?? '_untagged')
+      const k =
+        groupBy === 'kind'
+          ? i.kind
+          : groupBy === 'import'
+            ? `${i.source_class ?? 'Added in the portal'} · ${(i.source_topic ?? '').replace(/\(DO NOT POST\)/i, '').trim() || 'Ungrouped'}`
+            : (i.disciplines[0] ?? '_untagged')
       by.set(k, [...(by.get(k) ?? []), i])
+    }
+    if (groupBy === 'import') {
+      return [...by.entries()].sort((a, b) => b[1].length - a[1].length)
     }
     if (groupBy === 'kind') {
       // Every type the shelf holds, not only the ones that landed on this
@@ -436,8 +449,10 @@ export default async function LibraryPage({
   const UNTYPED = 'No type yet'
   const kindLabel = (k: string) => KIND_META[k as keyof typeof KIND_META] || UNTYPED
   const groupLabel = (cat: string) =>
-    groupBy === 'kind'
-      ? kindLabel(cat)
+    groupBy === 'import'
+      ? cat
+      : groupBy === 'kind'
+        ? kindLabel(cat)
       : cat === '_untagged'
         ? 'Not tied to an expertise'
         : CAPABILITY_META[cat as CapabilityCategory].label
@@ -672,9 +687,7 @@ export default async function LibraryPage({
                 ? 'No items'
                 : `Showing ${offset + 1}–${offset + items.length}`}
             </p>
-            {status === 'pending' && items.length > 0 ? (
-              <ReviewQueue items={items} venues={venues} sites={siteOptions} />
-            ) : (
+            {(
               <div className="space-y-2">
                 {grouped.map(([cat, rows]) => (
                   // Folded, because the headings are the point: what a shelf
@@ -721,7 +734,7 @@ export default async function LibraryPage({
                       // Ticked rows, not the group: the heading is a type, and
                       // a type is not a destination. What a hand-picked set
                       // can be told is on the bar.
-                      <PickSet items={rows} venues={venues} sites={siteOptions} />
+                      <PickSet items={rows} venues={venues} sites={siteOptions} pending={status === 'pending'} />
                     ) : (
                       <div className="border border-zinc-800 rounded-lg divide-y divide-zinc-800/70">
                         {rows.map((it) => (

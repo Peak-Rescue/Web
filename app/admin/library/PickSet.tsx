@@ -9,7 +9,13 @@ import { errorFrom } from '@/lib/action-result'
 import { KIND_GROUPS, KIND_META, type LibraryItem, type Venue } from '@/lib/library'
 import { type SiteOption } from '@/app/admin/schedules/types'
 import { COURSE_TYPE_OPTIONS, courseShortName } from '@/lib/courses'
+import { AUDIENCE_META } from '@/lib/library'
+import { CAPABILITY_META, CAPABILITY_ORDER } from '@/lib/capabilities'
 import {
+  approveLibraryItems,
+  setLibraryAudience,
+  setLibraryDisciplines,
+  rejectLibraryItems,
   setLibraryKind,
   setLibraryCourseType,
   setLibraryPlace,
@@ -34,10 +40,15 @@ export default function PickSet({
   items,
   venues,
   sites,
+  pending = false,
 }: {
   items: LibraryItem[]
   venues: Venue[]
   sites: SiteOption[]
+  /** The import queue. The same list and the same bar, plus the two verbs
+      that only mean anything there — nothing pending is on a shelf, in a
+      picker or visible to an instructor until it is approved. */
+  pending?: boolean
 }) {
   const router = useRouter()
   const [picked, setPicked] = useState<Set<string>>(new Set())
@@ -100,6 +111,32 @@ export default function PickSet({
         // long group is a bar you have to scroll back to.
         <div className="sticky top-2 z-10 rounded-lg border border-zinc-700 bg-zinc-900/95 backdrop-blur p-2 space-y-2">
           <div className="flex items-center gap-2 flex-wrap">
+            {pending && (
+              <>
+                {/* First, because on this list it is the usual answer: the
+                    tagging is worth doing before approving, which is why
+                    these sit at the end of the same bar rather than on a
+                    screen of their own. */}
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => run(() => approveLibraryItems(ids), `${n} approved`)}
+                  className="text-[11px] px-2 py-1 rounded bg-pr-red hover:bg-pr-red-dark text-white font-medium transition-colors disabled:opacity-40"
+                >
+                  Approve
+                </button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => run(() => rejectLibraryItems(ids), `${n} skipped`)}
+                  title="Archived: it stays searchable and is never suggested"
+                  className={bar}
+                >
+                  Skip
+                </button>
+              </>
+            )}
+
             <select
               disabled={busy}
               defaultValue=""
@@ -135,6 +172,41 @@ export default function PickSet({
                 <optgroup key={g.category} label={g.label}>
                   {g.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </optgroup>
+              ))}
+            </select>
+
+            <select
+              disabled={busy}
+              defaultValue=""
+              onChange={(e) => {
+                const a = e.target.value as 'internal' | 'shared'
+                e.currentTarget.value = ''
+                if (a) run(() => setLibraryAudience(ids, a), `${n} set to “${AUDIENCE_META[a].choice}”`)
+              }}
+              className="bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-[11px] focus:outline-none focus:border-zinc-500"
+            >
+              <option value="">Who sees it…</option>
+              <option value="internal">{AUDIENCE_META.internal.choice}</option>
+              <option value="shared">{AUDIENCE_META.shared.choice}</option>
+            </select>
+
+            {/* Replaces rather than adds, which is right for the pile this
+                is used on — nothing imported came with expertise on it — and
+                wrong enough on a tagged row to be worth saying out loud. */}
+            <select
+              disabled={busy}
+              defaultValue=""
+              title="Replaces whatever expertise these carry"
+              onChange={(e) => {
+                const d = e.target.value
+                e.currentTarget.value = ''
+                if (d) run(() => setLibraryDisciplines(ids, [d]), `${n} tagged ${CAPABILITY_META[d as keyof typeof CAPABILITY_META]?.label ?? d}`)
+              }}
+              className="bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-[11px] focus:outline-none focus:border-zinc-500"
+            >
+              <option value="">Set expertise…</option>
+              {CAPABILITY_ORDER.map((c) => (
+                <option key={c} value={c}>{CAPABILITY_META[c].label}</option>
               ))}
             </select>
 

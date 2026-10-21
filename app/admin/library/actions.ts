@@ -457,34 +457,6 @@ export async function rejectLibraryItems(ids: string[]) {
   revalidate()
 }
 
-// Review queue: publish everything still pending from one Classroom class,
-// so a batch that's already correct clears in one click.
-export async function publishPendingFromClass(sourceClass: string) {
-  const admin = await requireAdmin()
-  const { error, count } = await admin
-    .from('library_items')
-    .update({ status: 'published', reviewed_at: new Date().toISOString() }, { count: 'exact' })
-    .eq('status', 'pending')
-    .eq('source_class', sourceClass)
-  if (error) throw new Error(error.message)
-  revalidate()
-  return { published: count ?? 0 }
-}
-
-// ─── Venues ─────────────────────────────────────────────────────────────────
-
-/** A place made from inside whichever form needed it, returning the id so the
- *  picker can select it on the spot.
- *
- *  Without this, filing a map of somewhere new means abandoning the half-typed
- *  map, going to another screen, making the venue, and coming back to start
- *  again — which is how a map ends up filed nowhere, the one thing the
- *  required place field exists to prevent.
- *
- *  Only a name and a state: everything else about a venue can be filled in
- *  later, on the screen that is actually about venues, and asking for it here
- *  would rebuild that screen inside a dropdown.
- */
 export async function createPlaceInline(
   name: string,
   regionCode: string | null
