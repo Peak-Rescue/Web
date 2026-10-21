@@ -110,6 +110,17 @@ const BUCKET_FOR_KIND: Partial<Record<LibraryKind, LibraryBucket>> = {
     the shelf it was filed to before anyone could say it was a kit list. */
 export const KINDS_OFF_BUCKET_SHELVES: LibraryKind[] = ['kit_list']
 
+/** The shelf a row is actually found on, for the chip that says where it
+    lives. Usually its bucket — that is what a bucket shelf lists by — with
+    the two exceptions whose card is not a bucket: a written gear list reads
+    on Gear lists, a photo album on Photos & video, and neither bucket means
+    anything to the person reading the row. */
+export function shelfOfRow(kind: string, bucket: LibraryBucket | null): LibraryShelf | null {
+  if (KINDS_OFF_BUCKET_SHELVES.includes(kind as LibraryKind)) return 'gear'
+  if (kind === 'media') return 'media'
+  return bucket
+}
+
 export function bucketForKind(kind: string): LibraryBucket | null {
   return BUCKET_FOR_KIND[kind as LibraryKind] ?? null
 }

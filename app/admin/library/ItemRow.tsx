@@ -1,4 +1,4 @@
-import { KIND_META, materialKind, type LibraryItem } from '@/lib/library'
+import { KIND_META, materialKind, shelfOfRow, shelfLabel, type LibraryItem } from '@/lib/library'
 import { AudiencePills } from '@/components/AudiencePills'
 import { CAPABILITY_META } from '@/lib/capabilities'
 
@@ -43,6 +43,9 @@ export default function ItemRow({
           )}
           {KIND_META[item.kind as keyof typeof KIND_META] && (
             <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400 shrink-0">
+              {shelfOfRow(item.kind, item.bucket) && (
+                <span className="text-zinc-500">{shelfLabel(shelfOfRow(item.kind, item.bucket)!)} · </span>
+              )}
               {KIND_META[item.kind as keyof typeof KIND_META]}
             </span>
           )}

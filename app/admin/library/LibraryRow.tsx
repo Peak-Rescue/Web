@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { updateLibraryItem, deleteLibraryItem, libraryItemUses, type LibraryItemUses } from './actions'
 import { errorFrom, type ActionResult } from '@/lib/action-result'
-import { KIND_META, KIND_GROUPS, AUDIENCE_META, bucketForKind, type LibraryBucket, type LibraryItem, type Venue } from '@/lib/library'
+import { KIND_META, KIND_GROUPS, AUDIENCE_META, bucketForKind, shelfOfRow, shelfLabel, type LibraryBucket, type LibraryItem, type Venue } from '@/lib/library'
 import { AudiencePills } from '@/components/AudiencePills'
 import { CAPABILITY_META, CAPABILITY_ORDER } from '@/lib/capabilities'
 import MapLinks from './MapLinks'
@@ -121,8 +121,15 @@ export default function LibraryRow({ item, venues, sites = [], hideProvenance = 
             ) : (
               <span className="text-sm font-medium truncate">{item.title}</span>
             )}
+            {/* Where it lives and what it is, in that order — the shelf is
+                the thing you cannot see from a row sitting in a search
+                result or in the import queue, and "Presentation" alone never
+                said which of the seven cards it would turn up on. */}
             {KIND_META[item.kind as keyof typeof KIND_META] && (
               <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400">
+                {shelfOfRow(item.kind, item.bucket) && (
+                  <span className="text-zinc-500">{shelfLabel(shelfOfRow(item.kind, item.bucket)!)} · </span>
+                )}
                 {KIND_META[item.kind as keyof typeof KIND_META]}
               </span>
             )}
