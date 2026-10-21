@@ -11,6 +11,7 @@ import MapLinks from './MapLinks'
 import { NEEDS_SORTING } from '@/lib/sorting'
 import PlaceSelect, { placeValue } from '@/components/PlaceSelect'
 import { type SiteOption } from '@/app/admin/schedules/types'
+import { COURSE_TYPE_OPTIONS, courseShortName } from '@/lib/courses'
 import CloseButton from '@/components/CloseButton'
 import TrashIcon from '@/components/TrashIcon'
 
@@ -37,6 +38,7 @@ export default function LibraryRow({ item, venues, sites = [], hideProvenance = 
     // row says where it belongs.
     topicsRaw: item.topics.filter((t) => t !== NEEDS_SORTING).join(', '),
     place: placeValue(item.region, item.venue_id, item.site_id),
+    course_type: item.course_type ?? '',
     admin_only: item.admin_only,
     expires_at: item.expires_at ?? '',
   })
@@ -121,6 +123,14 @@ export default function LibraryRow({ item, venues, sites = [], hideProvenance = 
             {KIND_META[item.kind as keyof typeof KIND_META] && (
               <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400">
                 {KIND_META[item.kind as keyof typeof KIND_META]}
+              </span>
+            )}
+            {item.course_type && (
+              <span
+                title="Only offered to courses of this kind"
+                className="text-[10px] px-1.5 py-0.5 rounded bg-blue-900/40 text-blue-300"
+              >
+                {courseShortName(item.course_type, null)}
               </span>
             )}
             <AudiencePills audience={item.audience} />
@@ -246,6 +256,33 @@ export default function LibraryRow({ item, venues, sites = [], hideProvenance = 
           {KIND_GROUPS.map((g) => (
                 <optgroup key={g.label} label={g.label}>
                   {g.kinds.map((k) => <option key={k} value={k}>{KIND_META[k]}</option>)}
+                </optgroup>
+              ))}
+            </select>
+          </div>
+          {/* For one kind of course and no other: the ACA swiftwater
+              materials, a manual for kit only the aerial courses carry.
+              Optional, and blank is the usual answer — expertise is the
+              broader match and most material wants the broader one. */}
+          <div>
+            <label className={label}>
+              Offering <span className="text-zinc-700">— only if it is for one</span>
+            </label>
+            <select
+              className={input}
+              value={form.course_type}
+              onChange={(e) => setForm({ ...form, course_type: e.target.value })}
+            >
+              <option value="">— any offering —</option>
+              {/* A retired slug still reads on the row that was saved with
+                  it, so changing your mind is not a one-way door. */}
+              {form.course_type &&
+                !COURSE_TYPE_OPTIONS.some((g) => g.options.some((o) => o.value === form.course_type)) && (
+                  <option value={form.course_type}>{courseShortName(form.course_type, null)}</option>
+                )}
+              {COURSE_TYPE_OPTIONS.map((g) => (
+                <optgroup key={g.category} label={g.label}>
+                  {g.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </optgroup>
               ))}
             </select>

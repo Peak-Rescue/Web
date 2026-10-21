@@ -67,6 +67,7 @@ export type LibraryPatch = {
   expires_at?: string | null
   status?: 'pending' | 'published' | 'archived'
   bucket?: string | null
+  course_type?: string | null
   region?: string | null
 }
 
@@ -102,6 +103,9 @@ export async function updateLibraryItem(id: string, patch: LibraryPatch) {
   if (patch.bucket !== undefined && patch.bucket !== null && VALID_BUCKETS.has(patch.bucket)) update.bucket = patch.bucket
   if (patch.region !== undefined) update.region = isValidRegion(patch.region) ? patch.region : null
   if (patch.expires_at !== undefined) update.expires_at = patch.expires_at || null
+  // '' is "any offering", which is null on the row — the same answer the
+  // templates store for a list that suits everything.
+  if (patch.course_type !== undefined) update.course_type = patch.course_type || null
   if (patch.status !== undefined) {
     update.status = patch.status
     if (patch.status === 'published') update.reviewed_at = new Date().toISOString()
@@ -842,6 +846,21 @@ export async function setLibraryPlace(ids: string[], place: string) {
   const { error } = await admin
     .from('library_items')
     .update({ ...resolved, updated_at: new Date().toISOString() })
+    .in('id', ids)
+  if (error) throw new Error(error.message)
+  await clearSortingMark(admin, ids)
+  revalidate()
+}
+
+/** The offering a hand-picked set is for, or none. Blank is "any offering",
+    which is what most material is: expertise and place are the broader match
+    and nearly everything wants the broader one. */
+export async function setLibraryCourseType(ids: string[], courseType: string) {
+  const admin = await requireAdmin()
+  if (ids.length === 0) return
+  const { error } = await admin
+    .from('library_items')
+    .update({ course_type: courseType || null, updated_at: new Date().toISOString() })
     .in('id', ids)
   if (error) throw new Error(error.message)
   await clearSortingMark(admin, ids)

@@ -31,7 +31,8 @@ import { albumMatches } from '@/lib/media'
 import { NEEDS_SORTING } from '@/lib/sorting'
 import SitesShelf from '@/app/admin/sites/SitesShelf'
 import { loadSitesShelf } from '@/app/admin/sites/load'
-import { CAPABILITY_META, CAPABILITY_ORDER, type CapabilityCategory } from '@/lib/capabilities'
+import { CAPABILITY_META, CAPABILITY_ORDER, courseCapabilityCategories, type CapabilityCategory } from '@/lib/capabilities'
+import { COURSE_TYPE_OPTIONS } from '@/lib/courses'
 import { readViewAs, viewAsSelf } from '@/lib/view-as'
 import ViewAsMenu from '@/components/ViewAsMenu'
 
@@ -40,13 +41,13 @@ const input = 'w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-
 export default async function LibraryPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; discipline?: string; kind?: string; audience?: string; venue?: string; bucket?: string; q?: string; template?: string; open?: string; page?: string; sort?: string; topic?: string }>
+  searchParams: Promise<{ status?: string; discipline?: string; kind?: string; audience?: string; venue?: string; offering?: string; bucket?: string; q?: string; template?: string; open?: string; page?: string; sort?: string; topic?: string }>
 }) {
   // Published is the library. Pending review is a queue that Google Classroom
   // imports drop into, and landing on it meant the shelf you came to look at
   // read as empty — an item added by hand is published the moment it's added,
   // so the queue is usually empty and the answer usually isn't there.
-  const { status: askedStatus, discipline, kind, audience, venue, bucket, q, template, open, page, sort, topic } = await searchParams
+  const { status: askedStatus, discipline, kind, audience, venue, offering, bucket, q, template, open, page, sort, topic } = await searchParams
 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -122,7 +123,7 @@ export default async function LibraryPage({
 
   let query = admin
     .from('library_items')
-    .select('id, title, description, source_type, url, edit_url, drive_file_id, kind, audience, disciplines, topics, admin_only, venue_id, site_id, expires_at, status, bucket, region, source_class, source_topic, source_item, library_item_links(id, url, access, audience)')
+    .select('id, title, description, source_type, url, edit_url, drive_file_id, kind, audience, disciplines, topics, admin_only, venue_id, site_id, expires_at, course_type, status, bucket, region, source_class, source_topic, source_item, library_item_links(id, url, access, audience)')
     // The review queue is a queue: oldest problems first is the wrong way
     // round, and it is read top to bottom rather than looked up. Every other
     // view is looked up, so it goes in the order a shelf goes in.
@@ -147,6 +148,18 @@ export default async function LibraryPage({
   if (kind) query = query.eq('kind', kind)
   if (audience) query = query.eq('audience', audience)
   if (venue) query = query.eq('venue_id', venue)
+  // "What would a Canyon Mobility course reach for": the rows tied to that
+  // offering, plus the untied ones whose expertise it involves. Tying every
+  // row to an offering would be a tag that says "most of them", so untied is
+  // the usual answer and this is what makes it still findable.
+  if (offering) {
+    const implied = courseCapabilityCategories(offering, null) as string[]
+    query = query.or(
+      implied.length > 0
+        ? `course_type.eq.${offering},and(course_type.is.null,disciplines.ov.{${implied.join(',')}})`
+        : `course_type.eq.${offering}`
+    )
+  }
   if (bucket && !isTemplateShelf(bucket)) {
     query = query.eq('bucket', bucket)
     // A kit list keeps the shelf it was filed to before anyone could say it
@@ -206,7 +219,7 @@ export default async function LibraryPage({
     showTemplates && shelves.includes('setup')
       ? (() => {
           let c = admin.from('course_templates')
-            .select('id, name, description, course_type, disciplines, course_template_sections(id, title, sort_order, course_template_items(id, sort_order, library_items(id, title, description, source_type, url, edit_url, drive_file_id, kind, audience, disciplines, topics, admin_only, venue_id, site_id, expires_at, status, bucket, region, source_class, source_topic, source_item, library_item_links(id, url, access, audience))))')
+            .select('id, name, description, course_type, disciplines, course_template_sections(id, title, sort_order, course_template_items(id, sort_order, library_items(id, title, description, source_type, url, edit_url, drive_file_id, kind, audience, disciplines, topics, admin_only, venue_id, site_id, expires_at, course_type, status, bucket, region, source_class, source_topic, source_item, library_item_links(id, url, access, audience))))')
             .eq('active', true)
             .order('name')
           if (q) c = c.ilike('name', `%${q}%`)
@@ -232,7 +245,7 @@ export default async function LibraryPage({
     showTemplates && shelves.includes('gear')
       ? admin
           .from('library_items')
-          .select('id, title, description, source_type, url, edit_url, drive_file_id, kind, audience, disciplines, topics, admin_only, venue_id, site_id, expires_at, status, bucket, region, source_class, source_topic, source_item, library_item_links(id, url, access, audience)')
+          .select('id, title, description, source_type, url, edit_url, drive_file_id, kind, audience, disciplines, topics, admin_only, venue_id, site_id, expires_at, course_type, status, bucket, region, source_class, source_topic, source_item, library_item_links(id, url, access, audience)')
           .eq('kind', 'kit_list')
           .eq('status', 'published')
           .order('title')
@@ -253,7 +266,7 @@ export default async function LibraryPage({
     onSort && sortView !== 'inbox'
       ? admin
           .from('library_items')
-          .select('id, title, description, source_type, url, edit_url, drive_file_id, kind, audience, disciplines, topics, admin_only, venue_id, site_id, expires_at, status, bucket, region, source_class, source_topic, source_item, library_item_links(id, url, access, audience)')
+          .select('id, title, description, source_type, url, edit_url, drive_file_id, kind, audience, disciplines, topics, admin_only, venue_id, site_id, expires_at, course_type, status, bucket, region, source_class, source_topic, source_item, library_item_links(id, url, access, audience)')
           .eq('status', 'published')
           .order('title')
           .limit(2000)
@@ -410,7 +423,7 @@ export default async function LibraryPage({
 
   const href = (patch: Record<string, string | undefined>) => {
     const p = new URLSearchParams()
-    const merged = { status, discipline, kind, audience, venue, bucket, q, sort, topic, ...patch }
+    const merged = { status, discipline, kind, audience, venue, offering, bucket, q, sort, topic, ...patch }
     for (const [k, v] of Object.entries(merged)) if (v) p.set(k, v)
     return `/admin/library?${p.toString()}`
   }
@@ -693,6 +706,17 @@ export default async function LibraryPage({
               ))}
             </select>
           )}
+          {/* Derived, not a second tagging job: an offering already says
+              which expertise it involves, so this reads the rows tied to it
+              and the untied ones that expertise matches. */}
+          <select name="offering" defaultValue={offering ?? ''} className={input}>
+            <option value="">All offerings</option>
+            {COURSE_TYPE_OPTIONS.map((g) => (
+              <optgroup key={g.category} label={g.label}>
+                {g.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </optgroup>
+            ))}
+          </select>
           <select name="venue" defaultValue={venue ?? ''} className={input}>
             <option value="">All venues</option>
             {venues.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}

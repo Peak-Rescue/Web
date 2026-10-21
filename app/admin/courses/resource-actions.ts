@@ -79,7 +79,7 @@ export type ResourcePickerItem = {
   venueName: string | null
   regionLabel: string | null
   suggested: boolean
-  matchedOn: 'venue' | 'region' | 'discipline' | null
+  matchedOn: 'offering' | 'venue' | 'region' | 'discipline' | null
   /** The expertise it shares with the course, when that is why it is offered. */
   disciplineLabel: string | null
   alreadyAdded: boolean
@@ -103,7 +103,7 @@ export async function loadResourceLibrary(instanceId: string): Promise<ResourceP
     admin.from('course_instances').select('location, region, venue_id, course_type, custom_categories').eq('id', instanceId).single(),
     admin
       .from('library_items')
-      .select('id, title, url, kind, audience, region, venue_id, site_id, bucket, disciplines, venues(name)')
+      .select('id, title, url, kind, audience, region, venue_id, site_id, bucket, disciplines, course_type, venues(name)')
       // Reference, plus the plans a place has. A venue's evac plan is the
       // thing somebody goes looking for while building the course that goes
       // there, and it sits on the Documents shelf — so offering only the
@@ -147,6 +147,13 @@ export async function loadResourceLibrary(instanceId: string): Promise<ResourceP
     // place or not at all. Otherwise eight copies of "Company Evac Plans"
     // would be offered to every course ever built.
     const placeOnly = r.bucket === 'documents'
+    // Tied to one kind of course. The ACA swiftwater materials are for the
+    // swiftwater courses and no other, so on anything else they are not a
+    // weaker match — they are the wrong thing, and expertise alone would
+    // offer them to all four canyon offerings. Null, the usual answer, means
+    // it matches on expertise and place like everything else. See 242.
+    const offeringMiss = Boolean(r.course_type && r.course_type !== inst?.course_type)
+    const offeringHit = Boolean(r.course_type && r.course_type === inst?.course_type)
     return {
       id: r.id,
       title: r.title,
@@ -155,9 +162,9 @@ export async function loadResourceLibrary(instanceId: string): Promise<ResourceP
       audience: r.audience as LibraryAudience,
       venueName,
       regionLabel: regionLabel(r.region),
-      suggested: placeOnly ? venueHit || regionHit : venueHit || regionHit || shared.length > 0,
-      hidden: placeOnly && !venueHit && !regionHit,
-      matchedOn: (venueHit ? 'venue' : regionHit ? 'region' : shared.length > 0 ? 'discipline' : null) as ResourcePickerItem['matchedOn'],
+      suggested: offeringHit || (placeOnly ? venueHit || regionHit : venueHit || regionHit || shared.length > 0),
+      hidden: offeringMiss || (placeOnly && !venueHit && !regionHit),
+      matchedOn: (offeringHit ? 'offering' : venueHit ? 'venue' : regionHit ? 'region' : shared.length > 0 ? 'discipline' : null) as ResourcePickerItem['matchedOn'],
       disciplineLabel: shared.map((d) => CAPABILITY_META[d as CapabilityCategory]?.label ?? d).join(', ') || null,
       alreadyAdded: added.has(r.id),
       placed: Boolean(r.venue_id || r.site_id || r.region),

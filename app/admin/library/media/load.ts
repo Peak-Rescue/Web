@@ -30,7 +30,7 @@ export async function loadMediaShelf(): Promise<{
     admin.from('media_folders').select('drive_folder_id').eq('slug', 'general').maybeSingle(),
     admin
       .from('library_items')
-      .select('id, title, description, source_type, url, edit_url, drive_file_id, kind, audience, disciplines, topics, admin_only, venue_id, site_id, expires_at, status, bucket, region, source_class, source_topic, source_item, library_item_links(id, url, access, audience)')
+      .select('id, title, description, source_type, url, edit_url, drive_file_id, kind, audience, disciplines, topics, admin_only, venue_id, site_id, expires_at, course_type, status, bucket, region, source_class, source_topic, source_item, library_item_links(id, url, access, audience)')
       .eq('kind', 'media')
       .eq('status', 'published')
       .order('title'),

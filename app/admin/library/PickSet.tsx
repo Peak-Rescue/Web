@@ -8,8 +8,10 @@ import TrashIcon from '@/components/TrashIcon'
 import { errorFrom } from '@/lib/action-result'
 import { KIND_GROUPS, KIND_META, type LibraryItem, type Venue } from '@/lib/library'
 import { type SiteOption } from '@/app/admin/schedules/types'
+import { COURSE_TYPE_OPTIONS, courseShortName } from '@/lib/courses'
 import {
   setLibraryKind,
+  setLibraryCourseType,
   setLibraryPlace,
   archiveLibraryItems,
   deleteLibraryItems,
@@ -114,6 +116,24 @@ export default function PickSet({
                   {g.kinds.map((k) => (
                     <option key={k} value={k}>{KIND_META[k]}</option>
                   ))}
+                </optgroup>
+              ))}
+            </select>
+
+            <select
+              disabled={busy}
+              defaultValue=""
+              onChange={(e) => {
+                const ct = e.target.value
+                e.currentTarget.value = ''
+                if (ct) run(() => setLibraryCourseType(ids, ct), `${n} tied to ${courseShortName(ct, null)}`)
+              }}
+              className="bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-[11px] focus:outline-none focus:border-zinc-500"
+            >
+              <option value="">Set offering…</option>
+              {COURSE_TYPE_OPTIONS.map((g) => (
+                <optgroup key={g.category} label={g.label}>
+                  {g.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </optgroup>
               ))}
             </select>

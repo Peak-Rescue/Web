@@ -420,6 +420,11 @@ export type LibraryItem = {
   site_id: string | null
   region: string | null
   expires_at: string | null
+  /** The one offering this is for, when it is for one. Null — the usual
+      answer — means it is reached for by expertise and place like everything
+      else; an offering on every row would be a tag that says "most of them".
+      See 242. */
+  course_type: string | null
   status: LibraryStatus
   bucket: LibraryBucket
   /** Maps only; every other kind has one link in `url`. */
