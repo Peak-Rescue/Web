@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ACCESS_META, LINK_AUDIENCE_META, type MapLink } from '@/lib/library'
 import { removeMapLink, setMapLink, updateMapLink } from './actions'
+import { STUDENTS, INSTRUCTORS } from '@/components/AudiencePills'
 
 // The ways into one map.
 //
@@ -78,7 +79,7 @@ export default function MapLinks({ itemId, links }: { itemId: string; links: Map
                 disabled={busy}
                 onChange={(e) => run(() => save(updateMapLink(l.id, { audience: e.target.value as MapLink['audience'] })))}
                 className={`text-[11px] rounded px-1.5 py-1 border border-transparent focus:outline-none focus:border-zinc-600 shrink-0 ${
-                  l.audience === 'students' ? 'bg-teal-950/60 text-teal-300' : 'bg-amber-950/60 text-amber-400'
+                  l.audience === 'students' ? STUDENTS : INSTRUCTORS
                 }`}
               >
                 {AUDIENCES.map((a) => <option key={a} value={a}>{LINK_AUDIENCE_META[a]}</option>)}

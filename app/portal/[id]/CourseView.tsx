@@ -97,9 +97,9 @@ const STATUS_LABEL: Record<string, string> = {
 // controlling visibility right up until someone changes one of them.
 const CHIP = {
   instructors: {
-    chip: 'border-amber-900 bg-amber-950/40 text-amber-400',
-    hover: 'hover:text-amber-200 hover:border-amber-700',
-    tail: 'text-amber-500/70',
+    chip: 'border-violet-900 bg-violet-950/40 text-violet-300',
+    hover: 'hover:text-violet-100 hover:border-violet-700',
+    tail: 'text-violet-400/70',
   },
   maps: {
     chip: 'border-teal-800 bg-teal-950/40 text-teal-300',

@@ -32,6 +32,7 @@ export type CourseUpdate = {
 
 import type { NotifyCounts } from '@/lib/course-notify'
 import ComposerTrigger, { SendIcon } from '@/components/ComposerTrigger'
+import { STUDENTS, INSTRUCTORS } from '@/components/AudiencePills'
 export type { NotifyCounts }
 
 // Updates for the people on the course. The email only points here, so this
@@ -159,7 +160,7 @@ export default function CourseUpdates({
                         instructors-only note sitting in a list the students also read
                         needs to look different from the ones they can see. */}
                     {canPost && u.audience !== 'everyone' && (
-                      <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded-full border border-teal-500/30 bg-teal-500/10 text-teal-300">
+                      <span className={`text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded-full ${u.audience === 'instructors' ? INSTRUCTORS : STUDENTS}`}>
                         {u.audience === 'instructors' ? 'Instructors only' : 'Students only'}
                       </span>
                     )}

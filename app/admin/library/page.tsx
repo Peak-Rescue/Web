@@ -32,6 +32,7 @@ import { CAPABILITY_META, CAPABILITY_ORDER, courseCapabilityCategories, type Cap
 import { COURSE_TYPE_OPTIONS } from '@/lib/courses'
 import { readViewAs, viewAsSelf } from '@/lib/view-as'
 import ViewAsMenu from '@/components/ViewAsMenu'
+import { INSTRUCTORS } from '@/components/AudiencePills'
 
 const input = 'w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500'
 
@@ -451,7 +452,7 @@ export default async function LibraryPage({
     >
       {text}
       {Boolean(badge) && (
-        <span className="text-[10px] leading-none px-1.5 py-1 rounded bg-amber-950/60 text-amber-400">
+        <span className={`text-[10px] leading-none px-1.5 py-1 rounded ${INSTRUCTORS}`}>
           {badge}
         </span>
       )}

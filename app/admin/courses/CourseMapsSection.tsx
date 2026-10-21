@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 import { errorFrom, type ActionResult } from '@/lib/action-result'
 import AddMapDialog from '@/components/AddMapDialog'
 import { type LibraryAudience, shelfLink } from '@/lib/library'
-import { AudiencePills } from '@/components/AudiencePills'
+import { AudiencePills, INSTRUCTORS } from '@/components/AudiencePills'
 import AudienceToggle from '@/components/AudienceToggle'
 import TrashIcon from '@/components/TrashIcon'
 import {
@@ -189,7 +189,7 @@ export default function CourseMapsSection({
               {m.audience === 'shared' && !m.overridden && !m.hasStudentLink && (
                 <span
                   title="None of this map's links is marked for students, so they would see nothing. Add a students link in the library."
-                  className="text-[10px] px-1.5 py-0.5 rounded bg-amber-950/60 text-amber-400"
+                  className={`text-[10px] px-1.5 py-0.5 rounded ${INSTRUCTORS}`}
                 >
                   no student link
                 </span>

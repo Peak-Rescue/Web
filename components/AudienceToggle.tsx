@@ -17,7 +17,7 @@ import { type LibraryAudience } from '@/lib/library'
 
 const STUDENTS_ON = 'bg-teal-900/50 text-teal-300 hover:bg-teal-900'
 const STUDENTS_OFF = 'bg-zinc-800/60 text-zinc-600 line-through decoration-zinc-700 hover:text-zinc-400'
-const INSTRUCTORS = 'bg-amber-950/60 text-amber-400'
+import { INSTRUCTORS } from '@/components/AudiencePills'
 // The confirm is a question with two answers, so neither answer has to carry
 // the question in its label.
 //

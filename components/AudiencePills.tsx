@@ -13,8 +13,17 @@ import { type LibraryAudience } from '@/lib/library'
 // which is easier to read at a glance than the difference between the words
 // "Internal" and "Students".
 
-const STUDENTS = 'bg-teal-900/50 text-teal-300'
-const INSTRUCTORS = 'bg-amber-950/60 text-amber-400'
+// Exported, because the pill is not the only place either of these appears —
+// a map's audience chip, a toggle, an update's "Instructors only" — and every
+// hand-rolled copy is a place the vocabulary can drift.
+//
+// Instructors were amber until the library's "needs sorting" badge landed
+// beside one and the two read as the same kind of fact. Amber had come to
+// mean attention everywhere else in the portal — unsigned waivers, missing
+// MEDEVAC plans, a crew that is not the crew priced — and an audience is not
+// a warning. Violet is spoken nowhere else.
+export const STUDENTS = 'bg-teal-900/50 text-teal-300'
+export const INSTRUCTORS = 'bg-violet-950/70 text-violet-300'
 
 export function AudiencePills({
   audience,
