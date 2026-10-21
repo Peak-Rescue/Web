@@ -550,16 +550,29 @@ export default async function LibraryPage({
       by.set(k, [...(by.get(k) ?? []), i])
     }
     if (groupBy === 'kind') {
-      return LIBRARY_KINDS.filter((k) => by.has(k)).map((k) => [k as string, by.get(k)!] as const)
+      // Every type the shelf holds, not only the ones that landed on this
+      // page. The facets counted the whole shelf and the headings counted
+      // sixty rows, so the type list in the filter and the type list on the
+      // page disagreed — seven types offered above, four headings below, and
+      // no way to tell which of the two was lying.
+      const keys = hasFacets
+        ? LIBRARY_KINDS.filter((k) => by.has(k) || facetKinds.has(k))
+        : LIBRARY_KINDS.filter((k) => by.has(k))
+      return keys.map((k) => [k as string, by.get(k) ?? []] as const)
     }
     return [
       ...CAPABILITY_ORDER.filter((c) => by.has(c)).map((c) => [c as string, by.get(c)!] as const),
       ...(by.has('_untagged') ? [['_untagged', by.get('_untagged')!] as const] : []),
     ]
   })()
+  // Blank is how an untyped row reads on its own line — nothing has been said
+  // about it yet. A heading cannot be blank, and neither can a line in a
+  // filter: there it is a row you cannot read and cannot not pick.
+  const UNTYPED = 'No type yet'
+  const kindLabel = (k: string) => KIND_META[k as keyof typeof KIND_META] || UNTYPED
   const groupLabel = (cat: string) =>
     groupBy === 'kind'
-      ? KIND_META[cat as keyof typeof KIND_META] ?? cat
+      ? kindLabel(cat)
       : cat === '_untagged'
         ? 'Not tied to an expertise'
         : CAPABILITY_META[cat as CapabilityCategory].label
@@ -711,7 +724,7 @@ export default async function LibraryPage({
               <option value="">All types</option>
               {(hasFacets ? LIBRARY_KINDS.filter((k) => facetKinds.has(k)) : LIBRARY_KINDS).map((k) => (
                 <option key={k} value={k}>
-                  {KIND_META[k]}{hasFacets ? ` (${facetKinds.get(k)})` : ''}
+                  {kindLabel(k)}{hasFacets ? ` (${facetKinds.get(k)})` : ''}
                 </option>
               ))}
             </select>
@@ -830,6 +843,18 @@ export default async function LibraryPage({
                           click. They are typed one at a time on the row. */}
                     </summary>
                     <div className="pt-1 pb-3">
+                    {/* None of this type on this page — the shelf holds them
+                        further down the alphabet. The heading is still here,
+                        because the shelf still holds them, and this is the
+                        way to the rest. */}
+                    {rows.length === 0 && (
+                      <Link
+                        href={href({ kind: cat, page: undefined })}
+                        className="text-xs text-zinc-500 hover:text-white transition-colors"
+                      >
+                        Show all {facetKinds.get(cat)} →
+                      </Link>
+                    )}
                     {/* The same rows either way. An admin gets the editor,
                         which is a row that can be opened and changed; everyone
                         else gets the row. */}
@@ -844,6 +869,15 @@ export default async function LibraryPage({
                           <ItemRow key={it.id} item={it} venueName={it.venue_id ? venueName.get(it.venue_id) : null} />
                         ))}
                       </div>
+                    )}
+                    {/* The rest of them, where the page cut the group off. */}
+                    {rows.length > 0 && groupBy === 'kind' && hasFacets && (facetKinds.get(cat) ?? 0) > rows.length && (
+                      <Link
+                        href={href({ kind: cat, page: undefined })}
+                        className="inline-block mt-2 text-xs text-zinc-500 hover:text-white transition-colors"
+                      >
+                        Show all {facetKinds.get(cat)} →
+                      </Link>
                     )}
                     </div>
                   </details>
