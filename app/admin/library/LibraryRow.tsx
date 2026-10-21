@@ -14,6 +14,7 @@ import { type SiteOption } from '@/app/admin/schedules/types'
 import { COURSE_TYPE_OPTIONS, courseShortName } from '@/lib/courses'
 import CloseButton from '@/components/CloseButton'
 import TrashIcon from '@/components/TrashIcon'
+import InfoHint from '@/components/InfoHint'
 import StateBadge from '@/components/StateBadge'
 import KindOptions from '@/components/KindOptions'
 
@@ -295,10 +296,11 @@ export default function LibraryRow({ item, venues, sites = [], hideProvenance = 
               Several, because one was always going to be the wrong answer
               for anything two offerings share. */}
           <div>
-            <label className={label}>
-              Course offerings <span className="text-zinc-700">— only the ones it is for</span>
+            <label className={`${label} flex items-center gap-1.5`}>
+              Course offerings
+              <InfoHint text="Pick one to limit this to those courses. Left empty it is offered wherever its discipline matches, which is what most material wants." />
             </label>
-            <div className="flex items-center gap-1.5 flex-wrap mb-1.5">
+            <div className={`flex items-center gap-1.5 flex-wrap ${form.course_types.length ? 'mb-1.5' : ''}`}>
               {form.course_types.map((ct) => (
                 <span
                   key={ct}
@@ -315,9 +317,6 @@ export default function LibraryRow({ item, venues, sites = [], hideProvenance = 
                   </button>
                 </span>
               ))}
-              {form.course_types.length === 0 && (
-                <span className="text-[11px] text-zinc-600">Any offering its discipline matches</span>
-              )}
             </div>
             <select
               className={input}
