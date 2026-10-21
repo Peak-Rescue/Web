@@ -111,7 +111,12 @@ export default async function LibraryPage({
   // 800 rows cost about half a second to render a list nobody reads end to
   // end — while this one capped at 500 and said nothing, so items 501 and on
   // simply weren't reachable from here.
-  const PAGE = 60
+  // The import queue is the exception: it is a pile you work through until
+  // it is empty, and splitting 118 rows across two pages means the groups
+  // are cut in half — "Rappelling (14)" on one page and the rest of
+  // Rappelling on the next, each with its own selection. The groups are
+  // folded, so the cost is rows in the DOM nobody has opened.
+  const PAGE = status === 'pending' ? 500 : 60
   const pageNo = Math.max(0, Number(page ?? '0') || 0)
   const offset = pageNo * PAGE
 
