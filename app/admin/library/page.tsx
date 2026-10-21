@@ -234,7 +234,17 @@ export default async function LibraryPage({
     // Counted whatever tab you are on: the queue is no longer the page you
     // land on, so the only thing keeping an import from rotting there unseen
     // is the number on the tab.
-    admin.from('library_items').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
+    // Scoped to the shelf being stood on, because the tab beside it is: it
+    // read "Pending review 68" on Reference and then showed the thirteen
+    // that are Reference's, which is the same count-says-one-thing,
+    // list-says-another the type facets had.
+    (() => {
+      let q = admin.from('library_items').select('id', { count: 'exact', head: true }).eq('status', 'pending')
+      if (onShelf && !isTemplateShelf(bucket)) {
+        q = q.eq('bucket', bucket).not('kind', 'in', `(${KINDS_OFF_BUCKET_SHELVES.join(',')})`)
+      }
+      return q
+    })(),
     // What is behind each door, for the cards. Head-only counts, and only on
     // the landing — a number on a card is the difference between picking a
     // shelf and guessing at one.
