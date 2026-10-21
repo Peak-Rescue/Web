@@ -13,6 +13,8 @@ import {
   deleteCourseDoc,
   courseDocFilingDraft,
   fileCourseDocToLibrary,
+  libraryForCourseFiles,
+  addCourseDocsFromLibrary,
 } from './document-actions'
 import { LinkIcon, PencilIcon } from '@/components/TaskIcons'
 import UploadNameDialog from '@/components/UploadNameDialog'
@@ -20,6 +22,7 @@ import AddLinkDialog from '@/components/AddLinkDialog'
 import InfoHint from '@/components/InfoHint'
 import TrashIcon from '@/components/TrashIcon'
 import SaveItemToLibrary from './SaveItemToLibrary'
+import FromLibraryPicker from '@/components/FromLibraryPicker'
 
 export type CourseFile = {
   id: string
@@ -177,6 +180,14 @@ export default function CourseFilesSection({
           <p className="text-xs text-zinc-500">Documents and task attachments.</p>
         </div>
         <div className="shrink-0 flex items-center gap-2">
+          {/* The other half of "save to library": a course should be able to
+              reach for something already on the shelves, or the second copy
+              somebody uploads instead is the thing the shelves exist to
+              stop. */}
+          <FromLibraryPicker
+            onOpen={() => libraryForCourseFiles(instanceId)}
+            onAdd={(ids) => addCourseDocsFromLibrary(instanceId, ids)}
+          />
           <button
             onClick={() => setLinkOpen(true)}
             disabled={linkBusy}

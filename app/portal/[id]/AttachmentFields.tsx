@@ -4,6 +4,8 @@ import { useState } from 'react'
 import { linkLabel } from '@/lib/course-links'
 import { createUpdateUploadTargets, type UpdateLink, type UpdateAttachment } from './update-actions'
 import TrashIcon from '@/components/TrashIcon'
+import FromLibraryPicker from '@/components/FromLibraryPicker'
+import { libraryForCourseFiles } from '@/app/admin/courses/document-actions'
 
 // The links-and-files half of writing something onto a course: the chips, the
 // two icons that add to them, and the upload itself.
@@ -123,6 +125,20 @@ export default function AttachmentFields({
           else — its name is taken from the address, and the pill can be
           renamed after the fact if the host makes a poor label. */}
       <div className="flex flex-wrap items-center gap-1">
+        {/* The shelves, as a third way in. Writing an update that points at
+            the gear list we already have should not mean finding its URL
+            again — and a pasted second copy is what the library exists to
+            stop. Picked rows arrive as links, because that is what an
+            update's attachment row is. */}
+        <FromLibraryPicker
+          onOpen={() => libraryForCourseFiles(instanceId)}
+          onPick={(rows) =>
+            setLinks((p) => [
+              ...p,
+              ...rows.filter((r) => r.url).map((r) => ({ url: r.url!, label: r.title })),
+            ])
+          }
+        />
         <button
           onClick={() => setAddingLink((v) => !v)}
           title="Add a link"

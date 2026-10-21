@@ -242,3 +242,45 @@ export async function fileCourseDocToLibrary(
   revalidatePath(`/admin/courses/${instanceId}`)
   revalidatePath('/admin/library')
 }
+
+/** The library, as a picker for this course's files — the same ranking the
+    Reference picker uses, because it is the same question: which row, and is
+    it about where this course is.
+ *
+ * Adding from the library is the other half of filing to it. Every screen
+ * that takes a file or a link can now also take one that already exists,
+ * which is the point of having a library at all. */
+export async function libraryForCourseFiles(instanceId: string) {
+  const { loadResourceLibrary } = await import('./resource-actions')
+  return loadResourceLibrary(instanceId)
+}
+
+export async function addCourseDocsFromLibrary(
+  instanceId: string,
+  itemIds: string[]
+): Promise<ActionResult> {
+  const { user, admin } = await requireTeam(instanceId)
+  if (itemIds.length === 0) return
+
+  const { data: items } = await admin
+    .from('library_items')
+    .select('id, title, url, admin_only')
+    .in('id', itemIds)
+    .eq('admin_only', false)
+  if (!items?.length) return refuse('Nothing to add')
+
+  // The library row is referenced, not copied: a course file pointing at one
+  // follows its link and its name, and deleting the course row leaves the
+  // library alone.
+  const { error } = await admin.from('course_documents').insert(
+    items.map((i) => ({
+      instance_id: instanceId,
+      url: i.url,
+      filename: i.title,
+      library_item_id: i.id,
+      uploaded_by: user.id,
+    }))
+  )
+  if (error) throw new Error(error.message)
+  revalidatePath(`/admin/courses/${instanceId}`)
+}
