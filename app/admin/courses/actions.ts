@@ -12,7 +12,10 @@ import { sendMail } from '@/lib/mailer'
 import { announcesChanges, emailAdminsNewCourse, notifyRoleChange } from '@/lib/course-notify'
 import { clampOffDays, dayShift, strokeOffDays, type OffSpan } from '@/lib/courses'
 import { todayHere } from '@/lib/course-clock'
-import { assertCustomCourseTagged } from '@/lib/capabilities'
+import { assertCustomCourseTagged, courseCapabilityCategories } from '@/lib/capabilities'
+import { refuse, type ActionResult } from '@/lib/action-result'
+import { classify, NEEDS_SORTING } from '@/lib/sorting'
+import { moduleAudience } from '@/lib/library'
 import { asInstanceRole, type CrewPlan } from '@/lib/staffing-roles'
 
 const fmtLong = (d: string) =>
@@ -1348,6 +1351,112 @@ export async function deleteItem(instanceId: string, itemId: string) {
 
   if (error) throw new Error(error.message)
   revalidatePath(`/admin/courses/${instanceId}`)
+}
+
+// File a curriculum item that was typed onto one course into the library, so
+// the next course can pull it from the picker instead of retyping it. The
+// course keeps its row: it stops owning the link and starts pointing at the
+// library item, the same move saveCourseResourceToLibrary makes for the
+// Resources shelf.
+//
+// Admin-only, unlike the rest of the curriculum writes: course staff build
+// their own course, but what goes on the library shelves is an admin call.
+// The course is read from the item, not taken from the caller.
+export async function saveCurriculumItemToLibrary(itemId: string): Promise<ActionResult> {
+  await requireAdmin()
+  const admin = createAdminClient()
+
+  const { data: item } = await admin
+    .from('course_items')
+    .select('id, title, type, url, audience, library_item_id, course_modules(instance_id, audience)')
+    .eq('id', itemId)
+    .single()
+  const mod = item?.course_modules as unknown as { instance_id: string; audience: string } | null
+  if (!item || !mod) return refuse('That item is no longer on this course')
+  if (item.library_item_id) return refuse('That item is already in the library')
+  if (!item.url) return refuse('That item has no link to save')
+  const instanceId = mod.instance_id
+
+  // Same match addLinkToLibrary refuses on. Here it is a reason to link
+  // rather than a reason to stop: the person wanted this item to be the
+  // library's, and it already is.
+  const { data: existing } = await admin
+    .from('library_items')
+    .select('id, audience, admin_only')
+    .eq('url', item.url)
+    .neq('status', 'archived')
+    .limit(1)
+    .maybeSingle()
+  // Company paperwork is never offered to a course (addLibraryItems filters
+  // it out), so a course row must not become the way to point at it.
+  if (existing?.admin_only) return refuse('That link is already in the library as admin-only paperwork')
+
+  // An instructors-only section makes the item instructors-only whatever its
+  // own pill says, and the library copy should not quietly open it up.
+  const sectionInternal = moduleAudience(mod.audience) === 'internal'
+  const audience: 'internal' | 'shared' = sectionInternal ? 'internal' : item.audience === 'internal' ? 'internal' : 'shared'
+
+  let libraryItemId = existing?.id as string | undefined
+  if (!libraryItemId) {
+    const { data: inst } = await admin
+      .from('course_instances')
+      .select('region, venue_id, course_type, custom_categories')
+      .eq('id', instanceId)
+      .single()
+
+    // It came through the curriculum, so teaching is the shelf it falls back
+    // to; the classifier still wins when it is sure, so a permit pasted into a
+    // section is filed as a permit. Unsure, it wears the needs-sorting tag
+    // like every other promote path, rather than a guess.
+    const fallbackKind = item.type === 'video' ? 'video' : 'reference'
+    const verdict = classify({ title: item.title, url: item.url, kind: fallbackKind, bucket: 'teaching', source_topic: null })
+    const drive = /drive\.google\.com|docs\.google\.com/i.test(item.url)
+
+    const { data: created, error: createError } = await admin
+      .from('library_items')
+      .insert({
+        title: item.title,
+        url: item.url,
+        source_type: drive ? 'drive' : /youtube\.com|youtu\.be/i.test(item.url) ? 'youtube' : 'link',
+        kind: verdict.confident ? verdict.kind ?? fallbackKind : fallbackKind,
+        bucket: verdict.confident ? verdict.bucket ?? 'teaching' : 'teaching',
+        admin_only: verdict.confident ? verdict.adminOnly ?? false : false,
+        audience,
+        region: inst?.region ?? null,
+        venue_id: inst?.venue_id ?? null,
+        // The course already says what discipline this is, so it arrives
+        // tagged and the picker can suggest it to the next course like it.
+        disciplines: inst
+          ? (courseCapabilityCategories(inst.course_type, inst.custom_categories) as string[])
+          : [],
+        topics: verdict.confident ? [] : [NEEDS_SORTING],
+        // Published, as every promote path files: it was already good enough
+        // to put in front of a course, and the sorting tag is the review.
+        status: 'published',
+      })
+      .select('id')
+      .single()
+    if (createError) throw new Error(createError.message)
+    libraryItemId = created.id as string
+  }
+
+  // Linking to an item that already exists brings its ceiling with it: a row
+  // left 'shared' would override an instructors-only library document and put
+  // it in front of students.
+  const clamped = existing?.audience === 'internal' ? { audience: 'internal' } : {}
+
+  // url goes because the library's is the one rendered now — a stale copy
+  // here is how a fixed link stays broken on this course. Title stays: the
+  // column is NOT NULL, and it is what addLibraryItems writes too.
+  const { error } = await admin
+    .from('course_items')
+    .update({ library_item_id: libraryItemId, url: null, ...clamped })
+    .eq('id', itemId)
+  if (error) throw new Error(error.message)
+
+  revalidatePath(`/admin/courses/${instanceId}`)
+  revalidatePath(`/portal/${instanceId}`)
+  revalidatePath('/admin/library')
 }
 
 // The crew plan off a details form: three boxes, each of them allowed to be

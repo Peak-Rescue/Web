@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { addModule, deleteModule, addItem, deleteItem, setModuleAudience, setItemAudience } from './actions'
+import { addModule, deleteModule, addItem, deleteItem, setModuleAudience, setItemAudience, saveCurriculumItemToLibrary } from './actions'
 import { LIBRARY_HREF } from '@/lib/course-links'
 import { moduleAudience, type LibraryAudience } from '@/lib/library'
 import LibraryPicker from './LibraryPicker'
@@ -7,6 +7,7 @@ import SuggestedContent from './SuggestedContent'
 import TemplatePicker, { type TemplateOption } from './TemplatePicker'
 import RemovableRow from './RemovableRow'
 import AudienceSetter from './AudienceSetter'
+import SaveItemToLibrary from './SaveItemToLibrary'
 
 const ITEM_ICON: Record<string, string> = {
   video: 'M15 10l4.553-2.069A1 1 0 0 1 21 8.82v6.361a1 1 0 0 1-1.447.894L15 14M3 8a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8z',
@@ -42,6 +43,7 @@ export default function CourseCurriculumEditor({
   templates,
   courseDisciplines,
   knownSectionNames,
+  canFileToLibrary = false,
 }: {
   instanceId: string
   /** Already ordered by the caller — instructor-only sections first for staff. */
@@ -52,6 +54,9 @@ export default function CourseCurriculumEditor({
   /** Section names already in use, so the same one isn't retyped three
       slightly different ways across courses. */
   knownSectionNames: string[]
+  /** Real admins only: filing into the library is an admin write, so course
+      staff building their own curriculum do not get the offer. */
+  canFileToLibrary?: boolean
 }) {
   const addModuleWithId = addModule.bind(null, instanceId)
 
@@ -111,6 +116,11 @@ export default function CourseCurriculumEditor({
                             ? <a href={url} target="_blank" rel="noreferrer" className="text-sm font-medium hover:text-pr-red-light transition-colors">{title}</a>
                             : <span className="text-sm font-medium">{title}</span>}
                           {lib && <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-500">library</span>}
+                          {canFileToLibrary && !item.library_item_id && item.url && (
+                            <SaveItemToLibrary
+                              onSave={async () => { 'use server'; return saveCurriculumItemToLibrary(item.id) }}
+                            />
+                          )}
                           {/* Inside an instructors-only section there is
                               nothing to decide — students see none of it
                               either way, so the control would be a lie.

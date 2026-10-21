@@ -95,6 +95,10 @@ const STATUS_LABEL: Record<string, string> = {
 // the other half of the answer resting on whoever had typed "Student Map"
 // into a title — a second source of truth that agrees with the column
 // controlling visibility right up until someone changes one of them.
+// What each level is called where somebody reads it. The schema says site,
+// venue, region; the person reading says canyon, venue, state.
+const LEVEL_WORD: Record<string, string> = { site: 'canyon', venue: 'venue', region: 'state' }
+
 const CHIP = {
   instructors: {
     chip: 'border-violet-900 bg-violet-950/40 text-violet-300',
@@ -761,6 +765,12 @@ export default async function CourseView({
       internal: r.audience !== 'shared' || item?.audience === 'internal',
       place: item?.sites?.name ?? item?.venues?.name
         ?? (item?.region ? regionLabel(item.region) || item.region : null),
+      // Which level it is filed at, not only where. "Zion" could be the
+      // venue or a canyon in it, and the difference is the difference
+      // between a plan that covers every course that goes there and one
+      // that covers a single descent — which is the mistake worth being
+      // able to see from here.
+      placeLevel: item?.sites?.name ? 'site' : item?.venues?.name ? 'venue' : item?.region ? 'region' : null,
     }
   }).filter((r) => r.url && (showTasks || !r.internal))
 
@@ -1804,6 +1814,7 @@ export default async function CourseView({
                     suggestions={canManageTasks ? templateRows ?? [] : []}
                     canManage={canManageTasks}
                     currentUserId={userId ?? ''}
+                    canFileToLibrary={showAsAdmin}
                   />
                 </div>
               )}
@@ -2475,6 +2486,7 @@ export default async function CourseView({
                     templates={curriculumTemplates}
                     courseDisciplines={courseDisciplines}
                     knownSectionNames={knownSectionNames}
+                    canFileToLibrary={showAsAdmin}
                   />
                 ) : null
               }
@@ -2643,8 +2655,12 @@ export default async function CourseView({
                             {r.label}
                           </span>
                           {r.place && (
-                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-900/40 text-blue-300 shrink-0">
+                            <span
+                              title={`Filed to the ${LEVEL_WORD[r.placeLevel ?? 'region']}, so it reaches every course under it`}
+                              className="text-[10px] px-1.5 py-0.5 rounded bg-blue-900/40 text-blue-300 shrink-0"
+                            >
                               {r.place}
+                              <span className="text-blue-300/50"> · {LEVEL_WORD[r.placeLevel ?? 'region']}</span>
                             </span>
                           )}
                           {showTasks && r.internal && (
@@ -2912,6 +2928,7 @@ export default async function CourseView({
                               // Only for staff: a student needs no list of every
                               // lot the company gathers in.
                               meetingPoints={showTasks ? schedMeetingPoints : []}
+                              canFileToLibrary={showAsAdmin}
                               siteMeetupName={d.sites?.meeting_points?.name ?? null}
                               // Which of the three fallbacks answered, so the
                               // line under an inherited point names the place

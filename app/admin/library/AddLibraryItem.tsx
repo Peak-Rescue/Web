@@ -115,7 +115,7 @@ export default function AddLibraryItem({
 
       <div className="sm:col-span-2">
         <label className={label}>
-          {isMap ? 'Place * — country, state, venue or canyon' : 'Place — country, state, venue or canyon'}
+          {isMap ? 'Location * — country, state, venue or canyon' : 'Location — country, state, venue or canyon'}
         </label>
         <PlaceSelect
           name="place"

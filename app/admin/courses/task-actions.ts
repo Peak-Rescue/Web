@@ -7,6 +7,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { courseShortName } from '@/lib/courses'
 import { normalizeDocLink } from '@/lib/doc-links'
 import { sendMail } from '@/lib/mailer'
+import { requireAdminUser } from '@/lib/course-access'
 
 // Admins manage tasks everywhere; a lead instructor manages tasks on their
 // own course. Assignees may toggle their own task's status.
@@ -367,4 +368,51 @@ export async function deleteTask(instanceId: string | null, taskId: string) {
   const { error } = await admin.from('course_tasks').delete().eq('id', taskId).filter('instance_id', instanceId ? 'eq' : 'is', instanceId)
   if (error) throw new Error(error.message)
   revalidateTaskViews(instanceId)
+}
+
+// Files a task typed on one course into the suggestion library, so the next
+// course can pick it instead of someone typing it again. Admin-only: the
+// library is offered on every course, so adding to it is a catalog change,
+// not a course one. The title is read from the task row rather than taken
+// from the browser, and it lands as a situational suggestion
+// (default_line false) — a one-off is not yet proof that every course needs it.
+export async function fileTaskAsSuggestion(taskId: string) {
+  const { admin } = await requireAdminUser()
+  const { data: task, error: tErr } = await admin
+    .from('course_tasks')
+    .select('title, instance_id')
+    .eq('id', taskId)
+    .single()
+  if (tErr || !task) throw new Error(tErr?.message ?? 'Task not found')
+  const title = (task.title as string).trim()
+  if (!title) throw new Error('Task has no title')
+
+  const { data: existing, error: eErr } = await admin
+    .from('course_task_templates')
+    .select('title, sort_order')
+    .eq('active', true)
+  if (eErr) throw new Error(eErr.message)
+  // A second click, or another admin filing the same task, is a no-op rather
+  // than a duplicate line in everyone's picker.
+  if ((existing ?? []).some((t) => (t.title as string).trim().toLowerCase() === title.toLowerCase())) {
+    revalidateTaskViews(task.instance_id as string | null)
+    return
+  }
+
+  // After the last line, inactive ones included, so a retired template's slot
+  // is never reused and the canonical order stays stable.
+  const { data: last } = await admin
+    .from('course_task_templates')
+    .select('sort_order')
+    .order('sort_order', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  const { error } = await admin.from('course_task_templates').insert({
+    title,
+    sort_order: ((last?.sort_order as number | undefined) ?? 0) + 10,
+    default_line: false,
+    active: true,
+  })
+  if (error) throw new Error(error.message)
+  revalidateTaskViews(task.instance_id as string | null)
 }

@@ -7,11 +7,13 @@ import AttachmentFields from './AttachmentFields'
 import { ChipRow } from '@/components/LinkChip'
 import { Linkified, shortUrl, urlsIn } from '@/lib/linkify'
 import CloseButton from '@/components/CloseButton'
+import InfoHint from '@/components/InfoHint'
 import type { MeetingLink, MeetingFile } from '@/lib/meeting-details'
 import type { UpdateLink, UpdateAttachment, UpdateAudience } from './update-actions'
 import type { NotifyCounts } from '@/lib/course-notify'
 import { announceMeetingDetails } from './update-actions'
 import { saveDayMeetingDetails } from './logistics-actions'
+import { fileDayMeetingPoint } from '@/app/admin/sites/actions'
 import { meetingDayLabel } from '@/lib/meeting-details'
 
 // Meeting point and time: read as two facts, edited in place, and announced
@@ -35,6 +37,7 @@ export default function MeetingDetails({
   meetingPoint,
   meetingPointId,
   meetingPoints = [],
+  canFileToLibrary = false,
   siteMeetupName = null,
   inheritedFrom = null,
   inheritedPlace = null,
@@ -70,6 +73,10 @@ export default function MeetingDetails({
   /** Everywhere a day could be told to gather. Empty for anyone who can't
       edit, so a student is sent no list of the company's meetups. */
   meetingPoints?: { id: string; name: string }[]
+  /** Whether a meetup typed onto this day can be filed into the library from
+      here. Admins only: the library is shared by every course, and the
+      meeting-points table is theirs to write. */
+  canFileToLibrary?: boolean
   /** What the site usually uses, named — so the empty option reads "Meet at
       the Grafton lot" rather than the blank that makes a picker look unset. */
   siteMeetupName?: string | null
@@ -122,6 +129,12 @@ export default function MeetingDetails({
   const [point, setPoint] = useState(meetingPoint ?? '')
   const [pointId, setPointId] = useState(meetingPointId ?? '')
   const pointRef = useRef<HTMLTextAreaElement>(null)
+  // A meetup filed from this box joins the picker straight away, before the
+  // refresh brings the library back with it in — otherwise the select would
+  // be set to an id it has no option for and read as the usual.
+  const [filedPoints, setFiledPoints] = useState<{ id: string; name: string }[]>([])
+  const pickable = [...meetingPoints, ...filedPoints.filter((f) => !meetingPoints.some((p) => p.id === f.id))]
+  const [filing, setFiling] = useState(false)
 
   // Height follows the content rather than the other way round. Reset first:
   // scrollHeight only ever reports growth, so without it the box can grow and
@@ -226,6 +239,25 @@ export default function MeetingDetails({
     }
   }
 
+  // One press, never automatic: most typed mornings are one-offs — the lay-by
+  // on the way, the morning we start at the shop — and a library that filled
+  // itself from every one of them would be a picker nobody could read.
+  async function fileToLibrary() {
+    setFiling(true); setError(null)
+    try {
+      const res = await fileDayMeetingPoint(dayId, point)
+      if ('error' in res) { setError(res.error); return }
+      setFiledPoints((prev) => [...prev, res])
+      setPointId(res.id)
+      setPoint('')
+      router.refresh()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'That didn’t file')
+    } finally {
+      setFiling(false)
+    }
+  }
+
   function discard() {
     setPoint(meetingPoint ?? ''); setPointId(meetingPointId ?? ''); setTime(meetingTime ?? '')
     setDraftLinks(links)
@@ -254,7 +286,7 @@ export default function MeetingDetails({
             Left alone it says what the canyon usually does, which is why the
             empty option is named rather than blank: an unset picker and a
             picker set to the usual look identical otherwise. */}
-        {meetingPoints.length > 0 && (
+        {pickable.length > 0 && (
           <label className="block sm:col-span-2">
             <span className="block text-[11px] uppercase tracking-wide text-zinc-500 mb-1">Meet at</span>
             <select
@@ -267,7 +299,7 @@ export default function MeetingDetails({
               <option value="">
                 {siteMeetupName ? `${siteMeetupName} — the usual` : 'Wherever this site usually meets'}
               </option>
-              {meetingPoints.map((p) => (
+              {pickable.map((p) => (
                 <option key={p.id} value={p.id}>{p.name}</option>
               ))}
             </select>
@@ -289,6 +321,19 @@ export default function MeetingDetails({
             className="w-full min-h-[4.5rem] resize-y bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-zinc-200 leading-relaxed focus:outline-none focus:border-zinc-500"
           />
         </label>
+        {canFileToLibrary && point.trim() && !pointId && (
+          <div className="sm:col-span-2 -mt-1 flex items-center gap-1.5 text-[11px]">
+            <button
+              type="button"
+              disabled={busy || filing}
+              onClick={fileToLibrary}
+              className="text-zinc-500 hover:text-zinc-200 underline-offset-2 hover:underline transition-colors disabled:opacity-40"
+            >
+              {filing ? 'Saving…' : 'Save to meeting points'}
+            </button>
+            <InfoHint text="Files these words as a meeting point other courses can pick, and points this day at it. The first line becomes its name; the rest stays as directions, and both can be tidied on the meeting points screen." />
+          </div>
+        )}
         {pinnable.length > 0 && (
           <div className="sm:col-span-2 -mt-1 flex flex-wrap items-center gap-2 text-[11px] text-zinc-500">
             <span>Add {pinnable.length === 1 ? 'it' : 'them'} as a pin too?</span>

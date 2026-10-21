@@ -58,8 +58,11 @@ export type LibraryShelf = LibraryBucket | TemplateShelf | PlaceShelf | MediaShe
 
 export const PLACE_SHELF_META: Record<PlaceShelf, { label: string; hint: string }> = {
   venue: {
-    label: 'Venue information',
-    hint: 'Maps, beta, weather and contacts — everything filed by where it is',
+    // "Venue information" named one of the four levels it holds. A map of
+    // Utah and the beta for one canyon are both on this card, and only the
+    // middle of the ladder is a venue.
+    label: 'Locations',
+    hint: 'Countries, states, venues and canyons — maps, beta, weather, contacts and plans, each filed at the level it is true for',
   },
 }
 
@@ -317,7 +320,7 @@ export const KIND_GROUPS: { label: string; kinds: LibraryKind[] }[] = [
   // A plan and a permit are about one place — Deer Haven's risk eval, the
   // Snoqualmie permit — so they are listed under the card they are read on.
   // Which shelf the row sits on is a different question, answered below.
-  { label: 'Venue information', kinds: ['map', 'route', 'medevac', 'permit'] },
+  { label: 'Locations', kinds: ['map', 'route', 'medevac', 'permit'] },
   { label: 'Photos & video',    kinds: ['media'] },
   // `reference` is deliberately not here. It is the absence of an answer,
   // and listing it under a heading called "Not said yet" put the word

@@ -189,8 +189,21 @@ export default function SitesShelf({
     const contacts = info?.contacts ?? []
     // Always rendered, because the add forms live here too: a state with
     // nothing in it is exactly where something is about to be put.
+    const anything =
+      weather.length > 0 || contacts.length > 0 || other.length > 0 ||
+      canyons.length > 0 || beta.length > 0 || plans.length > 0 ||
+      permits.length > 0 || maps.length > 0
+
     return (
       <div className="mb-2 space-y-2">
+        {/* What filing something here means, where the filing happens. The
+            level is the claim "this is true for everything under here", and
+            that claim is the whole reason there are levels. */}
+        {anything && (
+          <p className="text-[10px] text-zinc-600">
+            Filed to the state — every venue and course under it inherits this.
+          </p>
+        )}
         {weather.length > 0 && (
           <div className="flex flex-wrap gap-1.5">
             {weather.map((l, i) => (
@@ -281,6 +294,11 @@ export default function SitesShelf({
           <div key={c.country || '_none'} className="rounded-lg border border-zinc-800/80 bg-zinc-950/40 p-3">
             <h2 className="flex items-center gap-2 text-lg font-bold text-white mb-3 pb-2 border-b border-zinc-700">
               {c.label}
+              {/* The level, said rather than inferred. Indentation and colour
+                  tell three levels apart once you know there are three; the
+                  word is for everyone else, and for the question this page
+                  is actually asked — what does this thing cover. */}
+              <span className="text-[10px] font-normal uppercase tracking-wide text-zinc-600">country</span>
               {c.country && !c.hasStates && <RemovePlace what={c.label} regionCode={c.country} />}
             </h2>
             {c.country && <RegionBlocks code={c.country} />}
@@ -295,6 +313,7 @@ export default function SitesShelf({
                 {(sub.label || c.hasStates) && (
                   <p className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-pr-red-light/80 mb-2">
                     {sub.label || 'No state set'}
+                    <span className="text-[10px] font-normal tracking-wide text-zinc-600 normal-case">state</span>
                     {sub.code && <RemovePlace what={sub.label || sub.code} regionCode={sub.code} />}
                   </p>
                 )}
@@ -304,6 +323,7 @@ export default function SitesShelf({
             <summary className="cursor-pointer list-none flex items-center gap-2 px-3 py-2.5 hover:bg-zinc-800/60 transition-colors">
               <span aria-hidden className="text-zinc-600 text-xs transition-transform group-open/venue:rotate-90">▶</span>
               <span className="text-sm font-medium text-zinc-200">{g.name}</span>
+              <span className="text-[10px] uppercase tracking-wide text-zinc-600">venue</span>
               {g.venue && <EditVenue venue={g.venue} />}
               {g.venue && <RemovePlace what={g.venue.name} venueId={g.venue.id} />}
               {/* No tally. "1 beta · 1 map" told you a venue had something

@@ -369,8 +369,8 @@ export default function LibraryRow({ item, venues, sites = [], hideProvenance = 
                 be about a country, a state, a venue or one canyon inside
                 one, and only one of those is a venue. */}
             <label className={`${label} flex items-center gap-1.5`}>
-              Place{form.kind === 'map' ? ' *' : ''}
-              <InfoHint text="Country, state, venue or canyon — whichever this is actually about. A map needs one: a map filed nowhere is offered to no course." />
+              Location{form.kind === 'map' ? ' *' : ''}
+              <InfoHint text="Country, state, venue or canyon — whichever level this is true for. Everything under it inherits it, so file it as broadly as it is true. A map needs one: a map filed nowhere is offered to no course." />
             </label>
             <PlaceSelect
               name="place"

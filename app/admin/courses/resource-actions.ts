@@ -6,6 +6,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { normalizeDocLink } from '@/lib/doc-links'
 import { type LibraryAudience } from '@/lib/library'
 import { regionLabel } from '@/lib/regions'
+import { addPlaceContact } from '@/app/admin/sites/actions'
 import { refuse, type ActionResult } from '@/lib/action-result'
 import { classify, NEEDS_SORTING } from '@/lib/sorting'
 import { bucketForKind, KINDS_OFF_BUCKET_SHELVES } from '@/lib/library'
@@ -528,4 +529,38 @@ export async function placeContactsFor(instanceId: string): Promise<
     ...take(venue?.contacts as unknown[], venue?.name ?? 'this venue'),
     ...take(region?.contacts, regionLabel(code) || 'the state'),
   ]
+}
+
+/** Files a contact typed on a course with the place the course is at: the
+ *  venue when it has one, else the state. The course keeps its own copy —
+ *  this only adds the person to the list the next course there is offered.
+ *  Admin only, the same as adding them on the places page, because that list
+ *  is shared by every course that goes there. Returns where it went, so the
+ *  button can say so. */
+export async function fileContactToPlace(
+  instanceId: string,
+  contact: { name: string; phone?: string; email?: string }
+): Promise<{ error: string } | { filedWith: string }> {
+  const { admin } = await requireTeam(instanceId)
+  const { data: inst } = await admin
+    .from('course_instances')
+    .select('venue_id, region, venues(name)')
+    .eq('id', instanceId)
+    .single()
+  const venueName = (inst?.venues as unknown as { name?: string } | null)?.name
+  const scope = inst?.venue_id
+    ? { venueId: inst.venue_id as string }
+    : inst?.region
+      ? { regionCode: inst.region as string }
+      : null
+  if (!scope) return { error: 'Say where the course is first, so there is a place to file them with.' }
+  const filedWith = 'venueId' in scope ? venueName ?? 'the venue' : regionLabel(scope.regionCode) || 'the state'
+  // Already on file there — most often because it was picked from that list
+  // and then given a new number. Saying so beats a second copy of the person.
+  const key = contact.name.trim().toLowerCase()
+  const onFile = await placeContactsFor(instanceId)
+  if (onFile.some((c) => c.from === filedWith && c.name.toLowerCase() === key)) return { filedWith }
+  const refused = await addPlaceContact(scope, contact)
+  if (refused) return refused
+  return { filedWith }
 }

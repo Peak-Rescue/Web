@@ -15,6 +15,7 @@ import {
   addTaskDocLink,
   renameTaskDoc,
   deleteTaskDoc,
+  fileTaskAsSuggestion,
 } from '@/app/admin/courses/task-actions'
 
 import { NotesIcon, PaperclipIcon, taskIconClass } from '@/components/TaskIcons'
@@ -48,6 +49,9 @@ export type TaskSuggestion = { id: string; title: string; default_line: boolean;
 // everyone on the course can see it, and assignees can check off their own.
 // With a null instanceId it is the general list — tasks on no course, which
 // only admins manage (/admin/tasks).
+// `canFileToLibrary` (real admins only) lets a task typed by hand be saved
+// into the suggestions every course picks from — the library has no other
+// way to grow from what courses actually needed.
 export default function CourseTasksPanel({
   instanceId,
   tasks,
@@ -56,6 +60,7 @@ export default function CourseTasksPanel({
   currentUserId,
   suggestions = [],
   completedOpen = false,
+  canFileToLibrary = false,
 }: {
   instanceId: string | null
   tasks: CourseTask[]
@@ -64,6 +69,7 @@ export default function CourseTasksPanel({
   currentUserId: string
   suggestions?: TaskSuggestion[]
   completedOpen?: boolean
+  canFileToLibrary?: boolean
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -177,6 +183,11 @@ export default function CourseTasksPanel({
       </>
     )
   }
+
+  // Matched on title, loosely, because that is all a picked suggestion leaves
+  // on the task — and a case-only difference is the same line to the picker.
+  const libraryTitles = new Set(suggestions.map((s) => s.title.trim().toLowerCase()))
+  const inLibrary = (t: CourseTask) => libraryTitles.has(t.title.trim().toLowerCase())
 
   const isOn = (t: CourseTask) => t.assignees.some((a) => a.id === currentUserId)
   const namesOf = (t: CourseTask) =>
@@ -497,7 +508,16 @@ export default function CourseTasksPanel({
                     Retry
                   </button>
                 )}
-                <button onClick={() => setOpenDetailsId(null)} className="ml-auto text-xs text-zinc-600 hover:text-zinc-400 transition-colors">
+                {canFileToLibrary && !inLibrary(t) && (
+                  <button
+                    onClick={() => run(() => fileTaskAsSuggestion(t.id), t.id)}
+                    disabled={busyId === t.id}
+                    className="ml-auto text-xs text-zinc-500 hover:text-zinc-300 transition-colors disabled:opacity-50"
+                  >
+                    Save as suggestion
+                  </button>
+                )}
+                <button onClick={() => setOpenDetailsId(null)} className={`${canFileToLibrary && !inLibrary(t) ? '' : 'ml-auto '}text-xs text-zinc-600 hover:text-zinc-400 transition-colors`}>
                   Close
                 </button>
               </div>
