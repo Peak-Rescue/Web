@@ -151,75 +151,78 @@ export default function CourseDetailsEditor({
             {/* The locals, kept apart from the client's people above: a
                 landowner in that list is a landowner a quote could be
                 addressed to. */}
-            <CoursePlaceContacts initial={placeContacts} instanceId={instanceId} />
+            <div className="sm:col-span-2">
+              <CoursePlaceContacts initial={placeContacts} instanceId={instanceId} />
+            </div>
           </>
         )}
-        {/* Nobody enrols on a job, so there is no headcount to set. Left in
-            the data where it was already set, because a gear list built for
-            ten before somebody changed the type should not quietly re-price
-            itself. */}
-        {kind === 'course' && !meeting && (
+        {/* Owner, headcount and crew share one row of three, on the same
+            columns as the contacts above, so the form reads as a grid. */}
+        <div className="sm:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-4 items-start">
+          {/* Whose job it is to move this along — get it staffed, get the quote
+              out, get it billed, close its books. Not the crew: the crew runs
+              the course, this is who chases it. A course with nobody here is
+              the one everybody assumes somebody else is driving, so the courses
+              list draws the empty state as an alarm rather than as a blank. */}
+          {owners.length > 0 && (
+            <div>
+              <label className="block text-xs text-zinc-400 mb-1">Owner</label>
+              <select
+                name="owner_id"
+                defaultValue={course.owner_id ?? ''}
+                className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500"
+              >
+                <option value="">No owner</option>
+                {owners.map((o) => (
+                  <option key={o.id} value={o.id}>{o.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+          {/* Nobody enrols on a job, so there is no headcount to set. Left in
+              the data where it was already set, because a gear list built for
+              ten before somebody changed the type should not quietly re-price
+              itself. */}
+          {kind === 'course' && !meeting && (
+            <div>
+              <label className="block text-xs text-zinc-400 mb-1">Max students</label>
+              <input name="max_students" type="number" min="1" defaultValue={course.max_students ?? ''} className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
+            </div>
+          )}
+          {/* The crew, by seat. It was one number, and one number cannot say what
+              the people are there to do — which is the first thing an instructor
+              asked to work the week wants to know, and the thing that decides
+              whether they can say yes at all. The total follows from the boxes
+              rather than being a fourth box to keep in step. */}
+          {!meeting && (
           <div>
-            <label className="block text-xs text-zinc-400 mb-1">Max students</label>
-            <input name="max_students" type="number" min="1" defaultValue={course.max_students ?? ''} className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
-          </div>
-        )}
-        {/* Whose job it is to move this along — get it staffed, get the quote
-            out, get it billed, close its books. Not the crew: the crew runs
-            the course, this is who chases it. A course with nobody here is
-            the one everybody assumes somebody else is driving, so the courses
-            list draws the empty state as an alarm rather than as a blank. */}
-        {owners.length > 0 && (
-          <div>
-            <label className="block text-xs text-zinc-400 mb-1">Owner</label>
-            <select
-              name="owner_id"
-              defaultValue={course.owner_id ?? ''}
-              className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500"
-            >
-              <option value="">No owner</option>
-              {owners.map((o) => (
-                <option key={o.id} value={o.id}>{o.name}</option>
+            <label className="flex items-center gap-1 text-xs text-zinc-400 mb-1">
+              {kind === 'job' ? 'Crew' : 'Crew plan'}
+              <InfoHint text="How many of each the course runs. Each is a wage, and it is what the call-out asks an instructor to accept. Empty means nobody has decided; 0 means there is no room." />
+            </label>
+            <div className="flex items-center gap-2">
+              {CREW_SEAT_FIELDS.map((f) => (
+                <label key={f.name} className="flex-1 min-w-0 flex items-center bg-zinc-800 border border-zinc-700 rounded focus-within:border-zinc-500">
+                  <span className={`pl-2 text-[10px] font-semibold uppercase tracking-wide ${ROLE_TEXT[f.role]}`}>{f.label}</span>
+                  <input
+                    name={f.name}
+                    type="number"
+                    min="0"
+                    step="1"
+                    defaultValue={(course[f.key] as number | null) ?? ''}
+                    className="w-full min-w-0 bg-transparent px-2 py-2 text-sm text-right tabular-nums focus:outline-none"
+                  />
+                </label>
               ))}
-            </select>
-          </div>
-        )}
-        {/* The crew, by seat. It was one number, and one number cannot say what
-            the people are there to do — which is the first thing an instructor
-            asked to work the week wants to know, and the thing that decides
-            whether they can say yes at all. The total follows from the boxes
-            rather than being a fourth box to keep in step. */}
-        {!meeting && (
-        <div>
-          <label className="block text-xs text-zinc-400 mb-1">
-            {kind === 'job' ? 'Crew' : 'Crew plan'}
-            <InfoHint text="How many of each the course runs. Each is a wage, and it is what the call-out asks an instructor to accept. Empty means nobody has decided; 0 means there is no room." />
-          </label>
-          <div className="flex items-end gap-2">
-            {CREW_SEAT_FIELDS.map((f) => (
-              <div key={f.name} className="flex-1 min-w-0">
-                <span className={`block text-[10px] font-semibold uppercase tracking-wide mb-1 ${ROLE_TEXT[f.role]}`}>{f.label}</span>
-                <input
-                  name={f.name}
-                  type="number"
-                  min="0"
-                  step="1"
-                  defaultValue={(course[f.key] as number | null) ?? ''}
-                  className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500"
-                />
-              </div>
-            ))}
-            {/* Read-only, because it is worked out. A fourth box here is how
-                the parts and the total come to disagree. */}
-            <div className="shrink-0 text-center">
-              <span className="block text-[10px] uppercase tracking-wide text-zinc-600 mb-1">Total</span>
-              <span className="block px-3 py-2 text-sm text-zinc-400 tabular-nums">
-                {course.instructor_slots ?? '—'}
+              {/* Read-only, because it is worked out. A fourth box here is how
+                  the parts and the total come to disagree. */}
+              <span title="Total" className="shrink-0 py-2 text-sm text-zinc-400 tabular-nums">
+                = {course.instructor_slots ?? '—'}
               </span>
             </div>
           </div>
+          )}
         </div>
-        )}
       </AutoSaveForm>
 
       <div className="p-6 pt-5 border-t border-zinc-800">
