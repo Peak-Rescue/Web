@@ -6,7 +6,7 @@ import LibraryRow from './LibraryRow'
 import PlaceSelect from '@/components/PlaceSelect'
 import TrashIcon from '@/components/TrashIcon'
 import { errorFrom } from '@/lib/action-result'
-import { KIND_GROUPS, KIND_META, type LibraryItem, type Venue } from '@/lib/library'
+import { KIND_OPTIONS, KIND_META, type LibraryItem, type Venue } from '@/lib/library'
 import { type SiteOption } from '@/app/admin/schedules/types'
 import { COURSE_TYPE_OPTIONS, courseShortName } from '@/lib/courses'
 import { AUDIENCE_META } from '@/lib/library'
@@ -148,12 +148,8 @@ export default function PickSet({
               className="bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-[11px] focus:outline-none focus:border-zinc-500"
             >
               <option value="">Set type…</option>
-              {KIND_GROUPS.map((g) => (
-                <optgroup key={g.label} label={g.label}>
-                  {g.kinds.map((k) => (
-                    <option key={k} value={k}>{KIND_META[k]}</option>
-                  ))}
-                </optgroup>
+              {KIND_OPTIONS.map((o) => (
+                <option key={o.kind} value={o.kind}>{o.label}</option>
               ))}
             </select>
 

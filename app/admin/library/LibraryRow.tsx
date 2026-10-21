@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { updateLibraryItem, deleteLibraryItem, libraryItemUses, type LibraryItemUses } from './actions'
 import { errorFrom, type ActionResult } from '@/lib/action-result'
-import { KIND_META, KIND_GROUPS, AUDIENCE_META, bucketForKind, shelfOfRow, shelfLabel, type LibraryBucket, type LibraryItem, type Venue } from '@/lib/library'
+import { KIND_META, KIND_OPTIONS, AUDIENCE_META, bucketForKind, shelfOfRow, shelfLabel, type LibraryBucket, type LibraryItem, type Venue } from '@/lib/library'
 import { AudiencePills } from '@/components/AudiencePills'
 import { CAPABILITY_META, CAPABILITY_ORDER } from '@/lib/capabilities'
 import MapLinks from './MapLinks'
@@ -273,10 +273,12 @@ export default function LibraryRow({ item, venues, sites = [], hideProvenance = 
                   has. A type list that offers "not said yet" as a row reads
                   as a category, and people filed things under it. */}
               {form.kind === 'reference' && <option value="reference" />}
-          {KIND_GROUPS.map((g) => (
-                <optgroup key={g.label} label={g.label}>
-                  {g.kinds.map((k) => <option key={k} value={k}>{KIND_META[k]}</option>)}
-                </optgroup>
+              {/* Card and type on one line, because sorting asks both at once
+                  and an optgroup heading is drawn small and grey by the
+                  browser — so the shelf, which is half the decision, was the
+                  quiet half, and invisible once the list was closed. */}
+              {KIND_OPTIONS.map((o) => (
+                <option key={o.kind} value={o.kind}>{o.label}</option>
               ))}
             </select>
           </div>
