@@ -563,6 +563,7 @@ export default async function CoursePricingEditor({
           endsAt: course.ends_at,
         })}
         recipients={(billerRows ?? []).map((r) => ({ id: r.id as string, name: r.name as string }))}
+        clientNote={suggested?.bill_to?.note ?? null}
       />
       </PricingFold>
 

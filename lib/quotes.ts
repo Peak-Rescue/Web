@@ -145,8 +145,12 @@ export type QuoteRow = {
   sent_at: string | null
   accepted_at: string | null
   accepted_name: string | null
+  bill_to: QuoteBillTo | null
 }
+
+/** Who the client said to invoice, as they typed it on accepting. */
+export type QuoteBillTo = { name: string; email: string; phone: string | null; note: string | null }
 
 /** The columns a QuoteRow needs, for the queries that load or return one. */
 export const QUOTE_ROW_COLUMNS =
-  'id, accept_token, estimate_id, archived_at, prepared_by, prepared_by_name, quote_seq, status, issue_date, valid_until, total, options, scope_bullets, course_blurb, sent_at, accepted_at, accepted_name' as const
+  'id, accept_token, estimate_id, archived_at, prepared_by, prepared_by_name, quote_seq, status, issue_date, valid_until, total, options, scope_bullets, course_blurb, sent_at, accepted_at, accepted_name, bill_to' as const

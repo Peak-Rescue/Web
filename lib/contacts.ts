@@ -71,6 +71,52 @@ export function billTo(contacts: CoursePOC[]): { contact: CoursePOC; tagged: boo
   return first ? { contact: first, tagged: false } : null
 }
 
+/** The contacts after the client has said, on accepting a quote, who the
+    invoice goes to.
+
+    One path whether they confirmed the person we had, corrected it, or told
+    us for the first time: whoever they named becomes the billing contact,
+    matched to someone already on the list by email (else by name) so a
+    confirmation does not add a duplicate, and appended when they are new.
+    Every other tag comes off — there is one person to bill.
+
+    Except when they named the course's own contact, who `billTo` already
+    falls back to untagged. Tagging them would take the quotes away from them,
+    since `primaryContactEmail` skips the billing POC. */
+export function withInvoiceContact(
+  contacts: CoursePOC[],
+  answer: { name: string; email: string; phone: string | null }
+): CoursePOC[] {
+  const email = answer.email.trim().toLowerCase()
+  const name = answer.name.trim().toLowerCase()
+  const untagged = contacts.map(({ role: _role, ...c }) => c as CoursePOC)
+  const i = untagged.findIndex((c) =>
+    email ? c.emails.some((e) => e.toLowerCase() === email) : c.name.toLowerCase() === name
+  )
+  if (i === -1) {
+    return [
+      ...untagged,
+      {
+        name: answer.name.trim(),
+        phones: answer.phone?.trim() ? [answer.phone.trim()] : [],
+        emails: answer.email.trim() ? [answer.email.trim()] : [],
+        role: 'billing',
+      },
+    ]
+  }
+  const found = untagged[i]
+  const filled: CoursePOC = {
+    name: found.name || answer.name.trim(),
+    emails: found.emails,
+    phones:
+      answer.phone?.trim() && !found.phones.includes(answer.phone.trim())
+        ? [...found.phones, answer.phone.trim()]
+        : found.phones,
+  }
+  if (billTo(untagged)?.contact === found) return untagged.map((c, j) => (j === i ? filled : c))
+  return untagged.map((c, j) => (j === i ? { ...filled, role: 'billing' } : c))
+}
+
 // Every other email on file — offered as opt-in CCs when sending a quote.
 // The billing POC is in here: copying them on the quote is a choice worth
 // offering, just not one worth making for you.

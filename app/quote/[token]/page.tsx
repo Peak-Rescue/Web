@@ -6,13 +6,14 @@ import QuoteHeroPicker from '@/app/admin/courses/QuoteHeroPicker'
 import { HERO_CHOICES, clientSafeHero } from '@/lib/quote-heroes'
 import { courseDisplayName, courseShortName } from '@/lib/courses'
 import { services, categoryMeta, type ServiceCategory } from '@/lib/data/services'
-import { QUOTE_MISSION, quoteCommitment, QUOTE_CONTACT, quoteNumber, type QuoteOption } from '@/lib/quotes'
+import { QUOTE_MISSION, quoteCommitment, QUOTE_CONTACT, quoteNumber, type QuoteBillTo, type QuoteOption } from '@/lib/quotes'
 import { fmtMoney } from '@/lib/expenses'
 import AcceptForm from './AcceptForm'
 import PayButton from './PayButton'
 import { squareConfigured } from '@/lib/square'
 import { cardPaymentBlocker, settleOrder } from '@/lib/payments'
 import { todayHere } from '@/lib/course-clock'
+import { billingContact, parseContacts } from '@/lib/contacts'
 
 // Public, tokenized quote page — the client-facing deliverable. Styled to
 // match the public site (dark, red accents, course photography).
@@ -40,7 +41,7 @@ export default async function QuotePage({
 
   const { data: inst } = await admin
     .from('course_instances')
-    .select('ref_number, course_type, course_category, custom_title, client_name, location, starts_at, ends_at, hero_image, hero_position, hero_scale')
+    .select('ref_number, course_type, course_category, custom_title, client_name, location, starts_at, ends_at, hero_image, hero_position, hero_scale, contacts')
     .eq('id', quote.instance_id)
     .single()
   if (!inst) notFound()
@@ -85,6 +86,15 @@ export default async function QuotePage({
         transformOrigin: inst.hero_position ?? undefined,
       }
     : undefined
+
+  // Only somebody explicitly marked billing is offered for confirming. The
+  // untagged fallback is just whoever booked, and putting them up as the
+  // answer would read as a fact we never had — so then we ask.
+  const marked = billingContact(parseContacts(inst.contacts))
+  const invoiceContact = marked
+    ? { name: marked.name, email: marked.emails[0] ?? '', phone: marked.phones[0] ?? null }
+    : null
+  const billedTo = quote.bill_to as QuoteBillTo | null
 
   const qNum = quoteNumber(inst.ref_number, quote.quote_seq)
   const courseName = courseDisplayName(inst.course_type, inst.custom_title)
@@ -181,6 +191,11 @@ export default async function QuotePage({
             ✅ This quote was accepted{quote.accepted_name ? ` by ${quote.accepted_name}` : ''}
             {quote.accepted_at ? ` on ${fmtLong(quote.accepted_at.slice(0, 10))}` : ''}. We&apos;ll be in touch about
             next steps — thank you!
+            {billedTo?.name && (
+              <span className="block mt-1 text-teal-300/80">
+                The invoice will go to {billedTo.name}{billedTo.email ? ` (${billedTo.email})` : ''}.
+              </span>
+            )}
           </div>
         )}
         {cardPayment && (
@@ -303,6 +318,7 @@ export default async function QuotePage({
               clientName={inst.client_name}
               options={options}
               canPay={cardReady}
+              invoiceContact={invoiceContact}
             />
           </section>
         )}

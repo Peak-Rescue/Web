@@ -42,6 +42,7 @@ export default function BillingSection({
   quoteId: defaultQuoteId,
   forWhat,
   recipients,
+  clientNote = null,
 }: {
   instanceId: string
   requests: InvoiceRequest[]
@@ -70,8 +71,11 @@ export default function BillingSection({
   /** The active billers, who the request is mailed to. More than one and the
       send says which of them — all of them unless somebody says otherwise. */
   recipients: { id: string; name: string }[]
+  /** The PO number or billing instructions the client typed when accepting
+      the quote being billed — the note's starting point. */
+  clientNote?: string | null
 }) {
-  const [note, setNote] = useState('')
+  const [note, setNote] = useState(clientNote ?? '')
   // What is about to be sent, all of it editable. Seeded from the course and
   // then owned by this form: the request is a snapshot of what Harken was
   // told, so the moment to correct any of it is before it goes.

@@ -11,8 +11,12 @@ export default function AcceptForm({
   clientName,
   options,
   canPay,
+  invoiceContact,
 }: {
   token: string
+  /** The POC marked billing on the course, shown for the client to confirm or
+      change. Null when nobody is marked, and the client is asked instead. */
+  invoiceContact: { name: string; email: string; phone: string | null } | null
   /** Square is set up, so the client may pay by card as they accept. */
   canPay: boolean
   clientName: string | null
@@ -24,6 +28,11 @@ export default function AcceptForm({
   const [title, setTitle] = useState('')
   const [authorized, setAuthorized] = useState(false)
   const [selected, setSelected] = useState<Set<number>>(new Set())
+  const [changingBillTo, setChangingBillTo] = useState(!invoiceContact?.email)
+  const [billName, setBillName] = useState(invoiceContact?.name ?? '')
+  const [billEmail, setBillEmail] = useState(invoiceContact?.email ?? '')
+  const [billPhone, setBillPhone] = useState(invoiceContact?.phone ?? '')
+  const [billNote, setBillNote] = useState('')
   const [busy, setBusy] = useState<null | 'accept' | 'pay'>(null)
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
@@ -32,6 +41,8 @@ export default function AcceptForm({
   // combination the server will turn down.
   const problem = options ? selectionProblem(options, [...selected]) : null
   const needsPick = Boolean(options) && selected.size === 0
+  // Paying by card needs no invoice, so only the plain accept waits on this.
+  const needsBillTo = !billName.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(billEmail.trim())
   const selectedTotal = options
     ? [...selected].reduce((s, i) => s + Number(options[i]?.total ?? 0), 0)
     : 0
@@ -72,11 +83,17 @@ export default function AcceptForm({
   // client abandons the card page, and the accepted quote offers the button
   // again when they come back.
   async function submit(pay: boolean) {
-    if (busy || !name.trim() || !authorized || needsPick || problem) return
+    if (busy || !name.trim() || !authorized || needsPick || problem || (!pay && needsBillTo)) return
     setBusy(pay ? 'pay' : 'accept')
     setError(null)
     try {
-      const result = await acceptQuote(token, { name, title, selected: options ? [...selected] : undefined })
+      const result = await acceptQuote(token, {
+        name,
+        title,
+        selected: options ? [...selected] : undefined,
+        billTo: { name: billName, email: billEmail, phone: billPhone, note: billNote },
+        byCard: pay,
+      })
       if (!result.ok) {
         setError(result.error)
         return
@@ -165,6 +182,52 @@ export default function AcceptForm({
         <label className="block text-xs text-zinc-400 mb-1.5">Title / role (optional)</label>
         <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Operations SNCOIC" className={inputCls} />
       </div>
+      <div className="sm:col-span-2 pt-2">
+        <p className="text-xs text-zinc-400 mb-2">
+          {invoiceContact ? 'Invoice to' : 'Who should we send the invoice to?'}
+        </p>
+        {!changingBillTo && invoiceContact ? (
+          <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-lg border border-zinc-700 bg-zinc-800/50">
+            <span className="min-w-0 text-sm">
+              <span className="block font-medium text-white">{invoiceContact.name}</span>
+              <span className="block text-zinc-400 truncate">
+                {[invoiceContact.email, invoiceContact.phone].filter(Boolean).join(' · ')}
+              </span>
+            </span>
+            <button
+              type="button"
+              onClick={() => setChangingBillTo(true)}
+              className="text-xs text-zinc-400 hover:text-white underline whitespace-nowrap"
+            >
+              Send it to someone else
+            </button>
+          </div>
+        ) : (
+          <div className="grid sm:grid-cols-3 gap-3">
+            <input value={billName} onChange={(e) => setBillName(e.target.value)} placeholder="Name" className={inputCls} />
+            <input
+              type="email"
+              value={billEmail}
+              onChange={(e) => setBillEmail(e.target.value)}
+              placeholder="Email"
+              className={inputCls}
+            />
+            <input
+              type="tel"
+              value={billPhone}
+              onChange={(e) => setBillPhone(e.target.value)}
+              placeholder="Phone (optional)"
+              className={inputCls}
+            />
+          </div>
+        )}
+        <input
+          value={billNote}
+          onChange={(e) => setBillNote(e.target.value)}
+          placeholder="PO number or billing instructions (optional)"
+          className={`${inputCls} mt-3`}
+        />
+      </div>
       <label className="sm:col-span-2 flex items-start gap-2.5 text-sm text-zinc-300 cursor-pointer">
         <input
           type="checkbox"
@@ -182,7 +245,7 @@ export default function AcceptForm({
         <div className="flex flex-wrap gap-3">
           <button
             onClick={() => submit(false)}
-            disabled={Boolean(busy) || !name.trim() || !authorized || needsPick}
+            disabled={Boolean(busy) || !name.trim() || !authorized || needsPick || needsBillTo}
             className="px-6 py-3 bg-pr-red hover:bg-pr-red-dark text-white rounded font-semibold transition-colors disabled:opacity-40"
           >
             {busy === 'accept'
@@ -207,6 +270,9 @@ export default function AcceptForm({
           </p>
         )}
         {needsPick && <p className="mt-2 text-xs text-zinc-500">Select at least one option above to accept.</p>}
+        {!needsPick && needsBillTo && (
+          <p className="mt-2 text-xs text-zinc-500">Add a name and email for the invoice to accept.</p>
+        )}
       </div>
     </div>
   )

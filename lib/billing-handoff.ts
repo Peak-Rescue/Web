@@ -4,7 +4,7 @@ import { round2 } from '@/lib/expenses'
 import { billTo, parseContacts } from '@/lib/contacts'
 import { courseShortName } from '@/lib/courses'
 import { describeForBiller, numberSoFar, type ChainLink, type InvoiceRequest, type InvoiceStatus } from '@/lib/billing'
-import { quoteNumber } from '@/lib/quotes'
+import { quoteNumber, type QuoteBillTo } from '@/lib/quotes'
 
 // The handoff to Harken, worked out once.
 //
@@ -153,6 +153,7 @@ export type BillingPanelData = {
   quoteId: string | null
   forWhat: string
   recipients: { id: string; name: string }[]
+  clientNote: string | null
 }
 
 export async function loadBillingPanel(
@@ -173,7 +174,7 @@ export async function loadBillingPanel(
         .order('created_at'),
       admin
         .from('course_quotes')
-        .select('id, estimate_id, quote_seq, status, total, archived_at')
+        .select('id, estimate_id, quote_seq, status, total, archived_at, bill_to')
         .eq('instance_id', instanceId)
         .order('quote_seq', { ascending: false }),
       admin
@@ -233,6 +234,7 @@ export async function loadBillingPanel(
         : null,
     }),
     quotes: billableQuoteOptions(quotes, inst.ref_number as number),
+    clientNote: (quote?.bill_to as QuoteBillTo | null)?.note ?? null,
     quoteId: quote?.id ?? null,
     forWhat: describeForBiller({
       refNumber: inst.ref_number as number,

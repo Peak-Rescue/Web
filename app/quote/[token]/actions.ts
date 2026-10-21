@@ -5,7 +5,8 @@ import { after } from 'next/server'
 import { revalidatePath } from 'next/cache'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { syncCourseCalendar } from '@/lib/google-calendar'
-import { quoteNumber, selectionProblem, type QuoteOption } from '@/lib/quotes'
+import { quoteNumber, selectionProblem, type QuoteBillTo, type QuoteOption } from '@/lib/quotes'
+import { parseContacts, withInvoiceContact } from '@/lib/contacts'
 import { courseShortName } from '@/lib/courses'
 import { sendMail } from '@/lib/mailer'
 import { todayHere } from '@/lib/course-clock'
@@ -16,13 +17,39 @@ import { cardPaymentBlocker } from '@/lib/payments'
 // For multi-option quotes, `selected` holds the indexes of the option or
 // options the client is accepting; every option stays on record with the
 // chosen ones flagged, and the quote total becomes their sum.
+//
+// `billTo` is who the client says the invoice goes to. Required unless they
+// are paying by card on the spot, where there is no invoice to send.
 export async function acceptQuote(
   token: string,
-  input: { name: string; title: string; selected?: number[] }
+  input: {
+    name: string
+    title: string
+    selected?: number[]
+    billTo?: { name: string; email: string; phone: string; note: string }
+    byCard?: boolean
+  }
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const name = input.name.trim()
   const title = input.title.trim()
   if (!name) return { ok: false, error: 'Please enter your name' }
+
+  const clip = (v: string | undefined, n: number) => (v ?? '').trim().slice(0, n)
+  const billTo: QuoteBillTo | null =
+    input.billTo && (clip(input.billTo.name, 200) || clip(input.billTo.email, 200))
+      ? {
+          name: clip(input.billTo.name, 200),
+          email: clip(input.billTo.email, 200),
+          phone: clip(input.billTo.phone, 60) || null,
+          note: clip(input.billTo.note, 1000) || null,
+        }
+      : null
+  if (!input.byCard) {
+    if (!billTo?.name) return { ok: false, error: 'Please tell us who the invoice should go to' }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(billTo.email)) {
+      return { ok: false, error: 'Please enter an email address for the invoice' }
+    }
+  }
 
   const admin = createAdminClient()
   const { data: quote } = await admin
@@ -69,6 +96,7 @@ export async function acceptQuote(
       accepted_name: name.slice(0, 120),
       accepted_title: title.slice(0, 120) || null,
       accepted_ip: ip,
+      bill_to: billTo,
     })
     .eq('id', quote.id)
     .eq('status', 'sent')
@@ -76,12 +104,18 @@ export async function acceptQuote(
 
   const { data: inst } = await admin
     .from('course_instances')
-    .select('ref_number, course_type, custom_title, client_name, status')
+    .select('ref_number, course_type, custom_title, client_name, status, contacts')
     .eq('id', quote.instance_id)
     .single()
-  if (inst && ['tentative', 'quoted'].includes(inst.status)) {
-    await admin.from('course_instances').update({ status: 'confirmed' }).eq('id', quote.instance_id)
-    after(() => syncCourseCalendar(admin, quote.instance_id))
+  // What the client said goes onto the course's contacts, which is what the
+  // handoff to Harken reads. In the same write as the status, so a course
+  // never shows confirmed with the old payee.
+  const patch: Record<string, unknown> = {}
+  if (inst && ['tentative', 'quoted'].includes(inst.status)) patch.status = 'confirmed'
+  if (inst && billTo) patch.contacts = withInvoiceContact(parseContacts(inst.contacts), billTo)
+  if (Object.keys(patch).length > 0) {
+    await admin.from('course_instances').update(patch).eq('id', quote.instance_id)
+    if (patch.status) after(() => syncCourseCalendar(admin, quote.instance_id))
   }
 
   // Tell the admins the moment it happens (best-effort, deferred so the
@@ -104,12 +138,19 @@ export async function acceptQuote(
             '',
             `Course: ${courseName}${inst.client_name ? ` · ${inst.client_name}` : ''}`,
             `The course status has been moved to Confirmed.`,
+            ...(billTo
+              ? [
+                  '',
+                  `Invoice to: ${[billTo.name, billTo.email, billTo.phone].filter(Boolean).join(' · ')}`,
+                  ...(billTo.note ? [`Billing note: ${billTo.note}`] : []),
+                ]
+              : []),
             '',
             // Said here because this is the mail somebody actually reads on
             // the day it happens, and the handoff is the next thing that has
-            // to occur. Never sent automatically: at the moment a quote is
-            // accepted the billing contact is usually still unknown, and a
-            // request with a blank payee is worse for the biller than none.
+            // to occur. Still never sent automatically: the client now names
+            // the payee, but the amount and which quote it bills are a
+            // judgment somebody here makes.
             `Next: send it to Harken to be invoiced — Billing, on the course's Pricing section.`,
           ].join('\n'),
         })
