@@ -10,8 +10,8 @@ export const SECTORS = [
 ] as const
 
 // Which client sectors an instructor can work — a separate question from what
-// they're skilled in. Kept above Expertise because it's the coarser filter:
-// sector decides whether they're eligible for the job at all, expertise
+// they're skilled in. Kept above Disciplines because it's the coarser filter:
+// sector decides whether they're eligible for the job at all, discipline
 // decides what they can run once they are.
 export default function SectorPanel({
   instructorId,

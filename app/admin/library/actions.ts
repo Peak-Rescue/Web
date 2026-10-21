@@ -388,7 +388,7 @@ export async function setLibraryAudience(ids: string[], audience: 'internal' | '
   revalidate()
 }
 
-// Expertise for a whole section at once. The Classroom topic a batch arrives
+// Disciplines for a whole section at once. The Classroom topic a batch arrives
 // under is usually the discipline answer for every item in it — "Standards
 // Topics" is not thirteen separate judgements — and tagging them one at a time
 // is the step that was being skipped, which leaves items on the shelf that no
@@ -807,7 +807,7 @@ export async function setLibraryPlace(ids: string[], place: string) {
 }
 
 /** The offering a hand-picked set is for, or none. Blank is "any offering",
-    which is what most material is: expertise and place are the broader match
+    which is what most material is: discipline and place are the broader match
     and nearly everything wants the broader one. */
 export async function setLibraryCourseType(ids: string[], courseType: string) {
   const admin = await requireAdmin()

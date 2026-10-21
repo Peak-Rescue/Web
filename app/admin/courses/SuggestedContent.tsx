@@ -10,7 +10,7 @@ import { type PickerItem } from './LibraryPicker'
 import InfoHint from '@/components/InfoHint'
 
 // Library material offered for a course, grouped by the topic it came from —
-// each group becomes a section. Suggested material (this course's expertise or
+// each group becomes a section. Suggested material (this course's disciplines or
 // venue) leads, but everything is reachable: a jungle course often wants the
 // canyon set, and there's no reason to make that the hard path.
 //
@@ -179,7 +179,7 @@ export default function SuggestedContent({
               Suggested for this course{courseDisciplines.length ? ` (${courseDisciplines.map((d) => CAPABILITY_META[d as CapabilityCategory]?.label ?? d).join(', ')})` : ''}
             </option>
             <option value="all">Everything in the library</option>
-            <optgroup label="By expertise">
+            <optgroup label="By discipline">
               {CAPABILITY_ORDER.map((c) => (
                 <option key={c} value={c}>{CAPABILITY_META[c].label}</option>
               ))}

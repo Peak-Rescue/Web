@@ -41,7 +41,7 @@ export default function CourseGear({
       the shelf has nobody to check it. */
   viewerId?: string | null
   courseType: string | null
-  /** The expertise this course draws on — its offering's, or the boxes ticked
+  /** The disciplines this course draws on — its offering's, or the boxes ticked
       on a custom one. The catalog is tagged with the same vocabulary, so it is
       what the add panel offers first. */
   courseDisciplines?: string[]

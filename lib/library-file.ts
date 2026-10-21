@@ -34,7 +34,7 @@ export async function fileToLibrary(
     /** The object in task-documents. */
     path: string
     filename: string
-    /** The course it came off, for the place and the expertise. */
+    /** The course it came off, for the place and the discipline. */
     instanceId: string | null
     /** What the person said it is, on the form. Beats the classifier, which
         is guessing from a file name. */

@@ -235,7 +235,7 @@ export function roleBadgeClass(role: string | null | undefined): string {
 // what somebody is signed off to do across a discipline. A standing fact about a
 // person rather than a fact about one course — but it is the same vocabulary, so
 // it wears the same colours. A lead looks like a lead on their profile, on the
-// expertise grid and on a course crew row, and the axis is told apart by what is
+// discipline grid and on a course crew row, and the axis is told apart by what is
 // around it, not by inventing a second palette for the same word.
 //
 // Capabilities have no shadow, and should not: shadowing is what somebody does
@@ -245,7 +245,7 @@ export function roleBadgeClass(role: string | null | undefined): string {
 // instructor table and "primary" on a course, which are not the same claim and
 // were the same colour.
 
-/** Filled, for a toggle that is on — an expertise button, a picked capability.
+/** Filled, for a toggle that is on — a discipline button, a picked capability.
     A translucent pill does not read as pressed. */
 export const ROLE_SOLID: Record<InstanceRole, string> = {
   lead: 'bg-violet-700 text-white',

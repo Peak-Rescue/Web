@@ -409,8 +409,8 @@ export async function adminSetShowOnTeamPage(instructorId: string, show: boolean
 // looking for the checkbox.
 const VALID_SECTORS = new Set(['military', 'civilian'])
 
-// Which client sectors this instructor can work. Separate from expertise:
-// sector is eligibility for the job, expertise is what they can run on it.
+// Which client sectors this instructor can work. Separate from disciplines:
+// sector is eligibility for the job, discipline is what they can run on it.
 export async function adminSetInstructorSectors(instructorId: string, sectors: string[]) {
   await requireAdmin()
   const clean = [...new Set(sectors.filter((s) => VALID_SECTORS.has(s)))]
@@ -422,10 +422,10 @@ export async function adminSetInstructorSectors(instructorId: string, sectors: s
   await revalidateInstructor(instructorId)
 }
 
-// Single entry point for the bulk expertise grid: role null clears the
+// Single entry point for the bulk discipline grid: role null clears the
 // sign-off, otherwise it's set. Saves one cell at a time so a mis-click is
 // one click to undo.
-export async function adminSetExpertise(
+export async function adminSetDiscipline(
   instructorId: string,
   category: CapabilityCategory,
   role: CapabilityRole | null
@@ -447,7 +447,7 @@ export async function adminSetExpertise(
     if (error) throw new Error(error.message)
   }
   revalidatePath('/admin/instructors')
-  revalidatePath('/admin/instructors/expertise')
+  revalidatePath('/admin/instructors/disciplines')
   revalidatePath(`/admin/instructors/${instructorId}`)
 }
 

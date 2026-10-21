@@ -350,7 +350,7 @@ export default async function AdminInstructorDetailPage({ params }: { params: Pr
         </section>
 
         <section className="mb-10">
-          <h2 className="text-lg font-semibold mb-1">Expertise</h2>
+          <h2 className="text-lg font-semibold mb-1">Disciplines</h2>
           <p className="text-xs text-zinc-500 mb-3">What they&rsquo;re signed off to run, and at what level.</p>
           <CapabilityPanel
             instructorId={instructor.id}

@@ -24,7 +24,7 @@ export default function InstructorAssign({
   hasCrew: boolean
   // Internal events don't run by the staffing rules — who comes to a CE day or
   // a planning day is a choice, not a qualification — so the list opens on
-  // everyone rather than on whoever the expertise map would have allowed.
+  // everyone rather than on whoever the discipline map would have allowed.
   anyone?: boolean
   /** Courses each instructor is already on that run on this course's days.
       A warning, never a block: a two-hour overlap on a travel day is a call

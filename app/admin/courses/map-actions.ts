@@ -77,7 +77,7 @@ export type MapPickerItem = {
   regionLabel: string | null
   suggested: boolean
   matchedOn: 'site' | 'venue' | 'region' | 'discipline' | null
-  /** The expertise it shares with the course, when that is why it is offered. */
+  /** The discipline it shares with the course, when that is why it is offered. */
   disciplineLabel: string | null
   alreadyAdded: boolean
 }

@@ -29,6 +29,12 @@ const nextConfig: NextConfig = {
         destination: '/services/rope-access',
         permanent: true,
       },
+      // The grid was called Expertise until Oct 2026; Discipline is the one word now.
+      {
+        source: '/admin/instructors/expertise',
+        destination: '/admin/instructors/disciplines',
+        permanent: true,
+      },
     ]
   },
   images: {

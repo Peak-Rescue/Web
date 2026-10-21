@@ -170,7 +170,7 @@ describe('a crew that is not the crew that was priced', () => {
 
 
 // One palette, one definition. These exist because the same three words appear
-// on the crew row, the roster card, the dashboard, the call-out, the expertise
+// on the crew row, the roster card, the dashboard, the call-out, the discipline
 // grid and the rate library, and three screens each picking their own blue is
 // how a colour stops meaning anything.
 describe('the wage band palette', () => {

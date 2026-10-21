@@ -164,7 +164,7 @@ export default async function LibraryPage({
   if (audience) query = query.eq('audience', audience)
   if (venue) query = query.eq('venue_id', venue)
   // "What would a Canyon Mobility course reach for": the rows tied to that
-  // offering, plus the untied ones whose expertise it involves. Tying every
+  // offering, plus the untied ones whose discipline it involves. Tying every
   // row to an offering would be a tag that says "most of them", so untied is
   // the usual answer and this is what makes it still findable.
   if (offering) {
@@ -365,7 +365,7 @@ export default async function LibraryPage({
       }),
   }))
   // Grouped by the move itself, which is the unit the claim can be agreed
-  // The facets of the shelf being stood on: which types and which expertise
+  // The facets of the shelf being stood on: which types and which disciplines
   // are actually represented, and how many of each.
   const facetKinds = new Map<string, number>()
   const facetDisciplines = new Map<string, number>()
@@ -413,12 +413,12 @@ export default async function LibraryPage({
   // and it is the only axis on which "Reference" reads as four things rather
   // than fifty-nine.
   //
-  // Searching across shelves, by expertise instead: the question there is
+  // Searching across shelves, by discipline instead: the question there is
   // "what have we got on canyons", and the answer sorted by document type is
   // no answer at all. An item is listed under the first discipline it carries
   // rather than once per discipline — the filter still matches on any of
   // them, so nothing is unreachable for being grouped under one.
-  // A shelf groups by type; a search across shelves groups by expertise.
+  // A shelf groups by type; a search across shelves groups by discipline.
   // There was a third, by the Classroom class a row was imported from, for
   // the queue that no longer exists — a pending row now sits on its shelf
   // among the rows it is about to join, which is a better comparison than
@@ -455,7 +455,7 @@ export default async function LibraryPage({
     groupBy === 'kind'
       ? kindLabel(cat)
       : cat === '_untagged'
-        ? 'Not tied to an expertise'
+        ? 'Not tied to a discipline'
         : CAPABILITY_META[cat as CapabilityCategory].label
 
   return (
@@ -550,8 +550,8 @@ export default async function LibraryPage({
             </select>
           )}
           {/* Derived, not a second tagging job: an offering already says
-              which expertise it involves, so this reads the rows tied to it
-              and the untied ones that expertise matches. */}
+              which discipline it involves, so this reads the rows tied to it
+              and the untied ones that discipline matches. */}
           {!onMedia && (
           <select name="offering" defaultValue={offering ?? ''} className={input}>
             <option value="">All offerings</option>

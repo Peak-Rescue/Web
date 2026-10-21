@@ -11,7 +11,7 @@ export type TemplateOption = {
   description: string | null
   sections: number
   items: number
-  /** Why it is offered for this course — its offering, or the expertise it
+  /** Why it is offered for this course — its offering, or the disciplines it
       shares with it. Null means it isn't specific to this course, which is
       what the shelf is cut to before anything is shown. */
   relevance: string | null

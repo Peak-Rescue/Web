@@ -35,7 +35,7 @@ export function CourseTypeSelect({
 
   const selectedGroup = COURSE_TYPE_OPTIONS.find(g => g.category === category)
   const isCustom = courseType === 'custom'
-  // A typed course derives its expertise from the offering; a custom one has
+  // A typed course derives its disciplines from the offering; a custom one has
   // nothing to derive it from, so untagged it reaches nobody at all. Marking
   // every box required while none is ticked is what makes the browser say so
   // at the field — but only where there is a submit to block, which is the new
@@ -122,7 +122,7 @@ export function CourseTypeSelect({
 
       {/* Step 4 — what a custom event is, since it has no type to derive it
           from. Two unrelated things share the box because they appear on the
-          same trigger: whether anyone enrols, and which expertise it draws on.
+          same trigger: whether anyone enrols, and which discipline it draws on.
           Internal events belong here rather than in a field of their own —
           they are custom by nature, a CE day or a planning day or a
           consultation, and this block is already on screen the moment you say
@@ -177,7 +177,7 @@ export function CourseTypeSelect({
           <p className="text-[11px] text-zinc-500 mt-1">
             {internal
               ? 'Seen only by the people added to it — anyone can be added.'
-              : 'Instructors with expertise in a checked category see this course in their “All courses” calendar and count as qualified for staffing.'}
+              : 'Instructors signed off in a checked discipline see this course in their “All courses” calendar and count as qualified for staffing.'}
           </p>
         </div>
       )}

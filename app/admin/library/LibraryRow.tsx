@@ -154,7 +154,7 @@ export default function LibraryRow({ item, venues, sites = [], hideProvenance = 
             {site
               ? <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-900/40 text-blue-300">{site.name}</span>
               : venue && <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-900/40 text-blue-300">{venue.name}</span>}
-            {/* The expertise, up here with the rest of the tagging rather
+            {/* The disciplines, up here with the rest of the tagging rather
                 than in the grey line under it. Whether a row is properly
                 tagged is the question this list is read with, and the answer
                 was the one part of it written in the colour of a footnote.
@@ -202,7 +202,7 @@ export default function LibraryRow({ item, venues, sites = [], hideProvenance = 
               : item.url
                 ? new URL(item.url, 'https://x').hostname.replace('www.', '') || 'link'
                 : 'no link'}
-            {item.disciplines.length === 0 && ' · no expertise tag'}
+            {item.disciplines.length === 0 && ' · no discipline tag'}
             {!hideProvenance && item.source_class && (
               <span className="text-zinc-700"> · from {item.source_class}</span>
             )}
@@ -289,7 +289,7 @@ export default function LibraryRow({ item, venues, sites = [], hideProvenance = 
           </div>
           {/* For one kind of course and no other: the ACA swiftwater
               materials, a manual for kit only the aerial courses carry.
-              Optional, and blank is the usual answer — expertise is the
+              Optional, and blank is the usual answer — discipline is the
               broader match and most material wants the broader one. */}
           <div>
             <label className={label}>

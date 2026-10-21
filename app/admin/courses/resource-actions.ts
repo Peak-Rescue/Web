@@ -80,7 +80,7 @@ export type ResourcePickerItem = {
   regionLabel: string | null
   suggested: boolean
   matchedOn: 'offering' | 'venue' | 'region' | 'discipline' | null
-  /** The expertise it shares with the course, when that is why it is offered. */
+  /** The discipline it shares with the course, when that is why it is offered. */
   disciplineLabel: string | null
   alreadyAdded: boolean
   /** A plan for somewhere else. Loaded, because the query is one query, and
@@ -156,9 +156,9 @@ export async function loadResourceLibrary(instanceId: string): Promise<ResourceP
     const placeOnly = r.bucket === 'documents' || r.bucket === 'instructor'
     // Tied to one kind of course. The ACA swiftwater materials are for the
     // swiftwater courses and no other, so on anything else they are not a
-    // weaker match — they are the wrong thing, and expertise alone would
+    // weaker match — they are the wrong thing, and discipline alone would
     // offer them to all four canyon offerings. Null, the usual answer, means
-    // it matches on expertise and place like everything else. See 242.
+    // it matches on discipline and place like everything else. See 242.
     const offeringMiss = Boolean(r.course_type && r.course_type !== inst?.course_type)
     const offeringHit = Boolean(r.course_type && r.course_type === inst?.course_type)
     return {

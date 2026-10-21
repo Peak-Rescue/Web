@@ -860,7 +860,7 @@ export default async function CourseView({
       sections: t.course_template_sections.length,
       items: t.course_template_sections.reduce((n, sec) => n + sec.course_template_items.length, 0),
       // Why this setup is offered here, on the same terms as the gear and
-      // schedule shelves: its own offering, or the expertise that offering
+      // schedule shelves: its own offering, or the discipline that offering
       // implies. An exact course_type compare reached no custom course at all,
       // however many boxes were ticked on it.
       relevance: templateRelevance(t, templateCourse),

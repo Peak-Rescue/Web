@@ -88,14 +88,14 @@ export default async function AdminInstructorsPage() {
         <Link href="/admin" className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors mb-6 inline-block">← Portal</Link>
         <h1 className="text-2xl font-bold mb-2">All Instructor Profiles</h1>
         <div className="flex items-center justify-between mb-10">
-          <p className="text-zinc-400">Certifications, expertise, and portal access</p>
+          <p className="text-zinc-400">Certifications, disciplines, and portal access</p>
           <div className="flex items-center gap-2">
             {isAdmin && (
               <Link
-                href="/admin/instructors/expertise"
+                href="/admin/instructors/disciplines"
                 className="text-xs px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded transition-colors"
               >
-                Edit expertise grid
+                Edit discipline grid
               </Link>
             )}
             {isAdmin && <AddInstructorButton />}

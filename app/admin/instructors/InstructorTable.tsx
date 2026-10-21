@@ -136,8 +136,8 @@ export function InstructorTable({ instructors, isAdmin = false }: { instructors:
   const [requiredCerts, setRequiredCerts] = useState<Set<CertType>>(new Set())
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [levelFilters, setLevelFilters] = useState<Map<CertType, number>>(new Map())
-  const [expertiseFilter, setExpertiseFilter] = useState<Map<CapabilityCategory, CapabilityRole | 'any'>>(new Map())
-  // Cert groups start collapsed to their summary dots; only Expertise
+  const [disciplineFilter, setDisciplineFilter] = useState<Map<CapabilityCategory, CapabilityRole | 'any'>>(new Map())
+  // Cert groups start collapsed to their summary dots; only Disciplines
   // ('capabilities', not a cert group) opens expanded.
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(
     () => new Set(CERT_GROUPS.map(g => g.id))
@@ -145,8 +145,8 @@ export function InstructorTable({ instructors, isAdmin = false }: { instructors:
   const [previewDoc, setPreviewDoc] = useState<{ url: string; name: string } | null>(null)
   const [emailsCopied, setEmailsCopied] = useState(false)
 
-  function toggleExpertise(cat: CapabilityCategory) {
-    setExpertiseFilter(prev => {
+  function toggleDiscipline(cat: CapabilityCategory) {
+    setDisciplineFilter(prev => {
       const next = new Map(prev)
       if (next.has(cat)) next.delete(cat)
       else next.set(cat, 'any')
@@ -154,8 +154,8 @@ export function InstructorTable({ instructors, isAdmin = false }: { instructors:
     })
   }
 
-  function setExpertiseRole(cat: CapabilityCategory, role: CapabilityRole | 'any') {
-    setExpertiseFilter(prev => {
+  function setDisciplineRole(cat: CapabilityCategory, role: CapabilityRole | 'any') {
+    setDisciplineFilter(prev => {
       const next = new Map(prev)
       if (next.get(cat) === role) next.set(cat, 'any')
       else next.set(cat, role)
@@ -232,9 +232,9 @@ export function InstructorTable({ instructors, isAdmin = false }: { instructors:
         if (!hasMatchingStatus) return false
       }
 
-      if (expertiseFilter.size > 0) {
+      if (disciplineFilter.size > 0) {
         const capMap = Object.fromEntries(instructor.instructor_capabilities.map(c => [c.category, c.role])) as Partial<Record<CapabilityCategory, CapabilityRole>>
-        for (const [cat, roleFilter] of expertiseFilter) {
+        for (const [cat, roleFilter] of disciplineFilter) {
           const role = capMap[cat]
           if (!role) return false
           if (roleFilter !== 'any' && role !== roleFilter) return false
@@ -243,15 +243,15 @@ export function InstructorTable({ instructors, isAdmin = false }: { instructors:
 
       return true
     })
-  }, [instructors, requiredCerts, levelFilters, statusFilter, expertiseFilter])
+  }, [instructors, requiredCerts, levelFilters, statusFilter, disciplineFilter])
 
-  const hasFilters = requiredCerts.size > 0 || statusFilter !== 'all' || levelFilters.size > 0 || expertiseFilter.size > 0
+  const hasFilters = requiredCerts.size > 0 || statusFilter !== 'all' || levelFilters.size > 0 || disciplineFilter.size > 0
 
   function clearAll() {
     setRequiredCerts(new Set())
     setStatusFilter('all')
     setLevelFilters(new Map())
-    setExpertiseFilter(new Map())
+    setDisciplineFilter(new Map())
   }
 
   function copyEmails() {
@@ -337,17 +337,17 @@ export function InstructorTable({ instructors, isAdmin = false }: { instructors:
           </div>
         </div>
 
-        {/* Expertise */}
+        {/* Disciplines */}
         <div className="flex flex-wrap items-center gap-3">
-          <span className="text-xs font-medium text-zinc-400 uppercase tracking-wider shrink-0">Expertise</span>
+          <span className="text-xs font-medium text-zinc-400 uppercase tracking-wider shrink-0">Disciplines</span>
           <div className="flex flex-wrap gap-2">
             {CAPABILITY_ORDER.map(cat => {
-              const roleFilter = expertiseFilter.get(cat)
+              const roleFilter = disciplineFilter.get(cat)
               const active = roleFilter !== undefined
               return (
                 <div key={cat} className="flex items-center gap-0.5">
                   <button
-                    onClick={() => toggleExpertise(cat)}
+                    onClick={() => toggleDiscipline(cat)}
                     className={`px-2.5 py-1 rounded-l text-xs font-medium transition-colors ${
                       active
                         ? 'bg-teal-700 text-white'
@@ -359,13 +359,13 @@ export function InstructorTable({ instructors, isAdmin = false }: { instructors:
                   {active && (
                     <>
                       <button
-                        onClick={() => setExpertiseRole(cat, 'lead')}
+                        onClick={() => setDisciplineRole(cat, 'lead')}
                         className={`px-2 py-1 text-[10px] font-bold transition-colors ${
                           roleFilter === 'lead' ? ROLE_SOLID.lead : `${ROLE_MUTED.lead} hover:brightness-125`
                         }`}
                       >L</button>
                       <button
-                        onClick={() => setExpertiseRole(cat, 'assist')}
+                        onClick={() => setDisciplineRole(cat, 'assist')}
                         className={`px-2 py-1 text-[10px] font-bold rounded-r transition-colors ${
                           roleFilter === 'assist' ? ROLE_SOLID.assist : `${ROLE_MUTED.assist} hover:brightness-125`
                         }`}
@@ -470,7 +470,7 @@ export function InstructorTable({ instructors, isAdmin = false }: { instructors:
                     <button
                       onClick={() => toggleGroup('capabilities')}
                       className="flex items-center justify-center gap-1 mx-auto hover:text-white transition-colors"
-                      title={collapsed ? 'Expand Expertise' : 'Collapse Expertise'}
+                      title={collapsed ? 'Expand Disciplines' : 'Collapse Disciplines'}
                     >
                       <svg
                         xmlns="http://www.w3.org/2000/svg"
@@ -482,7 +482,7 @@ export function InstructorTable({ instructors, isAdmin = false }: { instructors:
                       >
                         <polyline points="6 9 12 15 18 9" />
                       </svg>
-                      <span className="text-xs">Expertise</span>
+                      <span className="text-xs">Disciplines</span>
                     </button>
                   </th>
                 )
@@ -652,8 +652,8 @@ export function InstructorTable({ instructors, isAdmin = false }: { instructors:
         <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-yellow-400" /> Expiring &lt;60 days</span>
         <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-red-400" /> Expired</span>
         <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-zinc-600" /> Not on file</span>
-        <span className="flex items-center gap-1.5"><span className="inline-flex items-center justify-center rounded px-1.5 py-0.5 text-[10px] font-bold leading-none bg-teal-900/60 text-teal-300">L</span> Expertise: Lead</span>
-        <span className="flex items-center gap-1.5"><span className="inline-flex items-center justify-center rounded px-1.5 py-0.5 text-[10px] font-bold leading-none bg-blue-900/60 text-blue-300">A</span> Expertise: Assist</span>
+        <span className="flex items-center gap-1.5"><span className="inline-flex items-center justify-center rounded px-1.5 py-0.5 text-[10px] font-bold leading-none bg-teal-900/60 text-teal-300">L</span> Discipline: Lead</span>
+        <span className="flex items-center gap-1.5"><span className="inline-flex items-center justify-center rounded px-1.5 py-0.5 text-[10px] font-bold leading-none bg-blue-900/60 text-blue-300">A</span> Discipline: Assist</span>
       </div>
     </div>
   )

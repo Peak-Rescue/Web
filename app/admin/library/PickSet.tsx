@@ -185,12 +185,12 @@ export default function PickSet({
             </select>
 
             {/* Replaces rather than adds, which is right for the pile this
-                is used on — nothing imported came with expertise on it — and
+                is used on — nothing imported came with a discipline on it — and
                 wrong enough on a tagged row to be worth saying out loud. */}
             <select
               disabled={busy}
               defaultValue=""
-              title="Replaces whatever expertise these carry"
+              title="Replaces whatever disciplines these carry"
               onChange={(e) => {
                 const d = e.target.value
                 e.currentTarget.value = ''
@@ -198,7 +198,7 @@ export default function PickSet({
               }}
               className="bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-[11px] focus:outline-none focus:border-zinc-500"
             >
-              <option value="">Set expertise…</option>
+              <option value="">Set discipline…</option>
               {CAPABILITY_ORDER.map((c) => (
                 <option key={c} value={c}>{CAPABILITY_META[c].label}</option>
               ))}

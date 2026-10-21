@@ -2141,7 +2141,7 @@ function AddGear({
   listId: string
   ownsCatalog: boolean
   catalog: GearItem[]
-  /** This course's expertise. Gear tagged for another discipline stands back
+  /** This course's disciplines. Gear tagged for another discipline stands back
       behind a count; gear tagged for none has made no claim either way and is
       shown, since most of the catalog is untagged and hiding it would empty
       the panel. */

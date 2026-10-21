@@ -1,4 +1,4 @@
-// Expertise: the skill an instructor is signed off in, at lead or assist.
+// Discipline: the skill an instructor is signed off in, at lead or assist.
 //
 // One list, not one per sector. The skills genuinely overlap — swiftwater is
 // swiftwater whether the team is civilian or military — and in practice the
@@ -53,7 +53,7 @@ export const CAPABILITY_ORDER: CapabilityCategory[] = [
   'mountain', 'jungle_mobility', 'urban_mobility', 'cold_weather', 'small_team',
 ]
 
-// Which expertise covers each offering. Civilian and military versions of the
+// Which discipline covers each offering. Civilian and military versions of the
 // same terrain map to the same skill — Canyon Mobility and Class C Canyon
 // Rescue both need Canyon — because the sector gate handles the rest.
 export const CATEGORY_COURSE_TYPES: Record<CapabilityCategory, string[]> = {
@@ -77,7 +77,7 @@ export const CATEGORY_COURSE_TYPES: Record<CapabilityCategory, string[]> = {
   small_team:      ['small-team-rescue'],
 }
 
-// Expertise that covers a course instance — the reverse of the map above.
+// Disciplines that cover a course instance — the reverse of the map above.
 // Custom courses have no type slug, so they use the categories the admin
 // tagged them with (course_instances.custom_categories).
 export function courseCapabilityCategories(
@@ -90,7 +90,7 @@ export function courseCapabilityCategories(
   return CAPABILITY_ORDER.filter((cat) => CATEGORY_COURSE_TYPES[cat].includes(course_type))
 }
 
-// A custom course has no offering to derive its expertise from, so these boxes
+// A custom course has no offering to derive its disciplines from, so these boxes
 // are the only thing that says what kind of work it is — which templates it is
 // offered, whose "All courses" calendar it turns up on, and who counts as
 // qualified to staff it. Untagged, it is a course nothing can find, so the tag

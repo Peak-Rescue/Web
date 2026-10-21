@@ -139,7 +139,7 @@ export default function CourseResourcesSection({
     .filter((i) => !i.alreadyAdded)
     .filter((i) => (scope === 'venue' ? i.placed : !i.placed))
     .sort((a, b) => Number(b.suggested) - Number(a.suggested) || a.title.localeCompare(b.title))
-  // What fits this course — its venue, its region, or its expertise — is what
+  // What fits this course — its venue, its region, or its disciplines — is what
   // the picker opens on. The rest of the shelf is one press away and says how
   // much of it there is, so nothing is hidden, only stood back from.
   const fitting = unadded.filter((i) => i.suggested)

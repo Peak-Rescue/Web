@@ -27,7 +27,7 @@ export type MediaAlbum = {
   count: number
   /** When the most recent thing in it was added. */
   latest: string | null
-  /** Expertise, inherited from the course or set on the items themselves. */
+  /** Disciplines, inherited from the course or set on the items themselves. */
   disciplines: string[]
   /** The offering, for the course albums that have one. */
   courseType: string | null

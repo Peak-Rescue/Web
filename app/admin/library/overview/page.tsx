@@ -55,7 +55,7 @@ export default async function LibraryOverviewPage() {
   const cleanTopics = (r: Row) => r.topics.filter((t) => t !== 'needs-link-check')
   const today = todayHere()
 
-  // ── Expertise → sections ────────────────────────────────────────────────
+  // ── Disciplines → sections ────────────────────────────────────────────────
   const byDiscipline = CAPABILITY_ORDER.map((cat) => {
     const mine = items.filter((i) => i.disciplines.includes(cat))
     const sections = new Map<string, Row[]>()
@@ -76,7 +76,7 @@ export default async function LibraryOverviewPage() {
   // ── Attention list ──────────────────────────────────────────────────────
   const flags = [
     { label: 'Waiting for review', n: items.filter((i) => i.status === 'pending').length, href: '/admin/library' },
-    { label: 'No expertise tag', n: untagged.length, href: '/admin/library' },
+    { label: 'No discipline tag', n: untagged.length, href: '/admin/library' },
     { label: 'Link may be dead', n: items.filter((i) => i.topics.includes('needs-link-check')).length, href: '/admin/library' },
     { label: 'No link at all', n: items.filter((i) => !i.url).length, href: '/admin/library' },
     { label: 'Expired', n: items.filter((i) => i.expires_at && i.expires_at < today).length, href: '/admin/library?kind=permit' },
@@ -114,9 +114,9 @@ export default async function LibraryOverviewPage() {
           </section>
         )}
 
-        {/* ── By expertise ──────────────────────────────────────────────── */}
+        {/* ── By discipline ──────────────────────────────────────────────── */}
         <section className="mb-10">
-          <h2 className="text-sm font-semibold text-zinc-400 mb-3">By expertise — sections and depth</h2>
+          <h2 className="text-sm font-semibold text-zinc-400 mb-3">By discipline — sections and depth</h2>
           <div className="space-y-2">
             {byDiscipline.map((d) => (
               <details key={d.cat} className={`${card} group`} open={d.total > 0}>
@@ -196,7 +196,7 @@ export default async function LibraryOverviewPage() {
         {untagged.length > 0 && (
           <section>
             <h2 className="flex items-center gap-1.5 text-sm font-semibold text-zinc-400 mb-2">
-              Not tied to any expertise ({untagged.length})
+              Not tied to any discipline ({untagged.length})
               <InfoHint text="These never surface as suggestions on a course — only by search or their Classroom class. Company documents belong here; teaching material probably doesn't." />
             </h2>
             <div className={`${card} px-4 py-3 text-xs text-zinc-500 space-y-1`}>

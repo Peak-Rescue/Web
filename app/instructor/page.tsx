@@ -236,10 +236,10 @@ export default async function InstructorPage() {
           <CertGrid initialCerts={certsWithDocs} actions={{ upsertCert, deleteCert, addCertDocument, deleteCertDocument }} />
         </section>
 
-        {/* Teaching expertise (read-only — set by admin) */}
+        {/* Teaching disciplines (read-only — set by admin) */}
         {capabilities.length > 0 && (
           <section>
-            <h2 className="text-lg font-semibold mb-1">Teaching Expertise</h2>
+            <h2 className="text-lg font-semibold mb-1">Teaching Disciplines</h2>
             <p className="text-xs text-zinc-500 mb-4">Set by your administrator.</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               {CAPABILITY_ORDER

@@ -199,7 +199,7 @@ export function shelfLink(shelf: LibraryShelf, params?: Record<string, string>) 
 }
 
 /** What a course is, as far as picking a template goes: the offering it is,
-    and the expertise it draws on. A custom course has no offering slug worth
+    and the disciplines it draws on. A custom course has no offering slug worth
     matching — every one of them is `custom` — but it does carry the boxes
     checked when it was set up, and those are the same vocabulary a template is
     tagged with. Which is why relevance is two tests, not one. */
@@ -227,7 +227,7 @@ export function templateRelevance(
   if (t.course_type && t.course_type !== 'custom' && t.course_type === course.course_type) {
     return 'this offering'
   }
-  // A template's own offering implies expertise too — a Class C Canyon Rescue
+  // A template's own offering implies a discipline too — a Class C Canyon Rescue
   // template is canyon work whether or not anyone ticked the Canyon box — so
   // the tag it was saved with counts alongside the ones typed on the shelf.
   // Without this, a template saved off a typed course reaches no custom course
@@ -441,7 +441,7 @@ export type LibraryItem = {
   region: string | null
   expires_at: string | null
   /** The one offering this is for, when it is for one. Null — the usual
-      answer — means it is reached for by expertise and place like everything
+      answer — means it is reached for by discipline and place like everything
       else; an offering on every row would be a tag that says "most of them".
       See 242. */
   course_type: string | null

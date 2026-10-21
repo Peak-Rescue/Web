@@ -69,7 +69,7 @@ export default function CourseSetupRow({ setup, venues, sites }: { setup: Course
     finally { setBusy(false) }
   }
 
-  // The offering already says which expertise this is — a Swiftwater setup is
+  // The offering already says which discipline this is — a Swiftwater setup is
   // water work whether or not anyone ticks the box — so the box is shown
   // checked and held there rather than left for a human to keep in sync. The
   // matching that reads these does the same derivation.

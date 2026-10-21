@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { ROLE_SOLID, roleInitial } from '@/lib/staffing-roles'
 import Link from 'next/link'
-import { adminSetExpertise, adminSetInstructorSectors } from '../[id]/actions'
+import { adminSetDiscipline, adminSetInstructorSectors } from '../[id]/actions'
 import { CAPABILITY_META, CAPABILITY_ORDER, type CapabilityCategory, type CapabilityRole } from '@/lib/capabilities'
 
 export type GridRow = {
@@ -16,7 +16,7 @@ export type GridRow = {
 // Every instructor × every skill in one grid. Lead/assist toggles behave the
 // same as on an instructor's own profile — click to set, click the active one
 // to clear — so there's nothing new to learn. Each click saves on its own.
-export default function ExpertiseGrid({ rows }: { rows: GridRow[] }) {
+export default function DisciplineGrid({ rows }: { rows: GridRow[] }) {
   const [state, setState] = useState<GridRow[]>(rows)
   const [pending, setPending] = useState<Set<string>>(new Set())
   const [error, setError] = useState('')
@@ -51,7 +51,7 @@ export default function ExpertiseGrid({ rows }: { rows: GridRow[] }) {
     setPending((p) => new Set(p).add(key))
     setError('')
     try {
-      await adminSetExpertise(row.id, cat, next)
+      await adminSetDiscipline(row.id, cat, next)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Save failed')
       setState(rows) // fall back to the server's view

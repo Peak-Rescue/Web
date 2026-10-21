@@ -2,10 +2,10 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import ExpertiseGrid, { type GridRow } from './ExpertiseGrid'
+import DisciplineGrid, { type GridRow } from './DisciplineGrid'
 import { type CapabilityRole } from '@/lib/capabilities'
 
-export default async function ExpertiseGridPage() {
+export default async function DisciplineGridPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
@@ -38,13 +38,13 @@ export default async function ExpertiseGridPage() {
         <Link href="/admin/instructors" className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors mb-3 inline-block">
           ← All instructors
         </Link>
-        <h1 className="text-2xl font-bold">Expertise &amp; Sector</h1>
+        <h1 className="text-2xl font-bold">Disciplines &amp; Sector</h1>
         <p className="text-zinc-400 mt-1 max-w-3xl text-sm">
           Staffing needs both: the right skill, and clearance for the client type.
         </p>
       </div>
 
-      <ExpertiseGrid rows={rows} />
+      <DisciplineGrid rows={rows} />
     </main>
   )
 }

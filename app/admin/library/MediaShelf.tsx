@@ -74,7 +74,7 @@ export default function MediaShelf({
     }
   }
 
-  // Only the expertise actually represented, for the same reason the shelves
+  // Only the disciplines actually represented, for the same reason the shelves
   // do it: a filter that returns nothing teaches nothing.
   const present = CAPABILITY_ORDER.filter((c) => albums.some((a) => a.disciplines.includes(c)))
 

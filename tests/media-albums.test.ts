@@ -29,7 +29,7 @@ const album = (over: Partial<MediaAlbum> = {}): MediaAlbum => ({
 })
 
 describe('album tags are inherited, not typed', () => {
-  it('takes its expertise from the course, so nobody tags a photo', () => {
+  it('takes its disciplines from the course, so nobody tags a photo', () => {
     // The whole point: nobody ever tagged the Maui photos as canyon work.
     expect(inheritedDisciplines(course())).toContain('canyoning')
   })
@@ -46,7 +46,7 @@ describe('album tags are inherited, not typed', () => {
 })
 
 describe('finding an album', () => {
-  it('matches on inherited expertise across every album at once', () => {
+  it('matches on inherited disciplines across every album at once', () => {
     expect(albumMatches(album(), 'canyoning')).toBe(true)
     expect(albumMatches(album(), 'swift_water')).toBe(false)
   })

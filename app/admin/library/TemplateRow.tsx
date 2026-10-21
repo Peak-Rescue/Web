@@ -95,7 +95,7 @@ export default function TemplateRow(props: Props) {
   // click away. A custom course has no offering worth matching — every one of
   // them says 'custom' — so its checked categories are what reach it, which is
   // why a mixed canyons-and-mountain course wants both tagged here.
-  // The offering already says which expertise this is — Urban Mobility is
+  // The offering already says which discipline this is — Urban Mobility is
   // urban work whether or not anyone ticks the box — so the box is shown
   // checked and held there rather than left for a human to keep in sync. The
   // matching that reads these does the same derivation, so an unticked box was
@@ -148,7 +148,7 @@ export default function TemplateRow(props: Props) {
               ...courseCapabilityCategories(summary.course_type ?? '', null) as string[],
               ...summary.disciplines,
             ])].map((d) => CAPABILITY_META[d as keyof typeof CAPABILITY_META]?.label ?? d).join(', ')
-              || 'no expertise tag'}
+              || 'no discipline tag'}
           </p>
         </div>
 

@@ -20,7 +20,7 @@ import PrimaryStar from '@/components/PrimaryStar'
 export default async function AdminPage({ searchParams }: { searchParams: Promise<{ cal?: string; scope?: string; cat?: string }> }) {
   const { cal, scope, cat } = await searchParams
   // Everyone lands on the whole calendar: for an admin that is every
-  // course, for an instructor it is already narrowed to their expertise
+  // course, for an instructor it is already narrowed to their disciplines
   // below. ?scope=mine is how you say otherwise, and it has to be an
   // explicit value now that an absent param means "all".
   const showAllCourses = scope !== 'mine'
@@ -193,7 +193,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
 
   // Calendar: assigned courses by default, every course when scope=all (past
   // months included so back-navigation isn't empty), cancelled excluded.
-  // Instructors' "All courses" is scoped to their teaching expertise: courses
+  // Instructors' "All courses" is scoped to their teaching disciplines: courses
   // whose type falls under a category they hold (lead or assist), plus
   // anything they're assigned to. Admins see everything.
   // Chips only link where the viewer can actually open the course portal.
@@ -204,7 +204,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   const invitedRows = (meetingInviteRows ?? []).map((r) => r.course_instances as unknown as InstRow)
   const invitedIds = new Set(invitedRows.map((i) => i.id))
   // Internal courses (instructor development, CE) are the exception to the
-  // expertise rule: a canyon course laid on for three people would otherwise
+  // discipline rule: a canyon course laid on for three people would otherwise
   // show to every canyon-qualified instructor, who then wonders why they
   // weren't asked. Only the crew on it — and admins — see it at all.
   const calendarSource: InstRow[] = showAllCourses
@@ -323,7 +323,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     },
     {
       title: 'All Instructor Profiles',
-      desc: 'Certifications, expertise, and portal access',
+      desc: 'Certifications, disciplines, and portal access',
       href: '/admin/instructors',
       section: 'personal',
       icon: (
