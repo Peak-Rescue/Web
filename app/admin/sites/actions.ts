@@ -178,41 +178,86 @@ export async function deleteMeetingPoint(id: string) {
 // A meetup typed straight onto a course day, filed into the library from
 // there. The words are already written and the person who wrote them is the
 // one who knows it is a real place we will meet again — so the offer sits
-// beside the box, and taking it is one press rather than a trip to the
-// meeting-points screen to retype the same sentence.
+// beside the box, and filing it is a short form there rather than a trip to
+// the meeting-points screen to retype the same sentence.
 //
 // The day is pointed at the new row and its own text cleared in the same go:
 // left in place, the typed words still beat the meetup (free text outranks
 // both on a day), and the next correction made in the library would never
 // reach the morning that started it.
-export async function fileDayMeetingPoint(
-  dayId: string,
-  text: string
-): Promise<{ id: string; name: string } | ActionRefusal> {
-  const admin = await requireAdmin()
-  const directions = text.trim()
-  if (!directions) return refuse('There is nothing typed to file.')
 
-  const { data: day, error: dayError } = await admin
+type FilingDay = {
+  meeting_point_id: string | null
+  site_id: string | null
+  sites: { name: string; venue_id: string | null; meeting_point_id: string | null } | null
+  course_schedules: { instance_id: string | null } | null
+}
+
+async function filingDay(admin: Awaited<ReturnType<typeof requireAdmin>>, dayId: string) {
+  const { data, error } = await admin
     .from('schedule_days')
-    .select('meeting_point_id, sites(venue_id), course_schedules(instance_id)')
+    .select('meeting_point_id, site_id, sites(name, venue_id, meeting_point_id), course_schedules(instance_id)')
     .eq('id', dayId)
     .single()
-  if (dayError) throw new Error(dayError.message)
-  if (day.meeting_point_id) return refuse('This day already meets at a saved meeting point.')
+  if (error) throw new Error(error.message)
+  return data as unknown as FilingDay
+}
 
-  // The name is the first line, minus any URL pasted into it — what someone
-  // would call the place out loud. The whole text stays as the directions, so
-  // nothing written on the day is lost by filing it, and the name can be
-  // tidied on the meeting-points screen afterwards.
-  const firstLine = directions.split('\n')[0].replace(/https?:\/\/\S+/gi, '').trim()
-  const name = (firstLine || 'Untitled meeting point').slice(0, 80)
-  // A pasted "lat, lng" is the pin itself, so it goes where the pin goes.
-  const coords = directions.match(/-?\d{1,2}\.\d{3,}\s*,\s*-?\d{1,3}\.\d{3,}/)?.[0]?.replace(/\s+/g, '') ?? null
-  // Filed under the region of the canyon this day is at, so it sorts with the
-  // lots near it in the picker. A site placed only by state has no venue, and
-  // the meetup goes in unfiled rather than under a guess.
-  const venueId = (day.sites as unknown as { venue_id: string | null } | null)?.venue_id ?? null
+// What the filing form needs and the course page does not otherwise load for
+// this block: every venue, and which canyon the day is at. Asked when the
+// form opens rather than on every page load, because nearly every morning
+// typed on a day is never filed.
+export async function dayMeetingPointFilingOptions(dayId: string): Promise<{
+  venues: { id: string; name: string }[]
+  venueId: string | null
+  site: { name: string; hasUsual: boolean } | null
+}> {
+  const admin = await requireAdmin()
+  const [day, { data: venues, error }] = await Promise.all([
+    filingDay(admin, dayId),
+    admin.from('venues').select('id, name').eq('active', true).order('name'),
+  ])
+  if (error) throw new Error(error.message)
+  return {
+    venues: venues ?? [],
+    venueId: day.sites?.venue_id ?? null,
+    site: day.site_id && day.sites
+      ? { name: day.sites.name, hasUsual: Boolean(day.sites.meeting_point_id) }
+      : null,
+  }
+}
+
+export async function fileDayMeetingPoint(
+  dayId: string,
+  input: {
+    name: string
+    directions: string
+    coords: string
+    venueId: string | null
+    /** Point the day's site at it too, so every course at that canyon meets
+        here unless told otherwise. Off unless asked: one morning at a lot is
+        not yet evidence that the canyon always meets there. */
+    makeSiteUsual: boolean
+  }
+): Promise<{ id: string; name: string } | ActionRefusal> {
+  const admin = await requireAdmin()
+  const name = input.name.trim().slice(0, 160)
+  if (!name) return refuse('A meeting point needs a name.')
+  const directions = input.directions.trim() || null
+  const coords = input.coords.trim().slice(0, 200) || null
+
+  const day = await filingDay(admin, dayId)
+  if (day.meeting_point_id) return refuse('This day already meets at a saved meeting point.')
+  if (input.makeSiteUsual && !day.site_id) return refuse('This day has no site to make it the usual for.')
+
+  // The id came from a select in the browser, so it is checked rather than
+  // trusted: a venue deleted since the form opened would otherwise fail the
+  // foreign key and arrive as an unexplained error.
+  const venueId: string | null = input.venueId || null
+  if (venueId) {
+    const { data: venue } = await admin.from('venues').select('id').eq('id', venueId).maybeSingle()
+    if (!venue) return refuse('That venue no longer exists. Pick another.')
+  }
 
   const { data: row, error } = await admin
     .from('meeting_points')
@@ -227,7 +272,15 @@ export async function fileDayMeetingPoint(
     .eq('id', dayId)
   if (linkError) throw new Error(linkError.message)
 
-  const instanceId = (day.course_schedules as unknown as { instance_id: string | null } | null)?.instance_id
+  if (input.makeSiteUsual && day.site_id) {
+    const { error: siteError } = await admin
+      .from('sites')
+      .update({ meeting_point_id: row.id })
+      .eq('id', day.site_id)
+    if (siteError) throw new Error(siteError.message)
+  }
+
+  const instanceId = day.course_schedules?.instance_id
   if (instanceId) revalidatePath(`/admin/courses/${instanceId}`)
   revalidate()
   return row

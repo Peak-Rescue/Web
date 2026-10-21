@@ -531,36 +531,67 @@ export async function placeContactsFor(instanceId: string): Promise<
   ]
 }
 
-/** Files a contact typed on a course with the place the course is at: the
- *  venue when it has one, else the state. The course keeps its own copy —
- *  this only adds the person to the list the next course there is offered.
- *  Admin only, the same as adding them on the places page, because that list
- *  is shared by every course that goes there. Returns where it went, so the
- *  button can say so. */
-export async function fileContactToPlace(
-  instanceId: string,
-  contact: { name: string; phone?: string; email?: string }
-): Promise<{ error: string } | { filedWith: string }> {
+export type ContactShelf = 'venue' | 'region'
+
+// The places a course's contact can be filed with, read off the course as
+// saved: its venue, and the state (from the venue, else the course's own).
+async function contactShelves(instanceId: string) {
   const { admin } = await requireTeam(instanceId)
   const { data: inst } = await admin
     .from('course_instances')
-    .select('venue_id, region, venues(name)')
+    .select('venue_id, region, venues(name, region_code)')
     .eq('id', instanceId)
     .single()
-  const venueName = (inst?.venues as unknown as { name?: string } | null)?.name
-  const scope = inst?.venue_id
-    ? { venueId: inst.venue_id as string }
-    : inst?.region
-      ? { regionCode: inst.region as string }
-      : null
-  if (!scope) return { error: 'Say where the course is first, so there is a place to file them with.' }
-  const filedWith = 'venueId' in scope ? venueName ?? 'the venue' : regionLabel(scope.regionCode) || 'the state'
-  // Already on file there — most often because it was picked from that list
-  // and then given a new number. Saying so beats a second copy of the person.
-  const key = contact.name.trim().toLowerCase()
-  const onFile = await placeContactsFor(instanceId)
-  if (onFile.some((c) => c.from === filedWith && c.name.toLowerCase() === key)) return { filedWith }
-  const refused = await addPlaceContact(scope, contact)
+  const venue = inst?.venues as unknown as { name?: string; region_code?: string | null } | null
+  const regionCode = (venue?.region_code ?? inst?.region ?? null) as string | null
+  return {
+    admin,
+    venue: inst?.venue_id ? { id: inst.venue_id as string, label: venue?.name ?? 'The venue' } : null,
+    region: regionCode ? { code: regionCode, label: regionLabel(regionCode) || regionCode } : null,
+  }
+}
+
+/** Where the filing form can put a contact, best first: a ranger district or
+ *  a landowner is usually about the venue, so that leads when there is one. */
+export async function contactFilingShelves(
+  instanceId: string
+): Promise<{ shelf: ContactShelf; label: string }[]> {
+  const { venue, region } = await contactShelves(instanceId)
+  return [
+    ...(venue ? [{ shelf: 'venue' as const, label: venue.label }] : []),
+    ...(region ? [{ shelf: 'region' as const, label: region.label }] : []),
+  ]
+}
+
+/** Files a contact typed on a course with a place: the venue or the state, as
+ *  the person filing chose. The course keeps its own copy — this only adds
+ *  them to the list the next course there is offered. The places are resolved
+ *  here from the course, never taken from the browser, and addPlaceContact is
+ *  admin only, as on the places page, because that list is shared by every
+ *  course that goes there. Returns where it went, so the row can say so. */
+export async function fileContactToPlace(
+  instanceId: string,
+  shelf: ContactShelf,
+  contact: { name: string; role?: string; phone?: string; email?: string; note?: string }
+): Promise<{ error: string } | { filedWith: string }> {
+  const { admin, venue, region } = await contactShelves(instanceId)
+  const name = contact.name.trim()
+  if (!name) return { error: 'A contact needs a name.' }
+  const target = shelf === 'venue' ? venue : region
+  if (!target) return { error: 'Say where the course is first, so there is a place to file them with.' }
+  const scope = shelf === 'venue' ? { venueId: venue!.id } : { regionCode: region!.code }
+
+  // Already on file there — most often picked from that list and then given a
+  // new number. Saying so beats a second copy of the person.
+  const { data: held } = 'venueId' in scope
+    ? await admin.from('venues').select('contacts').eq('id', scope.venueId).maybeSingle()
+    : await admin.from('region_info').select('contacts').eq('region_code', scope.regionCode).maybeSingle()
+  const key = name.toLowerCase()
+  if (((held?.contacts ?? []) as { name?: string }[]).some((c) => c.name?.trim().toLowerCase() === key)) {
+    return { filedWith: target.label }
+  }
+
+  const refused = await addPlaceContact(scope, { ...contact, name })
   if (refused) return refused
-  return { filedWith }
+  return { filedWith: target.label }
 }

@@ -12,10 +12,12 @@ import { sendMail } from '@/lib/mailer'
 import { announcesChanges, emailAdminsNewCourse, notifyRoleChange } from '@/lib/course-notify'
 import { clampOffDays, dayShift, strokeOffDays, type OffSpan } from '@/lib/courses'
 import { todayHere } from '@/lib/course-clock'
-import { assertCustomCourseTagged, courseCapabilityCategories } from '@/lib/capabilities'
+import { assertCustomCourseTagged, courseCapabilityCategories, CAPABILITY_ORDER } from '@/lib/capabilities'
 import { refuse, type ActionResult } from '@/lib/action-result'
 import { classify, NEEDS_SORTING } from '@/lib/sorting'
-import { moduleAudience } from '@/lib/library'
+import { moduleAudience, bucketForKind, LIBRARY_KINDS, type Venue } from '@/lib/library'
+import { LIBRARY_HREF } from '@/lib/course-links'
+import { type SiteOption } from '@/app/admin/schedules/types'
 import { asInstanceRole, type CrewPlan } from '@/lib/staffing-roles'
 
 const fmtLong = (d: string) =>
@@ -1353,19 +1355,26 @@ export async function deleteItem(instanceId: string, itemId: string) {
   revalidatePath(`/admin/courses/${instanceId}`)
 }
 
-// File a curriculum item that was typed onto one course into the library, so
-// the next course can pull it from the picker instead of retyping it. The
-// course keeps its row: it stops owning the link and starts pointing at the
-// library item, the same move saveCourseResourceToLibrary makes for the
-// Resources shelf.
+// ─── Filing a curriculum item into the library ──────────────────────────────
 //
-// Admin-only, unlike the rest of the curriculum writes: course staff build
-// their own course, but what goes on the library shelves is an admin call.
-// The course is read from the item, not taken from the caller.
-export async function saveCurriculumItemToLibrary(itemId: string): Promise<ActionResult> {
-  await requireAdmin()
-  const admin = createAdminClient()
+// An item typed onto one course is often exactly what the library was
+// missing. Filing it is an admin call, unlike the rest of the curriculum
+// writes — course staff build their own course, the shelves are not theirs —
+// and it is asked rather than guessed: the classifier's verdict is the
+// starting point of the form, not the answer.
+//
+// Both actions read the course from the item, never from the caller.
 
+type CurriculumRow = {
+  id: string; title: string; type: string | null; url: string | null
+  audience: string | null; library_item_id: string | null
+  instanceId: string; sectionAudience: string
+}
+
+async function curriculumRow(
+  admin: ReturnType<typeof createAdminClient>,
+  itemId: string
+): Promise<CurriculumRow | { error: string }> {
   const { data: item } = await admin
     .from('course_items')
     .select('id, title, type, url, audience, library_item_id, course_modules(instance_id, audience)')
@@ -1375,63 +1384,210 @@ export async function saveCurriculumItemToLibrary(itemId: string): Promise<Actio
   if (!item || !mod) return refuse('That item is no longer on this course')
   if (item.library_item_id) return refuse('That item is already in the library')
   if (!item.url) return refuse('That item has no link to save')
-  const instanceId = mod.instance_id
+  return { ...item, instanceId: mod.instance_id, sectionAudience: mod.audience } as CurriculumRow
+}
 
-  // Same match addLinkToLibrary refuses on. Here it is a reason to link
-  // rather than a reason to stop: the person wanted this item to be the
-  // library's, and it already is.
-  const { data: existing } = await admin
+// Same match addLinkToLibrary refuses on. Here it is a reason to link rather
+// than to stop: the item is already the library's, it just doesn't know it.
+async function libraryItemAt(admin: ReturnType<typeof createAdminClient>, url: string) {
+  const { data } = await admin
     .from('library_items')
-    .select('id, audience, admin_only')
-    .eq('url', item.url)
+    .select('id, title, audience, admin_only')
+    .eq('url', url)
     .neq('status', 'archived')
     .limit(1)
     .maybeSingle()
-  // Company paperwork is never offered to a course (addLibraryItems filters
-  // it out), so a course row must not become the way to point at it.
-  if (existing?.admin_only) return refuse('That link is already in the library as admin-only paperwork')
+  return data as { id: string; title: string; audience: string; admin_only: boolean } | null
+}
+
+export type CurriculumFilingDraft =
+  | { error: string }
+  | { existing: { id: string; title: string; adminOnly: boolean } }
+  | {
+      draft: {
+        title: string
+        kind: string
+        audience: 'internal' | 'shared'
+        place: string
+        disciplines: string[]
+        topics: string
+        /** The classifier could not tell from the title and link. Said beside
+            the type, since that is the field it was guessing. */
+        unsure: boolean
+      }
+      venues: Venue[]
+      sites: SiteOption[]
+    }
+
+/** What the filing form opens with. Read when it opens rather than on every
+    course render, because the venue and site lists are only wanted by the
+    one admin who clicked. */
+export async function curriculumFilingDraft(itemId: string): Promise<CurriculumFilingDraft> {
+  await requireAdmin()
+  const admin = createAdminClient()
+
+  const row = await curriculumRow(admin, itemId)
+  if ('error' in row) return row
+
+  // Already on a shelf: there is nothing to ask. A form here would either be
+  // ignored or make the second copy the dedupe exists to prevent, so the
+  // person is told what it is filed as and offered the link.
+  const existing = await libraryItemAt(admin, row.url!)
+  if (existing) return { existing: { id: existing.id, title: existing.title, adminOnly: existing.admin_only } }
+
+  const [{ data: inst }, { data: venueRows }, { data: siteRows }] = await Promise.all([
+    admin.from('course_instances').select('region, venue_id, course_type, custom_categories').eq('id', row.instanceId).single(),
+    admin.from('venues').select('id, name, region, region_code, client_name, notes, links, contacts, active').order('name'),
+    admin.from('sites').select('id, name, kind, beta, venue_id, venues(name)').eq('active', true).order('name'),
+  ])
+
+  // It came through the curriculum, so teaching material is the fallback; the
+  // classifier still wins when it is sure, so a permit pasted into a section
+  // starts out as a permit.
+  const fallbackKind = row.type === 'video' ? 'video' : 'reference'
+  const verdict = classify({ title: row.title, url: row.url, kind: fallbackKind, bucket: 'teaching', source_topic: null })
 
   // An instructors-only section makes the item instructors-only whatever its
   // own pill says, and the library copy should not quietly open it up.
-  const sectionInternal = moduleAudience(mod.audience) === 'internal'
-  const audience: 'internal' | 'shared' = sectionInternal ? 'internal' : item.audience === 'internal' ? 'internal' : 'shared'
+  const audience: 'internal' | 'shared' =
+    moduleAudience(row.sectionAudience) === 'internal' || row.audience === 'internal' ? 'internal' : 'shared'
 
-  let libraryItemId = existing?.id as string | undefined
-  if (!libraryItemId) {
-    const { data: inst } = await admin
-      .from('course_instances')
-      .select('region, venue_id, course_type, custom_categories')
-      .eq('id', instanceId)
-      .single()
+  return {
+    draft: {
+      title: row.title,
+      kind: verdict.confident ? verdict.kind ?? fallbackKind : fallbackKind,
+      audience,
+      // PlaceSelect's value format. Not its placeValue helper: that lives in a
+      // client module, and imported here it would arrive as a client
+      // reference rather than a function.
+      place: inst?.venue_id ? `venue:${inst.venue_id}` : inst?.region ? `region:${inst.region}` : '',
+      disciplines: inst ? (courseCapabilityCategories(inst.course_type, inst.custom_categories) as string[]) : [],
+      // NEEDS_SORTING is not prefilled even when unsure: the admin filling
+      // this in is the sorting, and a tag the software put in their box is one
+      // they would have to remember to delete (clearSortingMark's reasoning).
+      topics: '',
+      unsure: !verdict.confident,
+    },
+    venues: (venueRows ?? []) as Venue[],
+    sites: ((siteRows ?? []) as unknown as {
+      id: string; name: string; kind: string | null; beta: string | null; venue_id: string | null; venues: { name: string } | null
+    }[]).map((s) => ({ id: s.id, name: s.name, kind: s.kind, beta: s.beta, venue_id: s.venue_id, venue_name: s.venues?.name ?? null })),
+  }
+}
 
-    // It came through the curriculum, so teaching is the shelf it falls back
-    // to; the classifier still wins when it is sure, so a permit pasted into a
-    // section is filed as a permit. Unsure, it wears the needs-sorting tag
-    // like every other promote path, rather than a guess.
-    const fallbackKind = item.type === 'video' ? 'video' : 'reference'
-    const verdict = classify({ title: item.title, url: item.url, kind: fallbackKind, bucket: 'teaching', source_topic: null })
-    const drive = /drive\.google\.com|docs\.google\.com/i.test(item.url)
+export type CurriculumFilingChoices = {
+  title: string
+  kind: string
+  /** 'admin' is the library's third rung: the admin_only flag. */
+  audience: 'internal' | 'shared' | 'admin'
+  /** A PlaceSelect value: `region:`, `venue:` or `site:`. */
+  place: string
+  disciplines: string[]
+  topics: string
+}
+
+/** The library's resolvePlace, which is not exported from there. A site
+    answers for its venue and the venue for its state, so the stored levels
+    cannot contradict each other. */
+async function resolveFilingPlace(
+  admin: ReturnType<typeof createAdminClient>,
+  raw: string
+): Promise<{ venue_id: string | null; site_id: string | null; region: string | null }> {
+  const none = { venue_id: null, site_id: null, region: null }
+  const i = raw.indexOf(':')
+  const level = i === -1 ? '' : raw.slice(0, i)
+  const id = i === -1 ? '' : raw.slice(i + 1)
+  if (!id) return none
+  if (level === 'region') return { ...none, region: isValidRegion(id) ? id : null }
+  if (level === 'venue') {
+    const { data } = await admin.from('venues').select('region_code').eq('id', id).maybeSingle()
+    return data ? { venue_id: id, site_id: null, region: data.region_code ?? null } : none
+  }
+  if (level !== 'site') return none
+  const { data } = await admin.from('sites').select('venue_id, venues(region_code)').eq('id', id).maybeSingle()
+  if (!data) return none
+  const venue = data.venues as unknown as { region_code: string | null } | null
+  return { venue_id: data.venue_id ?? null, site_id: id, region: venue?.region_code ?? null }
+}
+
+/** File the item with the admin's answers, then point the course row at the
+    new library item. With no choices it only links, which is all it can do
+    when the URL is already on a shelf. */
+export async function saveCurriculumItemToLibrary(
+  itemId: string,
+  choices?: CurriculumFilingChoices
+): Promise<ActionResult> {
+  await requireAdmin()
+  const admin = createAdminClient()
+
+  const row = await curriculumRow(admin, itemId)
+  if ('error' in row) return row
+  const url = row.url!
+
+  // Checked again here, not trusted from when the form opened: someone may
+  // have filed the same link in the meantime.
+  const existing = await libraryItemAt(admin, url)
+
+  let libraryItemId: string
+  let libraryInternal: boolean
+  if (existing) {
+    // Company paperwork is never offered to a course (addLibraryItems filters
+    // it out), so a course row must not become the way to point at it.
+    if (existing.admin_only) {
+      return refuse(`That link is already filed as “${existing.title}”, which is admin-only and cannot sit on a course`, { href: LIBRARY_HREF, label: 'Open the library' })
+    }
+    libraryItemId = existing.id
+    libraryInternal = existing.audience === 'internal'
+  } else {
+    if (!choices) return refuse('Say where it should be filed first')
+
+    // Refused rather than filed-and-left-unlinked. Filing it would leave the
+    // course still showing its own copy of a document the admin has just said
+    // never belongs on a course, and the button would keep offering to file
+    // it again. Admin-only paperwork is filed from the library, where taking
+    // it off this course is the decision it actually is.
+    if (choices.audience === 'admin') {
+      return refuse('Admin-only material cannot stay on a course. Remove it here and add it from the library instead.', { href: LIBRARY_HREF, label: 'Open the library' })
+    }
+
+    const title = choices.title.trim().slice(0, 200)
+    if (!title) return refuse('It needs a title')
+    if (!(LIBRARY_KINDS as readonly string[]).includes(choices.kind)) return refuse('Pick a type')
+    const place = await resolveFilingPlace(admin, choices.place)
+    // The library's own rule: a map filed nowhere is offered to no course.
+    if (choices.kind === 'map' && !place.venue_id && !place.site_id) {
+      return refuse('A map needs a place — pick the area or the canyon it is about')
+    }
+    const validDisciplines = new Set<string>(CAPABILITY_ORDER)
+    // Same tidying as the library's tag box, minus the sorting mark: an admin
+    // has just classified this by hand, so it is sorted.
+    const topics = [...new Set(
+      choices.topics.split(',').map((t) => t.trim()).filter((t) => t && t !== NEEDS_SORTING).map((t) => t.slice(0, 60))
+    )].slice(0, 12)
+
+    const drive = /drive\.google\.com|docs\.google\.com/i.test(url)
+    libraryInternal = choices.audience === 'internal'
 
     const { data: created, error: createError } = await admin
       .from('library_items')
       .insert({
-        title: item.title,
-        url: item.url,
-        source_type: drive ? 'drive' : /youtube\.com|youtu\.be/i.test(item.url) ? 'youtube' : 'link',
-        kind: verdict.confident ? verdict.kind ?? fallbackKind : fallbackKind,
-        bucket: verdict.confident ? verdict.bucket ?? 'teaching' : 'teaching',
-        admin_only: verdict.confident ? verdict.adminOnly ?? false : false,
-        audience,
-        region: inst?.region ?? null,
-        venue_id: inst?.venue_id ?? null,
-        // The course already says what discipline this is, so it arrives
-        // tagged and the picker can suggest it to the next course like it.
-        disciplines: inst
-          ? (courseCapabilityCategories(inst.course_type, inst.custom_categories) as string[])
-          : [],
-        topics: verdict.confident ? [] : [NEEDS_SORTING],
+        title,
+        url,
+        source_type: drive ? 'drive' : /youtube\.com|youtu\.be/i.test(url) ? 'youtube' : 'link',
+        kind: choices.kind,
+        // The type decides the shelf, as on the library's own form; the
+        // types with no shelf of their own fall back to teaching, which is
+        // where curriculum came from.
+        bucket: bucketForKind(choices.kind) ?? 'teaching',
+        admin_only: false,
+        audience: choices.audience,
+        venue_id: place.venue_id,
+        site_id: place.site_id,
+        region: place.region,
+        disciplines: choices.disciplines.filter((d) => validDisciplines.has(d)),
+        topics,
         // Published, as every promote path files: it was already good enough
-        // to put in front of a course, and the sorting tag is the review.
+        // to put in front of a course, and an admin has just looked at it.
         status: 'published',
       })
       .select('id')
@@ -1440,10 +1596,9 @@ export async function saveCurriculumItemToLibrary(itemId: string): Promise<Actio
     libraryItemId = created.id as string
   }
 
-  // Linking to an item that already exists brings its ceiling with it: a row
-  // left 'shared' would override an instructors-only library document and put
-  // it in front of students.
-  const clamped = existing?.audience === 'internal' ? { audience: 'internal' } : {}
+  // The library item's audience is a ceiling. A row left 'shared' would
+  // override an instructors-only document and put it in front of students.
+  const clamped = libraryInternal ? { audience: 'internal' } : {}
 
   // url goes because the library's is the one rendered now — a stale copy
   // here is how a fixed link stays broken on this course. Title stays: the
@@ -1454,8 +1609,8 @@ export async function saveCurriculumItemToLibrary(itemId: string): Promise<Actio
     .eq('id', itemId)
   if (error) throw new Error(error.message)
 
-  revalidatePath(`/admin/courses/${instanceId}`)
-  revalidatePath(`/portal/${instanceId}`)
+  revalidatePath(`/admin/courses/${row.instanceId}`)
+  revalidatePath(`/portal/${row.instanceId}`)
   revalidatePath('/admin/library')
 }
 

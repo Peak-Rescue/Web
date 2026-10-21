@@ -1,8 +1,10 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { Fragment, useRef, useState } from 'react'
 import TrashIcon from '@/components/TrashIcon'
-import { fileContactToPlace, placeContactsFor } from '@/app/admin/courses/resource-actions'
+import {
+  contactFilingShelves, fileContactToPlace, placeContactsFor, type ContactShelf,
+} from '@/app/admin/courses/resource-actions'
 
 // Who to ring about where the course is — the ranger district, the landowner,
 // whoever holds the gate code.
@@ -35,6 +37,20 @@ export default function CoursePlaceContacts({
 }) {
   const [rows, setRows] = useState<Row[]>(initial)
   const [filing, setFiling] = useState<number | null>(null)
+  // The filing card for one row. The row is a course's shorthand — a name and
+  // a number — and the venue's list is read by people who were not there, so
+  // filing asks the two things the shorthand leaves out: which place they
+  // belong to, and what they are for.
+  const [card, setCard] = useState<{
+    i: number
+    shelves: { shelf: ContactShelf; label: string }[]
+    shelf: ContactShelf
+    name: string
+    role: string
+    phone: string
+    email: string
+    note: string
+  } | null>(null)
   const [fileError, setFileError] = useState<string | null>(null)
   const [offered, setOffered] = useState<{ from: string; name: string; phones: string[]; emails: string[] }[] | null>(null)
   const [looking, setLooking] = useState(false)
@@ -66,7 +82,8 @@ export default function CoursePlaceContacts({
 
       <div className="space-y-1.5">
         {rows.map((c, i) => (
-          <div key={i} className="grid grid-cols-[1fr_1fr_auto_1.25rem] gap-2 items-center">
+          <Fragment key={i}>
+          <div className="grid grid-cols-[1fr_1fr_auto_1.25rem] gap-2 items-center">
             <input
               className={input}
               value={c.name}
@@ -88,36 +105,131 @@ export default function CoursePlaceContacts({
             ) : (
               <button
                 type="button"
-                disabled={!c.name.trim() || filing !== null}
+                disabled={!c.name.trim() || filing !== null || card !== null}
                 onClick={async () => {
                   setFiling(i)
                   setFileError(null)
                   try {
-                    const res = await fileContactToPlace(instanceId, {
-                      name: c.name,
-                      phone: c.phone || undefined,
-                      email: c.email || undefined,
+                    const shelves = await contactFilingShelves(instanceId)
+                    if (!shelves.length) {
+                      setFileError('Say where the course is first, so there is a place to file them with.')
+                      return
+                    }
+                    setCard({
+                      i,
+                      shelves,
+                      shelf: shelves[0].shelf,
+                      name: c.name.trim(),
+                      role: '',
+                      phone: c.phone ?? '',
+                      email: c.email ?? '',
+                      note: '',
                     })
-                    if ('error' in res) setFileError(res.error)
-                    else setRows((now) => now.map((x, j) => (j === i ? { ...x, filed: res.filedWith } : x)))
                   } finally {
                     setFiling(null)
                   }
                 }}
                 className="text-xs text-zinc-500 hover:text-white transition-colors disabled:opacity-40 disabled:hover:text-zinc-500"
               >
-                {filing === i ? 'Saving…' : 'Save to library'}
+                {filing === i ? 'Looking…' : 'Save to library'}
               </button>
             )}
             <button
               type="button"
-              onClick={() => write(rows.filter((_, j) => j !== i))}
+              onClick={() => {
+                // The card is keyed by position, and this shifts every row under it.
+                setCard(null)
+                write(rows.filter((_, j) => j !== i))
+              }}
               aria-label={`Remove ${c.name || 'contact'}`}
               className="text-xs text-zinc-600 hover:text-red-400 transition-colors"
             >
               <TrashIcon />
             </button>
           </div>
+          {card?.i === i && (
+            <div className="rounded border border-zinc-800 bg-zinc-900/60 p-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <label className="block">
+                <span className="block text-[11px] text-zinc-500 mb-1">File with</span>
+                <select
+                  className={input}
+                  value={card.shelf}
+                  onChange={(e) => setCard({ ...card, shelf: e.target.value as ContactShelf })}
+                >
+                  {card.shelves.map((o) => (
+                    <option key={o.shelf} value={o.shelf}>{o.label}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="block">
+                <span className="block text-[11px] text-zinc-500 mb-1">Role</span>
+                <input
+                  className={input}
+                  value={card.role}
+                  placeholder="Ranger district, landowner…"
+                  onChange={(e) => setCard({ ...card, role: e.target.value })}
+                />
+              </label>
+              <label className="block">
+                <span className="block text-[11px] text-zinc-500 mb-1">Name</span>
+                <input className={input} value={card.name} onChange={(e) => setCard({ ...card, name: e.target.value })} />
+              </label>
+              <label className="block">
+                <span className="block text-[11px] text-zinc-500 mb-1">Phone</span>
+                <input className={input} type="tel" value={card.phone} onChange={(e) => setCard({ ...card, phone: e.target.value })} />
+              </label>
+              <label className="block">
+                <span className="block text-[11px] text-zinc-500 mb-1">Email</span>
+                <input className={input} type="email" value={card.email} onChange={(e) => setCard({ ...card, email: e.target.value })} />
+              </label>
+              <label className="block">
+                <span className="block text-[11px] text-zinc-500 mb-1">Note</span>
+                <input
+                  className={input}
+                  value={card.note}
+                  placeholder="Gate code, best hours…"
+                  onChange={(e) => setCard({ ...card, note: e.target.value })}
+                />
+              </label>
+              <div className="sm:col-span-2 flex items-center gap-3">
+                <button
+                  type="button"
+                  disabled={!card.name.trim() || filing !== null}
+                  onClick={async () => {
+                    setFiling(i)
+                    setFileError(null)
+                    try {
+                      const res = await fileContactToPlace(instanceId, card.shelf, {
+                        name: card.name,
+                        role: card.role || undefined,
+                        phone: card.phone || undefined,
+                        email: card.email || undefined,
+                        note: card.note || undefined,
+                      })
+                      if ('error' in res) setFileError(res.error)
+                      else {
+                        setRows((now) => now.map((x, j) => (j === i ? { ...x, filed: res.filedWith } : x)))
+                        setCard(null)
+                      }
+                    } finally {
+                      setFiling(null)
+                    }
+                  }}
+                  className="px-3 py-1 bg-pr-red hover:bg-pr-red-dark text-white rounded text-xs font-medium transition-colors disabled:opacity-40"
+                >
+                  {filing === i ? 'Filing…' : 'File'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCard(null)}
+                  className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+          </Fragment>
         ))}
 
         {fileError && <p className="text-xs text-red-400">{fileError}</p>}

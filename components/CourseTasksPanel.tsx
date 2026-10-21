@@ -25,6 +25,7 @@ import UploadNameDialog from '@/components/UploadNameDialog'
 import AddLinkDialog from '@/components/AddLinkDialog'
 import { useUnsavedGuard, withSaveTimeout } from '@/components/useUnsavedGuard'
 import TrashIcon from '@/components/TrashIcon'
+import InfoHint from '@/components/InfoHint'
 
 export type CourseTask = {
   id: string
@@ -187,7 +188,15 @@ export default function CourseTasksPanel({
   // Matched on title, loosely, because that is all a picked suggestion leaves
   // on the task — and a case-only difference is the same line to the picker.
   const libraryTitles = new Set(suggestions.map((s) => s.title.trim().toLowerCase()))
-  const inLibrary = (t: CourseTask) => libraryTitles.has(t.title.trim().toLowerCase())
+  // Plus the ones filed from here this visit: filed under a tidied title, a
+  // task no longer matches by its own, and the button would sit there looking
+  // as if the save had not happened.
+  const [filedIds, setFiledIds] = useState<Set<string>>(() => new Set())
+  const inLibrary = (t: CourseTask) => filedIds.has(t.id) || libraryTitles.has(t.title.trim().toLowerCase())
+  // The filing form, open on one task at a time. Wording typed for one course
+  // often wants tidying before every course sees it, and only the admin knows
+  // whether it is a line for every course or one for when it applies.
+  const [filing, setFiling] = useState<{ taskId: string; title: string; defaultLine: boolean } | null>(null)
 
   const isOn = (t: CourseTask) => t.assignees.some((a) => a.id === currentUserId)
   const namesOf = (t: CourseTask) =>
@@ -510,8 +519,8 @@ export default function CourseTasksPanel({
                 )}
                 {canFileToLibrary && !inLibrary(t) && (
                   <button
-                    onClick={() => run(() => fileTaskAsSuggestion(t.id), t.id)}
-                    disabled={busyId === t.id}
+                    onClick={() => setFiling({ taskId: t.id, title: t.title, defaultLine: false })}
+                    disabled={busyId === t.id || filing?.taskId === t.id}
                     className="ml-auto text-xs text-zinc-500 hover:text-zinc-300 transition-colors disabled:opacity-50"
                   >
                     Save as suggestion
@@ -521,6 +530,61 @@ export default function CourseTasksPanel({
                   Close
                 </button>
               </div>
+              {filing?.taskId === t.id && (
+                <div className="mt-2 p-3 bg-zinc-900 border border-dashed border-zinc-700 rounded-lg flex items-end gap-2 flex-wrap">
+                  <div className="flex-1 min-w-48">
+                    <label className="block text-xs text-zinc-500 mb-1">Suggestion</label>
+                    <input
+                      value={filing.title}
+                      maxLength={200}
+                      onChange={(e) => setFiling({ ...filing, title: e.target.value })}
+                      className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-zinc-500"
+                    />
+                  </div>
+                  <div className="w-full flex items-center flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-300">
+                    <label className="inline-flex items-center gap-1.5 cursor-pointer">
+                      <input
+                        type="radio"
+                        checked={filing.defaultLine}
+                        onChange={() => setFiling({ ...filing, defaultLine: true })}
+                        className="accent-teal-600"
+                      />
+                      Every new course
+                    </label>
+                    <label className="inline-flex items-center gap-1.5 cursor-pointer">
+                      <input
+                        type="radio"
+                        checked={!filing.defaultLine}
+                        onChange={() => setFiling({ ...filing, defaultLine: false })}
+                        className="accent-teal-600"
+                      />
+                      Offered when it applies
+                    </label>
+                    <InfoHint text="Every new course: added to each course's checklist when it is created. Offered when it applies: listed under Additional in Add from checklist, picked only where it is needed." />
+                  </div>
+                  <button
+                    onClick={() => {
+                      const f = filing
+                      run(async () => {
+                        await fileTaskAsSuggestion(f.taskId, { title: f.title, defaultLine: f.defaultLine })
+                        setFiledIds((prev) => new Set(prev).add(f.taskId))
+                        setFiling(null)
+                      }, t.id)
+                    }}
+                    disabled={busyId === t.id || !filing.title.trim()}
+                    className="px-3 py-1.5 bg-pr-red hover:bg-pr-red-dark text-white rounded text-sm font-medium transition-colors disabled:opacity-50"
+                  >
+                    {busyId === t.id ? 'Filing…' : 'File'}
+                  </button>
+                  <button
+                    onClick={() => setFiling(null)}
+                    disabled={busyId === t.id}
+                    className="px-3 py-1.5 text-zinc-400 hover:text-zinc-200 text-sm disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
             </div>
           ) : (
             t.notes ? <TaskNotesView text={t.notes} /> : <p className="text-sm text-zinc-500">No notes.</p>

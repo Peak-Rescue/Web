@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { addModule, deleteModule, addItem, deleteItem, setModuleAudience, setItemAudience, saveCurriculumItemToLibrary } from './actions'
+import { addModule, deleteModule, addItem, deleteItem, setModuleAudience, setItemAudience, saveCurriculumItemToLibrary, curriculumFilingDraft } from './actions'
 import { LIBRARY_HREF } from '@/lib/course-links'
 import { moduleAudience, type LibraryAudience } from '@/lib/library'
 import LibraryPicker from './LibraryPicker'
@@ -118,7 +118,8 @@ export default function CourseCurriculumEditor({
                           {lib && <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-500">library</span>}
                           {canFileToLibrary && !item.library_item_id && item.url && (
                             <SaveItemToLibrary
-                              onSave={async () => { 'use server'; return saveCurriculumItemToLibrary(item.id) }}
+                              onOpen={async () => { 'use server'; return curriculumFilingDraft(item.id) }}
+                              onFile={async (choices) => { 'use server'; return saveCurriculumItemToLibrary(item.id, choices) }}
                             />
                           )}
                           {/* Inside an instructors-only section there is

@@ -13,7 +13,7 @@ import type { UpdateLink, UpdateAttachment, UpdateAudience } from './update-acti
 import type { NotifyCounts } from '@/lib/course-notify'
 import { announceMeetingDetails } from './update-actions'
 import { saveDayMeetingDetails } from './logistics-actions'
-import { fileDayMeetingPoint } from '@/app/admin/sites/actions'
+import { fileDayMeetingPoint, dayMeetingPointFilingOptions } from '@/app/admin/sites/actions'
 import { meetingDayLabel } from '@/lib/meeting-details'
 
 // Meeting point and time: read as two facts, edited in place, and announced
@@ -135,6 +135,17 @@ export default function MeetingDetails({
   const [filedPoints, setFiledPoints] = useState<{ id: string; name: string }[]>([])
   const pickable = [...meetingPoints, ...filedPoints.filter((f) => !meetingPoints.some((p) => p.id === f.id))]
   const [filing, setFiling] = useState(false)
+  // The filing form's draft. Null while closed. venueId stays undefined until
+  // someone picks one, so the day's own venue can fill it in when the options
+  // arrive without overwriting a choice made while they were loading.
+  const [fileDraft, setFileDraft] = useState<{
+    name: string
+    directions: string
+    coords: string
+    venueId: string | undefined
+    makeSiteUsual: boolean
+  } | null>(null)
+  const [fileOpts, setFileOpts] = useState<Awaited<ReturnType<typeof dayMeetingPointFilingOptions>> | null>(null)
 
   // Height follows the content rather than the other way round. Reset first:
   // scrollHeight only ever reports growth, so without it the box can grow and
@@ -239,17 +250,47 @@ export default function MeetingDetails({
     }
   }
 
-  // One press, never automatic: most typed mornings are one-offs — the lay-by
+  // Asked for, never automatic: most typed mornings are one-offs — the lay-by
   // on the way, the morning we start at the shop — and a library that filled
   // itself from every one of them would be a picker nobody could read.
+  //
+  // Opened prefilled with a guess rather than filed on the guess: the first
+  // line is usually the name, but the person who typed it is the one who
+  // knows what the place is called and which region it serves.
+  function openFiling() {
+    const text = point.trim()
+    setError(null)
+    setFileDraft({
+      name: (text.split('\n')[0].replace(/https?:\/\/\S+/gi, '').trim() || '').slice(0, 160),
+      directions: text,
+      // A pasted "lat, lng" is the pin itself, so it goes where the pin goes.
+      coords: text.match(/-?\d{1,2}\.\d{3,}\s*,\s*-?\d{1,3}\.\d{3,}/)?.[0]?.replace(/\s+/g, '') ?? '',
+      venueId: undefined,
+      makeSiteUsual: false,
+    })
+    if (!fileOpts) {
+      dayMeetingPointFilingOptions(dayId)
+        .then(setFileOpts)
+        .catch((e) => setError(e instanceof Error ? e.message : 'Couldn’t load venues'))
+    }
+  }
+
   async function fileToLibrary() {
+    if (!fileDraft) return
     setFiling(true); setError(null)
     try {
-      const res = await fileDayMeetingPoint(dayId, point)
+      const res = await fileDayMeetingPoint(dayId, {
+        name: fileDraft.name,
+        directions: fileDraft.directions,
+        coords: fileDraft.coords,
+        venueId: (fileDraft.venueId ?? fileOpts?.venueId) || null,
+        makeSiteUsual: Boolean(fileOpts?.site) && fileDraft.makeSiteUsual,
+      })
       if ('error' in res) { setError(res.error); return }
       setFiledPoints((prev) => [...prev, res])
       setPointId(res.id)
       setPoint('')
+      setFileDraft(null)
       router.refresh()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'That didn’t file')
@@ -262,6 +303,7 @@ export default function MeetingDetails({
     setPoint(meetingPoint ?? ''); setPointId(meetingPointId ?? ''); setTime(meetingTime ?? '')
     setDraftLinks(links)
     setDraftFiles(files.map(({ path, filename }) => ({ path, filename })))
+    setFileDraft(null)
     setError(null); setEditing(false)
   }
 
@@ -321,17 +363,103 @@ export default function MeetingDetails({
             className="w-full min-h-[4.5rem] resize-y bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-zinc-200 leading-relaxed focus:outline-none focus:border-zinc-500"
           />
         </label>
-        {canFileToLibrary && point.trim() && !pointId && (
+        {canFileToLibrary && point.trim() && !pointId && !fileDraft && (
           <div className="sm:col-span-2 -mt-1 flex items-center gap-1.5 text-[11px]">
             <button
               type="button"
-              disabled={busy || filing}
-              onClick={fileToLibrary}
+              disabled={busy}
+              onClick={openFiling}
               className="text-zinc-500 hover:text-zinc-200 underline-offset-2 hover:underline transition-colors disabled:opacity-40"
             >
-              {filing ? 'Saving…' : 'Save to meeting points'}
+              Save to meeting points
             </button>
-            <InfoHint text="Files these words as a meeting point other courses can pick, and points this day at it. The first line becomes its name; the rest stays as directions, and both can be tidied on the meeting points screen." />
+            <InfoHint text="Files these words as a meeting point other courses can pick, and points this day at it." />
+          </div>
+        )}
+        {/* Nested in the day's form rather than a dialog over it: what is
+            being filed is the box just above, and covering it would hide the
+            words being turned into a meetup. */}
+        {fileDraft && (
+          <div className="sm:col-span-2 p-3 rounded border border-zinc-700 bg-zinc-950/60 space-y-2">
+            <span className="block text-[11px] uppercase tracking-wide text-zinc-500">File as a meeting point</span>
+            <div className="grid sm:grid-cols-2 gap-2">
+              <label className="block">
+                <span className="block text-[11px] uppercase tracking-wide text-zinc-500 mb-1">Name</span>
+                <input
+                  autoFocus
+                  value={fileDraft.name}
+                  onChange={(e) => setFileDraft({ ...fileDraft, name: e.target.value })}
+                  placeholder="Hanawi lower lot"
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-zinc-200 focus:outline-none focus:border-zinc-500"
+                />
+              </label>
+              <label className="block">
+                <span className="block text-[11px] uppercase tracking-wide text-zinc-500 mb-1">Venue</span>
+                <select
+                  value={fileDraft.venueId ?? fileOpts?.venueId ?? ''}
+                  onChange={(e) => setFileDraft({ ...fileDraft, venueId: e.target.value })}
+                  disabled={!fileOpts}
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-zinc-200 focus:outline-none focus:border-zinc-500 disabled:opacity-40"
+                >
+                  <option value="">{fileOpts ? 'No venue' : 'Loading…'}</option>
+                  {fileOpts?.venues.map((v) => (
+                    <option key={v.id} value={v.id}>{v.name}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="block sm:col-span-2">
+                <span className="block text-[11px] uppercase tracking-wide text-zinc-500 mb-1">Directions</span>
+                <textarea
+                  rows={3}
+                  value={fileDraft.directions}
+                  onChange={(e) => setFileDraft({ ...fileDraft, directions: e.target.value })}
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-zinc-200 focus:outline-none focus:border-zinc-500 resize-y leading-relaxed"
+                />
+              </label>
+              <label className="block sm:col-span-2">
+                <span className="block text-[11px] uppercase tracking-wide text-zinc-500 mb-1">Coordinates</span>
+                <input
+                  value={fileDraft.coords}
+                  onChange={(e) => setFileDraft({ ...fileDraft, coords: e.target.value })}
+                  placeholder="20.7984,-156.3319"
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-zinc-200 focus:outline-none focus:border-zinc-500"
+                />
+              </label>
+            </div>
+            {fileOpts?.site && (
+              <label className="inline-flex items-center gap-1.5 text-[11px] text-zinc-400 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={fileDraft.makeSiteUsual}
+                  onChange={(e) => setFileDraft({ ...fileDraft, makeSiteUsual: e.target.checked })}
+                  className="accent-pr-red w-3 h-3"
+                />
+                Make it {fileOpts.site.name}’s usual meetup
+                <InfoHint
+                  text={fileOpts.site.hasUsual
+                    ? `Every course at ${fileOpts.site.name} would meet here unless a day says otherwise, replacing the meetup it uses now.`
+                    : `Every course at ${fileOpts.site.name} would meet here unless a day says otherwise.`}
+                />
+              </label>
+            )}
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={fileToLibrary}
+                disabled={filing || !fileDraft.name.trim()}
+                className="px-2.5 py-1 rounded bg-zinc-700 hover:bg-zinc-600 text-white text-xs font-medium transition-colors disabled:opacity-40"
+              >
+                {filing ? 'Filing…' : 'File'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setFileDraft(null)}
+                disabled={filing}
+                className="px-2.5 py-1 rounded text-xs text-zinc-400 hover:text-zinc-200 transition-colors disabled:opacity-40"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         )}
         {pinnable.length > 0 && (
