@@ -600,6 +600,26 @@ export async function adminSetExempt(profileId: string, isExempt: boolean) {
   revalidatePath('/portal', 'layout')
 }
 
+/** Where this person's expense reports are sent. Null is the default,
+    EXPENSE_REPORT_TO — an address here is for the person who cannot send
+    theirs to the usual approver, the usual approver above all. */
+export async function adminSetExpenseReportTo(profileId: string, address: string | null) {
+  await requireAdmin()
+
+  const trimmed = address?.trim() ? normalizeEmail(address) : null
+  if (trimmed !== null && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(trimmed)) {
+    throw new Error('That is not an email address')
+  }
+
+  const { error } = await createAdminClient()
+    .from('profiles')
+    .update({ expense_report_to: trimmed })
+    .eq('id', profileId)
+
+  if (error) throw new Error(error.message)
+  await revalidateByProfileId(profileId)
+}
+
 /** What the salary is. Overhead: no course's actuals read it, and it is kept
     so the org's own profit and loss has a figure to read. Null means nobody
     has said. */

@@ -370,7 +370,7 @@ async function doSubmitReport(reportId: string): Promise<{ ok: true } | { ok: fa
 
   const { data: profile } = await admin
     .from('profiles')
-    .select('first_name, last_name, email, signature_data_url')
+    .select('first_name, last_name, email, signature_data_url, expense_report_to')
     .eq('id', user.id)
     .single()
 
@@ -411,7 +411,14 @@ async function doSubmitReport(reportId: string): Promise<{ ok: true } | { ok: fa
   const pdfName = `Expense Report - ${employeeName} - ${monthTag}.pdf`
 
   // Email to accounting (best-effort attachments for receipts, capped).
-  const to = process.env.EXPENSE_REPORT_TO || 'info@peak-rescue.com'
+  // Their own approver when an admin has named one (Micah's go to Nate, since
+  // he cannot approve his own). Production only: Preview points
+  // EXPENSE_REPORT_TO at a test inbox, and a per-person address would step
+  // straight past it to a real one.
+  const fallbackTo = process.env.EXPENSE_REPORT_TO || 'info@peak-rescue.com'
+  const to = process.env.VERCEL_ENV === 'production' && profile?.expense_report_to
+    ? profile.expense_report_to
+    : fallbackTo
   if (process.env.RESEND_API_KEY) {
     try {
       const attachments: { filename: string; content: Buffer }[] = [

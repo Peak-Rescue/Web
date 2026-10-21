@@ -19,6 +19,7 @@ import CalendarInviteStatus from '@/app/admin/instructors/CalendarInviteStatus'
 import CourseAlertsForm from '@/app/instructor/CourseAlertsForm'
 import EmploymentPanel from '@/app/admin/instructors/EmploymentPanel'
 import ExemptToggle from '@/app/admin/instructors/ExemptToggle'
+import ExpenseReportToField from '@/app/admin/instructors/ExpenseReportToField'
 import DeleteInstructorButton from '@/app/admin/instructors/DeleteInstructorButton'
 import { InviteButton } from '@/app/admin/instructors/InviteButton'
 import {
@@ -65,7 +66,7 @@ export default async function AdminInstructorDetailPage({ params }: { params: Pr
   const profile = instructor.profile_id
     ? (await admin
         .from('profiles')
-        .select('id, first_name, last_name, email, phone, role, emergency_name, emergency_relationship, emergency_phone, is_exempt')
+        .select('id, first_name, last_name, email, phone, role, emergency_name, emergency_relationship, emergency_phone, is_exempt, expense_report_to')
         .eq('id', instructor.profile_id)
         .single()).data
     : null
@@ -341,6 +342,15 @@ export default async function AdminInstructorDetailPage({ params }: { params: Pr
               profile ? <ExemptToggle profileId={profile.id} initialValue={profile.is_exempt ?? false} /> : null
             }
           />
+          {profile && (
+            <div className="mt-2">
+              <ExpenseReportToField
+                profileId={profile.id}
+                initialValue={profile.expense_report_to ?? null}
+                defaultTo={process.env.EXPENSE_REPORT_TO || 'info@peak-rescue.com'}
+              />
+            </div>
+          )}
         </section>
 
         <section className="mb-10">
