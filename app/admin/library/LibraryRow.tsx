@@ -300,24 +300,6 @@ export default function LibraryRow({ item, venues, sites = [], hideProvenance = 
               Course offerings
               <InfoHint text="Pick one to limit this to those courses. Left empty it is offered wherever its discipline matches, which is what most material wants." />
             </label>
-            <div className={`flex items-center gap-1.5 flex-wrap ${form.course_types.length ? 'mb-1.5' : ''}`}>
-              {form.course_types.map((ct) => (
-                <span
-                  key={ct}
-                  className="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded bg-blue-900/40 text-blue-300"
-                >
-                  {courseShortName(ct, null)}
-                  <button
-                    type="button"
-                    aria-label={`Not for ${courseShortName(ct, null)}`}
-                    onClick={() => setForm({ ...form, course_types: form.course_types.filter((x) => x !== ct) })}
-                    className="text-blue-300/60 hover:text-white transition-colors"
-                  >
-                    ×
-                  </button>
-                </span>
-              ))}
-            </div>
             <select
               className={input}
               value=""
@@ -337,6 +319,24 @@ export default function LibraryRow({ item, venues, sites = [], hideProvenance = 
                 </optgroup>
               ))}
             </select>
+            <div className={`flex items-center gap-1.5 flex-wrap ${form.course_types.length ? 'mt-1.5' : ''}`}>
+              {form.course_types.map((ct) => (
+                <span
+                  key={ct}
+                  className="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded bg-blue-900/40 text-blue-300"
+                >
+                  {courseShortName(ct, null)}
+                  <button
+                    type="button"
+                    aria-label={`Not for ${courseShortName(ct, null)}`}
+                    onClick={() => setForm({ ...form, course_types: form.course_types.filter((x) => x !== ct) })}
+                    className="text-blue-300/60 hover:text-white transition-colors"
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+            </div>
           </div>
           <div>
             <label className={label}>Who can see it</label>
