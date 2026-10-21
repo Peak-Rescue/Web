@@ -674,13 +674,23 @@ export default async function LibraryPage({
             placeholder={onShelf ? `Search ${shelfLabel(bucket as LibraryShelf).toLowerCase()}…` : 'Search every shelf…'}
             className={input}
           />
-          <select name="bucket" defaultValue={bucket ?? ''} className={input}>
-            <option value="">All libraries</option>
-            {BUCKET_ORDER.map((b) => <option key={b} value={b}>{BUCKET_META[b].label}</option>)}
-            <optgroup label="Reusable, built here">
-              {TEMPLATE_SHELF_ORDER.map((s) => <option key={s} value={s}>{TEMPLATE_SHELF_META[s].label}</option>)}
-            </optgroup>
-          </select>
+          {/* Which shelf, only while standing on none. On a shelf it was a
+              control that said where you already were, with the breadcrumb
+              saying it again above — and on the two shelves it does not list,
+              Venue information and Photos & video, it read as "All libraries"
+              and quietly threw you back there the moment you searched. Now
+              the shelf you are on rides along hidden. */}
+          {onShelf || onMedia || onPlaces ? (
+            <input type="hidden" name="bucket" value={bucket ?? ''} />
+          ) : (
+            <select name="bucket" defaultValue={bucket ?? ''} className={input}>
+              <option value="">All libraries</option>
+              {BUCKET_ORDER.map((b) => <option key={b} value={b}>{BUCKET_META[b].label}</option>)}
+              <optgroup label="Reusable, built here">
+                {TEMPLATE_SHELF_ORDER.map((s) => <option key={s} value={s}>{TEMPLATE_SHELF_META[s].label}</option>)}
+              </optgroup>
+            </select>
+          )}
           {/* Standing on a shelf, these offer what that shelf holds and say
               how much of it. Offering "Video" where there is no video is a
               dead end dressed as a choice: you pick it, get nothing back, and
@@ -709,6 +719,7 @@ export default async function LibraryPage({
           {/* Derived, not a second tagging job: an offering already says
               which expertise it involves, so this reads the rows tied to it
               and the untied ones that expertise matches. */}
+          {!onMedia && (
           <select name="offering" defaultValue={offering ?? ''} className={input}>
             <option value="">All offerings</option>
             {COURSE_TYPE_OPTIONS.map((g) => (
@@ -717,10 +728,13 @@ export default async function LibraryPage({
               </optgroup>
             ))}
           </select>
+          )}
+          {!onMedia && (
           <select name="venue" defaultValue={venue ?? ''} className={input}>
             <option value="">All venues</option>
             {venues.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
           </select>
+          )}
           <button className="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 rounded text-sm text-zinc-300 transition-colors">Filter</button>
         </form>
 
