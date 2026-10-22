@@ -11,6 +11,7 @@ import { refuse, type ActionResult } from '@/lib/action-result'
 import { classify, NEEDS_SORTING } from '@/lib/sorting'
 import { bucketForKind, KINDS_OFF_BUCKET_SHELVES } from '@/lib/library'
 import { courseCapabilityCategories, CAPABILITY_META, type CapabilityCategory } from '@/lib/capabilities'
+import { withAncestors } from '@/lib/clients'
 
 // Reference attached to a course, set alongside its location for the same
 // reason maps are: a med plan belongs to a place, not to a course type. Two
@@ -100,7 +101,7 @@ export type ResourcePickerItem = {
 export async function loadResourceLibrary(instanceId: string): Promise<ResourcePickerItem[]> {
   const { admin } = await requireTeam(instanceId)
 
-  const [{ data: inst }, { data: rows }, { data: existing }] = await Promise.all([
+  const [{ data: inst }, { data: rows }, { data: existing }, { data: clientTree }] = await Promise.all([
     admin.from('course_instances').select('location, region, venue_id, client_id, course_type, custom_categories').eq('id', instanceId).single(),
     admin
       .from('library_items')
@@ -127,7 +128,9 @@ export async function loadResourceLibrary(instanceId: string): Promise<ResourceP
       .order('title')
       .limit(300),
     admin.from('course_resources').select('library_item_id').eq('instance_id', instanceId),
+    admin.from('clients').select('id, parent_id'),
   ])
+  const courseClients = withAncestors(clientTree ?? [], inst?.client_id)
 
   const added = new Set((existing ?? []).map((r) => r.library_item_id).filter(Boolean))
   const loc = (inst?.location ?? '').toLowerCase().trim()
@@ -165,8 +168,11 @@ export async function loadResourceLibrary(instanceId: string): Promise<ResourceP
     // material on another client's course is the one filing mistake that is
     // somebody else's problem rather than ours. Material with no client is
     // ours and is offered anywhere, which is nearly all of it.
-    const clientMiss = Boolean(r.client_id && r.client_id !== inst?.client_id)
-    const clientHit = Boolean(r.client_id && r.client_id === inst?.client_id)
+    // "That client" includes everything the course's client is filed under:
+    // the 24 STS's material is Red Team's too, and a sector's is every
+    // client's in it.
+    const clientMiss = Boolean(r.client_id && !courseClients.has(r.client_id))
+    const clientHit = Boolean(r.client_id && courseClients.has(r.client_id))
     const tied = (r.course_types ?? []) as string[]
     const offeringMiss = tied.length > 0 && !tied.includes(inst?.course_type ?? '')
     const offeringHit = tied.length > 0 && tied.includes(inst?.course_type ?? '')
@@ -203,11 +209,11 @@ export async function addCourseResourcesFromLibrary(instanceId: string, itemIds:
   // Whose the course is, so another client's material cannot be added to it
   // by a search that went around the picker. The picker hides it; this is the
   // gate, and the two have to agree for the same reason the shelves do.
-  const { data: inst } = await admin
-    .from('course_instances')
-    .select('client_id')
-    .eq('id', instanceId)
-    .single()
+  const [{ data: inst }, { data: clientTree }] = await Promise.all([
+    admin.from('course_instances').select('client_id').eq('id', instanceId).single(),
+    admin.from('clients').select('id, parent_id'),
+  ])
+  const courseClients = withAncestors(clientTree ?? [], inst?.client_id)
 
   const { data: items } = await admin
     .from('library_items')
@@ -219,7 +225,7 @@ export async function addCourseResourcesFromLibrary(instanceId: string, itemIds:
 
   let sort = await nextSort(admin, instanceId)
   const rows = (items ?? [])
-    .filter((i) => !i.client_id || i.client_id === inst?.client_id)
+    .filter((i) => !i.client_id || courseClients.has(i.client_id))
     .map((i) => ({
     instance_id: instanceId,
     library_item_id: i.id,

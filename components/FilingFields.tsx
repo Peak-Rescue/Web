@@ -7,6 +7,7 @@ import KindOptions from '@/components/KindOptions'
 import { AUDIENCE_META, type Venue } from '@/lib/library'
 import { CAPABILITY_META, CAPABILITY_ORDER } from '@/lib/capabilities'
 import { type SiteOption } from '@/app/admin/schedules/types'
+import { type ClientSelectGroup } from '@/lib/clients'
 
 // What filing something asks, wherever it is asked.
 //
@@ -70,8 +71,8 @@ export default function FilingFields({
   onChange: (next: FilingValue, changed: keyof FilingValue) => void
   venues: Venue[]
   sites: SiteOption[]
-  /** The client list, flattened to "Sector › Client" paths. */
-  clients?: { id: string; path: string }[]
+  /** The client tree, one group per sector. */
+  clients?: ClientSelectGroup[]
   fixedKind?: string
   /** 'library' adds the admins-only rung; a template has no such column. */
   audienceMode?: 'library' | 'template'
@@ -209,9 +210,19 @@ export default function FilingFields({
           value={value.client_id ?? ''}
           onChange={(e) => set({ client_id: e.target.value || null }, 'client_id')}
         >
-          <option value="">— ours, not a client's —</option>
-          {clients.map((c) => (
-            <option key={c.id} value={c.id}>{c.path}</option>
+          <option value="">— ours, not a client&rsquo;s —</option>
+          {/* Laid out like Type: a heading per sector, its contents indented
+              under it. Indented with no-break spaces, the only indent a
+              native option keeps. */}
+          {clients.map((g) => (
+            <optgroup key={g.sector} label={g.sector.toUpperCase()}>
+              {g.options.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {'\u00a0'.repeat(o.depth * 3)}
+                  {o.label}
+                </option>
+              ))}
+            </optgroup>
           ))}
         </select>
       </div>

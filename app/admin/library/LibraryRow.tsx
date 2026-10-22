@@ -1,5 +1,6 @@
 'use client'
 
+import { type ClientSelectGroup } from '@/lib/clients'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { updateLibraryItem, deleteLibraryItem, libraryItemUses, type LibraryItemUses } from './actions'
@@ -23,7 +24,7 @@ const input =
   'w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-zinc-500'
 const label = 'block text-[11px] text-zinc-500 mb-1'
 
-export default function LibraryRow({ item, venues, sites = [], clients = [], hideProvenance = false, initialOpen = false }: { item: LibraryItem; venues: Venue[]; sites?: SiteOption[]; clients?: { id: string; path: string }[]; hideProvenance?: boolean; initialOpen?: boolean }) {
+export default function LibraryRow({ item, venues, sites = [], clients = [], hideProvenance = false, initialOpen = false }: { item: LibraryItem; venues: Venue[]; sites?: SiteOption[]; clients?: ClientSelectGroup[]; hideProvenance?: boolean; initialOpen?: boolean }) {
   const router = useRouter()
   const [open, setOpen] = useState(initialOpen)
   const [busy, setBusy] = useState(false)

@@ -33,7 +33,7 @@ import { readViewAs, viewAsSelf } from '@/lib/view-as'
 import ViewAsMenu from '@/components/ViewAsMenu'
 import ShelfTypeSelect from '@/components/ShelfTypeSelect'
 import ShelfError from './shelf-error'
-import { CLIENT_COLUMNS, placeOptions, type ClientRow } from '@/lib/clients'
+import { CLIENT_COLUMNS, clientSelectGroups, type ClientRow } from '@/lib/clients'
 import FoldedGroup from '@/components/FoldedGroup'
 
 const input = 'w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500'
@@ -472,10 +472,8 @@ export default async function LibraryPage({
   const shelfCount = gearTemplates.length + scheduleTemplates.length + courseSetups.length
   const countByShelf = new Map<LibraryShelf, number>(shelfCounts)
   const venueName = new Map(venues.map((v) => [v.id, v.name]))
-  // "Sector › Client", so a name that repeats under two sectors is still
-  // tellable apart in a flat list.
-  const clients = placeOptions((clientRows ?? []) as ClientRow[])
-    .filter((c) => !((clientRows ?? []) as ClientRow[]).find((r) => r.id === c.id)?.is_group)
+  // Grouped by sector the way the Type field is, any level pickable.
+  const clients = clientSelectGroups((clientRows ?? []) as ClientRow[])
 
   // Arriving from a course page: which template to open, and on which half —
   // "edit its name" and "show me what's in it" are different errands.

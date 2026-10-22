@@ -31,6 +31,41 @@ export function clientLabel(rows: ClientRow[], id: string): string {
   return parts.join(' – ')
 }
 
+/** A client and everything it is filed under. Material belonging to any of
+    these belongs to a course for that client: the 24 STS's SOP is Red Team's
+    too, and a sector's material is every client's in it. */
+export function withAncestors(rows: Pick<ClientRow, 'id' | 'parent_id'>[], id: string | null | undefined): Set<string> {
+  const byId = new Map(rows.map((r) => [r.id, r]))
+  const out = new Set<string>()
+  for (let r = id ? byId.get(id) : undefined; r && !out.has(r.id); r = r.parent_id ? byId.get(r.parent_id) : undefined) out.add(r.id)
+  return out
+}
+
+/** The tree as a dropdown, the way the library's Type field reads: one group
+    per sector, headed in capitals, its contents indented beneath it. A
+    sector's heading cannot be picked in a native select, so each group opens
+    with "All of …", which can. A team reads "24 STS – Red Team", so the box
+    still says which Red Team once it is closed. */
+export type ClientSelectGroup = { sector: string; options: { id: string; label: string; depth: number }[] }
+export function clientSelectGroups(rows: ClientRow[]): ClientSelectGroup[] {
+  const tree = buildClientTree(rows)
+  const out: ClientSelectGroup[] = []
+  const walk = (n: ClientNode, into: ClientSelectGroup['options']) => {
+    into.push({
+      id: n.id,
+      label: n.is_group ? `All of ${n.name}` : clientLabel(rows, n.id),
+      depth: n.depth - 1,
+    })
+    n.children.forEach((c) => walk(c, into))
+  }
+  for (const sector of tree.filter((n) => n.is_group)) {
+    const options: ClientSelectGroup['options'] = [{ id: sector.id, label: `All of ${sector.name}`, depth: 0 }]
+    sector.children.forEach((c) => walk(c, options))
+    out.push({ sector: sector.name, options })
+  }
+  return out
+}
+
 /** Every place a new client could be filed: any sector, subsector or client. */
 export function placeOptions(rows: ClientRow[]): { id: string; path: string }[] {
   return rows

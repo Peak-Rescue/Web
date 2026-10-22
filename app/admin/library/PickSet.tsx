@@ -1,5 +1,6 @@
 'use client'
 
+import { type ClientSelectGroup } from '@/lib/clients'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import LibraryRow from './LibraryRow'
@@ -47,7 +48,7 @@ export default function PickSet({
   items: LibraryItem[]
   venues: Venue[]
   sites: SiteOption[]
-  clients?: { id: string; path: string }[]
+  clients?: ClientSelectGroup[]
   /** Arrived here to look at one row — from a course that filed it, say — so
       that row opens rather than waiting to be found and clicked. */
   openId?: string

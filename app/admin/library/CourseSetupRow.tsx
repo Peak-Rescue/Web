@@ -1,5 +1,6 @@
 'use client'
 
+import { type ClientSelectGroup } from '@/lib/clients'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
@@ -48,7 +49,7 @@ export type CourseSetup = {
 // answer the only question worth asking of it — is this the right material,
 // and is it filed where it should be. So each one is the ordinary library row,
 // openable and taggable in place.
-export default function CourseSetupRow({ setup, venues, sites, clients = [] }: { setup: CourseSetup; venues: Venue[]; sites: SiteOption[]; clients?: { id: string; path: string }[] }) {
+export default function CourseSetupRow({ setup, venues, sites, clients = [] }: { setup: CourseSetup; venues: Venue[]; sites: SiteOption[]; clients?: ClientSelectGroup[] }) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)

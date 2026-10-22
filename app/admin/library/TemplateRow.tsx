@@ -1,5 +1,6 @@
 'use client'
 
+import { type ClientSelectGroup } from '@/lib/clients'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import TrashIcon from '@/components/TrashIcon'
@@ -39,7 +40,7 @@ type Props = {
       now has. */
   venues: Venue[]
   placeSites?: SiteOption[]
-  clients?: { id: string; path: string }[]
+  clients?: ClientSelectGroup[]
 } & (
   | { shelf: 'gear'; list: GearList; catalog: GearItem[] }
   | { shelf: 'schedule'; schedule: Schedule; sites: SiteOption[] }
