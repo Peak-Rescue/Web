@@ -43,6 +43,30 @@ export default function ClientPicker({
   const [missed, setMissed] = useState('')
   const [at, setAt] = useState<string | null>(null)
 
+  // The teams under a client, shown wherever that client is offered: a unit
+  // with teams is a choice that can go one step finer, and a client picked
+  // without anyone noticing that is how a course ends up on the 24 STS when
+  // whoever booked it knew it was Red Team.
+  const teamsOf = (id: string) =>
+    rows
+      .filter((r) => r.parent_id === id && !r.is_group)
+      .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))
+
+  const teamButtons = (id: string) => (
+    <span className="flex flex-wrap gap-1">
+      {teamsOf(id).map((t) => (
+        <button
+          key={t.id}
+          type="button"
+          onClick={() => choose(t.id, false)}
+          className="text-xs px-2 py-0.5 rounded border border-zinc-700 text-zinc-300 hover:text-white hover:border-zinc-500 hover:bg-zinc-800"
+        >
+          {t.name}
+        </button>
+      ))}
+    </span>
+  )
+
   const hits = useMemo(() => {
     if (!query.trim()) return []
     return rows
@@ -71,6 +95,7 @@ export default function ClientPicker({
 
   if (mode === 'show' && selected) {
     const row = rows.find((r) => r.id === selected)
+    const teams = row ? teamsOf(row.id) : []
     return (
       <div>
         {hidden}
@@ -93,6 +118,14 @@ export default function ClientPicker({
             </button>
           </span>
         </div>
+        {/* Offered, never required: the unit is a complete answer when the
+            team is not known. */}
+        {teams.length > 0 && (
+          <div className="mt-1.5 flex flex-wrap items-center gap-2">
+            <span className="text-xs text-zinc-500">Narrow to a team:</span>
+            {teamButtons(row!.id)}
+          </div>
+        )}
       </div>
     )
   }
@@ -193,17 +226,22 @@ export default function ClientPicker({
       />
       {query.trim() && (
         <div className="mt-1 rounded border border-zinc-700 bg-zinc-900">
-          {hits.map((h) => (
-            <button
-              key={h.id}
-              type="button"
-              onClick={() => choose(h.id, false)}
-              className="flex w-full items-baseline gap-2 px-3 py-1.5 text-left hover:bg-zinc-800"
-            >
-              <span className="text-sm text-white">{h.name}</span>
-              <span className="text-xs text-zinc-500 truncate">{h.path}</span>
-            </button>
-          ))}
+          {hits.map((h) => {
+            const hasTeams = teamsOf(h.id).length > 0
+            return (
+              <div key={h.id} className="hover:bg-zinc-800/60">
+                <button
+                  type="button"
+                  onClick={() => choose(h.id, false)}
+                  className="flex w-full items-baseline gap-2 px-3 pt-1.5 pb-1 text-left"
+                >
+                  <span className="text-sm text-white">{h.name}</span>
+                  <span className="text-xs text-zinc-500 truncate">{h.path}</span>
+                </button>
+                {hasTeams && <div className="pl-6 pr-3 pb-1.5">{teamButtons(h.id)}</div>}
+              </div>
+            )
+          })}
           {hits.length === 0 && <p className="px-3 py-2 text-xs text-zinc-500">No client called &ldquo;{query.trim()}&rdquo;.</p>}
         </div>
       )}
