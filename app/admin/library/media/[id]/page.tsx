@@ -46,7 +46,9 @@ export default async function LibraryAlbumPage({
   const c = course as unknown as AlbumCourse
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-8">
+    // pt-16/20 like every other admin page: the site header is fixed, and a
+    // page that forgets it starts underneath the logo.
+    <div className="max-w-5xl mx-auto px-4 pt-24 md:pt-28 pb-8">
       <div className="flex items-baseline justify-between gap-4 flex-wrap mb-1">
         <h1 className="text-2xl font-bold">{albumTitle(c)}</h1>
         <Link
