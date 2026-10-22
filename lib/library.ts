@@ -113,6 +113,17 @@ const BUCKET_FOR_KIND: Partial<Record<LibraryKind, LibraryBucket>> = {
     those rows is wherever they were filed before anyone could say what they
     were — which is how Reference came to have a "Photos / media (3)" heading
     on a shelf whose own subtitle is "manuals, tech notes, standards". */
+/** The type a shelf answers for by itself. Gear lists holds gear lists and
+    Photos & video holds albums, so asking is asking a question the door
+    already answered; Reference holds three types and Locations four, so there
+    the form opens blank and waits. Derived, so a shelf that gains a second
+    type stops answering for it. */
+export function soleKindOfShelf(shelf: LibraryShelf | undefined): LibraryKind | undefined {
+  if (!shelf) return undefined
+  const group = KIND_GROUPS.find((g) => g.label === shelfLabel(shelf))
+  return group?.kinds.length === 1 ? group.kinds[0] : undefined
+}
+
 export const KINDS_OFF_BUCKET_SHELVES: LibraryKind[] = ['kit_list', 'media']
 
 /** The shelf a row is actually found on, for the chip that says where it

@@ -5,7 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import {
   KIND_META, LIBRARY_KINDS, BUCKET_META, BUCKET_ORDER,
   TEMPLATE_SHELF_META, TEMPLATE_SHELF_ORDER, SHELF_ORDER, isTemplateShelf, isPlaceShelf,
-  shelfLabel, shelfHint, isMediaShelf, KINDS_OFF_BUCKET_SHELVES,
+  shelfLabel, shelfHint, isMediaShelf, KINDS_OFF_BUCKET_SHELVES, soleKindOfShelf,
   type LibraryItem, type LibraryShelf, type LibraryBucket, type TemplateShelf, type TemplateSummary, type Venue,
 } from '@/lib/library'
 import { type GearItem, type GearList } from '@/app/admin/gear/GearListEditor'
@@ -679,7 +679,9 @@ export default async function LibraryPage({
               venues={venues}
               sites={siteOptions}
               defaultBucket={bucket === 'gear' || onMedia ? undefined : bucket}
-              defaultKind={bucket === 'gear' ? 'kit_list' : onMedia ? 'media' : undefined}
+              // Only where the shelf has one type to give. Everywhere else
+              // the form opens blank and waits to be told.
+              defaultKind={soleKindOfShelf(bucket as LibraryShelf | undefined)}
             />
           </details>
         )}

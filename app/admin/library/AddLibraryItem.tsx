@@ -41,7 +41,11 @@ export default function AddLibraryItem({
       question the door already answered. */
   defaultKind?: string
 }) {
-  const [kind, setKind] = useState(defaultKind ?? 'reference')
+  // Blank, not the first type in the list. It held 'reference', which is not
+  // in the list, so the browser drew the first option — "Presentation" — while
+  // the form carried something else: a select showing one answer and posting
+  // another, on the field that decides the shelf.
+  const [kind, setKind] = useState(defaultKind ?? '')
   const [bucket, setBucket] = useState(defaultBucket ?? 'resource')
   const isMap = kind === 'map'
   const isPermit = kind === 'permit'
@@ -63,9 +67,12 @@ export default function AddLibraryItem({
           }}
           className={input}
         >
-          {/* Nothing added by hand needs to arrive unsaid: the person adding
-              it is looking at it. */}
-<KindOptions />
+          {/* Asked, unless the shelf already answered it — Gear lists means
+              a gear list. Otherwise it opens blank and stays blank until
+              somebody says, because a type nobody chose is a row filed on a
+              shelf nobody meant. */}
+          {!kind && <option value="">— what is it? —</option>}
+          <KindOptions />
         </select>
       </div>
       <div>
