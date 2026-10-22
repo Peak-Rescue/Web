@@ -1568,8 +1568,8 @@ export async function saveCurriculumItemToLibrary(
     if (!(LIBRARY_KINDS as readonly string[]).includes(choices.kind)) return refuse('Pick a type')
     const place = await resolveFilingPlace(admin, choices.place)
     // The library's own rule: a map filed nowhere is offered to no course.
-    if (choices.kind === 'map' && !place.venue_id && !place.site_id) {
-      return refuse('A map needs a place — pick the area or the canyon it is about')
+    if (choices.kind === 'map' && !place.venue_id && !place.site_id && !place.region) {
+      return refuse('A map needs a place — pick the country, state, venue or canyon it is about')
     }
     const validDisciplines = new Set<string>(CAPABILITY_ORDER)
     // Same tidying as the library's tag box, minus the sorting mark: an admin

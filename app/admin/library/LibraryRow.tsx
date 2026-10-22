@@ -56,7 +56,7 @@ export default function LibraryRow({ item, venues, sites = [], clients = [], hid
   const pending = item.status === 'pending'
   // A map filed nowhere is offered to nobody. Eleven of the twenty-three on
   // the shelf are in that state and nothing ever said so.
-  const unplaced = item.kind === 'map' && !item.venue_id && !item.site_id
+  const unplaced = item.kind === 'map' && !item.venue_id && !item.site_id && !item.region
 
   // An expected refusal comes back as a value and is shown as it was written;
   // anything thrown is a fault, and errorFrom keeps its digest.
@@ -102,7 +102,7 @@ export default function LibraryRow({ item, venues, sites = [], clients = [], hid
 
   const save = () => run(async () => {
     if (form.kind === 'map' && !form.place) {
-      return { error: 'A map needs a place — pick the area or the canyon it is about.' }
+      return { error: 'A map needs a place — pick the country, state, venue or canyon it is about.' }
     }
     const { url, edit_url, place, ...rest } = form
     await updateLibraryItem(item.id, {

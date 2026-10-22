@@ -180,12 +180,17 @@ export async function createLibraryItem(formData: FormData) {
   // twice, so the two levels cannot contradict each other — which they already
   // had: Mineral Creek, in the Alpine Lakes, was filed to Dingford Creek.
   const place = await resolvePlace(admin, (formData.get('place') as string) || '')
+  // Any level counts. A map of the whole United States is a map of
+  // somewhere, and the Locations shelf offers "Add to United States: Map" —
+  // so this refused what the page in front of it had just invited, and the
+  // throw surfaced as the library failing to render.
+  //
   // Thrown, not returned: this is a plain `action=` form whose signature is
   // void, and the field is `required`, so the normal path cannot reach here.
   // Only a submit that went around the form can — which is a fault, not a
   // person making a mistake.
-  if (isMap && !place.venue_id && !place.site_id) {
-    throw new Error('A map needs a place — pick the area or the canyon it is about.')
+  if (isMap && !place.venue_id && !place.site_id && !place.region) {
+    throw new Error('A map needs a place — pick the country, state, venue or canyon it is about.')
   }
 
   const { data: created, error } = await admin.from('library_items').insert({
