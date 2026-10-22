@@ -64,11 +64,17 @@ export default function TemplateRow(props: Props) {
   // the offering drives which disciplines are ticked for you, and the
   // disciplines are checkboxes. The text fields are uncontrolled and save on
   // the way out, the way every other editor in the portal does it.
+  // A gear list stores who carries it; the library stores who can see it,
+  // and they are the same answer in different words — the list a student
+  // carries is the list a student can see. Translated here so the question
+  // reads identically on every shelf.
   const [form, setForm] = useState<FilingValue>({
     title: summary.name,
+    url: summary.url ?? '',
     kind: '',
+    note: summary.description ?? '',
     course_types: summary.course_types ?? [],
-    audience: summary.audience ?? 'student',
+    audience: summary.audience === 'instructor' ? 'internal' : 'shared',
     place: summary.place,
     disciplines: summary.disciplines,
     topicsRaw: summary.topics.join(', '),
@@ -224,7 +230,9 @@ export default function TemplateRow(props: Props) {
                 // the editor underneath it has none either.
                 if (changed === 'title') patch({ name: next.title })
                 if (changed === 'course_types') patch({ courseTypes: next.course_types })
-                if (changed === 'audience') patch({ audience: next.audience as 'student' | 'instructor' })
+                if (changed === 'audience') patch({ audience: next.audience === 'internal' ? 'instructor' : 'student' })
+                if (changed === 'url') patch({ url: next.url })
+                if (changed === 'note') patch({ description: next.note })
                 if (changed === 'disciplines') patch({ disciplines: next.disciplines })
                 if (changed === 'place') patch({ place: next.place })
                 if (changed === 'topicsRaw')
@@ -232,40 +240,11 @@ export default function TemplateRow(props: Props) {
               }}
               venues={props.venues}
               sites={props.placeSites ?? []}
-              titleLabel="Name"
-              // The document behind it, where there is one. Without this
-              // field the link went in the note, which is how the shelf came
-              // to show a sentence under one row and a URL under the next.
-              linkSlot={
-                <>
-                  <label className="block text-[11px] text-zinc-500 mb-1">Link</label>
-                  <input
-                    className={input}
-                    defaultValue={summary.url ?? ''}
-                    onBlur={(e) => e.target.value !== (summary.url ?? '') && patch({ url: e.target.value })}
-                  />
-                </>
-              }
-              // Its type is the shelf it is on: a gear list is a gear list.
-              // Its contents are below, not in a box — the rows and the days
-              // are the thing itself.
-              showType={false}
-              audienceMode={props.shelf === 'gear' ? 'carrier' : 'none'}
-              offeringsLabel="Mainly for"
+              fixedKind={meta.noun[0].toUpperCase() + meta.noun.slice(1)}
+              audienceMode="template"
               offeringsHint="Courses of these offerings see it first. It still reaches any course sharing its discipline, so this ranks rather than restricts — unlike a library item, where an offering limits who is offered it."
               lockedDisciplines={implied}
               lockedFrom={impliedFrom}
-              extras={
-                <div className="sm:col-span-2">
-                  <Label hint="Internal — never shown to students.">Note</Label>
-                  <input
-                    className={input}
-                    defaultValue={summary.description ?? ''}
-                    onBlur={(e) =>
-                      e.target.value !== (summary.description ?? '') && patch({ description: e.target.value })}
-                  />
-                </div>
-              }
             />
           </div>
 

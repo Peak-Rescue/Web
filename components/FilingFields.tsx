@@ -22,10 +22,14 @@ import { type SiteOption } from '@/app/admin/schedules/types'
 
 export type FilingValue = {
   title: string
+  url: string
   kind: string
+  note: string
   course_types: string[]
-  /** 'internal' | 'shared' | 'admin' in the library; 'student' | 'instructor'
-      where the question is who carries the thing rather than who may see it. */
+  /** 'internal' | 'shared' | 'admin'. A gear list stores the same answer as
+      'instructor' | 'student' — the list a student carries is the list a
+      student can see — and translates on the way in and out, so the question
+      reads identically on every shelf. */
   audience: string
   place: string
   disciplines: string[]
@@ -41,37 +45,37 @@ export default function FilingFields({
   onChange,
   venues,
   sites,
-  titleLabel = 'Title',
-  /** A document's link, a map's link rows — whatever stands in for "the thing
-      itself" on this shelf. Templates have none: their contents are below. */
-  linkSlot,
-  showType = true,
-  audienceMode = 'library',
-  audienceLabel,
-  offeringsLabel,
-  offeringsHint,
+  /** The shelf's own type, where the shelf decides it: a gear list is a gear
+      list. Shown in the same place as the picker, so the form does not
+      change shape between shelves. */
+  fixedKind,
   placeRequired = false,
   /** Disciplines the offerings already imply. Shown ticked and held there,
       because the matching derives them anyway and an unticked box that the
       matching treats as ticked is a lie on the form. */
   lockedDisciplines = [],
   lockedFrom,
+  offeringsHint,
+  linkHint,
+  noteHint,
+  audienceMode = 'library',
+  linkSlot,
   extras,
 }: {
   value: FilingValue
   onChange: (next: FilingValue, changed: keyof FilingValue) => void
   venues: Venue[]
   sites: SiteOption[]
-  titleLabel?: string
+  fixedKind?: string
+  /** 'library' adds the admins-only rung; a template has no such column. */
+  audienceMode?: 'library' | 'template'
   linkSlot?: React.ReactNode
-  showType?: boolean
-  audienceMode?: 'library' | 'carrier' | 'none'
-  audienceLabel?: string
-  offeringsLabel?: string
-  offeringsHint?: string
   placeRequired?: boolean
   lockedDisciplines?: string[]
   lockedFrom?: string | null
+  offeringsHint?: string
+  linkHint?: string
+  noteHint?: string
   extras?: React.ReactNode
 }) {
   const set = (patch: Partial<FilingValue>, changed: keyof FilingValue) =>
@@ -80,7 +84,7 @@ export default function FilingFields({
   return (
     <>
       <div className="sm:col-span-2">
-        <label className={label}>{titleLabel}</label>
+        <label className={label}>Title</label>
         <input
           className={input}
           value={value.title}
@@ -88,14 +92,31 @@ export default function FilingFields({
         />
       </div>
 
-      {linkSlot && <div className="sm:col-span-2">{linkSlot}</div>}
+      <div className="sm:col-span-2">
+        <label className={`${label} flex items-center gap-1.5`}>
+          Link
+          {linkHint && <InfoHint text={linkHint} />}
+        </label>
+        {linkSlot ?? (
+          <input
+            className={input}
+            value={value.url}
+            onChange={(e) => set({ url: e.target.value }, 'url')}
+          />
+        )}
+      </div>
 
-      {showType && (
-        <div>
-          {/* Picking a type has already said which shelf — it is listed under
-              that shelf's name — so the shelf follows rather than being asked
-              for again on the next line. */}
-          <label className={label}>Type</label>
+      <div>
+        {/* Picking a type has already said which shelf — it is listed under
+            that shelf's name — so the shelf follows rather than being asked
+            for again on the next line. Where the shelf decides the type, the
+            field still stands in the same place saying what it is. */}
+        <label className={label}>Type</label>
+        {fixedKind ? (
+          <select className={`${input} opacity-60`} value="fixed" disabled>
+            <option value="fixed">{fixedKind}</option>
+          </select>
+        ) : (
           <select
             className={input}
             value={value.kind}
@@ -107,11 +128,10 @@ export default function FilingFields({
             {value.kind === 'reference' && <option value="reference" />}
             <KindOptions />
           </select>
-        </div>
-      )}
+        )}
+      </div>
 
       <OfferingChips
-        label={offeringsLabel}
         hint={
           offeringsHint ??
           'Pick one to limit this to those courses. Left empty it is offered wherever its discipline matches, which is what most material wants.'
@@ -121,33 +141,24 @@ export default function FilingFields({
         className={input}
       />
 
-      {audienceMode !== 'none' && (
-        <div>
-          <label className={label}>{audienceLabel ?? (audienceMode === 'carrier' ? 'Who carries it' : 'Who can see it')}</label>
-          <select
-            className={input}
-            value={value.audience}
-            onChange={(e) => set({ audience: e.target.value }, 'audience')}
-          >
-            {audienceMode === 'carrier' ? (
-              <>
-                <option value="student">Students</option>
-                <option value="instructor">Instructors</option>
-              </>
-            ) : (
-              <>
-                <option value="internal">{AUDIENCE_META.internal.choice}</option>
-                <option value="shared">{AUDIENCE_META.shared.choice}</option>
-                {/* One ladder in the UI, two fields underneath. Admin-only is
-                    stored as its own flag so it can only ever add a
-                    restriction, but to the person setting it this is plainly
-                    the third rung: students, then instructors, then us. */}
-                <option value="admin">Admins only — and never on a course</option>
-              </>
-            )}
-          </select>
-        </div>
-      )}
+      <div>
+        <label className={label}>Who can see it</label>
+        <select
+          className={input}
+          value={value.audience}
+          onChange={(e) => set({ audience: e.target.value }, 'audience')}
+        >
+          <option value="internal">{AUDIENCE_META.internal.choice}</option>
+          <option value="shared">{AUDIENCE_META.shared.choice}</option>
+          {/* One ladder in the UI, two fields underneath. Admin-only is
+              stored as its own flag so it can only ever add a restriction,
+              but to the person setting it this is plainly the third rung:
+              students, then instructors, then us. */}
+          {audienceMode === 'library' && (
+            <option value="admin">Admins only — and never on a course</option>
+          )}
+        </select>
+      </div>
 
       {/* One question at either level — the area, or the canyon inside it. */}
       <div>
@@ -163,6 +174,18 @@ export default function FilingFields({
           onChange={(v) => set({ place: v }, 'place')}
           required={placeRequired}
           className={input}
+        />
+      </div>
+
+      <div className="sm:col-span-2">
+        <label className={`${label} flex items-center gap-1.5`}>
+          Note
+          <InfoHint text={noteHint ?? 'Anything the title does not say. Internal — never shown to students.'} />
+        </label>
+        <input
+          className={input}
+          value={value.note}
+          onChange={(e) => set({ note: e.target.value }, 'note')}
         />
       </div>
 

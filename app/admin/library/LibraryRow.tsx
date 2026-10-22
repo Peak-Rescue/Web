@@ -41,6 +41,7 @@ export default function LibraryRow({ item, venues, sites = [], hideProvenance = 
     // to remember to delete before saving. It comes off by itself when the
     // row says where it belongs.
     topicsRaw: item.topics.filter((t) => t !== NEEDS_SORTING).join(', '),
+    description: item.description ?? '',
     place: placeValue(item.region, item.venue_id, item.site_id),
     course_types: item.course_types ?? [],
     admin_only: item.admin_only,
@@ -251,7 +252,9 @@ export default function LibraryRow({ item, venues, sites = [], hideProvenance = 
           <FilingFields
             value={{
               title: form.title,
+              url: form.url,
               kind: form.kind,
+              note: form.description,
               course_types: form.course_types,
               audience: form.admin_only ? 'admin' : form.audience,
               place: form.place,
@@ -262,6 +265,8 @@ export default function LibraryRow({ item, venues, sites = [], hideProvenance = 
               setForm({
                 ...form,
                 title: next.title,
+                url: next.url,
+                description: next.note,
                 course_types: next.course_types,
                 place: next.place,
                 disciplines: next.disciplines,
@@ -284,16 +289,8 @@ export default function LibraryRow({ item, venues, sites = [], hideProvenance = 
             // A map's links are rows of their own, each with its own access
             // and audience, so they are managed here rather than typed into
             // two boxes that decided both at once.
-            linkSlot={
-              form.kind === 'map' ? (
-                <MapLinks itemId={item.id} links={item.links ?? []} />
-              ) : (
-                <>
-                  <label className={label}>Link</label>
-                  <input className={input} value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} />
-                </>
-              )
-            }
+            linkSlot={form.kind === 'map' ? <MapLinks itemId={item.id} links={item.links ?? []} /> : undefined}
+            linkHint={form.kind === 'map' ? "A map's links are rows of their own, each with its own access and audience." : undefined}
             // In 820 items this has never once been filled in, including on
             // every permit. It stays for the kind it was built for and is out
             // of the way of everything else.
