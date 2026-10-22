@@ -358,6 +358,9 @@ export default function CourseResourcesSection({
                     {i.venueName && (
                       <span className="text-[10px] px-1 rounded bg-blue-900/40 text-blue-300 shrink-0">{i.venueName}</span>
                     )}
+                    {i.matchedOn === 'client' && (
+                      <span className="text-[10px] px-1 rounded bg-zinc-800 text-zinc-400 shrink-0">this client</span>
+                    )}
                     {i.matchedOn === 'offering' && (
                       <span className="text-[10px] px-1 rounded bg-zinc-800 text-zinc-400 shrink-0">this course</span>
                     )}

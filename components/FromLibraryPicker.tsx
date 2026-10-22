@@ -26,7 +26,7 @@ export type LibraryChoice = {
   venueName: string | null
   regionLabel: string | null
   suggested: boolean
-  matchedOn: 'offering' | 'venue' | 'region' | 'discipline' | null
+  matchedOn: 'client' | 'offering' | 'venue' | 'region' | 'discipline' | null
   disciplineLabel: string | null
   alreadyAdded: boolean
 }
@@ -149,6 +149,7 @@ export default function FromLibraryPicker({
               {KIND_META[r.kind as LibraryKind] || 'No type yet'}
             </span>
             {/* Why it is near the top, in the word that put it there. */}
+            {r.matchedOn === 'client' && <span className="text-[10px] text-zinc-500 shrink-0">this client</span>}
             {r.matchedOn === 'offering' && <span className="text-[10px] text-zinc-500 shrink-0">this course</span>}
             {r.matchedOn === 'venue' && r.venueName && <span className="text-[10px] text-zinc-500 shrink-0">{r.venueName}</span>}
             {r.matchedOn === 'region' && r.regionLabel && <span className="text-[10px] text-zinc-500 shrink-0">{r.regionLabel}</span>}

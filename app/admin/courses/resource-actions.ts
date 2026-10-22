@@ -80,7 +80,7 @@ export type ResourcePickerItem = {
   venueName: string | null
   regionLabel: string | null
   suggested: boolean
-  matchedOn: 'offering' | 'venue' | 'region' | 'discipline' | null
+  matchedOn: 'client' | 'offering' | 'venue' | 'region' | 'discipline' | null
   /** The discipline it shares with the course, when that is why it is offered. */
   disciplineLabel: string | null
   alreadyAdded: boolean
@@ -101,10 +101,10 @@ export async function loadResourceLibrary(instanceId: string): Promise<ResourceP
   const { admin } = await requireTeam(instanceId)
 
   const [{ data: inst }, { data: rows }, { data: existing }] = await Promise.all([
-    admin.from('course_instances').select('location, region, venue_id, course_type, custom_categories').eq('id', instanceId).single(),
+    admin.from('course_instances').select('location, region, venue_id, client_id, course_type, custom_categories').eq('id', instanceId).single(),
     admin
       .from('library_items')
-      .select('id, title, url, kind, audience, region, venue_id, site_id, bucket, disciplines, course_types, venues(name)')
+      .select('id, title, url, kind, audience, region, venue_id, site_id, bucket, disciplines, course_types, client_id, venues(name)')
       // Reference, plus the plans a place has. A venue's evac plan is the
       // thing somebody goes looking for while building the course that goes
       // there, and it sits on the Documents shelf — so offering only the
@@ -160,6 +160,13 @@ export async function loadResourceLibrary(instanceId: string): Promise<ResourceP
     // weaker match — they are the wrong thing, and discipline alone would
     // offer them to all four canyon offerings. Null, the usual answer, means
     // it matches on discipline and place like everything else. See 242.
+    // Whose it is. A client's patrol manual belongs to their courses and to
+    // nobody else's — not ranked lower, absent: offering one client's
+    // material on another client's course is the one filing mistake that is
+    // somebody else's problem rather than ours. Material with no client is
+    // ours and is offered anywhere, which is nearly all of it.
+    const clientMiss = Boolean(r.client_id && r.client_id !== inst?.client_id)
+    const clientHit = Boolean(r.client_id && r.client_id === inst?.client_id)
     const tied = (r.course_types ?? []) as string[]
     const offeringMiss = tied.length > 0 && !tied.includes(inst?.course_type ?? '')
     const offeringHit = tied.length > 0 && tied.includes(inst?.course_type ?? '')
@@ -171,9 +178,9 @@ export async function loadResourceLibrary(instanceId: string): Promise<ResourceP
       audience: r.audience as LibraryAudience,
       venueName,
       regionLabel: regionLabel(r.region),
-      suggested: offeringHit || (placeOnly ? venueHit || regionHit : venueHit || regionHit || shared.length > 0),
-      hidden: offeringMiss || (placeOnly && !venueHit && !regionHit),
-      matchedOn: (offeringHit ? 'offering' : venueHit ? 'venue' : regionHit ? 'region' : shared.length > 0 ? 'discipline' : null) as ResourcePickerItem['matchedOn'],
+      suggested: clientHit || offeringHit || (placeOnly ? venueHit || regionHit : venueHit || regionHit || shared.length > 0),
+      hidden: clientMiss || offeringMiss || (placeOnly && !venueHit && !regionHit),
+      matchedOn: (clientHit ? 'client' : offeringHit ? 'offering' : venueHit ? 'venue' : regionHit ? 'region' : shared.length > 0 ? 'discipline' : null) as ResourcePickerItem['matchedOn'],
       disciplineLabel: shared.map((d) => CAPABILITY_META[d as CapabilityCategory]?.label ?? d).join(', ') || null,
       alreadyAdded: added.has(r.id),
       placed: Boolean(r.venue_id || r.site_id || r.region),
@@ -193,16 +200,27 @@ export async function addCourseResourcesFromLibrary(instanceId: string, itemIds:
   // a venue's med plan and evac plan — while this silently dropped them for
   // not being Reference, so the row you ticked was added to nothing and the
   // section came back exactly as it was.
+  // Whose the course is, so another client's material cannot be added to it
+  // by a search that went around the picker. The picker hides it; this is the
+  // gate, and the two have to agree for the same reason the shelves do.
+  const { data: inst } = await admin
+    .from('course_instances')
+    .select('client_id')
+    .eq('id', instanceId)
+    .single()
+
   const { data: items } = await admin
     .from('library_items')
-    .select('id, audience')
+    .select('id, audience, client_id')
     .in('id', itemIds)
     .in('bucket', ['resource', 'documents', 'instructor'])
     .not('kind', 'in', `(${KINDS_OFF_BUCKET_SHELVES.join(',')})`)
     .eq('admin_only', false)
 
   let sort = await nextSort(admin, instanceId)
-  const rows = (items ?? []).map((i) => ({
+  const rows = (items ?? [])
+    .filter((i) => !i.client_id || i.client_id === inst?.client_id)
+    .map((i) => ({
     instance_id: instanceId,
     library_item_id: i.id,
     audience: i.audience === 'shared' ? 'shared' : 'internal',
