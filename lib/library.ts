@@ -257,6 +257,9 @@ export type TemplateSummary = {
   course_types: string[]
   disciplines: string[]
   topics: string[]
+  /** The document behind it, where there is one — half the written-down
+      gear lists are a link to a Google Doc. See 258. */
+  url: string | null
   /** Where it is filed, as a PlaceSelect value. A gear list for one canyon is
       a real thing, and until 256 there was nowhere to say so. */
   place: string

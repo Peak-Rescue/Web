@@ -160,6 +160,8 @@ export async function updateSchedule(
     /** A PlaceSelect value — `region:`, `venue:` or `site:` — resolved here
         to the three columns, the same ladder a library row stores. */
     place?: string
+    /** The document behind it, where it is a written-down list. See 258. */
+    url?: string | null
     disciplines?: string[]
     topics?: string[]
   }
@@ -182,6 +184,7 @@ export async function updateSchedule(
     update.course_types = patch.courseTypes
     update.course_type = patch.courseTypes[0] ?? null
   }
+  if (patch.url !== undefined) update.url = patch.url?.trim() || null
   if (patch.place !== undefined) {
     const { resolvePlaceValue } = await import('@/lib/library-file')
     Object.assign(update, await resolvePlaceValue(admin, patch.place))

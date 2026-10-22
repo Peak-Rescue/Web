@@ -218,7 +218,7 @@ export default async function LibraryPage({
     showTemplates && shelves.includes('gear')
       ? (() => {
           let g = admin.from('gear_lists')
-            .select(`id, name, description, audience, intro, students, course_type, course_types, venue_id, site_id, region, disciplines, topics, instance_id, is_template, ${GEAR_ENTRIES_SELECT}`)
+            .select(`id, name, description, audience, intro, students, url, course_type, course_types, venue_id, site_id, region, disciplines, topics, instance_id, is_template, ${GEAR_ENTRIES_SELECT}`)
             .eq('is_template', true)
             .order('name')
           if (q) g = g.ilike('name', `%${q}%`)
@@ -229,7 +229,7 @@ export default async function LibraryPage({
     showTemplates && shelves.includes('schedule')
       ? (() => {
           let s = admin.from('course_schedules')
-            .select('id, name, description, overview, objectives, course_type, course_types, venue_id, site_id, region, disciplines, topics, instance_id, is_template, schedule_days(id, title, location, site_id, notes, objectives, meeting_point, meeting_time, sort_order, schedule_blocks(id, parent_id, title, time_label, location, sort_order))')
+            .select('id, name, description, overview, objectives, url, course_type, course_types, venue_id, site_id, region, disciplines, topics, instance_id, is_template, schedule_days(id, title, location, site_id, notes, objectives, meeting_point, meeting_time, sort_order, schedule_blocks(id, parent_id, title, time_label, location, sort_order))')
             .eq('is_template', true)
             .order('name')
           if (q) s = s.ilike('name', `%${q}%`)
@@ -435,14 +435,14 @@ export default async function LibraryPage({
   const summarize = (
     t: {
       id: string; name: string; description: string | null
-      course_types?: string[] | null; course_type?: string | null
+      course_types?: string[] | null; course_type?: string | null; url?: string | null
       disciplines: string[]; topics: string[]
       venue_id?: string | null; site_id?: string | null; region?: string | null
     },
     count: number,
     audience?: 'student' | 'instructor'
   ): TemplateSummary => ({
-    id: t.id, name: t.name, description: t.description,
+    id: t.id, name: t.name, description: t.description, url: t.url ?? null,
     place: t.site_id ? `site:${t.site_id}` : t.venue_id ? `venue:${t.venue_id}` : t.region ? `region:${t.region}` : '',
     // The column is filled from course_type by 256; this keeps a row written
     // by an older deploy readable until nothing writes the single one.

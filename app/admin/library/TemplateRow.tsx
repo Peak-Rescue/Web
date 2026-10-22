@@ -19,6 +19,10 @@ const input =
   'w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-zinc-500'
 // A field's name, and — behind the icon — the sentence about it that would
 // otherwise sit on screen forever after the one time anyone needed it.
+const hostOf = (url: string) => {
+  try { return new URL(url).hostname.replace('www.', '') } catch { return 'link' }
+}
+
 const Label = ({ children, hint }: { children: string; hint?: string }) => (
   <span className="flex items-center gap-1.5 mb-1">
     <span className="text-[11px] text-zinc-500">{children}</span>
@@ -90,6 +94,7 @@ export default function TemplateRow(props: Props) {
     audience?: 'student' | 'instructor'
     /** A PlaceSelect value, resolved to venue/site/region by the action. */
     place?: string
+    url?: string | null
   }
   const patch = ({ audience, ...shared }: Patch) => run(() =>
     props.shelf === 'gear'
@@ -156,9 +161,10 @@ export default function TemplateRow(props: Props) {
               the title says it, and the note is for the exception. A line of
               grey telling you a field is empty is a line you learn to read
               past, which is how it hid the rows that did have something. */}
-          {(summary.description || summary.disciplines.length > 0 || (summary.course_types ?? []).length > 0) && (
+          {(summary.url || summary.description || summary.disciplines.length > 0 || (summary.course_types ?? []).length > 0) && (
             <p className="text-[11px] text-zinc-600 mt-1 truncate">
               {[
+                summary.url ? hostOf(summary.url) : null,
                 summary.description,
                 [...new Set([
                   ...(summary.course_types ?? []).flatMap((ct) => courseCapabilityCategories(ct, null) as string[]),
@@ -227,8 +233,22 @@ export default function TemplateRow(props: Props) {
               venues={props.venues}
               sites={props.placeSites ?? []}
               titleLabel="Name"
-              // Its contents are below, not in a box. A gear list's rows and a
-              // schedule's days are the thing itself.
+              // The document behind it, where there is one. Without this
+              // field the link went in the note, which is how the shelf came
+              // to show a sentence under one row and a URL under the next.
+              linkSlot={
+                <>
+                  <label className="block text-[11px] text-zinc-500 mb-1">Link</label>
+                  <input
+                    className={input}
+                    defaultValue={summary.url ?? ''}
+                    onBlur={(e) => e.target.value !== (summary.url ?? '') && patch({ url: e.target.value })}
+                  />
+                </>
+              }
+              // Its type is the shelf it is on: a gear list is a gear list.
+              // Its contents are below, not in a box — the rows and the days
+              // are the thing itself.
               showType={false}
               audienceMode={props.shelf === 'gear' ? 'carrier' : 'none'}
               offeringsLabel="Mainly for"

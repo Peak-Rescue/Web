@@ -24,6 +24,10 @@ import type { Schedule } from '@/app/admin/schedules/types'
 type GearTemplate = GearList & { description: string | null; course_type: string | null; disciplines: string[] }
 type ScheduleTemplate = Schedule & { description: string | null; course_type: string | null; disciplines: string[] }
 
+const hostOf = (url: string) => {
+  try { return new URL(url).hostname.replace('www.', '') } catch { return 'link' }
+}
+
 export default function TemplateReadOnly(
   props: { summary: TemplateSummary } & (
     | { shelf: 'gear'; list: GearTemplate; catalog: CatalogItem[] }
@@ -51,28 +55,24 @@ export default function TemplateReadOnly(
               </span>
             ))}
           </span>
-          {/* Imports put a link in the note on about half of these, so the
-              same line read as a sentence on one row and as a raw URL on the
-              next. A link is shown as one — named by its host, like every
-              other link in the library — and a note is shown as a note. */}
-          {summary.description && (
-            /^https?:\/\//i.test(summary.description.trim()) ? (
-              <a
-                href={summary.description.trim()}
-                target="_blank"
-                rel="noreferrer"
-                // No onClick to stop the <summary> toggling under it: this
-                // file is a server component, and a handler here is not a
-                // style mistake but a render-time throw that takes the whole
-                // instructor view of the shelf with it. Opening the fold as
-                // well as the link costs nothing.
-                className="block text-[11px] text-zinc-500 hover:text-white transition-colors mt-0.5 truncate"
-              >
-                {new URL(summary.description.trim()).hostname.replace('www.', '')} ↗
-              </a>
-            ) : (
-              <span className="block text-[11px] text-zinc-600 mt-0.5 truncate">{summary.description}</span>
-            )
+          {/* The link is a column now (258), so the note is a note again.
+              Both are shown, because a list can be a document and still have
+              something to say about itself. */}
+          {(summary.url || summary.description) && (
+            <span className="block text-[11px] text-zinc-600 mt-0.5 truncate">
+              {summary.url && (
+                <a
+                  href={summary.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-zinc-500 hover:text-white transition-colors"
+                >
+                  {hostOf(summary.url)} ↗
+                </a>
+              )}
+              {summary.url && summary.description ? ' · ' : ''}
+              {summary.description}
+            </span>
           )}
         </span>
         <span className="shrink-0 text-[11px] text-zinc-500">
