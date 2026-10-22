@@ -257,6 +257,9 @@ export type TemplateSummary = {
   course_types: string[]
   disciplines: string[]
   topics: string[]
+  /** Where it is filed, as a PlaceSelect value. A gear list for one canyon is
+      a real thing, and until 256 there was nowhere to say so. */
+  place: string
   count: number
   audience?: 'student' | 'instructor'
 }

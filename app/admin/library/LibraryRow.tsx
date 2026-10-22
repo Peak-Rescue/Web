@@ -15,7 +15,7 @@ import { COURSE_TYPE_OPTIONS, courseShortName } from '@/lib/courses'
 import CloseButton from '@/components/CloseButton'
 import TrashIcon from '@/components/TrashIcon'
 import InfoHint from '@/components/InfoHint'
-import OfferingChips from '@/components/OfferingChips'
+import FilingFields from '@/components/FilingFields'
 import StateBadge from '@/components/StateBadge'
 import KindOptions from '@/components/KindOptions'
 
@@ -247,139 +247,68 @@ export default function LibraryRow({ item, venues, sites = [], hideProvenance = 
 
       {open && (
         <div className="px-3 pb-3 pt-1 border-t border-zinc-800 grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div className="sm:col-span-2">
-            <label className={label}>Title</label>
-            <input className={input} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
-          </div>
-          {/* A map's links are rows of their own, each with its own access
-              and audience, so they are managed here rather than typed into two
-              boxes that decided both at once. Everything else has one link. */}
-          {form.kind === 'map' ? (
-            <div className="sm:col-span-2">
-              <MapLinks itemId={item.id} links={item.links ?? []} />
-            </div>
-          ) : (
-            <div className="sm:col-span-2">
-              <label className={label}>Link</label>
-              <input className={input} value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} />
-            </div>
-          )}
-          {/* No shelf, picker or otherwise. The type says it — the types
-              are listed under the shelf they belong to — so a second field
-              repeating the answer is a field to read past on a form whose
-              whole job is being quick to fill in. */}
-          <div>
-            <label className={label}>Type</label>
-            {/* Picking a type has already said which shelf — it is listed
-                under that shelf's name — so the shelf follows rather than
-                being asked for again on the next line. It stays changeable
-                underneath, because a manual can legitimately be teaching
-                material on one course and reference on another. */}
-            <select
-              className={input}
-              value={form.kind}
-              onChange={(e) => {
-                const kind = e.target.value
-                setForm({ ...form, kind, ...(bucketForKind(kind) ? { bucket: bucketForKind(kind)! } : {}) })
-              }}
-            >
-              {/* Blank while nothing has been said, and gone once something
-                  has. A type list that offers "not said yet" as a row reads
-                  as a category, and people filed things under it. */}
-              {form.kind === 'reference' && <option value="reference" />}
-<KindOptions />
-            </select>
-          </div>
-          <OfferingChips
-            value={form.course_types}
-            onChange={(course_types) => setForm({ ...form, course_types })}
-            hint="Pick one to limit this to those courses. Left empty it is offered wherever its discipline matches, which is what most material wants."
-            className={input}
+          <FilingFields
+            value={{
+              title: form.title,
+              kind: form.kind,
+              course_types: form.course_types,
+              audience: form.admin_only ? 'admin' : form.audience,
+              place: form.place,
+              disciplines: form.disciplines,
+              topicsRaw: form.topicsRaw,
+            }}
+            onChange={(next, changed) =>
+              setForm({
+                ...form,
+                title: next.title,
+                course_types: next.course_types,
+                place: next.place,
+                disciplines: next.disciplines,
+                topicsRaw: next.topicsRaw,
+                // The type decides the shelf; the two cannot be set apart.
+                ...(changed === 'kind'
+                  ? { kind: next.kind, ...(bucketForKind(next.kind) ? { bucket: bucketForKind(next.kind)! } : {}) }
+                  : {}),
+                // One ladder on the form, two fields underneath.
+                ...(changed === 'audience'
+                  ? next.audience === 'admin'
+                    ? { admin_only: true, audience: 'internal' as const }
+                    : { admin_only: false, audience: next.audience as 'internal' | 'shared' }
+                  : {}),
+              })
+            }
+            venues={venues}
+            sites={sites}
+            placeRequired={form.kind === 'map'}
+            // A map's links are rows of their own, each with its own access
+            // and audience, so they are managed here rather than typed into
+            // two boxes that decided both at once.
+            linkSlot={
+              form.kind === 'map' ? (
+                <MapLinks itemId={item.id} links={item.links ?? []} />
+              ) : (
+                <>
+                  <label className={label}>Link</label>
+                  <input className={input} value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} />
+                </>
+              )
+            }
+            // In 820 items this has never once been filled in, including on
+            // every permit. It stays for the kind it was built for and is out
+            // of the way of everything else.
+            extras={form.kind === 'permit' ? (
+              <div>
+                <label className={label}>Expires (permits, dated docs)</label>
+                <input type="date" className={input} value={form.expires_at} onChange={(e) => setForm({ ...form, expires_at: e.target.value })} />
+              </div>
+            ) : null}
           />
-          <div>
-            <label className={label}>Who can see it</label>
-            <select
-              className={input}
-              value={form.admin_only ? 'admin' : form.audience}
-              onChange={(e) =>
-                e.target.value === 'admin'
-                  ? setForm({ ...form, admin_only: true, audience: 'internal' })
-                  : setForm({ ...form, admin_only: false, audience: e.target.value as 'internal' | 'shared' })
-              }
-            >
-              <option value="internal">{AUDIENCE_META.internal.choice}</option>
-              <option value="shared">{AUDIENCE_META.shared.choice}</option>
-              {/* One ladder in the UI, two fields underneath. Admin-only is
-                  stored as its own flag so it can only ever add a restriction,
-                  but to the person setting it this is plainly the third rung:
-                  students, then instructors, then us. */}
-              <option value="admin">Admins only — and never on a course</option>
-            </select>
-          </div>
-          {/* One question at either level — the area, or the canyon inside
-              it. Required for a map, because a map filed nowhere is offered to
-              no course; optional for everything else, which is only sometimes
-              about a place at all. */}
-          <div className={form.kind === 'map' ? 'sm:col-span-2' : ''}>
-            {/* One word for one field. It said "Place" on most rows and
-                "Where it is" on a map, which is the same question asked
-                twice — and "venue" is deliberately not the word: a row can
-                be about a country, a state, a venue or one canyon inside
-                one, and only one of those is a venue. */}
-            <label className={`${label} flex items-center gap-1.5`}>
-              Location{form.kind === 'map' ? ' *' : ''}
-              <InfoHint text="Country, state, venue or canyon — whichever level this is true for. Everything under it inherits it, so file it as broadly as it is true. A map needs one: a map filed nowhere is offered to no course." />
-            </label>
-            <PlaceSelect
-              name="place"
-              venues={venues}
-              sites={sites}
-              value={form.place}
-              onChange={(v) => setForm({ ...form, place: v })}
-              required={form.kind === 'map'}
-              className={input}
-            />
-          </div>
-          {/* In 820 items this has never once been filled in, including on
-              every permit in there. It stays for the kind it was built for and
-              is out of the way of everything else. */}
-          {form.kind === 'permit' && (
-          <div>
-              <label className={label}>Expires (permits, dated docs)</label>
-              <input type="date" className={input} value={form.expires_at} onChange={(e) => setForm({ ...form, expires_at: e.target.value })} />
-            </div>
+          {item.topics.includes(NEEDS_SORTING) && (
+            <p className="sm:col-span-2 -mt-2 text-[11px] text-zinc-600">
+              Marked for sorting. Saying what this is, which shelf it is on, or where it
+              is takes that off — a new title on its own does not.
+            </p>
           )}
-          <div className="sm:col-span-2">
-            <label className={label}>Disciplines</label>
-            <div className="flex flex-wrap gap-x-4 gap-y-1.5 p-2 bg-zinc-800/50 border border-zinc-700 rounded">
-              {CAPABILITY_ORDER.map((c) => (
-                <label key={c} className="flex items-center gap-1.5 text-xs text-zinc-300 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    className="accent-red-600"
-                    checked={form.disciplines.includes(c)}
-                    onChange={() => setForm({
-                      ...form,
-                      disciplines: form.disciplines.includes(c)
-                        ? form.disciplines.filter((x) => x !== c)
-                        : [...form.disciplines, c],
-                    })}
-                  />
-                  {CAPABILITY_META[c].label}
-                </label>
-              ))}
-            </div>
-          </div>
-          <div className="sm:col-span-2">
-            <label className={label}>Topic tags (comma separated)</label>
-            <input className={input} value={form.topicsRaw} onChange={(e) => setForm({ ...form, topicsRaw: e.target.value })} />
-            {item.topics.includes(NEEDS_SORTING) && (
-              <p className="text-[11px] text-zinc-600 mt-1">
-                Marked for sorting. Saying what this is, which shelf it is on, or where it
-                is takes that off — a new title on its own does not.
-              </p>
-            )}
-          </div>
           <div className="sm:col-span-2 flex items-center gap-3">
             <button onClick={save} disabled={busy} className="px-3 py-1.5 rounded bg-pr-red hover:bg-pr-red-dark text-white text-sm font-medium transition-colors disabled:opacity-40">
               {busy ? 'Saving…' : 'Save'}

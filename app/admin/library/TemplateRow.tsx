@@ -3,12 +3,12 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import TrashIcon from '@/components/TrashIcon'
-import OfferingChips from '@/components/OfferingChips'
+import FilingFields, { type FilingValue } from '@/components/FilingFields'
 import GearListEditor, { type GearItem, type GearList } from '@/app/admin/gear/GearListEditor'
 import ScheduleEditor, { type Schedule, type SiteOption } from '@/app/admin/schedules/ScheduleEditor'
 import { updateGearList, deleteGearList } from '@/app/admin/gear/actions'
 import { updateSchedule, deleteSchedule } from '@/app/admin/schedules/actions'
-import { TEMPLATE_SHELF_META, type TemplateShelf, type TemplateSummary } from '@/lib/library'
+import { TEMPLATE_SHELF_META, type TemplateShelf, type TemplateSummary , type Venue } from '@/lib/library'
 import { CAPABILITY_META, CAPABILITY_ORDER, courseCapabilityCategories } from '@/lib/capabilities'
 import { ForPill } from '@/components/AudiencePills'
 import { COURSE_TYPE_OPTIONS, courseShortName } from '@/lib/courses'
@@ -30,6 +30,9 @@ type Props = {
   /** Opened on arrival when a course page linked straight to this template —
       the row is what you came for, so it shouldn't need a second click. */
   initialOpen?: 'contents' | 'details'
+  /** For the filing panel's location field, which every shelf now has. */
+  venues: Venue[]
+  placeSites?: SiteOption[]
 } & (
   | { shelf: 'gear'; list: GearList; catalog: GearItem[] }
   | { shelf: 'schedule'; schedule: Schedule; sites: SiteOption[] }
@@ -55,10 +58,14 @@ export default function TemplateRow(props: Props) {
   // the offering drives which disciplines are ticked for you, and the
   // disciplines are checkboxes. The text fields are uncontrolled and save on
   // the way out, the way every other editor in the portal does it.
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<FilingValue>({
+    title: summary.name,
+    kind: '',
     course_types: summary.course_types ?? [],
     audience: summary.audience ?? 'student',
+    place: summary.place,
     disciplines: summary.disciplines,
+    topicsRaw: summary.topics.join(', '),
   })
 
   const meta = TEMPLATE_SHELF_META[shelf as TemplateShelf]
@@ -79,6 +86,8 @@ export default function TemplateRow(props: Props) {
     disciplines?: string[]
     topics?: string[]
     audience?: 'student' | 'instructor'
+    /** A PlaceSelect value, resolved to venue/site/region by the action. */
+    place?: string
   }
   const patch = ({ audience, ...shared }: Patch) => run(() =>
     props.shelf === 'gear'
@@ -173,95 +182,44 @@ export default function TemplateRow(props: Props) {
       {open && (
         <div className="border-t border-zinc-800">
           <div className="px-3 pt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="sm:col-span-2">
-              <Label>Name</Label>
-              <input
-                className={input}
-                defaultValue={summary.name}
-                onBlur={(e) => e.target.value !== summary.name && patch({ name: e.target.value })}
-              />
-            </div>
-            <div className="sm:col-span-2">
-              <Label hint="Internal — never shown to students.">Note</Label>
-              <input
-                className={input}
-                defaultValue={summary.description ?? ''}
-                onBlur={(e) =>
-                  e.target.value !== (summary.description ?? '') && patch({ description: e.target.value })}
-              />
-            </div>
-            <div>
-              <OfferingChips
-                label="Mainly for"
-                hint="Courses of these offerings see it first. It still reaches any course sharing its discipline, so this ranks rather than restricts — unlike a library item, where an offering limits who is offered it."
-                value={form.course_types}
-                onChange={(course_types) => {
-                  setForm({ ...form, course_types })
-                  patch({ courseTypes: course_types })
-                }}
-                className={input}
-              />
-            </div>
-            {props.shelf === 'gear' && (
-              <div>
-                <Label>Who carries it</Label>
-                <select
-                  className={input}
-                  value={form.audience}
-                  onChange={(e) => {
-                    const audience = e.target.value as 'student' | 'instructor'
-                    setForm({ ...form, audience })
-                    patch({ audience })
-                  }}
-                >
-                  <option value="student">Students</option>
-                  <option value="instructor">Instructors</option>
-                </select>
-              </div>
-            )}
-            <div className="sm:col-span-2">
-              <Label hint="How a custom course finds this. The offering's own discipline is ticked and locked.">Disciplines</Label>
-              <div className="flex flex-wrap gap-x-4 gap-y-1.5 p-2 bg-zinc-800/50 border border-zinc-700 rounded">
-                {CAPABILITY_ORDER.map((c) => {
-                  const fromOffering = implied.includes(c)
-                  return (
-                    <label
-                      key={c}
-                      title={fromOffering ? `Comes with the ${impliedFrom} offering` : undefined}
-                      className={`flex items-center gap-1.5 text-xs ${
-                        fromOffering ? 'text-zinc-500 cursor-default' : 'text-zinc-300 cursor-pointer'
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        className="accent-red-600"
-                        checked={fromOffering || form.disciplines.includes(c)}
-                        disabled={fromOffering}
-                        onChange={() => {
-                          const disciplines = form.disciplines.includes(c)
-                            ? form.disciplines.filter((x) => x !== c)
-                            : [...form.disciplines, c]
-                          setForm({ ...form, disciplines })
-                          patch({ disciplines })
-                        }}
-                      />
-                      {CAPABILITY_META[c].label}
-                    </label>
-                  )
-                })}
-              </div>
-            </div>
-            <div className="sm:col-span-2">
-              <Label hint="Free-text tags, comma separated. They are searched and shown on the row; the expertise above is what the matching reads.">Topics</Label>
-              <input
-                className={input}
-                defaultValue={summary.topics.join(', ')}
-                onBlur={(e) => {
-                  const topics = e.target.value.split(',').map((t) => t.trim()).filter(Boolean)
-                  if (topics.join(', ') !== summary.topics.join(', ')) patch({ topics })
-                }}
-              />
-            </div>
+            <FilingFields
+              value={form}
+              onChange={(next, changed) => {
+                setForm(next)
+                // Saved as it is changed, the way every other field on this
+                // row has always been — the row has no Save button because
+                // the editor underneath it has none either.
+                if (changed === 'title') patch({ name: next.title })
+                if (changed === 'course_types') patch({ courseTypes: next.course_types })
+                if (changed === 'audience') patch({ audience: next.audience as 'student' | 'instructor' })
+                if (changed === 'disciplines') patch({ disciplines: next.disciplines })
+                if (changed === 'place') patch({ place: next.place })
+                if (changed === 'topicsRaw')
+                  patch({ topics: next.topicsRaw.split(',').map((t) => t.trim()).filter(Boolean) })
+              }}
+              venues={props.venues}
+              sites={props.placeSites ?? []}
+              titleLabel="Name"
+              // Its contents are below, not in a box. A gear list's rows and a
+              // schedule's days are the thing itself.
+              showType={false}
+              audienceMode={props.shelf === 'gear' ? 'carrier' : 'none'}
+              offeringsLabel="Mainly for"
+              offeringsHint="Courses of these offerings see it first. It still reaches any course sharing its discipline, so this ranks rather than restricts — unlike a library item, where an offering limits who is offered it."
+              lockedDisciplines={implied}
+              lockedFrom={impliedFrom}
+              extras={
+                <div className="sm:col-span-2">
+                  <Label hint="Internal — never shown to students.">Note</Label>
+                  <input
+                    className={input}
+                    defaultValue={summary.description ?? ''}
+                    onBlur={(e) =>
+                      e.target.value !== (summary.description ?? '') && patch({ description: e.target.value })}
+                  />
+                </div>
+              }
+            />
           </div>
 
           <div className="px-3 pt-4 mt-3 border-t border-zinc-800">

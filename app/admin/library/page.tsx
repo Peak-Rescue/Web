@@ -218,7 +218,7 @@ export default async function LibraryPage({
     showTemplates && shelves.includes('gear')
       ? (() => {
           let g = admin.from('gear_lists')
-            .select(`id, name, description, audience, intro, students, course_type, course_types, disciplines, topics, instance_id, is_template, ${GEAR_ENTRIES_SELECT}`)
+            .select(`id, name, description, audience, intro, students, course_type, course_types, venue_id, site_id, region, disciplines, topics, instance_id, is_template, ${GEAR_ENTRIES_SELECT}`)
             .eq('is_template', true)
             .order('name')
           if (q) g = g.ilike('name', `%${q}%`)
@@ -229,7 +229,7 @@ export default async function LibraryPage({
     showTemplates && shelves.includes('schedule')
       ? (() => {
           let s = admin.from('course_schedules')
-            .select('id, name, description, overview, objectives, course_type, course_types, disciplines, topics, instance_id, is_template, schedule_days(id, title, location, site_id, notes, objectives, meeting_point, meeting_time, sort_order, schedule_blocks(id, parent_id, title, time_label, location, sort_order))')
+            .select('id, name, description, overview, objectives, course_type, course_types, venue_id, site_id, region, disciplines, topics, instance_id, is_template, schedule_days(id, title, location, site_id, notes, objectives, meeting_point, meeting_time, sort_order, schedule_blocks(id, parent_id, title, time_label, location, sort_order))')
             .eq('is_template', true)
             .order('name')
           if (q) s = s.ilike('name', `%${q}%`)
@@ -433,11 +433,17 @@ export default async function LibraryPage({
   const catalog = (catalogRes.data ?? []) as unknown as GearItem[]
 
   const summarize = (
-    t: { id: string; name: string; description: string | null; course_types?: string[] | null; course_type?: string | null; disciplines: string[]; topics: string[] },
+    t: {
+      id: string; name: string; description: string | null
+      course_types?: string[] | null; course_type?: string | null
+      disciplines: string[]; topics: string[]
+      venue_id?: string | null; site_id?: string | null; region?: string | null
+    },
     count: number,
     audience?: 'student' | 'instructor'
   ): TemplateSummary => ({
     id: t.id, name: t.name, description: t.description,
+    place: t.site_id ? `site:${t.site_id}` : t.venue_id ? `venue:${t.venue_id}` : t.region ? `region:${t.region}` : '',
     // The column is filled from course_type by 256; this keeps a row written
     // by an older deploy readable until nothing writes the single one.
     course_types: t.course_types?.length ? t.course_types : t.course_type ? [t.course_type] : [],
@@ -851,6 +857,8 @@ export default async function LibraryPage({
                     <TemplateRow
                       key={t.id}
                       shelf="gear"
+                      venues={venues}
+                      placeSites={siteOptions}
                       list={t}
                       catalog={catalog}
                       summary={summarize(t, t.gear_list_entries?.length ?? 0, t.audience)}
@@ -871,6 +879,8 @@ export default async function LibraryPage({
                     <TemplateRow
                       key={t.id}
                       shelf="schedule"
+                      venues={venues}
+                      placeSites={siteOptions}
                       schedule={t}
                       sites={siteOptions}
                       summary={summarize(t, t.schedule_days?.length ?? 0)}
