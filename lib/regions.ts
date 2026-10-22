@@ -195,7 +195,12 @@ export function regionShort(code: string | null | undefined): string {
 export function isValidRegion(code: string | null | undefined): boolean {
   if (!code) return false
   const [country, sub] = code.split('-')
-  if (country === 'US') return sub in US_NAMES
-  if (country === 'CA') return sub in CA_NAMES
+  // A bare "US" or "CA" is as real an answer as a bare "TW". These two were
+  // the only countries required to name a state, because they are the only
+  // two we file states under — so a map of the whole United States had its
+  // region quietly stripped and arrived filed nowhere, badged "needs a
+  // place", with nothing saying what had happened to it.
+  if (country === 'US') return !sub || sub in US_NAMES
+  if (country === 'CA') return !sub || sub in CA_NAMES
   return !sub && COUNTRY_CODES.split(',').includes(country)
 }
