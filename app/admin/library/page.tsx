@@ -32,6 +32,7 @@ import { COURSE_TYPE_OPTIONS } from '@/lib/courses'
 import { readViewAs, viewAsSelf } from '@/lib/view-as'
 import ViewAsMenu from '@/components/ViewAsMenu'
 import ShelfTypeSelect from '@/components/ShelfTypeSelect'
+import ShelfError from './shelf-error'
 import { CLIENT_COLUMNS, placeOptions, type ClientRow } from '@/lib/clients'
 import FoldedGroup from '@/components/FoldedGroup'
 
@@ -271,8 +272,12 @@ export default async function LibraryPage({
           .in('status', STATUSES)
           .order('title')
       : Promise.resolve({ data: [] }),
-    onPlaces ? loadSitesShelf() : Promise.resolve(null),
-    onMedia ? loadMediaShelf() : Promise.resolve(null),
+    // Caught, not left to throw: a shelf that cannot load should say so and
+    // leave the rest of the library standing. One of these taking the whole
+    // page down is how a 500 with an error number became the only thing
+    // anybody could see.
+    onPlaces ? loadSitesShelf().catch((e) => ({ failed: e })) : Promise.resolve(null),
+    onMedia ? loadMediaShelf().catch((e) => ({ failed: e })) : Promise.resolve(null),
     // What is actually on this shelf, for the filters above it. Offering
     // "Video" on a shelf holding no video is a dead end dressed as a choice —
     // you pick it, get nothing, and learn nothing about why. Cheap: two
@@ -794,7 +799,10 @@ export default async function LibraryPage({
         )}
 
         {/* ── Photos & video ───────────────────────────────────────────── */}
-        {onMedia && mediaShelf && (
+        {onMedia && mediaShelf && 'failed' in mediaShelf && (
+          <ShelfError what="Photos & video" error={(mediaShelf as { failed: unknown }).failed} />
+        )}
+        {onMedia && mediaShelf && !('failed' in mediaShelf) && (
           <MediaShelf
             albums={mediaShelf.albums.filter((a) => albumMatches(a, discipline, q))}
             linked={mediaShelf.linked}
@@ -811,7 +819,10 @@ export default async function LibraryPage({
         )}
 
         {/* ── Venue information ────────────────────────────────────────── */}
-        {onPlaces && placesShelf && (
+        {onPlaces && placesShelf && 'failed' in placesShelf && (
+          <ShelfError what="Locations" error={(placesShelf as { failed: unknown }).failed} />
+        )}
+        {onPlaces && placesShelf && !('failed' in placesShelf) && (
           isAdmin ? (
             <SitesShelf {...placesShelf} />
           ) : (
