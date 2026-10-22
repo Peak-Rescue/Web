@@ -61,7 +61,11 @@ export default function TemplateReadOnly(
                 href={summary.description.trim()}
                 target="_blank"
                 rel="noreferrer"
-                onClick={(e) => e.stopPropagation()}
+                // No onClick to stop the <summary> toggling under it: this
+                // file is a server component, and a handler here is not a
+                // style mistake but a render-time throw that takes the whole
+                // instructor view of the shelf with it. Opening the fold as
+                // well as the link costs nothing.
                 className="block text-[11px] text-zinc-500 hover:text-white transition-colors mt-0.5 truncate"
               >
                 {new URL(summary.description.trim()).hostname.replace('www.', '')} ↗
