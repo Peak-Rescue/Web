@@ -541,10 +541,14 @@ export default async function LibraryPage({
               looking at was a select box in the middle of a row of five. */}
           <div className="flex items-center gap-2 text-sm text-zinc-500 min-w-0">
             <Link href="/admin" className="hover:text-zinc-300 transition-colors">← Portal</Link>
-            {onShelf && (
+            {/* Whenever you are not already looking at them. It appeared only
+                on a shelf, so a search — which is on no shelf — had no way
+                back to the cards at all: you cleared the box and pressed
+                Filter, or you edited the URL. */}
+            {!landing && (
               <>
                 <span className="text-zinc-700">/</span>
-                <Link href="/admin/library" className="hover:text-zinc-300 transition-colors">All libraries</Link>
+                <Link href="/admin/library" className="hover:text-zinc-300 transition-colors">All shelves</Link>
               </>
             )}
           </div>
