@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { removeRegion, removeVenue } from './actions'
 import TrashIcon from '@/components/TrashIcon'
@@ -18,6 +19,7 @@ export default function RemovePlace({
   const router = useRouter()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [link, setLink] = useState<{ href: string; label: string } | null>(null)
 
   return (
     <>
@@ -32,7 +34,7 @@ export default function RemovePlace({
           setError(null)
           try {
             const r = 'venueId' in scope ? await removeVenue(scope.venueId) : await removeRegion(scope.regionCode)
-            if (r && 'error' in r) setError(r.error)
+            if (r && 'error' in r) { setError(r.error); setLink(r.link ?? null) }
             else router.refresh()
           } finally {
             setBusy(false)
@@ -42,7 +44,22 @@ export default function RemovePlace({
       >
         <TrashIcon />
       </button>
-      {error && <span className="text-[11px] text-pr-red">{error}</span>}
+      {/* The refusal and the way to act on it. Naming what is in the way
+          without linking to it is how somebody goes looking for a course by
+          opening the list and guessing. */}
+      {error && (
+        <span className="text-[11px] text-pr-red">
+          {error}
+          {link && (
+            <>
+              {' '}
+              <Link href={link.href} className="underline hover:text-white transition-colors">
+                {link.label}
+              </Link>
+            </>
+          )}
+        </span>
+      )}
     </>
   )
 }

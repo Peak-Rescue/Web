@@ -423,17 +423,41 @@ export async function removePlaceLink(scope: PlaceScope, url: string): Promise<A
  */
 export async function removeVenue(id: string): Promise<ActionResult> {
   const admin = await requireAdmin()
-  const [{ count: sites }, { count: items }, { count: courses }] = await Promise.all([
+  const [{ count: sites }, { count: items }, { data: courseRows }] = await Promise.all([
     admin.from('sites').select('id', { count: 'exact', head: true }).eq('venue_id', id),
     admin.from('library_items').select('id', { count: 'exact', head: true }).eq('venue_id', id),
-    admin.from('course_instances').select('id', { count: 'exact', head: true }).eq('venue_id', id),
+    // Named, not counted. "This venue still has 1 course" is a refusal with
+    // nowhere to go: the one thing the person needs next is which course, and
+    // they are left to find it by opening the list and guessing.
+    admin
+      .from('course_instances')
+      .select('id, ref_number, course_type, custom_title')
+      .eq('venue_id', id)
+      .order('starts_at', { ascending: false })
+      .limit(4),
   ])
+  const courses = courseRows ?? []
   const held = [
     sites && `${sites} canyon${sites === 1 ? '' : 's'}`,
     items && `${items} document${items === 1 ? '' : 's'}`,
-    courses && `${courses} course${courses === 1 ? '' : 's'}`,
+    courses.length > 0 &&
+      `${courses.length} course${courses.length === 1 ? '' : 's'} (${courses
+        .map((c) => (c.ref_number ? `PR-${String(c.ref_number).padStart(4, '0')}` : (c.custom_title as string) || 'untitled'))
+        .join(', ')})`,
   ].filter(Boolean).join(', ')
-  if (held) return refuse(`This venue still has ${held}. Move or remove those first.`)
+  if (held) {
+    // The door is the course itself. The list has no venue filter to send
+    // anyone to, and the message already names them, so the link opens the
+    // most recent and the rest are findable by the refs beside it.
+    const first = courses[0]
+    const link = first
+      ? {
+          href: `/portal/${first.id}`,
+          label: first.ref_number ? `Open PR-${String(first.ref_number).padStart(4, '0')}` : 'Open it',
+        }
+      : undefined
+    return refuse(`This venue still has ${held}. Move or remove those first.`, link)
+  }
 
   const { error } = await admin.from('venues').delete().eq('id', id)
   if (error) throw new Error(error.message)
