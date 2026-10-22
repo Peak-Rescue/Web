@@ -267,6 +267,8 @@ export async function updateGearList(
     place?: string
     /** The document behind it, where it is a written-down list. See 258. */
     url?: string | null
+    /** Whose it is. See 262. */
+    clientId?: string | null
     disciplines?: string[]
     topics?: string[]
     /** The headcount this list is packed for. Null hands it back to the
@@ -294,6 +296,7 @@ export async function updateGearList(
     update.course_type = patch.courseTypes[0] ?? null
   }
   if (patch.url !== undefined) update.url = patch.url?.trim() || null
+  if (patch.clientId !== undefined) update.client_id = patch.clientId
   if (patch.place !== undefined) {
     const { resolvePlaceValue } = await import('@/lib/library-file')
     Object.assign(update, await resolvePlaceValue(admin, patch.place))

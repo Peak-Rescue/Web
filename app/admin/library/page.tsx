@@ -32,6 +32,7 @@ import { COURSE_TYPE_OPTIONS } from '@/lib/courses'
 import { readViewAs, viewAsSelf } from '@/lib/view-as'
 import ViewAsMenu from '@/components/ViewAsMenu'
 import ShelfTypeSelect from '@/components/ShelfTypeSelect'
+import { CLIENT_COLUMNS, placeOptions, type ClientRow } from '@/lib/clients'
 import FoldedGroup from '@/components/FoldedGroup'
 
 const input = 'w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500'
@@ -130,7 +131,7 @@ export default async function LibraryPage({
 
   let query = admin
     .from('library_items')
-    .select('id, title, description, source_type, url, edit_url, drive_file_id, kind, audience, disciplines, topics, admin_only, venue_id, site_id, expires_at, course_types, status, bucket, region, source_class, source_topic, source_item, library_item_links(id, url, access, audience)')
+    .select('id, title, description, source_type, url, edit_url, drive_file_id, kind, audience, disciplines, topics, admin_only, venue_id, site_id, expires_at, course_types, client_id, status, bucket, region, source_class, source_topic, source_item, library_item_links(id, url, access, audience)')
     // The review queue is a queue: oldest problems first is the wrong way
     // round, and it is read top to bottom rather than looked up. Every other
     // view is looked up, so it goes in the order a shelf goes in.
@@ -209,7 +210,7 @@ export default async function LibraryPage({
   // Templates take the same search box and discipline tags the documents use.
   // Nothing to approve about a kit list you wrote yourself, so they have no
   // filing state at all.
-  const [{ data: itemRows }, { data: venueRows }, { data: siteRows }, gearRes, scheduleRes, setupRes, catalogRes, { data: kitListRows }, placesShelf, mediaShelf, { data: facetRows }, shelfCounts] = await Promise.all([
+  const [{ data: itemRows }, { data: venueRows }, { data: siteRows }, gearRes, scheduleRes, setupRes, catalogRes, { data: kitListRows }, placesShelf, mediaShelf, { data: facetRows }, { data: clientRows }, shelfCounts] = await Promise.all([
     showDocs ? query : Promise.resolve({ data: [] }),
     admin.from('venues').select('id, name, region, region_code, client_name, notes, links, contacts, active').order('name'),
     // A per-region template pins its canyons here, so the courses started from
@@ -218,7 +219,7 @@ export default async function LibraryPage({
     showTemplates && shelves.includes('gear')
       ? (() => {
           let g = admin.from('gear_lists')
-            .select(`id, name, description, audience, intro, students, url, course_type, course_types, venue_id, site_id, region, disciplines, topics, instance_id, is_template, ${GEAR_ENTRIES_SELECT}`)
+            .select(`id, name, description, audience, intro, students, url, client_id, course_type, course_types, venue_id, site_id, region, disciplines, topics, instance_id, is_template, ${GEAR_ENTRIES_SELECT}`)
             .eq('is_template', true)
             .order('name')
           if (q) g = g.ilike('name', `%${q}%`)
@@ -229,7 +230,7 @@ export default async function LibraryPage({
     showTemplates && shelves.includes('schedule')
       ? (() => {
           let s = admin.from('course_schedules')
-            .select('id, name, description, overview, objectives, url, course_type, course_types, venue_id, site_id, region, disciplines, topics, instance_id, is_template, schedule_days(id, title, location, site_id, notes, objectives, meeting_point, meeting_time, sort_order, schedule_blocks(id, parent_id, title, time_label, location, sort_order))')
+            .select('id, name, description, overview, objectives, url, client_id, course_type, course_types, venue_id, site_id, region, disciplines, topics, instance_id, is_template, schedule_days(id, title, location, site_id, notes, objectives, meeting_point, meeting_time, sort_order, schedule_blocks(id, parent_id, title, time_label, location, sort_order))')
             .eq('is_template', true)
             .order('name')
           if (q) s = s.ilike('name', `%${q}%`)
@@ -246,7 +247,7 @@ export default async function LibraryPage({
     showTemplates && shelves.includes('setup')
       ? (() => {
           let c = admin.from('course_templates')
-            .select('id, name, description, course_type, course_types, url, topics, audience, venue_id, site_id, region, disciplines, course_template_sections(id, title, sort_order, course_template_items(id, sort_order, library_items(id, title, description, source_type, url, edit_url, drive_file_id, kind, audience, disciplines, topics, admin_only, venue_id, site_id, expires_at, course_types, status, bucket, region, source_class, source_topic, source_item, library_item_links(id, url, access, audience))))')
+            .select('id, name, description, course_type, course_types, url, client_id, topics, audience, venue_id, site_id, region, disciplines, course_template_sections(id, title, sort_order, course_template_items(id, sort_order, library_items(id, title, description, source_type, url, edit_url, drive_file_id, kind, audience, disciplines, topics, admin_only, venue_id, site_id, expires_at, course_types, client_id, status, bucket, region, source_class, source_topic, source_item, library_item_links(id, url, access, audience))))')
             .eq('active', true)
             .order('name')
           if (q) c = c.ilike('name', `%${q}%`)
@@ -265,7 +266,7 @@ export default async function LibraryPage({
     showTemplates && shelves.includes('gear')
       ? admin
           .from('library_items')
-          .select('id, title, description, source_type, url, edit_url, drive_file_id, kind, audience, disciplines, topics, admin_only, venue_id, site_id, expires_at, course_types, status, bucket, region, source_class, source_topic, source_item, library_item_links(id, url, access, audience)')
+          .select('id, title, description, source_type, url, edit_url, drive_file_id, kind, audience, disciplines, topics, admin_only, venue_id, site_id, expires_at, course_types, client_id, status, bucket, region, source_class, source_topic, source_item, library_item_links(id, url, access, audience)')
           .eq('kind', 'kit_list')
           .in('status', STATUSES)
           .order('title')
@@ -279,6 +280,10 @@ export default async function LibraryPage({
     onShelf && !isTemplateShelf(bucket) && !onPlaces
       ? narrow(admin.from('library_items').select('kind, disciplines') as unknown as typeof query, false).limit(2000)
       : Promise.resolve({ data: null }),
+    // The client list, for the filing panel's one new question. Small — 52
+    // rows — and read on every shelf, so it is fetched with everything else
+    // rather than behind a click.
+    admin.from('clients').select(CLIENT_COLUMNS).order('name'),
     landing
       ? Promise.all([
           ...BUCKET_ORDER.map(async (b) => [b, (await admin
@@ -349,7 +354,7 @@ export default async function LibraryPage({
               (((await narrow(
                 admin
                   .from('library_items')
-                  .select('id, title, description, source_type, url, edit_url, drive_file_id, kind, audience, disciplines, topics, admin_only, venue_id, site_id, expires_at, course_types, status, bucket, region, source_class, source_topic, source_item, library_item_links(id, url, access, audience)')
+                  .select('id, title, description, source_type, url, edit_url, drive_file_id, kind, audience, disciplines, topics, admin_only, venue_id, site_id, expires_at, course_types, client_id, status, bucket, region, source_class, source_topic, source_item, library_item_links(id, url, access, audience)')
                   .eq('kind', k)
                   .order('title')
                   .order('id')
@@ -380,7 +385,7 @@ export default async function LibraryPage({
   const scheduleTemplates = (scheduleRes.data ?? []) as unknown as ScheduleTemplate[]
   const courseSetups = ((setupRes.data ?? []) as unknown as {
     id: string; name: string; description: string | null; course_type: string | null
-    course_types: string[] | null; url: string | null; topics: string[] | null
+    course_types: string[] | null; url: string | null; topics: string[] | null; client_id: string | null
     audience: 'internal' | 'shared' | null
     venue_id: string | null; site_id: string | null; region: string | null
     disciplines: string[] | null
@@ -400,6 +405,7 @@ export default async function LibraryPage({
     url: t.url,
     topics: t.topics ?? [],
     audience: t.audience ?? 'shared',
+    client_id: t.client_id ?? null,
     place: t.site_id ? `site:${t.site_id}` : t.venue_id ? `venue:${t.venue_id}` : t.region ? `region:${t.region}` : '',
     disciplines: t.disciplines ?? [],
     sections: [...(t.course_template_sections ?? [])]
@@ -443,14 +449,14 @@ export default async function LibraryPage({
   const summarize = (
     t: {
       id: string; name: string; description: string | null
-      course_types?: string[] | null; course_type?: string | null; url?: string | null
+      course_types?: string[] | null; course_type?: string | null; url?: string | null; client_id?: string | null
       disciplines: string[]; topics: string[]
       venue_id?: string | null; site_id?: string | null; region?: string | null
     },
     count: number,
     audience?: 'student' | 'instructor'
   ): TemplateSummary => ({
-    id: t.id, name: t.name, description: t.description, url: t.url ?? null,
+    id: t.id, name: t.name, description: t.description, url: t.url ?? null, client_id: t.client_id ?? null,
     place: t.site_id ? `site:${t.site_id}` : t.venue_id ? `venue:${t.venue_id}` : t.region ? `region:${t.region}` : '',
     // The column is filled from course_type by 256; this keeps a row written
     // by an older deploy readable until nothing writes the single one.
@@ -461,6 +467,10 @@ export default async function LibraryPage({
   const shelfCount = gearTemplates.length + scheduleTemplates.length + courseSetups.length
   const countByShelf = new Map<LibraryShelf, number>(shelfCounts)
   const venueName = new Map(venues.map((v) => [v.id, v.name]))
+  // "Sector › Client", so a name that repeats under two sectors is still
+  // tellable apart in a flat list.
+  const clients = placeOptions((clientRows ?? []) as ClientRow[])
+    .filter((c) => !((clientRows ?? []) as ClientRow[]).find((r) => r.id === c.id)?.is_group)
 
   // Arriving from a course page: which template to open, and on which half —
   // "edit its name" and "show me what's in it" are different errands.
@@ -742,7 +752,7 @@ export default async function LibraryPage({
                       // Ticked rows, not the group: the heading is a type,
                       // and a type is not a destination. What a hand-picked
                       // set can be told is on the bar.
-                      <PickSet items={rows} venues={venues} sites={siteOptions} openId={item} />
+                      <PickSet items={rows} venues={venues} sites={siteOptions} clients={clients} openId={item} />
                     ) : (
                       <div className="border border-zinc-800 rounded-lg divide-y divide-zinc-800/70">
                         {rows.map((it) => (
@@ -855,7 +865,7 @@ export default async function LibraryPage({
                 {/* The written-down kind, first: they are what exists, and
                     the structured ones are what we have started building. */}
                 {shelf === 'gear' && isAdmin && kitLists.map((it) => (
-                  <LibraryRow key={it.id} item={it} venues={venues} sites={siteOptions} />
+                  <LibraryRow key={it.id} item={it} venues={venues} sites={siteOptions} clients={clients} />
                 ))}
                 {shelf === 'gear' && !isAdmin && kitLists.map((it) => (
                   <ItemRow key={it.id} item={it} venueName={it.venue_id ? venueName.get(it.venue_id) : null} />
@@ -867,6 +877,7 @@ export default async function LibraryPage({
                       shelf="gear"
                       venues={venues}
                       placeSites={siteOptions}
+                      clients={clients}
                       list={t}
                       catalog={catalog}
                       summary={summarize(t, t.gear_list_entries?.length ?? 0, t.audience)}
@@ -889,6 +900,7 @@ export default async function LibraryPage({
                       shelf="schedule"
                       venues={venues}
                       placeSites={siteOptions}
+                      clients={clients}
                       schedule={t}
                       sites={siteOptions}
                       summary={summarize(t, t.schedule_days?.length ?? 0)}
@@ -905,7 +917,7 @@ export default async function LibraryPage({
                 ))}
                 {shelf === 'setup' && courseSetups.map((t) => (
                   isAdmin
-                    ? <CourseSetupRow key={t.id} setup={t} venues={venues} sites={siteOptions} />
+                    ? <CourseSetupRow key={t.id} setup={t} clients={clients} venues={venues} sites={siteOptions} />
                     : <CourseSetupReadOnly key={t.id} setup={t} venues={venues} />
                 ))}
                 {rows.length === 0 && (

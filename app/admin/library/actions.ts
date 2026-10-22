@@ -68,6 +68,7 @@ export type LibraryPatch = {
   status?: 'pending' | 'published' | 'archived'
   bucket?: string | null
   course_types?: string[]
+  clientId?: string | null
   region?: string | null
 }
 
@@ -78,6 +79,7 @@ export async function updateLibraryItem(id: string, patch: LibraryPatch) {
   if (patch.title !== undefined) update.title = patch.title.trim().slice(0, 200) || 'Untitled'
   if (patch.description !== undefined) update.description = patch.description?.trim() || null
   if (patch.url !== undefined) update.url = patch.url?.trim() || null
+  if (patch.clientId !== undefined) update.client_id = patch.clientId
   if (patch.edit_url !== undefined) update.edit_url = patch.edit_url?.trim() || null
   if (patch.kind !== undefined && VALID_KINDS.has(patch.kind)) update.kind = patch.kind
   if (patch.audience !== undefined) update.audience = patch.audience
@@ -661,6 +663,7 @@ export async function updateCourseSetup(
     topics?: string[]
     audience?: 'internal' | 'shared'
     url?: string | null
+    clientId?: string | null
     place?: string
   }
 ) {
@@ -677,6 +680,7 @@ export async function updateCourseSetup(
   if (patch.topics !== undefined) update.topics = patch.topics
   if (patch.audience !== undefined) update.audience = patch.audience
   if (patch.url !== undefined) update.url = patch.url?.trim() || null
+  if (patch.clientId !== undefined) update.client_id = patch.clientId
   if (patch.place !== undefined) {
     const { resolvePlaceValue } = await import('@/lib/library-file')
     Object.assign(update, await resolvePlaceValue(admin, patch.place))

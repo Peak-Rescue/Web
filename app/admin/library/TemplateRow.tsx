@@ -35,9 +35,11 @@ type Props = {
   /** Opened on arrival when a course page linked straight to this template —
       the row is what you came for, so it shouldn't need a second click. */
   initialOpen?: 'contents' | 'details'
-  /** For the filing panel's location field, which every shelf now has. */
+  /** For the filing panel's location and client fields, which every shelf
+      now has. */
   venues: Venue[]
   placeSites?: SiteOption[]
+  clients?: { id: string; path: string }[]
 } & (
   | { shelf: 'gear'; list: GearList; catalog: GearItem[] }
   | { shelf: 'schedule'; schedule: Schedule; sites: SiteOption[] }
@@ -76,6 +78,7 @@ export default function TemplateRow(props: Props) {
     course_types: summary.course_types ?? [],
     audience: summary.audience === 'instructor' ? 'internal' : 'shared',
     place: summary.place,
+    client_id: summary.client_id ?? null,
     disciplines: summary.disciplines,
     topicsRaw: summary.topics.join(', '),
   })
@@ -101,6 +104,7 @@ export default function TemplateRow(props: Props) {
     /** A PlaceSelect value, resolved to venue/site/region by the action. */
     place?: string
     url?: string | null
+    clientId?: string | null
   }
   const patch = ({ audience, ...shared }: Patch) => run(() =>
     props.shelf === 'gear'
@@ -235,11 +239,13 @@ export default function TemplateRow(props: Props) {
                 if (changed === 'note') patch({ description: next.note })
                 if (changed === 'disciplines') patch({ disciplines: next.disciplines })
                 if (changed === 'place') patch({ place: next.place })
+                if (changed === 'client_id') patch({ clientId: next.client_id })
                 if (changed === 'topicsRaw')
                   patch({ topics: next.topicsRaw.split(',').map((t) => t.trim()).filter(Boolean) })
               }}
               venues={props.venues}
               sites={props.placeSites ?? []}
+              clients={props.clients ?? []}
               fixedKind={meta.noun[0].toUpperCase() + meta.noun.slice(1)}
               audienceMode="template"
               offeringsHint="Courses of these offerings see it first. It still reaches any course sharing its discipline, so this ranks rather than restricts — unlike a library item, where an offering limits who is offered it."

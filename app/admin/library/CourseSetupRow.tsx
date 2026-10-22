@@ -30,6 +30,7 @@ export type CourseSetup = {
   place: string
   topics: string[]
   audience: 'internal' | 'shared'
+  client_id: string | null
   disciplines: string[]
   sections: { id: string; title: string; items: { rowId: string; item: LibraryItem }[]; missing: number }[]
 }
@@ -47,7 +48,7 @@ export type CourseSetup = {
 // answer the only question worth asking of it — is this the right material,
 // and is it filed where it should be. So each one is the ordinary library row,
 // openable and taggable in place.
-export default function CourseSetupRow({ setup, venues, sites }: { setup: CourseSetup; venues: Venue[]; sites: SiteOption[] }) {
+export default function CourseSetupRow({ setup, venues, sites, clients = [] }: { setup: CourseSetup; venues: Venue[]; sites: SiteOption[]; clients?: { id: string; path: string }[] }) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -62,6 +63,7 @@ export default function CourseSetupRow({ setup, venues, sites }: { setup: Course
     course_types: setup.course_types ?? [],
     audience: setup.audience ?? 'shared',
     place: setup.place,
+    client_id: setup.client_id ?? null,
     disciplines: setup.disciplines,
     topicsRaw: (setup.topics ?? []).join(', '),
   })
@@ -156,12 +158,14 @@ export default function CourseSetupRow({ setup, venues, sites }: { setup: Course
                 if (changed === 'course_types') patch({ courseTypes: next.course_types })
                 if (changed === 'audience') patch({ audience: next.audience as 'internal' | 'shared' })
                 if (changed === 'place') patch({ place: next.place })
+                if (changed === 'client_id') patch({ clientId: next.client_id })
                 if (changed === 'disciplines') patch({ disciplines: next.disciplines })
                 if (changed === 'topicsRaw')
                   patch({ topics: next.topicsRaw.split(',').map((t) => t.trim()).filter(Boolean) })
               }}
               venues={venues}
               sites={sites}
+              clients={clients}
               fixedKind="Course setup"
               audienceMode="template"
               offeringsHint="Courses of these offerings see this setup first. It still reaches any course sharing its discipline, so this ranks rather than restricts."

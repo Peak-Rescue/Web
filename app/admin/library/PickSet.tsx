@@ -41,11 +41,13 @@ export default function PickSet({
   items,
   venues,
   sites,
+  clients = [],
   openId,
 }: {
   items: LibraryItem[]
   venues: Venue[]
   sites: SiteOption[]
+  clients?: { id: string; path: string }[]
   /** Arrived here to look at one row — from a course that filed it, say — so
       that row opens rather than waiting to be found and clicked. */
   openId?: string
@@ -306,7 +308,7 @@ export default function PickSet({
             className="mt-3.5 shrink-0 accent-pr-red"
           />
           <div className="min-w-0 flex-1">
-            <LibraryRow item={it} venues={venues} sites={sites} initialOpen={it.id === openId} />
+            <LibraryRow item={it} venues={venues} sites={sites} clients={clients} initialOpen={it.id === openId} />
           </div>
         </div>
       ))}

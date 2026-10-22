@@ -23,7 +23,7 @@ const input =
   'w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-zinc-500'
 const label = 'block text-[11px] text-zinc-500 mb-1'
 
-export default function LibraryRow({ item, venues, sites = [], hideProvenance = false, initialOpen = false }: { item: LibraryItem; venues: Venue[]; sites?: SiteOption[]; hideProvenance?: boolean; initialOpen?: boolean }) {
+export default function LibraryRow({ item, venues, sites = [], clients = [], hideProvenance = false, initialOpen = false }: { item: LibraryItem; venues: Venue[]; sites?: SiteOption[]; clients?: { id: string; path: string }[]; hideProvenance?: boolean; initialOpen?: boolean }) {
   const router = useRouter()
   const [open, setOpen] = useState(initialOpen)
   const [busy, setBusy] = useState(false)
@@ -42,6 +42,7 @@ export default function LibraryRow({ item, venues, sites = [], hideProvenance = 
     // row says where it belongs.
     topicsRaw: item.topics.filter((t) => t !== NEEDS_SORTING).join(', '),
     description: item.description ?? '',
+    client_id: item.client_id ?? null,
     place: placeValue(item.region, item.venue_id, item.site_id),
     course_types: item.course_types ?? [],
     admin_only: item.admin_only,
@@ -258,6 +259,7 @@ export default function LibraryRow({ item, venues, sites = [], hideProvenance = 
               course_types: form.course_types,
               audience: form.admin_only ? 'admin' : form.audience,
               place: form.place,
+              client_id: form.client_id,
               disciplines: form.disciplines,
               topicsRaw: form.topicsRaw,
             }}
@@ -269,6 +271,7 @@ export default function LibraryRow({ item, venues, sites = [], hideProvenance = 
                 description: next.note,
                 course_types: next.course_types,
                 place: next.place,
+                client_id: next.client_id,
                 disciplines: next.disciplines,
                 topicsRaw: next.topicsRaw,
                 // The type decides the shelf; the two cannot be set apart.
@@ -285,6 +288,7 @@ export default function LibraryRow({ item, venues, sites = [], hideProvenance = 
             }
             venues={venues}
             sites={sites}
+            clients={clients}
             placeRequired={form.kind === 'map'}
             // A map's links are rows of their own, each with its own access
             // and audience, so they are managed here rather than typed into

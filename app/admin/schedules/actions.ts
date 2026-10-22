@@ -162,6 +162,8 @@ export async function updateSchedule(
     place?: string
     /** The document behind it, where it is a written-down list. See 258. */
     url?: string | null
+    /** Whose it is. See 262. */
+    clientId?: string | null
     disciplines?: string[]
     topics?: string[]
   }
@@ -185,6 +187,7 @@ export async function updateSchedule(
     update.course_type = patch.courseTypes[0] ?? null
   }
   if (patch.url !== undefined) update.url = patch.url?.trim() || null
+  if (patch.clientId !== undefined) update.client_id = patch.clientId
   if (patch.place !== undefined) {
     const { resolvePlaceValue } = await import('@/lib/library-file')
     Object.assign(update, await resolvePlaceValue(admin, patch.place))

@@ -32,6 +32,9 @@ export type FilingValue = {
       reads identically on every shelf. */
   audience: string
   place: string
+  /** The client this belongs to, where it belongs to one. Null is the usual
+      answer: most of the library is ours. See 262. */
+  client_id: string | null
   disciplines: string[]
   topicsRaw: string
 }
@@ -45,6 +48,7 @@ export default function FilingFields({
   onChange,
   venues,
   sites,
+  clients = [],
   /** The shelf's own type, where the shelf decides it: a gear list is a gear
       list. Shown in the same place as the picker, so the form does not
       change shape between shelves. */
@@ -66,6 +70,8 @@ export default function FilingFields({
   onChange: (next: FilingValue, changed: keyof FilingValue) => void
   venues: Venue[]
   sites: SiteOption[]
+  /** The client list, flattened to "Sector › Client" paths. */
+  clients?: { id: string; path: string }[]
   fixedKind?: string
   /** 'library' adds the admins-only rung; a template has no such column. */
   audienceMode?: 'library' | 'template'
@@ -187,6 +193,27 @@ export default function FilingFields({
           value={value.note}
           onChange={(e) => set({ note: e.target.value }, 'note')}
         />
+      </div>
+
+      {/* Whose it is. A resort's patrol manual and a squadron's SOP are ours
+          to hold and theirs to be about, and a shelf full of material that
+          looks teachable from any course is how one ends up on somebody
+          else's. Empty is the usual answer. */}
+      <div>
+        <label className={`${label} flex items-center gap-1.5`}>
+          Client
+          <InfoHint text="Set this only where the material belongs to one client — their manual, their SOP, their permit. Left empty it is ours and is offered anywhere its discipline and place match." />
+        </label>
+        <select
+          className={input}
+          value={value.client_id ?? ''}
+          onChange={(e) => set({ client_id: e.target.value || null }, 'client_id')}
+        >
+          <option value="">— ours, not a client's —</option>
+          {clients.map((c) => (
+            <option key={c.id} value={c.id}>{c.path}</option>
+          ))}
+        </select>
       </div>
 
       {extras}

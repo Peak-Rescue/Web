@@ -260,6 +260,8 @@ export type TemplateSummary = {
   /** The document behind it, where there is one — half the written-down
       gear lists are a link to a Google Doc. See 258. */
   url: string | null
+  /** Whose it is, where it is somebody's. See 262. */
+  client_id: string | null
   /** Where it is filed, as a PlaceSelect value. A gear list for one canyon is
       a real thing, and until 256 there was nowhere to say so. */
   place: string
@@ -459,6 +461,8 @@ export type LibraryItem = {
       "most of them". Several, because one was always going to be the wrong
       answer for anything two offerings share. See 242 and 250. */
   course_types: string[]
+  /** Whose it is, where it is somebody's. See 262. */
+  client_id: string | null
   status: LibraryStatus
   bucket: LibraryBucket
   /** Maps only; every other kind has one link in `url`. */
