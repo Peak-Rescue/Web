@@ -90,14 +90,16 @@ export default function SitesShelf({
           : mapsByVenue
     into.set(k, [...(into.get(k) ?? []), m])
   }
-  // A venue earns a heading by having anything under it at all — its own
-  // links, a canyon, or a map.
+  // Every venue gets a heading. It used to have to earn one by holding
+  // something — a canyon, a map, a link — which made a venue you had just
+  // created invisible on the page you created it from, with nothing saying
+  // why and nowhere to put the first thing in it. An empty venue is exactly
+  // where something is about to go.
   const groups: {
     key: string; name: string; venue: Venue | null
     sites: Site[]; maps: LibraryItem[]; beta: LibraryItem[]; plans: LibraryItem[]; permits: LibraryItem[]
   }[] = [
     ...venues
-      .filter((v) => byVenue.has(v.id) || mapsByVenue.has(v.id) || betaByVenue.has(v.id) || (v.links ?? []).length > 0)
       .map((v) => ({
         key: v.id,
         name: v.name,
