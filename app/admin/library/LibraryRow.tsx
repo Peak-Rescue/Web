@@ -98,10 +98,24 @@ export default function LibraryRow({ item, venues, sites = [], clients = [], hid
       setBusy(false)
     }
 
-    // A template use, or an item with no link to hand back, is refused — and
-    // the action's own refusal explains it better than a confirm could, so let
-    // it do the talking rather than asking permission for a no.
-    const blocked = uses.templates.length > 0 || (uses.maps + uses.resources + uses.items > 0 && !uses.hasLink)
+    // A setup holding it is a question, not a wall. The import filled every
+    // setup with whatever its Classroom room held, so "we never teach from
+    // this" is a normal answer — and the only way to act on it was to go and
+    // unpick the setup by hand first.
+    if (uses.templates.length > 0) {
+      const which = uses.templates.map((t) => `“${t}”`).join(', ')
+      if (!confirm(
+        `${uses.templates.length === 1 ? 'The course setup' : 'Course setups'} ${which} ${uses.templates.length === 1 ? 'holds' : 'hold'} this item.\n\n` +
+        `Delete it and take it out of ${uses.templates.length === 1 ? 'that setup' : 'those setups'}? Courses already built from ${uses.templates.length === 1 ? 'it' : 'them'} keep what they copied.\n\n` +
+        `Cancel to leave it where it is — archiving hides it from every picker without changing any setup.`
+      )) return
+      await run(() => deleteLibraryItem(item.id, true))
+      return
+    }
+
+    // An item with no link to hand back is still refused, and the action's
+    // own refusal explains it better than a confirm could.
+    const blocked = uses.maps + uses.resources + uses.items > 0 && !uses.hasLink
     if (!blocked && !confirm(deletePrompt(uses))) return
     await run(() => deleteLibraryItem(item.id))
   }

@@ -316,26 +316,39 @@ export async function libraryItemUses(id: string): Promise<LibraryItemUses> {
   return usesOf(admin, id)
 }
 
-export async function deleteLibraryItem(id: string): Promise<ActionResult> {
+export async function deleteLibraryItem(
+  id: string,
+  /** Said yes to the question the refusal asks. The references in those
+      setups go with it — which is the point: the import filled every setup
+      with whatever was in its Classroom room, and some of that we have never
+      taught from. */
+  alsoFromSetups = false
+): Promise<ActionResult> {
   const admin = await requireAdmin()
   const uses = await usesOf(admin, id)
 
-  // A template item is nothing but a reference — no title, no url of its own —
-  // so there is no row to hand the link back to, only a row to lose. Archiving
-  // is the move that leaves the templates working, which is why it is named.
-  if (uses.templates.length > 0) {
-    // Named and opened. "The template X uses this item" with nowhere to click
-    // leaves somebody to find a setup by its name on a shelf of eleven, and
-    // the whole reason they are reading the sentence is to go and deal with
-    // that setup.
+  // A setup item is nothing but a reference — no title, no url of its own —
+  // so there is no row to hand the link back to, only a row to lose. Worth a
+  // question rather than a wall: archiving keeps every setup working, and
+  // deleting is right when the setup should never have held it.
+  if (uses.templates.length > 0 && !alsoFromSetups) {
+    // Named and opened. "The setup X uses this item" with nowhere to click
+    // leaves somebody to find a setup by its name on a shelf of eleven.
     return refuse(
       `${uses.templates.length === 1 ? 'The course setup' : 'Course setups'} ${uses.templates
-        .map((t) => `“${t}”`)
-        .join(', ')} ${uses.templates.length === 1 ? 'uses' : 'use'} this item, and a setup holds only a reference to it — deleting it would empty that section. Archive it instead: it disappears from the pickers and every setup keeps working.`,
+        .map((t) => `\u201c${t}\u201d`)
+        .join(', ')} ${uses.templates.length === 1 ? 'uses' : 'use'} this item, and a setup holds only a reference to it \u2014 deleting it empties that section.`,
       uses.templateId
         ? { href: `/admin/library?bucket=setup&template=${uses.templateId}&open=contents`, label: 'Open the setup' }
         : undefined
     )
+  }
+
+  // Said yes: the references go first, so no setup is left pointing at a row
+  // that does not exist.
+  if (alsoFromSetups) {
+    const { error: refError } = await admin.from('course_template_items').delete().eq('item_id', id)
+    if (refError) throw new Error(refError.message)
   }
 
   const attached = uses.maps + uses.resources + uses.items
@@ -352,9 +365,6 @@ export async function deleteLibraryItem(id: string): Promise<ActionResult> {
   revalidate()
 }
 
-// Turn every course row pointing at this item back into the one-off it was
-// before promotion. Done before the delete, so a failure here leaves both the
-// item and its references intact rather than half a delete.
 async function handBackLink(admin: Admin, id: string) {
   const [{ data: item }, { data: links }] = await Promise.all([
     admin.from('library_items').select('title, url').eq('id', id).single(),
