@@ -28,6 +28,7 @@ export default function AddLibraryItem({
   venues,
   sites,
   defaultBucket,
+  defaultKind,
 }: {
   venues: Venue[]
   sites: SiteOption[]
@@ -35,8 +36,12 @@ export default function AddLibraryItem({
       was written and then opened a form defaulted to something else, so the
       first thing added to a shelf landed on a different one. */
   defaultBucket?: string
+  /** The shelf's own type, where the shelf has one: Gear lists means a gear
+      list, and arriving with "Manual" selected there is a form asking a
+      question the door already answered. */
+  defaultKind?: string
 }) {
-  const [kind, setKind] = useState('reference')
+  const [kind, setKind] = useState(defaultKind ?? 'reference')
   const [bucket, setBucket] = useState(defaultBucket ?? 'resource')
   const isMap = kind === 'map'
   const isPermit = kind === 'permit'

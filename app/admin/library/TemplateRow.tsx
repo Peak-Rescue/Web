@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import TrashIcon from '@/components/TrashIcon'
 import GearListEditor, { type GearItem, type GearList } from '@/app/admin/gear/GearListEditor'
 import ScheduleEditor, { type Schedule, type SiteOption } from '@/app/admin/schedules/ScheduleEditor'
 import { updateGearList, deleteGearList } from '@/app/admin/gear/actions'
@@ -159,6 +160,20 @@ export default function TemplateRow(props: Props) {
           >
             {open ? 'Close' : 'Edit'}
           </button>
+          {/* Beside Edit, like every document row on every other shelf. It
+              was at the bottom of the open editor, so throwing one out meant
+              opening it first — and a gear list and a manual are the same
+              kind of thing to the person tidying a shelf. */}
+          {!open && (
+            <button
+              onClick={remove}
+              disabled={busy}
+              aria-label={`Delete ${summary.name}`}
+              className="text-xs text-zinc-600 hover:text-red-400 transition-colors disabled:opacity-40"
+            >
+              <TrashIcon />
+            </button>
+          )}
         </div>
       </div>
 

@@ -622,14 +622,26 @@ export default async function LibraryPage({
         {/* A button, not a line of grey text with a triangle in front of it.
             Adding is the second thing anyone comes here to do and it read as a
             footnote under the filters. */}
+        {/* Gear lists holds both shapes, so it takes documents too: a PDF
+            that says what to bring is a gear list that was written down, and
+            the shelf that holds the structured ones is where somebody goes
+            looking for it. The other template shelves build their rows and
+            have nothing to file. */}
         {isAdmin && (
-          <details className={`mb-6 group ${showDocs ? '' : 'hidden'}`}>
+          <details className={`mb-6 group ${showDocs || bucket === 'gear' ? '' : 'hidden'}`}>
             <summary className="cursor-pointer list-none inline-flex items-center gap-2 rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm font-medium text-zinc-200 hover:border-zinc-500 hover:text-white transition-colors">
               <span className="text-base leading-none text-zinc-500 group-open:hidden">+</span>
               <span className="hidden text-base leading-none text-zinc-500 group-open:inline">−</span>
-              {onShelf ? `Add to ${shelfLabel(bucket as LibraryShelf)}` : 'Add an item'}
+              {bucket === 'gear'
+                ? 'Add a written gear list — a document or a link'
+                : onShelf ? `Add to ${shelfLabel(bucket as LibraryShelf)}` : 'Add an item'}
             </summary>
-            <AddLibraryItem venues={venues} sites={siteOptions} defaultBucket={bucket} />
+            <AddLibraryItem
+              venues={venues}
+              sites={siteOptions}
+              defaultBucket={bucket === 'gear' ? undefined : bucket}
+              defaultKind={bucket === 'gear' ? 'kit_list' : undefined}
+            />
           </details>
         )}
 
