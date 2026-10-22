@@ -264,13 +264,19 @@ export default async function LibraryPage({
     // Kit lists written as documents, read on the gear shelf beside the
     // structured lists. Everything here predates the structure; a PDF that
     // says what to bring is a gear list that was written down.
+    // Narrowed like everything else. It was not: searching "powerpoint"
+    // filtered the documents, the gear lists and the schedules and then
+    // listed every written-down gear list underneath them, because this
+    // query knew about the shelf and nothing about the question.
     showTemplates && shelves.includes('gear')
-      ? admin
-          .from('library_items')
-          .select('id, title, description, source_type, url, edit_url, drive_file_id, kind, audience, disciplines, topics, admin_only, venue_id, site_id, expires_at, course_types, client_id, status, bucket, region, source_class, source_topic, source_item, library_item_links(id, url, access, audience)')
-          .eq('kind', 'kit_list')
-          .in('status', STATUSES)
-          .order('title')
+      ? narrow(
+          admin
+            .from('library_items')
+            .select('id, title, description, source_type, url, edit_url, drive_file_id, kind, audience, disciplines, topics, admin_only, venue_id, site_id, expires_at, course_types, client_id, status, bucket, region, source_class, source_topic, source_item, library_item_links(id, url, access, audience)')
+            .eq('kind', 'kit_list')
+            .order('title') as unknown as typeof query,
+          true
+        )
       : Promise.resolve({ data: [] }),
     // Caught, not left to throw: a shelf that cannot load should say so and
     // leave the rest of the library standing. One of these taking the whole
