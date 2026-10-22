@@ -51,8 +51,24 @@ export default function TemplateReadOnly(
               </span>
             ))}
           </span>
+          {/* Imports put a link in the note on about half of these, so the
+              same line read as a sentence on one row and as a raw URL on the
+              next. A link is shown as one — named by its host, like every
+              other link in the library — and a note is shown as a note. */}
           {summary.description && (
-            <span className="block text-[11px] text-zinc-600 mt-0.5 truncate">{summary.description}</span>
+            /^https?:\/\//i.test(summary.description.trim()) ? (
+              <a
+                href={summary.description.trim()}
+                target="_blank"
+                rel="noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="block text-[11px] text-zinc-500 hover:text-white transition-colors mt-0.5 truncate"
+              >
+                {new URL(summary.description.trim()).hostname.replace('www.', '')} ↗
+              </a>
+            ) : (
+              <span className="block text-[11px] text-zinc-600 mt-0.5 truncate">{summary.description}</span>
+            )
           )}
         </span>
         <span className="shrink-0 text-[11px] text-zinc-500">
@@ -72,7 +88,7 @@ export default function TemplateReadOnly(
   )
 }
 
-function GearBody({ list, catalog }: { list: GearTemplate; catalog: CatalogItem[] }) {
+export function GearBody({ list, catalog }: { list: GearList; catalog: CatalogItem[] }) {
   const byId = new Map(catalog.map((c) => [c.id, c]))
   const entries = list.gear_list_entries ?? []
   if (entries.length === 0) return <p className="text-sm text-zinc-500">Nothing on this list yet.</p>
@@ -162,7 +178,7 @@ function Line({
   )
 }
 
-function ScheduleBody({ schedule }: { schedule: ScheduleTemplate }) {
+export function ScheduleBody({ schedule }: { schedule: Schedule }) {
   const days = [...(schedule.schedule_days ?? [])].sort((a, b) => a.sort_order - b.sort_order)
   if (days.length === 0) return <p className="text-sm text-zinc-500">No days on this schedule yet.</p>
 

@@ -119,10 +119,7 @@ export default function PickSet({
           <div className="flex items-center gap-2 flex-wrap">
             {pending && (
               <>
-                {/* First, because on this list it is the usual answer: the
-                    tagging is worth doing before approving, which is why
-                    these sit at the end of the same bar rather than on a
-                    screen of their own. */}
+                {/* Only for rows still carrying the state 257 cleared. */}
                 <button
                   type="button"
                   disabled={busy}

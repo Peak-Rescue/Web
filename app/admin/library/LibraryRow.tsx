@@ -49,6 +49,8 @@ export default function LibraryRow({ item, venues, sites = [], hideProvenance = 
 
   const venue = venues.find((v) => v.id === item.venue_id)
   const site = sites.find((x) => x.id === item.site_id)
+  // Nothing is pending any more — see 257. The row still reads the state so
+  // an older row rendered from a stale page does not lie about itself.
   const pending = item.status === 'pending'
   // A map filed nowhere is offered to nobody. Eleven of the twenty-three on
   // the shelf are in that state and nothing ever said so.

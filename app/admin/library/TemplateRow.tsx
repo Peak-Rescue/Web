@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import TrashIcon from '@/components/TrashIcon'
+import { GearBody, ScheduleBody } from './TemplateReadOnly'
 import FilingFields, { type FilingValue } from '@/components/FilingFields'
 import GearListEditor, { type GearItem, type GearList } from '@/app/admin/gear/GearListEditor'
 import ScheduleEditor, { type Schedule, type SiteOption } from '@/app/admin/schedules/ScheduleEditor'
@@ -51,6 +52,7 @@ type Props = {
 export default function TemplateRow(props: Props) {
   const { summary, shelf, initialOpen } = props
   const router = useRouter()
+  const [viewing, setViewing] = useState(false)
   const [open, setOpen] = useState(initialOpen !== undefined)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -125,7 +127,14 @@ export default function TemplateRow(props: Props) {
       <div className="flex items-start gap-3 px-3 py-2.5">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm font-medium truncate">{summary.name}</span>
+            <button
+              type="button"
+              onClick={() => { setViewing((v) => !v); setOpen(false) }}
+              title="See it the way an instructor does"
+              className="text-sm font-medium truncate text-left hover:text-white transition-colors"
+            >
+              {summary.name}
+            </button>
             {/* The noun, not the shelf's name: one row is a gear list, and
                 "Gear lists" on it read as a second type beside "Kit list"
                 rather than as the shape this one is. */}
@@ -178,6 +187,17 @@ export default function TemplateRow(props: Props) {
       </div>
 
       {error && <p className="px-3 pb-2 text-xs text-pr-red">{error}</p>}
+
+      {/* The instructors' view, on the admin's row. Edit is for changing it;
+          the name is for reading it, and reading it was the one thing this
+          row could not do without opening a form over the top of it. */}
+      {viewing && !open && (
+        <div className="px-3 pb-3 pt-1 border-t border-zinc-800">
+          {props.shelf === 'gear'
+            ? <GearBody list={props.list} catalog={props.catalog} />
+            : <ScheduleBody schedule={props.schedule} />}
+        </div>
+      )}
 
       {open && (
         <div className="border-t border-zinc-800">
