@@ -13,7 +13,7 @@ import NewTabIcon from '@/components/NewTabIcon'
 import CloseButton from '@/components/CloseButton'
 import InfoHint from '@/components/InfoHint'
 import TrashIcon from '@/components/TrashIcon'
-import { GEAR_CATEGORIES, gearQuantity, isChoice, KIT_LABEL, matchesGear, placeSets, productName, unwrap, type CatalogItem, type Joiner } from '@/lib/gear'
+import { GEAR_CATEGORIES, gearQuantity, isChoice, KIT_LABEL, kitSides, matchesGear, placeSets, productName, unwrap, type CatalogItem, type Joiner } from '@/lib/gear'
 import {
   addGearEntry, updateGearEntry, removeGearEntry, updateGearList, copyGearList,
   saveGearListIntoTemplate, setGearEntryOptions, upsertGearItem, renameGearSection,
@@ -413,7 +413,7 @@ export default function GearListEditor({
   const packFor = list.students ?? students ?? null
   const drifted = list.students != null && students != null && list.students !== students
 
-  const halves = entries.length === 0 ? [] : HALVES
+  const halves = HALVES.filter((gt) => kitSides(entries).includes(gt))
 
   const headings = useMemo(() => {
     const seen: string[] = []
@@ -957,12 +957,14 @@ export default function GearListEditor({
           <div key={gt}>
             {/* The half, named at the weight of a heading, with what it holds
                 beside it and what the two columns mean on the right. */}
-            <div className="flex items-baseline gap-2 mb-2 flex-wrap">
-              <h4 className="text-sm font-semibold text-zinc-200">{KIT_LABEL[gt]}</h4>
-              <span className="text-[11px] text-zinc-600">
-                {halfCount} item{halfCount === 1 ? '' : 's'}
-              </span>
-            </div>
+            {halves.length > 1 && (
+              <div className="flex items-baseline gap-2 mb-2 flex-wrap">
+                <h4 className="text-sm font-semibold text-zinc-200">{KIT_LABEL[gt]}</h4>
+                <span className="text-[11px] text-zinc-600">
+                  {halfCount} item{halfCount === 1 ? '' : 's'}
+                </span>
+              </div>
+            )}
 
             <div className="rounded-lg border border-zinc-800 overflow-hidden">
               {/* The columns named inside the table they head, on their own
@@ -1020,12 +1022,6 @@ export default function GearListEditor({
               {real.map((s) => (
                 <SectionCard key={`${gt}:${s.name}`} {...shared} groupType={gt} name={s.name} rows={s.rows} />
               ))}
-
-              {loose.length === 0 && real.length === 0 && (
-                <p className="px-3 py-2 text-xs text-zinc-600">
-                  Nothing in {KIT_LABEL[gt].toLowerCase()} yet.
-                </p>
-              )}
               </div>
             </div>
           </div>

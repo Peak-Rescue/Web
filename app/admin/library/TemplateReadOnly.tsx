@@ -1,4 +1,4 @@
-import { gearLabel, gearQuantity, isChoice, KIT_LABEL, placeSets, productName, type CatalogItem } from '@/lib/gear'
+import { gearLabel, gearQuantity, isChoice, KIT_LABEL, kitSides, placeSets, productName, type CatalogItem } from '@/lib/gear'
 import { TEMPLATE_SHELF_META, type TemplateShelf, type TemplateSummary } from '@/lib/library'
 import { CAPABILITY_META, type CapabilityCategory } from '@/lib/capabilities'
 import { courseShortName } from '@/lib/courses'
@@ -89,9 +89,11 @@ function GearBody({ list, catalog }: { list: GearTemplate; catalog: CatalogItem[
         for (const r of rows) bySection.set(r.section ?? null, [...(bySection.get(r.section ?? null) ?? []), r])
         return (
           <div key={gt}>
-            <h4 className="text-[13px] font-medium text-zinc-300 mb-2">
-              {KIT_LABEL[gt]}
-            </h4>
+            {kitSides(entries).length > 1 && (
+              <h4 className="text-[13px] font-medium text-zinc-300 mb-2">
+                {KIT_LABEL[gt]}
+              </h4>
+            )}
             <div className="ml-0.5 pl-3 border-l-2 border-zinc-800 space-y-2">
               {[...bySection.entries()].map(([section, items]) => (
                 <div key={section ?? '—'}>

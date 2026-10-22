@@ -8,7 +8,7 @@
 // from a sheet that doesn't match the course.
 
 import {
-  gearLabel, gearQuantity, isChoice, KIT_LABEL, placeSets, productName,
+  gearLabel, gearQuantity, isChoice, KIT_LABEL, kitSides, placeSets, productName,
   type JoinerFields, type QuantityFields, type QuantityView,
 } from '@/lib/gear'
 import { CONTENT_W, FAINT, INK, MARGIN, MUTED, PdfBuilder, RED } from '@/lib/pdf-layout'
@@ -242,7 +242,8 @@ export async function generateGearListPdf(data: GearPdf): Promise<Uint8Array> {
     const rows = data.entries.filter((e) => e.group_type === gt).sort((a, b2) => a.sort_order - b2.sort_order)
     if (rows.length === 0) continue
 
-    b.sectionHeading(KIT_LABEL[gt])
+    const namesSide = kitSides(data.entries).length > 1
+    if (namesSide) b.sectionHeading(KIT_LABEL[gt])
 
     // What the two columns on the right are, named once at the top of them —
     // the same words the editor and the portal head them with. Without it the
@@ -269,10 +270,12 @@ export async function generateGearListPdf(data: GearPdf): Promise<Uint8Array> {
     // a break in the middle of it says so at the top of the next page.
     let openSection: string | null = null
     b.continued = () => {
-      b.text(`${KIT_LABEL[gt]} (continued)`.toUpperCase(), { size: 9, bold: true, color: INK })
-      b.y -= 6
-      b.hairline()
-      b.y -= 14
+      if (namesSide) {
+        b.text(`${KIT_LABEL[gt]} (continued)`.toUpperCase(), { size: 9, bold: true, color: INK })
+        b.y -= 6
+        b.hairline()
+        b.y -= 14
+      }
       columnHeads()
       if (openSection) {
         b.text(openSection.toUpperCase(), { size: 7.5, bold: true, color: MUTED })

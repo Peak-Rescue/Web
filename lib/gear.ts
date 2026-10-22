@@ -56,6 +56,16 @@ export const KIT_LABEL: Record<'personal' | 'group', string> = {
   group: 'Group kit',
 }
 
+// The halves a list actually uses, in order. Most lists are one side only —
+// a pasted or copied list lands entirely in personal kit — and naming the one
+// half there is wraps the list's own headings in a heading of ours, with an
+// empty "Group kit" under it. The division is only worth naming when both
+// halves hold something.
+export function kitSides(rows: { group_type?: string | null }[]): ('personal' | 'group')[] {
+  return (['personal', 'group'] as const).filter((gt) =>
+    rows.some((r) => (r.group_type ?? 'personal') === gt))
+}
+
 // What a piece of gear IS. Notes about it — spec, quantity, condition — are
 // not here on purpose: those are answers to "on this course", and the catalog
 // is the one place that doesn't know which course is asking. They live on the

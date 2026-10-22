@@ -31,7 +31,7 @@ import { plannedInstructorCount } from '@/lib/estimates'
 import { parseContacts, studentEmail } from '@/lib/contacts'
 import PhoneText from '@/components/PhoneText'
 import { unseenSections, lastPushToStudents, behindOnPush, type Push } from '@/lib/course-pushes'
-import { GEAR_ENTRIES_SELECT, KIT_LABEL } from '@/lib/gear'
+import { GEAR_ENTRIES_SELECT, KIT_LABEL, kitSides } from '@/lib/gear'
 import { courseCapabilityCategories } from '@/lib/capabilities'
 import { GEAR_ENTRY_COLUMNS, gearLabel, gearQuantity, isChoice, placeSets, productName } from '@/lib/gear'
 import { courseDisplayName, computeBlocks, courseDates, courseEventTitle, isJob, isSession, sessionTimeLabel, startTimeLabel, workNoun, WorkNoun } from '@/lib/courses'
@@ -2334,12 +2334,14 @@ export default async function CourseView({
                       differently is how the wrong amount of gear gets loaded.
                       Staff only: a student's list has one number at most and
                       nothing to head. */}
-                  <div className="flex items-baseline gap-2 mb-2 flex-wrap">
-                    <h4 className="text-sm font-semibold text-zinc-200">{KIT_LABEL[gt]}</h4>
-                    <span className="text-[11px] text-zinc-600">
-                      {rows.length} item{rows.length === 1 ? '' : 's'}
-                    </span>
-                  </div>
+                  {kitSides(gl.gear_list_entries).length > 1 && (
+                    <div className="flex items-baseline gap-2 mb-2 flex-wrap">
+                      <h4 className="text-sm font-semibold text-zinc-200">{KIT_LABEL[gt]}</h4>
+                      <span className="text-[11px] text-zinc-600">
+                        {rows.length} item{rows.length === 1 ? '' : 's'}
+                      </span>
+                    </div>
+                  )}
                   <div className="rounded-lg border border-zinc-800 overflow-hidden">
                   {showTasks && (
                     <div className="flex items-baseline gap-2 pl-3 pr-4 py-1.5 bg-zinc-900/70 border-b border-zinc-800">
