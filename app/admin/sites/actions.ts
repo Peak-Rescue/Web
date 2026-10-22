@@ -463,3 +463,29 @@ export async function removeRegion(code: string): Promise<ActionResult> {
   revalidate()
   revalidatePath('/admin/library')
 }
+
+/** A contact off a place. Matched on name, which is what the row shows: two
+    contacts with the same name on one venue is a duplicate, not a pair. */
+export async function removePlaceContact(scope: PlaceScope, name: string): Promise<ActionResult> {
+  const admin = await requireAdmin()
+  const drop = (rows: { name: string }[] | null | undefined) => (rows ?? []).filter((c) => c.name !== name)
+
+  if ('venueId' in scope) {
+    const { data } = await admin.from('venues').select('contacts').eq('id', scope.venueId).single()
+    const { error } = await admin
+      .from('venues')
+      .update({ contacts: drop(data?.contacts as { name: string }[]) })
+      .eq('id', scope.venueId)
+    if (error) throw new Error(error.message)
+  } else {
+    const { data } = await admin
+      .from('region_info').select('contacts').eq('region_code', scope.regionCode).maybeSingle()
+    const { error } = await admin
+      .from('region_info')
+      .update({ contacts: drop(data?.contacts as { name: string }[]) })
+      .eq('region_code', scope.regionCode)
+    if (error) throw new Error(error.message)
+  }
+  revalidate()
+  revalidatePath('/admin/library')
+}

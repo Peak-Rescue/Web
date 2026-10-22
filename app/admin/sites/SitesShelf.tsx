@@ -1,4 +1,5 @@
 import SiteRow from './SiteRow'
+import PlaceContactChip from './PlaceContactChip'
 import JumpToNewRow from '@/components/JumpToNewRow'
 import AddToPlace from './AddToPlace'
 import AddLevel from './AddLevel'
@@ -201,7 +202,7 @@ export default function SitesShelf({
             that claim is the whole reason there are levels. */}
         {anything && (
           <p className="text-[10px] text-zinc-600">
-            Filed to the state — every venue and course under it inherits this.
+            Filed to the {code.includes('-') ? 'state' : 'country'} — every venue and course under it inherits this.
           </p>
         )}
         {weather.length > 0 && (
@@ -214,16 +215,7 @@ export default function SitesShelf({
         {contacts.length > 0 && (
           <div className="flex flex-wrap gap-x-4 gap-y-1">
             {contacts.map((c, i) => (
-              <span key={i} className="text-[11px] text-zinc-400">
-                {c.name}
-                {c.role && <span className="text-zinc-600"> · {c.role}</span>}
-                {(c.phone || c.email) && (
-                  <a href={c.phone ? `tel:${c.phone}` : `mailto:${c.email}`}
-                     className="ml-1.5 text-zinc-300 hover:text-white underline underline-offset-2">
-                    {c.phone || c.email}
-                  </a>
-                )}
-              </span>
+              <PlaceContactChip key={i} scope={{ regionCode: code }} contact={c} />
             ))}
           </div>
         )}
@@ -352,16 +344,7 @@ export default function SitesShelf({
                 <p className="text-[10px] uppercase tracking-wide text-zinc-700 mb-1.5">Contacts</p>
                 <div className="flex flex-wrap gap-x-4 gap-y-1">
                   {g.venue.contacts.map((c, i) => (
-                    <span key={i} className="text-[11px] text-zinc-400">
-                      {c.name}
-                      {c.role && <span className="text-zinc-600"> · {c.role}</span>}
-                      {(c.phone || c.email) && (
-                        <a href={c.phone ? `tel:${c.phone}` : `mailto:${c.email}`}
-                           className="ml-1.5 text-zinc-300 hover:text-white underline underline-offset-2">
-                          {c.phone || c.email}
-                        </a>
-                      )}
-                    </span>
+                    <PlaceContactChip key={i} scope={{ venueId: g.venue!.id }} contact={c} />
                   ))}
                 </div>
               </div>
