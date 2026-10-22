@@ -9,9 +9,11 @@ import TrashIcon from '@/components/TrashIcon'
 // Undoing a level that was added by mistake — picking Nevada when you meant
 // New Mexico, typing a venue twice.
 //
-// It refuses while anything is under it rather than asking whether you are
-// sure: the one you want gone is the empty one you just made, and a confirm
-// on a venue with four canyons under it is a confirm somebody will click.
+// It refuses while a canyon, a document or a course is under it — but those
+// were never everything it holds. A venue's own weather links and contacts
+// are part of the venue, so they do not block the delete and went with it
+// silently, which is the case the confirm is for: the thing you are about to
+// lose is the thing nothing warned you about.
 export default function RemovePlace({
   what,
   ...scope
@@ -30,6 +32,9 @@ export default function RemovePlace({
         onClick={async (e) => {
           e.preventDefault()
           e.stopPropagation()
+          if (!confirm(
+            `Delete ${what}? Any weather links and contacts on it go too, and this cannot be undone.`
+          )) return
           setBusy(true)
           setError(null)
           try {
