@@ -15,6 +15,27 @@ export type ClientRow = {
   position: number
   /** A sector or subsector — a grouping, never something a course attaches to. */
   is_group: boolean
+  created_at?: string
+}
+
+/** The columns a ClientRow needs, for every query that loads the tree. */
+export const CLIENT_COLUMNS = 'id, parent_id, name, aliases, note, position, is_group, created_at' as const
+
+/** How a client reads on a course: "24 STS – Red Team". The client and the
+    clients above it, stopping at the first sector or subsector. Mirrors the
+    database's client_label(), which is what actually writes course names. */
+export function clientLabel(rows: ClientRow[], id: string): string {
+  const byId = new Map(rows.map((r) => [r.id, r]))
+  const parts: string[] = []
+  for (let r = byId.get(id); r && !r.is_group; r = r.parent_id ? byId.get(r.parent_id) : undefined) parts.unshift(r.name)
+  return parts.join(' – ')
+}
+
+/** Every place a new client could be filed: any sector, subsector or client. */
+export function placeOptions(rows: ClientRow[]): { id: string; path: string }[] {
+  return rows
+    .map((r) => ({ id: r.id, path: clientPath(rows, r.id) }))
+    .sort((a, b) => a.path.localeCompare(b.path, undefined, { numeric: true }))
 }
 
 export type ClientNode = ClientRow & { children: ClientNode[]; depth: number }

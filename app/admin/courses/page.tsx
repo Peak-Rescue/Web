@@ -16,6 +16,8 @@ import { todayHere } from '@/lib/course-clock'
 import { loadCourseExtras, loadBooksSettleDays, showsSteps, coursePhase } from '@/lib/course-readiness'
 import { loadCourseOwners } from '@/lib/course-owner'
 import InfoHint from '@/components/InfoHint'
+import ClientPicker from '@/components/ClientPicker'
+import { CLIENT_COLUMNS, type ClientRow } from '@/lib/clients'
 import { CREW_SEAT_FIELDS, ROLE_TEXT } from '@/lib/staffing-roles'
 import { clashesAcross, clashNames, asClashCourse } from '@/lib/staffing-conflicts'
 
@@ -37,7 +39,7 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
   const { data: profile } = await admin.from('profiles').select('role').eq('id', user.id).single()
   if (profile?.role !== 'admin') redirect('/dashboard')
 
-  const [{ data: raw }, { data: venueRows }, { data: allOffDays }, { data: rosterRows }] = await Promise.all([
+  const [{ data: raw }, { data: venueRows }, { data: allOffDays }, { data: rosterRows }, { data: clientRows }] = await Promise.all([
     admin
       .from('course_instances')
       .select(`
@@ -56,6 +58,8 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
     admin.from('instance_off_days').select('instance_id, off_date, end_date'),
     // Who a new meeting can be for, when it is not for everyone.
     admin.from('instructors').select('id, name').eq('active', true).order('name'),
+    // The client tree, for the picker on the new-course form.
+    admin.from('clients').select(CLIENT_COLUMNS),
   ])
 
   // Who could be driving a course, for the pill on every row and the filter
@@ -210,7 +214,7 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
             <CourseLocationFields venues={venueRows ?? []} />
             <div>
               <label className="block text-xs text-zinc-400 mb-1">Client / organization</label>
-              <input name="client_name" placeholder="e.g. 24th STS" className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
+              <ClientPicker clients={(clientRows ?? []) as ClientRow[]} />
             </div>
             <CourseContactsEditor initial={[]} />
             <NewCourseDates today={today} others={otherCourses} />

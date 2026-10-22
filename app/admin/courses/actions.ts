@@ -227,6 +227,19 @@ const addDays = (ymd: string, days: number) =>
 // the until field, not against anything anybody would ask for.
 const MAX_REPEATS = 60
 
+/** The client a course form chose, from the client tree. There is no typed
+    client any more: the name on a course is the database's copy of the tree's
+    (see migration 261), so what is checked here is only that the id is a
+    client rather than a sector, and `label` is how it will read. */
+async function chosenClient(admin: ReturnType<typeof createAdminClient>, formData: FormData) {
+  const id = ((formData.get('client_id') as string) || '').trim()
+  if (!id) return { client_id: null, label: null }
+  const { data } = await admin.from('clients').select('is_group').eq('id', id).maybeSingle()
+  if (!data || data.is_group) throw new Error('Choose a client from the list')
+  const { data: label } = await admin.rpc('client_label', { cid: id })
+  return { client_id: id, label: (label as string | null) ?? null }
+}
+
 export async function createInstance(formData: FormData) {
   const creator = await requireAdmin()
   const admin = createAdminClient()
@@ -241,7 +254,7 @@ export async function createInstance(formData: FormData) {
   const regionRaw        = (formData.get('region') as string) || ''
   const region           = isValidRegion(regionRaw) ? regionRaw : null
   const venue_id         = (formData.get('venue_id') as string) || null
-  const client_name      = (formData.get('client_name') as string) || null
+  const { client_id, label: client_label } = await chosenClient(admin, formData)
   const contacts         = contactsFromForm(formData.get('contacts_json'))
   const notes            = (formData.get('notes') as string) || null
   const max_students     = formData.get('max_students') ? Number(formData.get('max_students')) : null
@@ -279,7 +292,7 @@ export async function createInstance(formData: FormData) {
   // has to be compared as one or the guard silently never fires.
   for (const [column, value] of [
     ['custom_title', custom_title],
-    ['client_name', client_name],
+    ['client_id', client_id],
     ['location', location],
     ['starts_at', starts_at],
   ] as const) {
@@ -308,7 +321,7 @@ export async function createInstance(formData: FormData) {
     occurrences.push({
       starts_at: start,
       ends_at: ends_at && addDays(ends_at, w * 7),
-      slug: await generateSlug([displayName, client_name, location, start]),
+      slug: await generateSlug([displayName, client_label, location, start]),
     })
   }
 
@@ -321,7 +334,7 @@ export async function createInstance(formData: FormData) {
     // common that it stops being read.
     .insert(occurrences.map((o) => ({
       course_category, course_type, custom_title, custom_categories, status, internal,
-      location, region, venue_id, client_name, contacts, notes, max_students,
+      location, region, venue_id, client_id, contacts, notes, max_students,
       // The seats are what somebody typed. instructor_slots is not written here
       // or anywhere — the database computes it from these three.
       lead_slots: crewPlan.lead, assist_slots: crewPlan.assist, shadow_slots: crewPlan.shadow,
@@ -398,7 +411,7 @@ export async function updateInstanceDetails(id: string, formData: FormData) {
   const regionRaw        = (formData.get('region') as string) || ''
   const region           = isValidRegion(regionRaw) ? regionRaw : null
   const venue_id         = (formData.get('venue_id') as string) || null
-  const client_name      = (formData.get('client_name') as string) || null
+  const client_id        = formData.has('client_id') ? (await chosenClient(admin, formData)).client_id : undefined
   const contactsRaw      = formData.get('contacts_json')
   // Who to ring about the place, as opposed to about the client. Same jsonb
   // treatment, different list, and never the one a quote is sent from.
@@ -433,7 +446,7 @@ export async function updateInstanceDetails(id: string, formData: FormData) {
       ...(formData.has('location') ? { location } : {}),
       ...(formData.has('region') ? { region } : {}),
       ...(formData.has('venue_id') ? { venue_id } : {}),
-      ...(formData.has('client_name') ? { client_name } : {}),
+      ...(client_id !== undefined ? { client_id } : {}),
       ...(formData.has('notes') ? { notes } : {}),
       ...(formData.has('max_students') ? { max_students } : {}),
       // The crew plan arrives as three boxes; the head count follows from them in
@@ -482,12 +495,12 @@ export async function updateInstanceDetails(id: string, formData: FormData) {
       const { courseShortName } = await import('@/lib/courses')
       const { data: dates } = await admin
         .from('course_instances')
-        .select('starts_at, ends_at')
+        .select('starts_at, ends_at, client_name')
         .eq('id', id)
         .single()
       await emailCourseOff(await assignedEmails(admin, id), {
         courseName: courseShortName(course_type, custom_title),
-        client_name,
+        client_name: dates?.client_name ?? null,
         location,
         when: dateRange(dates?.starts_at ?? null, dates?.ends_at ?? null),
       })

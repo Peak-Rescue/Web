@@ -12,7 +12,8 @@ import {
   type ClientNode,
   type ClientRow,
 } from '@/lib/clients'
-import { addClient, deleteClient, moveClient, setSignoff, shiftSector, updateClient } from './actions'
+import { addClient, deleteClient, mergeClient, moveClient, setSignoff, shiftSector, updateClient } from './actions'
+import { NewClient } from '@/components/ClientPicker'
 
 type Signoff = { profileId: string; initials: string; name: string }
 type Result = Awaited<ReturnType<typeof addClient>>
@@ -22,7 +23,7 @@ const inputCls =
 
 // One open form at a time across the whole page, so two half-filled forms
 // never compete. `id: null` is the add form at the top.
-type Open = { id: string; mode: 'edit' | 'delete' } | { id: null; mode: 'client' | 'sector' } | null
+type Open = { id: string; mode: 'edit' | 'delete' | 'merge' } | { id: null; mode: 'client' | 'sector' } | null
 
 // Where a drag can end: on a row (file it under that row), in the unfiled
 // tray, or on the strip that makes a group a sector.
@@ -32,11 +33,18 @@ export default function ClientTree({
   rows,
   signoffs,
   me,
+  courseCounts,
 }: {
   rows: ClientRow[]
   signoffs: Record<string, Signoff[]>
   me: string
+  /** How many courses point at each client. A client with courses is merged,
+      never deleted, and the count says which is the real one of two. */
+  courseCounts: Record<string, number>
 }) {
+  // Clients added in the last month carry a marker, so each new one gets seen
+  // by an admin — the moment a duplicate is cheapest to catch.
+  const [newSince] = useState(() => Date.now() - 30 * 86_400_000)
   const tree = useMemo(() => buildClientTree(rows), [rows])
   const sectors = tree.filter((n) => n.is_group)
   const unfiled = tree.filter((n) => !n.is_group)
@@ -64,7 +72,9 @@ export default function ClientTree({
   const accepts = (id: string, t: DropTarget | null): boolean => {
     const node = rows.find((r) => r.id === id)
     if (!node || !t) return false
-    if (t.kind === 'unfiled') return !node.is_group && node.parent_id !== null
+    // A client always lives in a sector now; the tray only holds the few that
+    // predate that rule, and nothing is dropped back into it.
+    if (t.kind === 'unfiled') return false
     if (t.kind === 'top') return node.is_group && node.parent_id !== null
     if (t.id === id || t.id === node.parent_id) return false
     return placementProblem(rows, id, t.id) === null
@@ -220,6 +230,16 @@ export default function ClientTree({
               {n.name}
             </span>
             {shut && <span className="ml-2 text-xs text-zinc-600">{n.children.length}</span>}
+            {n.created_at && Date.parse(n.created_at) > newSince && (
+              <span className="ml-2 text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded bg-sky-900/60 text-sky-200">
+                New
+              </span>
+            )}
+            {!n.is_group && (courseCounts[n.id] ?? 0) > 0 && (
+              <span className="ml-2 text-xs text-zinc-600">
+                {courseCounts[n.id]} {courseCounts[n.id] === 1 ? 'course' : 'courses'}
+              </span>
+            )}
             {n.aliases.length > 0 && <span className="ml-2 text-xs text-zinc-500">also {n.aliases.join(', ')}</span>}
             {n.note && <span className="ml-2 text-xs text-amber-400/80">{n.note}</span>}
           </span>
@@ -265,7 +285,8 @@ export default function ClientTree({
               className={btn.danger}
               disabled={pending}
               onClick={() => {
-                if (n.children.length > 0) setOpen({ id: n.id, mode: 'delete' })
+                if (!n.is_group && (courseCounts[n.id] ?? 0) > 0) setOpen({ id: n.id, mode: 'merge' })
+                else if (n.children.length > 0) setOpen({ id: n.id, mode: 'delete' })
                 else if (confirm(`Delete ${n.name}?`)) run(() => deleteClient(n.id))
               }}
             >
@@ -294,12 +315,23 @@ export default function ClientTree({
             onPick={(parentId) => run(() => deleteClient(n.id, parentId))}
           />
         )}
+        {here === 'merge' && (
+          <MergeForm
+            indent={n.depth * 24 + 28}
+            node={n}
+            rows={rows}
+            courses={courseCounts[n.id] ?? 0}
+            pending={pending}
+            onCancel={() => setOpen(null)}
+            onMerge={(intoId) => run(() => mergeClient(n.id, intoId))}
+          />
+        )}
         {!shut && n.children.length > 0 && <ul>{n.children.map(renderNode)}</ul>}
       </li>
     )
   }
 
-  const showUnfiled = unfiled.length > 0 || (dragged && !dragged.is_group && dragged.parent_id !== null)
+  const showUnfiled = unfiled.length > 0
 
   return (
     <div className={dragId ? 'select-none' : ''}>
@@ -317,8 +349,28 @@ export default function ClientTree({
           Add a sector
         </button>
       </div>
-      {open?.id === null && (
-        <AddForm key={open.mode} group={open.mode === 'sector'} pending={pending} run={run} onCancel={() => setOpen(null)} />
+      {open?.id === null && open.mode === 'client' && (
+        <div className="mt-3">
+          <NewClient
+            rows={rows}
+            onCancel={() => setOpen(null)}
+            onUse={() => setOpen(null)}
+            onAdded={() => {
+              setOpen(null)
+              router.refresh()
+            }}
+          />
+        </div>
+      )}
+      {open?.id === null && open.mode === 'sector' && (
+        <ClientForm
+          indent={0}
+          group
+          pending={pending}
+          submitLabel="Add sector"
+          onCancel={() => setOpen(null)}
+          onSave={(v) => run(() => addClient({ ...v, isGroup: true, parentId: null }))}
+        />
       )}
       {error && <p className="mt-3 text-sm text-red-400">{error}</p>}
       {visible && visible.size === 0 && <p className="mt-4 text-sm text-zinc-500">Nothing called that yet.</p>}
@@ -331,7 +383,7 @@ export default function ClientTree({
           }`}
         >
           <h2 className="text-xs font-semibold uppercase tracking-wide text-amber-300/90">Not filed yet</h2>
-          <p className="text-xs text-zinc-500 mt-0.5">Drag each one onto the sector, subsector or client it belongs under.</p>
+          <p className="text-xs text-zinc-500 mt-0.5">Added before clients had to be filed. Drag each one to where it belongs.</p>
           {unfiled.length > 0 && <ul className="mt-1">{unfiled.map(renderNode)}</ul>}
         </section>
       )}
@@ -423,60 +475,53 @@ function ClientForm({
   )
 }
 
-// A new client asks first when its name is already somewhere in the tree —
-// the usual duplicate is the same unit filed under a different sector.
-function AddForm({
-  group,
+// Folding a duplicate into the real client. Offered instead of Delete for a
+// client that has courses: its courses, teams and names all move across.
+function MergeForm({
+  indent,
+  node,
+  rows,
+  courses,
   pending,
-  run,
+  onMerge,
   onCancel,
 }: {
-  group: boolean
+  indent: number
+  node: ClientNode
+  rows: ClientRow[]
+  courses: number
   pending: boolean
-  run: (fn: () => Promise<Result>, after?: (r: Result) => void) => void
+  onMerge: (intoId: string) => void
   onCancel: () => void
 }) {
-  const [similar, setSimilar] = useState<{ paths: string[]; value: { name: string; aliases: string; note: string } } | null>(
-    null
-  )
-  if (similar) {
-    return (
-      <div className="py-2 text-sm">
-        <p className="text-amber-300">
-          &ldquo;{similar.value.name}&rdquo; already exists: {similar.paths.join('; ')}. Use that one instead?
-        </p>
-        <div className="mt-2 flex gap-2">
-          <button type="button" className={btn.secondary} onClick={onCancel}>
-            Yes, don&rsquo;t add it
-          </button>
-          <button
-            type="button"
-            className={btn.quiet}
-            disabled={pending}
-            onClick={() => run(() => addClient({ ...similar.value, isGroup: false }, true))}
-          >
-            No, add it anyway
-          </button>
-        </div>
-      </div>
-    )
-  }
+  const blocked = subtreeIds(rows, node.id)
+  const targets = rows
+    .filter((r) => !r.is_group && !blocked.has(r.id))
+    .map((r) => ({ id: r.id, path: clientPath(rows, r.id) }))
+    .sort((a, b) => a.path.localeCompare(b.path, undefined, { numeric: true }))
+  const [into, setInto] = useState('')
   return (
-    <ClientForm
-      indent={0}
-      group={group}
-      pending={pending}
-      submitLabel={group ? 'Add sector' : 'Add client'}
-      onCancel={onCancel}
-      onSave={(value) =>
-        run(
-          () => addClient({ ...value, isGroup: group }),
-          (res) => {
-            if (!res.ok && 'similar' in res) setSimilar({ paths: res.similar, value })
-          }
-        )
-      }
-    />
+    <div className="flex flex-wrap items-center gap-2 py-2" style={{ paddingLeft: `${indent}px` }}>
+      <span className="text-sm text-zinc-400">
+        {node.name} has {courses} {courses === 1 ? 'course' : 'courses'}. Merge it into
+      </span>
+      <select value={into} onChange={(e) => setInto(e.target.value)} className={`${inputCls} max-w-md`}>
+        <option value="" disabled>
+          Choose the client it duplicates
+        </option>
+        {targets.map((t) => (
+          <option key={t.id} value={t.id}>
+            {t.path}
+          </option>
+        ))}
+      </select>
+      <button type="button" disabled={pending || !into} onClick={() => onMerge(into)} className={btn.danger}>
+        Merge
+      </button>
+      <button type="button" onClick={onCancel} className={btn.quiet}>
+        Cancel
+      </button>
+    </div>
   )
 }
 

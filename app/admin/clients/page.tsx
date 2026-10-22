@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import type { ClientRow } from '@/lib/clients'
+import { CLIENT_COLUMNS, type ClientRow } from '@/lib/clients'
 import ClientTree from './ClientTree'
 
 // The client list, edited in place. Doubles as the review of the first draft:
@@ -17,10 +17,13 @@ export default async function ClientsPage() {
   const { data: profile } = await admin.from('profiles').select('role').eq('id', user.id).single()
   if (profile?.role !== 'admin') redirect('/dashboard')
 
-  const [{ data: clientRows }, { data: signoffRows }] = await Promise.all([
-    admin.from('clients').select('id, parent_id, name, aliases, note, position, is_group'),
+  const [{ data: clientRows }, { data: signoffRows }, { data: courseRows }] = await Promise.all([
+    admin.from('clients').select(CLIENT_COLUMNS),
     admin.from('client_signoffs').select('client_id, profile_id, profiles(first_name, last_name)'),
+    admin.from('course_instances').select('client_id').not('client_id', 'is', null),
   ])
+  const courseCounts: Record<string, number> = {}
+  for (const c of courseRows ?? []) courseCounts[c.client_id as string] = (courseCounts[c.client_id as string] ?? 0) + 1
 
   // Who has ticked what, as initials — enough to see at a glance whether a
   // client has been looked at by one person or by everyone.
@@ -40,7 +43,7 @@ export default async function ClientsPage() {
     <main className="min-h-screen bg-zinc-950 text-white pt-16 md:pt-20">
       <div className="max-w-4xl mx-auto px-4 py-10">
         <h1 className="text-2xl font-bold mb-6">Clients</h1>
-        <ClientTree rows={(clientRows ?? []) as ClientRow[]} signoffs={signoffs} me={user.id} />
+        <ClientTree rows={(clientRows ?? []) as ClientRow[]} signoffs={signoffs} me={user.id} courseCounts={courseCounts} />
       </div>
     </main>
   )

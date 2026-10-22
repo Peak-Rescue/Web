@@ -3,6 +3,8 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { CourseTypeSelect } from '../CourseTypeSelect'
+import ClientPicker from '@/components/ClientPicker'
+import { CLIENT_COLUMNS, type ClientRow } from '@/lib/clients'
 import { importCourseFromEvent, dismissImportedEvent } from './actions'
 import { calendarSyncEnabled, listUpcomingEvents, type GcalEvent } from '@/lib/google-calendar'
 
@@ -89,7 +91,7 @@ export default async function CalendarImportPage({
   ]
 
   const enabled = calendarSyncEnabled()
-  const [{ data: linked }, { data: importedRows }, { data: instructorRows }] = await Promise.all([
+  const [{ data: linked }, { data: importedRows }, { data: instructorRows }, { data: clientRows }] = await Promise.all([
     admin.from('course_instances').select('gcal_event_id').not('gcal_event_id', 'is', null),
     // Already-imported events whose manual copy outlived the import (e.g.
     // imported from the old read-only general calendar, then moved here) are
@@ -97,6 +99,7 @@ export default async function CalendarImportPage({
     // the id when an event moves between calendars.
     admin.from('course_instances').select('notes').ilike('notes', '%Imported from Google Calendar (event %'),
     admin.from('instructors').select('id, name').order('name'),
+    admin.from('clients').select(CLIENT_COLUMNS),
   ])
   const instructors = instructorRows ?? []
   const portalEventIds = new Set((linked ?? []).map((r) => r.gcal_event_id as string))
@@ -198,7 +201,7 @@ export default async function CalendarImportPage({
                       </div>
                       <div>
                         <label className={labelCls}>Client / organization</label>
-                        <input name="client_name" placeholder="e.g. 24th STS" className={inputCls} />
+                        <ClientPicker clients={(clientRows ?? []) as ClientRow[]} />
                       </div>
                       <div>
                         <label className={labelCls}>Location</label>

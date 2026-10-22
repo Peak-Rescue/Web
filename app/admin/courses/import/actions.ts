@@ -29,7 +29,13 @@ export async function importCourseFromEvent(formData: FormData) {
   const custom_title = (formData.get('custom_title') as string) || (formData.get('summary') as string) || null
   const custom_categories = course_type === 'custom' ? (formData.getAll('custom_categories') as string[]) : null
   const status = (formData.get('status') as string) || 'confirmed'
-  const client_name = (formData.get('client_name') as string) || null
+  // Chosen from the client tree; the course's client_name is the database's
+  // copy of that client's name (migration 261), never typed.
+  const client_id = ((formData.get('client_id') as string) || '').trim() || null
+  if (client_id) {
+    const { data: c } = await admin.from('clients').select('is_group').eq('id', client_id).maybeSingle()
+    if (!c || c.is_group) throw new Error('Choose a client from the list')
+  }
   const location = (formData.get('location') as string) || null
   const starts_at = (formData.get('starts_at') as string) || null
   const ends_at = (formData.get('ends_at') as string) || null
@@ -54,7 +60,7 @@ export async function importCourseFromEvent(formData: FormData) {
       starts_at,
       ends_at,
       location,
-      client_name,
+      client_id,
       created_by: userId,
       // The event's own notes/attachments come first; the event id line lets
       // the import page recognize already-imported events whose manual copy

@@ -19,6 +19,8 @@ import CoursePlaceContacts, { type PlaceContact } from '@/components/CoursePlace
 import { type CourseOwner } from '@/lib/course-owner'
 import { type Venue } from '@/lib/library'
 import { CREW_SEAT_FIELDS, ROLE_TEXT } from '@/lib/staffing-roles'
+import ClientPicker from '@/components/ClientPicker'
+import { type ClientRow } from '@/lib/clients'
 
 function fmt(d: string) {
   return new Date(d + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
@@ -34,6 +36,7 @@ export type CourseDetailsRow = {
   region: string | null
   venue_id: string | null
   client_name: string | null
+  client_id?: string | null
   max_students: number | null
   instructor_slots: number | null
   lead_slots?: number | null
@@ -68,7 +71,10 @@ export default function CourseDetailsEditor({
   internal,
   owners = [],
   kind = 'course',
+  clients = [],
 }: {
+  /** The client tree, for the client picker. */
+  clients?: ClientRow[]
   instanceId: string
   course: CourseDetailsRow
   contacts: CoursePOC[]
@@ -145,7 +151,7 @@ export default function CourseDetailsEditor({
             />
             <div>
               <label className="block text-xs text-zinc-400 mb-1">Client / organization</label>
-              <input name="client_name" defaultValue={course.client_name ?? ''} className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
+              <ClientPicker clients={clients} defaultId={course.client_id ?? null} />
             </div>
             <CourseContactsEditor initial={contacts} />
             {/* The locals, kept apart from the client's people above: a
