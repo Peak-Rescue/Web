@@ -5,7 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import {
   KIND_META, LIBRARY_KINDS, BUCKET_META, BUCKET_ORDER,
   TEMPLATE_SHELF_META, TEMPLATE_SHELF_ORDER, SHELF_ORDER, isTemplateShelf, isPlaceShelf,
-  shelfLabel, shelfHint, isMediaShelf, KINDS_OFF_BUCKET_SHELVES, soleKindOfShelf,
+  shelfLabel, shelfHint, isMediaShelf, shelfOfRow, KINDS_OFF_BUCKET_SHELVES, soleKindOfShelf,
   type LibraryItem, type LibraryShelf, type LibraryBucket, type TemplateShelf, type TemplateSummary, type Venue,
 } from '@/lib/library'
 import { type GearItem, type GearList } from '@/app/admin/gear/GearListEditor'
@@ -495,20 +495,20 @@ export default async function LibraryPage({
   // than fifty-nine.
   //
   // Searching across shelves, by discipline instead: the question there is
-  // "what have we got on canyons", and the answer sorted by document type is
-  // no answer at all. An item is listed under the first discipline it carries
-  // rather than once per discipline — the filter still matches on any of
-  // them, so nothing is unreachable for being grouped under one.
-  // A shelf groups by type; a search across shelves groups by discipline.
-  // There was a third, by the Classroom class a row was imported from, for
-  // the queue that no longer exists — a pending row now sits on its shelf
-  // among the rows it is about to join, which is a better comparison than
-  // the room it was posted in five years ago.
-  const groupBy: 'kind' | 'discipline' = onShelf ? 'kind' : 'discipline'
+  // A shelf groups by type, because that is what a shelf is a list of.
+  //
+  // A search does not group at all. It used to group by discipline, written
+  // for browsing — "what have we got on canyons" — and nobody browses here:
+  // the landing is the cards, and the one thing that reaches this list is a
+  // search, where "Industry 15" above a result for "powerpoint" answers a
+  // question nobody asked. Every row already says its shelf, its type, its
+  // disciplines and where it is about, so a heading could only repeat one of
+  // them and hide the rest behind a fold.
+  const groupBy: 'kind' | 'flat' = onShelf ? 'kind' : 'flat'
   const grouped = (() => {
     const by = new Map<string, LibraryItem[]>()
     for (const i of items) {
-      const k = groupBy === 'kind' ? i.kind : (i.disciplines[0] ?? '_untagged')
+      const k = groupBy === 'kind' ? i.kind : '_all'
       by.set(k, [...(by.get(k) ?? []), i])
     }
     if (groupBy === 'kind') {
@@ -522,22 +522,14 @@ export default async function LibraryPage({
         : LIBRARY_KINDS.filter((k) => by.has(k))
       return keys.map((k) => [k as string, by.get(k) ?? []] as const)
     }
-    return [
-      ...CAPABILITY_ORDER.filter((c) => by.has(c)).map((c) => [c as string, by.get(c)!] as const),
-      ...(by.has('_untagged') ? [['_untagged', by.get('_untagged')!] as const] : []),
-    ]
+    return by.has('_all') ? [['_all', by.get('_all')!] as const] : []
   })()
   // Blank is how an untyped row reads on its own line — nothing has been said
   // about it yet. A heading cannot be blank, and neither can a line in a
   // filter: there it is a row you cannot read and cannot not pick.
   const UNTYPED = 'No type yet'
   const kindLabel = (k: string) => KIND_META[k as keyof typeof KIND_META] || UNTYPED
-  const groupLabel = (cat: string) =>
-    groupBy === 'kind'
-      ? kindLabel(cat)
-      : cat === '_untagged'
-        ? 'Not tied to a discipline'
-        : CAPABILITY_META[cat as CapabilityCategory].label
+  const groupLabel = (cat: string) => (groupBy === 'kind' ? kindLabel(cat) : '')
 
   return (
     <main className="min-h-screen bg-zinc-950 text-white pt-16 md:pt-20">
@@ -739,7 +731,19 @@ export default async function LibraryPage({
             </p>
             {(
               <div className="space-y-2">
-                {grouped.map(([cat, rows]) => (
+                {groupBy === 'flat' ? (
+                  // One list, in the order the search returned it. The chips
+                  // on each row carry what the headings used to.
+                  isAdmin ? (
+                    <PickSet items={items} venues={venues} sites={siteOptions} clients={clients} openId={item} />
+                  ) : (
+                    <div className="border border-zinc-800 rounded-lg divide-y divide-zinc-800/70">
+                      {items.map((it) => (
+                        <ItemRow key={it.id} item={it} venueName={it.venue_id ? venueName.get(it.venue_id) : null} />
+                      ))}
+                    </div>
+                  )
+                ) : grouped.map(([cat, rows]) => (
                   // Folded, because the headings are the point: what a shelf
                   // holds is the list of kinds on it, and reading that list
                   // should not mean scrolling past three hundred rows to
@@ -754,7 +758,10 @@ export default async function LibraryPage({
                     key={cat}
                     heading={groupLabel(cat)}
                     count={rows.length}
-                    defaultOpen={grouped.length === 1}
+                    // A search is a question, and folding its answer away so
+                    // it can be unfolded is a click between somebody and the
+                    // thing they just asked for.
+                    defaultOpen={grouped.length === 1 || Boolean(q)}
                   >
                     {/* The same rows either way. An admin gets the editor,
                         which is a row that can be opened and changed;
