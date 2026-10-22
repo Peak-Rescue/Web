@@ -869,6 +869,15 @@ export default async function LibraryPage({
             the *next* course starts from, never a course already running. */}
         {showTemplates && shelves.map((shelf) => {
           const rows = shelf === 'gear' ? gearTemplates : shelf === 'schedule' ? scheduleTemplates : courseSetups
+          // A search that found nothing on a shelf says nothing about that
+          // shelf. Three headings reading "Nothing on this shelf matches",
+          // each with a button offering to start a blank one, is an answer
+          // about the question rather than about the library — and starting a
+          // blank gear list is not what anybody is doing in the middle of
+          // reading search results.
+          const searching = Boolean(q || discipline || offering || venue || kind || item)
+          const written = shelf === 'gear' ? kitLists.length : 0
+          if (searching && rows.length === 0 && written === 0) return null
           return (
             <section key={shelf} className={showDocs ? 'mt-10 pt-8 border-t border-zinc-800' : ''}>
               {/* Named here only when there is more than one shelf on the
@@ -883,7 +892,7 @@ export default async function LibraryPage({
                 </h2>
                 {/* A setup is a shape imported from Classroom, not something
                     started blank here — there is nothing to add it from. */}
-                {isAdmin && shelf !== 'setup' && <AddTemplate shelf={shelf} />}
+                {isAdmin && shelf !== 'setup' && !searching && <AddTemplate shelf={shelf} />}
               </div>
               <div className="space-y-2">
                 {/* The written-down kind, first: they are what exists, and
