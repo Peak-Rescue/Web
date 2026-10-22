@@ -650,7 +650,19 @@ export async function removeMapLink(linkId: string): Promise<void> {
     imported class name ("Copy of Rope 2") is not a sentence anyone chose. */
 export async function updateCourseSetup(
   id: string,
-  patch: { name?: string; description?: string | null; courseType?: string | null; disciplines?: string[] }
+  patch: {
+    name?: string
+    description?: string | null
+    courseType?: string | null
+    /** The filing panel's fields, which every shelf now answers. See 256,
+        258 and 260. */
+    courseTypes?: string[]
+    disciplines?: string[]
+    topics?: string[]
+    audience?: 'internal' | 'shared'
+    url?: string | null
+    place?: string
+  }
 ) {
   const admin = await requireAdmin()
 
@@ -658,6 +670,17 @@ export async function updateCourseSetup(
   if (patch.name !== undefined) update.name = patch.name.trim().slice(0, 120) || 'Untitled setup'
   if (patch.description !== undefined) update.description = patch.description?.trim() || null
   if (patch.courseType !== undefined) update.course_type = patch.courseType || null
+  if (patch.courseTypes !== undefined) {
+    update.course_types = patch.courseTypes
+    update.course_type = patch.courseTypes[0] ?? null
+  }
+  if (patch.topics !== undefined) update.topics = patch.topics
+  if (patch.audience !== undefined) update.audience = patch.audience
+  if (patch.url !== undefined) update.url = patch.url?.trim() || null
+  if (patch.place !== undefined) {
+    const { resolvePlaceValue } = await import('@/lib/library-file')
+    Object.assign(update, await resolvePlaceValue(admin, patch.place))
+  }
   if (patch.disciplines !== undefined) {
     update.disciplines = patch.disciplines.filter((d) => VALID_DISCIPLINES.has(d))
   }

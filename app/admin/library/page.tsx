@@ -246,7 +246,7 @@ export default async function LibraryPage({
     showTemplates && shelves.includes('setup')
       ? (() => {
           let c = admin.from('course_templates')
-            .select('id, name, description, course_type, course_types, disciplines, course_template_sections(id, title, sort_order, course_template_items(id, sort_order, library_items(id, title, description, source_type, url, edit_url, drive_file_id, kind, audience, disciplines, topics, admin_only, venue_id, site_id, expires_at, course_types, status, bucket, region, source_class, source_topic, source_item, library_item_links(id, url, access, audience))))')
+            .select('id, name, description, course_type, course_types, url, topics, audience, venue_id, site_id, region, disciplines, course_template_sections(id, title, sort_order, course_template_items(id, sort_order, library_items(id, title, description, source_type, url, edit_url, drive_file_id, kind, audience, disciplines, topics, admin_only, venue_id, site_id, expires_at, course_types, status, bucket, region, source_class, source_topic, source_item, library_item_links(id, url, access, audience))))')
             .eq('active', true)
             .order('name')
           if (q) c = c.ilike('name', `%${q}%`)
@@ -380,6 +380,9 @@ export default async function LibraryPage({
   const scheduleTemplates = (scheduleRes.data ?? []) as unknown as ScheduleTemplate[]
   const courseSetups = ((setupRes.data ?? []) as unknown as {
     id: string; name: string; description: string | null; course_type: string | null
+    course_types: string[] | null; url: string | null; topics: string[] | null
+    audience: 'internal' | 'shared' | null
+    venue_id: string | null; site_id: string | null; region: string | null
     disciplines: string[] | null
     course_template_sections: {
       id: string; title: string; sort_order: number
@@ -393,6 +396,11 @@ export default async function LibraryPage({
     name: t.name,
     description: t.description,
     course_type: t.course_type,
+    course_types: t.course_types?.length ? t.course_types : t.course_type ? [t.course_type] : [],
+    url: t.url,
+    topics: t.topics ?? [],
+    audience: t.audience ?? 'shared',
+    place: t.site_id ? `site:${t.site_id}` : t.venue_id ? `venue:${t.venue_id}` : t.region ? `region:${t.region}` : '',
     disciplines: t.disciplines ?? [],
     sections: [...(t.course_template_sections ?? [])]
       .sort((a, b) => a.sort_order - b.sort_order)

@@ -9,6 +9,7 @@ import {
 import SetupItemPicker from './SetupItemPicker'
 import { errorFrom, type ActionResult } from '@/lib/action-result'
 import { COURSE_TYPE_OPTIONS, courseShortName } from '@/lib/courses'
+import FilingFields, { type FilingValue } from '@/components/FilingFields'
 import { CAPABILITY_META, CAPABILITY_ORDER, courseCapabilityCategories } from '@/lib/capabilities'
 import type { LibraryItem, Venue } from '@/lib/library'
 import { type SiteOption } from '@/app/admin/schedules/types'
@@ -22,6 +23,13 @@ export type CourseSetup = {
   name: string
   description: string | null
   course_type: string | null
+  /** The filing panel's fields, which this shelf answers like every other.
+      See 256, 258 and 260. */
+  course_types: string[]
+  url: string | null
+  place: string
+  topics: string[]
+  audience: 'internal' | 'shared'
   disciplines: string[]
   sections: { id: string; title: string; items: { rowId: string; item: LibraryItem }[]; missing: number }[]
 }
@@ -46,9 +54,16 @@ export default function CourseSetupRow({ setup, venues, sites }: { setup: Course
   const [error, setError] = useState<string | null>(null)
   // The two fields something else on this row reads back live in state: the
   // offering ticks its own disciplines, and the disciplines are checkboxes.
-  const [form, setForm] = useState({
-    course_type: setup.course_type ?? '',
+  const [form, setForm] = useState<FilingValue>({
+    title: setup.name,
+    url: setup.url ?? '',
+    kind: '',
+    note: setup.description ?? '',
+    course_types: setup.course_types ?? [],
+    audience: setup.audience ?? 'shared',
+    place: setup.place,
     disciplines: setup.disciplines,
+    topicsRaw: (setup.topics ?? []).join(', '),
   })
 
   const input = 'w-full bg-zinc-800 border border-zinc-700 rounded px-2.5 py-1.5 text-sm focus:outline-none focus:border-zinc-500'
@@ -73,9 +88,9 @@ export default function CourseSetupRow({ setup, venues, sites }: { setup: Course
   // water work whether or not anyone ticks the box — so the box is shown
   // checked and held there rather than left for a human to keep in sync. The
   // matching that reads these does the same derivation.
-  const implied = courseCapabilityCategories(form.course_type || '', null) as string[]
-  const impliedFrom = form.course_type ? courseShortName(form.course_type, null) : null
-  const offering = setup.course_type ? courseShortName(setup.course_type, null) : null
+  const implied = [...new Set(form.course_types.flatMap((ct) => courseCapabilityCategories(ct, null) as string[]))]
+  const impliedFrom = form.course_types.map((ct) => courseShortName(ct, null)).join(', ') || null
+  const offerings = (setup.course_types ?? []).map((ct) => courseShortName(ct, null))
   // An offering the picker no longer lists is still offered as the option it
   // was saved with, so changing your mind is not a one-way door.
   const retiredOffering =
@@ -96,9 +111,9 @@ export default function CourseSetupRow({ setup, venues, sites }: { setup: Course
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-sm font-medium truncate">{setup.name}</span>
-            {offering && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-900/40 text-blue-300">{offering}</span>
-            )}
+            {offerings.map((o) => (
+              <span key={o} className="text-[10px] px-1.5 py-0.5 rounded bg-blue-900/40 text-blue-300">{o}</span>
+            ))}
             <span className="text-[11px] text-zinc-600">
               {setup.sections.length} section{setup.sections.length === 1 ? '' : 's'} · {itemCount} item{itemCount === 1 ? '' : 's'}
             </span>
@@ -127,82 +142,32 @@ export default function CourseSetupRow({ setup, venues, sites }: { setup: Course
       {open && (
         <div className="border-t border-zinc-800">
           <div className="px-3 pt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="sm:col-span-2">
-              <Label>Name</Label>
-              <input
-                className={input}
-                defaultValue={setup.name}
-                onBlur={(e) => e.target.value !== setup.name && patch({ name: e.target.value })}
-              />
-            </div>
-            <div className="sm:col-span-2">
-              <Label hint="Internal — never shown to students.">Note</Label>
-              <input
-                className={input}
-                defaultValue={setup.description ?? ''}
-                placeholder="What this shape is for, and when to reach for it"
-                onBlur={(e) =>
-                  e.target.value !== (setup.description ?? '') && patch({ description: e.target.value })}
-              />
-            </div>
-            <div>
-              <Label hint="Its courses see this setup first, and its discipline is ticked below. A custom course has no offering, so disciplines are all it matches on.">
-                Offering
-              </Label>
-              <select
-                className={input}
-                value={form.course_type}
-                disabled={busy}
-                onChange={(e) => {
-                  setForm({ ...form, course_type: e.target.value })
-                  patch({ courseType: e.target.value || null })
-                }}
-              >
-                <option value="">— any offering —</option>
-                {retiredOffering && (
-                  <option value={retiredOffering}>{courseShortName(retiredOffering, null)}</option>
-                )}
-                {COURSE_TYPE_OPTIONS.map((g) => (
-                  <optgroup key={g.category} label={g.label}>
-                    {g.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                  </optgroup>
-                ))}
-              </select>
-            </div>
-            <div className="sm:col-span-2">
-              <Label hint="How a course with no matching offering finds this. The offering's own discipline is ticked and locked.">
-                Disciplines
-              </Label>
-              <div className="flex flex-wrap gap-x-4 gap-y-1.5 p-2 bg-zinc-800/50 border border-zinc-700 rounded">
-                {CAPABILITY_ORDER.map((c) => {
-                  const fromOffering = implied.includes(c)
-                  return (
-                    <label
-                      key={c}
-                      title={fromOffering ? `Comes with the ${impliedFrom} offering` : undefined}
-                      className={`flex items-center gap-1.5 text-xs ${
-                        fromOffering ? 'text-zinc-500 cursor-default' : 'text-zinc-300 cursor-pointer'
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        className="accent-red-600"
-                        checked={fromOffering || form.disciplines.includes(c)}
-                        disabled={fromOffering || busy}
-                        onChange={() => {
-                          const disciplines = form.disciplines.includes(c)
-                            ? form.disciplines.filter((x) => x !== c)
-                            : [...form.disciplines, c]
-                          setForm({ ...form, disciplines })
-                          patch({ disciplines })
-                        }}
-                      />
-                      {CAPABILITY_META[c].label}
-                    </label>
-                  )
-                })}
-              </div>
-            </div>
+            {/* The same panel every other shelf uses. This row had its own
+                four fields — no link, no location, no topics, one offering —
+                which is exactly the drift that made two editors of the same
+                thing. */}
+            <FilingFields
+              value={form}
+              onChange={(next, changed) => {
+                setForm(next)
+                if (changed === 'title') patch({ name: next.title })
+                if (changed === 'url') patch({ url: next.url })
+                if (changed === 'note') patch({ description: next.note })
+                if (changed === 'course_types') patch({ courseTypes: next.course_types })
+                if (changed === 'audience') patch({ audience: next.audience as 'internal' | 'shared' })
+                if (changed === 'place') patch({ place: next.place })
+                if (changed === 'disciplines') patch({ disciplines: next.disciplines })
+                if (changed === 'topicsRaw')
+                  patch({ topics: next.topicsRaw.split(',').map((t) => t.trim()).filter(Boolean) })
+              }}
+              venues={venues}
+              sites={sites}
+              fixedKind="Course setup"
+              audienceMode="template"
+              offeringsHint="Courses of these offerings see this setup first. It still reaches any course sharing its discipline, so this ranks rather than restricts."
+              lockedDisciplines={implied}
+              lockedFrom={impliedFrom}
+            />
           </div>
 
           {/* What it would add — and the place to put it right. Checking a
