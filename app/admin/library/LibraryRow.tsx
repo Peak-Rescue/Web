@@ -2,6 +2,7 @@
 
 import { type ClientSelectGroup } from '@/lib/clients'
 import { useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { updateLibraryItem, deleteLibraryItem, libraryItemUses, type LibraryItemUses } from './actions'
 import { errorFrom, type ActionResult } from '@/lib/action-result'
@@ -29,6 +30,10 @@ export default function LibraryRow({ item, venues, sites = [], clients = [], hid
   const [open, setOpen] = useState(initialOpen)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // A refusal that names what is in the way carries the way to it. Without
+  // this the sentence says "the course setup HAZMAT uses this" and leaves
+  // somebody to find HAZMAT on a shelf of eleven.
+  const [errorLink, setErrorLink] = useState<{ href: string; label: string } | null>(null)
   const [form, setForm] = useState({
     title: item.title,
     url: item.url ?? '',
@@ -67,7 +72,7 @@ export default function LibraryRow({ item, venues, sites = [], clients = [], hid
     try {
       const result = await fn()
       router.refresh()
-      if (result?.error) setError(result.error)
+      if (result?.error) { setError(result.error); setErrorLink(result.link ?? null) }
     } catch (e) {
       setError(errorFrom(e))
     } finally {
@@ -249,6 +254,23 @@ export default function LibraryRow({ item, venues, sites = [], clients = [], hid
         </div>
       </div>
 
+      {/* Said on the row, not inside the editor. Delete sits beside Edit, so
+          its refusal was being written into a panel that is not on screen
+          when it is clicked — which reads as the button doing nothing. */}
+      {error && (
+        <p className="px-3 pb-2.5 text-xs text-pr-red">
+          {error}
+          {errorLink && (
+            <>
+              {' '}
+              <Link href={errorLink.href} className="underline hover:text-white transition-colors">
+                {errorLink.label}
+              </Link>
+            </>
+          )}
+        </p>
+      )}
+
       {open && (
         <div className="px-3 pb-3 pt-1 border-t border-zinc-800 grid grid-cols-1 sm:grid-cols-2 gap-3">
           <FilingFields
@@ -329,7 +351,6 @@ export default function LibraryRow({ item, venues, sites = [], clients = [], hid
               Delete
             </button>
           </div>
-          {error && <p className="sm:col-span-2 text-xs text-pr-red">{error}</p>}
         </div>
       )}
     </div>

@@ -251,8 +251,11 @@ export type LibraryItemUses = {
   items: number
   /** Distinct courses affected — the number worth putting in a sentence. */
   courses: number
-  /** Templates using it, by name. These block the delete. */
+  /** Course setups using it, by name. These block the delete. */
   templates: string[]
+  /** The first of them, so the refusal can open it rather than naming it and
+      leaving somebody to find it on a shelf. */
+  templateId: string | null
   /** False when there is no link to hand back, which also blocks the delete. */
   hasLink: boolean
 }
@@ -269,7 +272,7 @@ async function usesOf(admin: Admin, id: string): Promise<LibraryItemUses> {
       admin.from('course_items').select('id, course_modules!inner(instance_id)').eq('library_item_id', id),
       admin
         .from('course_template_items')
-        .select('id, course_template_sections!inner(course_templates!inner(name))')
+        .select('id, course_template_sections!inner(course_templates!inner(id, name))')
         .eq('item_id', id),
     ])
 
@@ -282,9 +285,11 @@ async function usesOf(admin: Admin, id: string): Promise<LibraryItemUses> {
   }
 
   const names = new Set<string>()
+  let templateId: string | null = null
   for (const r of templates ?? []) {
-    const section = r.course_template_sections as unknown as { course_templates: { name: string } | null } | null
+    const section = r.course_template_sections as unknown as { course_templates: { id: string; name: string } | null } | null
     if (section?.course_templates?.name) names.add(section.course_templates.name)
+    templateId ??= section?.course_templates?.id ?? null
   }
 
   return {
@@ -293,6 +298,7 @@ async function usesOf(admin: Admin, id: string): Promise<LibraryItemUses> {
     items: (items ?? []).length,
     courses: courses.size,
     templates: [...names].sort(),
+    templateId,
     hasLink: Boolean(item?.url || readableLink(links ?? [])),
   }
 }
@@ -318,10 +324,17 @@ export async function deleteLibraryItem(id: string): Promise<ActionResult> {
   // so there is no row to hand the link back to, only a row to lose. Archiving
   // is the move that leaves the templates working, which is why it is named.
   if (uses.templates.length > 0) {
+    // Named and opened. "The template X uses this item" with nowhere to click
+    // leaves somebody to find a setup by its name on a shelf of eleven, and
+    // the whole reason they are reading the sentence is to go and deal with
+    // that setup.
     return refuse(
-      `${uses.templates.length === 1 ? 'The template' : 'Templates'} ${uses.templates
-        .map((n) => `“${n}”`)
-        .join(', ')} ${uses.templates.length === 1 ? 'uses' : 'use'} this item, and a template holds only a reference to it — deleting it would empty that section. Archive it instead: it disappears from the pickers and every template keeps working.`
+      `${uses.templates.length === 1 ? 'The course setup' : 'Course setups'} ${uses.templates
+        .map((t) => `“${t}”`)
+        .join(', ')} ${uses.templates.length === 1 ? 'uses' : 'use'} this item, and a setup holds only a reference to it — deleting it would empty that section. Archive it instead: it disappears from the pickers and every setup keeps working.`,
+      uses.templateId
+        ? { href: `/admin/library?bucket=setup&template=${uses.templateId}&open=contents`, label: 'Open the setup' }
+        : undefined
     )
   }
 
