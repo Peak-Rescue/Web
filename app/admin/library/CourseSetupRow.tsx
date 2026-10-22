@@ -106,7 +106,7 @@ export default function CourseSetupRow({ setup, venues, sites }: { setup: Course
           {/* An untagged setup reaches no course by itself, which is the one
               fact about it worth saying on a collapsed row. */}
           <p className="text-[11px] text-zinc-600 mt-1 truncate">
-            {setup.description || 'no note — say what this setup is for'}
+            {setup.description}
             {' · '}
             {tags.join(', ') || (
               <span className="text-amber-500/80">untagged — no course is offered this</span>

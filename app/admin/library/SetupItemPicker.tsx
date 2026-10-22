@@ -121,7 +121,7 @@ export default function SetupItemPicker({
                 <span className="block text-[10px] text-zinc-600 mt-0.5 truncate">
                   {r.disciplines
                     .map((d) => CAPABILITY_META[d as keyof typeof CAPABILITY_META]?.label ?? d)
-                    .join(', ') || 'no discipline tag'}
+                    .join(', ')}
                   {r.source_class && ` · from ${r.source_class}`}
                 </span>
               </button>

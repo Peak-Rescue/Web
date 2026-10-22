@@ -34,7 +34,7 @@ export default function CourseSetupReadOnly({ setup, venues }: { setup: CourseSe
             </span>
           </span>
           <span className="block text-[11px] text-zinc-600 mt-1 truncate">
-            {setup.description || 'no note'}
+            {setup.description}
             {tags.length > 0 && ` · ${tags.join(', ')}`}
           </span>
         </span>

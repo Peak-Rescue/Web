@@ -207,7 +207,6 @@ export default function LibraryRow({ item, venues, sites = [], hideProvenance = 
               : item.url
                 ? new URL(item.url, 'https://x').hostname.replace('www.', '') || 'link'
                 : 'no link'}
-            {item.disciplines.length === 0 && ' · no discipline tag'}
             {!hideProvenance && item.source_class && (
               <span className="text-zinc-700"> · from {item.source_class}</span>
             )}

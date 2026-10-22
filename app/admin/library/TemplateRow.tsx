@@ -151,15 +151,22 @@ export default function TemplateRow(props: Props) {
               {summary.count} {shelf === 'gear' ? `item${summary.count === 1 ? '' : 's'}` : `day${summary.count === 1 ? '' : 's'}`}
             </span>
           </div>
-          <p className="text-[11px] text-zinc-600 mt-1 truncate">
-            {summary.description || `no note — say what this ${meta.noun} is for`}
-            {' · '}
-            {[...new Set([
-              ...(summary.course_types ?? []).flatMap((ct) => courseCapabilityCategories(ct, null) as string[]),
-              ...summary.disciplines,
-            ])].map((d) => CAPABILITY_META[d as keyof typeof CAPABILITY_META]?.label ?? d).join(', ')
-              || 'no discipline tag'}
-          </p>
+          {/* Only what the row has. "no note — say what this is for" sat
+              under almost every row, because almost nothing needs a note:
+              the title says it, and the note is for the exception. A line of
+              grey telling you a field is empty is a line you learn to read
+              past, which is how it hid the rows that did have something. */}
+          {(summary.description || summary.disciplines.length > 0 || (summary.course_types ?? []).length > 0) && (
+            <p className="text-[11px] text-zinc-600 mt-1 truncate">
+              {[
+                summary.description,
+                [...new Set([
+                  ...(summary.course_types ?? []).flatMap((ct) => courseCapabilityCategories(ct, null) as string[]),
+                  ...summary.disciplines,
+                ])].map((d) => CAPABILITY_META[d as keyof typeof CAPABILITY_META]?.label ?? d).join(', ') || null,
+              ].filter(Boolean).join(' · ')}
+            </p>
+          )}
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
