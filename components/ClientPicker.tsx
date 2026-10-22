@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState, useTransition } from 'react'
+import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { btn } from '@/lib/ui'
 import {
   clientMatches,
@@ -91,14 +91,26 @@ export default function ClientPicker({
     setMissed('')
   }
 
-  const hidden = <input type="hidden" name={name} value={selected ?? ''} />
+  // The chosen id travels in a hidden field, and a hidden field changing tells
+  // nobody. The forms this sits in auto-save on input events, so a choice (or
+  // a Clear) announces itself — and the picker's own boxes below are kept from
+  // announcing anything, or typing a search would save the course with
+  // whatever happened to be chosen at that moment.
+  const field = useRef<HTMLInputElement>(null)
+  const announced = useRef(selected)
+  useEffect(() => {
+    if (announced.current === selected) return
+    announced.current = selected
+    field.current?.dispatchEvent(new Event('input', { bubbles: true }))
+  }, [selected])
+
+  const body = () => {
 
   if (mode === 'show' && selected) {
     const row = rows.find((r) => r.id === selected)
     const teams = row ? teamsOf(row.id) : []
     return (
       <div>
-        {hidden}
         <div className="flex flex-wrap items-center gap-2 rounded border border-zinc-700 bg-zinc-800/60 px-3 py-2">
           <span className="text-sm text-white">{row?.name ?? 'Unknown client'}</span>
           {row && <span className="text-xs text-zinc-500">{clientPath(rows, row.id)}</span>}
@@ -137,7 +149,6 @@ export default function ClientPicker({
       .sort((a, b) => Number(b.is_group) - Number(a.is_group) || a.name.localeCompare(b.name, undefined, { numeric: true }))
     return (
       <div className="rounded border border-zinc-700 bg-zinc-900 p-3">
-        {hidden}
         <div className="flex flex-wrap items-center gap-1 text-xs text-zinc-400 mb-2">
           <button type="button" className="hover:text-white" onClick={() => setAt(null)}>
             All sectors
@@ -191,7 +202,6 @@ export default function ClientPicker({
   if (mode === 'add') {
     return (
       <div>
-        {hidden}
         <NewClient
           rows={rows}
           initialName={missed || query}
@@ -209,7 +219,6 @@ export default function ClientPicker({
 
   return (
     <div className="relative">
-      {hidden}
       <input
         autoFocus={Boolean(defaultId) || undefined}
         value={query}
@@ -257,6 +266,17 @@ export default function ClientPicker({
             Cancel
           </button>
         )}
+      </div>
+    </div>
+  )
+  }
+
+  const quiet = (e: React.SyntheticEvent) => e.stopPropagation()
+  return (
+    <div>
+      <input ref={field} type="hidden" name={name} value={selected ?? ''} />
+      <div onInput={quiet} onChange={quiet}>
+        {body()}
       </div>
     </div>
   )
