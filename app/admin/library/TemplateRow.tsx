@@ -197,7 +197,6 @@ export default function TemplateRow(props: Props) {
                 defaultValue={summary.description ?? ''}
                 onBlur={(e) =>
                   e.target.value !== (summary.description ?? '') && patch({ description: e.target.value })}
-                placeholder={shelf === 'gear' ? 'Cold-water kit; assumes the client supplies helmets' : 'Three-day version, no night ops'}
               />
             </div>
             <div>
@@ -271,10 +270,9 @@ export default function TemplateRow(props: Props) {
               </div>
             </div>
             <div className="sm:col-span-2">
-              <Label>Topics</Label>
+              <Label hint="Free-text tags, comma separated. They are searched and shown on the row; the expertise above is what the matching reads.">Topics</Label>
               <input
                 className={input}
-                placeholder="swiftwater, night ops"
                 defaultValue={summary.topics.join(', ')}
                 onBlur={(e) => {
                   const topics = e.target.value.split(',').map((t) => t.trim()).filter(Boolean)

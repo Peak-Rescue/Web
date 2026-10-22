@@ -764,11 +764,17 @@ export default function GearListEditor({
         />
       )}
 
+      {/* Named, now the placeholder that was naming it is gone. A field
+          whose only label is an example reads as a field already filled in,
+          and the example is the first thing you have to delete. */}
+      <label className="block text-xs text-zinc-500 mb-1 flex items-center gap-1.5">
+        Intro
+        <InfoHint text="Shown above the list on the course — why this kit, what the conditions are. Optional." />
+      </label>
       <textarea
         defaultValue={list.intro ?? ''}
         onBlur={(e) => e.target.value !== (list.intro ?? '') && run(() => updateGearList(list.id, { intro: e.target.value }))}
         rows={2}
-        placeholder="Optional intro — why this kit, what the conditions are"
         className={`w-full resize-y ${input}`}
       />
 
