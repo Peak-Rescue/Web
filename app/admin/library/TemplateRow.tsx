@@ -200,7 +200,12 @@ export default function TemplateRow(props: Props) {
               />
             </div>
             <div>
-              <Label hint="Its courses see this template first, and its discipline is ticked below. A custom course has no offering, so disciplines are all it matches on.">Offering</Label>
+              {/* "Mainly for", not "only for" — which is the opposite of
+                  what the same word means on a library item, where picking
+                  an offering hides the row from every other course. Here it
+                  ranks: the list still reaches anything sharing its
+                  discipline, which is why one value is enough. */}
+              <Label hint="Courses of this offering see it first. It still reaches any course sharing its discipline, so this is a preference rather than a restriction — unlike a library item, where an offering limits who is offered it.">Mainly for</Label>
               <select
                 className={input}
                 value={form.course_type}
