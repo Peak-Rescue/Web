@@ -260,6 +260,8 @@ export async function updateGearList(
     // list can carry them too; nothing reads them there.
     description?: string | null
     courseType?: string | null
+    /** Several, like a library item's. See 256. */
+    courseTypes?: string[]
     disciplines?: string[]
     topics?: string[]
     /** The headcount this list is packed for. Null hands it back to the
@@ -280,6 +282,12 @@ export async function updateGearList(
   if (patch.audience !== undefined) update.audience = patch.audience
   if (patch.description !== undefined) update.description = patch.description?.trim() || null
   if (patch.courseType !== undefined) update.course_type = patch.courseType || null
+  // The list. course_type stays written for now so a deploy in either order
+  // keeps matching — see 256.
+  if (patch.courseTypes !== undefined) {
+    update.course_types = patch.courseTypes
+    update.course_type = patch.courseTypes[0] ?? null
+  }
   if (patch.disciplines !== undefined) update.disciplines = [...new Set(patch.disciplines)]
   if (patch.topics !== undefined) {
     update.topics = [...new Set(patch.topics.map((t) => t.trim()).filter(Boolean))]

@@ -18,8 +18,11 @@ describe('admin-only material', () => {
   })
 
   it('is filtered out of the library list for anyone who is not an admin', () => {
+    // The gate moved into narrow(), the one function both the list and its
+    // facet counts are built from — so this asserts the rule rather than the
+    // line it used to be written on.
     const page = read('app/admin/library/page.tsx')
-    expect(page).toContain("if (!isAdmin) query = query.eq('admin_only', false)")
+    expect(page).toMatch(/if \(!isAdmin\) out = out\.eq\('admin_only', false\)/)
   })
 
   it('cannot be marked admin-only and student-visible at once', () => {

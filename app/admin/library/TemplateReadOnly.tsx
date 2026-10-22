@@ -40,11 +40,11 @@ export default function TemplateReadOnly(
         <span className="min-w-0 flex-1">
           <span className="flex items-center gap-2 flex-wrap">
             <span className="text-sm font-medium">{summary.name}</span>
-            {summary.course_type && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400">
-                {courseShortName(summary.course_type, null)}
+            {(summary.course_types ?? []).map((ct) => (
+              <span key={ct} className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400">
+                {courseShortName(ct, null)}
               </span>
-            )}
+            ))}
             {summary.disciplines.map((d) => (
               <span key={d} className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400">
                 {CAPABILITY_META[d as CapabilityCategory]?.label ?? d}

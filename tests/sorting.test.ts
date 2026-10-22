@@ -69,7 +69,7 @@ describe('changesFor — admin-only is compared too', () => {
 describe('shelfLink', () => {
   it('names a shelf from the same table the card is drawn from', async () => {
     const { shelfLink } = await import('@/lib/library')
-    expect(shelfLink('venue')).toEqual({ href: '/admin/library?bucket=venue', label: 'Venue information' })
+    expect(shelfLink('venue')).toEqual({ href: '/admin/library?bucket=venue', label: 'Locations' })
     expect(shelfLink('resource').label).toBe('Reference')
   })
 

@@ -221,13 +221,14 @@ export type TemplateAudienceCourse = { course_type: string | null; categories: s
     specific to it. The string is shown on the row, so a mixed custom course
     can see *which* half of it a template answers to. */
 export function templateRelevance(
-  t: { course_type?: string | null; disciplines?: string[] | null },
+  t: { course_type?: string | null; course_types?: string[] | null; disciplines?: string[] | null },
   course: TemplateAudienceCourse,
 ): string | null {
-  // A typed course matches its own offering. 'custom' is deliberately not a
-  // match with itself: every custom course shares that slug, so it would make
-  // "for this offering" mean "someone once did something bespoke".
-  if (t.course_type && t.course_type !== 'custom' && t.course_type === course.course_type) {
+  // A typed course matches any of its offerings. 'custom' is deliberately not
+  // a match with itself: every custom course shares that slug, so it would
+  // make "for this offering" mean "someone once did something bespoke".
+  const offerings = t.course_types?.length ? t.course_types : t.course_type ? [t.course_type] : []
+  if (course.course_type && course.course_type !== 'custom' && offerings.includes(course.course_type)) {
     return 'this offering'
   }
   // A template's own offering implies a discipline too — a Class C Canyon Rescue
@@ -235,7 +236,7 @@ export function templateRelevance(
   // the tag it was saved with counts alongside the ones typed on the shelf.
   // Without this, a template saved off a typed course reaches no custom course
   // at all until someone goes and tags it by hand.
-  const implied = t.course_type ? courseCapabilityCategories(t.course_type, null) : []
+  const implied = offerings.flatMap((ct) => courseCapabilityCategories(ct, null) as string[])
   const tags = [...new Set([...(t.disciplines ?? []), ...implied])]
   const shared = tags.filter((d) => course.categories.includes(d))
   if (shared.length === 0) return null
@@ -250,7 +251,10 @@ export type TemplateSummary = {
   id: string
   name: string
   description: string | null
-  course_type: string | null
+  /** Its offerings. A list, like a library item's, and meaning the same
+      thing in the same words — though here it ranks rather than restricts:
+      templateRelevance falls through to discipline either way. See 256. */
+  course_types: string[]
   disciplines: string[]
   topics: string[]
   count: number

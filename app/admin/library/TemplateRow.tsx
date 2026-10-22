@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import TrashIcon from '@/components/TrashIcon'
+import OfferingChips from '@/components/OfferingChips'
 import GearListEditor, { type GearItem, type GearList } from '@/app/admin/gear/GearListEditor'
 import ScheduleEditor, { type Schedule, type SiteOption } from '@/app/admin/schedules/ScheduleEditor'
 import { updateGearList, deleteGearList } from '@/app/admin/gear/actions'
@@ -55,7 +56,7 @@ export default function TemplateRow(props: Props) {
   // disciplines are checkboxes. The text fields are uncontrolled and save on
   // the way out, the way every other editor in the portal does it.
   const [form, setForm] = useState({
-    course_type: summary.course_type ?? '',
+    course_types: summary.course_types ?? [],
     audience: summary.audience ?? 'student',
     disciplines: summary.disciplines,
   })
@@ -74,7 +75,7 @@ export default function TemplateRow(props: Props) {
   type Patch = {
     name?: string
     description?: string | null
-    courseType?: string | null
+    courseTypes?: string[]
     disciplines?: string[]
     topics?: string[]
     audience?: 'student' | 'instructor'
@@ -101,20 +102,10 @@ export default function TemplateRow(props: Props) {
   // checked and held there rather than left for a human to keep in sync. The
   // matching that reads these does the same derivation, so an unticked box was
   // never actually wrong; it just looked it, which is its own bug.
-  const implied = courseCapabilityCategories(form.course_type || '', null) as string[]
-  const impliedFrom = form.course_type ? courseShortName(form.course_type, null) : null
+  const implied = [...new Set(form.course_types.flatMap((ct) => courseCapabilityCategories(ct, null) as string[]))]
+  const impliedFrom = form.course_types.map((ct) => courseShortName(ct, null)).join(', ') || null
 
-  const offering = summary.course_type ? courseShortName(summary.course_type, null) : null
-  // An offering the picker no longer lists — a retired slug — is still offered
-  // as the option it was saved with, so changing your mind is not a one-way
-  // door. Keyed off what's on the shelf, not what's in the box: keying it off
-  // the current choice made the old value vanish the moment you left it.
-  const retiredOffering =
-    summary.course_type &&
-    !COURSE_TYPE_OPTIONS.some((g) => g.options.some((o) => o.value === summary.course_type))
-      ? summary.course_type
-      : null
-
+  const offerings = (summary.course_types ?? []).map((ct) => courseShortName(ct, null))
   return (
     <div
       id={`t-${summary.id}`}
@@ -135,9 +126,9 @@ export default function TemplateRow(props: Props) {
             {summary.audience && (
               <ForPill audience={summary.audience} />
             )}
-            {offering && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-900/40 text-blue-300">{offering}</span>
-            )}
+            {offerings.map((o) => (
+              <span key={o} className="text-[10px] px-1.5 py-0.5 rounded bg-blue-900/40 text-blue-300">{o}</span>
+            ))}
             <span className="text-[11px] text-zinc-600">
               {summary.count} {shelf === 'gear' ? `item${summary.count === 1 ? '' : 's'}` : `day${summary.count === 1 ? '' : 's'}`}
             </span>
@@ -146,7 +137,7 @@ export default function TemplateRow(props: Props) {
             {summary.description || `no note — say what this ${meta.noun} is for`}
             {' · '}
             {[...new Set([
-              ...courseCapabilityCategories(summary.course_type ?? '', null) as string[],
+              ...(summary.course_types ?? []).flatMap((ct) => courseCapabilityCategories(ct, null) as string[]),
               ...summary.disciplines,
             ])].map((d) => CAPABILITY_META[d as keyof typeof CAPABILITY_META]?.label ?? d).join(', ')
               || 'no discipline tag'}
@@ -200,30 +191,16 @@ export default function TemplateRow(props: Props) {
               />
             </div>
             <div>
-              {/* "Mainly for", not "only for" — which is the opposite of
-                  what the same word means on a library item, where picking
-                  an offering hides the row from every other course. Here it
-                  ranks: the list still reaches anything sharing its
-                  discipline, which is why one value is enough. */}
-              <Label hint="Courses of this offering see it first. It still reaches any course sharing its discipline, so this is a preference rather than a restriction — unlike a library item, where an offering limits who is offered it.">Mainly for</Label>
-              <select
-                className={input}
-                value={form.course_type}
-                onChange={(e) => {
-                  setForm({ ...form, course_type: e.target.value })
-                  patch({ courseType: e.target.value || null })
+              <OfferingChips
+                label="Mainly for"
+                hint="Courses of these offerings see it first. It still reaches any course sharing its discipline, so this ranks rather than restricts — unlike a library item, where an offering limits who is offered it."
+                value={form.course_types}
+                onChange={(course_types) => {
+                  setForm({ ...form, course_types })
+                  patch({ courseTypes: course_types })
                 }}
-              >
-                <option value="">— any offering —</option>
-                {retiredOffering && (
-                  <option value={retiredOffering}>{courseShortName(retiredOffering, null)}</option>
-                )}
-                {COURSE_TYPE_OPTIONS.map((g) => (
-                  <optgroup key={g.category} label={g.label}>
-                    {g.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                  </optgroup>
-                ))}
-              </select>
+                className={input}
+              />
             </div>
             {props.shelf === 'gear' && (
               <div>
@@ -289,10 +266,10 @@ export default function TemplateRow(props: Props) {
 
           <div className="px-3 pt-4 mt-3 border-t border-zinc-800">
             {props.shelf === 'gear'
-              ? <GearListEditor list={props.list} catalog={props.catalog} courseType={summary.course_type} />
+              ? <GearListEditor list={props.list} catalog={props.catalog} courseType={summary.course_types?.[0] ?? null} />
               : <ScheduleEditor
                   schedule={props.schedule}
-                  courseType={summary.course_type}
+                  courseType={summary.course_types?.[0] ?? null}
                   sites={props.sites}
                   // This is the shelf. There is nowhere to save it to from
                   // here — it is already the thing other schedules get saved

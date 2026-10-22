@@ -15,6 +15,7 @@ import { COURSE_TYPE_OPTIONS, courseShortName } from '@/lib/courses'
 import CloseButton from '@/components/CloseButton'
 import TrashIcon from '@/components/TrashIcon'
 import InfoHint from '@/components/InfoHint'
+import OfferingChips from '@/components/OfferingChips'
 import StateBadge from '@/components/StateBadge'
 import KindOptions from '@/components/KindOptions'
 
@@ -289,55 +290,12 @@ export default function LibraryRow({ item, venues, sites = [], hideProvenance = 
 <KindOptions />
             </select>
           </div>
-          {/* For particular courses and no others: the ACA swiftwater
-              materials, a manual for kit only the aerial courses carry.
-              Optional, and none is the usual answer — a discipline is the
-              broader match and most material wants the broader one.
-              Several, because one was always going to be the wrong answer
-              for anything two offerings share. */}
-          <div>
-            <label className={`${label} flex items-center gap-1.5`}>
-              Course offerings
-              <InfoHint text="Pick one to limit this to those courses. Left empty it is offered wherever its discipline matches, which is what most material wants." />
-            </label>
-            <select
-              className={input}
-              value=""
-              onChange={(e) => {
-                const ct = e.target.value
-                if (ct && !form.course_types.includes(ct)) {
-                  setForm({ ...form, course_types: [...form.course_types, ct] })
-                }
-              }}
-            >
-              <option value="">+ Add an offering…</option>
-              {COURSE_TYPE_OPTIONS.map((g) => (
-                <optgroup key={g.category} label={g.label.toUpperCase()}>
-                  {g.options
-                    .filter((o) => !form.course_types.includes(o.value))
-                    .map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                </optgroup>
-              ))}
-            </select>
-            <div className={`flex items-center gap-1.5 flex-wrap ${form.course_types.length ? 'mt-1.5' : ''}`}>
-              {form.course_types.map((ct) => (
-                <span
-                  key={ct}
-                  className="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded bg-blue-900/40 text-blue-300"
-                >
-                  {courseShortName(ct, null)}
-                  <button
-                    type="button"
-                    aria-label={`Not for ${courseShortName(ct, null)}`}
-                    onClick={() => setForm({ ...form, course_types: form.course_types.filter((x) => x !== ct) })}
-                    className="text-blue-300/60 hover:text-white transition-colors"
-                  >
-                    ×
-                  </button>
-                </span>
-              ))}
-            </div>
-          </div>
+          <OfferingChips
+            value={form.course_types}
+            onChange={(course_types) => setForm({ ...form, course_types })}
+            hint="Pick one to limit this to those courses. Left empty it is offered wherever its discipline matches, which is what most material wants."
+            className={input}
+          />
           <div>
             <label className={label}>Who can see it</label>
             <select
