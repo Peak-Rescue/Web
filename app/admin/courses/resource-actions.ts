@@ -659,15 +659,15 @@ export async function contactFilingShelves(
 /** Files a contact typed on a course with a place: the venue or the state, as
  *  the person filing chose. The course keeps its own copy — this only adds
  *  them to the list the next course there is offered. The places are resolved
- *  here from the course, never taken from the browser, and addPlaceContact is
- *  admin only, as on the places page, because that list is shared by every
- *  course that goes there. Returns where it went, so the row can say so. */
+ *  here from the course, never taken from the browser, and filing is admin
+ *  only, as on the places page, because that list is shared by every course
+ *  that goes there. Returns where it went, so the row can say so. */
 export async function fileContactToPlace(
   instanceId: string,
   shelf: ContactShelf,
   contact: { name: string; role?: string; phone?: string; email?: string; note?: string },
-  /** A local contact typed into the course's own list, which is saved with
-      the details form. Said yes here, the course keeps them too. */
+  /** A local contact typed into the course's own list, which writes itself.
+      Said yes here, the course keeps them too. */
   alsoKeepOnCourse = false
 ): Promise<{ error: string } | { filedWith: string }> {
   const { admin, client, venue, region } = await contactShelves(instanceId)
