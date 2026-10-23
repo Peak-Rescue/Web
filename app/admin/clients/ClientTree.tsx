@@ -14,7 +14,7 @@ import {
   type ClientNode,
   type ClientRow,
 } from '@/lib/clients'
-import { addClient, deleteClient, mergeClient, moveClient, setSignoff, shiftSector, updateClient } from './actions'
+import { addClient, deleteClient, mergeClient, moveClient, saveClientNote, setSignoff, shiftSector, updateClient } from './actions'
 import { NewClient } from '@/components/ClientPicker'
 
 type Signoff = { profileId: string; initials: string; name: string }
@@ -278,7 +278,14 @@ export default function ClientTree({
               </span>
             )}
             {n.aliases.length > 0 && <span className="ml-2 text-xs text-zinc-500">also {n.aliases.join(', ')}</span>}
-            {n.note && <span className="ml-2 text-xs text-amber-400/80">{n.note}</span>}
+            {/* The first line only: the whole note is in the panel the name
+                opens, and a long one would push the row's buttons off it. */}
+            {n.note && (
+              <span className="ml-2 text-xs text-amber-400/80">
+                {n.note.split('\n')[0].slice(0, 80)}
+                {n.note.length > Math.min(80, n.note.split('\n')[0].length) ? '…' : ''}
+              </span>
+            )}
           </span>
 
           {!n.is_group && (
@@ -347,7 +354,7 @@ export default function ClientTree({
             client started from a blank list. Opened by clicking the name. */}
         {here === 'people' && (
           <div style={{ marginLeft: n.depth * 24 + 28 }} className="my-2 p-3 rounded border border-zinc-800 bg-zinc-900/60">
-            {n.note && <p className="text-[11px] text-amber-400/80 mb-2">{n.note}</p>}
+            <ClientNotes id={n.id} initial={n.note ?? ''} />
             <ContactBook
               scope={{ clientId: n.id }}
               contacts={contactsByOwner?.[`client:${n.id}`] ?? []}
@@ -419,7 +426,7 @@ export default function ClientTree({
           pending={pending}
           submitLabel="Add sector"
           onCancel={() => setOpen(null)}
-          onSave={(v) => run(() => addClient({ ...v, isGroup: true, parentId: null }))}
+          onSave={(v) => run(() => addClient({ ...v, note: v.note ?? '', isGroup: true, parentId: null }))}
         />
       )}
       {error && <p className="mt-3 text-sm text-red-400">{error}</p>}
@@ -478,7 +485,7 @@ function ClientForm({
   initial?: Pick<ClientRow, 'name' | 'aliases' | 'note'>
   group: boolean
   pending: boolean
-  onSave: (v: { name: string; aliases: string; note: string }) => void
+  onSave: (v: { name: string; aliases: string; note?: string }) => void
   onCancel: () => void
   submitLabel?: string
 }) {
@@ -493,7 +500,8 @@ function ClientForm({
     <form
       onSubmit={(e) => {
         e.preventDefault()
-        onSave({ name, aliases, note })
+        // A client's note lives in its panel; only a sector's is edited here.
+        onSave({ name, aliases, ...(group ? { note } : {}) })
       }}
       className="flex flex-wrap items-end gap-3 py-2"
       style={{ paddingLeft: `${indent}px` }}
@@ -509,10 +517,12 @@ function ClientForm({
           <input value={aliases} onChange={(e) => setAliases(e.target.value)} className={`${inputCls} w-full`} />
         </label>
       )}
-      <label className="w-56">
-        <span className={label}>Note</span>
-        <input value={note} onChange={(e) => setNote(e.target.value)} className={`${inputCls} w-full`} />
-      </label>
+      {group && (
+        <label className="w-56">
+          <span className={label}>Note</span>
+          <input value={note} onChange={(e) => setNote(e.target.value)} className={`${inputCls} w-full`} />
+        </label>
+      )}
       <span className="flex items-center gap-2 pb-0.5">
         <button type="submit" disabled={pending || !name.trim()} className={btn.secondary}>
           {submitLabel}
@@ -631,6 +641,63 @@ function RehomeForm({
       <button type="button" onClick={onCancel} className={btn.quiet}>
         Cancel
       </button>
+    </div>
+  )
+}
+
+// A client's notes, in the panel its name opens. A box that grows with what is
+// in it, saved as you type — notes run long, and a Save button is a thing to
+// forget. It keeps its own text once open: every save refreshes the page, and
+// a box rebuilt from the saved copy mid-sentence would eat what was typed
+// while the save was in the air.
+function ClientNotes({ id, initial }: { id: string; initial: string }) {
+  const [text, setText] = useState(initial)
+  const [state, setState] = useState<'idle' | 'pending' | 'saving' | 'saved' | 'error'>('idle')
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const box = useRef<HTMLTextAreaElement>(null)
+  const last = useRef(initial)
+
+  // Tall enough for everything in it, never a scrollbar inside a scrollbar.
+  useEffect(() => {
+    const el = box.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${Math.max(el.scrollHeight, 96)}px`
+  }, [text])
+
+  async function save(value: string) {
+    if (timer.current) clearTimeout(timer.current)
+    timer.current = null
+    if (value === last.current) return setState((s) => (s === 'pending' ? 'idle' : s))
+    setState('saving')
+    const res = await saveClientNote(id, value)
+    if (res.ok) {
+      last.current = value
+      setState('saved')
+    } else setState('error')
+  }
+
+  return (
+    <div className="mb-3">
+      <div className="flex items-baseline justify-between mb-1">
+        <span className="text-[11px] font-medium text-zinc-500">Notes</span>
+        <span className={`text-[11px] ${state === 'error' ? 'text-red-400' : state === 'saved' ? 'text-teal-400' : 'text-zinc-600'}`}>
+          {state === 'saving' ? 'Saving…' : state === 'saved' ? 'Saved ✓' : state === 'error' ? 'Not saved — try again' : state === 'pending' ? '…' : ''}
+        </span>
+      </div>
+      <textarea
+        ref={box}
+        value={text}
+        onChange={(e) => {
+          setText(e.target.value)
+          setState('pending')
+          if (timer.current) clearTimeout(timer.current)
+          const v = e.target.value
+          timer.current = setTimeout(() => void save(v), 900)
+        }}
+        onBlur={() => void save(text)}
+        className="w-full min-h-24 resize-y bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm text-white leading-relaxed focus:outline-none focus:border-zinc-500"
+      />
     </div>
   )
 }

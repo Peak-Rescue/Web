@@ -25,6 +25,10 @@ type Result =
 
 type Admin = Awaited<ReturnType<typeof requireAdminUser>>['admin']
 
+// Room for real notes — who to call for what, how they like to be billed,
+// what went wrong last time — not just a one-line flag.
+const NOTE_MAX = 5000
+
 // A client's name is shown on every course filed under it, so a change here
 // is a change on course pages and the course list as well as this one.
 const done = (id?: string): Result => {
@@ -84,7 +88,7 @@ export async function addClient(
       is_group: input.isGroup,
       name,
       aliases: input.isGroup ? [] : parseAliases(input.aliases, name),
-      note: input.note.trim().slice(0, 500) || null,
+      note: input.note.trim().slice(0, NOTE_MAX) || null,
       position: input.isGroup && !input.parentId ? Math.max(0, ...sectors.map((r) => r.position)) + 1 : 0,
       created_by: user.id,
     })
@@ -96,7 +100,9 @@ export async function addClient(
 
 export async function updateClient(
   id: string,
-  input: { name: string; aliases: string; note: string }
+  /** `note` absent leaves the note as it is: a client's note is written from
+      its panel, not from Edit, and an Edit save must not blank it. */
+  input: { name: string; aliases: string; note?: string }
 ): Promise<Result> {
   const { admin } = await requireAdminUser()
   const name = input.name.trim().slice(0, 200)
@@ -104,11 +110,28 @@ export async function updateClient(
   const { data: before } = await admin.from('clients').select('name').eq('id', id).maybeSingle()
   const { error } = await admin
     .from('clients')
-    .update({ name, aliases: parseAliases(input.aliases, name), note: input.note.trim().slice(0, 500) || null })
+    .update({
+      name,
+      aliases: parseAliases(input.aliases, name),
+      ...(input.note !== undefined ? { note: input.note.trim().slice(0, NOTE_MAX) || null } : {}),
+    })
     .eq('id', id)
   if (error) return { ok: false, error: nameTaken(error.code) }
   if (before && before.name !== name) await resyncCalendars(admin, id)
   return done()
+}
+
+/** A client's notes, from the panel its name opens. Saved as typed, with no
+    form around it: notes get long, and a Save button is a thing to forget. */
+export async function saveClientNote(id: string, note: string): Promise<Result> {
+  const { admin } = await requireAdminUser()
+  const { error } = await admin
+    .from('clients')
+    .update({ note: note.trim().slice(0, NOTE_MAX) || null })
+    .eq('id', id)
+  if (error) return { ok: false, error: 'Could not save the note — please try again' }
+  revalidatePath('/admin/clients')
+  return { ok: true }
 }
 
 /** What someone typed before finding a client another way, kept on it so the
