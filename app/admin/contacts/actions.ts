@@ -3,6 +3,9 @@
 import { revalidatePath } from 'next/cache'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { requireAdminUser } from '@/lib/course-access'
+import { keyOf, scopeOf, type ContactHome, type ContactScope } from '@/lib/contact-homes'
+
+export type { ContactHome, ContactScope }
 
 // People, and where each is known from (267).
 //
@@ -12,11 +15,6 @@ import { requireAdminUser } from '@/lib/course-access'
 // once. Now there is one row per person and a link per place they are known
 // from, and these are the only writes to either.
 
-export type ContactScope =
-  | { clientId: string }
-  | { venueId: string }
-  | { regionCode: string }
-
 export type BookContact = {
   id: string
   name: string
@@ -24,8 +22,11 @@ export type BookContact = {
   phone?: string | null
   email?: string | null
   note?: string | null
-  /** Everywhere else this person is known from, for the row that says so. */
-  alsoFrom?: string[]
+  /** Everywhere this person is known from, including the list they are
+      being read on. The row says "also …" by dropping that one, and the
+      editor ticks the rest. Labels alone were enough to say it and not
+      enough to change it. */
+  homes?: ContactHome[]
 }
 
 const column = (scope: ContactScope) =>
@@ -55,7 +56,6 @@ export async function contactsFor(scope: ContactScope): Promise<BookContact[]> {
 
   const venueName = new Map((venues ?? []).map((v) => [v.id as string, v.name as string]))
   const clientName = new Map((clients ?? []).map((c) => [c.id as string, c.name as string]))
-  const mine = value(scope)
 
   return (people ?? []).map((p) => ({
     id: p.id as string,
@@ -64,17 +64,15 @@ export async function contactsFor(scope: ContactScope): Promise<BookContact[]> {
     phone: p.phone as string | null,
     email: p.email as string | null,
     note: p.note as string | null,
-    alsoFrom: (links ?? [])
+    homes: (links ?? [])
       .filter((l) => l.contact_id === p.id)
       .map((l) =>
         l.client_id
-          ? { key: l.client_id as string, label: clientName.get(l.client_id as string) ?? 'a client' }
+          ? { key: `client:${l.client_id}`, label: clientName.get(l.client_id as string) ?? 'a client' }
           : l.venue_id
-            ? { key: l.venue_id as string, label: venueName.get(l.venue_id as string) ?? 'a venue' }
-            : { key: l.region_code as string, label: l.region_code as string }
-      )
-      .filter((x) => x.key !== mine)
-      .map((x) => x.label),
+            ? { key: `venue:${l.venue_id}`, label: venueName.get(l.venue_id as string) ?? 'a venue' }
+            : { key: `region:${l.region_code}`, label: String(l.region_code) }
+      ),
   }))
 }
 
@@ -82,7 +80,11 @@ export async function contactsFor(scope: ContactScope): Promise<BookContact[]> {
     a wrong number is corrected everywhere it is read from. */
 export async function saveContact(
   scope: ContactScope,
-  contact: { id?: string; name: string; role?: string; phone?: string; email?: string; note?: string }
+  contact: { id?: string; name: string; role?: string; phone?: string; email?: string; note?: string },
+  /** Every place this person belongs to, as keys, when the editor asked. The
+      list being edited is always one of them — you cannot file somebody out
+      of the list you are standing in; the trash does that and says so. */
+  homes?: string[]
 ): Promise<{ error: string } | { id: string }> {
   await requireAdminUser()
   const admin = createAdminClient()
@@ -123,11 +125,31 @@ export async function saveContact(
     }
   }
 
-  const { error: linkError } = await admin
-    .from('contact_links')
-    .upsert({ contact_id: id, [column(scope)]: value(scope) }, { onConflict: `contact_id,${column(scope)}` })
-  // A duplicate link is the same fact twice, which is not an error.
-  if (linkError && !linkError.message.includes('duplicate')) throw new Error(linkError.message)
+  const wanted = new Set([keyOf(scope), ...(homes ?? [])])
+  for (const key of wanted) {
+    const target = scopeOf(key)
+    if (!target) continue
+    const { error: linkError } = await admin
+      .from('contact_links')
+      .upsert({ contact_id: id, [column(target)]: value(target) }, { onConflict: `contact_id,${column(target)}` })
+    // A duplicate link is the same fact twice, which is not an error.
+    if (linkError && !linkError.message.includes('duplicate')) throw new Error(linkError.message)
+  }
+
+  // Only when the editor said what the whole set should be. Called without
+  // homes — from a course, from the places form — this adds one link and
+  // touches nothing else, because those callers were never asked about the
+  // person's other homes and must not be read as having answered.
+  if (homes) {
+    const { data: existing } = await admin
+      .from('contact_links')
+      .select('id, client_id, venue_id, region_code')
+      .eq('contact_id', id)
+    for (const l of existing ?? []) {
+      const key = l.client_id ? `client:${l.client_id}` : l.venue_id ? `venue:${l.venue_id}` : `region:${l.region_code}`
+      if (!wanted.has(key)) await admin.from('contact_links').delete().eq('id', l.id)
+    }
+  }
 
   revalidatePath('/admin/clients')
   revalidatePath('/admin/sites')
@@ -170,4 +192,22 @@ export async function deleteContactEverywhere(contactId: string): Promise<void> 
   revalidatePath('/admin/clients')
   revalidatePath('/admin/sites')
   revalidatePath('/admin/library')
+}
+
+/** Everywhere a person could be filed: every client, every venue, and every
+    state or country the places page knows about. Fetched when somebody opens
+    the editor rather than loaded onto every page that lists a contact. */
+export async function contactHomes(): Promise<{ clients: ContactHome[]; venues: ContactHome[]; regions: ContactHome[] }> {
+  await requireAdminUser()
+  const admin = createAdminClient()
+  const [{ data: clients }, { data: venues }, { data: regions }] = await Promise.all([
+    admin.from('clients').select('id, name').order('name'),
+    admin.from('venues').select('id, name').order('name'),
+    admin.from('region_info').select('region_code').order('region_code'),
+  ])
+  return {
+    clients: (clients ?? []).map((c) => ({ key: `client:${c.id}`, label: c.name as string })),
+    venues: (venues ?? []).map((v) => ({ key: `venue:${v.id}`, label: v.name as string })),
+    regions: (regions ?? []).map((r) => ({ key: `region:${r.region_code}`, label: String(r.region_code) })),
+  }
 }

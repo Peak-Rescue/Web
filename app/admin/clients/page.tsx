@@ -50,11 +50,7 @@ export default async function ClientsPage() {
       ...(contactsByOwner[here.key] ?? []),
       {
         ...p,
-        alsoFrom: links
-          .filter((x) => x.contact_id === l.contact_id)
-          .map(where)
-          .filter((x) => x.key !== here.key)
-          .map((x) => x.label),
+        homes: links.filter((x) => x.contact_id === l.contact_id).map(where),
       },
     ]
   }

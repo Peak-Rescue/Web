@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import ContactFields from '@/components/ContactFields'
 import { contactFilingShelves, fileContactToPlace, type ContactShelf } from '@/app/admin/courses/resource-actions'
 
 // Keeping a person, from wherever they were typed.
@@ -11,9 +12,6 @@ import { contactFilingShelves, fileContactToPlace, type ContactShelf } from '@/a
 // somebody retyped a number off an old quote. Both lists ask the same thing
 // now, with the same card, and the only difference is which answer leads —
 // the client for a POC, the venue for a local contact.
-
-const input =
-  'w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-zinc-500'
 
 export type ContactDraft = { name: string; role?: string; phone?: string; email?: string; note?: string }
 
@@ -100,57 +98,25 @@ export default function FileContactCard({
     )
   }
 
-  const field = (
-    label: string,
-    key: 'name' | 'role' | 'phone' | 'email' | 'note',
-    extra?: { type?: string; placeholder?: string }
-  ) => (
-    <label className="block">
-      <span className="block text-[11px] text-zinc-500 mb-1">{label}</span>
-      <input
-        className={input}
-        type={extra?.type}
-        placeholder={extra?.placeholder}
-        value={card[key]}
-        onChange={(e) => setCard({ ...card, [key]: e.target.value })}
-      />
-    </label>
-  )
-
   return (
-    <div className="w-full basis-full mt-2 rounded border border-zinc-800 bg-zinc-900/60 p-3 grid grid-cols-1 sm:grid-cols-3 gap-2">
-      <div className="sm:col-span-3">
-        {/* Client first where there is one: a point of contact is the
-            client's person, and filing them under the canyon they asked
-            about files them under the wrong noun. */}
-        <span className="block text-[11px] text-zinc-500 mb-1">File with</span>
-        <div className="flex flex-wrap gap-x-4 gap-y-1.5 p-2 bg-zinc-800/50 border border-zinc-700 rounded">
-          {shelves.map((o) => (
-            <label key={o.shelf} className="flex items-center gap-1.5 text-xs text-zinc-300 cursor-pointer">
-              <input
-                type="checkbox"
-                className="accent-red-600"
-                checked={card.shelves.includes(o.shelf)}
-                onChange={() =>
-                  setCard({
-                    ...card,
-                    shelves: card.shelves.includes(o.shelf)
-                      ? card.shelves.filter((x) => x !== o.shelf)
-                      : [...card.shelves, o.shelf],
-                  })
-                }
-              />
-              {o.label}
-            </label>
-          ))}
-        </div>
-      </div>
-      {field('Role', 'role', { placeholder: rolePlaceholder })}
-      {field('Name', 'name')}
-      {field('Phone', 'phone', { type: 'tel' })}
-      {field('Email', 'email', { type: 'email' })}
-      {field('Note', 'note', { placeholder: 'Best hours, gate code…' })}
-      <div className="sm:col-span-2 flex items-center gap-3">
+    <div className="w-full basis-full mt-2 rounded border border-zinc-800 bg-zinc-900/60 p-3 space-y-2">
+      {/* The same panel the client page and the places page use, so a person
+          filed from a course is filed by the form that files them anywhere.
+          Its homes here are the course's own three — client, venue, state —
+          under their shelf names, because those are resolved from the course
+          on the server and never taken from the browser. Client leads where
+          there is one: a point of contact is the client's person, and filing
+          them under the canyon they asked about files them under the wrong
+          noun. */}
+      <ContactFields
+        value={card}
+        onChange={(v) => setCard({ ...card, ...v })}
+        homes={shelves.map((o) => ({ key: o.shelf, label: o.label }))}
+        chosen={card.shelves}
+        onChosenChange={(keys) => setCard({ ...card, shelves: keys as ContactShelf[] })}
+        rolePlaceholder={rolePlaceholder}
+      />
+      <div className="flex items-center gap-3">
         <button
           type="button"
           disabled={!card.name.trim() || card.shelves.length === 0 || busy}

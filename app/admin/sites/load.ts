@@ -10,7 +10,9 @@ import { type LibraryItem, type Venue, type VenueContact, type VenueLink } from 
     page and the library shelf — cannot drift apart. */
 export async function loadSitesShelf() {
   const admin = createAdminClient()
-  const [{ data: siteRows }, { data: venueRows }, { data: dayRows }, { data: pointRows }, { data: mapRows }, { data: regionRows }, { data: peopleRows }, { data: linkRows }] = await Promise.all([
+  const [{ data: siteRows }, { data: venueRows }, { data: dayRows }, { data: pointRows }, { data: mapRows }, { data: regionRows }, { data: peopleRows }, { data: linkRows },
+    { data: clientRows },
+  ] = await Promise.all([
     admin.from('sites').select('id, venue_id, region_code, name, kind, beta, meeting_point_id, usual_meeting_time, coords, links, active').order('name'),
     admin.from('venues').select('id, name, region, region_code, client_name, notes, links, contacts, active').order('name'),
     admin.from('schedule_days').select('site_id').not('site_id', 'is', null),
@@ -39,6 +41,9 @@ export async function loadSitesShelf() {
     // them.
     admin.from('contacts').select('id, name, role, phone, email, note'),
     admin.from('contact_links').select('contact_id, client_id, venue_id, region_code'),
+    // Named, not "a client": the line under a venue contact says where else
+    // they are known from, and "also a client" names nothing.
+    admin.from('clients').select('id, name'),
   ])
 
   const sites = (siteRows ?? []) as Site[]
@@ -68,12 +73,13 @@ export async function loadSitesShelf() {
   // People by the place that knows them, with the other places they are
   // known from on the row — which is the line that used to be a duplicate.
   const venueName = new Map(venues.map((v) => [v.id, v.name]))
+  const clientName = new Map(((clientRows ?? []) as { id: string; name: string }[]).map((c) => [c.id, c.name]))
   const people = new Map((peopleRows ?? []).map((p) => [p.id as string, p as BookPerson]))
   const byOwner = new Map<string, BookContact[]>()
   const owners = new Map<string, { key: string; label: string }[]>()
   for (const l of (linkRows ?? []) as LinkRow[]) {
     const where = l.client_id
-      ? { key: `client:${l.client_id}`, label: 'a client' }
+      ? { key: `client:${l.client_id}`, label: clientName.get(l.client_id) ?? 'a client' }
       : l.venue_id
         ? { key: `venue:${l.venue_id}`, label: venueName.get(l.venue_id) ?? 'a venue' }
         : { key: `region:${l.region_code}`, label: String(l.region_code) }
@@ -85,7 +91,9 @@ export async function loadSitesShelf() {
     const key = l.client_id ? `client:${l.client_id}` : l.venue_id ? `venue:${l.venue_id}` : `region:${l.region_code}`
     byOwner.set(key, [
       ...(byOwner.get(key) ?? []),
-      { ...person, alsoFrom: (owners.get(l.contact_id) ?? []).filter((o) => o.key !== key).map((o) => o.label) },
+      // Every home, not only the other ones: the row drops this list to say
+      // "also …", and the editor needs the whole set to change it.
+      { ...person, homes: owners.get(l.contact_id) ?? [] },
     ])
   }
 

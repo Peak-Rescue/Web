@@ -357,6 +357,7 @@ export default function ClientTree({
             <ClientNotes id={n.id} initial={n.note ?? ''} />
             <ContactBook
               scope={{ clientId: n.id }}
+              scopeLabel={n.name}
               contacts={contactsByOwner?.[`client:${n.id}`] ?? []}
               rolePlaceholder="Booking, safety, billing…"
             />

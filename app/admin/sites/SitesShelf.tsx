@@ -228,6 +228,7 @@ export default function SitesShelf({
         )}
         <ContactBook
           scope={{ regionCode: code }}
+          scopeLabel={regionLabel(code) || code}
           contacts={contactsByOwner.get(`region:${code}`) ?? []}
           rolePlaceholder="Ranger district, landowner…"
         />
@@ -361,6 +362,7 @@ export default function SitesShelf({
                 <p className="text-[10px] uppercase tracking-wide text-zinc-700 mb-1.5">Contacts</p>
                 <ContactBook
                   scope={{ venueId: g.venue.id }}
+                  scopeLabel={g.venue.name}
                   contacts={contactsByOwner.get(`venue:${g.venue.id}`) ?? []}
                   rolePlaceholder="Ranger district, landowner…"
                 />
