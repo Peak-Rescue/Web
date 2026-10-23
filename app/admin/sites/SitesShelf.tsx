@@ -226,16 +226,22 @@ export default function SitesShelf({
             ))}
           </div>
         )}
-        <div>
-          <p className="text-[10px] uppercase tracking-wide text-zinc-700 mb-1.5">Contacts</p>
-          <ContactBook
-            scope={{ regionCode: code }}
-            scopeLabel={regionLabel(code) || code}
-            contacts={contactsByOwner.get(`region:${code}`) ?? []}
-            rolePlaceholder="Ranger district, landowner…"
-            canAdd={false}
-          />
-        </div>
+        {/* Drawn only when there is somebody, like Weather and Maps and
+            every other block here. An empty one announced "Nobody on file
+            yet" under a heading, which is a sentence about nothing — the
+            page does not say a place has no maps either. */}
+        {contacts.length > 0 && (
+          <div>
+            <p className="text-[10px] uppercase tracking-wide text-zinc-700 mb-1.5">Contacts</p>
+            <ContactBook
+              scope={{ regionCode: code }}
+              scopeLabel={regionLabel(code) || code}
+              contacts={contacts}
+              rolePlaceholder="Ranger district, landowner…"
+              canAdd={false}
+            />
+          </div>
+        )}
         {other.length > 0 && (
           <div className="flex flex-wrap gap-1.5">
             {other.map((l, i) => (
@@ -365,7 +371,7 @@ export default function SitesShelf({
               </div>
             )}
 
-            {g.venue && (
+            {g.venue && (contactsByOwner.get(`venue:${g.venue.id}`) ?? []).length > 0 && (
               <div className="mb-2">
                 <p className="text-[10px] uppercase tracking-wide text-zinc-700 mb-1.5">Contacts</p>
                 <ContactBook

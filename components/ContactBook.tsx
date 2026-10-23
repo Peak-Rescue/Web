@@ -43,7 +43,6 @@ export default function ContactBook({
 
   return (
     <div className="space-y-1.5">
-      {contacts.length === 0 && !editing && <p className="text-[11px] text-zinc-600">Nobody on file yet.</p>}
 
       {contacts.map((c) => {
         const others = (c.homes ?? []).filter((h) => h.key !== mine).map((h) => h.label)
