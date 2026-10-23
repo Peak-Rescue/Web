@@ -5,6 +5,7 @@ import { linkLabel } from '@/lib/course-links'
 import { createUpdateUploadTargets, type UpdateLink, type UpdateAttachment } from './update-actions'
 import TrashIcon from '@/components/TrashIcon'
 import FromLibraryPicker from '@/components/FromLibraryPicker'
+import AddButtons from '@/components/AddButtons'
 import { libraryForCourseFiles } from '@/app/admin/courses/document-actions'
 
 // The links-and-files half of writing something onto a course: the chips, the
@@ -33,6 +34,7 @@ export default function AttachmentFields({
   trailing?: React.ReactNode
 }) {
   const [addingLink, setAddingLink] = useState(false)
+  const [libraryOpen, setLibraryOpen] = useState(false)
   const [linkUrl, setLinkUrl] = useState('')
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
@@ -124,54 +126,16 @@ export default function AttachmentFields({
       {/* Two icons rather than three fields. A link needs a URL and nothing
           else — its name is taken from the address, and the pill can be
           renamed after the fact if the host makes a poor label. */}
-      <div className="flex flex-wrap items-center gap-1">
-        {/* The shelves, as a third way in. Writing an update that points at
-            the gear list we already have should not mean finding its URL
-            again — and a pasted second copy is what the library exists to
-            stop. Picked rows arrive as links, because that is what an
+      <div className="flex flex-wrap items-center gap-2">
+        {/* The same three, in the same order, as every other block that takes
+            material. Picked rows arrive as links, because that is what an
             update's attachment row is. */}
-        <FromLibraryPicker
-          onOpen={() => libraryForCourseFiles(instanceId)}
-          onPick={(rows) =>
-            setLinks((p) => [
-              ...p,
-              ...rows.filter((r) => r.url).map((r) => ({ url: r.url!, label: r.title })),
-            ])
-          }
+        <AddButtons
+          disabled={disabled || uploading}
+          onFromLibrary={() => setLibraryOpen(true)}
+          onAddLink={() => setAddingLink((v) => !v)}
+          onAddFile={(files) => upload(files)}
         />
-        <button
-          onClick={() => setAddingLink((v) => !v)}
-          title="Add a link"
-          aria-label="Add a link"
-          disabled={disabled}
-          className={`p-1.5 rounded transition-colors disabled:opacity-40 ${
-            addingLink ? 'text-white bg-zinc-800' : 'text-zinc-500 hover:text-white hover:bg-zinc-800'
-          }`}
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-          </svg>
-        </button>
-
-        <label
-          title="Attach files"
-          aria-label="Attach files"
-          className={`p-1.5 rounded transition-colors cursor-pointer ${
-            uploading ? 'text-white bg-zinc-800' : 'text-zinc-500 hover:text-white hover:bg-zinc-800'
-          }`}
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
-          </svg>
-          <input
-            type="file"
-            multiple
-            hidden
-            disabled={uploading || disabled}
-            onChange={(e) => { if (e.target.files?.length) upload(e.target.files); e.target.value = '' }}
-          />
-        </label>
-
         {uploading && <span className="text-[11px] text-zinc-500 ml-1">Uploading…</span>}
         {trailing}
       </div>

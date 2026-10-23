@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { errorFrom, type ActionResult } from '@/lib/action-result'
 import AddLinkDialog from '@/components/AddLinkDialog'
 import { createClient } from '@/lib/supabase/client'
+import AddButtons from '@/components/AddButtons'
 import { KIND_META, shelfLink, type LibraryAudience, type LibraryKind } from '@/lib/library'
 import { AudiencePills } from '@/components/AudiencePills'
 import AudienceToggle from '@/components/AudienceToggle'
@@ -231,13 +232,13 @@ export default function CourseResourcesSection({
             onClick={() => { setQ(''); setOnlyKind('medevac'); openPicker() }}
             className={`${btn} shrink-0`}
           >
-            From the library
+            Add from library
           </button>
           <button
             onClick={() => { setLinkKind('medevac'); setLinkOpen(true) }}
             className={`${btn} shrink-0`}
           >
-            Add a new one
+            Add new link
           </button>
         </div>
       )}
@@ -334,34 +335,13 @@ export default function CourseResourcesSection({
       )}
 
       <div className="flex items-center gap-2 mt-3">
-        {/* The same two icons the Files section uses for the same two acts —
-            a shelf for taking one off it, a plus for making one. */}
-        <button onClick={openPicker} disabled={busy} className={`${btn} inline-flex items-center gap-1.5`}>
-          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z" />
-          </svg>
-          {/* One phrase for taking something off a shelf, wherever it is
-              taken: this said "Add venue material", the maps section said
-              "Choose from the library" and the MEDEVAC banner said "Find
-              one", for the same act. */}
-          From the library
-        </button>
-        {/* One way in for something new, whichever shape it arrives in. The
-            dialog asks for a link or takes the file. */}
-        <button
-          onClick={() => { setLinkKind(undefined); setLinkOpen(true) }}
+        <AddButtons
           disabled={busy}
-          className={`${btn} inline-flex items-center gap-1.5`}
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M12 5v14M5 12h14" />
-          </svg>
-          {scope === 'venue' ? 'Add new venue material' : 'Add new reference material'}
-        </button>
-        {/* Adding a second link for a resource already on the shelf is usually
-            meant as an edit to that entry, and until there was a way through
-            to it the only door out of this section made a duplicate. Opens in
-            its own tab: it is an errand beside this page, not away from it. */}
+          noun="file"
+          onFromLibrary={openPicker}
+          onAddLink={() => { setLinkKind(undefined); setLinkOpen(true) }}
+          onAddFile={(files) => upload(files)}
+        />
         {/* The shelf this section is a view of. It said Reference on both,
             so the venue half — maps, beta, plans, permits, all filed by
             place — offered a door to a shelf none of its rows are on. */}

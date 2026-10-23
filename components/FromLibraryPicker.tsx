@@ -36,6 +36,8 @@ export default function FromLibraryPicker({
   onAdd,
   onPick,
   title = 'From the library',
+  open: openProp,
+  onOpenChange,
 }: {
   onOpen: () => Promise<LibraryChoice[]>
   /** Where the thing being added is a row somewhere — a course file. */
@@ -44,9 +46,17 @@ export default function FromLibraryPicker({
       a meeting point's. Nothing is saved until the composer is. */
   onPick?: (rows: LibraryChoice[]) => void
   title?: string
+  /** Controlled, where the button that opens it lives somewhere else — the
+      three add buttons are one component now, and this is the panel one of
+      them opens. */
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
 }) {
   const router = useRouter()
-  const [open, setOpen] = useState(false)
+  const [openState, setOpenState] = useState(false)
+  const controlled = openProp !== undefined
+  const open = controlled ? openProp : openState
+  const setOpen = (v: boolean) => (controlled ? onOpenChange?.(v) : setOpenState(v))
   const [busy, setBusy] = useState(false)
   const [rows, setRows] = useState<LibraryChoice[] | null>(null)
   const [picked, setPicked] = useState<Set<string>>(new Set())
@@ -87,6 +97,10 @@ export default function FromLibraryPicker({
     }
   }
 
+  // Controlled: somebody else draws the button, so there is nothing to draw
+  // when it is closed.
+  if (!open && controlled) return null
+
   if (!open) {
     return (
       <button
@@ -102,6 +116,8 @@ export default function FromLibraryPicker({
       </button>
     )
   }
+
+  if (controlled && open && !rows && !busy && !error) void show()
 
   const needle = q.trim().toLowerCase()
   const shown = (rows ?? [])

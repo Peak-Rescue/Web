@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { errorFrom, type ActionResult } from '@/lib/action-result'
 import AddMapDialog from '@/components/AddMapDialog'
+import AddButtons from '@/components/AddButtons'
 import { type LibraryAudience, shelfLink } from '@/lib/library'
 import { AudiencePills } from '@/components/AudiencePills'
 import StateBadge from '@/components/StateBadge'
@@ -246,18 +247,11 @@ export default function CourseMapsSection({
       )}
 
       <div className="flex items-center gap-2 mt-3">
-        <button onClick={openPicker} disabled={busy} className={`${btn} inline-flex items-center gap-1.5`}>
-          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z" />
-          </svg>
-          From the library
-        </button>
-        <button onClick={() => setLinkOpen(true)} disabled={busy} className={`${btn} inline-flex items-center gap-1.5`}>
-          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M12 5v14M5 12h14" />
-          </svg>
-          Add a new map
-        </button>
+        <AddButtons
+          disabled={busy}
+          onFromLibrary={openPicker}
+          onAddLink={() => setLinkOpen(true)}
+        />
         {/* Adding a second link for a map already on the shelf is usually
             meant as an edit to that entry, and until there was a way through
             to it the only door out of this section made a duplicate. Opens in
