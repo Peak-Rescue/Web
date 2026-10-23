@@ -63,6 +63,9 @@ export default function ClientTree({
   // what it is over is read from the document at the pointer. On a touch
   // screen the handle is what drags, so a row press can still scroll.
   const press = useRef<{ id: string; x: number; y: number; active: boolean } | null>(null)
+  // A drag that ends over the row it started on can still fire a click on
+  // the name; this keeps that click from opening the row.
+  const draggedJustNow = useRef(false)
   const ghost = useRef<HTMLDivElement>(null)
   const [dragId, setDragId] = useState<string | null>(null)
   const [over, setOver] = useState<string | null>(null)
@@ -118,6 +121,10 @@ export default function ClientTree({
       const p = press.current
       press.current = null
       if (!p?.active) return
+      draggedJustNow.current = true
+      setTimeout(() => {
+        draggedJustNow.current = false
+      }, 0)
       setDragId(null)
       setOver(null)
       const t = targetAt(ev.clientX, ev.clientY)
@@ -183,6 +190,13 @@ export default function ClientTree({
       return next
     })
 
+  // A click on a name, unless that press was the start of a drag.
+  function openFromName(n: ClientNode) {
+    if (draggedJustNow.current) return
+    if (n.is_group) toggle(n.id)
+    else setOpen(open?.id === n.id && open.mode === 'people' ? null : { id: n.id, mode: 'people' })
+  }
+
   const renderNode = (n: ClientNode) => {
     if (visible && !visible.has(n.id)) return null
     const shut = !visible && collapsed.has(n.id)
@@ -219,14 +233,27 @@ export default function ClientTree({
             {shut ? '▸' : '▾'}
           </button>
           <span className="min-w-0 flex-1">
+            {/* The name is the way in: a client opens to its note and its
+                people, a sector to what is filed under it. A press that turns
+                into a drag is not a click, so dragging by the name still
+                works. */}
             <span
-              className={
+              role="button"
+              tabIndex={0}
+              aria-expanded={n.is_group ? !shut : here === 'people'}
+              onClick={() => openFromName(n)}
+              onKeyDown={(e) => {
+                if (e.key !== 'Enter' && e.key !== ' ') return
+                e.preventDefault()
+                openFromName(n)
+              }}
+              className={`cursor-pointer hover:underline decoration-zinc-600 underline-offset-4 ${
                 sector
                   ? 'text-sm font-semibold uppercase tracking-wide text-zinc-300'
                   : subsector
                     ? 'text-xs font-semibold uppercase tracking-wide text-zinc-400'
                     : 'text-sm text-zinc-100'
-              }
+              }`}
             >
               {n.name}
             </span>
@@ -239,6 +266,11 @@ export default function ClientTree({
             {!n.is_group && (courseCounts[n.id] ?? 0) > 0 && (
               <span className="ml-2 text-xs text-zinc-600">
                 {courseCounts[n.id]} {courseCounts[n.id] === 1 ? 'course' : 'courses'}
+              </span>
+            )}
+            {!n.is_group && (n.contacts ?? []).length > 0 && (
+              <span className="ml-2 text-xs text-zinc-600">
+                {(n.contacts ?? []).length} {(n.contacts ?? []).length === 1 ? 'person' : 'people'}
               </span>
             )}
             {n.aliases.length > 0 && <span className="ml-2 text-xs text-zinc-500">also {n.aliases.join(', ')}</span>}
@@ -271,18 +303,6 @@ export default function ClientTree({
             <button type="button" className={btn.quiet} onClick={() => setOpen({ id: n.id, mode: 'edit' })}>
               Edit
             </button>
-            {/* Their people, where their people live. A POC filed from a
-                course had nowhere to be read or corrected — the next course
-                for the same client started from a blank list. */}
-            {!n.is_group && (
-              <button
-                type="button"
-                className={btn.quiet}
-                onClick={() => setOpen(here === 'people' ? null : { id: n.id, mode: 'people' })}
-              >
-                {(n.contacts ?? []).length > 0 ? `People ${(n.contacts ?? []).length}` : 'People'}
-              </button>
-            )}
             {sector && (
               <>
                 <button type="button" className={btn.quiet} disabled={pending} title="Move this sector up" onClick={() => run(() => shiftSector(n.id, -1))}>
@@ -318,6 +338,9 @@ export default function ClientTree({
             onSave={(v) => run(() => updateClient(n.id, v))}
           />
         )}
+        {/* Their people, where their people live. A POC filed from a course
+            had nowhere to be read or corrected — the next course for the same
+            client started from a blank list. Opened by clicking the name. */}
         {here === 'people' && (
           <div style={{ marginLeft: n.depth * 24 + 28 }} className="my-2 p-3 rounded border border-zinc-800 bg-zinc-900/60">
             {n.note && <p className="text-[11px] text-amber-400/80 mb-2">{n.note}</p>}
