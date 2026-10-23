@@ -956,6 +956,11 @@ export default async function CourseView({
     client: o.client_name,
   }))
   const coursePocs = parseContacts(inst.contacts)
+  // The course's own local contacts — the ranger district, the landowner.
+  // Read beside the client's people rather than only inside the form that
+  // adds them.
+  const placeContacts = ((inst.place_contacts ?? []) as { name: string; phone?: string; email?: string }[])
+    .filter((c) => c.name?.trim())
 
   // Loaded for staff only: the catalog is every item we own, and a student's
   // page has no use for it.
@@ -1716,7 +1721,7 @@ export default async function CourseView({
                       course={inst as unknown as React.ComponentProps<typeof CourseDetailsEditor>['course']}
                       kind={jobNotCourse ? 'job' : 'course'}
                       contacts={coursePocs}
-                      placeContacts={(inst.place_contacts ?? []) as { name: string; phone?: string; email?: string }[]}
+                      placeContacts={placeContacts}
                       venues={(venueRows ?? []) as unknown as React.ComponentProps<typeof CourseDetailsEditor>['venues']}
                       offDays={(offDays ?? []) as unknown as React.ComponentProps<typeof CourseDetailsEditor>['offDays']}
                       others={otherCourses}
@@ -1804,7 +1809,39 @@ export default async function CourseView({
                       </div>
                     </div>
                   )}
-                  {!inst.client_name && coursePocs.length === 0 && (
+                  {/* The locals, read the same way as the client's people.
+                      They were only visible inside the editor — added to a
+                      course and then gone until somebody opened the form to
+                      add another, which is how you end up with the ranger's
+                      number typed twice. */}
+                  {placeContacts.length > 0 && (
+                    <div className="mt-5">
+                      <p className="text-[11px] uppercase tracking-wide text-zinc-500 mb-2">
+                        Local {placeContacts.length > 1 ? 'contacts' : 'contact'}
+                      </p>
+                      <div className="grid grid-cols-[repeat(auto-fit,minmax(210px,1fr))] gap-x-6 gap-y-4">
+                        {placeContacts.map((c, i) => (
+                          <div key={i} className="text-sm min-w-0">
+                            <p className="text-zinc-200 truncate">{c.name}</p>
+                            {c.email && (
+                              <a
+                                href={`mailto:${c.email}`}
+                                className="block text-zinc-400 hover:text-zinc-100 transition-colors truncate"
+                              >
+                                {c.email}
+                              </a>
+                            )}
+                            {c.phone && (
+                              <p className="text-zinc-400 tabular-nums truncate">
+                                <PhoneText value={c.phone} format className="hover:text-zinc-100 transition-colors" />
+                              </p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {!inst.client_name && coursePocs.length === 0 && placeContacts.length === 0 && (
                     <p className="text-xs text-zinc-600">No client or contact yet.</p>
                   )}
                 </EditInPlace>
