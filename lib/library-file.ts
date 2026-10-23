@@ -20,7 +20,7 @@ import { refuse } from '@/lib/action-result'
 // sharing.
 
 const DOC_BUCKET = 'task-documents'
-const LIBRARY_FOLDER = 'Peak Rescue Library'
+const LIBRARY_FOLDER = 'Library'
 
 export async function fileToLibrary(
   admin: ReturnType<typeof createAdminClient>,

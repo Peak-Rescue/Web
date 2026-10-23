@@ -52,10 +52,16 @@ export function folderUrl(folderId: string): string {
   return `https://drive.google.com/drive/folders/${folderId}`
 }
 
-export async function createAlbumFolder(name: string): Promise<string> {
-  const parent = process.env.DRIVE_PHOTOS_PARENT
-  if (!parent) throw new Error('Drive albums not configured: DRIVE_PHOTOS_PARENT')
+// The drive holds the portal's two kinds of thing side by side — course albums
+// in one folder, the library's copies in another — rather than albums loose at
+// the root with the library wedged between them.
+const ALBUMS_FOLDER = 'Course Photos'
 
+export async function createAlbumFolder(name: string): Promise<string> {
+  return createFolder(name, await findOrCreateFolder(ALBUMS_FOLDER))
+}
+
+async function createFolder(name: string, parent: string): Promise<string> {
   const res = await driveFetch('files?supportsAllDrives=true&fields=id', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -286,10 +292,10 @@ export async function uploadFileToFolder(
   return id
 }
 
-/** A folder under the photos parent, made once and found by name after that.
-    Used for the library's flat backup folder — one folder, no shelves: Drive
-    is where the bytes also are, not a second filing system to keep in step
-    with this one. */
+/** A folder at the drive's root, made once and found by name after that: the
+    albums folder, and the library's flat backup folder — one folder, no
+    shelves: Drive is where the bytes also are, not a second filing system to
+    keep in step with this one. */
 export async function findOrCreateFolder(name: string): Promise<string> {
   const parent = process.env.DRIVE_PHOTOS_PARENT
   if (!parent) throw new Error('Drive not configured: DRIVE_PHOTOS_PARENT')
@@ -304,5 +310,5 @@ export async function findOrCreateFolder(name: string): Promise<string> {
     const { files } = (await res.json()) as { files: { id: string }[] }
     if (files?.[0]?.id) return files[0].id
   }
-  return createAlbumFolder(name)
+  return createFolder(name, parent)
 }
