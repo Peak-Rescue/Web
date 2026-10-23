@@ -3,6 +3,7 @@ import { albumsEnabled, findOrCreateFolder, uploadFileToFolder } from '@/lib/dri
 import { bucketForKind } from '@/lib/library'
 import { classify, NEEDS_SORTING } from '@/lib/sorting'
 import { refuse } from '@/lib/action-result'
+import { after } from 'next/server'
 
 // Filing an uploaded file to the library.
 //
@@ -101,7 +102,12 @@ export async function fileToLibrary(
   // Best effort, and deliberately after the row exists: the library works
   // without Drive, and a Drive outage must not be the reason a file could not
   // be filed.
-  void backupToDrive(admin, created.id, path, filename)
+  //
+  // `after`, not a floated promise: downloading the file back out of storage
+  // and pushing it to Drive took seconds, and a floated promise still holds
+  // the invocation open — so the person who pressed Upload waited for a copy
+  // they never asked about.
+  after(() => backupToDrive(admin, created.id, path, filename))
 
   return { id: created.id }
 }

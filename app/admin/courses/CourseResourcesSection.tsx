@@ -208,11 +208,13 @@ export default function CourseResourcesSection({
         if (upErr) throw new Error(`Upload failed for “${picked[i].name}”: ${upErr.message}`)
         uploads.push({ path: prepared.targets[i].path, filename: picked[i].name })
       }
-      return finalizeResourceUploads(
+      const chosenKind = filing?.kind || kind || uploadKind || 'reference'
+      const chosenAudience: LibraryAudience = filing?.audience === 'shared' ? 'shared' : 'internal'
+      const done = await finalizeResourceUploads(
         instanceId,
         uploads,
-        filing?.kind || kind || uploadKind || 'reference',
-        filing?.audience === 'shared' ? 'shared' : 'internal',
+        chosenKind,
+        chosenAudience,
         filing && {
           audience: filing.audience as 'internal' | 'shared' | 'admin',
           place: filing.place,
@@ -223,6 +225,28 @@ export default function CourseResourcesSection({
           courseTypes: filing.course_types,
         }
       )
+      // On screen the moment it is written, like a row picked off the shelf.
+      // The course page is rebuilt before the new row reaches it, which is a
+      // second or two of the section looking exactly as it did before the
+      // upload — and an upload that shows nothing is an upload that failed,
+      // as far as anyone watching can tell.
+      if (!done?.error) {
+        setJustAdded((prev) => [
+          ...prev,
+          ...uploads.map((u) => ({
+            // The same title fileToLibrary gives the row, so the server's
+            // copy displaces this one instead of sitting beside it.
+            id: `pending:${u.path}`,
+            label: u.filename.replace(/\.[a-z0-9]{1,5}$/i, '') || u.filename,
+            url: null,
+            audience: chosenAudience,
+            fromLibrary: true,
+            kind: chosenKind,
+            libraryLocked: chosenAudience === 'internal',
+          })),
+        ])
+      }
+      return done
     })
     setUploadKind(undefined)
   }
