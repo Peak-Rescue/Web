@@ -3,7 +3,8 @@
 import { Fragment, useRef, useState } from 'react'
 import TrashIcon from '@/components/TrashIcon'
 import FileContactCard from '@/components/FileContactCard'
-import { placeContactsFor } from '@/app/admin/courses/resource-actions'
+import { keepContactsOnCourse, placeContactsFor } from '@/app/admin/courses/resource-actions'
+import { useRouter } from 'next/navigation'
 
 // Who to ring about where the course is — the ranger district, the landowner,
 // whoever holds the gate code.
@@ -35,6 +36,7 @@ export default function CoursePlaceContacts({
   instanceId: string
 }) {
   const [rows, setRows] = useState<Row[]>(initial)
+  const router = useRouter()
   const [filingRow, setFilingRow] = useState<number | null>(null)
   const [offered, setOffered] = useState<{ from: string; name: string; phones: string[]; emails: string[] }[] | null>(null)
   const [looking, setLooking] = useState(false)
@@ -165,9 +167,16 @@ export default function CoursePlaceContacts({
               <button
                 key={i}
                 type="button"
-                onClick={() => {
-                  write([...rows, { name: c.name, phone: c.phones[0], email: c.emails[0], filed: c.from }])
+                onClick={async () => {
+                  const row = { name: c.name, phone: c.phones[0], email: c.emails[0], filed: c.from }
+                  write([...rows, row])
                   setOffered(null)
+                  // Written now, not when the details form is next saved.
+                  // Picked off the venue and left in the browser, the import
+                  // vanished with the editor — which looks exactly like the
+                  // import not working.
+                  await keepContactsOnCourse(instanceId, [{ name: row.name, phone: row.phone, email: row.email }])
+                  router.refresh()
                 }}
                 className="w-full text-left text-xs px-1.5 py-1 rounded hover:bg-zinc-800/70 transition-colors"
               >

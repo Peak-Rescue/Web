@@ -558,16 +558,21 @@ export async function placeContactsFor(instanceId: string): Promise<
   const { admin } = await requireTeam(instanceId)
   const { data: inst } = await admin
     .from('course_instances')
-    .select('venue_id, region')
+    .select('venue_id, region, client_id')
     .eq('id', instanceId)
     .single()
   if (!inst) return []
 
-  const [{ data: venue }, { data: regions }] = await Promise.all([
+  const [{ data: venue }, { data: regions }, { data: client }] = await Promise.all([
     inst.venue_id
       ? admin.from('venues').select('name, region_code, contacts').eq('id', inst.venue_id).maybeSingle()
       : Promise.resolve({ data: null }),
     admin.from('region_info').select('region_code, contacts'),
+    // The client's people too (266). They are kept for exactly this: the
+    // next course for the same client should not start from a blank list.
+    inst.client_id
+      ? admin.from('clients').select('name, contacts').eq('id', inst.client_id).maybeSingle()
+      : Promise.resolve({ data: null }),
   ])
 
   // Read upward, the way the day reads its weather: the venue, then the state
@@ -591,6 +596,7 @@ export async function placeContactsFor(instanceId: string): Promise<
       }))
 
   return [
+    ...take(client?.contacts as unknown[], client?.name ?? 'the client'),
     ...take(venue?.contacts as unknown[], venue?.name ?? 'this venue'),
     ...take(region?.contacts, regionLabel(code) || 'the state'),
   ]
@@ -828,4 +834,36 @@ export async function libraryFilingOptions(): Promise<{
     // Grouped by sector, the way the library's own Client field reads it.
     clients: clientSelectGroups((clientRows ?? []) as ClientRow[]),
   }
+}
+
+/** Contacts imported onto the course, written now rather than when somebody
+    remembers to save the form they were imported into.
+ *
+ * The list lives in a hidden field on the details form, so picking a name
+ * off the venue put it in the browser and nowhere else — close the editor
+ * and it was gone, which is indistinguishable from the import not working. */
+export async function keepContactsOnCourse(
+  instanceId: string,
+  contacts: { name: string; phone?: string; email?: string }[]
+): Promise<ActionResult> {
+  const { admin } = await requireTeam(instanceId)
+  const { data: inst } = await admin
+    .from('course_instances')
+    .select('place_contacts')
+    .eq('id', instanceId)
+    .single()
+
+  const have = (inst?.place_contacts ?? []) as { name?: string }[]
+  const seen = new Set(have.map((c) => c.name?.trim().toLowerCase()))
+  const add = contacts
+    .map((c) => ({ name: c.name.trim(), phone: c.phone?.trim() || undefined, email: c.email?.trim() || undefined }))
+    .filter((c) => c.name && !seen.has(c.name.toLowerCase()))
+  if (add.length === 0) return
+
+  const { error } = await admin
+    .from('course_instances')
+    .update({ place_contacts: [...have, ...add] })
+    .eq('id', instanceId)
+  if (error) throw new Error(error.message)
+  revalidate(instanceId)
 }
