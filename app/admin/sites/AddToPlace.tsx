@@ -6,6 +6,7 @@ import { createSite, addPlaceLink, type PlaceScope } from './actions'
 import { createLibraryItem } from '@/app/admin/library/actions'
 import { errorFrom } from '@/lib/action-result'
 import TrashIcon from '@/components/TrashIcon'
+import ContactEditor from '@/components/ContactEditor'
 
 // Adding to a place, asking what it is first.
 //
@@ -18,10 +19,7 @@ import TrashIcon from '@/components/TrashIcon'
 // could make a map and a ropewiki link and nothing else: a canyon's beta is a
 // paragraph somebody writes, and a contact is a person with a number.
 
-// No 'contact'. The contacts list sits above this row with its own "+ Add
-// contact", and that one opens the editor the client page and the course use
-// — this one was three boxes and could file them nowhere else.
-type Kind = 'map' | 'beta' | 'plan' | 'permit' | 'weather'
+type Kind = 'map' | 'beta' | 'plan' | 'permit' | 'weather' | 'contact'
 
 
 const input =
@@ -68,6 +66,7 @@ export default function AddToPlace({
     // failure, so it is not a box anyone has to remember to tick.
     { k: 'permit', label: 'Permit' },
     { k: 'weather', label: 'Weather' },
+    { k: 'contact', label: 'Contact' },
   ]
 
   async function run(fn: () => Promise<{ error: string } | void>) {
@@ -214,6 +213,20 @@ export default function AddToPlace({
           </button>
           {back}
         </form>
+      )}
+
+      {/* The same editor the list above opens, and the same one a course
+          and a client use: a contact is a person with homes, not three
+          boxes. It is here as well because this row is where every other
+          thing a place holds is added from, and Contact missing from it
+          read as a place that cannot have one. */}
+      {kind === 'contact' && (
+        <ContactEditor
+          scope={scope}
+          scopeLabel={placeName}
+          rolePlaceholder="Ranger district, landowner…"
+          onDone={() => setKind(null)}
+        />
       )}
 
       {error && <p className="text-[11px] text-pr-red">{error}</p>}

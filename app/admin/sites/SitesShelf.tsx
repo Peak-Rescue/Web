@@ -233,7 +233,7 @@ export default function SitesShelf({
             scopeLabel={regionLabel(code) || code}
             contacts={contactsByOwner.get(`region:${code}`) ?? []}
             rolePlaceholder="Ranger district, landowner…"
-            addLabel="+ Add contact"
+            canAdd={false}
           />
         </div>
         {other.length > 0 && (
@@ -373,7 +373,7 @@ export default function SitesShelf({
                   scopeLabel={g.venue.name}
                   contacts={contactsByOwner.get(`venue:${g.venue.id}`) ?? []}
                   rolePlaceholder="Ranger district, landowner…"
-                  addLabel="+ Add contact"
+                  canAdd={false}
                 />
               </div>
             )}
