@@ -84,7 +84,17 @@ export default function CoursePlaceContacts({
               }}
             />
             {c.filed ? (
-              <span className="text-xs text-zinc-600" title={`On file with ${c.filed}`}>On file</span>
+              // Not an end state. The same person is often the client's and
+              // the venue's, and filing again adds them to the other list
+              // rather than moving them.
+              <button
+                type="button"
+                onClick={() => setRows((now) => now.map((x, k) => (k === i ? { ...x, filed: undefined } : x)))}
+                title={`On file with ${c.filed} — file them somewhere else too`}
+                className="text-xs text-zinc-600 hover:text-zinc-300 transition-colors"
+              >
+                On file · change
+              </button>
             ) : (
               <FileContactCard
                 instanceId={instanceId}

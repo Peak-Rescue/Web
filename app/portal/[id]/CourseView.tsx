@@ -806,6 +806,7 @@ export default async function CourseView({
       // never claim students while the row under it says instructors.
       audience: (item?.audience === 'internal' ? 'internal' : r.audience) as CourseResource['audience'],
       fromLibrary: Boolean(r.library_item_id),
+      libraryItemId: (r.library_item_id as string | null) ?? null,
       // So the section can say whether the course's med plan is here, which
       // is the one resource every course is supposed to have.
       kind: item?.kind ?? null,
@@ -832,6 +833,7 @@ export default async function CourseView({
       url: item?.url ?? (r.url as string | null),
       audience: (r.audience_overridden ? r.audience : item?.audience ?? r.audience) as CourseMap['audience'],
       fromLibrary: Boolean(r.library_item_id),
+      libraryItemId: (r.library_item_id as string | null) ?? null,
       libraryAudience: (item?.audience as 'internal' | 'shared' | undefined) ?? null,
       overridden: Boolean(r.audience_overridden),
       // Sharing a map with students only shows them something if one of its

@@ -29,6 +29,10 @@ export type CourseResource = {
   url: string | null
   audience: LibraryAudience
   fromLibrary: boolean
+  /** Which row on the shelf, so "edit its filing" is a link rather than a
+      search. The shelf holds three hundred documents; being sent to it is
+      not being sent to this one. */
+  libraryItemId?: string | null
   /** The library item's type, where it came from one. */
   kind?: string | null
   /** The place the library row is filed under, when it is filed under one.
@@ -260,7 +264,9 @@ export default function CourseResourcesSection({
               )}
               {r.fromLibrary ? (
                 <Link
-                  href={shelfLink(scope === 'venue' ? 'venue' : 'resource', { status: 'all' }).href}
+                  href={r.libraryItemId
+                    ? `/admin/library?item=${r.libraryItemId}`
+                    : shelfLink(scope === 'venue' ? 'venue' : 'resource', { status: 'all' }).href}
                   className={`text-[11px] transition-colors ${
                     r.libraryLocked
                       ? 'text-amber-600/80 hover:text-amber-400'

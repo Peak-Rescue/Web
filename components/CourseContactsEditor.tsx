@@ -132,8 +132,17 @@ export default function CourseContactsEditor({
             <div className="flex items-center justify-between mb-1">
               <label className="block text-xs text-zinc-400">{labelFor(pocs, i)}</label>
               <span className="flex items-center gap-1.5">
-                {instanceId && (filed[i]
-                  ? <span className="text-[11px] text-zinc-600" title={`On file with ${filed[i]}`}>On file</span>
+                {instanceId && (filed[i] && filingRow !== i
+                  ? (
+                    <button
+                      type="button"
+                      onClick={() => setFilingRow(i)}
+                      title={`On file with ${filed[i]} — file them somewhere else too`}
+                      className="text-[11px] text-zinc-600 hover:text-zinc-300 transition-colors"
+                    >
+                      On file ·  change
+                    </button>
+                  )
                   : (
                     <button
                       type="button"
