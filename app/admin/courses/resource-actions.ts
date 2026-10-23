@@ -558,48 +558,65 @@ export async function placeContactsFor(instanceId: string): Promise<
   const { admin } = await requireTeam(instanceId)
   const { data: inst } = await admin
     .from('course_instances')
-    .select('venue_id, region, client_id')
+    .select('venue_id, region, client_id, venues(name, region_code), clients(name)')
     .eq('id', instanceId)
     .single()
   if (!inst) return []
 
-  const [{ data: venue }, { data: regions }, { data: client }] = await Promise.all([
-    inst.venue_id
-      ? admin.from('venues').select('name, region_code, contacts').eq('id', inst.venue_id).maybeSingle()
-      : Promise.resolve({ data: null }),
-    admin.from('region_info').select('region_code, contacts'),
-    // The client's people too (266). They are kept for exactly this: the
-    // next course for the same client should not start from a blank list.
-    inst.client_id
-      ? admin.from('clients').select('name, contacts').eq('id', inst.client_id).maybeSingle()
-      : Promise.resolve({ data: null }),
-  ])
-
-  // Read upward, the way the day reads its weather: the venue, then the state
-  // the venue is in — falling back to the course's own region when it has no
+  const venue = inst.venues as unknown as { name?: string; region_code?: string | null } | null
+  const client = inst.clients as unknown as { name?: string } | null
+  // Read upward, the way the day reads its weather: the venue, then the
+  // state it is in — falling back to the course's own region when it has no
   // venue, which is most of them.
   const code = venue?.region_code ?? inst.region ?? null
-  const region = ((regions ?? []) as { region_code: string; contacts: unknown[] }[])
-    .find((r) => r.region_code === code)
 
-  type PlaceContact = { name?: string; role?: string; phone?: string; email?: string }
-  const take = (rows: unknown[] | null | undefined, from: string) =>
-    ((rows ?? []) as PlaceContact[])
-      .filter((c) => c.name)
-      .map((c) => ({
-        from,
-        // The role is kept in the name, because a course contact has nowhere
-        // else to put it and "Ranger district" alone does not say what for.
-        name: c.role ? `${c.name} (${c.role})` : String(c.name),
-        phones: c.phone ? [c.phone] : [],
-        emails: c.email ? [c.email] : [],
-      }))
+  // One row per person (267), whichever of the three knows them. Somebody
+  // known from the client and the venue was two rows in this list until
+  // they stopped being two records.
+  const ors = [
+    inst.client_id ? `client_id.eq.${inst.client_id}` : null,
+    inst.venue_id ? `venue_id.eq.${inst.venue_id}` : null,
+    code ? `region_code.eq.${code}` : null,
+  ].filter(Boolean)
+  if (ors.length === 0) return []
 
-  return [
-    ...take(client?.contacts as unknown[], client?.name ?? 'the client'),
-    ...take(venue?.contacts as unknown[], venue?.name ?? 'this venue'),
-    ...take(region?.contacts, regionLabel(code) || 'the state'),
-  ]
+  const { data: links } = await admin
+    .from('contact_links')
+    .select('contact_id, client_id, venue_id, region_code, contacts(id, name, role, phone, email)')
+    .or(ors.join(','))
+
+  type Row = {
+    contact_id: string
+    client_id: string | null
+    venue_id: string | null
+    region_code: string | null
+    contacts: { id: string; name: string; role: string | null; phone: string | null; email: string | null } | null
+  }
+  const seen = new Map<string, { from: string[]; name: string; phones: string[]; emails: string[] }>()
+  for (const l of ((links ?? []) as unknown as Row[])) {
+    const p = l.contacts
+    if (!p?.name) continue
+    const from = l.client_id
+      ? client?.name ?? 'the client'
+      : l.venue_id
+        ? venue?.name ?? 'this venue'
+        : regionLabel(String(l.region_code)) || String(l.region_code)
+    const have = seen.get(p.id)
+    if (have) {
+      if (!have.from.includes(from)) have.from.push(from)
+      continue
+    }
+    seen.set(p.id, {
+      from: [from],
+      // The role is kept in the name, because a course contact has nowhere
+      // else to put it and "Ranger district" alone does not say what for.
+      name: p.role ? `${p.name} (${p.role})` : p.name,
+      phones: p.phone ? [p.phone] : [],
+      emails: p.email ? [p.email] : [],
+    })
+  }
+
+  return [...seen.values()].map((c) => ({ ...c, from: c.from.join(', ') }))
 }
 
 export type ContactShelf = 'client' | 'venue' | 'region'
@@ -651,79 +668,41 @@ export async function fileContactToPlace(
   shelf: ContactShelf,
   contact: { name: string; role?: string; phone?: string; email?: string; note?: string },
   /** A local contact typed into the course's own list, which is saved with
-      the details form. Filing them felt like saving them and was not: the
-      row lived in the browser until somebody pressed Save on a form two
-      sections up, and closing the editor lost them. Said yes here, the
-      course keeps them too. */
+      the details form. Said yes here, the course keeps them too. */
   alsoKeepOnCourse = false
 ): Promise<{ error: string } | { filedWith: string }> {
   const { admin, client, venue, region } = await contactShelves(instanceId)
   const name = contact.name.trim()
   if (!name) return { error: 'A contact needs a name.' }
 
-  if (alsoKeepOnCourse) {
-    const { data: inst } = await admin
-      .from('course_instances')
-      .select('place_contacts')
-      .eq('id', instanceId)
-      .single()
-    const have = (inst?.place_contacts ?? []) as { name?: string }[]
-    if (!have.some((c) => c.name?.trim().toLowerCase() === name.toLowerCase())) {
-      const { error } = await admin
-        .from('course_instances')
-        .update({
-          place_contacts: [
-            ...have,
-            { name, phone: contact.phone?.trim() || undefined, email: contact.email?.trim() || undefined },
-          ],
-        })
-        .eq('id', instanceId)
-      if (error) throw new Error(error.message)
-      revalidate(instanceId)
+  if (alsoKeepOnCourse) await keepContactsOnCourse(instanceId, [{ name, phone: contact.phone, email: contact.email }])
+
+  const target =
+    shelf === 'client' ? client && { label: client.label, scope: { clientId: client.id } as const }
+    : shelf === 'venue' ? venue && { label: venue.label, scope: { venueId: venue.id } as const }
+    : region && { label: region.label, scope: { regionCode: region.code } as const }
+  if (!target) {
+    return {
+      error:
+        shelf === 'client'
+          ? 'Say which client this course is for first.'
+          : 'Say where the course is first, so there is a place to file them with.',
     }
   }
 
-  // The client keeps its own people (266). Same question, a different noun
-  // underneath — which is why it is the same control and the same verb.
-  if (shelf === 'client') {
-    if (!client) return { error: 'Say which client this course is for first.' }
-    const { data: held } = await admin.from('clients').select('contacts').eq('id', client.id).maybeSingle()
-    const have = (held?.contacts ?? []) as { name?: string }[]
-    if (have.some((c) => c.name?.trim().toLowerCase() === name.toLowerCase())) {
-      return { filedWith: client.label }
-    }
-    const row = {
-      name: name.slice(0, 120),
-      role: contact.role?.trim().slice(0, 80) || undefined,
-      phone: contact.phone?.trim().slice(0, 40) || undefined,
-      email: contact.email?.trim().slice(0, 120) || undefined,
-      note: contact.note?.trim().slice(0, 300) || undefined,
-    }
-    const { error } = await admin
-      .from('clients')
-      .update({ contacts: [...have, row].slice(0, 24) })
-      .eq('id', client.id)
-    if (error) throw new Error(error.message)
-    revalidatePath('/admin/clients')
-    return { filedWith: client.label }
-  }
-
-  const target = shelf === 'venue' ? venue : region
-  if (!target) return { error: 'Say where the course is first, so there is a place to file them with.' }
-  const scope = shelf === 'venue' ? { venueId: venue!.id } : { regionCode: region!.code }
-
-  // Already on file there — most often picked from that list and then given a
-  // new number. Saying so beats a second copy of the person.
-  const { data: held } = 'venueId' in scope
-    ? await admin.from('venues').select('contacts').eq('id', scope.venueId).maybeSingle()
-    : await admin.from('region_info').select('contacts').eq('region_code', scope.regionCode).maybeSingle()
-  const key = name.toLowerCase()
-  if (((held?.contacts ?? []) as { name?: string }[]).some((c) => c.name?.trim().toLowerCase() === key)) {
-    return { filedWith: target.label }
-  }
-
-  const refused = await addPlaceContact(scope, { ...contact, name })
-  if (refused) return refused
+  // One person, one row, however many places know them (267). The book's
+  // own save does the matching — a name with the same number is them, not a
+  // second one of them — so filing with the client and the venue is two
+  // links rather than two copies.
+  const { saveContact } = await import('@/app/admin/contacts/actions')
+  const saved = await saveContact(target.scope, {
+    name,
+    role: contact.role,
+    phone: contact.phone,
+    email: contact.email,
+    note: contact.note,
+  })
+  if ('error' in saved) return saved
   return { filedWith: target.label }
 }
 

@@ -1,5 +1,6 @@
 import SiteRow from './SiteRow'
-import PlaceContacts from './PlaceContacts'
+import ContactBook from '@/components/ContactBook'
+import { type BookContact } from '@/app/admin/contacts/actions'
 import JumpToNewRow from '@/components/JumpToNewRow'
 import AddToPlace from './AddToPlace'
 import AddLevel from './AddLevel'
@@ -31,6 +32,7 @@ export default function SitesShelf({
   venues,
   maps,
   regionInfo,
+  contactsByOwner,
   dayCount,
   added,
 }: {
@@ -41,6 +43,9 @@ export default function SitesShelf({
   maps: LibraryItem[]
   /** Weather, contacts and notes held against a state or a country. */
   regionInfo: Map<string, { links: VenueLink[]; contacts: VenueContact[]; notes: string | null }>
+  /** People by the place that knows them, keyed `venue:<id>` or
+      `region:<code>` (267). */
+  contactsByOwner: Map<string, BookContact[]>
   /** How many schedule days point at each site. */
   dayCount: Map<string, number>
   /** A site just created, to scroll to. */
@@ -196,7 +201,7 @@ export default function SitesShelf({
     const maps = items.filter((i) => !['route', 'medevac', 'permit'].includes(i.kind))
     const weather = (info?.links ?? []).filter((l) => l.kind === 'weather')
     const other = (info?.links ?? []).filter((l) => l.kind !== 'weather')
-    const contacts = info?.contacts ?? []
+    const contacts = contactsByOwner.get(`region:${code}`) ?? []
     // Always rendered, because the add forms live here too: a state with
     // nothing in it is exactly where something is about to be put.
     const anything =
@@ -221,9 +226,11 @@ export default function SitesShelf({
             ))}
           </div>
         )}
-        {contacts.length > 0 && (
-          <PlaceContacts scope={{ regionCode: code }} contacts={contacts} />
-        )}
+        <ContactBook
+          scope={{ regionCode: code }}
+          contacts={contactsByOwner.get(`region:${code}`) ?? []}
+          rolePlaceholder="Ranger district, landowner…"
+        />
         {other.length > 0 && (
           <div className="flex flex-wrap gap-1.5">
             {other.map((l, i) => (
@@ -349,10 +356,14 @@ export default function SitesShelf({
               </div>
             )}
 
-            {g.venue && (g.venue.contacts ?? []).length > 0 && (
+            {g.venue && (
               <div className="mb-2">
                 <p className="text-[10px] uppercase tracking-wide text-zinc-700 mb-1.5">Contacts</p>
-                <PlaceContacts scope={{ venueId: g.venue.id }} contacts={g.venue.contacts} />
+                <ContactBook
+                  scope={{ venueId: g.venue.id }}
+                  contacts={contactsByOwner.get(`venue:${g.venue.id}`) ?? []}
+                  rolePlaceholder="Ranger district, landowner…"
+                />
               </div>
             )}
 

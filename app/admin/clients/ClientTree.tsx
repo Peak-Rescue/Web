@@ -1,6 +1,7 @@
 'use client'
 
-import ContactList from '@/components/ContactList'
+import ContactBook from '@/components/ContactBook'
+import { type BookContact } from '@/app/admin/contacts/actions'
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { btn } from '@/lib/ui'
@@ -13,7 +14,7 @@ import {
   type ClientNode,
   type ClientRow,
 } from '@/lib/clients'
-import { addClient, deleteClient, mergeClient, moveClient, saveClientContacts, setSignoff, shiftSector, updateClient } from './actions'
+import { addClient, deleteClient, mergeClient, moveClient, setSignoff, shiftSector, updateClient } from './actions'
 import { NewClient } from '@/components/ClientPicker'
 
 type Signoff = { profileId: string; initials: string; name: string }
@@ -35,10 +36,13 @@ export default function ClientTree({
   signoffs,
   me,
   courseCounts,
+  contactsByOwner,
 }: {
   rows: ClientRow[]
   signoffs: Record<string, Signoff[]>
   me: string
+  /** The people each client is known for, keyed `client:<id>` (267). */
+  contactsByOwner?: Record<string, BookContact[]>
   /** How many courses point at each client. A client with courses is merged,
       never deleted, and the count says which is the real one of two. */
   courseCounts: Record<string, number>
@@ -344,18 +348,10 @@ export default function ClientTree({
         {here === 'people' && (
           <div style={{ marginLeft: n.depth * 24 + 28 }} className="my-2 p-3 rounded border border-zinc-800 bg-zinc-900/60">
             {n.note && <p className="text-[11px] text-amber-400/80 mb-2">{n.note}</p>}
-            <ContactList
-              contacts={n.contacts ?? []}
+            <ContactBook
+              scope={{ clientId: n.id }}
+              contacts={contactsByOwner?.[`client:${n.id}`] ?? []}
               rolePlaceholder="Booking, safety, billing…"
-              addLabel="+ Add someone"
-              // Saved on the spot rather than through run(), which closes
-              // the panel on success — editing three people in a row should
-              // not close the list between each.
-              onSave={async (next) => {
-                const res = await saveClientContacts(n.id, next)
-                if ('error' in res && res.error) setError(res.error)
-                else router.refresh()
-              }}
             />
           </div>
         )}

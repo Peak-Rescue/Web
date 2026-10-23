@@ -1,4 +1,8 @@
 import { createAdminClient } from '@/lib/supabase/admin'
+import { type BookContact } from '@/app/admin/contacts/actions'
+
+type BookPerson = { id: string; name: string; role: string | null; phone: string | null; email: string | null; note: string | null }
+type LinkRow = { contact_id: string; client_id: string | null; venue_id: string | null; region_code: string | null }
 import { type Site, type MeetingPointRecord } from '@/lib/sites'
 import { type LibraryItem, type Venue, type VenueContact, type VenueLink } from '@/lib/library'
 
@@ -6,7 +10,7 @@ import { type LibraryItem, type Venue, type VenueContact, type VenueLink } from 
     page and the library shelf — cannot drift apart. */
 export async function loadSitesShelf() {
   const admin = createAdminClient()
-  const [{ data: siteRows }, { data: venueRows }, { data: dayRows }, { data: pointRows }, { data: mapRows }, { data: regionRows }] = await Promise.all([
+  const [{ data: siteRows }, { data: venueRows }, { data: dayRows }, { data: pointRows }, { data: mapRows }, { data: regionRows }, { data: peopleRows }, { data: linkRows }] = await Promise.all([
     admin.from('sites').select('id, venue_id, region_code, name, kind, beta, meeting_point_id, usual_meeting_time, coords, links, active').order('name'),
     admin.from('venues').select('id, name, region, region_code, client_name, notes, links, contacts, active').order('name'),
     admin.from('schedule_days').select('site_id').not('site_id', 'is', null),
@@ -30,6 +34,11 @@ export async function loadSitesShelf() {
       .neq('status', 'archived')
       .order('title'),
     admin.from('region_info').select('region_code, links, contacts, notes'),
+    // Who is known from where (267). One query for the lot: twenty people
+    // and six links, and the shelf draws them under every place that knows
+    // them.
+    admin.from('contacts').select('id, name, role, phone, email, note'),
+    admin.from('contact_links').select('contact_id, client_id, venue_id, region_code'),
   ])
 
   const sites = (siteRows ?? []) as Site[]
@@ -56,5 +65,29 @@ export async function loadSitesShelf() {
     regionInfo.set(r.region_code, { links: r.links ?? [], contacts: r.contacts ?? [], notes: r.notes })
   }
 
-  return { sites, venues, points, maps, regionInfo, siteCount, dayCount }
+  // People by the place that knows them, with the other places they are
+  // known from on the row — which is the line that used to be a duplicate.
+  const venueName = new Map(venues.map((v) => [v.id, v.name]))
+  const people = new Map((peopleRows ?? []).map((p) => [p.id as string, p as BookPerson]))
+  const byOwner = new Map<string, BookContact[]>()
+  const owners = new Map<string, { key: string; label: string }[]>()
+  for (const l of (linkRows ?? []) as LinkRow[]) {
+    const where = l.client_id
+      ? { key: `client:${l.client_id}`, label: 'a client' }
+      : l.venue_id
+        ? { key: `venue:${l.venue_id}`, label: venueName.get(l.venue_id) ?? 'a venue' }
+        : { key: `region:${l.region_code}`, label: String(l.region_code) }
+    owners.set(l.contact_id, [...(owners.get(l.contact_id) ?? []), where])
+  }
+  for (const l of (linkRows ?? []) as LinkRow[]) {
+    const person = people.get(l.contact_id)
+    if (!person) continue
+    const key = l.client_id ? `client:${l.client_id}` : l.venue_id ? `venue:${l.venue_id}` : `region:${l.region_code}`
+    byOwner.set(key, [
+      ...(byOwner.get(key) ?? []),
+      { ...person, alsoFrom: (owners.get(l.contact_id) ?? []).filter((o) => o.key !== key).map((o) => o.label) },
+    ])
+  }
+
+  return { sites, venues, points, maps, regionInfo, siteCount, dayCount, contactsByOwner: byOwner }
 }
