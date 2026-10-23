@@ -54,6 +54,10 @@ export default function FilingFields({
       list. Shown in the same place as the picker, so the form does not
       change shape between shelves. */
   fixedKind,
+  /** The dialog that files a new link already asked for these above the
+      panel; repeating them inside it is the same question twice. */
+  hideTitle = false,
+  hideLink = false,
   placeRequired = false,
   /** Disciplines the offerings already imply. Shown ticked and held there,
       because the matching derives them anyway and an unticked box that the
@@ -74,6 +78,8 @@ export default function FilingFields({
   /** The client tree, one group per sector. */
   clients?: ClientSelectGroup[]
   fixedKind?: string
+  hideTitle?: boolean
+  hideLink?: boolean
   /** 'library' adds the admins-only rung; a template has no such column. */
   audienceMode?: 'library' | 'template'
   linkSlot?: React.ReactNode
@@ -90,28 +96,32 @@ export default function FilingFields({
 
   return (
     <>
-      <div className="sm:col-span-2">
-        <label className={label}>Title</label>
-        <input
-          className={input}
-          value={value.title}
-          onChange={(e) => set({ title: e.target.value }, 'title')}
-        />
-      </div>
-
-      <div className="sm:col-span-2">
-        <label className={`${label} flex items-center gap-1.5`}>
-          Link
-          {linkHint && <InfoHint text={linkHint} />}
-        </label>
-        {linkSlot ?? (
+      {!hideTitle && (
+        <div className="sm:col-span-2">
+          <label className={label}>Title</label>
           <input
             className={input}
-            value={value.url}
-            onChange={(e) => set({ url: e.target.value }, 'url')}
+            value={value.title}
+            onChange={(e) => set({ title: e.target.value }, 'title')}
           />
-        )}
-      </div>
+        </div>
+      )}
+
+      {!hideLink && (
+        <div className="sm:col-span-2">
+          <label className={`${label} flex items-center gap-1.5`}>
+            Link
+            {linkHint && <InfoHint text={linkHint} />}
+          </label>
+          {linkSlot ?? (
+            <input
+              className={input}
+              value={value.url}
+              onChange={(e) => set({ url: e.target.value }, 'url')}
+            />
+          )}
+        </div>
+      )}
 
       <div>
         {/* Picking a type has already said which shelf — it is listed under

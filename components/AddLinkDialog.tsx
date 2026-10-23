@@ -2,6 +2,23 @@
 
 import { useEffect, useState } from 'react'
 import { type LibraryAudience } from '@/lib/library'
+import FilingFields, { type FilingValue } from '@/components/FilingFields'
+import { libraryFilingOptions } from '@/app/admin/courses/resource-actions'
+
+/** What the panel starts from: what the dialog already knows, and nothing
+    assumed about the rest. */
+const blankFiling = (kind: string, title: string): FilingValue => ({
+  title,
+  url: '',
+  kind,
+  note: '',
+  course_types: [],
+  audience: 'internal',
+  place: '',
+  client_id: null,
+  disciplines: [],
+  topicsRaw: '',
+})
 import KindOptions from '@/components/KindOptions'
 import { AudienceChoice } from '@/components/AudienceToggle'
 
@@ -40,8 +57,17 @@ export default function AddLinkDialog({
       both; withheld, it is a link dialog — a map is a CalTopo URL and there
       is no file to upload. The caller does the uploading; this only asks. */
   onUpload?: (files: FileList, kind: string, audience: LibraryAudience) => void
-  /** `kind` is only meaningful when the link is also being filed. */
-  onSubmit: (name: string, url: string, audience: LibraryAudience, toLibrary: boolean, kind: string) => void
+  /** `kind` is only meaningful when the link is also being filed; `filing`
+      carries the rest of what the library asks — where it is about, whose it
+      is, which offerings — when the person said to file it. */
+  onSubmit: (
+    name: string,
+    url: string,
+    audience: LibraryAudience,
+    toLibrary: boolean,
+    kind: string,
+    filing?: FilingValue
+  ) => void
   onCancel: () => void
 }) {
   const [name, setName] = useState('')
@@ -56,6 +82,21 @@ export default function AddLinkDialog({
   // plan, its evac plan, its permit — or it lands as untyped reference and
   // reads nowhere near where it belongs.
   const [kind, setKind] = useState(defaultKind ?? 'reference')
+  // Fetched the first time somebody says to file it, rather than loaded onto
+  // every course page for the one time in ten it is wanted.
+  const [options, setOptions] = useState<Awaited<ReturnType<typeof libraryFilingOptions>> | null>(null)
+  const [filing, setFiling] = useState<FilingValue | null>(null)
+  useEffect(() => {
+    if (!toLibrary || options) return
+    let live = true
+    libraryFilingOptions().then((o) => { if (live) setOptions(o) }).catch(() => {})
+    return () => { live = false }
+  }, [toLibrary, options])
+  // The type and the name keep coming from the fields above, so the panel is
+  // never asking for either of them twice.
+  useEffect(() => {
+    setFiling((f) => (f ? { ...f, kind, title: name } : f))
+  }, [kind, name])
 
   // Reopening starts a fresh link — reset the drafts during render
   // (React's "adjust state when a prop changes" pattern, no effect needed).
@@ -85,7 +126,8 @@ export default function AddLinkDialog({
   // Where the audience is asked, it is required — an unanswered question must
   // not resolve itself into the more restrictive answer behind your back.
   const canSubmit = !busy && url.trim().length > 0 && (!withAudience || audience !== null)
-  const submit = () => canSubmit && onSubmit(name, url, audience ?? 'internal', toLibrary, kind)
+  const submit = () =>
+    canSubmit && onSubmit(name, url, audience ?? 'internal', toLibrary, kind, toLibrary ? filing ?? undefined : undefined)
 
   return (
     <div
@@ -169,21 +211,27 @@ export default function AddLinkDialog({
           </label>
         )}
 
+        {/* The library's own filing panel, not a cut-down version of it.
+            Ticking the box used to ask one question — what is it — and file
+            the rest from the course: so a manual that is only ever about one
+            venue arrived carrying whatever place the course had, and saying
+            otherwise meant finding it in the library afterwards. */}
         {toLibrary && (
-          <label className="block mt-2 text-xs text-zinc-400">
-            What it is
-            <select
-              value={kind}
-              disabled={busy}
-              onChange={(e) => setKind(e.target.value)}
-              className="mt-1 w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-zinc-200 focus:outline-none focus:border-zinc-500"
-            >
-              {/* The library's own list. Five favourites here meant filing
-                  from a course and filing in the library asked the same
-                  question with different words available. */}
-              <KindOptions />
-            </select>
-          </label>
+          options ? (
+            <div className="mt-3 pt-3 border-t border-zinc-800 grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <FilingFields
+                value={filing ?? blankFiling(kind, name)}
+                onChange={(next) => setFiling(next)}
+                venues={options.venues}
+                sites={options.sites}
+                clients={options.clients}
+                hideTitle
+                hideLink
+              />
+            </div>
+          ) : (
+            <p className="mt-3 text-xs text-zinc-500">Reading the shelves…</p>
+          )
         )}
 
         <div className="flex items-center gap-3 mt-5">

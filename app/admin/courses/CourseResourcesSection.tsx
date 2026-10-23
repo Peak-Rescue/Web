@@ -334,17 +334,29 @@ export default function CourseResourcesSection({
       )}
 
       <div className="flex items-center gap-2 mt-3">
-        <button onClick={openPicker} disabled={busy} className={btn}>
+        {/* The same two icons the Files section uses for the same two acts —
+            a shelf for taking one off it, a plus for making one. */}
+        <button onClick={openPicker} disabled={busy} className={`${btn} inline-flex items-center gap-1.5`}>
+          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z" />
+          </svg>
           {/* One phrase for taking something off a shelf, wherever it is
               taken: this said "Add venue material", the maps section said
               "Choose from the library" and the MEDEVAC banner said "Find
               one", for the same act. */}
-          + From the library
+          From the library
         </button>
         {/* One way in for something new, whichever shape it arrives in. The
             dialog asks for a link or takes the file. */}
-        <button onClick={() => { setLinkKind(undefined); setLinkOpen(true) }} disabled={busy} className={btn}>
-          {scope === 'venue' ? '+ Add new venue material' : '+ Add new reference material'}
+        <button
+          onClick={() => { setLinkKind(undefined); setLinkOpen(true) }}
+          disabled={busy}
+          className={`${btn} inline-flex items-center gap-1.5`}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 5v14M5 12h14" />
+          </svg>
+          {scope === 'venue' ? 'Add new venue material' : 'Add new reference material'}
         </button>
         {/* Adding a second link for a resource already on the shelf is usually
             meant as an edit to that entry, and until there was a way through
@@ -530,13 +542,22 @@ export default function CourseResourcesSection({
           upload(files, kind)
         }}
         onCancel={() => setLinkOpen(false)}
-        onSubmit={(name, url, audience, toLibrary, kind) =>
+        onSubmit={(name, url, audience, toLibrary, kind, filing) =>
           run(async () => {
             // Close either way: a refusal ("already in the library") is
             // reported under the section, and a dialog left open would sit
             // on top of the sentence explaining what to do instead.
             try {
-              const result = await addCourseResourceLink(instanceId, url, name, audience, toLibrary, kind)
+              const result = await addCourseResourceLink(instanceId, url, name, audience, toLibrary, kind, filing && {
+                kind: filing.kind,
+                audience: filing.audience as 'internal' | 'shared' | 'admin',
+                place: filing.place,
+                disciplines: filing.disciplines,
+                topics: filing.topicsRaw,
+                note: filing.note,
+                clientId: filing.client_id,
+                courseTypes: filing.course_types,
+              })
               if (result?.error) return result
               if (toLibrary) setPicker(null) // the shelf just changed
             } finally {

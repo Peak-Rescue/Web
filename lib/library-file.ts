@@ -244,6 +244,10 @@ export type FilingChoices = {
   place?: string
   disciplines?: string[]
   topics?: string
+  /** The rest of what the filing panel asks. See 242, 250 and 262. */
+  note?: string
+  clientId?: string | null
+  courseTypes?: string[]
 }
 
 /** The said-out-loud version of what fileToLibrary and addLinkToLibrary work
@@ -269,6 +273,9 @@ export async function applyChoices(
   if (choices.topics !== undefined) {
     update.topics = choices.topics.split(',').map((t) => t.trim()).filter(Boolean)
   }
+  if (choices.note !== undefined) update.description = choices.note.trim() || null
+  if (choices.clientId !== undefined) update.client_id = choices.clientId
+  if (choices.courseTypes !== undefined) update.course_types = choices.courseTypes
   if (choices.place !== undefined) Object.assign(update, await resolvePlaceValue(admin, choices.place))
 
   const { error } = await admin.from('library_items').update(update).eq('id', id)

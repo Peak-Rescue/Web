@@ -9,7 +9,9 @@ import { regionLabel } from '@/lib/regions'
 import { addPlaceContact } from '@/app/admin/sites/actions'
 import { refuse, type ActionResult } from '@/lib/action-result'
 import { classify, NEEDS_SORTING } from '@/lib/sorting'
-import { bucketForKind, KINDS_OFF_BUCKET_SHELVES } from '@/lib/library'
+import { bucketForKind, KINDS_OFF_BUCKET_SHELVES, type Venue } from '@/lib/library'
+import { type SiteOption } from '@/app/admin/schedules/types'
+import { type ClientSelectGroup } from '@/lib/clients'
 import { courseCapabilityCategories, CAPABILITY_META, type CapabilityCategory } from '@/lib/capabilities'
 import { withAncestors } from '@/lib/clients'
 
@@ -254,7 +256,19 @@ export async function addCourseResourceLink(
   toLibrary = false,
   /** What it is, when it is being filed. Answered on the dialog, because the
       person pasting the link is the only one who knows. */
-  kind?: string
+  kind?: string,
+  /** The rest of the filing — where it is about, whose it is, which
+      offerings — answered on the same dialog by the library's own panel. */
+  filing?: {
+    kind?: string
+    audience?: 'internal' | 'shared' | 'admin'
+    place?: string
+    disciplines?: string[]
+    topics?: string
+    note?: string
+    clientId?: string | null
+    courseTypes?: string[]
+  }
 ): Promise<ActionResult> {
   const { user, admin } = await requireTeam(instanceId)
   const link = normalizeDocLink(url, label)
@@ -333,7 +347,7 @@ export async function addCourseResourceLink(
   // so the promotion reports itself rather than unwinding the add. The page
   // still has to be told about the document that did land, which is why the
   // refusal goes back after the revalidation rather than instead of it.
-  const failed = toLibrary ? await promoteToLibrary(admin, instanceId, row.id, kind) : null
+  const failed = toLibrary ? await promoteToLibrary(admin, instanceId, row.id, kind, filing) : null
 
   revalidate(instanceId)
   if (toLibrary) revalidatePath('/admin/library')
@@ -394,7 +408,17 @@ async function promoteToLibrary(
   resourceId: string,
   /** Said on the form. Beats the classifier, which is guessing from a pasted
       link and a typed label and would call a med plan a reference. */
-  told?: string
+  told?: string,
+  filing?: {
+    kind?: string
+    audience?: 'internal' | 'shared' | 'admin'
+    place?: string
+    disciplines?: string[]
+    topics?: string
+    note?: string
+    clientId?: string | null
+    courseTypes?: string[]
+  }
 ): Promise<{ error: string } | null> {
   const [{ data: row }, { data: inst }] = await Promise.all([
     admin
@@ -471,6 +495,23 @@ async function promoteToLibrary(
   // and the portal believing the pills. The item wins; the row comes down with
   // it, and the locked row explains itself on a link to where it is changed.
   const clamped = existing?.audience === 'internal' ? { audience: 'internal' } : {}
+
+  // What the panel said, applied to the row that was just made. Only for a
+  // new one: attaching to a shelf copy somebody else filed must not rewrite
+  // their filing from this screen.
+  if (filing && !existing?.id && libraryItemId) {
+    const { applyChoices } = await import('@/lib/library-file')
+    await applyChoices(admin, libraryItemId, {
+      kind: filing.kind,
+      audience: filing.audience,
+      place: filing.place,
+      disciplines: filing.disciplines,
+      topics: filing.topics,
+      clientId: filing.clientId,
+      courseTypes: filing.courseTypes,
+      note: filing.note,
+    })
+  }
 
   const { error } = await admin
     .from('course_resources')
@@ -684,4 +725,30 @@ export async function finalizeResourceUploads(
   }
   revalidate(instanceId)
   revalidatePath('/admin/library')
+}
+
+/** What the filing panel needs to ask its questions, fetched when somebody
+    ticks "add to the library" rather than loaded onto every course page for
+    the one time in ten it is wanted. */
+export async function libraryFilingOptions(): Promise<{
+  venues: Venue[]
+  sites: SiteOption[]
+  clients: ClientSelectGroup[]
+}> {
+  const { admin } = await requireAdmin()
+  const { CLIENT_COLUMNS, clientSelectGroups } = await import('@/lib/clients')
+  const [{ data: venueRows }, { data: siteRows }, { data: clientRows }] = await Promise.all([
+    admin.from('venues').select('id, name, region, region_code, client_name, notes, links, contacts, active').order('name'),
+    admin.from('sites').select('id, name, kind, beta, venue_id, venues(name)').eq('active', true).order('name'),
+    admin.from('clients').select(CLIENT_COLUMNS).order('name'),
+  ])
+  type ClientRow = Parameters<typeof clientSelectGroups>[0][number]
+  return {
+    venues: (venueRows ?? []) as Venue[],
+    sites: ((siteRows ?? []) as unknown as {
+      id: string; name: string; kind: string | null; beta: string | null; venue_id: string | null; venues: { name: string } | null
+    }[]).map((s) => ({ id: s.id, name: s.name, kind: s.kind, beta: s.beta, venue_id: s.venue_id, venue_name: s.venues?.name ?? null })),
+    // Grouped by sector, the way the library's own Client field reads it.
+    clients: clientSelectGroups((clientRows ?? []) as ClientRow[]),
+  }
 }
