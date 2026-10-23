@@ -1,5 +1,5 @@
 import SiteRow from './SiteRow'
-import PlaceContactChip from './PlaceContactChip'
+import PlaceContacts from './PlaceContacts'
 import JumpToNewRow from '@/components/JumpToNewRow'
 import AddToPlace from './AddToPlace'
 import AddLevel from './AddLevel'
@@ -222,11 +222,7 @@ export default function SitesShelf({
           </div>
         )}
         {contacts.length > 0 && (
-          <div className="flex flex-wrap gap-x-4 gap-y-1">
-            {contacts.map((c, i) => (
-              <PlaceContactChip key={i} scope={{ regionCode: code }} contact={c} />
-            ))}
-          </div>
+          <PlaceContacts scope={{ regionCode: code }} contacts={contacts} />
         )}
         {other.length > 0 && (
           <div className="flex flex-wrap gap-1.5">
@@ -356,11 +352,7 @@ export default function SitesShelf({
             {g.venue && (g.venue.contacts ?? []).length > 0 && (
               <div className="mb-2">
                 <p className="text-[10px] uppercase tracking-wide text-zinc-700 mb-1.5">Contacts</p>
-                <div className="flex flex-wrap gap-x-4 gap-y-1">
-                  {g.venue.contacts.map((c, i) => (
-                    <PlaceContactChip key={i} scope={{ venueId: g.venue!.id }} contact={c} />
-                  ))}
-                </div>
+                <PlaceContacts scope={{ venueId: g.venue.id }} contacts={g.venue.contacts} />
               </div>
             )}
 

@@ -513,3 +513,35 @@ export async function removePlaceContact(scope: PlaceScope, name: string): Promi
   revalidate()
   revalidatePath('/admin/library')
 }
+
+/** A place's whole contact list, saved as one. The same shape the client's
+    people are saved in, because they are edited by the same component: a
+    wrong number used to be fixable only by deleting the person. */
+export async function savePlaceContacts(
+  scope: PlaceScope,
+  contacts: { name: string; role?: string; phone?: string; email?: string; note?: string }[]
+): Promise<ActionResult> {
+  const admin = await requireAdmin()
+  const clean = contacts
+    .map((c) => ({
+      name: c.name.trim().slice(0, 120),
+      role: c.role?.trim().slice(0, 80) || undefined,
+      phone: c.phone?.trim().slice(0, 40) || undefined,
+      email: c.email?.trim().slice(0, 120) || undefined,
+      note: c.note?.trim().slice(0, 300) || undefined,
+    }))
+    .filter((c) => c.name)
+    .slice(0, 12)
+
+  if ('venueId' in scope) {
+    const { error } = await admin.from('venues').update({ contacts: clean }).eq('id', scope.venueId)
+    if (error) throw new Error(error.message)
+  } else {
+    const { error } = await admin
+      .from('region_info')
+      .upsert({ region_code: scope.regionCode, contacts: clean }, { onConflict: 'region_code' })
+    if (error) throw new Error(error.message)
+  }
+  revalidate()
+  revalidatePath('/admin/library')
+}

@@ -1,5 +1,6 @@
 'use client'
 
+import ContactList from '@/components/ContactList'
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { btn } from '@/lib/ui'
@@ -12,7 +13,7 @@ import {
   type ClientNode,
   type ClientRow,
 } from '@/lib/clients'
-import { addClient, deleteClient, mergeClient, moveClient, setSignoff, shiftSector, updateClient } from './actions'
+import { addClient, deleteClient, mergeClient, moveClient, saveClientContacts, setSignoff, shiftSector, updateClient } from './actions'
 import { NewClient } from '@/components/ClientPicker'
 
 type Signoff = { profileId: string; initials: string; name: string }
@@ -23,7 +24,7 @@ const inputCls =
 
 // One open form at a time across the whole page, so two half-filled forms
 // never compete. `id: null` is the add form at the top.
-type Open = { id: string; mode: 'edit' | 'delete' | 'merge' } | { id: null; mode: 'client' | 'sector' } | null
+type Open = { id: string; mode: 'edit' | 'delete' | 'merge' | 'people' } | { id: null; mode: 'client' | 'sector' } | null
 
 // Where a drag can end: on a row (file it under that row), in the unfiled
 // tray, or on the strip that makes a group a sector.
@@ -270,6 +271,18 @@ export default function ClientTree({
             <button type="button" className={btn.quiet} onClick={() => setOpen({ id: n.id, mode: 'edit' })}>
               Edit
             </button>
+            {/* Their people, where their people live. A POC filed from a
+                course had nowhere to be read or corrected — the next course
+                for the same client started from a blank list. */}
+            {!n.is_group && (
+              <button
+                type="button"
+                className={btn.quiet}
+                onClick={() => setOpen(here === 'people' ? null : { id: n.id, mode: 'people' })}
+              >
+                {(n.contacts ?? []).length > 0 ? `People ${(n.contacts ?? []).length}` : 'People'}
+              </button>
+            )}
             {sector && (
               <>
                 <button type="button" className={btn.quiet} disabled={pending} title="Move this sector up" onClick={() => run(() => shiftSector(n.id, -1))}>
@@ -304,6 +317,24 @@ export default function ClientTree({
             onCancel={() => setOpen(null)}
             onSave={(v) => run(() => updateClient(n.id, v))}
           />
+        )}
+        {here === 'people' && (
+          <div style={{ marginLeft: n.depth * 24 + 28 }} className="my-2 p-3 rounded border border-zinc-800 bg-zinc-900/60">
+            {n.note && <p className="text-[11px] text-amber-400/80 mb-2">{n.note}</p>}
+            <ContactList
+              contacts={n.contacts ?? []}
+              rolePlaceholder="Booking, safety, billing…"
+              addLabel="+ Add someone"
+              // Saved on the spot rather than through run(), which closes
+              // the panel on success — editing three people in a row should
+              // not close the list between each.
+              onSave={async (next) => {
+                const res = await saveClientContacts(n.id, next)
+                if ('error' in res && res.error) setError(res.error)
+                else router.refresh()
+              }}
+            />
+          </div>
         )}
         {here === 'delete' && (
           <RehomeForm

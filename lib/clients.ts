@@ -12,6 +12,11 @@ export type ClientRow = {
   name: string
   aliases: string[]
   note: string | null
+  /** The client's own people (266) — the ones a course's POC list is filed
+      into, and the ones the next course starts from. Optional on the type:
+      the picker builds rows in the browser to show one before it exists,
+      and a person it has never met is not part of that. */
+  contacts?: { name: string; role?: string; phone?: string; email?: string; note?: string }[]
   position: number
   /** A sector or subsector — a grouping, never something a course attaches to. */
   is_group: boolean
@@ -19,7 +24,8 @@ export type ClientRow = {
 }
 
 /** The columns a ClientRow needs, for every query that loads the tree. */
-export const CLIENT_COLUMNS = 'id, parent_id, name, aliases, note, position, is_group, created_at' as const
+export const CLIENT_COLUMNS =
+  'id, parent_id, name, aliases, note, contacts, position, is_group, created_at' as const
 
 /** How a client reads on a course: "24 STS – Red Team". The client and the
     clients above it, stopping at the first sector or subsector. Mirrors the

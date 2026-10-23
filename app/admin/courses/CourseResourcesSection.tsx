@@ -223,11 +223,10 @@ export default function CourseResourcesSection({
       {!medPlan && (
         <div className="mb-3 flex items-center gap-3 rounded-lg border border-dashed border-amber-900/60 bg-amber-950/10 px-4 py-3">
           <span className="text-sm text-amber-300/90">No MEDEVAC plan on this course</span>
-          <span className="text-xs text-zinc-500 min-w-0 flex-1 truncate">
-            {placeLabel
-              ? `Add ${placeLabel}’s, or any other — it is below with the rest of the shelf.`
-              : 'Add one below. Setting where the course is will offer the one for that place.'}
-          </span>
+          {/* The sentence that used to sit here was truncated to "Add
+              Stowe's, or any other — it is below with the r…", which is not
+              a sentence. The three buttons beside it say the same thing. */}
+          <span className="flex-1" />
           {/* The same three buttons as the block below it, in the same
               style: this banner had its own pair, which is how two rows of
               the same page came to offer the same acts in different clothes. */}
@@ -238,6 +237,11 @@ export default function CourseResourcesSection({
             onAddLink={() => { setLinkKind('medevac'); setLinkOpen(true) }}
             onAddFile={(files) => upload(files, 'medevac')}
           />
+          {/* Said here, where the button is. The section's error line is at
+              the bottom of a long block, so an upload that refused read as a
+              button that did nothing. */}
+          {busy && <span className="text-xs text-zinc-400 shrink-0">Working…</span>}
+          {error && <span className="text-xs text-pr-red shrink-0 max-w-xs truncate" title={error}>{error}</span>}
         </div>
       )}
 

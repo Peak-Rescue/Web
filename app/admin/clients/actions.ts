@@ -215,3 +215,26 @@ export async function setSignoff(id: string, on: boolean): Promise<Result> {
   revalidatePath('/admin/clients')
   return { ok: true }
 }
+
+/** A client's own people (266). Edited where they live, because the course
+    that filed them has moved on and the next one starts from this list. */
+export async function saveClientContacts(
+  id: string,
+  contacts: { name: string; role?: string; phone?: string; email?: string; note?: string }[]
+): Promise<Result> {
+  const { admin } = await requireAdminUser()
+  const clean = contacts
+    .map((c) => ({
+      name: c.name.trim().slice(0, 120),
+      role: c.role?.trim().slice(0, 80) || undefined,
+      phone: c.phone?.trim().slice(0, 40) || undefined,
+      email: c.email?.trim().slice(0, 120) || undefined,
+      note: c.note?.trim().slice(0, 300) || undefined,
+    }))
+    .filter((c) => c.name)
+    .slice(0, 24)
+
+  const { error } = await admin.from('clients').update({ contacts: clean }).eq('id', id)
+  if (error) return { ok: false, error: error.message }
+  return done()
+}
