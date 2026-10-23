@@ -3,6 +3,7 @@
 import { useRef, useState } from 'react'
 import type { CoursePOC } from '@/lib/contacts'
 import TrashIcon from '@/components/TrashIcon'
+import FileContactCard from '@/components/FileContactCard'
 
 const inputCls =
   'w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500'
@@ -75,7 +76,15 @@ function labelFor(pocs: CoursePOC[], i: number) {
 // about the people coming. Not the ranger district — that is a fact about
 // where the course is, and it lives in its own list for the same reason a
 // quote must never be addressed to a landowner.
-export default function CourseContactsEditor({ initial }: { initial: CoursePOC[] }) {
+export default function CourseContactsEditor({
+  initial,
+  instanceId,
+}: {
+  initial: CoursePOC[]
+  /** Absent while the course is still being created: there is nothing to
+      file a person against until it exists. */
+  instanceId?: string
+}) {
   const [pocs, setPocs] = useState<CoursePOC[]>(() =>
     (initial.length ? initial : [{ name: '', phones: [], emails: [] }]).map((p) => ({
       name: p.name,
@@ -84,6 +93,11 @@ export default function CourseContactsEditor({ initial }: { initial: CoursePOC[]
     }))
   )
   const hiddenRef = useRef<HTMLInputElement>(null)
+  // Who has been kept, by position. The client's people were typed onto one
+  // course and stayed there, so the next course for the same client started
+  // from a blank list — the local contacts have had the way out for a while
+  // and the ones above them did not.
+  const [filed, setFiled] = useState<Record<number, string>>({})
   const hasBilling = pocs.some((p) => p.role === 'billing')
 
   const cleaned = pocs
@@ -116,6 +130,20 @@ export default function CourseContactsEditor({ initial }: { initial: CoursePOC[]
             <div className="flex items-center justify-between mb-1">
               <label className="block text-xs text-zinc-400">{labelFor(pocs, i)}</label>
               <span className="flex items-center gap-1.5">
+                {instanceId && (filed[i]
+                  ? <span className="text-[11px] text-zinc-600" title={`On file with ${filed[i]}`}>On file</span>
+                  : (
+                    <FileContactCard
+                      instanceId={instanceId}
+                      contact={{
+                        name: p.name,
+                        phone: p.phones.find(Boolean),
+                        email: p.emails.find(Boolean),
+                        role: p.role === 'billing' ? 'Billing' : undefined,
+                      }}
+                      onFiled={(where) => setFiled((f) => ({ ...f, [i]: where }))}
+                    />
+                  ))}
                 {(i > 0 || p.role === 'billing') && (
                   <button
                     type="button"

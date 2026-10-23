@@ -596,7 +596,7 @@ export async function placeContactsFor(instanceId: string): Promise<
   ]
 }
 
-export type ContactShelf = 'venue' | 'region'
+export type ContactShelf = 'client' | 'venue' | 'region'
 
 // The places a course's contact can be filed with, read off the course as
 // saved: its venue, and the state (from the venue, else the course's own).
@@ -604,13 +604,18 @@ async function contactShelves(instanceId: string) {
   const { admin } = await requireTeam(instanceId)
   const { data: inst } = await admin
     .from('course_instances')
-    .select('venue_id, region, venues(name, region_code)')
+    .select('venue_id, region, client_id, venues(name, region_code), clients(id, name)')
     .eq('id', instanceId)
     .single()
   const venue = inst?.venues as unknown as { name?: string; region_code?: string | null } | null
+  const client = inst?.clients as unknown as { id: string; name: string } | null
   const regionCode = (venue?.region_code ?? inst?.region ?? null) as string | null
   return {
     admin,
+    // The client first: a course's points of contact are the client's
+    // people, and filing the sergeant who books the slot under the canyon he
+    // asked about is filing him under the wrong noun.
+    client: client ? { id: client.id, label: client.name } : null,
     venue: inst?.venue_id ? { id: inst.venue_id as string, label: venue?.name ?? 'The venue' } : null,
     region: regionCode ? { code: regionCode, label: regionLabel(regionCode) || regionCode } : null,
   }
@@ -621,8 +626,9 @@ async function contactShelves(instanceId: string) {
 export async function contactFilingShelves(
   instanceId: string
 ): Promise<{ shelf: ContactShelf; label: string }[]> {
-  const { venue, region } = await contactShelves(instanceId)
+  const { client, venue, region } = await contactShelves(instanceId)
   return [
+    ...(client ? [{ shelf: 'client' as const, label: client.label }] : []),
     ...(venue ? [{ shelf: 'venue' as const, label: venue.label }] : []),
     ...(region ? [{ shelf: 'region' as const, label: region.label }] : []),
   ]
@@ -639,9 +645,35 @@ export async function fileContactToPlace(
   shelf: ContactShelf,
   contact: { name: string; role?: string; phone?: string; email?: string; note?: string }
 ): Promise<{ error: string } | { filedWith: string }> {
-  const { admin, venue, region } = await contactShelves(instanceId)
+  const { admin, client, venue, region } = await contactShelves(instanceId)
   const name = contact.name.trim()
   if (!name) return { error: 'A contact needs a name.' }
+
+  // The client keeps its own people (266). Same question, a different noun
+  // underneath — which is why it is the same control and the same verb.
+  if (shelf === 'client') {
+    if (!client) return { error: 'Say which client this course is for first.' }
+    const { data: held } = await admin.from('clients').select('contacts').eq('id', client.id).maybeSingle()
+    const have = (held?.contacts ?? []) as { name?: string }[]
+    if (have.some((c) => c.name?.trim().toLowerCase() === name.toLowerCase())) {
+      return { filedWith: client.label }
+    }
+    const row = {
+      name: name.slice(0, 120),
+      role: contact.role?.trim().slice(0, 80) || undefined,
+      phone: contact.phone?.trim().slice(0, 40) || undefined,
+      email: contact.email?.trim().slice(0, 120) || undefined,
+      note: contact.note?.trim().slice(0, 300) || undefined,
+    }
+    const { error } = await admin
+      .from('clients')
+      .update({ contacts: [...have, row].slice(0, 24) })
+      .eq('id', client.id)
+    if (error) throw new Error(error.message)
+    revalidatePath('/admin/clients')
+    return { filedWith: client.label }
+  }
+
   const target = shelf === 'venue' ? venue : region
   if (!target) return { error: 'Say where the course is first, so there is a place to file them with.' }
   const scope = shelf === 'venue' ? { venueId: venue!.id } : { regionCode: region!.code }

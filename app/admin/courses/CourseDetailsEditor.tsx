@@ -153,7 +153,7 @@ export default function CourseDetailsEditor({
               <label className="block text-xs text-zinc-400 mb-1">Client / organization</label>
               <ClientPicker clients={clients} defaultId={course.client_id ?? null} />
             </div>
-            <CourseContactsEditor initial={contacts} />
+            <CourseContactsEditor initial={contacts} instanceId={instanceId} />
             {/* The locals, kept apart from the client's people above: a
                 landowner in that list is a landowner a quote could be
                 addressed to. */}
