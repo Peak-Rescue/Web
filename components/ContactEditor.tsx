@@ -10,6 +10,7 @@ import {
   type BookContact,
 } from '@/app/admin/contacts/actions'
 import { keyOf, type ContactHome, type ContactScope } from '@/lib/contact-homes'
+import { errorFrom } from '@/lib/action-result'
 
 // One person, written. The panel itself — the list that holds it and the row
 // of add buttons under it both open this, so "add a contact" is the same act
@@ -83,7 +84,13 @@ export default function ContactEditor({
         onChosenChange={(h) => setDraft({ ...draft, homes: h })}
         lockedKey={mine}
         catalog={catalog}
-        onNeedCatalog={async () => setCatalog(await contactHomes())}
+        onNeedCatalog={async () => {
+          // Caught and said out loud. Awaited with nothing watching it, a
+          // refused fetch left the picker reading "Loading…" for ever —
+          // which is the same lie a dead button tells.
+          try { setCatalog(await contactHomes()) }
+          catch (e) { setError(errorFrom(e, 'Could not load the places')) }
+        }}
         rolePlaceholder={rolePlaceholder}
       />
       <div className="flex items-center gap-3">

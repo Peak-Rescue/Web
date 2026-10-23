@@ -138,6 +138,7 @@ export default function ContactFields({
               }}
             >
               <option value="">{catalog ? 'Pick a client, venue or state…' : 'Loading…'}</option>
+              {catalog && more.length === 0 && <option value="" disabled>Nowhere else to file them</option>}
               {more.map((g) => (
                 <optgroup key={g.group} label={g.group}>
                   {g.items.map((i) => (
