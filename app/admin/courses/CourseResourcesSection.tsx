@@ -68,6 +68,9 @@ export default function CourseResourcesSection({
   // Where to go about it, when the refusal knows.
   const [errorLink, setErrorLink] = useState<{ href: string; label: string } | null>(null)
   const [linkOpen, setLinkOpen] = useState(false)
+  // What the dialog opens asking for. The MEDEVAC banner knows; the plain
+  // "+ Add a link" does not and leaves it to be said on the form.
+  const [linkKind, setLinkKind] = useState<string | undefined>(undefined)
   const [picker, setPicker] = useState<ResourcePickerItem[] | null>(null)
   const [pickerOpen, setPickerOpen] = useState(false)
   const [showAll, setShowAll] = useState(false)
@@ -185,11 +188,21 @@ export default function CourseResourcesSection({
               ? `Add ${placeLabel}’s, or any other — it is below with the rest of the shelf.`
               : 'Add one below. Setting where the course is will offer the one for that place.'}
           </span>
+          {/* Both halves of the answer. "Find one" only works once one is in
+              the library, and the first MEDEVAC plan for a place has to get
+              there from somewhere — this is that somewhere, and it files it
+              while it adds it. */}
           <button
             onClick={() => { setQ(''); setOnlyKind('medevac'); openPicker() }}
             className={`${btn} shrink-0`}
           >
             Find one
+          </button>
+          <button
+            onClick={() => { setLinkKind('medevac'); setLinkOpen(true) }}
+            className={`${btn} shrink-0`}
+          >
+            Add one
           </button>
         </div>
       )}
@@ -289,7 +302,7 @@ export default function CourseResourcesSection({
         <button onClick={openPicker} disabled={busy} className={btn}>
           {scope === 'venue' ? '+ Add venue material' : '+ Add reference material'}
         </button>
-        <button onClick={() => setLinkOpen(true)} disabled={busy} className={btn}>+ Add a link</button>
+        <button onClick={() => { setLinkKind(undefined); setLinkOpen(true) }} disabled={busy} className={btn}>+ Add a link</button>
         {/* Adding a second link for a resource already on the shelf is usually
             meant as an edit to that entry, and until there was a way through
             to it the only door out of this section made a duplicate. Opens in
@@ -463,6 +476,8 @@ export default function CourseResourcesSection({
         busy={busy}
         withAudience
         libraryPlace={placeLabel}
+        defaultKind={linkKind}
+        defaultToLibrary={Boolean(linkKind)}
         onCancel={() => setLinkOpen(false)}
         onSubmit={(name, url, audience, toLibrary, kind) =>
           run(async () => {

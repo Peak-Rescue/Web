@@ -19,13 +19,22 @@ export default function AddLinkDialog({
   libraryPlace = null,
   onSubmit,
   onCancel,
+  defaultKind,
+  defaultToLibrary,
 }: {
   open: boolean
   busy: boolean
   withAudience?: boolean
-  // The venue or region this course sits in, when it has one. Null hides the
-  // offer — there is nowhere to file the document against.
+  // The venue or region this course sits in, when it has one. It names the
+  // place on the offer; it no longer gates it. A course with no venue yet
+  // still has documents worth keeping, and hiding the only path to the
+  // library until somebody sets a place is how a med plan ends up pasted
+  // onto one course and nowhere else.
   libraryPlace?: string | null
+  /** Pre-ticked and pre-typed, where the thing being added is already known —
+      the MEDEVAC banner opens this asking for a MEDEVAC plan. */
+  defaultKind?: string
+  defaultToLibrary?: boolean
   /** `kind` is only meaningful when the link is also being filed. */
   onSubmit: (name: string, url: string, audience: LibraryAudience, toLibrary: boolean, kind: string) => void
   onCancel: () => void
@@ -35,13 +44,13 @@ export default function AddLinkDialog({
   // Null until asked and answered. Dialogs that don't ask (photos, task files)
   // fall back to instructors-only on submit, as they always did.
   const [audience, setAudience] = useState<LibraryAudience | null>(null)
-  const [toLibrary, setToLibrary] = useState(false)
+  const [toLibrary, setToLibrary] = useState(Boolean(defaultToLibrary))
   // Asked only when it is being filed, because it is the filing's question.
   // A link added to a course and nowhere else is whatever it is; one going
   // into the library under a place has to say whether it is that place's med
   // plan, its evac plan, its permit — or it lands as untyped reference and
   // reads nowhere near where it belongs.
-  const [kind, setKind] = useState('reference')
+  const [kind, setKind] = useState(defaultKind ?? 'reference')
 
   // Reopening starts a fresh link — reset the drafts during render
   // (React's "adjust state when a prop changes" pattern, no effect needed).
@@ -51,7 +60,11 @@ export default function AddLinkDialog({
     setName('')
     setUrl('')
     setAudience(null)
-    setToLibrary(false)
+    // Back to what the caller opened it with, not to blank: the MEDEVAC
+    // banner opens this asking for a MEDEVAC plan, and resetting to "no"
+    // would undo the thing the button was for.
+    setToLibrary(Boolean(defaultToLibrary))
+    setKind(defaultKind ?? 'reference')
   }
 
   useEffect(() => {
@@ -111,8 +124,7 @@ export default function AddLinkDialog({
           </>
         )}
 
-        {libraryPlace && (
-          <label className="flex items-center gap-2.5 mt-3 px-3 py-2.5 rounded border border-zinc-700 bg-zinc-800/50 hover:border-zinc-600 text-sm text-zinc-200 cursor-pointer transition-colors">
+        <label className="flex items-center gap-2.5 mt-3 px-3 py-2.5 rounded border border-zinc-700 bg-zinc-800/50 hover:border-zinc-600 text-sm text-zinc-200 cursor-pointer transition-colors">
             <input
               type="checkbox"
               checked={toLibrary}
@@ -121,12 +133,12 @@ export default function AddLinkDialog({
               className="accent-red-600 w-4 h-4 shrink-0 disabled:opacity-50"
             />
             <span>
-              Add to library for <span className="font-medium">{libraryPlace}</span>
+              Add to the library
+              {libraryPlace && <> for <span className="font-medium">{libraryPlace}</span></>}
             </span>
           </label>
-        )}
 
-        {libraryPlace && toLibrary && (
+        {toLibrary && (
           <label className="block mt-2 text-xs text-zinc-400">
             What it is
             <select
