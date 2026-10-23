@@ -131,9 +131,22 @@ export default function AddLinkDialog({
   // Where the audience is asked, it is required — an unanswered question must
   // not resolve itself into the more restrictive answer behind your back.
   const hasFiles = Boolean(files?.length)
-  const canSubmit = !busy && (hasFiles || url.trim().length > 0) && (!withAudience || audience !== null)
+  const needsUrl = !hasFiles && url.trim().length === 0
+  const needsAudience = Boolean(withAudience) && audience === null
+  const canSubmit = !busy && !needsUrl && !needsAudience
+  // What was missing when somebody last tried, so the form can point at it.
+  // A disabled button is a dead end: it refuses without saying which of a
+  // dozen fields it is waiting for, and the first guess is that the thing is
+  // broken — which is exactly what happened here.
+  const [missed, setMissed] = useState(false)
+  const miss = 'ring-1 ring-amber-500/70 rounded'
+
   const submit = () => {
-    if (!canSubmit) return
+    if (!canSubmit) {
+      setMissed(true)
+      return
+    }
+    setMissed(false)
     const chosen = audience ?? 'internal'
     // One answer, used twice: the pills above decide who sees it on the
     // course, and the library row has no business disagreeing with them.
@@ -179,7 +192,9 @@ export default function AddLinkDialog({
           </>
         ) : (
           <>
-            <label className="block text-xs text-zinc-500 mb-1">Link</label>
+            <label className="block text-xs text-zinc-500 mb-1">
+              Link{missed && needsUrl && <span className="text-amber-400"> — needed</span>}
+            </label>
             <input
               autoFocus
               value={url}
@@ -187,7 +202,9 @@ export default function AddLinkDialog({
               onChange={(e) => setUrl(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && submit()}
               placeholder="https://drive.google.com/…"
-              className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:border-zinc-500 disabled:opacity-50"
+              className={`w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:border-zinc-500 disabled:opacity-50 ${
+                missed && needsUrl ? miss : ''
+              }`}
             />
           </>
         )}
@@ -204,8 +221,12 @@ export default function AddLinkDialog({
 
         {withAudience && (
           <>
-            <label className="block text-xs text-zinc-500 mt-3 mb-1.5">Who can see it</label>
-            <AudienceChoice audience={audience} onChange={setAudience} disabled={busy} />
+            <label className="block text-xs text-zinc-500 mt-3 mb-1.5">
+              Who can see it{missed && needsAudience && <span className="text-amber-400"> — needed</span>}
+            </label>
+            <div className={missed && needsAudience ? `${miss} p-1 -m-1 inline-block` : undefined}>
+              <AudienceChoice audience={audience} onChange={setAudience} disabled={busy} />
+            </div>
           </>
         )}
 
@@ -275,17 +296,19 @@ export default function AddLinkDialog({
         <div className="flex items-center gap-3 mt-5">
           <button
             onClick={submit}
-            disabled={!canSubmit}
+            disabled={busy}
             className="px-4 py-2 bg-pr-red hover:bg-pr-red-dark text-white rounded text-sm font-medium transition-colors disabled:opacity-50"
           >
             {busy ? 'Adding…' : hasFiles ? 'Upload and file' : 'Add link'}
           </button>
-          {/* Why it is dead, where it is dead. A disabled button with no
-              reason reads as a broken one — and the reason here is a
-              question two fields up that looks answered because both of its
-              options are visible. */}
-          {withAudience && audience === null && (
-            <span className="text-xs text-zinc-500">Say who can see it first</span>
+          {/* Said after a try, not before it. The button works; pressing it
+              with something missing marks the field in amber and names it
+              here, which is how you find out that "Who can see it" has two
+              visible options and neither of them chosen. */}
+          {missed && (needsUrl || needsAudience) && (
+            <span className="text-xs text-amber-400">
+              {[needsUrl && 'a link', needsAudience && 'who can see it'].filter(Boolean).join(' and ')} — still needed
+            </span>
           )}
           <button
             onClick={onCancel}
