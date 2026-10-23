@@ -134,7 +134,10 @@ export default function AddLinkDialog({
   const canSubmit = !busy && (hasFiles || url.trim().length > 0) && (!withAudience || audience !== null)
   const submit = () => {
     if (!canSubmit) return
-    const answers = toLibrary ? filing ?? undefined : undefined
+    const chosen = audience ?? 'internal'
+    // One answer, used twice: the pills above decide who sees it on the
+    // course, and the library row has no business disagreeing with them.
+    const answers = toLibrary ? { ...(filing ?? blankFiling(kind, name)), audience: chosen } : undefined
     // A file is uploaded and filed by the caller; a link is added by it. The
     // questions are the same either way, which is the point of asking them
     // here rather than after the upload has already decided.
@@ -261,6 +264,7 @@ export default function AddLinkDialog({
                 clients={options.clients}
                 hideTitle
                 hideLink
+                hideAudience={withAudience}
               />
             </div>
           ) : (
@@ -276,6 +280,13 @@ export default function AddLinkDialog({
           >
             {busy ? 'Adding…' : hasFiles ? 'Upload and file' : 'Add link'}
           </button>
+          {/* Why it is dead, where it is dead. A disabled button with no
+              reason reads as a broken one — and the reason here is a
+              question two fields up that looks answered because both of its
+              options are visible. */}
+          {withAudience && audience === null && (
+            <span className="text-xs text-zinc-500">Say who can see it first</span>
+          )}
           <button
             onClick={onCancel}
             disabled={busy}

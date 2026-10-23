@@ -58,6 +58,10 @@ export default function FilingFields({
       panel; repeating them inside it is the same question twice. */
   hideTitle = false,
   hideLink = false,
+  /** Where the form around the panel already asked it. Two "Who can see it"
+      controls on one dialog is two answers to one question, and whichever
+      the person reads second is the one they think they gave. */
+  hideAudience = false,
   placeRequired = false,
   /** Disciplines the offerings already imply. Shown ticked and held there,
       because the matching derives them anyway and an unticked box that the
@@ -80,6 +84,7 @@ export default function FilingFields({
   fixedKind?: string
   hideTitle?: boolean
   hideLink?: boolean
+  hideAudience?: boolean
   /** 'library' adds the admins-only rung; a template has no such column. */
   audienceMode?: 'library' | 'template'
   linkSlot?: React.ReactNode
