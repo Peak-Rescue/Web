@@ -62,7 +62,10 @@ export const PLACE_SHELF_META: Record<PlaceShelf, { label: string; hint: string 
     // Utah and the beta for one canyon are both on this card, and only the
     // middle of the ladder is a venue.
     label: 'Locations',
-    hint: 'Countries, states, venues and canyons — maps, beta, weather, contacts and plans, each filed at the level it is true for',
+    // What is on the card, in the words the card's own buttons use. It used
+    // to describe the filing — four levels and the rule about which to use —
+    // which is how the shelf works, not what it holds.
+    hint: 'Maps, beta, MEDEVAC plans, permits, weather and local contacts',
   },
 }
 
