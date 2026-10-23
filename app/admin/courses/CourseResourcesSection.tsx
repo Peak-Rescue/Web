@@ -184,8 +184,7 @@ export default function CourseResourcesSection({
   // A file, onto the course and onto the shelf at the same time. Pasting a
   // Drive link was the only way before, which is a second home for a document
   // and no row in the library at all.
-  async function upload(files: FileList, kind?: string) {
-    const picked = Array.from(files)
+  async function upload(picked: File[], kind?: string) {
     if (picked.length === 0) return
     await run(async () => {
       const prepared = await createResourceUploadTargets(

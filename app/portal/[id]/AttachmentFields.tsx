@@ -49,10 +49,9 @@ export default function AttachmentFields({
     setAddingLink(false)
   }
 
-  async function upload(files: FileList) {
+  async function upload(list: File[]) {
     setUploading(true); setUploadError(null)
     try {
-      const list = Array.from(files)
       const targets = await createUpdateUploadTargets(
         instanceId,
         list.map((f) => ({ name: f.name, size: f.size }))

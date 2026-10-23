@@ -56,7 +56,7 @@ export default function AddLinkDialog({
   /** Where a file is as good an answer as a link. Given, the dialog offers
       both; withheld, it is a link dialog — a map is a CalTopo URL and there
       is no file to upload. The caller does the uploading; this only asks. */
-  onUpload?: (files: FileList, kind: string, audience: LibraryAudience) => void
+  onUpload?: (files: File[], kind: string, audience: LibraryAudience) => void
   /** `kind` is only meaningful when the link is also being filed; `filing`
       carries the rest of what the library asks — where it is about, whose it
       is, which offerings — when the person said to file it. */
@@ -135,7 +135,14 @@ export default function AddLinkDialog({
       onClick={() => !busy && onCancel()}
     >
       <div
-        className="w-full max-w-md bg-zinc-900 border border-zinc-700 rounded-lg p-5 shadow-xl"
+        // Scrolls, and wider once the filing panel is in it. With the panel
+        // open this is a dozen fields: at max-w-md with no max height it ran
+        // off the top and the bottom of the window, so the link box and the
+        // Save button — the first and last thing you need — were the two
+        // things you could not reach.
+        className={`w-full bg-zinc-900 border border-zinc-700 rounded-lg p-5 shadow-xl max-h-[85vh] overflow-y-auto ${
+          toLibrary ? 'max-w-2xl' : 'max-w-md'
+        }`}
         onClick={(e) => e.stopPropagation()}
       >
         <h3 className="text-sm font-semibold text-zinc-200 mb-1">
@@ -202,9 +209,12 @@ export default function AddLinkDialog({
               disabled={busy}
               className="hidden"
               onChange={(e) => {
-                const files = e.target.files
+                // Copied before the reset — see AddButtons: the FileList and
+                // the input are the same object, and clearing one empties
+                // the other.
+                const picked = Array.from(e.target.files ?? [])
                 e.target.value = ''
-                if (files?.length) onUpload(files, kind, audience ?? 'internal')
+                if (picked.length) onUpload(picked, kind, audience ?? 'internal')
               }}
             />
             <span className="text-xs text-zinc-500 shrink-0">Choose…</span>

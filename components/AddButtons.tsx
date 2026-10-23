@@ -64,8 +64,11 @@ export default function AddButtons({
 }: {
   onFromLibrary?: () => void
   onAddLink?: () => void
-  /** Given, an upload button appears and hands the files straight over. */
-  onAddFile?: (files: FileList) => void
+  /** Given, an upload button appears and hands the files straight over.
+      An array, not the FileList: resetting the input to allow picking the
+      same file twice empties the FileList it hands you, because the two are
+      the same object. */
+  onAddFile?: (files: File[]) => void
   /** What a new one is called here — "map", "file", "document". */
   noun?: string
   disabled?: boolean
@@ -99,9 +102,13 @@ export default function AddButtons({
             multiple
             className="hidden"
             onChange={(e) => {
-              const files = e.target.files
+              // Copied before the reset, not after. `e.target.files` is live:
+              // clearing the input to allow the same file to be picked again
+              // empties the list you are holding, so the handler saw nothing
+              // and the button read as doing nothing at all.
+              const picked = Array.from(e.target.files ?? [])
               e.target.value = ''
-              if (files?.length) onAddFile(files)
+              if (picked.length) onAddFile(picked)
             }}
           />
         </>

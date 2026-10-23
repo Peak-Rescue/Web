@@ -186,10 +186,7 @@ export default function CourseFilesSection({
           disabled={uploading || linkBusy}
           onFromLibrary={() => setLibraryOpen(true)}
           onAddLink={() => setLinkOpen(true)}
-          onAddFile={(files: FileList) => {
-            const picked = Array.from(files)
-            if (picked.length) setPending(picked)
-          }}
+          onAddFile={(picked) => { if (picked.length) setPending(picked) }}
         />
       </div>
 
