@@ -211,19 +211,22 @@ export function InstructorCard({
           move the wage pills make — a colour inside a shape — and this has to
           read as a mark *on the person*, not as another category they are in. */}
       <span
-        className={`grid place-items-center w-9 h-9 rounded-full overflow-hidden text-xs font-semibold shrink-0 ${
+        className={`relative grid place-items-center w-9 h-9 rounded-full overflow-hidden text-xs font-semibold shrink-0 ${
           primary
             ? 'bg-teal-900/50 text-teal-300 ring-2 ring-teal-400/70 ring-offset-2 ring-offset-zinc-900'
             : 'bg-zinc-800 text-zinc-400'
         }`}
       >
+        {/* Absolute, not a grid item: under place-items-center a tall photo
+            keeps its natural height, object-cover never crops, and the
+            saved framing does nothing. */}
         {avatar ? (
           <Image
             src={avatar}
             alt=""
             width={36}
             height={36}
-            className="w-full h-full object-cover"
+            className="absolute inset-0 w-full h-full object-cover"
             style={{
               objectPosition: avatarPosition ?? 'center',
               transform: avatarScale ? `scale(${avatarScale})` : undefined,

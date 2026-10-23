@@ -32,14 +32,14 @@ export default function OwnerPill({
     <span
       className={`inline-flex items-center gap-2 pl-1 pr-2.5 py-0.5 rounded-full border border-zinc-700 bg-zinc-800/70 text-zinc-300 text-xs ${className}`}
     >
-      <span className="grid place-items-center w-5 h-5 rounded-full overflow-hidden bg-zinc-700 text-[9px] font-bold text-zinc-200 shrink-0">
+      <span className="relative grid place-items-center w-5 h-5 rounded-full overflow-hidden bg-zinc-700 text-[9px] font-bold text-zinc-200 shrink-0">
         {owner.avatar ? (
           <Image
             src={owner.avatar}
             alt=""
             width={20}
             height={20}
-            className="w-full h-full object-cover"
+            className="absolute inset-0 w-full h-full object-cover"
             style={{
               objectPosition: owner.avatarPosition ?? 'center',
               transform: owner.avatarScale ? `scale(${owner.avatarScale})` : undefined,
