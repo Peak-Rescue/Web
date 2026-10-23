@@ -846,3 +846,30 @@ export async function keepContactsOnCourse(
   if (error) throw new Error(error.message)
   revalidate(instanceId)
 }
+
+/** The course's own local contacts, written as they are changed.
+ *
+ * They used to be a hidden field inside the details form, which autosaves:
+ * so the list the browser happened to be holding was posted over whatever
+ * was in the row, and a contact written by the import or the filing card
+ * was wiped by the next keystroke anywhere else on that form. Their own
+ * write, with no form around it, cannot be clobbered by one.
+ */
+export async function setCoursePlaceContacts(
+  instanceId: string,
+  rows: { name: string; phone?: string; email?: string }[]
+): Promise<ActionResult> {
+  const { admin } = await requireTeam(instanceId)
+  const clean = rows
+    .map((r) => ({
+      name: r.name.trim().slice(0, 120),
+      phone: r.phone?.trim().slice(0, 40) || undefined,
+      email: r.email?.trim().slice(0, 120) || undefined,
+    }))
+    .filter((r) => r.name)
+    .slice(0, 12)
+
+  const { error } = await admin.from('course_instances').update({ place_contacts: clean }).eq('id', instanceId)
+  if (error) throw new Error(error.message)
+  revalidate(instanceId)
+}

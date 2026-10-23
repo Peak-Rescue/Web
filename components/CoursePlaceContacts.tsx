@@ -1,10 +1,9 @@
 'use client'
 
-import { Fragment, useRef, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import TrashIcon from '@/components/TrashIcon'
 import FileContactCard from '@/components/FileContactCard'
-import { keepContactsOnCourse, placeContactsFor } from '@/app/admin/courses/resource-actions'
-import { useRouter } from 'next/navigation'
+import { placeContactsFor, setCoursePlaceContacts } from '@/app/admin/courses/resource-actions'
 
 // Who to ring about where the course is — the ranger district, the landowner,
 // whoever holds the gate code.
@@ -36,32 +35,52 @@ export default function CoursePlaceContacts({
   instanceId: string
 }) {
   const [rows, setRows] = useState<Row[]>(initial)
-  const router = useRouter()
   const [filingRow, setFilingRow] = useState<number | null>(null)
   const [offered, setOffered] = useState<{ from: string; name: string; phones: string[]; emails: string[] }[] | null>(null)
   const [looking, setLooking] = useState(false)
-  const hidden = useRef<HTMLInputElement>(null)
+  const [failed, setFailed] = useState<string | null>(null)
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // The form posts one field; the rows are the editable face of it.
-  const write = (next: Row[]) => {
-    setRows(next)
-    if (hidden.current) {
-      hidden.current.value = JSON.stringify(
-        next.filter((r) => r.name.trim()).map(({ filed: _, ...r }) => r)
+  // This list writes itself, and is no longer a hidden field inside the
+  // details form. That form auto-saves, so it posted whatever list the
+  // browser was holding over the row: a contact added by the import or by
+  // the filing card was wiped by the next keystroke anywhere else on the
+  // form, which looked exactly like the import not working.
+  const save = async (next: Row[]) => {
+    try {
+      await setCoursePlaceContacts(
+        instanceId,
+        next.filter((r) => r.name.trim()).map(({ filed: _f, ...r }) => r)
       )
-      // A row added or removed is no keystroke, so tell the auto-save.
-      hidden.current.dispatchEvent(new Event('input', { bubbles: true }))
+      setFailed(null)
+    } catch {
+      // Never silent. Awaited with nothing watching it, a refused write left
+      // the row on screen and nothing in the database.
+      setFailed('Those didn’t save — try again')
     }
   }
 
+  /** A row added, picked or removed: written at once, there is nothing more
+      coming. */
+  const write = (next: Row[]) => {
+    setRows(next)
+    if (timer.current) clearTimeout(timer.current)
+    void save(next)
+  }
+
+  /** A name or number being typed: written once they stop, so a phone number
+      is one write and not eleven racing ones. */
+  const type = (next: Row[]) => {
+    setRows(next)
+    if (timer.current) clearTimeout(timer.current)
+    timer.current = setTimeout(() => void save(next), 700)
+  }
+
+  // Closing the editor mid-word must not lose the word.
+  useEffect(() => () => { if (timer.current) clearTimeout(timer.current) }, [])
+
   return (
     <div>
-      <input
-        ref={hidden}
-        type="hidden"
-        name="place_contacts"
-        defaultValue={JSON.stringify(initial.filter((r) => r.name.trim()))}
-      />
       <label className="block text-xs text-zinc-400 mb-1">
         Local contacts — ranger district, landowner, gate code
       </label>
@@ -74,7 +93,7 @@ export default function CoursePlaceContacts({
               className={input}
               value={c.name}
               placeholder="Who"
-              onChange={(e) => write(rows.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))}
+              onChange={(e) => type(rows.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))}
             />
             <input
               className={input}
@@ -83,7 +102,7 @@ export default function CoursePlaceContacts({
               onChange={(e) => {
                 const v = e.target.value
                 const isEmail = v.includes('@')
-                write(rows.map((x, j) => (j === i ? { ...x, phone: isEmail ? '' : v, email: isEmail ? v : '' } : x)))
+                type(rows.map((x, j) => (j === i ? { ...x, phone: isEmail ? '' : v, email: isEmail ? v : '' } : x)))
               }}
             />
             {c.filed ? (
@@ -167,16 +186,12 @@ export default function CoursePlaceContacts({
               <button
                 key={i}
                 type="button"
-                onClick={async () => {
-                  const row = { name: c.name, phone: c.phones[0], email: c.emails[0], filed: c.from }
-                  write([...rows, row])
+                onClick={() => {
+                  // Written by `write`, now, rather than waiting for a save
+                  // of the form around it. Left in the browser, the import
+                  // went with the editor when it closed.
+                  write([...rows, { name: c.name, phone: c.phones[0], email: c.emails[0], filed: c.from }])
                   setOffered(null)
-                  // Written now, not when the details form is next saved.
-                  // Picked off the venue and left in the browser, the import
-                  // vanished with the editor — which looks exactly like the
-                  // import not working.
-                  await keepContactsOnCourse(instanceId, [{ name: row.name, phone: row.phone, email: row.email }])
-                  router.refresh()
                 }}
                 className="w-full text-left text-xs px-1.5 py-1 rounded hover:bg-zinc-800/70 transition-colors"
               >
@@ -207,6 +222,8 @@ export default function CoursePlaceContacts({
             </div>
           </div>
         )}
+
+        {failed && <p className="text-xs text-pr-red">{failed}</p>}
       </div>
     </div>
   )
