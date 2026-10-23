@@ -148,6 +148,13 @@ export default function SitesShelf({
     const v = g.venue ? venueOf.get(g.venue.id) : null
     regions.set(v?.region_code ?? '', [...(regions.get(v?.region_code ?? '') ?? []), g])
   }
+  // A state exists because somebody added it, not because a venue is in it.
+  // The list was built from venues alone, so adding Vermont wrote the row and
+  // showed nothing — and the only place to put the first venue in Vermont was
+  // under a heading that would not appear until something was already there.
+  for (const code of [...regionInfo.keys(), ...atRegion.keys()]) {
+    if (!regions.has(code)) regions.set(code, [])
+  }
   const byCountry = new Map<string, { code: string; label: string; groups: typeof groups }[]>()
   for (const [code, gs] of regions) {
     const { country } = splitRegion(code)
@@ -311,6 +318,11 @@ export default function SitesShelf({
                     {sub.code && <RemovePlace what={sub.label || sub.code} regionCode={sub.code} />}
                   </p>
                 )}
+                {/* The state's own weather, contacts, maps and plans — and the
+                    way to add them. The country had this block and the state
+                    did not, so a permit true for all of Utah could be filed
+                    only by pretending it belonged to one venue in it. */}
+                {sub.code && <RegionBlocks code={sub.code} />}
                 <div className="space-y-2">
         {sub.groups.map((g) => (
           <details key={g.key} className="group/venue rounded-lg border border-zinc-800 bg-zinc-900">
