@@ -118,6 +118,16 @@ export default function AddLinkDialog({
     setKind(defaultKind ?? 'reference')
   }
 
+  // Every hook sits above the `if (!open) return null` below. This one was
+  // under it, so opening the dialog rendered one hook more than closed had:
+  // React #310, which takes the whole page down and reads as the upload
+  // being broken.
+  // What was missing when somebody last tried, so the form can point at it.
+  // A disabled button is a dead end: it refuses without saying which of a
+  // dozen fields it is waiting for, and the first guess is that the thing is
+  // broken — which is exactly what happened here.
+  const [missed, setMissed] = useState(false)
+
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === 'Escape' && !busy) onCancel()
@@ -134,11 +144,6 @@ export default function AddLinkDialog({
   const needsUrl = !hasFiles && url.trim().length === 0
   const needsAudience = Boolean(withAudience) && audience === null
   const canSubmit = !busy && !needsUrl && !needsAudience
-  // What was missing when somebody last tried, so the form can point at it.
-  // A disabled button is a dead end: it refuses without saying which of a
-  // dozen fields it is waiting for, and the first guess is that the thing is
-  // broken — which is exactly what happened here.
-  const [missed, setMissed] = useState(false)
   const miss = 'ring-1 ring-amber-500/70 rounded'
 
   const submit = () => {

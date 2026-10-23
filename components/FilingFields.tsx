@@ -163,24 +163,29 @@ export default function FilingFields({
         className={input}
       />
 
-      <div>
-        <label className={label}>Who can see it</label>
-        <select
-          className={input}
-          value={value.audience}
-          onChange={(e) => set({ audience: e.target.value }, 'audience')}
-        >
-          <option value="internal">{AUDIENCE_META.internal.choice}</option>
-          <option value="shared">{AUDIENCE_META.shared.choice}</option>
-          {/* One ladder in the UI, two fields underneath. Admin-only is
-              stored as its own flag so it can only ever add a restriction,
-              but to the person setting it this is plainly the third rung:
-              students, then instructors, then us. */}
-          {audienceMode === 'library' && (
-            <option value="admin">Admins only — and never on a course</option>
-          )}
-        </select>
-      </div>
+      {/* The prop was taken and never used, so the dialog that had already
+          asked asked again — two controls, two answers, and the one the
+          person read second was not the one that was saved. */}
+      {!hideAudience && (
+        <div>
+          <label className={label}>Who can see it</label>
+          <select
+            className={input}
+            value={value.audience}
+            onChange={(e) => set({ audience: e.target.value }, 'audience')}
+          >
+            <option value="internal">{AUDIENCE_META.internal.choice}</option>
+            <option value="shared">{AUDIENCE_META.shared.choice}</option>
+            {/* One ladder in the UI, two fields underneath. Admin-only is
+                stored as its own flag so it can only ever add a restriction,
+                but to the person setting it this is plainly the third rung:
+                students, then instructors, then us. */}
+            {audienceMode === 'library' && (
+              <option value="admin">Admins only — and never on a course</option>
+            )}
+          </select>
+        </div>
+      )}
 
       {/* One question at either level — the area, or the canyon inside it. */}
       <div>
