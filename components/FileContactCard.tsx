@@ -22,6 +22,7 @@ export default function FileContactCard({
   contact,
   onFiled,
   rolePlaceholder = 'Booking, safety, billing…',
+  keepOnCourse = false,
   open: openProp,
   onOpenChange,
 }: {
@@ -29,6 +30,9 @@ export default function FileContactCard({
   contact: ContactDraft
   onFiled: (filedWith: string) => void
   rolePlaceholder?: string
+  /** The course's own local list, which is otherwise only written when the
+      details form is saved. */
+  keepOnCourse?: boolean
   /** Controlled, where the button and the panel cannot sit together: in a
       three-column grid the panel drawn beside its own button is a form
       squeezed into one column of it. The parent puts the button in the row
@@ -158,13 +162,18 @@ export default function FileContactCard({
               // refuses report separately rather than the pair failing.
               const filedWith: string[] = []
               for (const shelf of card.shelves) {
-                const res = await fileContactToPlace(instanceId, shelf, {
-                  name: card.name,
-                  role: card.role || undefined,
-                  phone: card.phone || undefined,
-                  email: card.email || undefined,
-                  note: card.note || undefined,
-                })
+                const res = await fileContactToPlace(
+                  instanceId,
+                  shelf,
+                  {
+                    name: card.name,
+                    role: card.role || undefined,
+                    phone: card.phone || undefined,
+                    email: card.email || undefined,
+                    note: card.note || undefined,
+                  },
+                  keepOnCourse
+                )
                 if ('error' in res) { setError(res.error); return }
                 filedWith.push(res.filedWith)
               }

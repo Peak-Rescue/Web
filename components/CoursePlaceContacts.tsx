@@ -35,6 +35,7 @@ export default function CoursePlaceContacts({
   instanceId: string
 }) {
   const [rows, setRows] = useState<Row[]>(initial)
+  const [filingRow, setFilingRow] = useState<number | null>(null)
   const [offered, setOffered] = useState<{ from: string; name: string; phones: string[]; emails: string[] }[] | null>(null)
   const [looking, setLooking] = useState(false)
   const hidden = useRef<HTMLInputElement>(null)
@@ -96,12 +97,14 @@ export default function CoursePlaceContacts({
                 On file · change
               </button>
             ) : (
-              <FileContactCard
-                instanceId={instanceId}
-                contact={{ name: c.name, phone: c.phone, email: c.email }}
-                rolePlaceholder="Ranger district, landowner…"
-                onFiled={(where) => setRows((now) => now.map((x, k) => (k === i ? { ...x, filed: where } : x)))}
-              />
+              <button
+                type="button"
+                disabled={!c.name.trim()}
+                onClick={() => setFilingRow(filingRow === i ? null : i)}
+                className="text-xs text-zinc-500 hover:text-white transition-colors disabled:opacity-40 disabled:hover:text-zinc-500"
+              >
+                {filingRow === i ? 'Close' : 'Save to library'}
+              </button>
             )}
             <button
               type="button"
@@ -112,6 +115,22 @@ export default function CoursePlaceContacts({
               <TrashIcon />
             </button>
           </div>
+          {/* Under the row, not in a column of it: four fields and a set of
+              checkboxes squeezed beside a phone number is the shape it was. */}
+          {filingRow === i && (
+            <FileContactCard
+              instanceId={instanceId}
+              open
+              keepOnCourse
+              onOpenChange={(v) => setFilingRow(v ? i : null)}
+              contact={{ name: c.name, phone: c.phone, email: c.email }}
+              rolePlaceholder="Ranger district, landowner…"
+              onFiled={(where) => {
+                setRows((now) => now.map((x, k) => (k === i ? { ...x, filed: where } : x)))
+                setFilingRow(null)
+              }}
+            />
+          )}
           </Fragment>
         ))}
 

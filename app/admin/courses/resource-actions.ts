@@ -643,11 +643,39 @@ export async function contactFilingShelves(
 export async function fileContactToPlace(
   instanceId: string,
   shelf: ContactShelf,
-  contact: { name: string; role?: string; phone?: string; email?: string; note?: string }
+  contact: { name: string; role?: string; phone?: string; email?: string; note?: string },
+  /** A local contact typed into the course's own list, which is saved with
+      the details form. Filing them felt like saving them and was not: the
+      row lived in the browser until somebody pressed Save on a form two
+      sections up, and closing the editor lost them. Said yes here, the
+      course keeps them too. */
+  alsoKeepOnCourse = false
 ): Promise<{ error: string } | { filedWith: string }> {
   const { admin, client, venue, region } = await contactShelves(instanceId)
   const name = contact.name.trim()
   if (!name) return { error: 'A contact needs a name.' }
+
+  if (alsoKeepOnCourse) {
+    const { data: inst } = await admin
+      .from('course_instances')
+      .select('place_contacts')
+      .eq('id', instanceId)
+      .single()
+    const have = (inst?.place_contacts ?? []) as { name?: string }[]
+    if (!have.some((c) => c.name?.trim().toLowerCase() === name.toLowerCase())) {
+      const { error } = await admin
+        .from('course_instances')
+        .update({
+          place_contacts: [
+            ...have,
+            { name, phone: contact.phone?.trim() || undefined, email: contact.email?.trim() || undefined },
+          ],
+        })
+        .eq('id', instanceId)
+      if (error) throw new Error(error.message)
+      revalidate(instanceId)
+    }
+  }
 
   // The client keeps its own people (266). Same question, a different noun
   // underneath — which is why it is the same control and the same verb.
