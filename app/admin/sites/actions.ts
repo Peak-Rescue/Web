@@ -5,7 +5,6 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { type SiteLink } from '@/lib/sites'
-import { saveContact } from '@/app/admin/contacts/actions'
 import { refuse, type ActionResult, type ActionRefusal } from '@/lib/action-result'
 import { isValidRegion } from '@/lib/regions'
 
@@ -334,22 +333,6 @@ export async function addPlaceLink(
 }
 
 /** The local someone we actually ring about this area. */
-export async function addPlaceContact(
-  scope: PlaceScope,
-  contact: { name: string; role?: string; phone?: string; email?: string; note?: string }
-): Promise<ActionResult> {
-  await requireAdmin()
-  // Written where contacts live now. This wrote a row into `venues.contacts`
-  // and `region_info.contacts`, the json arrays that migration 267 replaced,
-  // so the save worked and the page — which reads `contact_links` — never
-  // showed it. A person is one record with a link per place they belong to;
-  // there is one writer for that, and this is not a second one.
-  const saved = await saveContact(scope, contact)
-  if ('error' in saved) return saved
-  revalidate()
-  revalidatePath('/admin/library')
-}
-
 /** Makes a country or a state exist on the places page before anything is in
  *  it. A region is not a row anywhere — it is a code other things carry — so
  *  until something was filed under it there was no heading to file anything

@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createSite, addPlaceLink, addPlaceContact, type PlaceScope } from './actions'
+import { createSite, addPlaceLink, type PlaceScope } from './actions'
 import { createLibraryItem } from '@/app/admin/library/actions'
 import { errorFrom } from '@/lib/action-result'
 import TrashIcon from '@/components/TrashIcon'
@@ -18,7 +18,10 @@ import TrashIcon from '@/components/TrashIcon'
 // could make a map and a ropewiki link and nothing else: a canyon's beta is a
 // paragraph somebody writes, and a contact is a person with a number.
 
-type Kind = 'map' | 'beta' | 'plan' | 'permit' | 'weather' | 'contact'
+// No 'contact'. The contacts list sits above this row with its own "+ Add
+// contact", and that one opens the editor the client page and the course use
+// — this one was three boxes and could file them nowhere else.
+type Kind = 'map' | 'beta' | 'plan' | 'permit' | 'weather'
 
 
 const input =
@@ -65,7 +68,6 @@ export default function AddToPlace({
     // failure, so it is not a box anyone has to remember to tick.
     { k: 'permit', label: 'Permit' },
     { k: 'weather', label: 'Weather' },
-    { k: 'contact', label: 'Contact' },
   ]
 
   async function run(fn: () => Promise<{ error: string } | void>) {
@@ -209,33 +211,6 @@ export default function AddToPlace({
           <input name="url" required className={`${input} font-mono`} placeholder="https://…" />
           <button disabled={busy} className="text-[11px] px-2 py-1 rounded border border-zinc-700 text-zinc-300 hover:border-zinc-500 hover:text-white transition-colors disabled:opacity-40">
             Add weather
-          </button>
-          {back}
-        </form>
-      )}
-
-      {/* Not a link. The ranger district, the landowner, whoever holds the
-          gate code — the local we actually ring about this area. */}
-      {kind === 'contact' && (
-        <form
-          className="grid gap-2 sm:grid-cols-[1fr_1fr_1fr_auto_auto] items-center"
-          onSubmit={(e) => {
-            e.preventDefault()
-            const f = new FormData(e.currentTarget)
-            const who = String(f.get('who'))
-            run(() => addPlaceContact(scope, {
-              name: String(f.get('name')),
-              role: String(f.get('role')),
-              phone: who.includes('@') ? undefined : who,
-              email: who.includes('@') ? who : undefined,
-            }))
-          }}
-        >
-          <input name="name" required autoFocus className={input} placeholder="Who — ranger district, landowner" />
-          <input name="role" className={input} placeholder="What for — permits, gate code" />
-          <input name="who" className={input} placeholder="Phone or email" />
-          <button disabled={busy} className="text-[11px] px-2 py-1 rounded border border-zinc-700 text-zinc-300 hover:border-zinc-500 hover:text-white transition-colors disabled:opacity-40">
-            Add contact
           </button>
           {back}
         </form>

@@ -226,12 +226,16 @@ export default function SitesShelf({
             ))}
           </div>
         )}
-        <ContactBook
-          scope={{ regionCode: code }}
-          scopeLabel={regionLabel(code) || code}
-          contacts={contactsByOwner.get(`region:${code}`) ?? []}
-          rolePlaceholder="Ranger district, landowner…"
-        />
+        <div>
+          <p className="text-[10px] uppercase tracking-wide text-zinc-700 mb-1.5">Contacts</p>
+          <ContactBook
+            scope={{ regionCode: code }}
+            scopeLabel={regionLabel(code) || code}
+            contacts={contactsByOwner.get(`region:${code}`) ?? []}
+            rolePlaceholder="Ranger district, landowner…"
+            addLabel="+ Add contact"
+          />
+        </div>
         {other.length > 0 && (
           <div className="flex flex-wrap gap-1.5">
             {other.map((l, i) => (
@@ -326,7 +330,11 @@ export default function SitesShelf({
                     way to add them. The country had this block and the state
                     did not, so a permit true for all of Utah could be filed
                     only by pretending it belonged to one venue in it. */}
-                {sub.code && <RegionBlocks code={sub.code} />}
+                {/* Not where the sub is the country — Bahamas has no
+                    states, so its venues are filed to BS and the country's
+                    own block and this one were the same block drawn twice.
+                    Two "Nobody on file yet", two add rows, one place. */}
+                {sub.code && sub.code !== c.country && <RegionBlocks code={sub.code} />}
                 <div className="space-y-2">
         {sub.groups.map((g) => (
           <details key={g.key} className="group/venue rounded-lg border border-zinc-800 bg-zinc-900">
@@ -365,6 +373,7 @@ export default function SitesShelf({
                   scopeLabel={g.venue.name}
                   contacts={contactsByOwner.get(`venue:${g.venue.id}`) ?? []}
                   rolePlaceholder="Ranger district, landowner…"
+                  addLabel="+ Add contact"
                 />
               </div>
             )}
