@@ -7,6 +7,7 @@ import { errorFrom, type ActionResult } from '@/lib/action-result'
 import AddLinkDialog from '@/components/AddLinkDialog'
 import { createClient } from '@/lib/supabase/client'
 import AddButtons from '@/components/AddButtons'
+import { type FilingValue } from '@/components/FilingFields'
 import { KIND_META, shelfLink, type LibraryAudience, type LibraryKind } from '@/lib/library'
 import { AudiencePills } from '@/components/AudiencePills'
 import AudienceToggle from '@/components/AudienceToggle'
@@ -83,6 +84,10 @@ export default function CourseResourcesSection({
   // What the dialog opens asking for. The MEDEVAC banner knows; the plain
   // "+ Add a link" does not and leaves it to be said on the form.
   const [linkKind, setLinkKind] = useState<string | undefined>(undefined)
+  // Chosen but not yet uploaded: the dialog asks the filing questions first,
+  // because a file that uploads the moment it is picked has already been
+  // filed by the time anybody could say where it belongs.
+  const [pendingFiles, setPendingFiles] = useState<File[] | null>(null)
   const [picker, setPicker] = useState<ResourcePickerItem[] | null>(null)
   const [pickerOpen, setPickerOpen] = useState(false)
   const [showAll, setShowAll] = useState(false)
@@ -184,7 +189,7 @@ export default function CourseResourcesSection({
   // A file, onto the course and onto the shelf at the same time. Pasting a
   // Drive link was the only way before, which is a second home for a document
   // and no row in the library at all.
-  async function upload(picked: File[], kind?: string) {
+  async function upload(picked: File[], kind?: string, filing?: FilingValue) {
     if (picked.length === 0) return
     await run(async () => {
       const prepared = await createResourceUploadTargets(
@@ -203,7 +208,21 @@ export default function CourseResourcesSection({
         if (upErr) throw new Error(`Upload failed for “${picked[i].name}”: ${upErr.message}`)
         uploads.push({ path: prepared.targets[i].path, filename: picked[i].name })
       }
-      return finalizeResourceUploads(instanceId, uploads, kind ?? uploadKind ?? 'reference', 'internal')
+      return finalizeResourceUploads(
+        instanceId,
+        uploads,
+        filing?.kind || kind || uploadKind || 'reference',
+        filing?.audience === 'shared' ? 'shared' : 'internal',
+        filing && {
+          audience: filing.audience as 'internal' | 'shared' | 'admin',
+          place: filing.place,
+          disciplines: filing.disciplines,
+          topics: filing.topicsRaw,
+          note: filing.note,
+          clientId: filing.client_id,
+          courseTypes: filing.course_types,
+        }
+      )
     })
     setUploadKind(undefined)
   }
@@ -234,7 +253,7 @@ export default function CourseResourcesSection({
             disabled={busy}
             onFromLibrary={() => { setQ(''); setOnlyKind('medevac'); openPicker() }}
             onAddLink={() => { setLinkKind('medevac'); setLinkOpen(true) }}
-            onAddFile={(files) => upload(files, 'medevac')}
+            onAddFile={(files) => { setPendingFiles(files); setLinkKind('medevac'); setLinkOpen(true) }}
           />
           {/* Said here, where the button is. The section's error line is at
               the bottom of a long block, so an upload that refused read as a
@@ -343,7 +362,7 @@ export default function CourseResourcesSection({
           noun="file"
           onFromLibrary={openPicker}
           onAddLink={() => { setLinkKind(undefined); setLinkOpen(true) }}
-          onAddFile={(files) => upload(files)}
+          onAddFile={(files) => { setPendingFiles(files); setLinkKind(undefined); setLinkOpen(true) }}
         />
         {/* The shelf this section is a view of. It said Reference on both,
             so the venue half — maps, beta, plans, permits, all filed by
@@ -518,13 +537,14 @@ export default function CourseResourcesSection({
         withAudience
         libraryPlace={placeLabel}
         defaultKind={linkKind}
-        defaultToLibrary={Boolean(linkKind)}
-        onUpload={(files, kind) => {
-          setUploadKind(kind)
+        defaultToLibrary={Boolean(linkKind) || Boolean(pendingFiles)}
+        files={pendingFiles}
+        onUpload={(files, kind, _audience, filing) => {
           setLinkOpen(false)
-          upload(files, kind)
+          setPendingFiles(null)
+          upload(files, kind, filing)
         }}
-        onCancel={() => setLinkOpen(false)}
+        onCancel={() => { setLinkOpen(false); setPendingFiles(null) }}
         onSubmit={(name, url, audience, toLibrary, kind, filing) =>
           run(async () => {
             // Close either way: a refusal ("already in the library") is

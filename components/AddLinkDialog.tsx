@@ -39,6 +39,7 @@ export default function AddLinkDialog({
   defaultKind,
   defaultToLibrary,
   onUpload,
+  files,
 }: {
   open: boolean
   busy: boolean
@@ -56,7 +57,11 @@ export default function AddLinkDialog({
   /** Where a file is as good an answer as a link. Given, the dialog offers
       both; withheld, it is a link dialog — a map is a CalTopo URL and there
       is no file to upload. The caller does the uploading; this only asks. */
-  onUpload?: (files: File[], kind: string, audience: LibraryAudience) => void
+  onUpload?: (files: File[], kind: string, audience: LibraryAudience, filing?: FilingValue) => void
+  /** Files already chosen, so the dialog is the place the questions get
+      asked rather than something that happens after the upload has already
+      filed it. With these the link box steps aside. */
+  files?: File[] | null
   /** `kind` is only meaningful when the link is also being filed; `filing`
       carries the rest of what the library asks — where it is about, whose it
       is, which offerings — when the person said to file it. */
@@ -125,9 +130,17 @@ export default function AddLinkDialog({
 
   // Where the audience is asked, it is required — an unanswered question must
   // not resolve itself into the more restrictive answer behind your back.
-  const canSubmit = !busy && url.trim().length > 0 && (!withAudience || audience !== null)
-  const submit = () =>
-    canSubmit && onSubmit(name, url, audience ?? 'internal', toLibrary, kind, toLibrary ? filing ?? undefined : undefined)
+  const hasFiles = Boolean(files?.length)
+  const canSubmit = !busy && (hasFiles || url.trim().length > 0) && (!withAudience || audience !== null)
+  const submit = () => {
+    if (!canSubmit) return
+    const answers = toLibrary ? filing ?? undefined : undefined
+    // A file is uploaded and filed by the caller; a link is added by it. The
+    // questions are the same either way, which is the point of asking them
+    // here rather than after the upload has already decided.
+    if (hasFiles && onUpload) onUpload(files!, kind, audience ?? 'internal', answers)
+    else onSubmit(name, url, audience ?? 'internal', toLibrary, kind, answers)
+  }
 
   return (
     <div
@@ -146,24 +159,35 @@ export default function AddLinkDialog({
         onClick={(e) => e.stopPropagation()}
       >
         <h3 className="text-sm font-semibold text-zinc-200 mb-1">
-          {onUpload ? 'Add something new' : 'Add a link'}
+          {hasFiles ? 'Add this file' : onUpload ? 'Add something new' : 'Add a link'}
         </h3>
         <p className="text-xs text-zinc-500 mb-4">
-          {onUpload
-            ? 'A link to where it already lives, or the file itself.'
-            : 'Google Drive, Dropbox, CalTopo — wherever it already lives.'}
+          {hasFiles
+            ? 'It goes on the course, and — if you say so — onto the shelves as well.'
+            : onUpload
+              ? 'A link to where it already lives, or the file itself.'
+              : 'Google Drive, Dropbox, CalTopo — wherever it already lives.'}
         </p>
 
-        <label className="block text-xs text-zinc-500 mb-1">Link</label>
-        <input
-          autoFocus
-          value={url}
-          disabled={busy}
-          onChange={(e) => setUrl(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && submit()}
-          placeholder="https://drive.google.com/…"
-          className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:border-zinc-500 disabled:opacity-50"
-        />
+        {files?.length ? (
+          <>
+            <label className="block text-xs text-zinc-500 mb-1">File</label>
+            <p className="text-sm text-zinc-200 truncate">{files.map((f) => f.name).join(', ')}</p>
+          </>
+        ) : (
+          <>
+            <label className="block text-xs text-zinc-500 mb-1">Link</label>
+            <input
+              autoFocus
+              value={url}
+              disabled={busy}
+              onChange={(e) => setUrl(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && submit()}
+              placeholder="https://drive.google.com/…"
+              className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:border-zinc-500 disabled:opacity-50"
+            />
+          </>
+        )}
 
         <label className="block text-xs text-zinc-500 mt-3 mb-1">Name</label>
         <input
@@ -200,7 +224,7 @@ export default function AddLinkDialog({
             for "a link" and "a file" made the choice before the question —
             what is being added is one thing, and how it arrives is a detail
             of it. */}
-        {onUpload && (
+        {onUpload && !hasFiles && (
           <label className="flex items-center justify-between gap-3 mt-3 px-3 py-2.5 rounded border border-dashed border-zinc-700 hover:border-zinc-500 text-sm text-zinc-300 cursor-pointer transition-colors">
             <span>Or upload the file itself</span>
             <input
@@ -214,7 +238,7 @@ export default function AddLinkDialog({
                 // the other.
                 const picked = Array.from(e.target.files ?? [])
                 e.target.value = ''
-                if (picked.length) onUpload(picked, kind, audience ?? 'internal')
+                if (picked.length) onUpload(picked, kind, audience ?? 'internal', toLibrary ? filing ?? undefined : undefined)
               }}
             />
             <span className="text-xs text-zinc-500 shrink-0">Choose…</span>
@@ -250,7 +274,7 @@ export default function AddLinkDialog({
             disabled={!canSubmit}
             className="px-4 py-2 bg-pr-red hover:bg-pr-red-dark text-white rounded text-sm font-medium transition-colors disabled:opacity-50"
           >
-            {busy ? 'Adding…' : 'Add link'}
+            {busy ? 'Adding…' : hasFiles ? 'Upload and file' : 'Add link'}
           </button>
           <button
             onClick={onCancel}

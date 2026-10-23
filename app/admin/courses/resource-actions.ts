@@ -730,7 +730,20 @@ export async function finalizeResourceUploads(
   instanceId: string,
   uploads: { path: string; filename: string }[],
   kind: string,
-  audience: 'internal' | 'shared'
+  audience: 'internal' | 'shared',
+  /** The rest of what the filing panel asked, applied to the row the upload
+      makes. Without it an uploaded file was filed from the course — its
+      place, its disciplines, no client — which is the thing the panel
+      exists to stop. */
+  filing?: {
+    audience?: 'internal' | 'shared' | 'admin'
+    place?: string
+    disciplines?: string[]
+    topics?: string
+    note?: string
+    clientId?: string | null
+    courseTypes?: string[]
+  }
 ): Promise<ActionResult> {
   const { user, admin } = await requireTeam(instanceId)
   if (uploads.length === 0) return
@@ -746,6 +759,10 @@ export async function finalizeResourceUploads(
       audience,
     })
     if ('error' in r) return r
+    if (filing) {
+      const { applyChoices } = await import('@/lib/library-file')
+      await applyChoices(admin, r.id, { ...filing, kind })
+    }
     const { error } = await admin.from('course_resources').insert({
       instance_id: instanceId,
       library_item_id: r.id,
