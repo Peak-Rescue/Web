@@ -230,7 +230,7 @@ export default function CourseResourcesSection({
               )}
               {r.fromLibrary ? (
                 <Link
-                  href={shelfLink('resource', { status: 'all' }).href}
+                  href={shelfLink(scope === 'venue' ? 'venue' : 'resource', { status: 'all' }).href}
                   className={`text-[11px] transition-colors ${
                     r.libraryLocked
                       ? 'text-amber-600/80 hover:text-amber-400'
@@ -307,12 +307,15 @@ export default function CourseResourcesSection({
             meant as an edit to that entry, and until there was a way through
             to it the only door out of this section made a duplicate. Opens in
             its own tab: it is an errand beside this page, not away from it. */}
+        {/* The shelf this section is a view of. It said Reference on both,
+            so the venue half — maps, beta, plans, permits, all filed by
+            place — offered a door to a shelf none of its rows are on. */}
         <Link
-          href="/admin/library?status=all&bucket=resource"
+          href={shelfLink(scope === 'venue' ? 'venue' : 'resource', { status: 'all' }).href}
           target="_blank"
           className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors ml-auto"
         >
-          {shelfLink('resource').label} library ↗
+          {shelfLink(scope === 'venue' ? 'venue' : 'resource').label} ↗
         </Link>
       </div>
 
