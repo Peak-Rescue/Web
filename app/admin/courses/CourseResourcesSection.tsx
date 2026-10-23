@@ -224,22 +224,16 @@ export default function CourseResourcesSection({
               ? `Add ${placeLabel}’s, or any other — it is below with the rest of the shelf.`
               : 'Add one below. Setting where the course is will offer the one for that place.'}
           </span>
-          {/* Both halves of the answer. "Find one" only works once one is in
-              the library, and the first MEDEVAC plan for a place has to get
-              there from somewhere — this is that somewhere, and it files it
-              while it adds it. */}
-          <button
-            onClick={() => { setQ(''); setOnlyKind('medevac'); openPicker() }}
-            className={`${btn} shrink-0`}
-          >
-            Add from library
-          </button>
-          <button
-            onClick={() => { setLinkKind('medevac'); setLinkOpen(true) }}
-            className={`${btn} shrink-0`}
-          >
-            Add new link
-          </button>
+          {/* The same three buttons as the block below it, in the same
+              style: this banner had its own pair, which is how two rows of
+              the same page came to offer the same acts in different clothes. */}
+          <AddButtons
+            className="shrink-0"
+            disabled={busy}
+            onFromLibrary={() => { setQ(''); setOnlyKind('medevac'); openPicker() }}
+            onAddLink={() => { setLinkKind('medevac'); setLinkOpen(true) }}
+            onAddFile={(files) => upload(files, 'medevac')}
+          />
         </div>
       )}
 

@@ -22,13 +22,24 @@ export default function FileContactCard({
   contact,
   onFiled,
   rolePlaceholder = 'Booking, safety, billing…',
+  open: openProp,
+  onOpenChange,
 }: {
   instanceId: string
   contact: ContactDraft
   onFiled: (filedWith: string) => void
   rolePlaceholder?: string
+  /** Controlled, where the button and the panel cannot sit together: in a
+      three-column grid the panel drawn beside its own button is a form
+      squeezed into one column of it. The parent puts the button in the row
+      and the panel under it. */
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
 }) {
-  const [open, setOpen] = useState(false)
+  const [openState, setOpenState] = useState(false)
+  const controlled = openProp !== undefined
+  const open = controlled ? openProp : openState
+  const setOpen = (v: boolean) => (controlled ? onOpenChange?.(v) : setOpenState(v))
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [shelves, setShelves] = useState<{ shelf: ContactShelf; label: string }[] | null>(null)
@@ -56,6 +67,13 @@ export default function FileContactCard({
     } finally {
       setBusy(false)
     }
+  }
+
+  // Controlled and asked to open: fetch the shelves once, then draw the
+  // panel. There is no button here to have done it.
+  if (controlled && open && !card && !busy && !error) void start()
+  if (controlled && (!open || !card || !shelves)) {
+    return error ? <p className="text-[11px] text-pr-red">{error}</p> : null
   }
 
   if (!open || !card || !shelves) {
@@ -92,7 +110,7 @@ export default function FileContactCard({
   )
 
   return (
-    <div className="basis-full mt-2 rounded border border-zinc-800 bg-zinc-900/60 p-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+    <div className="w-full basis-full mt-2 rounded border border-zinc-800 bg-zinc-900/60 p-3 grid grid-cols-1 sm:grid-cols-3 gap-2">
       <label className="block">
         {/* Client first where there is one: a point of contact is the
             client's person, and filing them under the canyon they asked

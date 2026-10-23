@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { Fragment, useRef, useState } from 'react'
 import type { CoursePOC } from '@/lib/contacts'
 import TrashIcon from '@/components/TrashIcon'
 import FileContactCard from '@/components/FileContactCard'
@@ -98,6 +98,7 @@ export default function CourseContactsEditor({
   // from a blank list — the local contacts have had the way out for a while
   // and the ones above them did not.
   const [filed, setFiled] = useState<Record<number, string>>({})
+  const [filingRow, setFilingRow] = useState<number | null>(null)
   const hasBilling = pocs.some((p) => p.role === 'billing')
 
   const cleaned = pocs
@@ -125,7 +126,8 @@ export default function CourseContactsEditor({
     <div className="sm:col-span-2 space-y-4">
       <input ref={hiddenRef} type="hidden" name="contacts_json" value={JSON.stringify(cleaned)} readOnly />
       {pocs.map((p, i) => (
-        <div key={i} className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-start">
+        <Fragment key={i}>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-start">
           <div>
             <div className="flex items-center justify-between mb-1">
               <label className="block text-xs text-zinc-400">{labelFor(pocs, i)}</label>
@@ -133,16 +135,14 @@ export default function CourseContactsEditor({
                 {instanceId && (filed[i]
                   ? <span className="text-[11px] text-zinc-600" title={`On file with ${filed[i]}`}>On file</span>
                   : (
-                    <FileContactCard
-                      instanceId={instanceId}
-                      contact={{
-                        name: p.name,
-                        phone: p.phones.find(Boolean),
-                        email: p.emails.find(Boolean),
-                        role: p.role === 'billing' ? 'Billing' : undefined,
-                      }}
-                      onFiled={(where) => setFiled((f) => ({ ...f, [i]: where }))}
-                    />
+                    <button
+                      type="button"
+                      disabled={!p.name.trim()}
+                      onClick={() => setFilingRow(filingRow === i ? null : i)}
+                      className="text-[11px] text-zinc-500 hover:text-white transition-colors disabled:opacity-40 disabled:hover:text-zinc-500"
+                    >
+                      {filingRow === i ? 'Close' : 'Save to library'}
+                    </button>
                   ))}
                 {(i > 0 || p.role === 'billing') && (
                   <button
@@ -198,6 +198,27 @@ export default function CourseContactsEditor({
             onRemove={(j) => update((n) => void n[i].emails.splice(j, 1), { notify: true })}
           />
         </div>
+        {/* Under the row, across all three columns. Drawn beside its own
+            button it was a six-field form folded into one column of a
+            three-column grid. */}
+        {instanceId && filingRow === i && (
+          <FileContactCard
+            instanceId={instanceId}
+            open
+            onOpenChange={(v) => setFilingRow(v ? i : null)}
+            contact={{
+              name: p.name,
+              phone: p.phones.find(Boolean),
+              email: p.emails.find(Boolean),
+              role: p.role === 'billing' ? 'Billing' : undefined,
+            }}
+            onFiled={(where) => {
+              setFiled((f) => ({ ...f, [i]: where }))
+              setFilingRow(null)
+            }}
+          />
+        )}
+        </Fragment>
       ))}
 
       {/* One box, the state of one fact: invoices follow the point of contact
