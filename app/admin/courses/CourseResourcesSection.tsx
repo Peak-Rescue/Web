@@ -5,12 +5,15 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { errorFrom, type ActionResult } from '@/lib/action-result'
 import AddLinkDialog from '@/components/AddLinkDialog'
+import { createClient } from '@/lib/supabase/client'
 import { KIND_META, shelfLink, type LibraryAudience, type LibraryKind } from '@/lib/library'
 import { AudiencePills } from '@/components/AudiencePills'
 import AudienceToggle from '@/components/AudienceToggle'
 import {
   addCourseResourceLink,
   addCourseResourcesFromLibrary,
+  createResourceUploadTargets,
+  finalizeResourceUploads,
   loadResourceLibrary,
   removeCourseResource,
   saveCourseResourceToLibrary,
@@ -68,6 +71,10 @@ export default function CourseResourcesSection({
   // Where to go about it, when the refusal knows.
   const [errorLink, setErrorLink] = useState<{ href: string; label: string } | null>(null)
   const [linkOpen, setLinkOpen] = useState(false)
+  // What an upload is filed as. The MEDEVAC banner knows and says so; the
+  // plain Upload button asks nothing and lets the row be typed afterwards,
+  // which is the same deal the rest of the library offers.
+  const [uploadKind, setUploadKind] = useState<string | undefined>(undefined)
   // What the dialog opens asking for. The MEDEVAC banner knows; the plain
   // "+ Add a link" does not and leaves it to be said on the form.
   const [linkKind, setLinkKind] = useState<string | undefined>(undefined)
@@ -169,6 +176,34 @@ export default function CourseResourcesSection({
   // if nobody has put one there. A missing thing that is not on the page is
   // a thing nobody notices is missing, and this one is noticed at the worst
   // possible moment.
+  // A file, onto the course and onto the shelf at the same time. Pasting a
+  // Drive link was the only way before, which is a second home for a document
+  // and no row in the library at all.
+  async function upload(files: FileList, kind?: string) {
+    const picked = Array.from(files)
+    if (picked.length === 0) return
+    await run(async () => {
+      const prepared = await createResourceUploadTargets(
+        instanceId,
+        picked.map((f) => ({ name: f.name, size: f.size }))
+      )
+      if ('error' in prepared) return prepared
+      const supabase = createClient()
+      const uploads: { path: string; filename: string }[] = []
+      for (let i = 0; i < picked.length; i++) {
+        const { error: upErr } = await supabase.storage
+          .from('task-documents')
+          .uploadToSignedUrl(prepared.targets[i].path, prepared.targets[i].token, picked[i], {
+            contentType: picked[i].type,
+          })
+        if (upErr) throw new Error(`Upload failed for “${picked[i].name}”: ${upErr.message}`)
+        uploads.push({ path: prepared.targets[i].path, filename: picked[i].name })
+      }
+      return finalizeResourceUploads(instanceId, uploads, kind ?? uploadKind ?? 'reference', 'internal')
+    })
+    setUploadKind(undefined)
+  }
+
   // Asked for in the Venue section, because that is where a MEDEVAC plan is.
   // Either type satisfies it: the two are often one document — the Maui one
   // is called Medical-MEDEVAC-Plan — and a course with an evac plan and no
@@ -196,13 +231,13 @@ export default function CourseResourcesSection({
             onClick={() => { setQ(''); setOnlyKind('medevac'); openPicker() }}
             className={`${btn} shrink-0`}
           >
-            Find one
+            From the library
           </button>
           <button
             onClick={() => { setLinkKind('medevac'); setLinkOpen(true) }}
             className={`${btn} shrink-0`}
           >
-            Add one
+            Add a new one
           </button>
         </div>
       )}
@@ -300,9 +335,17 @@ export default function CourseResourcesSection({
 
       <div className="flex items-center gap-2 mt-3">
         <button onClick={openPicker} disabled={busy} className={btn}>
-          {scope === 'venue' ? '+ Add venue material' : '+ Add reference material'}
+          {/* One phrase for taking something off a shelf, wherever it is
+              taken: this said "Add venue material", the maps section said
+              "Choose from the library" and the MEDEVAC banner said "Find
+              one", for the same act. */}
+          + From the library
         </button>
-        <button onClick={() => { setLinkKind(undefined); setLinkOpen(true) }} disabled={busy} className={btn}>+ Add a link</button>
+        {/* One way in for something new, whichever shape it arrives in. The
+            dialog asks for a link or takes the file. */}
+        <button onClick={() => { setLinkKind(undefined); setLinkOpen(true) }} disabled={busy} className={btn}>
+          {scope === 'venue' ? '+ Add new venue material' : '+ Add new reference material'}
+        </button>
         {/* Adding a second link for a resource already on the shelf is usually
             meant as an edit to that entry, and until there was a way through
             to it the only door out of this section made a duplicate. Opens in
@@ -481,6 +524,11 @@ export default function CourseResourcesSection({
         libraryPlace={placeLabel}
         defaultKind={linkKind}
         defaultToLibrary={Boolean(linkKind)}
+        onUpload={(files, kind) => {
+          setUploadKind(kind)
+          setLinkOpen(false)
+          upload(files, kind)
+        }}
         onCancel={() => setLinkOpen(false)}
         onSubmit={(name, url, audience, toLibrary, kind) =>
           run(async () => {

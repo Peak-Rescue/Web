@@ -35,7 +35,7 @@ export default function FromLibraryPicker({
   onOpen,
   onAdd,
   onPick,
-  title = 'Add from the library',
+  title = 'From the library',
 }: {
   onOpen: () => Promise<LibraryChoice[]>
   /** Where the thing being added is a row somewhere — a course file. */

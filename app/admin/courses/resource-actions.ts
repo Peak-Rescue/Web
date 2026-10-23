@@ -619,3 +619,69 @@ export async function fileContactToPlace(
   if (refused) return refused
   return { filedWith: target.label }
 }
+
+// Uploading a document onto a course, and keeping it.
+//
+// The course could take a link and the library could take a file, but the
+// course could not take a file: the only way to get a PDF of a MEDEVAC plan
+// onto a course was to put it in Drive first and paste the link. Which is a
+// second place for it to live, and the thing the library's own file rows were
+// built to stop.
+const RESOURCE_BUCKET = 'task-documents'
+const MAX_RESOURCE_BYTES = 20 * 1024 * 1024
+
+export async function createResourceUploadTargets(
+  instanceId: string,
+  files: { name: string; size: number }[]
+): Promise<{ targets: { path: string; token: string }[] } | { error: string }> {
+  const { admin } = await requireTeam(instanceId)
+  const { randomUUID } = await import('crypto')
+
+  const targets: { path: string; token: string }[] = []
+  for (const file of files) {
+    if (file.size > MAX_RESOURCE_BYTES) return refuse(`“${file.name}” is over the 20 MB limit`)
+    const ext = (file.name.split('.').pop() ?? 'pdf').toLowerCase().replace(/[^a-z0-9]/g, '') || 'pdf'
+    const path = `courses/${instanceId}/resources/${randomUUID()}.${ext}`
+    const { data, error } = await admin.storage.from(RESOURCE_BUCKET).createSignedUploadUrl(path)
+    if (error || !data) throw new Error(error?.message ?? 'Could not create upload URL')
+    targets.push({ path: data.path, token: data.token })
+  }
+  return { targets }
+}
+
+/** Filed and attached in one go: the library row is made first, and the
+    course points at it. A file added this way is on the shelf by the time it
+    is on the course, which is the difference between this and pasting a
+    link nobody else will ever find. */
+export async function finalizeResourceUploads(
+  instanceId: string,
+  uploads: { path: string; filename: string }[],
+  kind: string,
+  audience: 'internal' | 'shared'
+): Promise<ActionResult> {
+  const { user, admin } = await requireTeam(instanceId)
+  if (uploads.length === 0) return
+
+  const { fileToLibrary } = await import('@/lib/library-file')
+  let sort = await nextSort(admin, instanceId)
+  for (const u of uploads) {
+    const r = await fileToLibrary(admin, {
+      path: u.path,
+      filename: u.filename,
+      instanceId,
+      told: kind,
+      audience,
+    })
+    if ('error' in r) return r
+    const { error } = await admin.from('course_resources').insert({
+      instance_id: instanceId,
+      library_item_id: r.id,
+      audience,
+      sort_order: sort++,
+      added_by: user.id,
+    })
+    if (error) throw new Error(error.message)
+  }
+  revalidate(instanceId)
+  revalidatePath('/admin/library')
+}

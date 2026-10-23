@@ -21,6 +21,7 @@ export default function AddLinkDialog({
   onCancel,
   defaultKind,
   defaultToLibrary,
+  onUpload,
 }: {
   open: boolean
   busy: boolean
@@ -35,6 +36,10 @@ export default function AddLinkDialog({
       the MEDEVAC banner opens this asking for a MEDEVAC plan. */
   defaultKind?: string
   defaultToLibrary?: boolean
+  /** Where a file is as good an answer as a link. Given, the dialog offers
+      both; withheld, it is a link dialog — a map is a CalTopo URL and there
+      is no file to upload. The caller does the uploading; this only asks. */
+  onUpload?: (files: FileList, kind: string, audience: LibraryAudience) => void
   /** `kind` is only meaningful when the link is also being filed. */
   onSubmit: (name: string, url: string, audience: LibraryAudience, toLibrary: boolean, kind: string) => void
   onCancel: () => void
@@ -91,9 +96,13 @@ export default function AddLinkDialog({
         className="w-full max-w-md bg-zinc-900 border border-zinc-700 rounded-lg p-5 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 className="text-sm font-semibold text-zinc-200 mb-1">Add a link</h3>
+        <h3 className="text-sm font-semibold text-zinc-200 mb-1">
+          {onUpload ? 'Add something new' : 'Add a link'}
+        </h3>
         <p className="text-xs text-zinc-500 mb-4">
-          Google Drive, Dropbox, CalTopo — wherever it already lives.
+          {onUpload
+            ? 'A link to where it already lives, or the file itself.'
+            : 'Google Drive, Dropbox, CalTopo — wherever it already lives.'}
         </p>
 
         <label className="block text-xs text-zinc-500 mb-1">Link</label>
@@ -137,6 +146,28 @@ export default function AddLinkDialog({
               {libraryPlace && <> for <span className="font-medium">{libraryPlace}</span></>}
             </span>
           </label>
+
+        {/* The other way in, in the same dialog. Two buttons on the section
+            for "a link" and "a file" made the choice before the question —
+            what is being added is one thing, and how it arrives is a detail
+            of it. */}
+        {onUpload && (
+          <label className="flex items-center justify-between gap-3 mt-3 px-3 py-2.5 rounded border border-dashed border-zinc-700 hover:border-zinc-500 text-sm text-zinc-300 cursor-pointer transition-colors">
+            <span>Or upload the file itself</span>
+            <input
+              type="file"
+              multiple
+              disabled={busy}
+              className="hidden"
+              onChange={(e) => {
+                const files = e.target.files
+                e.target.value = ''
+                if (files?.length) onUpload(files, kind, audience ?? 'internal')
+              }}
+            />
+            <span className="text-xs text-zinc-500 shrink-0">Choose…</span>
+          </label>
+        )}
 
         {toLibrary && (
           <label className="block mt-2 text-xs text-zinc-400">

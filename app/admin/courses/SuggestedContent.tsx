@@ -156,7 +156,7 @@ export default function SuggestedContent({
       <div className="flex items-start justify-between gap-3 flex-wrap mb-3">
         <div>
           <div className="flex items-center gap-1.5">
-            <h3 className="text-sm font-semibold">Add content from the library</h3>
+            <h3 className="text-sm font-semibold">From the library</h3>
             <InfoHint text="Tick what this delivery needs, set who sees each section, and override individual items where they differ." />
           </div>
           <p className="text-xs text-zinc-500 mt-0.5">Each group becomes a section.</p>

@@ -246,8 +246,8 @@ export default function CourseMapsSection({
       )}
 
       <div className="flex items-center gap-2 mt-3">
-        <button onClick={openPicker} disabled={busy} className={btn}>+ Choose from the library</button>
-        <button onClick={() => setLinkOpen(true)} disabled={busy} className={btn}>+ Add a map</button>
+        <button onClick={openPicker} disabled={busy} className={btn}>+ From the library</button>
+        <button onClick={() => setLinkOpen(true)} disabled={busy} className={btn}>+ Add a new map</button>
         {/* Adding a second link for a map already on the shelf is usually
             meant as an edit to that entry, and until there was a way through
             to it the only door out of this section made a duplicate. Opens in
