@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { type SiteLink } from '@/lib/sites'
+import { saveContact } from '@/app/admin/contacts/actions'
 import { refuse, type ActionResult, type ActionRefusal } from '@/lib/action-result'
 import { isValidRegion } from '@/lib/regions'
 
@@ -337,33 +338,14 @@ export async function addPlaceContact(
   scope: PlaceScope,
   contact: { name: string; role?: string; phone?: string; email?: string; note?: string }
 ): Promise<ActionResult> {
-  const admin = await requireAdmin()
-  const name = contact.name.trim()
-  if (!name) return refuse('A contact needs a name.')
-  const row = {
-    name: name.slice(0, 120),
-    role: contact.role?.trim().slice(0, 80) || undefined,
-    phone: contact.phone?.trim().slice(0, 40) || undefined,
-    email: contact.email?.trim().slice(0, 120) || undefined,
-    note: contact.note?.trim().slice(0, 300) || undefined,
-  }
-
-  if ('venueId' in scope) {
-    const { data } = await admin.from('venues').select('contacts').eq('id', scope.venueId).single()
-    const { error } = await admin
-      .from('venues')
-      .update({ contacts: [...((data?.contacts as typeof row[]) ?? []), row].slice(0, 12) })
-      .eq('id', scope.venueId)
-    if (error) throw new Error(error.message)
-  } else {
-    const { data } = await admin
-      .from('region_info').select('contacts').eq('region_code', scope.regionCode).maybeSingle()
-    const { error } = await admin.from('region_info').upsert(
-      { region_code: scope.regionCode, contacts: [...((data?.contacts as typeof row[]) ?? []), row].slice(0, 12), updated_at: new Date().toISOString() },
-      { onConflict: 'region_code' }
-    )
-    if (error) throw new Error(error.message)
-  }
+  await requireAdmin()
+  // Written where contacts live now. This wrote a row into `venues.contacts`
+  // and `region_info.contacts`, the json arrays that migration 267 replaced,
+  // so the save worked and the page — which reads `contact_links` — never
+  // showed it. A person is one record with a link per place they belong to;
+  // there is one writer for that, and this is not a second one.
+  const saved = await saveContact(scope, contact)
+  if ('error' in saved) return saved
   revalidate()
   revalidatePath('/admin/library')
 }
@@ -488,60 +470,3 @@ export async function removeRegion(code: string): Promise<ActionResult> {
   revalidatePath('/admin/library')
 }
 
-/** A contact off a place. Matched on name, which is what the row shows: two
-    contacts with the same name on one venue is a duplicate, not a pair. */
-export async function removePlaceContact(scope: PlaceScope, name: string): Promise<ActionResult> {
-  const admin = await requireAdmin()
-  const drop = (rows: { name: string }[] | null | undefined) => (rows ?? []).filter((c) => c.name !== name)
-
-  if ('venueId' in scope) {
-    const { data } = await admin.from('venues').select('contacts').eq('id', scope.venueId).single()
-    const { error } = await admin
-      .from('venues')
-      .update({ contacts: drop(data?.contacts as { name: string }[]) })
-      .eq('id', scope.venueId)
-    if (error) throw new Error(error.message)
-  } else {
-    const { data } = await admin
-      .from('region_info').select('contacts').eq('region_code', scope.regionCode).maybeSingle()
-    const { error } = await admin
-      .from('region_info')
-      .update({ contacts: drop(data?.contacts as { name: string }[]) })
-      .eq('region_code', scope.regionCode)
-    if (error) throw new Error(error.message)
-  }
-  revalidate()
-  revalidatePath('/admin/library')
-}
-
-/** A place's whole contact list, saved as one. The same shape the client's
-    people are saved in, because they are edited by the same component: a
-    wrong number used to be fixable only by deleting the person. */
-export async function savePlaceContacts(
-  scope: PlaceScope,
-  contacts: { name: string; role?: string; phone?: string; email?: string; note?: string }[]
-): Promise<ActionResult> {
-  const admin = await requireAdmin()
-  const clean = contacts
-    .map((c) => ({
-      name: c.name.trim().slice(0, 120),
-      role: c.role?.trim().slice(0, 80) || undefined,
-      phone: c.phone?.trim().slice(0, 40) || undefined,
-      email: c.email?.trim().slice(0, 120) || undefined,
-      note: c.note?.trim().slice(0, 300) || undefined,
-    }))
-    .filter((c) => c.name)
-    .slice(0, 12)
-
-  if ('venueId' in scope) {
-    const { error } = await admin.from('venues').update({ contacts: clean }).eq('id', scope.venueId)
-    if (error) throw new Error(error.message)
-  } else {
-    const { error } = await admin
-      .from('region_info')
-      .upsert({ region_code: scope.regionCode, contacts: clean }, { onConflict: 'region_code' })
-    if (error) throw new Error(error.message)
-  }
-  revalidate()
-  revalidatePath('/admin/library')
-}
