@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { removePlaceLink, type PlaceScope } from './actions'
 import type { VenueLink } from '@/lib/library'
 import TrashIcon from '@/components/TrashIcon'
+import { errorFrom } from '@/lib/action-result'
 
 // A link on a place, with the way to take it off.
 //
@@ -23,6 +24,7 @@ export default function PlaceLinkChip({
 }) {
   const router = useRouter()
   const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const cls = tone === 'weather'
     ? 'border-sky-900/60 bg-sky-950/30 text-sky-300 hover:border-sky-700'
@@ -40,12 +42,17 @@ export default function PlaceLinkChip({
         onClick={async () => {
           if (!confirm(`Take "${link.label}" off this place?`)) return
           setBusy(true)
-          try { await removePlaceLink(scope, link.url); router.refresh() } finally { setBusy(false) }
+          // Caught, because a throw in an async handler is an unhandled
+          // rejection: nothing is drawn and the button reads as dead.
+          try { await removePlaceLink(scope, link.url); router.refresh() }
+          catch (e) { setError(errorFrom(e, 'That didn’t come off')) }
+          finally { setBusy(false) }
         }}
         className="text-zinc-600 hover:text-red-400 transition-colors disabled:opacity-40 px-0.5"
       >
         <TrashIcon />
       </button>
+      {error && <span className="text-[11px] text-pr-red">{error}</span>}
     </span>
   )
 }

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import TrashIcon from '@/components/TrashIcon'
 import ContactEditor from '@/components/ContactEditor'
 import { unlinkContact, type BookContact } from '@/app/admin/contacts/actions'
+import { errorFrom } from '@/lib/action-result'
 import { keyOf, type ContactScope } from '@/lib/contact-homes'
 
 // The people known from one place, edited in place.
@@ -38,6 +39,7 @@ export default function ContactBook({
   /** A contact's id while it is being changed, or 'new'. */
   const [editing, setEditing] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const mine = keyOf(scope)
 
@@ -88,7 +90,11 @@ export default function ContactBook({
               onClick={async () => {
                 if (!confirm(`Take ${c.name} off this list?`)) return
                 setBusy(true)
-                try { await unlinkContact(scope, c.id); router.refresh() } finally { setBusy(false) }
+                // Caught: a throw here is an unhandled rejection, which
+                // draws nothing and reads as a trash that does not work.
+                try { await unlinkContact(scope, c.id); router.refresh() }
+                catch (e) { setError(errorFrom(e, 'That didn’t come off')) }
+                finally { setBusy(false) }
               }}
               className="text-zinc-700 hover:text-red-400 transition-colors disabled:opacity-40"
             >
@@ -97,6 +103,8 @@ export default function ContactBook({
           </div>
         )
       })}
+
+      {error && <p className="text-[11px] text-pr-red">{error}</p>}
 
       {editing === 'new' && (
         <ContactEditor

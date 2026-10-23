@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { removeRegion, removeVenue } from './actions'
 import TrashIcon from '@/components/TrashIcon'
+import { errorFrom } from '@/lib/action-result'
 
 // Undoing a level that was added by mistake — picking Nevada when you meant
 // New Mexico, typing a venue twice.
@@ -41,6 +42,12 @@ export default function RemovePlace({
             const r = 'venueId' in scope ? await removeVenue(scope.venueId) : await removeRegion(scope.regionCode)
             if (r && 'error' in r) { setError(r.error); setLink(r.link ?? null) }
             else router.refresh()
+          } catch (e) {
+            // A throw inside an async onClick is an unhandled rejection: no
+            // error boundary catches it and nothing is drawn, so a delete
+            // that failed looks exactly like a button that does nothing.
+            // That is what confirming and watching nothing happen was.
+            setError(errorFrom(e, 'That didn’t delete'))
           } finally {
             setBusy(false)
           }
