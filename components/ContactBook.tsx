@@ -3,7 +3,13 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import TrashIcon from '@/components/TrashIcon'
-import { saveContact, unlinkContact, type BookContact, type ContactScope } from '@/app/admin/contacts/actions'
+import {
+  deleteContactEverywhere,
+  saveContact,
+  unlinkContact,
+  type BookContact,
+  type ContactScope,
+} from '@/app/admin/contacts/actions'
 
 // The people known from one place, edited in place.
 //
@@ -74,6 +80,25 @@ export default function ContactBook({
               </button>
               <button type="button" onClick={() => setDraft(null)} className="text-[11px] text-zinc-500 hover:text-zinc-300 transition-colors">
                 Cancel
+              </button>
+              {/* The other kind of delete. The trash on the row is "not ours
+                  any more" and leaves them wherever else they are known;
+                  this is "not a person we have", and it says how many lists
+                  it empties before it empties them. */}
+              <button
+                type="button"
+                disabled={busy}
+                onClick={async () => {
+                  const also = c.alsoFrom?.length
+                    ? ` They are also known from ${c.alsoFrom.join(', ')}, and go from there too.`
+                    : ''
+                  if (!confirm(`Delete ${c.name} everywhere?${also} This cannot be undone.`)) return
+                  setBusy(true)
+                  try { await deleteContactEverywhere(c.id); setDraft(null); router.refresh() } finally { setBusy(false) }
+                }}
+                className="ml-auto text-[11px] text-zinc-600 hover:text-red-400 transition-colors disabled:opacity-40"
+              >
+                Delete everywhere
               </button>
               {error && <span className="text-[11px] text-pr-red">{error}</span>}
             </div>

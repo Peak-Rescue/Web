@@ -153,3 +153,21 @@ export async function unlinkContact(scope: ContactScope, contactId: string): Pro
   revalidatePath('/admin/sites')
   revalidatePath('/admin/library')
 }
+
+/** The person, gone from everywhere that knows them.
+ *
+ * The trash on a list is "not ours any more", which is the common one and
+ * the safe one: the number is still right for the venue even when the client
+ * stops using them. This is the other one — left the industry, wrong person
+ * entered, a duplicate that slipped past the matching — and it says how many
+ * lists it is about to empty before it does it. */
+export async function deleteContactEverywhere(contactId: string): Promise<void> {
+  await requireAdminUser()
+  const admin = createAdminClient()
+  // The links cascade off the person, so this is one delete.
+  const { error } = await admin.from('contacts').delete().eq('id', contactId)
+  if (error) throw new Error(error.message)
+  revalidatePath('/admin/clients')
+  revalidatePath('/admin/sites')
+  revalidatePath('/admin/library')
+}
