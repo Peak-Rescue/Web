@@ -133,11 +133,14 @@ export async function saveContact(
   for (const key of wanted) {
     const target = scopeOf(key)
     if (!target) continue
+    // A plain insert, not an upsert: the unique indexes are partial (one per
+    // kind of place), and ON CONFLICT cannot name a partial index — so the
+    // upsert this used to be was refused with 42P10 on every save.
     const { error: linkError } = await admin
       .from('contact_links')
-      .upsert({ contact_id: id, [column(target)]: value(target) }, { onConflict: `contact_id,${column(target)}` })
+      .insert({ contact_id: id, [column(target)]: value(target) })
     // A duplicate link is the same fact twice, which is not an error.
-    if (linkError && !linkError.message.includes('duplicate')) throw new Error(linkError.message)
+    if (linkError && linkError.code !== '23505') throw new Error(linkError.message)
   }
 
   // Only when the editor said what the whole set should be. Called without
