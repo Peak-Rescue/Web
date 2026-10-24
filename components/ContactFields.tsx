@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { type ContactHome } from '@/app/admin/contacts/actions'
+import { type ContactHome } from '@/lib/contact-homes'
 
 // One person's details, and everywhere they are known from.
 //

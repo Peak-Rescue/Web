@@ -5,7 +5,11 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { requireAdminUser } from '@/lib/course-access'
 import { keyOf, scopeOf, type ContactHome, type ContactScope } from '@/lib/contact-homes'
 
-export type { ContactHome, ContactScope }
+// The types are not re-exported from here. `export type { ContactHome }` in a
+// `'use server'` file compiled to a value re-export, and the module threw
+// `ReferenceError: ContactHome is not defined` at evaluation — so every
+// action in it 500'd, which is why the places picker sat on "Loading…".
+// Import them from '@/lib/contact-homes', where they are declared.
 
 // People, and where each is known from (267).
 //
