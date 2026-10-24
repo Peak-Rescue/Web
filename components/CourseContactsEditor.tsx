@@ -90,6 +90,9 @@ export default function CourseContactsEditor({
       name: p.name,
       phones: p.phones.length ? p.phones : [''],
       emails: p.emails.length ? p.emails : [''],
+      // Carried, or a saved billing contact reloads as "POC 2" and the next
+      // auto-save writes it back untagged.
+      ...(p.role ? { role: p.role } : {}),
     }))
   )
   const hiddenRef = useRef<HTMLInputElement>(null)
