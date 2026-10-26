@@ -139,6 +139,24 @@ export default function AttachmentFields({
         {trailing}
       </div>
 
+      {/* The panel the first of those three buttons opens. It was imported
+          here and never drawn, so the button set a flag nothing read and
+          the library door on a meeting point and an update did nothing at
+          all. Picked rows arrive as links, because that is what an
+          attachment row is here — nothing is written until the composer
+          around it is saved. */}
+      <FromLibraryPicker
+        open={libraryOpen}
+        onOpenChange={setLibraryOpen}
+        onOpen={() => libraryForCourseFiles(instanceId)}
+        onPick={(rows) =>
+          setLinks((p) => [
+            ...p,
+            ...rows.filter((r) => r.url).map((r) => ({ url: r.url as string, label: r.title })),
+          ])
+        }
+      />
+
       {addingLink && (
         <div className="flex items-center gap-2">
           <input
