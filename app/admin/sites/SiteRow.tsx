@@ -62,7 +62,6 @@ export default function SiteRow({
     venue_id: site.venue_id ?? '',
     beta: site.beta ?? '',
     meeting_point_id: site.meeting_point_id ?? '',
-    usual_meeting_time: site.usual_meeting_time ?? '',
     coords: site.coords ?? '',
   })
   const [links, setLinks] = useState<SiteLink[]>(site.links ?? [])
@@ -265,14 +264,6 @@ export default function SiteRow({
                     .filter((p) => p.active || p.id === form.meeting_point_id)
                     .map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </select>
-              </div>
-              <div>
-                <label className={label}>Usual meeting time</label>
-                <input
-                  className={input}
-                  value={form.usual_meeting_time}
-                  onChange={(e) => setForm({ ...form, usual_meeting_time: e.target.value })}
-                />
               </div>
             </div>
             {pickedMeetup && (

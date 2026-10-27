@@ -2974,7 +2974,6 @@ export default async function CourseView({
                             <MeetingDetails
                               instanceId={id}
                               dayId={d.id}
-                              inheritedTime={m.usualTime}
                               meetingDate={date}
                               meetingPoint={d.meeting_point}
                               meetingPointId={d.meeting_point_id}

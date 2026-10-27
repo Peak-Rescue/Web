@@ -43,7 +43,6 @@ type Meetup = {
 export default function MeetingDetails({
   instanceId,
   dayId,
-  inheritedTime = null,
   meetingDate,
   meetingPoint,
   meetingPointId,
@@ -66,10 +65,6 @@ export default function MeetingDetails({
   /** The day this morning belongs to. A day has no date of its own — it is
       the Nth date the course runs — so there is no date field to offer. */
   dayId: string
-  /** What we usually do at this site. A placeholder only — the hour is never
-      inherited silently, because a default that announces itself is a default
-      nobody checked. */
-  inheritedTime?: string | null
   /** Which calendar date this day falls on, worked out by the caller from the
       course's own dates. Only used for what the announcement calls the day. */
   meetingDate: string | null
@@ -528,18 +523,7 @@ export default function MeetingDetails({
           </div>
         )}
         <label className="block">
-          <span className="flex items-center gap-2 text-[11px] uppercase tracking-wide text-zinc-500 mb-1">
-            Meeting time
-            {inheritedTime && !time && (
-              <button
-                type="button"
-                onClick={() => setTime(inheritedTime)}
-                className="normal-case tracking-normal text-zinc-500 hover:text-white transition-colors"
-              >
-                usual {inheritedTime}
-              </button>
-            )}
-          </span>
+          <span className="block text-[11px] uppercase tracking-wide text-zinc-500 mb-1">Meeting time</span>
           <input
             value={time}
             onChange={(e) => setTime(e.target.value)}
