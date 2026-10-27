@@ -151,7 +151,7 @@ export default function AddToPlace({
             )}
             <div className="grid gap-2 sm:grid-cols-2">
               <div>
-                <label className={label}>Name — route, canyon, site…</label>
+                <label className={label}>Name</label>
                 <input name="name" required autoFocus className={input} />
               </div>
               <div>
@@ -161,7 +161,7 @@ export default function AddToPlace({
             </div>
 
             <div>
-              <label className={label}>Beta — approach, raps, exit, hazards</label>
+              <label className={label}>Beta</label>
               <textarea name="beta" rows={5} className={`${input} resize-y`} />
             </div>
 
@@ -170,9 +170,9 @@ export default function AddToPlace({
               <div className="space-y-1.5">
                 {links.map((l, i) => (
                   <div key={i} className="grid grid-cols-[minmax(9rem,1fr)_minmax(0,1.6fr)_1.25rem] gap-2 items-center">
-                    <input name="link_label" value={l.label} placeholder="ropewiki, Mountain Project…" className={input}
+                    <input name="link_label" value={l.label} className={input}
                            onChange={(e) => setLinks(links.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))} />
-                    <input name="link_url" value={l.url} spellCheck={false} className={`${input} font-mono`} placeholder="https://…"
+                    <input name="link_url" value={l.url} spellCheck={false} className={`${input} font-mono`}
                            onChange={(e) => setLinks(links.map((x, j) => (j === i ? { ...x, url: e.target.value } : x)))} />
                     <button type="button" onClick={() => setLinks(links.filter((_, j) => j !== i))}
                             aria-label="Remove link"

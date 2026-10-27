@@ -47,7 +47,7 @@ export default function MeetingPointForm({
     <div className="rounded border border-zinc-800 bg-zinc-950/60 p-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
       <div>
         <label className={label}>Name</label>
-        <input className={input} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Hanawi lower lot" />
+        <input className={input} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
       </div>
       <div>
         <label className={label}>Venue</label>
@@ -57,26 +57,25 @@ export default function MeetingPointForm({
         </select>
       </div>
       <div className="sm:col-span-2">
-        <label className={label}>Directions — what someone reads at 0500. Where to turn, where to park, what to look for.</label>
+        <label className={label}>Directions</label>
         <textarea
           rows={3}
           className={`${input} resize-y leading-relaxed`}
           value={form.directions}
           onChange={(e) => setForm({ ...form, directions: e.target.value })}
-          placeholder={'Gate on the mauka side past mile 12. Park along the fence, not on the grass.'}
         />
       </div>
       <div>
-        <label className={label}>Coordinates — the pin you drive to</label>
-        <input className={input} value={form.coords} onChange={(e) => setForm({ ...form, coords: e.target.value })} placeholder="20.7988, -156.1193" />
+        <label className={label}>Coordinates</label>
+        <input className={input} value={form.coords} onChange={(e) => setForm({ ...form, coords: e.target.value })} />
       </div>
 
       <div className="sm:col-span-2">
-        <label className={label}>Links — driving pin, gate code page</label>
+        <label className={label}>Links</label>
         <div className="space-y-1.5">
           {links.length > 0 && (
             <div className="grid grid-cols-[minmax(9rem,1fr)_minmax(0,1.6fr)_1.25rem] gap-2 px-0.5">
-              <span className="text-[10px] uppercase tracking-wide text-zinc-600">Driving pin, gate code…</span>
+              <span className="text-[10px] uppercase tracking-wide text-zinc-600">Label</span>
               <span className="text-[10px] uppercase tracking-wide text-zinc-600">Address</span>
             </div>
           )}
@@ -85,13 +84,11 @@ export default function MeetingPointForm({
               <input
                 className={input}
                 value={l.label}
-                placeholder="driving pin"
                 onChange={(e) => setLinks(links.map((x, j) => j === i ? { ...x, label: e.target.value } : x))}
               />
               <input
                 className={`${input} font-mono text-[12px]`}
                 value={l.url}
-                placeholder="https://…"
                 spellCheck={false}
                 onChange={(e) => setLinks(links.map((x, j) => j === i ? { ...x, url: e.target.value } : x))}
               />

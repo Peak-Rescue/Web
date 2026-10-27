@@ -409,7 +409,6 @@ export default function MeetingDetails({
             rows={2}
             value={point}
             onChange={(e) => setPoint(e.target.value)}
-            placeholder={wordsArePlace ? 'lower lot, by the big cedar' : 'gate code, who’s driving, carpool from here'}
             className="w-full min-h-[4.5rem] resize-y bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-zinc-200 leading-relaxed focus:outline-none focus:border-zinc-500"
           />
         </label>
@@ -439,7 +438,6 @@ export default function MeetingDetails({
                   autoFocus
                   value={fileDraft.name}
                   onChange={(e) => setFileDraft({ ...fileDraft, name: e.target.value })}
-                  placeholder="Hanawi lower lot"
                   className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-zinc-200 focus:outline-none focus:border-zinc-500"
                 />
               </label>
@@ -471,7 +469,6 @@ export default function MeetingDetails({
                 <input
                   value={fileDraft.coords}
                   onChange={(e) => setFileDraft({ ...fileDraft, coords: e.target.value })}
-                  placeholder="20.7984,-156.3319"
                   className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-zinc-200 focus:outline-none focus:border-zinc-500"
                 />
               </label>
@@ -531,11 +528,21 @@ export default function MeetingDetails({
           </div>
         )}
         <label className="block">
-          <span className="block text-[11px] uppercase tracking-wide text-zinc-500 mb-1">Meeting time</span>
+          <span className="flex items-center gap-2 text-[11px] uppercase tracking-wide text-zinc-500 mb-1">
+            Meeting time
+            {inheritedTime && !time && (
+              <button
+                type="button"
+                onClick={() => setTime(inheritedTime)}
+                className="normal-case tracking-normal text-zinc-500 hover:text-white transition-colors"
+              >
+                usual {inheritedTime}
+              </button>
+            )}
+          </span>
           <input
             value={time}
             onChange={(e) => setTime(e.target.value)}
-            placeholder={inheritedTime ?? '0700, ready to walk'}
             className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-zinc-200 focus:outline-none focus:border-zinc-500"
           />
         </label>

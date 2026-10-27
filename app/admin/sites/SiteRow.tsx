@@ -234,7 +234,7 @@ export default function SiteRow({
             {/* Kind was a field and is a nudge: it only ever helped if
                 everybody used the same few words, and in four rows it was
                 "canyon" four times. The name carries it. */}
-            <label className={label}>Name — route, canyon, site…</label>
+            <label className={label}>Name</label>
             <input className={input} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
           </div>
           <div>
@@ -271,7 +271,6 @@ export default function SiteRow({
                 <input
                   className={input}
                   value={form.usual_meeting_time}
-                  placeholder="0700"
                   onChange={(e) => setForm({ ...form, usual_meeting_time: e.target.value })}
                 />
               </div>
@@ -300,7 +299,7 @@ export default function SiteRow({
           </div>
 
           <div className="sm:col-span-2">
-            <label className={label}>Beta — approach, raps, exit, hazards</label>
+            <label className={label}>Beta</label>
             <textarea
               rows={10}
               className={`${input} resize-y leading-relaxed`}
@@ -310,7 +309,7 @@ export default function SiteRow({
           </div>
 
           <div className="sm:col-span-2">
-            <label className={label}>Links — route page, gauge, driving pin</label>
+            <label className={label}>Links</label>
             {/* A grid, not a flex row: the shared input class carries w-full,
                 so a width utility next to it is a coin toss on stylesheet
                 order — which is how the URL field ended up a sliver and the
@@ -319,7 +318,7 @@ export default function SiteRow({
             <div className="space-y-1.5">
               {links.length > 0 && (
                 <div className="grid grid-cols-[minmax(9rem,1fr)_minmax(0,1.6fr)_1.25rem] gap-2 px-0.5">
-                  <span className="text-[10px] uppercase tracking-wide text-zinc-600">ropewiki, Mountain Project…</span>
+                  <span className="text-[10px] uppercase tracking-wide text-zinc-600">Label</span>
                   <span className="text-[10px] uppercase tracking-wide text-zinc-600">Address</span>
                 </div>
               )}
@@ -328,13 +327,11 @@ export default function SiteRow({
                   <input
                     className={input}
                     value={l.label}
-                    placeholder="water gauge"
                     onChange={(e) => setLinks(links.map((x, j) => j === i ? { ...x, label: e.target.value } : x))}
                   />
                   <input
                     className={`${input} font-mono text-[12px]`}
                     value={l.url}
-                    placeholder="https://…"
                     spellCheck={false}
                     onChange={(e) => setLinks(links.map((x, j) => j === i ? { ...x, url: e.target.value } : x))}
                   />
