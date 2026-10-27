@@ -332,7 +332,11 @@ export default function SitesShelf({
                   word is for everyone else, and for the question this page
                   is actually asked — what does this thing cover. */}
               <span className="text-[10px] font-normal uppercase tracking-wide text-zinc-600">country</span>
-              {canEdit && c.country && !c.hasStates && <RemovePlace what={c.label} regionCode={c.country} />}
+              {canEdit && c.country && !c.hasStates && (
+                <span className="ml-auto flex items-center shrink-0">
+                  <RemovePlace what={c.label} regionCode={c.country} />
+                </span>
+              )}
             </h2>
             {c.country && <RegionBlocks code={c.country} />}
             {c.subs.map((sub) => (
@@ -347,7 +351,11 @@ export default function SitesShelf({
                   <p className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-pr-red-light/80 mb-2">
                     {sub.label || 'No state set'}
                     <span className="text-[10px] font-normal tracking-wide text-zinc-600 normal-case">state</span>
-                    {canEdit && sub.code && <RemovePlace what={sub.label || sub.code} regionCode={sub.code} />}
+                    {canEdit && sub.code && (
+                      <span className="ml-auto flex items-center shrink-0">
+                        <RemovePlace what={sub.label || sub.code} regionCode={sub.code} />
+                      </span>
+                    )}
                   </p>
                 )}
                 {/* The state's own weather, contacts, maps and plans — and the
@@ -366,8 +374,15 @@ export default function SitesShelf({
               <span aria-hidden className="text-zinc-600 text-xs transition-transform group-open/venue:rotate-90">▶</span>
               <span className="text-sm font-medium text-zinc-200">{g.name}</span>
               <span className="text-[10px] uppercase tracking-wide text-zinc-600">venue</span>
-              {canEdit && g.venue && <EditVenue venue={g.venue} />}
-              {canEdit && g.venue && <RemovePlace what={g.venue.name} venueId={g.venue.id} />}
+              {/* At the end of the row, where a canyon's and a document's
+                  are. Beside the title they read as part of the name, and
+                  the page had its verbs in two places. */}
+              {canEdit && g.venue && (
+                <span className="ml-auto flex items-center gap-2 shrink-0">
+                  <EditVenue venue={g.venue} />
+                  <RemovePlace what={g.venue.name} venueId={g.venue.id} />
+                </span>
+              )}
               {/* No tally. "1 beta · 1 map" told you a venue had something
                   without telling you what, and you were about to open it
                   either way. */}
