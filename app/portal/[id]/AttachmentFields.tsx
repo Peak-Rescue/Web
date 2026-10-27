@@ -14,10 +14,20 @@ import { libraryForCourseFiles } from '@/app/admin/courses/document-actions'
 // Shared because an update and a meeting point want exactly the same thing —
 // a map pin, a photo of the trailhead — and a second copy of an uploader is a
 // second place for the private-bucket handling to go quietly wrong.
+// A URL pasted into the box and never Added is still meant: Save is the
+// commit, and Add only makes a pill. The parent holds the box's text so its
+// save can fold it in — see withLinkDraft.
+export function withLinkDraft(links: UpdateLink[], draft: string): UpdateLink[] {
+  const url = draft.trim()
+  return url ? [...links, { url, label: '' }] : links
+}
+
 export default function AttachmentFields({
   instanceId,
   links,
   setLinks,
+  linkDraft: linkUrl,
+  setLinkDraft: setLinkUrl,
   attachments,
   setAttachments,
   disabled,
@@ -26,6 +36,9 @@ export default function AttachmentFields({
   instanceId: string
   links: UpdateLink[]
   setLinks: (fn: (prev: UpdateLink[]) => UpdateLink[]) => void
+  /** The paste box's text, held by the parent so its save can keep it. */
+  linkDraft: string
+  setLinkDraft: (v: string) => void
   attachments: UpdateAttachment[]
   setAttachments: (fn: (prev: UpdateAttachment[]) => UpdateAttachment[]) => void
   disabled?: boolean
@@ -35,7 +48,6 @@ export default function AttachmentFields({
 }) {
   const [addingLink, setAddingLink] = useState(false)
   const [libraryOpen, setLibraryOpen] = useState(false)
-  const [linkUrl, setLinkUrl] = useState('')
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
 

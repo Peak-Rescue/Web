@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import InfoHint from '@/components/InfoHint'
-import AttachmentFields from './AttachmentFields'
+import AttachmentFields, { withLinkDraft } from './AttachmentFields'
 import type { UpdateLink, UpdateAttachment, UpdateAudience } from './update-actions'
 import type { NotifyCounts } from '@/lib/course-notify'
 import CloseButton from '@/components/CloseButton'
@@ -36,6 +36,7 @@ export default function Composer({
 }) {
   const [body, setBody] = useState(initial?.body ?? '')
   const [links, setLinks] = useState<UpdateLink[]>(initial?.links ?? [])
+  const [linkDraft, setLinkDraft] = useState('')
   const [attachments, setAttachments] = useState<UpdateAttachment[]>(initial?.attachments ?? [])
   // Held as two ticks rather than one three-way choice: "who is this for" is
   // two independent yes/nos in the writer's head, and both unticked is simply
@@ -50,7 +51,7 @@ export default function Composer({
     toStudents && toInstructors ? 'everyone' : toInstructors ? 'instructors' : 'students'
   const reach = toStudents || toInstructors ? notifyCounts[audience] : 0
 
-  const empty = !body.trim() && links.length === 0 && attachments.length === 0
+  const empty = !body.trim() && links.length === 0 && !linkDraft.trim() && attachments.length === 0
   const input = 'bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-zinc-500'
 
   return (
@@ -74,6 +75,8 @@ export default function Composer({
         instanceId={instanceId}
         links={links}
         setLinks={setLinks}
+        linkDraft={linkDraft}
+        setLinkDraft={setLinkDraft}
         attachments={attachments}
         setAttachments={setAttachments}
         trailing={
@@ -100,7 +103,7 @@ export default function Composer({
 
       <div className="flex items-center gap-3 flex-wrap">
         <button
-          onClick={() => onSubmit({ body, links, attachments, audience, copyMe })}
+          onClick={() => onSubmit({ body, links: withLinkDraft(links, linkDraft), attachments, audience, copyMe })}
           disabled={busy || empty || (!toStudents && !toInstructors)}
           className="px-3 py-1.5 rounded bg-pr-red hover:bg-pr-red-dark text-white text-sm font-medium transition-colors disabled:opacity-40"
         >

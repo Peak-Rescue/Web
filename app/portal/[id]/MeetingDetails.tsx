@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Tick } from './UpdateComposer'
-import AttachmentFields from './AttachmentFields'
+import AttachmentFields, { withLinkDraft } from './AttachmentFields'
 import { ChipRow } from '@/components/LinkChip'
 import { Linkified, shortUrl, urlsIn } from '@/lib/linkify'
 import CloseButton from '@/components/CloseButton'
@@ -158,6 +158,7 @@ export default function MeetingDetails({
   }, [point, editing])
   const [time, setTime] = useState(meetingTime ?? '')
   const [draftLinks, setDraftLinks] = useState<UpdateLink[]>(links)
+  const [linkDraft, setLinkDraft] = useState('')
   const [draftFiles, setDraftFiles] = useState<UpdateAttachment[]>(
     files.map(({ path, filename }) => ({ path, filename }))
   )
@@ -221,13 +222,15 @@ export default function MeetingDetails({
   async function submit(thenTell: boolean) {
     setBusy(true); setError(null); setResult(null)
     try {
+      const savedLinks = withLinkDraft(draftLinks, linkDraft)
       await saveDayMeetingDetails(dayId, {
         meetingPointId: pointId || null,
         meetingPoint: point,
         meetingTime: time,
-        links: draftLinks,
+        links: savedLinks,
         attachments: draftFiles,
       })
+      setDraftLinks(savedLinks); setLinkDraft('')
 
       if (!thenTell) {
         setEditing(false)
@@ -302,6 +305,7 @@ export default function MeetingDetails({
   function discard() {
     setPoint(meetingPoint ?? ''); setPointId(meetingPointId ?? ''); setTime(meetingTime ?? '')
     setDraftLinks(links)
+    setLinkDraft('')
     setDraftFiles(files.map(({ path, filename }) => ({ path, filename })))
     setFileDraft(null)
     setError(null); setEditing(false)
@@ -494,6 +498,8 @@ export default function MeetingDetails({
         instanceId={instanceId}
         links={draftLinks}
         setLinks={setDraftLinks}
+        linkDraft={linkDraft}
+        setLinkDraft={setLinkDraft}
         attachments={draftFiles}
         setAttachments={setDraftFiles}
         disabled={busy}
