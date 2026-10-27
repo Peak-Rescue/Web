@@ -4,6 +4,7 @@ import { useRef, useState, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import CloseButton from '@/components/CloseButton'
 import { usePendingSaves } from '@/components/PendingSaves'
+import { useDayOrderStyle } from '@/app/admin/schedules/DayOrder'
 
 // The pencil, drawn once. Both shells offer the same way in, so it looks and
 // reads the same whether it sits on a block's header or on a day's title line.
@@ -204,6 +205,7 @@ export default function EditInPlace({
 // The pieces arrive from the server already built, so a student is sent no
 // editor and no button: `editor` is null for them and this is a plain fold.
 export function DayFold({
+  dayId,
   open,
   /** The title line's contents — everything but the button. */
   summary,
@@ -214,6 +216,8 @@ export function DayFold({
   editor,
   children,
 }: {
+  /** Places the day where a surrounding DayOrder has it, ahead of the server. */
+  dayId?: string
   open: boolean
   summary: ReactNode
   above?: ReactNode
@@ -222,9 +226,10 @@ export function DayFold({
 }) {
   const { editing, setEditing, closing, saves, SavesProvider, close } = useEditSwap()
   const ref = useRef<HTMLDetailsElement>(null)
+  const style = useDayOrderStyle(dayId)
 
   return (
-    <details ref={ref} open={open} className="group/day bg-zinc-900 border border-zinc-800 rounded-lg p-4">
+    <details ref={ref} open={open} style={style} className="group/day bg-zinc-900 border border-zinc-800 rounded-lg p-4">
       {/* Wrapping, and nothing in here fixed at its own width: a no-wrap row of
           shrink-0 parts ran the controls off the right edge of a phone, where
           `overflow-x: clip` took them away rather than letting anyone scroll to

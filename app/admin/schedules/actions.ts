@@ -327,6 +327,50 @@ export async function moveScheduleDay(dayId: string, direction: 'up' | 'down') {
   touch(instanceId)
 }
 
+// The whole order in one write, for the arrows. They move a day on screen the
+// moment they're pressed and send only once the presses stop — so a day
+// carried four places costs one save and one page rebuild, not four of each
+// with the arrows locked between them.
+//
+// Takes the full order rather than a list of moves: what's on screen is the
+// order someone chose, and sending that is the same whether they got there in
+// one press or six. The list has to be exactly this schedule's days — a day
+// added or removed elsewhere since the page loaded would otherwise be dropped
+// from the order or slotted into a schedule it isn't in.
+export async function reorderScheduleDays(scheduleId: string, dayIds: string[]) {
+  const asker = await whoIsAsking()
+  const admin = asker.admin
+  const instanceId = await instanceOfSchedule(admin, scheduleId)
+  await mayEdit(asker, instanceId)
+
+  const { data: rows, error: readError } = await admin
+    .from('schedule_days').select('id, sort_order, title').eq('schedule_id', scheduleId)
+  if (readError) throw new Error(readError.message)
+  const byId = new Map((rows ?? []).map((r) => [r.id as string, r]))
+  if (dayIds.length !== byId.size || new Set(dayIds).size !== dayIds.length || dayIds.some((id) => !byId.has(id))) {
+    throw new Error('The schedule changed since this page loaded. Reload and try again.')
+  }
+
+  // Same rule as the single swap above: a title still on its "Day 3" default
+  // follows its new position, and one someone wrote is left alone.
+  const renumber = (title: string, order: number) =>
+    /^day\s*\d+$/i.test(title.trim()) ? `Day ${order + 1}` : title
+
+  // Only the rows that actually moved, and in parallel: sort_order carries no
+  // unique constraint, so two rows sharing a value mid-write is harmless.
+  const writes = dayIds.flatMap((id, order) => {
+    const row = byId.get(id)!
+    const title = renumber(row.title as string, order)
+    if (row.sort_order === order && title === row.title) return []
+    return [admin.from('schedule_days').update({ sort_order: order, title }).eq('id', id)]
+  })
+  const results = await Promise.all(writes)
+  const failed = results.find((r) => r.error)
+  if (failed?.error) throw new Error(failed.error.message)
+
+  touch(instanceId)
+}
+
 export async function removeScheduleDay(id: string) {
   const asker = await whoIsAsking()
   const admin = asker.admin

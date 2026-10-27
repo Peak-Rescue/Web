@@ -5,7 +5,8 @@ import { updateScheduleDay, removeScheduleDay, moveScheduleDay } from './actions
 import DayOutline from './DayOutline'
 import { Grows, Marked, PinIcon, RouteIcon, NoteIcon, TargetIcon, PencilIcon } from './fields'
 import type { ScheduleDay, SiteOption } from './types'
-import { useTrackedSaves } from '@/components/PendingSaves'
+import { useTrackedSaves, useRegisterSaver } from '@/components/PendingSaves'
+import { useDayOrder } from './DayOrder'
 import { shelfLink } from '@/lib/library'
 
 // One day of a running order, as a thing you can edit wherever you meet it.
@@ -62,6 +63,29 @@ export default function ScheduleDayCard({
   // Blur fires on the mousedown that closes this card's editor; tracking the
   // save keeps the close from re-reading the page before it lands.
   const track = useTrackedSaves()
+
+  // Inside a DayOrder the arrows move the day on screen at once and the list
+  // sends the order when the presses stop; closing the editor waits for that
+  // send like any other save. Outside one, a press is a save and a rebuild.
+  const live = useDayOrder()
+  useRegisterSaver({
+    isPending: () => live?.isPending() ?? false,
+    flush: () => live?.flush() ?? Promise.resolve(),
+  })
+  const at = live?.position(day.id) ?? -1
+  const ends = live && at >= 0
+    ? { isFirst: at === 0, isLast: at === live.count - 1 }
+    : order === 'unordered' ? null : order
+
+  function press(direction: 'up' | 'down', button: HTMLButtonElement) {
+    if (!live || at < 0) return void run(() => moveScheduleDay(day.id, direction))
+    // The card jumps a whole day's height on every press, which took the arrow
+    // out from under the pointer — so the page scrolls by the same amount and
+    // the next press lands on the same arrow.
+    const before = button.getBoundingClientRect().top
+    live.move(day.id, direction)
+    requestAnimationFrame(() => window.scrollBy(0, button.getBoundingClientRect().top - before))
+  }
 
   // Every action here revalidates the course, and that already carries the
   // re-rendered page back with the action's own response. A router.refresh()
@@ -125,6 +149,10 @@ export default function ScheduleDayCard({
           about half of itself. */}
       <div className="flex flex-wrap items-center gap-2">
         <input
+          // Keyed on the saved title: a "Day 3" default is renumbered by the
+          // server when the day moves, and a stale uncontrolled field would
+          // write the old number back on its next blur.
+          key={day.title}
           defaultValue={day.title}
           onBlur={(e) => e.target.value !== day.title && run(() => updateScheduleDay(day.id, { title: e.target.value }), { quiet: true })}
           placeholder="Day 1: Basic rope skills"
@@ -141,17 +169,17 @@ export default function ScheduleDayCard({
             thing they do is a direction. They keep the press's worth of
             padding the words had rather than shrinking to the glyph, and say
             their names to a screen reader and on hover. */}
-        {order !== 'unordered' && (
+        {ends && (
           <span className="ml-auto flex shrink-0 items-center gap-1.5">
             {([
-              ['up', 'Move earlier', order.isFirst, 'M12 19V5', 'm5 12 7-7 7 7'],
-              ['down', 'Move later', order.isLast, 'M12 5v14', 'm19 12-7 7-7-7'],
+              ['up', 'Move earlier', ends.isFirst, 'M12 19V5', 'm5 12 7-7 7 7'],
+              ['down', 'Move later', ends.isLast, 'M12 5v14', 'm19 12-7 7-7-7'],
             ] as const).map(([direction, label, atEnd, stem, head]) => (
               <button
                 key={direction}
                 type="button"
-                disabled={busy || atEnd}
-                onClick={() => run(() => moveScheduleDay(day.id, direction))}
+                disabled={(busy && !live) || atEnd}
+                onClick={(e) => press(direction, e.currentTarget)}
                 aria-label={label}
                 title={label}
                 className="rounded border border-zinc-800 px-2 py-1.5 text-zinc-500 hover:text-white hover:border-zinc-600 transition-colors disabled:opacity-30 disabled:hover:text-zinc-500 disabled:hover:border-zinc-800"

@@ -57,6 +57,7 @@ import { FoldHead, FOLD_PANEL } from './FoldIndex'
 import AddScheduleDay from './AddScheduleDay'
 import ScheduleOverviewFields from './ScheduleOverviewFields'
 import ScheduleDayCard from '@/app/admin/schedules/ScheduleDayCard'
+import { DayOrder, DayPosition } from '@/app/admin/schedules/DayOrder'
 import type { ScheduleDay as EditableDay } from '@/app/admin/schedules/types'
 import WaiverPanel from './WaiverPanel'
 import WaiverQrPanel, { type WaiverQr } from '@/components/WaiverQrPanel'
@@ -2851,7 +2852,15 @@ export default async function CourseView({
                 </div>
               )}
             </EditInPlace>
-            <div className="space-y-3">
+            {/* Laid out in the server's order and placed by the client's, so a
+                day moved with its arrows moves at the press and is saved once
+                the presses stop. */}
+            <DayOrder
+              scheduleId={sched.id}
+              ids={schedDays.map((d) => d.id)}
+              dates={dayDates.map((d) => (d ? fmtDay(d) : null))}
+              className="gap-3"
+            >
               {schedDays.map((d, di) => {
                 const blocks = [...(d.schedule_blocks ?? [])].sort((a, b) => a.sort_order - b.sort_order)
                 const topics = blocks.filter((b) => !b.parent_id)
@@ -2861,6 +2870,7 @@ export default async function CourseView({
                 return (
                   <DayFold
                     key={d.id}
+                    dayId={d.id}
                     open={!dayPassed}
                     /* Days already behind us fold to a line, so a five-day
                        course reads as today plus what is still ahead. The cut
@@ -2879,10 +2889,6 @@ export default async function CourseView({
                       >
                         ▸
                       </span>
-                      {!/^day\s*\d+\b/i.test(d.title.trim()) && (
-                        <span className="text-[11px] font-mono text-zinc-600 shrink-0">Day {di + 1}</span>
-                      )}
-                      <h3 className="font-semibold text-[15px] text-zinc-100 min-w-0">{d.title}</h3>
                       {/* Which calendar day this one is, worked out from the
                           course's start and the off days painted on it — so a
                           rest day in the middle pushes everything after it
@@ -2906,11 +2912,7 @@ export default async function CourseView({
 
                           A schedule longer than the course it is on runs out
                           of dates; those days simply show none. */}
-                      {dayDate && (
-                        <span className="text-[10px] font-mono tabular-nums uppercase tracking-wide text-zinc-500 shrink-0">
-                          {fmtDay(dayDate)}
-                        </span>
-                      )}
+                      <DayPosition id={d.id} index={di} title={d.title} date={dayDate ? fmtDay(dayDate) : null} />
                       {/* Folded, the place is the only other thing worth
                           carrying — it is what tells one past day from
                           another. */}
@@ -3259,7 +3261,7 @@ export default async function CourseView({
                   </DayFold>
                 )
               })}
-            </div>
+            </DayOrder>
             {/* The one piece of the schedule's shape that stayed: a day the
                 running order doesn't have yet belongs to no day, so there is
                 nowhere else on this page to put it. */}

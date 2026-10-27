@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { updateSchedule, addScheduleDay } from './actions'
 import ScheduleDayCard from './ScheduleDayCard'
 import SaveToShelf from './SaveToShelf'
+import { DayOrder, DaySlot } from './DayOrder'
 export type {
   Schedule, ScheduleDay, ScheduleBlock, SiteOption, MeetingPointOption, ScheduleTemplateOption,
 } from './types'
@@ -117,9 +118,10 @@ export default function ScheduleEditor({
         />
       </div>
 
+      <DayOrder scheduleId={schedule.id} ids={days.map((d) => d.id)} onError={setError} className="gap-5">
       {days.map((day, i) => (
+        <DaySlot key={day.id} id={day.id}>
         <ScheduleDayCard
-          key={day.id}
           day={day}
           sites={sites}
           venueId={venueId}
@@ -137,7 +139,9 @@ export default function ScheduleEditor({
           onRemoveFailed={(id) => setRemoved((r) => r.filter((x) => x !== id))}
           onError={setError}
         />
+        </DaySlot>
       ))}
+      </DayOrder>
 
       <div className="flex flex-wrap gap-3 items-center">
         <button
