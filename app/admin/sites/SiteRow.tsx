@@ -82,7 +82,16 @@ export default function SiteRow({
       <div className="flex items-center gap-3 px-3 py-2.5">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm font-medium">{site.name}</span>
+            {/* The title opens it, the way a document's title on any other
+                shelf opens the document. A row whose name is not the thing
+                you press is a row you have to learn. */}
+            <button
+              type="button"
+              onClick={() => { setToggled(!open); if (open) setEditing(false) }}
+              className="text-sm font-medium text-left hover:text-pr-red-light transition-colors"
+            >
+              {site.name}
+            </button>
             {!site.active && <span className="text-[10px] text-zinc-600">inactive</span>}
           </div>
           <p className="text-[11px] text-zinc-600 mt-0.5 truncate">
@@ -104,14 +113,14 @@ export default function SiteRow({
             )}
             <CloseButton onClick={() => { setToggled(false); setEditing(false) }} />
           </>
-        ) : (
+        ) : canEdit ? (
           <button
-            onClick={() => setToggled(true)}
+            onClick={() => { setToggled(true); setEditing(true) }}
             className="text-xs text-zinc-400 hover:text-white transition-colors shrink-0"
           >
-            {site.beta || (site.links ?? []).length ? 'Read' : canEdit ? 'Edit' : 'Open'}
+            Edit
           </button>
-        )}
+        ) : null}
       </div>
 
       {open && !editing && (
