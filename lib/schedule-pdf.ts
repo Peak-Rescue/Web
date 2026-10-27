@@ -42,6 +42,7 @@ export type SchedulePdfDay = {
   location: string | null
   sites: SchedulePdfSite | null
   meeting_point: string | null
+  meets_elsewhere?: boolean | null
   meeting_time: string | null
   meeting_points: SchedulePdfMeetup | null
   notes: string | null
@@ -136,6 +137,9 @@ export async function generateSchedulePdf(data: SchedulePdf): Promise<Uint8Array
       }
       if (meeting.coords) {
         b.paragraph(meeting.coords, { x: BODY_X, width: CONTENT_W - TIME_W, size: 8.5, leading: 11, color: FAINT })
+      }
+      if (meeting.note) {
+        b.paragraph(meeting.note, { x: BODY_X, width: CONTENT_W - TIME_W, size: 9, leading: 12, color: MUTED, paragraphs: true })
       }
       b.y -= 2
     }

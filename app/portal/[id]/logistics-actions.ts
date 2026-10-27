@@ -34,6 +34,8 @@ export async function saveDayMeetingDetails(
         different screen from the answer it overrides is how a morning ends up
         saying two things. */
     meetingPointId: string | null
+    /** The words are a one-off place rather than a note on the meetup. */
+    meetsElsewhere: boolean
     meetingPoint: string
     meetingTime: string
     links: UpdateLink[]
@@ -64,7 +66,8 @@ export async function saveDayMeetingDetails(
   const { error } = await admin
     .from('schedule_days')
     .update({
-      meeting_point_id: input.meetingPointId,
+      meeting_point_id: input.meetsElsewhere ? null : input.meetingPointId,
+      meets_elsewhere: input.meetsElsewhere,
       meeting_point: input.meetingPoint.trim().slice(0, MAX_FIELD) || null,
       meeting_time: input.meetingTime.trim().slice(0, MAX_FIELD) || null,
       meeting_links: links,

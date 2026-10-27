@@ -65,10 +65,14 @@ export type DayMeeting = {
   /** What the meetup is called, when the answer came from one. The directions
       alone are a paragraph; the name is what fits in a sentence. */
   placeName: string | null
-  /** The words someone reads at 0500 — the meetup's directions, or the day's
-      own if it overrode them. */
+  /** Where, in words — the meetup's directions, or the day's own words when
+      they are the place: a one-off spot, or a day with no meetup to name. */
   point: string | null
   pointFrom: MeetingSource | null
+  /** The day's words when they are about a meetup rather than instead of
+      one: the gate code, who is driving, what the water is doing. They used
+      to replace the meetup, so a note hid the pin it was a note about. */
+  note: string | null
   /** The hour announced for this day, and only ever the day's own. */
   time: string | null
   /** What we usually do at this site. Offered when setting a day, never
@@ -97,6 +101,8 @@ export type DayMeeting = {
 
 type DayRow = {
   meeting_point?: string | null
+  /** The words are a one-off place, not a note on the meetup. */
+  meets_elsewhere?: boolean | null
   meeting_time?: string | null
   meeting_points?: MeetingPoint | null
 }
@@ -112,9 +118,11 @@ const trim = (v: string | null | undefined) => {
   return t ? t : null
 }
 
-/** The day's own words, then the meetup it picked, then the site's usual
-    meetup, then the course. The course row is the floor for a course with no
-    schedule at all, which is why it is still read here rather than retired. */
+/** The meetup the day picked, then the site's usual, then the course — and
+    the day's own words as a note beside whichever won. The words are the
+    place only when the day says it meets somewhere else, or when there is no
+    meetup to name. The course row is the floor for a course with no schedule
+    at all, which is why it is still read here rather than retired. */
 export function resolveDayMeeting(
   day: DayRow | null,
   site: SiteRow | null,
@@ -127,10 +135,12 @@ export function resolveDayMeeting(
 
   // One decision, made once, so that the words, the name, the pin and the
   // links can never come from different answers.
+  const elsewhere = Boolean(day?.meets_elsewhere) && Boolean(dayWords)
   const chosen: { from: MeetingSource; meetup: MeetingPoint | null; words: string | null } | null =
-    dayWords ? { from: 'day', meetup: dayMeetup, words: dayWords }
+    elsewhere ? { from: 'day', meetup: null, words: dayWords }
     : dayMeetup ? { from: 'day-meetup', meetup: dayMeetup, words: trim(dayMeetup.directions) }
     : siteMeetup ? { from: 'site-meetup', meetup: siteMeetup, words: trim(siteMeetup.directions) }
+    : dayWords ? { from: 'day', meetup: null, words: dayWords }
     : courseWords ? { from: 'course', meetup: null, words: courseWords }
     : null
 
@@ -138,6 +148,7 @@ export function resolveDayMeeting(
     placeName: chosen?.meetup ? trim(chosen.meetup.name) : null,
     point: chosen?.words ?? null,
     pointFrom: chosen?.from ?? null,
+    note: chosen?.meetup ? dayWords : null,
     time: trim(day?.meeting_time),
     usualTime: trim(site?.usual_meeting_time),
     coords: chosen?.meetup ? trim(chosen.meetup.coords) : null,

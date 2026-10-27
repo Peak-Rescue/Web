@@ -7,6 +7,7 @@ import { type Site, type SiteLink, type MeetingPointRecord } from '@/lib/sites'
 import { type Venue } from '@/lib/library'
 import CloseButton from '@/components/CloseButton'
 import TrashIcon from '@/components/TrashIcon'
+import MeetingPointForm from './MeetingPointForm'
 import { errorFrom } from '@/lib/action-result'
 
 // A link's address is typed by hand, so it is not always a URL. Naming it
@@ -51,6 +52,7 @@ export default function SiteRow({
   // only one: the beta — the thing the row exists for — could be read only by
   // opening the form that writes it, in a textarea ten rows deep.
   const [editing, setEditing] = useState(false)
+  const [editingMeetup, setEditingMeetup] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [form, setForm] = useState({
@@ -159,24 +161,49 @@ export default function SiteRow({
             <p className="text-[11px] text-zinc-500 font-mono">{site.coords}</p>
           )}
           {meetup && (
-            <div className="text-xs">
-              <p className="text-zinc-500">Meet at <span className="text-zinc-300">{meetup.name}</span></p>
-              {/* Directions that are only a pasted pin say what the link below
-                  already does. */}
-              {meetup.directions && !/^\s*-?[\d.]+\s*,\s*-?[\d.]+\s*$/.test(meetup.directions) && (
-                <p className="text-zinc-400 whitespace-pre-line leading-relaxed max-w-prose mt-0.5">{meetup.directions}</p>
-              )}
-              {meetup.coords && (
-                <a
-                  href={`https://www.google.com/maps?q=${encodeURIComponent(meetup.coords)}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-[11px] text-zinc-500 font-mono hover:text-white transition-colors"
-                >
-                  {meetup.coords}
-                </a>
-              )}
-            </div>
+            editingMeetup ? (
+              <MeetingPointForm point={meetup} venues={venues} onDone={() => setEditingMeetup(false)} />
+            ) : (
+              <div className="text-xs space-y-1">
+                <p className="text-zinc-500">
+                  Meet at <span className="text-zinc-300">{meetup.name}</span>
+                  {canEdit && (
+                    <button
+                      type="button"
+                      onClick={() => setEditingMeetup(true)}
+                      className="ml-2 text-[11px] text-zinc-500 hover:text-white transition-colors"
+                    >
+                      Edit
+                    </button>
+                  )}
+                </p>
+                {/* Directions that are only a pasted pin say what the line
+                    below already does. */}
+                {meetup.directions && !/^\s*-?[\d.]+\s*,\s*-?[\d.]+\s*$/.test(meetup.directions) && (
+                  <p className="text-zinc-400 whitespace-pre-line leading-relaxed max-w-prose">{meetup.directions}</p>
+                )}
+                {/* Plain text, to copy into whatever map you use. The links
+                    are for the one tap into Google Maps. */}
+                {meetup.coords && (
+                  <p className="text-[11px] text-zinc-500 font-mono select-all">{meetup.coords}</p>
+                )}
+                {(meetup.links ?? []).length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {(meetup.links ?? []).map((l, i) => (
+                      <a
+                        key={i}
+                        href={l.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-[11px] px-2 py-1 rounded border border-zinc-700 text-zinc-300 hover:border-zinc-500 hover:text-white transition-colors"
+                      >
+                        {l.label || hostOf(l.url)}
+                      </a>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
           )}
           {(site.links ?? []).length > 0 && (
             <div className="flex flex-wrap gap-1.5">

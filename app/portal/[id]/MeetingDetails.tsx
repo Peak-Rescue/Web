@@ -16,6 +16,9 @@ import { saveDayMeetingDetails } from './logistics-actions'
 import { fileDayMeetingPoint, dayMeetingPointFilingOptions } from '@/app/admin/sites/actions'
 import { meetingDayLabel } from '@/lib/meeting-details'
 
+// The picker's value for a one-off spot typed below rather than filed.
+const ELSEWHERE = 'elsewhere'
+
 // Meeting point and time: read as two facts, edited in place, and announced
 // with the same composer the Updates section uses.
 //
@@ -31,16 +34,16 @@ import { meetingDayLabel } from '@/lib/meeting-details'
 export default function MeetingDetails({
   instanceId,
   dayId,
-  inheritedPoint = null,
   inheritedTime = null,
   meetingDate,
   meetingPoint,
   meetingPointId,
+  meetsElsewhere,
   meetingPoints = [],
   canFileToLibrary = false,
-  siteMeetupName = null,
-  inheritedFrom = null,
-  inheritedPlace = null,
+  siteMeetup = null,
+  editPlaceHref = null,
+  resolved,
   meetingTime,
   links,
   inheritedLinks = [],
@@ -54,10 +57,6 @@ export default function MeetingDetails({
   /** The day this morning belongs to. A day has no date of its own — it is
       the Nth date the course runs — so there is no date field to offer. */
   dayId: string
-  /** What this morning falls back to when nothing is typed here: the meetup
-      the site usually uses. Shown rather than copied, so correcting the meetup
-      still reaches every day that inherits it. */
-  inheritedPoint?: string | null
   /** What we usually do at this site. A placeholder only — the hour is never
       inherited silently, because a default that announces itself is a default
       nobody checked. */
@@ -65,11 +64,15 @@ export default function MeetingDetails({
   /** Which calendar date this day falls on, worked out by the caller from the
       course's own dates. Only used for what the announcement calls the day. */
   meetingDate: string | null
+  /** The day's own words: a note beside the meetup, or the place itself when
+      the day meets somewhere else or there is no meetup to name. */
   meetingPoint: string | null
   /** The meetup this day gathers at, when it has been told to use one other
       than the site's usual. Null means "whatever the canyon usually does",
       which is the right answer nearly every day. */
   meetingPointId: string | null
+  /** The words are a one-off place, not a note on the canyon's usual. */
+  meetsElsewhere: boolean
   /** Everywhere a day could be told to gather. Empty for anyone who can't
       edit, so a student is sent no list of the company's meetups. */
   meetingPoints?: { id: string; name: string }[]
@@ -77,13 +80,20 @@ export default function MeetingDetails({
       here. Admins only: the library is shared by every course, and the
       meeting-points table is theirs to write. */
   canFileToLibrary?: boolean
-  /** What the site usually uses, named — so the empty option reads "Meet at
-      the Grafton lot" rather than the blank that makes a picker look unset. */
-  siteMeetupName?: string | null
-  /** Where a shown-but-not-typed meeting point came from, so the line under it
-      can name the place instead of guessing at the site's. */
-  inheritedFrom?: 'day' | 'day-meetup' | 'site-meetup' | 'course' | null
-  inheritedPlace?: string | null
+  /** What the site usually uses — so the empty option reads "Grafton lot
+      (usual)" rather than the blank that makes a picker look unset, and so
+      the same place is never offered twice under two names. */
+  siteMeetup?: { id: string; name: string } | null
+  /** Where the usual meetup is edited, for those who may. */
+  editPlaceHref?: string | null
+  /** What the morning reads as, from `resolveDayMeeting`. */
+  resolved: {
+    name: string | null
+    point: string | null
+    from: 'day' | 'day-meetup' | 'site-meetup' | 'course' | null
+    coords: string | null
+    note: string | null
+  }
   meetingTime: string | null
   /** The pin, the gate-code page. Kept with the meeting point rather than on
       the announcement about it — a day later the announcement is somewhere
@@ -127,13 +137,22 @@ export default function MeetingDetails({
   // it blank means today.
   const [date] = useState(meetingDate ?? '')
   const [point, setPoint] = useState(meetingPoint ?? '')
-  const [pointId, setPointId] = useState(meetingPointId ?? '')
+  // Picking the usual by name is the same place as leaving it on the usual,
+  // and the two used to be two options saved two ways.
+  const savedPick = meetsElsewhere ? ELSEWHERE : meetingPointId && meetingPointId !== siteMeetup?.id ? meetingPointId : ''
+  const [pointId, setPointId] = useState(savedPick)
+  const elsewhere = pointId === ELSEWHERE
+  // Whether the words are the place or a note about it. They are the place
+  // when the day says so, or when nothing is picked and the canyon has no
+  // usual — there is then no other answer for them to sit beside.
+  const wordsArePlace = elsewhere || (!pointId && !siteMeetup)
   const pointRef = useRef<HTMLTextAreaElement>(null)
   // A meetup filed from this box joins the picker straight away, before the
   // refresh brings the library back with it in — otherwise the select would
   // be set to an id it has no option for and read as the usual.
   const [filedPoints, setFiledPoints] = useState<{ id: string; name: string }[]>([])
   const pickable = [...meetingPoints, ...filedPoints.filter((f) => !meetingPoints.some((p) => p.id === f.id))]
+    .filter((p) => p.id !== siteMeetup?.id)
   const [filing, setFiling] = useState(false)
   // The filing form's draft. Null while closed. venueId stays undefined until
   // someone picks one, so the day's own venue can fill it in when the options
@@ -174,28 +193,25 @@ export default function MeetingDetails({
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<string | null>(null)
 
-  // The meetup stands in for a day that hasn't overridden it, so a day
-  // pointing at a known place does not read as "nobody knows where to go".
-  const shownPoint = meetingPoint || inheritedPoint || null
-  const inherited = !meetingPoint && Boolean(inheritedPoint)
-  // The morning's pins, this day's first and the meetup's after — and never
-  // the same URL twice, for the day that overrode a meetup link by retyping it.
+  // The meetup's pins after this day's own — and never the same URL twice,
+  // for the day that retyped a meetup's link.
   const shownLinks = [
     ...links,
     ...inheritedLinks.filter((l) => !links.some((own) => own.url === l.url)),
   ]
   // Named, because "where did this come from" is the question behind every
-  // stale meeting point — and once a day can pick its own meetup, "the site's
-  // usual" is the wrong answer about half the time it gets asked.
-  const inheritedWhy =
-    inheritedFrom === 'day-meetup'
-      ? inheritedPlace ? `From ${inheritedPlace}, picked for this day` : 'From this day’s meetup'
-      : inheritedFrom === 'course'
-        ? 'From the course'
-        : inheritedPlace
-          ? `From ${inheritedPlace}, where this site usually meets`
-          : 'From the site’s usual meeting point'
-  const isSet = Boolean(shownPoint || meetingTime || shownLinks.length || files.length)
+  // stale meeting point.
+  const placeWhy =
+    resolved.from === 'day-meetup' ? 'Picked for this day'
+    : resolved.from === 'site-meetup' ? 'Where this canyon usually meets'
+    : resolved.from === 'course' ? 'From the course'
+    : null
+  // Directions that are only a pasted pin say what the coordinates line does.
+  const directions = resolved.point && !(resolved.name && /^\s*-?[\d.]+\s*,\s*-?[\d.]+\s*$/.test(resolved.point))
+    ? resolved.point
+    : null
+  const shownPoint = resolved.name ?? resolved.point
+  const isSet = Boolean(shownPoint || resolved.note || meetingTime || shownLinks.length || files.length)
   // A URL pasted into the words, that isn't already a pin. Offered, never
   // taken: the prose renders it as a link either way, so ignoring this costs
   // the reader nothing — it is here for the morning where what you want is the
@@ -224,7 +240,8 @@ export default function MeetingDetails({
     try {
       const savedLinks = withLinkDraft(draftLinks, linkDraft)
       await saveDayMeetingDetails(dayId, {
-        meetingPointId: pointId || null,
+        meetingPointId: elsewhere ? null : pointId || null,
+        meetsElsewhere: elsewhere,
         meetingPoint: point,
         meetingTime: time,
         links: savedLinks,
@@ -291,7 +308,7 @@ export default function MeetingDetails({
       })
       if ('error' in res) { setError(res.error); return }
       setFiledPoints((prev) => [...prev, res])
-      setPointId(res.id)
+      setPointId(res.id === siteMeetup?.id ? '' : res.id)
       setPoint('')
       setFileDraft(null)
       router.refresh()
@@ -303,7 +320,7 @@ export default function MeetingDetails({
   }
 
   function discard() {
-    setPoint(meetingPoint ?? ''); setPointId(meetingPointId ?? ''); setTime(meetingTime ?? '')
+    setPoint(meetingPoint ?? ''); setPointId(savedPick); setTime(meetingTime ?? '')
     setDraftLinks(links)
     setLinkDraft('')
     setDraftFiles(files.map(({ path, filename }) => ({ path, filename })))
@@ -324,30 +341,31 @@ export default function MeetingDetails({
           {draftDay ?? 'This day'}
         </p>
         {/* Which meetup, before the words about it — the place is the answer
-            most mornings, and the box under it is for the mornings where the
-            place is not enough. It lived in the day editor, one button away,
-            where picking it silently changed what this block read back and
-            nothing on either screen said so. Same question, so: same screen.
-
-            Left alone it says what the canyon usually does, which is why the
-            empty option is named rather than blank: an unset picker and a
-            picker set to the usual look identical otherwise. */}
-        {pickable.length > 0 && (
+            most mornings, and the box under it is for what the place does not
+            say. Left alone it is the canyon's usual, named, because an unset
+            picker and a picker set to the usual look identical otherwise. The
+            usual is offered once: under its own name as well, it was a second
+            option that saved the same place a second way. */}
+        {(siteMeetup || pickable.length > 0) && (
           <label className="block sm:col-span-2">
-            <span className="block text-[11px] uppercase tracking-wide text-zinc-500 mb-1">Meet at</span>
+            <span className="flex items-center gap-2 text-[11px] uppercase tracking-wide text-zinc-500 mb-1">
+              Meet at
+              {editPlaceHref && !pointId && siteMeetup && (
+                <a href={editPlaceHref} className="normal-case tracking-normal text-zinc-500 hover:text-white transition-colors">
+                  Edit {siteMeetup.name}
+                </a>
+              )}
+            </span>
             <select
               value={pointId}
               onChange={(e) => setPointId(e.target.value)}
-              className={`w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-zinc-500 ${
-                pointId ? 'text-zinc-200' : 'text-zinc-400'
-              }`}
+              className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-zinc-200 focus:outline-none focus:border-zinc-500"
             >
-              <option value="">
-                {siteMeetupName ? `${siteMeetupName} — the usual` : 'Wherever this site usually meets'}
-              </option>
+              <option value="">{siteMeetup ? `${siteMeetup.name} (usual)` : 'Somewhere else — write it below'}</option>
               {pickable.map((p) => (
                 <option key={p.id} value={p.id}>{p.name}</option>
               ))}
+              {siteMeetup && <option value={ELSEWHERE}>Somewhere else — write it below</option>}
             </select>
           </label>
         )}
@@ -356,18 +374,18 @@ export default function MeetingDetails({
             what the water is doing — and a one-line box that scrolls what you
             wrote out of sight is no way to write the second kind. */}
         <label className="block sm:col-span-2">
-          <span className="block text-[11px] uppercase tracking-wide text-zinc-500 mb-1">Meeting point</span>
+          <span className="block text-[11px] uppercase tracking-wide text-zinc-500 mb-1">{wordsArePlace ? 'Where' : 'Note for this morning'}</span>
           <textarea
             autoFocus
             ref={pointRef}
             rows={2}
             value={point}
             onChange={(e) => setPoint(e.target.value)}
-            placeholder={inheritedPoint ?? 'lower lot, by the big cedar'}
+            placeholder={wordsArePlace ? 'lower lot, by the big cedar' : 'gate code, who’s driving, carpool from here'}
             className="w-full min-h-[4.5rem] resize-y bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-zinc-200 leading-relaxed focus:outline-none focus:border-zinc-500"
           />
         </label>
-        {canFileToLibrary && point.trim() && !pointId && !fileDraft && (
+        {canFileToLibrary && wordsArePlace && point.trim() && !fileDraft && (
           <div className="sm:col-span-2 -mt-1 flex items-center gap-1.5 text-[11px]">
             <button
               type="button"
@@ -572,19 +590,23 @@ export default function MeetingDetails({
         // Spans the row when it runs past a line: a paragraph set in a half
         // width column beside a single time is a column of two-word lines.
         <div className={`px-3 py-2 rounded-lg border border-zinc-800 bg-zinc-900 ${
-          shownPoint.length > 80 || shownPoint.includes('\n') ? 'sm:col-span-2' : ''
+          (directions?.length ?? 0) > 80 || directions?.includes('\n') ? 'sm:col-span-2' : ''
         }`}>
           <dt className="text-[11px] uppercase tracking-wide text-zinc-500">Where</dt>
+          {resolved.name && <dd className="text-sm text-zinc-200 mt-0.5">{resolved.name}</dd>}
           {/* Typed over several lines, read back over several lines — and a
               URL typed into the middle of them is followed, not retyped. */}
-          <dd className="text-sm text-zinc-200 mt-0.5 whitespace-pre-line">
-            <Linkified text={shownPoint} />
-          </dd>
-          {/* Said out loud, because "where did this come from" is the question
-              behind every stale meeting point. */}
-          {inherited && (
-            <dd className="text-[11px] text-zinc-600 mt-0.5">{inheritedWhy}</dd>
+          {directions && (
+            <dd className={`text-sm mt-0.5 whitespace-pre-line ${resolved.name ? 'text-zinc-400' : 'text-zinc-200'}`}>
+              <Linkified text={directions} />
+            </dd>
           )}
+          {/* Plain, to copy into whatever map you use; the pins below are
+              the one tap into Google Maps. */}
+          {resolved.coords && (
+            <dd className="text-[11px] text-zinc-500 font-mono mt-0.5 select-all">{resolved.coords}</dd>
+          )}
+          {placeWhy && <dd className="text-[11px] text-zinc-600 mt-0.5">{placeWhy}</dd>}
         </div>
       )}
       {(meetingTime || day) && (
@@ -595,6 +617,16 @@ export default function MeetingDetails({
           <dd className="text-sm text-zinc-200 mt-0.5">
             {day && <span className="block">{day}</span>}
             {meetingTime}
+          </dd>
+        </div>
+      )}
+      {/* Beside the place rather than instead of it: a note used to replace
+          the meetup, so the gate code hid the pin it was about. */}
+      {resolved.note && (
+        <div className="sm:col-span-2 px-3 py-2 rounded-lg border border-zinc-800 bg-zinc-900">
+          <dt className="text-[11px] uppercase tracking-wide text-zinc-500">Note</dt>
+          <dd className="text-sm text-zinc-200 mt-0.5 whitespace-pre-line">
+            <Linkified text={resolved.note} />
           </dd>
         </div>
       )}

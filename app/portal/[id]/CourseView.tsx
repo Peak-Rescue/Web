@@ -356,7 +356,7 @@ export default async function CourseView({
   // right on the next load rather than needing a hand.
   const schedRowsPromise = keep(admin
     .from('course_schedules')
-    .select('id, name, overview, objectives, created_at, schedule_days(id, title, location, site_id, notes, objectives, meeting_point, meeting_point_id, meeting_time, meeting_links, meeting_attachments, sort_order, meeting_points(id, name, directions, coords, links), sites(id, name, beta, usual_meeting_time, coords, links, venue_id, venues(name, region_code, links), meeting_points(id, name, directions, coords, links)), schedule_blocks(id, parent_id, title, time_label, location, sort_order))')
+    .select('id, name, overview, objectives, created_at, schedule_days(id, title, location, site_id, notes, objectives, meeting_point, meeting_point_id, meets_elsewhere, meeting_time, meeting_links, meeting_attachments, sort_order, meeting_points(id, name, directions, coords, links), sites(id, name, beta, usual_meeting_time, coords, links, venue_id, venues(name, region_code, links), meeting_points(id, name, directions, coords, links)), schedule_blocks(id, parent_id, title, time_label, location, sort_order))')
     .eq('instance_id', id))
 
   // Weather for a whole state or country, for the days whose place is one.
@@ -510,7 +510,7 @@ export default async function CourseView({
   type SchedBlock = { id: string; parent_id: string | null; title: string; time_label: string | null; location: string | null; sort_order: number }
   type SchedMeetup = { id: string; name: string; directions: string | null; coords: string | null; links: { url: string; label: string }[] | null }
   type SchedSite = { id: string; name: string; beta: string | null; usual_meeting_time: string | null; coords: string | null; links: { url: string; label: string }[] | null; venue_id: string | null; venues: { name: string; region_code: string | null; links: { url: string; label: string; kind?: string }[] | null } | null; meeting_points: SchedMeetup | null }
-  type SchedDay = { id: string; title: string; location: string | null; site_id: string | null; sites: SchedSite | null; notes: string | null; objectives: string[] | null; meeting_point: string | null; meeting_point_id: string | null; meeting_points: SchedMeetup | null; meeting_time: string | null; meeting_links: { url: string; label: string }[] | null; meeting_attachments: { path: string; filename: string }[] | null; sort_order: number; schedule_blocks: SchedBlock[] }
+  type SchedDay = { id: string; title: string; location: string | null; site_id: string | null; sites: SchedSite | null; notes: string | null; objectives: string[] | null; meeting_point: string | null; meeting_point_id: string | null; meets_elsewhere: boolean; meeting_points: SchedMeetup | null; meeting_time: string | null; meeting_links: { url: string; label: string }[] | null; meeting_attachments: { path: string; filename: string }[] | null; sort_order: number; schedule_blocks: SchedBlock[] }
   const sched = ((schedRows ?? []) as unknown as {
     id: string; name: string; overview: string | null; objectives: string[]; created_at: string; schedule_days: SchedDay[]
   }[])
@@ -2974,21 +2974,20 @@ export default async function CourseView({
                             <MeetingDetails
                               instanceId={id}
                               dayId={d.id}
-                              inheritedPoint={d.meeting_point ? null : m.point}
                               inheritedTime={m.usualTime}
                               meetingDate={date}
                               meetingPoint={d.meeting_point}
                               meetingPointId={d.meeting_point_id}
+                              meetsElsewhere={d.meets_elsewhere}
                               // Only for staff: a student needs no list of every
                               // lot the company gathers in.
                               meetingPoints={showTasks ? schedMeetingPoints : []}
                               canFileToLibrary={showAsAdmin}
-                              siteMeetupName={d.sites?.meeting_points?.name ?? null}
-                              // Which of the three fallbacks answered, so the
-                              // line under an inherited point names the place
-                              // rather than always blaming the site.
-                              inheritedFrom={m.pointFrom}
-                              inheritedPlace={m.placeName}
+                              siteMeetup={d.sites?.meeting_points ? { id: d.sites.meeting_points.id, name: d.sites.meeting_points.name } : null}
+                              editPlaceHref={showAsAdmin && d.site_id ? `/admin/sites#site-${d.site_id}` : null}
+                              // What the morning reads as, worked out once by
+                              // the same resolver the PDF uses.
+                              resolved={{ name: m.placeName, point: m.point, from: m.pointFrom, coords: m.coords, note: m.note }}
                               meetingTime={d.meeting_time}
                               links={d.meeting_links ?? []}
                               // The meetup's driving pin, shown on every day
