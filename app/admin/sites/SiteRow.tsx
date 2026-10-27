@@ -20,13 +20,15 @@ const input = 'w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 tex
 const label = 'block text-[11px] text-zinc-500 mb-1'
 
 export default function SiteRow({
-  site, venues, meetup, canEdit = true,
+  site, venues, meetup, points = [], canEdit = true,
 }: {
   site: Site
   venues: Venue[]
   /** Where we meet for this canyon. Filed from a schedule day, so the row is
       the one place it can be read back without opening a course. */
   meetup: MeetingPointRecord | null
+  /** Every meetup a canyon could use as its usual, for the edit form. */
+  points?: MeetingPointRecord[]
   /** False for anyone who is not an admin: the beta is worth reading to
       everyone teaching off it, and setting a canyon up is not their errand. */
   canEdit?: boolean
@@ -82,6 +84,9 @@ export default function SiteRow({
   }
 
   const venue = venues.find((v) => v.id === site.venue_id)
+  // The meetup the edit form's picker is on — the saved one until it changes.
+  const pickedMeetup = points.find((p) => p.id === form.meeting_point_id)
+    ?? (meetup?.id === form.meeting_point_id ? meetup : null)
   // The first line of the beta is the scope line — "Upper Emerald only, to the
   // footbridge" — which is exactly what tells two sites at one canyon apart.
   const gist = (site.beta ?? '').split('\n').find((l) => l.trim()) ?? ''
@@ -171,9 +176,9 @@ export default function SiteRow({
                     <button
                       type="button"
                       onClick={() => setEditingMeetup(true)}
-                      className="ml-2 text-[11px] text-zinc-500 hover:text-white transition-colors"
+                      className="ml-2 rounded border border-zinc-700 px-1.5 py-0.5 text-[11px] text-zinc-300 hover:text-white hover:border-zinc-500 transition-colors"
                     >
-                      Edit
+                      Edit meetup
                     </button>
                   )}
                 </p>
@@ -243,6 +248,57 @@ export default function SiteRow({
             <label className={label}>Coordinates</label>
             <input className={input} value={form.coords} onChange={(e) => setForm({ ...form, coords: e.target.value })} />
           </div>
+          {/* The meetup is part of setting a canyon up, so it is part of
+              this form. It used to be held in the form's state and drawn
+              nowhere: pressing Edit was the one way to lose sight of it. */}
+          <div className="sm:col-span-2 space-y-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className={label}>Usual meetup</label>
+                <select
+                  className={input}
+                  value={form.meeting_point_id}
+                  onChange={(e) => { setForm({ ...form, meeting_point_id: e.target.value }); setEditingMeetup(false) }}
+                >
+                  <option value="">— none —</option>
+                  {points
+                    .filter((p) => p.active || p.id === form.meeting_point_id)
+                    .map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className={label}>Usual meeting time</label>
+                <input
+                  className={input}
+                  value={form.usual_meeting_time}
+                  placeholder="0700"
+                  onChange={(e) => setForm({ ...form, usual_meeting_time: e.target.value })}
+                />
+              </div>
+            </div>
+            {pickedMeetup && (
+              editingMeetup ? (
+                <MeetingPointForm point={pickedMeetup} venues={venues} onDone={() => setEditingMeetup(false)} />
+              ) : (
+                <div className="rounded border border-zinc-800 bg-zinc-950/60 px-3 py-2 text-xs space-y-1">
+                  {pickedMeetup.directions && (
+                    <p className="text-zinc-400 whitespace-pre-line leading-relaxed max-w-prose">{pickedMeetup.directions}</p>
+                  )}
+                  {pickedMeetup.coords && (
+                    <p className="text-[11px] text-zinc-500 font-mono select-all">{pickedMeetup.coords}</p>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setEditingMeetup(true)}
+                    className="rounded border border-zinc-700 px-1.5 py-0.5 text-[11px] text-zinc-300 hover:text-white hover:border-zinc-500 transition-colors"
+                  >
+                    Edit {pickedMeetup.name}
+                  </button>
+                </div>
+              )
+            )}
+          </div>
+
           <div className="sm:col-span-2">
             <label className={label}>Beta — approach, raps, exit, hazards</label>
             <textarea

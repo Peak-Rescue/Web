@@ -573,7 +573,7 @@ export default async function CourseView({
           .order('name'),
         // Where a day can be told to gather instead of the site's usual.
         admin.from('meeting_points')
-          .select('id, name, venue_id')
+          .select('id, name, venue_id, directions, coords, links')
           .eq('active', true)
           .order('name'),
       ])
@@ -1144,7 +1144,7 @@ export default async function CourseView({
   const shelfResources = editableResources.filter((r) => !r.place)
 
   const schedMeetingPoints = ((schedPointRows ?? []) as unknown as
-    { id: string; name: string; venue_id: string | null }[])
+    { id: string; name: string; venue_id: string | null; directions: string | null; coords: string | null; links: { url: string; label: string }[] | null }[])
 
   // The editor's shape, not the page's: it wants the days plain, without the
   // site rows the read view joins in to show beta.
@@ -2983,7 +2983,7 @@ export default async function CourseView({
                               // lot the company gathers in.
                               meetingPoints={showTasks ? schedMeetingPoints : []}
                               canFileToLibrary={showAsAdmin}
-                              siteMeetup={d.sites?.meeting_points ? { id: d.sites.meeting_points.id, name: d.sites.meeting_points.name } : null}
+                              siteMeetup={d.sites?.meeting_points ?? null}
                               editPlaceHref={showAsAdmin && d.site_id ? `/admin/sites#site-${d.site_id}` : null}
                               // What the morning reads as, worked out once by
                               // the same resolver the PDF uses.

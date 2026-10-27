@@ -19,6 +19,15 @@ import { meetingDayLabel } from '@/lib/meeting-details'
 // The picker's value for a one-off spot typed below rather than filed.
 const ELSEWHERE = 'elsewhere'
 
+// A meetup as the picker knows it: enough to show what picking it means.
+type Meetup = {
+  id: string
+  name: string
+  directions?: string | null
+  coords?: string | null
+  links?: MeetingLink[] | null
+}
+
 // Meeting point and time: read as two facts, edited in place, and announced
 // with the same composer the Updates section uses.
 //
@@ -75,7 +84,7 @@ export default function MeetingDetails({
   meetsElsewhere: boolean
   /** Everywhere a day could be told to gather. Empty for anyone who can't
       edit, so a student is sent no list of the company's meetups. */
-  meetingPoints?: { id: string; name: string }[]
+  meetingPoints?: Meetup[]
   /** Whether a meetup typed onto this day can be filed into the library from
       here. Admins only: the library is shared by every course, and the
       meeting-points table is theirs to write. */
@@ -83,7 +92,7 @@ export default function MeetingDetails({
   /** What the site usually uses — so the empty option reads "Grafton lot
       (usual)" rather than the blank that makes a picker look unset, and so
       the same place is never offered twice under two names. */
-  siteMeetup?: { id: string; name: string } | null
+  siteMeetup?: Meetup | null
   /** Where the usual meetup is edited, for those who may. */
   editPlaceHref?: string | null
   /** What the morning reads as, from `resolveDayMeeting`. */
@@ -150,9 +159,13 @@ export default function MeetingDetails({
   // A meetup filed from this box joins the picker straight away, before the
   // refresh brings the library back with it in — otherwise the select would
   // be set to an id it has no option for and read as the usual.
-  const [filedPoints, setFiledPoints] = useState<{ id: string; name: string }[]>([])
+  const [filedPoints, setFiledPoints] = useState<Meetup[]>([])
   const pickable = [...meetingPoints, ...filedPoints.filter((f) => !meetingPoints.some((p) => p.id === f.id))]
     .filter((p) => p.id !== siteMeetup?.id)
+  // The meetup the picker is on, read back under it: a name alone left the
+  // form looking emptier than the page it opened from, with the directions
+  // and the pin that were just on screen nowhere to be seen.
+  const pickedMeetup = elsewhere ? null : pointId ? pickable.find((p) => p.id === pointId) ?? null : siteMeetup
   const [filing, setFiling] = useState(false)
   // The filing form's draft. Null while closed. venueId stays undefined until
   // someone picks one, so the day's own venue can fill it in when the options
@@ -347,7 +360,8 @@ export default function MeetingDetails({
             usual is offered once: under its own name as well, it was a second
             option that saved the same place a second way. */}
         {(siteMeetup || pickable.length > 0) && (
-          <label className="block sm:col-span-2">
+          <div className="sm:col-span-2">
+          <label className="block">
             <span className="flex items-center gap-2 text-[11px] uppercase tracking-wide text-zinc-500 mb-1">
               Meet at
               {editPlaceHref && !pointId && siteMeetup && (
@@ -368,6 +382,20 @@ export default function MeetingDetails({
               {siteMeetup && <option value={ELSEWHERE}>Somewhere else — write it below</option>}
             </select>
           </label>
+            {pickedMeetup && (pickedMeetup.directions || pickedMeetup.coords || pickedMeetup.links?.length) && (
+              <div className="mt-2 px-3 py-2 rounded border border-zinc-800 bg-zinc-950/60 space-y-1.5">
+                {pickedMeetup.directions && (
+                  <p className="text-sm text-zinc-400 whitespace-pre-line">
+                    <Linkified text={pickedMeetup.directions} />
+                  </p>
+                )}
+                {pickedMeetup.coords && (
+                  <p className="text-[11px] text-zinc-500 font-mono select-all">{pickedMeetup.coords}</p>
+                )}
+                <ChipRow links={pickedMeetup.links ?? []} />
+              </div>
+            )}
+          </div>
         )}
         {/* Wide, and it grows with what you type. A meeting point is usually
             four words and sometimes a paragraph — where to park, which gate,
