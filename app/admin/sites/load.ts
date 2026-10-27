@@ -10,12 +10,11 @@ import { type LibraryItem, type Venue, type VenueContact, type VenueLink } from 
     page and the library shelf — cannot drift apart. */
 export async function loadSitesShelf() {
   const admin = createAdminClient()
-  const [{ data: siteRows }, { data: venueRows }, { data: dayRows }, { data: pointRows }, { data: mapRows }, { data: regionRows }, { data: peopleRows }, { data: linkRows },
+  const [{ data: siteRows }, { data: venueRows }, { data: pointRows }, { data: mapRows }, { data: regionRows }, { data: peopleRows }, { data: linkRows },
     { data: clientRows },
   ] = await Promise.all([
     admin.from('sites').select('id, venue_id, region_code, name, kind, beta, meeting_point_id, usual_meeting_time, coords, links, active').order('name'),
     admin.from('venues').select('id, name, region, region_code, client_name, notes, links, contacts, active').order('name'),
-    admin.from('schedule_days').select('site_id').not('site_id', 'is', null),
     admin.from('meeting_points').select('id, name, venue_id, directions, coords, links, active').order('name'),
     // Maps, route write-ups and the rescue and evac plans. All three are
     // about a place and nothing else, which is why they are read here rather
@@ -52,17 +51,6 @@ export async function loadSitesShelf() {
   const maps = ((mapRows ?? []) as unknown as (LibraryItem & { library_item_links?: LibraryItem['links'] })[])
     .map((m) => ({ ...m, links: m.library_item_links ?? [] }) as LibraryItem)
 
-  const siteCount = new Map<string, number>()
-  for (const s of sites) {
-    if (!s.meeting_point_id) continue
-    siteCount.set(s.meeting_point_id, (siteCount.get(s.meeting_point_id) ?? 0) + 1)
-  }
-  const dayCount = new Map<string, number>()
-  for (const r of dayRows ?? []) {
-    const k = r.site_id as string
-    dayCount.set(k, (dayCount.get(k) ?? 0) + 1)
-  }
-
   // Keyed by code, so a state's weather is looked up the same way a venue's
   // is: by the thing the items are already filed under.
   const regionInfo = new Map<string, { links: VenueLink[]; contacts: VenueContact[]; notes: string | null }>()
@@ -97,5 +85,5 @@ export async function loadSitesShelf() {
     ])
   }
 
-  return { sites, venues, points, maps, regionInfo, siteCount, dayCount, contactsByOwner: byOwner }
+  return { sites, venues, points, maps, regionInfo, contactsByOwner: byOwner }
 }

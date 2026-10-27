@@ -3,7 +3,7 @@
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import { useRouter } from 'next/navigation'
 import { updateSite, deleteSite } from './actions'
-import { type Site, type SiteLink } from '@/lib/sites'
+import { type Site, type SiteLink, type MeetingPointRecord } from '@/lib/sites'
 import { type Venue } from '@/lib/library'
 import CloseButton from '@/components/CloseButton'
 import TrashIcon from '@/components/TrashIcon'
@@ -19,13 +19,13 @@ const input = 'w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 tex
 const label = 'block text-[11px] text-zinc-500 mb-1'
 
 export default function SiteRow({
-  site, venues, dayCount, canEdit = true,
+  site, venues, meetup, canEdit = true,
 }: {
   site: Site
   venues: Venue[]
-  /** The meetups to choose from — shared rows, because a trailhead often
-      serves several canyons and we as often meet where there is parking. */
-  dayCount: number
+  /** Where we meet for this canyon. Filed from a schedule day, so the row is
+      the one place it can be read back without opening a course. */
+  meetup: MeetingPointRecord | null
   /** False for anyone who is not an admin: the beta is worth reading to
       everyone teaching off it, and setting a canyon up is not their errand. */
   canEdit?: boolean
@@ -103,8 +103,6 @@ export default function SiteRow({
           </div>
           <p className="text-[11px] text-zinc-600 mt-0.5 truncate">
             {venue?.name ?? 'no venue'}
-            {' · '}
-            {dayCount} day{dayCount === 1 ? '' : 's'}
             {gist && <span className="text-zinc-700"> · {gist}</span>}
           </p>
         </div>
@@ -138,7 +136,7 @@ export default function SiteRow({
             aria-label={`Delete ${site.name}`}
             title={`Delete ${site.name}`}
             onClick={() => {
-              if (!confirm(`Delete ${site.name}? The ${dayCount} day${dayCount === 1 ? '' : 's'} using it keep their own notes but lose the beta.`)) return
+              if (!confirm(`Delete ${site.name}? Days using it keep their own notes but lose the beta.`)) return
               run(() => deleteSite(site.id))
             }}
             className="text-zinc-700 hover:text-red-400 transition-colors disabled:opacity-40 shrink-0"
@@ -159,6 +157,26 @@ export default function SiteRow({
           )}
           {site.coords && (
             <p className="text-[11px] text-zinc-500 font-mono">{site.coords}</p>
+          )}
+          {meetup && (
+            <div className="text-xs">
+              <p className="text-zinc-500">Meet at <span className="text-zinc-300">{meetup.name}</span></p>
+              {/* Directions that are only a pasted pin say what the link below
+                  already does. */}
+              {meetup.directions && !/^\s*-?[\d.]+\s*,\s*-?[\d.]+\s*$/.test(meetup.directions) && (
+                <p className="text-zinc-400 whitespace-pre-line leading-relaxed max-w-prose mt-0.5">{meetup.directions}</p>
+              )}
+              {meetup.coords && (
+                <a
+                  href={`https://www.google.com/maps?q=${encodeURIComponent(meetup.coords)}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-[11px] text-zinc-500 font-mono hover:text-white transition-colors"
+                >
+                  {meetup.coords}
+                </a>
+              )}
+            </div>
           )}
           {(site.links ?? []).length > 0 && (
             <div className="flex flex-wrap gap-1.5">

@@ -7,7 +7,7 @@ import AddLevel from './AddLevel'
 import EditVenue from './EditVenue'
 import PlaceLinkChip from './PlaceLinkChip'
 import RemovePlace from './RemovePlace'
-import { type Site } from '@/lib/sites'
+import { type Site, type MeetingPointRecord } from '@/lib/sites'
 import { type LibraryItem, type Venue, type VenueContact, type VenueLink } from '@/lib/library'
 import { countryName, regionLabel, splitRegion, SUBDIVISIONS } from '@/lib/regions'
 import LibraryRow from '@/app/admin/library/LibraryRow'
@@ -35,7 +35,7 @@ export default function SitesShelf({
   regionInfo,
   contactsByOwner,
   canEdit = true,
-  dayCount,
+  points,
   added,
 }: {
   sites: Site[]
@@ -53,11 +53,13 @@ export default function SitesShelf({
       alternative was a flat list of canyons, which showed one venue's beta
       and nothing about where anything was. */
   canEdit?: boolean
-  /** How many schedule days point at each site. */
-  dayCount: Map<string, number>
+  /** Where each canyon meets, read on its row beside the beta. */
+  points: MeetingPointRecord[]
   /** A site just created, to scroll to. */
   added?: string
 }) {
+  const pointById = new Map(points.map((p) => [p.id, p]))
+  const meetupOf = (s: Site) => (s.meeting_point_id && pointById.get(s.meeting_point_id)) || null
   // Grouped by venue, because that's how you go looking: "what have we got on
   // Maui?" rather than "show me every canyon we've ever run".
   const byVenue = new Map<string, Site[]>()
@@ -270,7 +272,7 @@ export default function SitesShelf({
             <p className="text-[10px] uppercase tracking-wide text-zinc-700 mb-1.5">Beta</p>
             <div className="space-y-2">
               {canyons.map((x) => (
-                <SiteRow key={x.id} site={x} venues={venues} dayCount={dayCount.get(x.id) ?? 0} canEdit={canEdit} />
+                <SiteRow key={x.id} site={x} venues={venues} meetup={meetupOf(x)} canEdit={canEdit} />
               ))}
               {beta.map((b) => <PlaceItem key={b.id} item={b} />)}
             </div>
@@ -437,7 +439,7 @@ export default function SitesShelf({
                 <p className="text-[10px] uppercase tracking-wide text-zinc-700 mb-1.5">Beta</p>
                 <div className="space-y-2">
                   {g.sites.map((s) => (
-                    <SiteRow key={s.id} site={s} venues={venues} dayCount={dayCount.get(s.id) ?? 0} canEdit={canEdit} />
+                    <SiteRow key={s.id} site={s} venues={venues} meetup={meetupOf(s)} canEdit={canEdit} />
                   ))}
                   {g.beta.map((b) => (
                     <PlaceItem key={b.id} item={b} />
