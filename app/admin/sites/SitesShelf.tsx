@@ -11,6 +11,7 @@ import { type Site } from '@/lib/sites'
 import { type LibraryItem, type Venue, type VenueContact, type VenueLink } from '@/lib/library'
 import { countryName, regionLabel, splitRegion, SUBDIVISIONS } from '@/lib/regions'
 import LibraryRow from '@/app/admin/library/LibraryRow'
+import ItemRow from '@/app/admin/library/ItemRow'
 import { type SiteOption } from '@/app/admin/schedules/types'
 
 
@@ -33,6 +34,7 @@ export default function SitesShelf({
   maps,
   regionInfo,
   contactsByOwner,
+  canEdit = true,
   dayCount,
   added,
 }: {
@@ -46,6 +48,11 @@ export default function SitesShelf({
   /** People by the place that knows them, keyed `venue:<id>` or
       `region:<code>` (267). */
   contactsByOwner: Map<string, BookContact[]>
+  /** False for an instructor reading the shelf. They get every level and
+      everything filed on it — the same page, with the forms taken out. The
+      alternative was a flat list of canyons, which showed one venue's beta
+      and nothing about where anything was. */
+  canEdit?: boolean
   /** How many schedule days point at each site. */
   dayCount: Map<string, number>
   /** A site just created, to scroll to. */
@@ -187,6 +194,14 @@ export default function SitesShelf({
   }))
 
 
+  // An admin gets the row that can be opened and changed; everyone else gets
+  // the row. Both are the library's own, so a map reads the same here as it
+  // does on the shelf it came from.
+  const PlaceItem = ({ item }: { item: LibraryItem }) =>
+    canEdit
+      ? <LibraryRow item={item} venues={venues} sites={siteOptions} />
+      : <ItemRow item={item} venueName={item.venue_id ? venues.find((v) => v.id === item.venue_id)?.name ?? null : null} />
+
   // The same four blocks a venue has, for a state or a country. Maps and beta
   // are library rows filed to the code; weather and contacts are region_info,
   // which is keyed by the same code so there is no second list of states to
@@ -239,6 +254,7 @@ export default function SitesShelf({
               contacts={contacts}
               rolePlaceholder="Ranger district, landowner…"
               canAdd={false}
+              canEdit={canEdit}
             />
           </div>
         )}
@@ -254,9 +270,9 @@ export default function SitesShelf({
             <p className="text-[10px] uppercase tracking-wide text-zinc-700 mb-1.5">Beta</p>
             <div className="space-y-2">
               {canyons.map((x) => (
-                <SiteRow key={x.id} site={x} venues={venues} dayCount={dayCount.get(x.id) ?? 0} />
+                <SiteRow key={x.id} site={x} venues={venues} dayCount={dayCount.get(x.id) ?? 0} canEdit={canEdit} />
               ))}
-              {beta.map((b) => <LibraryRow key={b.id} item={b} venues={venues} sites={siteOptions} />)}
+              {beta.map((b) => <PlaceItem key={b.id} item={b} />)}
             </div>
           </div>
         )}
@@ -264,7 +280,7 @@ export default function SitesShelf({
           <div>
             <p className="text-[10px] uppercase tracking-wide text-zinc-700 mb-1.5">MEDEVAC</p>
             <div className="space-y-2">
-              {plans.map((x) => <LibraryRow key={x.id} item={x} venues={venues} sites={siteOptions} />)}
+              {plans.map((x) => <PlaceItem key={x.id} item={x} />)}
             </div>
           </div>
         )}
@@ -272,7 +288,7 @@ export default function SitesShelf({
           <div>
             <p className="text-[10px] uppercase tracking-wide text-zinc-700 mb-1.5">Permits</p>
             <div className="space-y-2">
-              {permits.map((x) => <LibraryRow key={x.id} item={x} venues={venues} sites={siteOptions} />)}
+              {permits.map((x) => <PlaceItem key={x.id} item={x} />)}
             </div>
           </div>
         )}
@@ -280,11 +296,13 @@ export default function SitesShelf({
           <div>
             <p className="text-[10px] uppercase tracking-wide text-zinc-700 mb-1.5">Maps</p>
             <div className="space-y-2">
-              {maps.map((m) => <LibraryRow key={m.id} item={m} venues={venues} sites={siteOptions} />)}
+              {maps.map((m) => <PlaceItem key={m.id} item={m} />)}
             </div>
           </div>
         )}
-        <AddToPlace scope={{ regionCode: code }} place={`region:${code}`} placeName={regionLabel(code) || code} />
+        {canEdit && (
+          <AddToPlace scope={{ regionCode: code }} place={`region:${code}`} placeName={regionLabel(code) || code} />
+        )}
       </div>
     )
   }
@@ -314,7 +332,7 @@ export default function SitesShelf({
                   word is for everyone else, and for the question this page
                   is actually asked — what does this thing cover. */}
               <span className="text-[10px] font-normal uppercase tracking-wide text-zinc-600">country</span>
-              {c.country && !c.hasStates && <RemovePlace what={c.label} regionCode={c.country} />}
+              {canEdit && c.country && !c.hasStates && <RemovePlace what={c.label} regionCode={c.country} />}
             </h2>
             {c.country && <RegionBlocks code={c.country} />}
             {c.subs.map((sub) => (
@@ -329,7 +347,7 @@ export default function SitesShelf({
                   <p className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-pr-red-light/80 mb-2">
                     {sub.label || 'No state set'}
                     <span className="text-[10px] font-normal tracking-wide text-zinc-600 normal-case">state</span>
-                    {sub.code && <RemovePlace what={sub.label || sub.code} regionCode={sub.code} />}
+                    {canEdit && sub.code && <RemovePlace what={sub.label || sub.code} regionCode={sub.code} />}
                   </p>
                 )}
                 {/* The state's own weather, contacts, maps and plans — and the
@@ -348,8 +366,8 @@ export default function SitesShelf({
               <span aria-hidden className="text-zinc-600 text-xs transition-transform group-open/venue:rotate-90">▶</span>
               <span className="text-sm font-medium text-zinc-200">{g.name}</span>
               <span className="text-[10px] uppercase tracking-wide text-zinc-600">venue</span>
-              {g.venue && <EditVenue venue={g.venue} />}
-              {g.venue && <RemovePlace what={g.venue.name} venueId={g.venue.id} />}
+              {canEdit && g.venue && <EditVenue venue={g.venue} />}
+              {canEdit && g.venue && <RemovePlace what={g.venue.name} venueId={g.venue.id} />}
               {/* No tally. "1 beta · 1 map" told you a venue had something
                   without telling you what, and you were about to open it
                   either way. */}
@@ -380,6 +398,7 @@ export default function SitesShelf({
                   contacts={contactsByOwner.get(`venue:${g.venue.id}`) ?? []}
                   rolePlaceholder="Ranger district, landowner…"
                   canAdd={false}
+                  canEdit={canEdit}
                 />
               </div>
             )}
@@ -403,10 +422,10 @@ export default function SitesShelf({
                 <p className="text-[10px] uppercase tracking-wide text-zinc-700 mb-1.5">Beta</p>
                 <div className="space-y-2">
                   {g.sites.map((s) => (
-                    <SiteRow key={s.id} site={s} venues={venues} dayCount={dayCount.get(s.id) ?? 0} />
+                    <SiteRow key={s.id} site={s} venues={venues} dayCount={dayCount.get(s.id) ?? 0} canEdit={canEdit} />
                   ))}
                   {g.beta.map((b) => (
-                    <LibraryRow key={b.id} item={b} venues={venues} sites={siteOptions} />
+                    <PlaceItem key={b.id} item={b} />
                   ))}
                 </div>
               </div>
@@ -417,7 +436,7 @@ export default function SitesShelf({
                 <p className="text-[10px] uppercase tracking-wide text-zinc-700 mb-1.5">MEDEVAC</p>
                 <div className="space-y-2">
                   {g.plans.map((x) => (
-                    <LibraryRow key={x.id} item={x} venues={venues} sites={siteOptions} />
+                    <PlaceItem key={x.id} item={x} />
                   ))}
                 </div>
               </div>
@@ -428,7 +447,7 @@ export default function SitesShelf({
                 <p className="text-[10px] uppercase tracking-wide text-zinc-700 mb-1.5">Permits</p>
                 <div className="space-y-2">
                   {g.permits.map((x) => (
-                    <LibraryRow key={x.id} item={x} venues={venues} sites={siteOptions} />
+                    <PlaceItem key={x.id} item={x} />
                   ))}
                 </div>
               </div>
@@ -442,14 +461,14 @@ export default function SitesShelf({
                 <p className="text-[10px] uppercase tracking-wide text-zinc-700 mb-1.5">Maps</p>
                 <div className="space-y-2">
                   {g.maps.map((m) => (
-                    <LibraryRow key={m.id} item={m} venues={venues} sites={siteOptions} />
+                    <PlaceItem key={m.id} item={m} />
                   ))}
                 </div>
               </div>
             )}
 
 
-            {g.venue && (
+            {canEdit && g.venue && (
               <AddToPlace
                 scope={{ venueId: g.venue.id }}
                 place={`venue:${g.venue.id}`}
@@ -461,18 +480,18 @@ export default function SitesShelf({
         ))}
                 </div>
                 <div className="mt-2">
-                  <AddLevel level="venue" country={sub.code || undefined} />
+                  {canEdit && <AddLevel level="venue" country={sub.code || undefined} />}
                 </div>
               </div>
             ))}
             {c.hasStates && (
               <div className="mt-2">
-                <AddLevel level="state" country={c.country} />
+                {canEdit && <AddLevel level="state" country={c.country} />}
               </div>
             )}
           </div>
         ))}
-        <AddLevel level="country" />
+        {canEdit && <AddLevel level="country" />}
         {sites.length === 0 && maps.length === 0 && <p className="text-sm text-zinc-500">Nothing filed by place yet.</p>}
       </div>
 

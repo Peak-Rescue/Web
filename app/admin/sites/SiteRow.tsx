@@ -8,17 +8,26 @@ import { type Venue } from '@/lib/library'
 import CloseButton from '@/components/CloseButton'
 import TrashIcon from '@/components/TrashIcon'
 
+// A link's address is typed by hand, so it is not always a URL. Naming it
+// must not be the thing that takes the row down.
+const hostOf = (url: string) => {
+  try { return new URL(url).hostname.replace(/^www\./, '') } catch { return url }
+}
+
 const input = 'w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-zinc-500'
 const label = 'block text-[11px] text-zinc-500 mb-1'
 
 export default function SiteRow({
-  site, venues, dayCount,
+  site, venues, dayCount, canEdit = true,
 }: {
   site: Site
   venues: Venue[]
   /** The meetups to choose from — shared rows, because a trailhead often
       serves several canyons and we as often meet where there is parking. */
   dayCount: number
+  /** False for anyone who is not an admin: the beta is worth reading to
+      everyone teaching off it, and setting a canyon up is not their errand. */
+  canEdit?: boolean
 }) {
   const router = useRouter()
   // Arriving from a schedule day's "Edit beta" opens this row. The hash is the
@@ -37,6 +46,10 @@ export default function SiteRow({
   // open, right up until the reader disagrees, and then they decide.
   const [toggled, setToggled] = useState<boolean | null>(null)
   const open = toggled ?? targeted
+  // Opening a canyon reads it. Editing is a second press, and used to be the
+  // only one: the beta — the thing the row exists for — could be read only by
+  // opening the form that writes it, in a textarea ten rows deep.
+  const [editing, setEditing] = useState(false)
   const [busy, setBusy] = useState(false)
   const [form, setForm] = useState({
     name: site.name,
@@ -80,13 +93,56 @@ export default function SiteRow({
           </p>
         </div>
         {open ? (
-          <CloseButton onClick={() => setToggled(!open)} />
+          <>
+            {canEdit && !editing && (
+              <button
+                onClick={() => setEditing(true)}
+                className="text-xs text-zinc-400 hover:text-white transition-colors shrink-0"
+              >
+                Edit
+              </button>
+            )}
+            <CloseButton onClick={() => { setToggled(false); setEditing(false) }} />
+          </>
         ) : (
-          <button onClick={() => setToggled(!open)} className="text-xs text-zinc-400 hover:text-white transition-colors shrink-0">Edit</button>
+          <button
+            onClick={() => setToggled(true)}
+            className="text-xs text-zinc-400 hover:text-white transition-colors shrink-0"
+          >
+            {site.beta || (site.links ?? []).length ? 'Read' : canEdit ? 'Edit' : 'Open'}
+          </button>
         )}
       </div>
 
-      {open && (
+      {open && !editing && (
+        <div className="px-3 pb-3 pt-1 border-t border-zinc-800 space-y-2">
+          {site.beta ? (
+            <p className="text-xs text-zinc-300 whitespace-pre-line leading-relaxed max-w-prose">{site.beta}</p>
+          ) : (
+            <p className="text-xs text-zinc-600">No beta written yet.</p>
+          )}
+          {site.coords && (
+            <p className="text-[11px] text-zinc-500 font-mono">{site.coords}</p>
+          )}
+          {(site.links ?? []).length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {(site.links ?? []).map((l, i) => (
+                <a
+                  key={i}
+                  href={l.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-[11px] px-2 py-1 rounded border border-zinc-700 text-zinc-300 hover:border-zinc-500 hover:text-white transition-colors"
+                >
+                  {l.label || hostOf(l.url)}
+                </a>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {open && editing && (
         <div className="px-3 pb-3 pt-1 border-t border-zinc-800 grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             {/* Kind was a field and is a nudge: it only ever helped if
@@ -162,7 +218,7 @@ export default function SiteRow({
 
           <div className="sm:col-span-2 flex items-center gap-3">
             <button
-              onClick={() => run(async () => { await updateSite(site.id, { ...form, links }); setToggled(false) })}
+              onClick={() => run(async () => { await updateSite(site.id, { ...form, links }); setEditing(false) })}
               disabled={busy}
               className="px-3 py-1.5 rounded bg-pr-red hover:bg-pr-red-dark text-white text-sm font-medium transition-colors disabled:opacity-40"
             >

@@ -840,30 +840,12 @@ export default async function LibraryPage({
           <ShelfError what="Locations" error={(placesShelf as { failed: unknown }).failed} />
         )}
         {onPlaces && placesShelf && !('failed' in placesShelf) && (
-          isAdmin ? (
-            <SitesShelf {...placesShelf} />
-          ) : (
-            // The beta is worth reading to anyone teaching off it; setting up
-            // a canyon is not their errand, so they get the rows and none of
-            // the forms.
-            <div className="space-y-8">
-              {placesShelf.sites.filter((x) => x.active).map((x) => (
-                <div key={x.id} className="rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2.5">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-medium">{x.name}</span>
-                    {x.kind && <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400">{x.kind}</span>}
-                    <span className="text-[11px] text-zinc-600">
-                      {placesShelf.venues.find((v) => v.id === x.venue_id)?.name ?? 'no venue'}
-                    </span>
-                  </div>
-                  {x.beta && (
-                    <p className="text-xs text-zinc-400 whitespace-pre-line leading-relaxed mt-1.5 max-w-prose">{x.beta}</p>
-                  )}
-                </div>
-              ))}
-              {placesShelf.sites.length === 0 && <p className="text-sm text-zinc-500">No sites yet.</p>}
-            </div>
-          )
+          // The same shelf for everyone: every country, state and venue, and
+          // everything filed on each. An instructor used to get a flat list
+          // of canyons with the beta already open, which showed one venue's
+          // write-ups and nothing about where anything was — and none of the
+          // maps, plans or permits filed to the levels above them.
+          <SitesShelf {...placesShelf} canEdit={isAdmin} />
         )}
 
         {/* ── Reusable shelves ─────────────────────────────────────────── */}

@@ -24,6 +24,7 @@ export default function ContactBook({
   rolePlaceholder = 'What for',
   addLabel = '+ Add contact',
   canAdd = true,
+  canEdit = true,
 }: {
   scope: ContactScope
   /** What this list is called, for the ticked and locked box on the editor.
@@ -34,6 +35,9 @@ export default function ContactBook({
   addLabel?: string
   /** False where the place's own add row already offers Contact. */
   canAdd?: boolean
+  /** False for a reader: a number is worth having wherever you are standing,
+      and changing whose it is is not every reader's errand. */
+  canEdit?: boolean
 }) {
   const router = useRouter()
   /** A contact's id while it is being changed, or 'new'. */
@@ -75,13 +79,16 @@ export default function ContactBook({
                   which is what used to be several rows of them. */}
               {others.length > 0 && <span className="text-zinc-600"> · also {others.join(', ')}</span>}
             </span>
-            <button
-              type="button"
-              onClick={() => setEditing(c.id)}
-              className="text-zinc-600 hover:text-zinc-300 transition-colors"
-            >
-              Edit
-            </button>
+            {canEdit && (
+              <button
+                type="button"
+                onClick={() => setEditing(c.id)}
+                className="text-zinc-600 hover:text-zinc-300 transition-colors"
+              >
+                Edit
+              </button>
+            )}
+            {canEdit && (
             <button
               type="button"
               disabled={busy}
@@ -100,6 +107,7 @@ export default function ContactBook({
             >
               <TrashIcon />
             </button>
+            )}
           </div>
         )
       })}
@@ -118,7 +126,7 @@ export default function ContactBook({
       {/* Where the place's own row of add buttons offers Contact — the same
           act, in the line that offers Map and Permit — this would be the
           second door to it. */}
-      {canAdd && !editing && (
+      {canAdd && canEdit && !editing && (
         <button
           type="button"
           onClick={() => setEditing('new')}
