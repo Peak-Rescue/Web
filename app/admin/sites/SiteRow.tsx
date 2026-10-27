@@ -7,6 +7,7 @@ import { type Site, type SiteLink } from '@/lib/sites'
 import { type Venue } from '@/lib/library'
 import CloseButton from '@/components/CloseButton'
 import TrashIcon from '@/components/TrashIcon'
+import { errorFrom } from '@/lib/action-result'
 
 // A link's address is typed by hand, so it is not always a URL. Naming it
 // must not be the thing that takes the row down.
@@ -51,6 +52,7 @@ export default function SiteRow({
   // opening the form that writes it, in a textarea ten rows deep.
   const [editing, setEditing] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [form, setForm] = useState({
     name: site.name,
     venue_id: site.venue_id ?? '',
@@ -69,7 +71,12 @@ export default function SiteRow({
 
   async function run(fn: () => Promise<void>) {
     setBusy(true)
-    try { await fn(); router.refresh() } finally { setBusy(false) }
+    setError(null)
+    // Caught: a throw in an async handler is an unhandled rejection, which
+    // draws nothing and reads as a button that does not work.
+    try { await fn(); router.refresh() }
+    catch (e) { setError(errorFrom(e, 'That didn’t save')) }
+    finally { setBusy(false) }
   }
 
   const venue = venues.find((v) => v.id === site.venue_id)
@@ -121,7 +128,27 @@ export default function SiteRow({
             Edit
           </button>
         ) : null}
+        {/* On the row, where a venue's and a state's are. It was inside the
+            edit form, so removing a canyon meant opening the thing that
+            writes one. */}
+        {canEdit && (
+          <button
+            type="button"
+            disabled={busy}
+            aria-label={`Delete ${site.name}`}
+            title={`Delete ${site.name}`}
+            onClick={() => {
+              if (!confirm(`Delete ${site.name}? The ${dayCount} day${dayCount === 1 ? '' : 's'} using it keep their own notes but lose the beta.`)) return
+              run(() => deleteSite(site.id))
+            }}
+            className="text-zinc-700 hover:text-red-400 transition-colors disabled:opacity-40 shrink-0"
+          >
+            <TrashIcon />
+          </button>
+        )}
       </div>
+
+      {error && <p className="px-3 pb-2 text-[11px] text-pr-red">{error}</p>}
 
       {open && !editing && (
         <div className="px-3 pb-3 pt-1 border-t border-zinc-800 space-y-2">
@@ -239,17 +266,6 @@ export default function SiteRow({
               className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
             >
               {site.active ? 'Mark inactive' : 'Reactivate'}
-            </button>
-            <button
-              onClick={() => {
-                if (confirm(`Delete ${site.name}? The ${dayCount} day(s) using it keep their own notes but lose the beta.`)) {
-                  run(() => deleteSite(site.id))
-                }
-              }}
-              disabled={busy}
-              className="text-xs text-zinc-600 hover:text-red-400 transition-colors ml-auto"
-            >
-              Delete
             </button>
           </div>
         </div>
