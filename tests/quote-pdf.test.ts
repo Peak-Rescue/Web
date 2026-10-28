@@ -12,6 +12,7 @@ function quote(over: Partial<QuotePdf> = {}): QuotePdf {
   return {
     quoteNumber: 'PR-0142-Q2',
     courseName: 'Rope Rescue Technician — NFPA 1006',
+    courseShortName: 'Rope Rescue Technician',
     clientName: 'Natrona County SAR',
     subtitle: 'June 2, 2026 – June 6, 2026  ·  Casper, WY',
     status: 'sent',

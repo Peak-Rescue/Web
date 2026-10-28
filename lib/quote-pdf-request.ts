@@ -5,7 +5,7 @@
 // the copy we attached stops matching the copy the client filed.
 
 import { createAdminClient } from '@/lib/supabase/admin'
-import { courseDisplayName } from '@/lib/courses'
+import { courseDisplayName, courseShortName } from '@/lib/courses'
 import { generateQuotePdf } from '@/lib/quote-pdf'
 import { quoteCommitment, quoteNumber, type QuoteOption } from '@/lib/quotes'
 import { todayHere } from '@/lib/course-clock'
@@ -43,6 +43,7 @@ export async function quotePdfResponse(quoteId: string): Promise<Response> {
   const bytes = await generateQuotePdf({
     quoteNumber: qNum,
     courseName: courseDisplayName(inst.course_type, inst.custom_title),
+    courseShortName: courseShortName(inst.course_type, inst.custom_title),
     clientName: inst.client_name,
     subtitle: [dates, inst.location].filter(Boolean).join('  ·  '),
     status: quote.status,

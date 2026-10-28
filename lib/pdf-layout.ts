@@ -12,9 +12,10 @@
 // on, which is what keeps a day of a schedule from being split across a break
 // halfway through its title.
 
-import { PDFDocument, PDFFont, PDFImage, PDFPage, StandardFonts, rgb } from 'pdf-lib'
+import { PDFDocument, PDFFont, PDFImage, PDFPage, StandardFonts, rgb, setCharacterSpacing } from 'pdf-lib'
+import fontkit from '@pdf-lib/fontkit'
 import { wrap, wrapParagraphs, winAnsiSafe } from '@/lib/pdf-text'
-import { LOGO_PNG_BASE64 } from '@/lib/pdf-logo'
+import { BARLOW_BOLD_TTF_BASE64, LOGO_DARK_JPG_BASE64 } from '@/lib/pdf-brand-assets'
 
 export const PAGE_W = 612
 export const PAGE_H = 792
@@ -38,20 +39,40 @@ export type DocMeta = {
   // What this document is: "Gear list", "Running order". Rides the running
   // head and the footer so a loose page still says what it came from.
   kind: string
-  // The logo, top right of page one. For what leaves the company — a quote
-  // goes to a purchasing office that has never heard of us — not for the
-  // handouts our own crew carry.
-  logo?: boolean
+  // For what leaves the company — a quote goes to a purchasing office that
+  // has never heard of us — not for the handouts our own crew carry.
+  // The website's hero, on paper: a black band across the top of page one with
+  // the colour logo, a red eyebrow and the heading in the site's display face.
+  // Replaces the title block and the red rule. Section headings become the
+  // site's red tracked labels to match.
+  masthead?: Masthead
 }
 
-const LOGO_H = 46
+export type Masthead = {
+  eyebrow: string
+  heading: string
+  // Under the heading, first one brightest.
+  lines: string[]
+  // Small, bottom of the band: a reference number.
+  ref?: string | null
+}
+
+const BAND_H = 158
+const BAND = rgb(0, 0, 0) // the colour logo's own background, so it has no edge
+const ON_BAND = rgb(0.83, 0.83, 0.85)
+const ON_BAND_DIM = rgb(0.55, 0.55, 0.58)
+export const PANEL = rgb(0.955, 0.955, 0.96)
 
 export class PdfBuilder {
   readonly doc: PDFDocument
   readonly font: PDFFont
   readonly bold: PDFFont
   readonly meta: DocMeta
-  private logo: PDFImage | null = null
+  private bandLogo: PDFImage | null = null
+  // Barlow Condensed Bold when there is a masthead, for the few big lines that
+  // carry the brand. Body text stays Helvetica: the face is condensed display
+  // type and reads poorly as paragraphs.
+  display: PDFFont | null = null
   page!: PDFPage
   y = 0
   // What to redraw at the top of a continuation page: the heading the broken
@@ -74,7 +95,11 @@ export class PdfBuilder {
     const font = await doc.embedFont(StandardFonts.Helvetica)
     const bold = await doc.embedFont(StandardFonts.HelveticaBold)
     const b = new PdfBuilder(doc, font, bold, meta)
-    if (meta.logo) b.logo = await doc.embedPng(LOGO_PNG_BASE64)
+    if (meta.masthead) {
+      doc.registerFontkit(fontkit)
+      b.display = await doc.embedFont(BARLOW_BOLD_TTF_BASE64, { subset: true })
+      b.bandLogo = await doc.embedJpg(LOGO_DARK_JPG_BASE64)
+    }
     doc.setTitle(`${meta.title} — ${meta.kind}`)
     b.newPage(true)
     return b
@@ -86,23 +111,20 @@ export class PdfBuilder {
     this.page = this.doc.addPage([PAGE_W, PAGE_H])
     this.y = PAGE_H - MARGIN
 
+    if (first && this.meta.masthead) {
+      this.drawMasthead(this.meta.masthead)
+      return
+    }
+
     if (first) {
       // A short red rule instead of a logo: it reads as ours at a glance and
       // survives a black-and-white printer, which is what most of these meet.
       this.page.drawRectangle({ x: MARGIN, y: this.y - 4, width: 34, height: 2.5, color: RED })
 
-      // Sized so its foot clears the subtitle line, which runs full width
-      // underneath; only the title has to wrap short of it.
-      let titleW = CONTENT_W
-      if (this.logo) {
-        const w = (this.logo.width / this.logo.height) * LOGO_H
-        this.page.drawImage(this.logo, { x: MARGIN + CONTENT_W - w, y: this.y + 6 - LOGO_H, width: w, height: LOGO_H })
-        titleW = CONTENT_W - w - 18
-      }
       this.y -= 24
 
       const title = winAnsiSafe(this.bold, this.meta.title)
-      for (const line of wrap(this.bold, title, 18, titleW)) {
+      for (const line of wrap(this.bold, title, 18, CONTENT_W)) {
         this.page.drawText(line, { x: MARGIN, y: this.y, size: 18, font: this.bold, color: INK })
         this.y -= 22
       }
@@ -129,6 +151,64 @@ export class PdfBuilder {
       this.breaking = true
       try { this.continued() } finally { this.breaking = false }
     }
+  }
+
+  private drawMasthead(m: Masthead) {
+    const top = PAGE_H
+    this.page.drawRectangle({ x: 0, y: top - BAND_H, width: PAGE_W, height: BAND_H, color: BAND })
+    // The red corner bracket from the site's hero.
+    this.page.drawRectangle({ x: 0, y: top - 3, width: 52, height: 3, color: RED })
+    this.page.drawRectangle({ x: 0, y: top - 52, width: 3, height: 52, color: RED })
+
+    let textW = CONTENT_W
+    if (this.bandLogo) {
+      const h = 66
+      const w = (this.bandLogo.width / this.bandLogo.height) * h
+      this.page.drawImage(this.bandLogo, {
+        x: MARGIN + CONTENT_W - w,
+        y: top - BAND_H / 2 - h / 2,
+        width: w,
+        height: h,
+      })
+      textW = CONTENT_W - w - 24
+    }
+
+    let y = top - 46
+    this.tracked(m.eyebrow.toUpperCase(), { x: MARGIN, y, size: 8.5, color: RED, spacing: 1.6 })
+    y -= 32
+    const display = this.display ?? this.bold
+    this.page.drawText(winAnsiSafe(display, m.heading), { x: MARGIN, y, size: 32, font: display, color: rgb(1, 1, 1) })
+    y -= 22
+    m.lines.forEach((line, i) => {
+      const size = i === 0 ? 11 : 9.5
+      for (const l of wrap(this.font, line, size, textW).slice(0, 2)) {
+        this.page.drawText(l, { x: MARGIN, y, size, font: i === 0 ? this.bold : this.font, color: i === 0 ? ON_BAND : ON_BAND_DIM })
+        y -= size * 1.5
+      }
+    })
+    if (m.ref) {
+      this.tracked(m.ref, { x: MARGIN, y: top - BAND_H + 16, size: 7.5, color: ON_BAND_DIM, spacing: 0.8 })
+    }
+
+    this.y = top - BAND_H - 34
+  }
+
+  // Letterspaced caps — the site's eyebrow and section labels. pdf-lib has no
+  // spacing option on drawText, so the operator is set around the one draw.
+  tracked(
+    value: string,
+    opts: { x?: number; y?: number; size: number; color?: ReturnType<typeof rgb>; spacing: number; bold?: boolean }
+  ) {
+    const font = opts.bold === false ? this.font : this.bold
+    this.page.pushOperators(setCharacterSpacing(opts.spacing))
+    this.page.drawText(winAnsiSafe(font, value), {
+      x: opts.x ?? MARGIN,
+      y: opts.y ?? this.y,
+      size: opts.size,
+      font,
+      color: opts.color ?? INK,
+    })
+    this.page.pushOperators(setCharacterSpacing(0))
   }
 
   // Guarantees `height` points of room below the cursor, breaking first if
@@ -207,6 +287,11 @@ export class PdfBuilder {
   // first couple of lines of whatever follows it.
   sectionHeading(value: string, opts?: { keepWith?: number }) {
     this.ensure(20 + (opts?.keepWith ?? 28))
+    if (this.meta.masthead) {
+      this.tracked(value.toUpperCase(), { size: 8.5, color: RED, spacing: 1.6 })
+      this.y -= 18
+      return
+    }
     this.text(value.toUpperCase(), { size: 9, bold: true, color: INK })
     this.y -= 6
     this.hairline()

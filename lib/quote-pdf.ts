@@ -6,7 +6,7 @@
 // Drawn from the same row the page reads, at the moment it is asked for: a
 // quote accepted since it was first downloaded says so when downloaded again.
 
-import { CONTENT_W, FAINT, INK, MARGIN, MUTED, PdfBuilder, RED } from '@/lib/pdf-layout'
+import { CONTENT_W, FAINT, INK, MARGIN, MUTED, PANEL, PdfBuilder, RED } from '@/lib/pdf-layout'
 import { fmtMoney } from '@/lib/expenses'
 import { longDate } from '@/lib/course-clock'
 import { QUOTE_CONTACT, QUOTE_MISSION, type QuoteOption } from '@/lib/quotes'
@@ -14,6 +14,8 @@ import { QUOTE_CONTACT, QUOTE_MISSION, type QuoteOption } from '@/lib/quotes'
 export type QuotePdf = {
   quoteNumber: string
   courseName: string
+  /** The eyebrow over "Training Quote", as on the quote page. */
+  courseShortName?: string
   clientName: string | null
   /** Dates and location, already formatted — the line under the title. */
   subtitle: string | null
@@ -39,11 +41,13 @@ export async function generateQuotePdf(data: QuotePdf): Promise<Uint8Array> {
     title: data.courseName,
     subtitle: [data.quoteNumber, data.subtitle].filter(Boolean).join('  ·  '),
     kind: 'Training quote',
-    logo: true,
+    masthead: {
+      eyebrow: data.courseShortName ?? data.courseName,
+      heading: 'Training Quote',
+      lines: [`Prepared for ${data.clientName ?? 'your team'}`, data.subtitle ?? ''].filter(Boolean),
+      ref: data.quoteNumber,
+    },
   })
-
-  b.paragraph(`Prepared for ${data.clientName ?? 'your team'}`, { size: 11, bold: true })
-  b.y -= 2
 
   // Where the quote stands, so a printed copy can't be mistaken for an offer
   // still open after it was accepted, or for one still open after it lapsed.
@@ -99,6 +103,20 @@ export async function generateQuotePdf(data: QuotePdf): Promise<Uint8Array> {
     b.y -= size * 0.4
   }
 
+  // The total in its own panel, as the quote page boxes it: the one number the
+  // reader came for, in the site's display face.
+  const pricePanel = (amount: number) => {
+    const h = 66
+    b.ensure(h + 10)
+    const top = b.y + 12
+    b.page.drawRectangle({ x: MARGIN, y: top - h, width: CONTENT_W, height: h, color: PANEL })
+    b.page.drawRectangle({ x: MARGIN, y: top - h, width: 3, height: h, color: RED })
+    b.tracked('TOTAL PRICE', { x: MARGIN + 20, y: top - 20, size: 8, color: RED, spacing: 1.6 })
+    const display = b.display ?? b.bold
+    b.page.drawText(fmtMoney(amount), { x: MARGIN + 20, y: top - 52, size: 30, font: display, color: INK })
+    b.y = top - h - 10
+  }
+
   const options = data.options
   const chosen = options?.filter((o) => o.chosen) ?? []
   const isAddition = (o: QuoteOption) => o.relation === 'addition' || Boolean(o.requires)
@@ -121,8 +139,8 @@ export async function generateQuotePdf(data: QuotePdf): Promise<Uint8Array> {
       { size: 9, color: MUTED }
     )
   } else {
-    b.sectionHeading(options ? `Accepted option${chosen.length > 1 ? 's' : ''}` : 'Price', { keepWith: 40 })
     if (options) {
+      b.sectionHeading(`Accepted option${chosen.length > 1 ? 's' : ''}`, { keepWith: 40 })
       for (const o of chosen) {
         line(o.title, Number(o.total), {
           size: 10,
@@ -131,11 +149,9 @@ export async function generateQuotePdf(data: QuotePdf): Promise<Uint8Array> {
           note: isAddition(o) ? addedTo(o) : undefined,
         })
       }
-      b.y -= 2
-      b.hairline({ x: MARGIN + CONTENT_W - 220, width: 220 })
       b.y -= 14
     }
-    line('Total price', data.total, { bold: true, size: 14 })
+    pricePanel(data.total)
   }
 
   if (data.scopeBullets.length > 0) {
@@ -152,19 +168,28 @@ export async function generateQuotePdf(data: QuotePdf): Promise<Uint8Array> {
 
   // ── Company and contact ────────────────────────────────────────────────────
 
-  b.sectionHeading('Our company')
-  b.paragraph(QUOTE_MISSION, { size: 9.5, color: MUTED })
-  b.y -= 14
-
+  // Side by side, as on the quote page.
   const contact = [
     data.preparedBy?.name,
     data.preparedBy?.email,
     QUOTE_CONTACT.phone,
     QUOTE_CONTACT.website,
   ].filter((s): s is string => Boolean(s))
-  b.sectionHeading('Contact us', { keepWith: contact.length * 14 })
-  for (const c of contact) b.paragraph(c, { size: 9.5 })
-  b.y -= 14
+  const colW = (CONTENT_W - 36) / 2
+  const rightX = MARGIN + colW + 36
+  const missionH = b.measure(QUOTE_MISSION, { size: 9.5, width: colW })
+  b.ensure(20 + Math.max(missionH, contact.length * 14))
+  const colTop = b.y
+  b.tracked('OUR COMPANY', { x: MARGIN, y: colTop, size: 8.5, color: RED, spacing: 1.6 })
+  b.tracked('CONTACT US', { x: rightX, y: colTop, size: 8.5, color: RED, spacing: 1.6 })
+  b.y = colTop - 18
+  b.paragraph(QUOTE_MISSION, { size: 9.5, color: MUTED, width: colW })
+  const leftEnd = b.y
+  b.y = colTop - 18
+  contact.forEach((c, i) =>
+    b.paragraph(c, { x: rightX, width: colW, size: 9.5, bold: i === 0 && Boolean(data.preparedBy) })
+  )
+  b.y = Math.min(leftEnd, b.y) - 16
 
   // ── Commitment ─────────────────────────────────────────────────────────────
 
