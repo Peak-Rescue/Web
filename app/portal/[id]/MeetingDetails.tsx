@@ -176,6 +176,10 @@ export default function MeetingDetails({
     coords: string
     venueId: string | undefined
     makeSiteUsual: boolean
+    /** Asked for from the picker rather than filed from today's words. The
+        box above is then about a morning nobody is writing, so it is not
+        drawn. */
+    fromPicker?: boolean
   } | null>(null)
   const [fileOpts, setFileOpts] = useState<Awaited<ReturnType<typeof dayMeetingPointFilingOptions>> | null>(null)
 
@@ -307,6 +311,7 @@ export default function MeetingDetails({
       coords,
       venueId: undefined,
       makeSiteUsual: false,
+      fromPicker: Boolean(opts?.blank),
     })
     if (!fileOpts) {
       dayMeetingPointFilingOptions(dayId)
@@ -412,7 +417,7 @@ export default function MeetingDetails({
             four words and sometimes a paragraph — where to park, which gate,
             what the water is doing — and a one-line box that scrolls what you
             wrote out of sight is no way to write the second kind. */}
-        <label className="block sm:col-span-2">
+        <label className={`block sm:col-span-2 ${fileDraft?.fromPicker ? 'hidden' : ''}`}>
           <span className="block text-[11px] uppercase tracking-wide text-zinc-500 mb-1">{wordsArePlace ? 'Where' : 'Note for this morning'}</span>
           <textarea
             autoFocus
@@ -448,7 +453,6 @@ export default function MeetingDetails({
                 <input
                   autoFocus
                   value={fileDraft.name}
-                  placeholder="The lot, the gate, the pull-out…"
                   onChange={(e) => setFileDraft({ ...fileDraft, name: e.target.value })}
                   className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-zinc-200 focus:outline-none focus:border-zinc-500"
                 />
@@ -471,7 +475,6 @@ export default function MeetingDetails({
                 <span className="block text-[11px] uppercase tracking-wide text-zinc-500 mb-1">Directions</span>
                 <textarea
                   rows={3}
-                  placeholder="Where to park, which gate, what the turning looks like"
                   value={fileDraft.directions}
                   onChange={(e) => setFileDraft({ ...fileDraft, directions: e.target.value })}
                   className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-zinc-200 focus:outline-none focus:border-zinc-500 resize-y leading-relaxed"
@@ -491,7 +494,19 @@ export default function MeetingDetails({
                 <input
                   type="checkbox"
                   checked={fileDraft.makeSiteUsual}
-                  onChange={(e) => setFileDraft({ ...fileDraft, makeSiteUsual: e.target.checked })}
+                  onChange={(e) =>
+                    setFileDraft({
+                      ...fileDraft,
+                      makeSiteUsual: e.target.checked,
+                      // Where this is where the canyon always meets, the
+                      // canyon's name is the answer to what it is called —
+                      // and asking for one anyway is asking somebody to
+                      // invent "Emerald Canyon (Upper) parking".
+                      name: e.target.checked && !fileDraft.name.trim()
+                        ? fileOpts?.site?.name ?? fileDraft.name
+                        : fileDraft.name,
+                    })
+                  }
                   className="accent-pr-red w-3 h-3"
                 />
                 Make it {fileOpts.site.name}’s usual meetup
