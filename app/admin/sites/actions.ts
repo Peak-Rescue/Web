@@ -295,7 +295,10 @@ export async function fileDayMeetingPoint(
   const coords = input.coords.trim().slice(0, 200) || null
 
   const day = await filingDay(admin, dayId)
-  if (day.meeting_point_id) return refuse('This day already meets at a saved meeting point.')
+  // A day already on a saved meetup used to be refused here. The picker now
+  // offers "+ New meeting point…" directly, so arriving with one already
+  // chosen is somebody replacing it on purpose — and nothing is lost: the old
+  // meetup stays in the library and the picker can go back to it.
   if (input.makeSiteUsual && !day.site_id) return refuse('This day has no site to make it the usual for.')
 
   // The id came from a select in the browser, so it is checked rather than

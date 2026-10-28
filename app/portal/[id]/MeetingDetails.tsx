@@ -18,6 +18,11 @@ import { meetingDayLabel } from '@/lib/meeting-details'
 
 // The picker's value for a one-off spot typed below rather than filed.
 const ELSEWHERE = 'elsewhere'
+// Making one from the picker, rather than by typing a morning into the box
+// below and being offered to file it afterwards. Adding a place we will meet
+// at again is not a correction to today's note; it was only reachable that
+// way, which is why a pin for tomorrow turned into a meetup called 20.81099.
+const NEWPOINT = 'new'
 
 // A meetup as the picker knows it: enough to show what picking it means.
 type Meetup = {
@@ -285,14 +290,21 @@ export default function MeetingDetails({
   // Opened prefilled with a guess rather than filed on the guess: the first
   // line is usually the name, but the person who typed it is the one who
   // knows what the place is called and which region it serves.
-  function openFiling() {
-    const text = point.trim()
+  function openFiling(opts?: { blank?: boolean }) {
+    // Blank where the picker asked for a new one: there are no typed words to
+    // guess from, and guessing from the last ones would put somebody else's
+    // morning in the form.
+    const text = opts?.blank ? '' : point.trim()
+    const coords = text.match(/-?\d{1,2}\.\d{3,}\s*,\s*-?\d{1,3}\.\d{3,}/)?.[0]?.replace(/\s+/g, '') ?? ''
+    // A pasted pin and nothing else is a pin: it is not what the place is
+    // called and it is not how to get there. Filling all three boxes with it
+    // made a meetup named after its own coordinates.
+    const onlyAPin = Boolean(coords) && text.replace(/-?\d{1,2}\.\d{3,}\s*,\s*-?\d{1,3}\.\d{3,}/, '').trim() === ''
     setError(null)
     setFileDraft({
-      name: (text.split('\n')[0].replace(/https?:\/\/\S+/gi, '').trim() || '').slice(0, 160),
-      directions: text,
-      // A pasted "lat, lng" is the pin itself, so it goes where the pin goes.
-      coords: text.match(/-?\d{1,2}\.\d{3,}\s*,\s*-?\d{1,3}\.\d{3,}/)?.[0]?.replace(/\s+/g, '') ?? '',
+      name: onlyAPin ? '' : (text.split('\n')[0].replace(/https?:\/\/\S+/gi, '').trim() || '').slice(0, 160),
+      directions: onlyAPin ? '' : text,
+      coords,
       venueId: undefined,
       makeSiteUsual: false,
     })
@@ -367,7 +379,10 @@ export default function MeetingDetails({
             </span>
             <select
               value={pointId}
-              onChange={(e) => setPointId(e.target.value)}
+              onChange={(e) => {
+                if (e.target.value === NEWPOINT) { openFiling({ blank: true }); return }
+                setPointId(e.target.value)
+              }}
               className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-zinc-200 focus:outline-none focus:border-zinc-500"
             >
               <option value="">{siteMeetup ? `${siteMeetup.name} (usual)` : 'Somewhere else — write it below'}</option>
@@ -375,6 +390,7 @@ export default function MeetingDetails({
                 <option key={p.id} value={p.id}>{p.name}</option>
               ))}
               {siteMeetup && <option value={ELSEWHERE}>Somewhere else — write it below</option>}
+              {canFileToLibrary && <option value={NEWPOINT}>+ New meeting point…</option>}
             </select>
           </label>
             {pickedMeetup && (pickedMeetup.directions || pickedMeetup.coords || pickedMeetup.links?.length) && (
@@ -412,7 +428,7 @@ export default function MeetingDetails({
             <button
               type="button"
               disabled={busy}
-              onClick={openFiling}
+              onClick={() => openFiling()}
               className="text-zinc-500 hover:text-zinc-200 underline-offset-2 hover:underline transition-colors disabled:opacity-40"
             >
               Save to meeting points
@@ -432,6 +448,7 @@ export default function MeetingDetails({
                 <input
                   autoFocus
                   value={fileDraft.name}
+                  placeholder="The lot, the gate, the pull-out…"
                   onChange={(e) => setFileDraft({ ...fileDraft, name: e.target.value })}
                   className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-zinc-200 focus:outline-none focus:border-zinc-500"
                 />
@@ -454,6 +471,7 @@ export default function MeetingDetails({
                 <span className="block text-[11px] uppercase tracking-wide text-zinc-500 mb-1">Directions</span>
                 <textarea
                   rows={3}
+                  placeholder="Where to park, which gate, what the turning looks like"
                   value={fileDraft.directions}
                   onChange={(e) => setFileDraft({ ...fileDraft, directions: e.target.value })}
                   className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-zinc-200 focus:outline-none focus:border-zinc-500 resize-y leading-relaxed"
