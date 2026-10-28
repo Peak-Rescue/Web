@@ -176,6 +176,9 @@ export default function MeetingDetails({
     coords: string
     venueId: string | undefined
     makeSiteUsual: boolean
+    /** The day's pins to put on the place as well. Ticked by default: a link
+        added while writing a meetup is nearly always about the meetup. */
+    keepLinks: string[]
     /** Asked for from the picker rather than filed from today's words. The
         box above is then about a morning nobody is writing, so it is not
         drawn. */
@@ -311,6 +314,7 @@ export default function MeetingDetails({
       coords,
       venueId: undefined,
       makeSiteUsual: false,
+      keepLinks: draftLinks.map((l) => l.url),
       fromPicker: Boolean(opts?.blank),
     })
     if (!fileOpts) {
@@ -329,6 +333,9 @@ export default function MeetingDetails({
         directions: fileDraft.directions,
         coords: fileDraft.coords,
         venueId: (fileDraft.venueId ?? fileOpts?.venueId) || null,
+        links: draftLinks
+          .filter((l) => fileDraft.keepLinks.includes(l.url))
+          .map((l) => ({ url: l.url, label: l.label ?? '' })),
         makeSiteUsual: Boolean(fileOpts?.site) && fileDraft.makeSiteUsual,
       })
       if ('error' in res) { setError(res.error); return }
@@ -489,6 +496,33 @@ export default function MeetingDetails({
                 />
               </label>
             </div>
+            {/* The pins already on this morning. A driving pin belongs to
+                the place and should be there for every course that meets
+                here; today's permit does not, so each one is asked about. */}
+            {draftLinks.length > 0 && (
+              <div className="space-y-1">
+                <span className="block text-[11px] uppercase tracking-wide text-zinc-500">Keep on the meeting point</span>
+                {draftLinks.map((l) => (
+                  <label key={l.url} className="flex items-center gap-1.5 text-[11px] text-zinc-400 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={fileDraft.keepLinks.includes(l.url)}
+                      onChange={(e) =>
+                        setFileDraft({
+                          ...fileDraft,
+                          keepLinks: e.target.checked
+                            ? [...fileDraft.keepLinks, l.url]
+                            : fileDraft.keepLinks.filter((u) => u !== l.url),
+                        })
+                      }
+                      className="accent-pr-red w-3 h-3"
+                    />
+                    <span className="truncate">{l.label || l.url}</span>
+                  </label>
+                ))}
+              </div>
+            )}
+
             {fileOpts?.site && (
               <label className="inline-flex items-center gap-1.5 text-[11px] text-zinc-400 cursor-pointer">
                 <input

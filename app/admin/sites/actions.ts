@@ -282,6 +282,10 @@ export async function fileDayMeetingPoint(
     directions: string
     coords: string
     venueId: string | null
+    /** The day's pins that belong to the place rather than to the morning —
+        the driving pin, the gate photo. They stay on the day as well; the
+        day's own are read first and the same URL is never shown twice. */
+    links?: SiteLink[]
     /** Point the day's site at it too, so every course at that canyon meets
         here unless told otherwise. Off unless asked: one morning at a lot is
         not yet evidence that the canyon always meets there. */
@@ -312,7 +316,7 @@ export async function fileDayMeetingPoint(
 
   const { data: row, error } = await admin
     .from('meeting_points')
-    .insert({ name, venue_id: venueId, directions, coords })
+    .insert({ name, venue_id: venueId, directions, coords, links: cleanLinks(input.links) })
     .select('id, name')
     .single()
   if (error) throw new Error(error.message)
