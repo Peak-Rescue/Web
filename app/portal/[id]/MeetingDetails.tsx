@@ -164,6 +164,7 @@ export default function MeetingDetails({
   // and the pin that were just on screen nowhere to be seen.
   const pickedMeetup = elsewhere ? null : pointId ? pickable.find((p) => p.id === pointId) ?? null : siteMeetup
   const [filing, setFiling] = useState(false)
+  const loadingOpts = useRef(false)
   // The filing form's draft. Null while closed. venueId stays undefined until
   // someone picks one, so the day's own venue can fill it in when the options
   // arrive without overwriting a choice made while they were loading.
@@ -301,7 +302,7 @@ export default function MeetingDetails({
   // Opened prefilled with a guess rather than filed on the guess: the first
   // line is usually the name, but the person who typed it is the one who
   // knows what the place is called and which region it serves.
-  function openFiling(asUsual = false) {
+  function openFiling() {
     const text = point.trim()
     const coords = text.match(/-?\d{1,2}\.\d{3,}\s*,\s*-?\d{1,3}\.\d{3,}/)?.[0]?.replace(/\s+/g, '') ?? ''
     // A pasted pin and nothing else is a pin: it is not what the place is
@@ -314,14 +315,31 @@ export default function MeetingDetails({
       directions: onlyAPin ? '' : text,
       coords,
       venueId: undefined,
-      makeSiteUsual: asUsual,
+      // Keeping it is making it the canyon's: where a day has a canyon,
+      // there is no other reason to keep the place at all.
+      makeSiteUsual: true,
       keepLinks: draftLinks.map((l) => l.url),
       links: [],
     })
-    if (!fileOpts) {
-      dayMeetingPointFilingOptions(dayId)
-        .then(setFileOpts)
-        .catch((e) => setError(e instanceof Error ? e.message : 'Couldn’t load venues'))
+    void ensureOpts()
+  }
+
+  /** The venues, and which canyon this day is at. Asked once, and as soon as
+      "New meeting location…" is picked rather than when the form opens: the
+      answer decides what the radio under the box is even called. */
+  async function ensureOpts() {
+    if (fileOpts || loadingOpts.current) return
+    loadingOpts.current = true
+    try {
+      const opts = await dayMeetingPointFilingOptions(dayId)
+      setFileOpts(opts)
+      // Its canyon's name, where there is one and nothing was typed: the
+      // place is being kept as that canyon's, so that is what it is called.
+      setFileDraft((d) => (d && !d.name.trim() && opts.site ? { ...d, name: opts.site.name } : d))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Couldn’t load venues')
+    } finally {
+      loadingOpts.current = false
     }
   }
 
@@ -399,6 +417,7 @@ export default function MeetingDetails({
                 // Changing where we meet closes any half-written meetup: it
                 // was about the words in the box, and the box has moved on.
                 if (fileDraft) setFileDraft(null)
+                if (e.target.value === ELSEWHERE) void ensureOpts()
                 setPointId(e.target.value)
               }}
               className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-zinc-200 focus:outline-none focus:border-zinc-500"
@@ -475,36 +494,29 @@ export default function MeetingDetails({
             className="w-full min-h-[4.5rem] resize-y bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-zinc-200 leading-relaxed focus:outline-none focus:border-zinc-500"
           />
         </label>
-        {/* One question, three answers. It was a tick to keep it and then a
-            second tick inside the form to make it the usual — two controls
-            for one decision, the second hidden behind the first, and neither
-            saying what the other left out. */}
+        {/* Two answers, because a meeting point is a fact about a canyon.
+            Keeping one and not making it that canyon's is a third state
+            nobody asked for — it only exists for a day that has no canyon,
+            where it is the sole way to keep anything, so that is the only
+            day it is offered on. */}
         {canFileToLibrary && wordsArePlace && (
           <div className="sm:col-span-2 -mt-1 space-y-1">
             {([
               ['day', 'Just this day'],
-              ['save', 'Keep it — other courses can pick it'],
-              ...(fileOpts?.site || !fileDraft
-                ? [['usual', `Keep it, and meet here at ${fileOpts?.site?.name ?? 'this canyon'} from now on`] as const]
-                : []),
+              [
+                'keep',
+                fileOpts?.site
+                  ? `Keep it as ${fileOpts.site.name}’s meeting point`
+                  : 'Keep it — any day can pick it',
+              ],
             ] as const).map(([value, label]) => (
               <label key={value} className="flex items-center gap-1.5 text-[11px] text-zinc-400 cursor-pointer">
                 <input
                   type="radio"
                   name={`keep-${dayId}`}
                   disabled={busy}
-                  checked={value === 'day' ? !fileDraft : Boolean(fileDraft && (value === 'usual') === fileDraft.makeSiteUsual)}
-                  onChange={() => {
-                    if (value === 'day') { setFileDraft(null); return }
-                    if (!fileDraft) { openFiling(value === 'usual'); return }
-                    setFileDraft({
-                      ...fileDraft,
-                      makeSiteUsual: value === 'usual',
-                      name: value === 'usual' && !fileDraft.name.trim()
-                        ? fileOpts?.site?.name ?? fileDraft.name
-                        : fileDraft.name,
-                    })
-                  }}
+                  checked={value === 'day' ? !fileDraft : Boolean(fileDraft)}
+                  onChange={() => (value === 'day' ? setFileDraft(null) : openFiling())}
                   className="accent-pr-red w-3 h-3"
                 />
                 {label}
@@ -512,6 +524,7 @@ export default function MeetingDetails({
             ))}
           </div>
         )}
+
         {/* Nested in the day's form rather than a dialog over it: what is
             being filed is the box just above, and covering it would hide the
             words being turned into a meetup. */}
