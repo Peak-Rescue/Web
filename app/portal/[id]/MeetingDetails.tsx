@@ -326,7 +326,7 @@ export default function MeetingDetails({
 
   /** The venues, and which canyon this day is at. Asked once, and as soon as
       "New meeting location…" is picked rather than when the form opens: the
-      answer decides what the radio under the box is even called. */
+      answer decides what the tick under the box is even called. */
   async function ensureOpts() {
     if (fileOpts || loadingOpts.current) return
     loadingOpts.current = true
@@ -507,9 +507,11 @@ export default function MeetingDetails({
               onChange={(e) => (e.target.checked ? openFiling() : setFileDraft(null))}
               className="accent-pr-red w-3 h-3"
             />
-            {fileOpts?.site
-              ? `Keep it as ${fileOpts.site.name}’s meeting point`
-              : 'Keep it — any day can pick it'}
+            {!fileOpts
+              ? 'Keep it for next time'
+              : fileOpts.site
+                ? `Keep it as ${fileOpts.site.name}’s meeting point`
+                : 'Keep it — any day can pick it'}
           </label>
         )}
 
