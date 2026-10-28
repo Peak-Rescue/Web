@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { updateMeetingPoint, deleteMeetingPoint } from './actions'
+import { createMeetingPointForSite, updateMeetingPoint, deleteMeetingPoint } from './actions'
 import { type MeetingPointRecord, type SiteLink } from '@/lib/sites'
 import { type Venue } from '@/lib/library'
 import TrashIcon from '@/components/TrashIcon'
@@ -19,21 +19,28 @@ export default function MeetingPointForm({
   point,
   venues,
   onDone,
+  /** Making a new one for a canyon rather than changing an existing one. It
+      becomes that canyon's usual as it is saved — which is the only reason
+      to make one from this end. */
+  forSite,
 }: {
-  point: MeetingPointRecord
+  point: MeetingPointRecord | null
   venues: Venue[]
-  onDone: () => void
+  onDone: (id?: string) => void
+  forSite?: { id: string; venueId: string | null }
 }) {
   const router = useRouter()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [form, setForm] = useState({
-    name: point.name,
-    venue_id: point.venue_id ?? '',
-    directions: point.directions ?? '',
-    coords: point.coords ?? '',
+    name: point?.name ?? '',
+    // The canyon's own venue, because a meetup made on a canyon is at that
+    // canyon — asked for again, it is a question with one sensible answer.
+    venue_id: point?.venue_id ?? forSite?.venueId ?? '',
+    directions: point?.directions ?? '',
+    coords: point?.coords ?? '',
   })
-  const [links, setLinks] = useState<SiteLink[]>(point.links ?? [])
+  const [links, setLinks] = useState<SiteLink[]>(point?.links ?? [])
 
   async function run(fn: () => Promise<void>) {
     setBusy(true)
@@ -109,22 +116,36 @@ export default function MeetingPointForm({
 
       <div className="sm:col-span-2 flex items-center gap-3">
         <button
-          onClick={() => run(async () => { await updateMeetingPoint(point.id, { ...form, links }); onDone() })}
-          disabled={busy}
+          onClick={() =>
+            run(async () => {
+              if (point) {
+                await updateMeetingPoint(point.id, { ...form, links })
+                onDone()
+                return
+              }
+              const made = await createMeetingPointForSite(forSite!.id, { ...form, links })
+              if ('error' in made) { setError(made.error); return }
+              onDone(made.id)
+            })
+          }
+          disabled={busy || !form.name.trim()}
           className="px-3 py-1.5 rounded bg-pr-red hover:bg-pr-red-dark text-white text-sm font-medium transition-colors disabled:opacity-40"
         >
-          {busy ? 'Saving…' : 'Save'}
+          {busy ? 'Saving…' : point ? 'Save' : 'Add meetup'}
         </button>
-        <button
-          onClick={() => run(() => updateMeetingPoint(point.id, { active: !point.active }))}
-          disabled={busy}
-          className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
-        >
-          {point.active ? 'Mark inactive' : 'Reactivate'}
-        </button>
-        <button onClick={onDone} disabled={busy} className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">
+        {point && (
+          <button
+            onClick={() => run(() => updateMeetingPoint(point.id, { active: !point.active }))}
+            disabled={busy}
+            className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+          >
+            {point.active ? 'Mark inactive' : 'Reactivate'}
+          </button>
+        )}
+        <button onClick={() => onDone()} disabled={busy} className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">
           Cancel
         </button>
+        {point && (
         <button
           onClick={() => {
             if (confirm(
@@ -138,6 +159,7 @@ export default function MeetingPointForm({
         >
           Delete
         </button>
+        )}
       </div>
       {error && <p className="sm:col-span-2 text-[11px] text-pr-red">{error}</p>}
     </div>

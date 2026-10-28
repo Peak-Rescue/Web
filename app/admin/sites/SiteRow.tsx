@@ -55,6 +55,7 @@ export default function SiteRow({
   // opening the form that writes it, in a textarea ten rows deep.
   const [editing, setEditing] = useState(false)
   const [editingMeetup, setEditingMeetup] = useState(false)
+  const [makingMeetup, setMakingMeetup] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [form, setForm] = useState({
@@ -254,19 +255,46 @@ export default function SiteRow({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className={label}>Usual meetup</label>
-                <select
-                  className={input}
-                  value={form.meeting_point_id}
-                  onChange={(e) => { setForm({ ...form, meeting_point_id: e.target.value }); setEditingMeetup(false) }}
-                >
-                  <option value="">— none —</option>
-                  {points
-                    .filter((p) => p.active || p.id === form.meeting_point_id)
-                    .map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </select>
+                <div className="flex items-center gap-2">
+                  <select
+                    className={input}
+                    value={form.meeting_point_id}
+                    onChange={(e) => { setForm({ ...form, meeting_point_id: e.target.value }); setEditingMeetup(false); setMakingMeetup(false) }}
+                  >
+                    <option value="">— none —</option>
+                    {points
+                      .filter((p) => p.active || p.id === form.meeting_point_id)
+                      .map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </select>
+                  {/* The picker only ever offered meetups that already
+                      existed, and a new one could only be born typed onto a
+                      course day — so setting a canyon up before anyone ran a
+                      course at it had no door at all. */}
+                  <button
+                    type="button"
+                    onClick={() => { setMakingMeetup((v) => !v); setEditingMeetup(false) }}
+                    className="shrink-0 text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+                  >
+                    {makingMeetup ? 'Cancel' : '+ New'}
+                  </button>
+                </div>
               </div>
             </div>
-            {pickedMeetup && (
+            {makingMeetup && (
+              <MeetingPointForm
+                point={null}
+                venues={venues}
+                forSite={{ id: site.id, venueId: form.venue_id || site.venue_id || null }}
+                onDone={(id) => {
+                  // Saved as this canyon's usual already, so the picker is
+                  // moved onto it rather than left on what it was.
+                  if (id) setForm((f) => ({ ...f, meeting_point_id: id }))
+                  setMakingMeetup(false)
+                }}
+              />
+            )}
+
+            {!makingMeetup && pickedMeetup && (
               editingMeetup ? (
                 <MeetingPointForm point={pickedMeetup} venues={venues} onDone={() => setEditingMeetup(false)} />
               ) : (

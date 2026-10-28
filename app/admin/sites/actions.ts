@@ -142,6 +142,54 @@ export async function createMeetingPoint(formData: FormData) {
   revalidate()
 }
 
+/** A meetup made where it is wanted: on the canyon that will use it.
+ *
+ * A new one could only be born on a course day — typed into a morning and
+ * filed from there — so setting up a canyon in advance meant inventing a day
+ * to type it on, or leaving the canyon with no meetup until somebody ran a
+ * course at it. Made here, it is the site's usual at once, which is the only
+ * reason to make one from this end.
+ */
+export async function createMeetingPointForSite(
+  siteId: string,
+  input: { name: string; venue_id?: string | null; directions?: string; coords?: string; links?: SiteLink[] }
+): Promise<{ id: string } | ActionRefusal> {
+  const admin = await requireAdmin()
+  const name = input.name.trim().slice(0, 160)
+  if (!name) return refuse('A meeting point needs a name.')
+
+  // Checked rather than trusted: the id came from a select in the browser,
+  // and a venue deleted since the form opened would otherwise arrive as an
+  // unexplained foreign-key error.
+  const venue_id = input.venue_id || null
+  if (venue_id) {
+    const { data: venue } = await admin.from('venues').select('id').eq('id', venue_id).maybeSingle()
+    if (!venue) return refuse('That venue no longer exists. Pick another.')
+  }
+
+  const { data: row, error } = await admin
+    .from('meeting_points')
+    .insert({
+      name,
+      venue_id,
+      directions: input.directions?.trim() || null,
+      coords: input.coords?.trim().slice(0, 200) || null,
+      links: cleanLinks(input.links),
+    })
+    .select('id')
+    .single()
+  if (error) throw new Error(error.message)
+
+  const { error: siteError } = await admin
+    .from('sites')
+    .update({ meeting_point_id: row.id })
+    .eq('id', siteId)
+  if (siteError) throw new Error(siteError.message)
+
+  revalidate()
+  return { id: row.id as string }
+}
+
 export async function updateMeetingPoint(
   id: string,
   patch: {
