@@ -191,6 +191,13 @@ export default function QuotesSection({
                 >
                   View page
                 </a>
+                <a
+                  href={`/api/quotes/${q.id}/pdf`}
+                  target="_blank"
+                  className="text-xs text-zinc-300 underline hover:text-white transition-colors"
+                >
+                  PDF
+                </a>
                 {/* The way back from a one-click outcome. Accepting is a
                     button on a row of buttons and everything downstream
                     believes it immediately — the course confirms, Billing

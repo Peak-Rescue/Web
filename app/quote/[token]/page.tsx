@@ -301,9 +301,20 @@ export default async function QuotePage({
               ))}
             </ul>
           )}
-          {quote.valid_until && (
-            <p className="mt-8 text-sm text-zinc-500">Quote {qNum} · valid through {fmtLong(quote.valid_until)}</p>
-          )}
+          <div className="mt-8 flex items-center justify-between gap-4 flex-wrap">
+            <p className="text-sm text-zinc-500">
+              Quote {qNum}
+              {quote.valid_until ? ` · valid through ${fmtLong(quote.valid_until)}` : ''}
+            </p>
+            <a
+              href={`/quote/${token}/pdf`}
+              target="_blank"
+              rel="noreferrer"
+              className="px-3 py-1.5 rounded border border-zinc-700 text-xs text-zinc-200 hover:border-zinc-500 hover:text-white transition-colors"
+            >
+              Download as PDF
+            </a>
+          </div>
         </section>
 
         {/* ── Accept ── */}

@@ -12,8 +12,9 @@
 // on, which is what keeps a day of a schedule from being split across a break
 // halfway through its title.
 
-import { PDFDocument, PDFFont, PDFPage, StandardFonts, rgb } from 'pdf-lib'
+import { PDFDocument, PDFFont, PDFImage, PDFPage, StandardFonts, rgb } from 'pdf-lib'
 import { wrap, wrapParagraphs, winAnsiSafe } from '@/lib/pdf-text'
+import { LOGO_PNG_BASE64 } from '@/lib/pdf-logo'
 
 export const PAGE_W = 612
 export const PAGE_H = 792
@@ -37,13 +38,20 @@ export type DocMeta = {
   // What this document is: "Gear list", "Running order". Rides the running
   // head and the footer so a loose page still says what it came from.
   kind: string
+  // The logo, top right of page one. For what leaves the company — a quote
+  // goes to a purchasing office that has never heard of us — not for the
+  // handouts our own crew carry.
+  logo?: boolean
 }
+
+const LOGO_H = 46
 
 export class PdfBuilder {
   readonly doc: PDFDocument
   readonly font: PDFFont
   readonly bold: PDFFont
   readonly meta: DocMeta
+  private logo: PDFImage | null = null
   page!: PDFPage
   y = 0
   // What to redraw at the top of a continuation page: the heading the broken
@@ -66,6 +74,7 @@ export class PdfBuilder {
     const font = await doc.embedFont(StandardFonts.Helvetica)
     const bold = await doc.embedFont(StandardFonts.HelveticaBold)
     const b = new PdfBuilder(doc, font, bold, meta)
+    if (meta.logo) b.logo = await doc.embedPng(LOGO_PNG_BASE64)
     doc.setTitle(`${meta.title} — ${meta.kind}`)
     b.newPage(true)
     return b
@@ -81,10 +90,19 @@ export class PdfBuilder {
       // A short red rule instead of a logo: it reads as ours at a glance and
       // survives a black-and-white printer, which is what most of these meet.
       this.page.drawRectangle({ x: MARGIN, y: this.y - 4, width: 34, height: 2.5, color: RED })
+
+      // Sized so its foot clears the subtitle line, which runs full width
+      // underneath; only the title has to wrap short of it.
+      let titleW = CONTENT_W
+      if (this.logo) {
+        const w = (this.logo.width / this.logo.height) * LOGO_H
+        this.page.drawImage(this.logo, { x: MARGIN + CONTENT_W - w, y: this.y + 6 - LOGO_H, width: w, height: LOGO_H })
+        titleW = CONTENT_W - w - 18
+      }
       this.y -= 24
 
       const title = winAnsiSafe(this.bold, this.meta.title)
-      for (const line of wrap(this.bold, title, 18, CONTENT_W)) {
+      for (const line of wrap(this.bold, title, 18, titleW)) {
         this.page.drawText(line, { x: MARGIN, y: this.y, size: 18, font: this.bold, color: INK })
         this.y -= 22
       }
