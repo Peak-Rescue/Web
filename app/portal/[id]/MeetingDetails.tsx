@@ -10,7 +10,6 @@ import Coords from '@/components/Coords'
 import { errorFrom } from '@/lib/action-result'
 import { Linkified, shortUrl, urlsIn } from '@/lib/linkify'
 import CloseButton from '@/components/CloseButton'
-import InfoHint from '@/components/InfoHint'
 import type { MeetingLink, MeetingFile } from '@/lib/meeting-details'
 import type { UpdateLink, UpdateAttachment, UpdateAudience } from './update-actions'
 import type { NotifyCounts } from '@/lib/course-notify'
@@ -302,7 +301,7 @@ export default function MeetingDetails({
   // Opened prefilled with a guess rather than filed on the guess: the first
   // line is usually the name, but the person who typed it is the one who
   // knows what the place is called and which region it serves.
-  function openFiling() {
+  function openFiling(asUsual = false) {
     const text = point.trim()
     const coords = text.match(/-?\d{1,2}\.\d{3,}\s*,\s*-?\d{1,3}\.\d{3,}/)?.[0]?.replace(/\s+/g, '') ?? ''
     // A pasted pin and nothing else is a pin: it is not what the place is
@@ -315,7 +314,7 @@ export default function MeetingDetails({
       directions: onlyAPin ? '' : text,
       coords,
       venueId: undefined,
-      makeSiteUsual: false,
+      makeSiteUsual: asUsual,
       keepLinks: draftLinks.map((l) => l.url),
       links: [],
     })
@@ -404,7 +403,7 @@ export default function MeetingDetails({
               }}
               className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-zinc-200 focus:outline-none focus:border-zinc-500"
             >
-              <option value="">{siteMeetup ? `${siteMeetup.name} (usual)` : 'Just this day — not saved'}</option>
+              <option value="">{siteMeetup ? `${siteMeetup.name} (usual)` : 'New meeting location…'}</option>
               {pickable.map((p) => (
                 <option key={p.id} value={p.id}>{p.name}</option>
               ))}
@@ -413,7 +412,7 @@ export default function MeetingDetails({
                   both are about this day, and both start by writing where we
                   are meeting — so keeping it is a tick under the words rather
                   than a decision to make before writing them. */}
-              {siteMeetup && <option value={ELSEWHERE}>Somewhere else…</option>}
+              {siteMeetup && <option value={ELSEWHERE}>New meeting location…</option>}
             </select>
           </label>
             {pickedMeetup && (pickedMeetup.directions || pickedMeetup.coords || pickedMeetup.links?.length) && (
@@ -465,7 +464,7 @@ export default function MeetingDetails({
             four words and sometimes a paragraph — where to park, which gate,
             what the water is doing — and a one-line box that scrolls what you
             wrote out of sight is no way to write the second kind. */}
-        <label className="block sm:col-span-2">
+        <label className={`block sm:col-span-2 ${fileDraft ? 'hidden' : ''}`}>
           <span className="block text-[11px] uppercase tracking-wide text-zinc-500 mb-1">{wordsArePlace ? 'Where' : 'Note for this morning'}</span>
           <textarea
             autoFocus
@@ -476,22 +475,42 @@ export default function MeetingDetails({
             className="w-full min-h-[4.5rem] resize-y bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-zinc-200 leading-relaxed focus:outline-none focus:border-zinc-500"
           />
         </label>
-        {/* The whole difference between a morning and a place, in one tick.
-            Unticked, the words live on this day and nowhere else; ticked, they
-            become a meeting point every later course can pick — and the form
-            for the parts a place needs and a morning does not opens under it. */}
+        {/* One question, three answers. It was a tick to keep it and then a
+            second tick inside the form to make it the usual — two controls
+            for one decision, the second hidden behind the first, and neither
+            saying what the other left out. */}
         {canFileToLibrary && wordsArePlace && (
-          <label className="sm:col-span-2 -mt-1 inline-flex items-center gap-1.5 text-[11px] text-zinc-400 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={Boolean(fileDraft)}
-              disabled={busy}
-              onChange={(e) => (e.target.checked ? openFiling() : setFileDraft(null))}
-              className="accent-pr-red w-3 h-3"
-            />
-            Keep this as a meeting point
-            <InfoHint text="Saves it so every later course can pick it, instead of these words living on this day alone." />
-          </label>
+          <div className="sm:col-span-2 -mt-1 space-y-1">
+            {([
+              ['day', 'Just this day'],
+              ['save', 'Keep it — other courses can pick it'],
+              ...(fileOpts?.site || !fileDraft
+                ? [['usual', `Keep it, and meet here at ${fileOpts?.site?.name ?? 'this canyon'} from now on`] as const]
+                : []),
+            ] as const).map(([value, label]) => (
+              <label key={value} className="flex items-center gap-1.5 text-[11px] text-zinc-400 cursor-pointer">
+                <input
+                  type="radio"
+                  name={`keep-${dayId}`}
+                  disabled={busy}
+                  checked={value === 'day' ? !fileDraft : Boolean(fileDraft && (value === 'usual') === fileDraft.makeSiteUsual)}
+                  onChange={() => {
+                    if (value === 'day') { setFileDraft(null); return }
+                    if (!fileDraft) { openFiling(value === 'usual'); return }
+                    setFileDraft({
+                      ...fileDraft,
+                      makeSiteUsual: value === 'usual',
+                      name: value === 'usual' && !fileDraft.name.trim()
+                        ? fileOpts?.site?.name ?? fileDraft.name
+                        : fileDraft.name,
+                    })
+                  }}
+                  className="accent-pr-red w-3 h-3"
+                />
+                {label}
+              </label>
+            ))}
+          </div>
         )}
         {/* Nested in the day's form rather than a dialog over it: what is
             being filed is the box just above, and covering it would hide the
@@ -610,34 +629,6 @@ export default function MeetingDetails({
               </div>
             )}
 
-            {fileOpts?.site && (
-              <label className="inline-flex items-center gap-1.5 text-[11px] text-zinc-400 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={fileDraft.makeSiteUsual}
-                  onChange={(e) =>
-                    setFileDraft({
-                      ...fileDraft,
-                      makeSiteUsual: e.target.checked,
-                      // Where this is where the canyon always meets, the
-                      // canyon's name is the answer to what it is called —
-                      // and asking for one anyway is asking somebody to
-                      // invent "Emerald Canyon (Upper) parking".
-                      name: e.target.checked && !fileDraft.name.trim()
-                        ? fileOpts?.site?.name ?? fileDraft.name
-                        : fileDraft.name,
-                    })
-                  }
-                  className="accent-pr-red w-3 h-3"
-                />
-                Make it {fileOpts.site.name}’s usual meetup
-                <InfoHint
-                  text={fileOpts.site.hasUsual
-                    ? `Every course at ${fileOpts.site.name} would meet here unless a day says otherwise, replacing the meetup it uses now.`
-                    : `Every course at ${fileOpts.site.name} would meet here unless a day says otherwise.`}
-                />
-              </label>
-            )}
             <div className="flex items-center gap-2">
               <button
                 type="button"
