@@ -47,9 +47,13 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
+    // Browser extensions stamp attributes on <html> before React loads (the
+    // Brex extension's data-brext-fragno); this ignores attribute differences
+    // on this one element only, so real mismatches below still surface.
     <html
       lang="en"
       className={`${barlowCondensed.variable} ${inter.variable} h-full`}
+      suppressHydrationWarning
     >
       <body className="min-h-full flex flex-col bg-pr-bg text-pr-text antialiased">
         <Header />
