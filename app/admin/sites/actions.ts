@@ -214,6 +214,38 @@ export async function updateMeetingPoint(
   revalidate()
 }
 
+/** A day's pin, kept on the meetup it was written beside.
+ *
+ * Filing a new meeting point asks which of the morning's links belong to the
+ * place. A day meeting at one that already exists had no such question, so a
+ * driving pin added on Tuesday stayed on Tuesday and every later course at
+ * that canyon met there without it. Added, never replaced: a meetup's own
+ * links are not this day's to throw away.
+ */
+export async function keepLinksOnMeetingPoint(
+  pointId: string,
+  links: SiteLink[]
+): Promise<ActionResult> {
+  const admin = await requireAdmin()
+  const { data: point } = await admin
+    .from('meeting_points')
+    .select('name, links')
+    .eq('id', pointId)
+    .maybeSingle()
+  if (!point) return refuse('That meeting point no longer exists.')
+
+  const have = (point.links ?? []) as SiteLink[]
+  const add = cleanLinks(links).filter((l) => !have.some((x) => x.url === l.url))
+  if (add.length === 0) return
+
+  const { error } = await admin
+    .from('meeting_points')
+    .update({ links: [...have, ...add], updated_at: new Date().toISOString() })
+    .eq('id', pointId)
+  if (error) throw new Error(error.message)
+  revalidate()
+}
+
 export async function deleteMeetingPoint(id: string) {
   const admin = await requireAdmin()
   // Both foreign keys are ON DELETE SET NULL, so a site or a day that met here

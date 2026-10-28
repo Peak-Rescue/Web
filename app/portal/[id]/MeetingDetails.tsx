@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Tick } from './UpdateComposer'
 import AttachmentFields, { withLinkDraft } from './AttachmentFields'
 import { ChipRow } from '@/components/LinkChip'
+import { errorFrom } from '@/lib/action-result'
 import { Linkified, shortUrl, urlsIn } from '@/lib/linkify'
 import CloseButton from '@/components/CloseButton'
 import InfoHint from '@/components/InfoHint'
@@ -13,7 +14,7 @@ import type { UpdateLink, UpdateAttachment, UpdateAudience } from './update-acti
 import type { NotifyCounts } from '@/lib/course-notify'
 import { announceMeetingDetails } from './update-actions'
 import { saveDayMeetingDetails } from './logistics-actions'
-import { fileDayMeetingPoint, dayMeetingPointFilingOptions } from '@/app/admin/sites/actions'
+import { fileDayMeetingPoint, dayMeetingPointFilingOptions, keepLinksOnMeetingPoint } from '@/app/admin/sites/actions'
 import { meetingDayLabel } from '@/lib/meeting-details'
 
 // The picker's value for a one-off spot typed below rather than filed.
@@ -197,6 +198,12 @@ export default function MeetingDetails({
   }, [point, editing])
   const [time, setTime] = useState(meetingTime ?? '')
   const [draftLinks, setDraftLinks] = useState<UpdateLink[]>(links)
+  // The morning's own pins that the meetup does not already carry — what
+  // there is to offer keeping, and nothing when there is nothing.
+  const strayPins = draftLinks.filter(
+    (l) => l.url && !(pickedMeetup?.links ?? []).some((x) => x.url === l.url)
+  )
+
   const [linkDraft, setLinkDraft] = useState('')
   const [draftFiles, setDraftFiles] = useState<UpdateAttachment[]>(
     files.map(({ path, filename }) => ({ path, filename }))
@@ -210,6 +217,7 @@ export default function MeetingDetails({
   // Same default as the update composer: the copy is the receipt that it went.
   const [copyMe, setCopyMe] = useState(true)
   const [busy, setBusy] = useState(false)
+  const [keeping, setKeeping] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<string | null>(null)
 
@@ -416,6 +424,36 @@ export default function MeetingDetails({
                   <p className="text-[11px] text-zinc-500 font-mono select-all">{pickedMeetup.coords}</p>
                 )}
                 <ChipRow links={pickedMeetup.links ?? []} />
+                {/* Filing a new meetup asks which of the morning's pins
+                    belong to the place; a day meeting at one that already
+                    exists was never asked, so the pin stayed on the day. */}
+                {canFileToLibrary && strayPins.length > 0 && (
+                  <button
+                    type="button"
+                    disabled={keeping}
+                    onClick={async () => {
+                      setKeeping(true)
+                      setError(null)
+                      try {
+                        const r = await keepLinksOnMeetingPoint(
+                          pickedMeetup.id,
+                          strayPins.map((l) => ({ url: l.url, label: l.label ?? '' }))
+                        )
+                        if (r?.error) { setError(r.error); return }
+                        router.refresh()
+                      } catch (e) {
+                        setError(errorFrom(e, 'That didn’t save'))
+                      } finally {
+                        setKeeping(false)
+                      }
+                    }}
+                    className="text-[11px] text-zinc-500 hover:text-zinc-200 underline-offset-2 hover:underline transition-colors disabled:opacity-40"
+                  >
+                    {keeping
+                      ? 'Keeping…'
+                      : `Keep ${strayPins.length === 1 ? 'this pin' : `these ${strayPins.length} pins`} on ${pickedMeetup.name}`}
+                  </button>
+                )}
               </div>
             )}
           </div>
