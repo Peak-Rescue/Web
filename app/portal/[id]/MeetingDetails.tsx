@@ -525,7 +525,6 @@ export default function MeetingDetails({
             words being turned into a meetup. */}
         {fileDraft && (
           <div className="sm:col-span-2 p-3 rounded border border-zinc-700 bg-zinc-950/60 space-y-2">
-            <span className="block text-[11px] uppercase tracking-wide text-zinc-500">What the place needs</span>
             <div className="grid sm:grid-cols-2 gap-2">
               <label className="block">
                 <span className="block text-[11px] uppercase tracking-wide text-zinc-500 mb-1">Name</span>
