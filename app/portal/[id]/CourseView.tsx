@@ -2944,7 +2944,12 @@ export default async function CourseView({
                         const m = resolveDayMeeting(d, d.sites)
                         const date = dayDate
                         const own = Boolean(d.meeting_time || d.meeting_point || (d.meeting_links ?? []).length || (d.meeting_attachments ?? []).length)
-                        const empty = !own && !m.point && !m.pointLinks.length
+                        // A meetup is a name, a pin and directions, and this
+                        // asked only about the last two — so a day meeting at
+                        // Emerald Canyon trailhead, which carries a name and
+                        // coordinates and no prose, read as a morning nobody
+                        // had set and folded itself away.
+                        const empty = !own && !m.point && !m.placeName && !m.coords && !m.pointLinks.length
                         // Staff get the block on every day, because setting a
                         // morning is the only way to set one — the editor no
                         // longer carries those fields, so a day that renders

@@ -415,12 +415,17 @@ export default function MeetingDetails({
               }}
               className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-zinc-200 focus:outline-none focus:border-zinc-500"
             >
-              <option value="">{siteMeetup ? `${siteMeetup.name} (usual)` : 'Somewhere else — write it below'}</option>
+              <option value="">{siteMeetup ? `${siteMeetup.name} (usual)` : 'Just this once — write it below'}</option>
               {pickable.map((p) => (
                 <option key={p.id} value={p.id}>{p.name}</option>
               ))}
-              {siteMeetup && <option value={ELSEWHERE}>Somewhere else — write it below</option>}
-              {canFileToLibrary && <option value={NEWPOINT}>+ New meeting point…</option>}
+              {/* The difference between these two is whether anyone will meet
+                  there again. One is a morning: words on this day and no row
+                  anywhere. The other is a place: saved, pickable by every
+                  later course, and offered as the canyon's usual. Named for
+                  that rather than for "somewhere else", which described both. */}
+              {siteMeetup && <option value={ELSEWHERE}>Just this once — write it below</option>}
+              {canFileToLibrary && <option value={NEWPOINT}>+ Save a new meeting point…</option>}
             </select>
           </label>
             {pickedMeetup && (pickedMeetup.directions || pickedMeetup.coords || pickedMeetup.links?.length) && (
