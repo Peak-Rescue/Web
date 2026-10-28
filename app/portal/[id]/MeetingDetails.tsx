@@ -494,35 +494,23 @@ export default function MeetingDetails({
             className="w-full min-h-[4.5rem] resize-y bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-zinc-200 leading-relaxed focus:outline-none focus:border-zinc-500"
           />
         </label>
-        {/* Two answers, because a meeting point is a fact about a canyon.
-            Keeping one and not making it that canyon's is a third state
-            nobody asked for — it only exists for a day that has no canyon,
-            where it is the sole way to keep anything, so that is the only
-            day it is offered on. */}
+        {/* One decision with a default, so one tick. Two radios where one is
+            "do nothing" asks somebody to choose what they already have; a
+            morning that belongs to this day alone is what every unticked box
+            here already means. */}
         {canFileToLibrary && wordsArePlace && (
-          <div className="sm:col-span-2 -mt-1 space-y-1">
-            {([
-              ['day', 'Just this day'],
-              [
-                'keep',
-                fileOpts?.site
-                  ? `Keep it as ${fileOpts.site.name}’s meeting point`
-                  : 'Keep it — any day can pick it',
-              ],
-            ] as const).map(([value, label]) => (
-              <label key={value} className="flex items-center gap-1.5 text-[11px] text-zinc-400 cursor-pointer">
-                <input
-                  type="radio"
-                  name={`keep-${dayId}`}
-                  disabled={busy}
-                  checked={value === 'day' ? !fileDraft : Boolean(fileDraft)}
-                  onChange={() => (value === 'day' ? setFileDraft(null) : openFiling())}
-                  className="accent-pr-red w-3 h-3"
-                />
-                {label}
-              </label>
-            ))}
-          </div>
+          <label className="sm:col-span-2 -mt-1 flex items-center gap-1.5 text-[11px] text-zinc-400 cursor-pointer">
+            <input
+              type="checkbox"
+              disabled={busy}
+              checked={Boolean(fileDraft)}
+              onChange={(e) => (e.target.checked ? openFiling() : setFileDraft(null))}
+              className="accent-pr-red w-3 h-3"
+            />
+            {fileOpts?.site
+              ? `Keep it as ${fileOpts.site.name}’s meeting point`
+              : 'Keep it — any day can pick it'}
+          </label>
         )}
 
         {/* Nested in the day's form rather than a dialog over it: what is
