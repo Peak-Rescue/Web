@@ -56,13 +56,33 @@ export default function Coords({
 
   return (
     <span className="relative inline-block">
+      {/* A chip, like every other pin on the page. As bare monospace text it
+          was indistinguishable from the address above it: nothing said it
+          could be pressed, and nothing said where. The map marker says both,
+          and the ring is the same one a link chip wears. */}
       <button
         type="button"
         onClick={open}
         title="Open in maps"
-        className={`font-mono hover:text-white underline-offset-2 hover:underline transition-colors ${className}`}
+        className={`inline-flex items-center gap-1.5 max-w-full rounded-full border border-teal-500/30 bg-teal-500/10 px-2.5 py-1 font-mono text-teal-300 hover:border-teal-400 hover:text-teal-100 transition-colors ${className}`}
       >
-        {pin}
+        <svg
+          aria-hidden
+          xmlns="http://www.w3.org/2000/svg"
+          width="12"
+          height="12"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="shrink-0"
+        >
+          <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
+          <circle cx="12" cy="10" r="3" />
+        </svg>
+        <span className="truncate">{pin}</span>
       </button>
 
       {choices && (

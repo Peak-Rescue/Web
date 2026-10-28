@@ -431,7 +431,7 @@ export default function MeetingDetails({
                   </p>
                 )}
                 {pickedMeetup.coords && (
-                  <p className="text-[11px] text-zinc-500"><Coords value={pickedMeetup.coords} /></p>
+                  <Coords value={pickedMeetup.coords} className="text-[11px]" />
                 )}
                 <ChipRow links={pickedMeetup.links ?? []} />
                 {/* Filing a new meetup asks which of the morning's pins
@@ -780,7 +780,7 @@ export default function MeetingDetails({
           {/* Plain, to copy into whatever map you use; the pins below are
               the one tap into Google Maps. */}
           {resolved.coords && (
-            <dd className="text-[11px] text-zinc-500 mt-0.5"><Coords value={resolved.coords} /></dd>
+            <dd className="mt-0.5"><Coords value={resolved.coords} className="text-[11px]" /></dd>
           )}
           {placeWhy && <dd className="text-[11px] text-zinc-600 mt-0.5">{placeWhy}</dd>}
         </div>
