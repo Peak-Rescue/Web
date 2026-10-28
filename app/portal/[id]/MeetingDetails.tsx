@@ -415,16 +415,17 @@ export default function MeetingDetails({
               }}
               className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-zinc-200 focus:outline-none focus:border-zinc-500"
             >
-              <option value="">{siteMeetup ? `${siteMeetup.name} (usual)` : 'Just this once — write it below'}</option>
+              <option value="">{siteMeetup ? `${siteMeetup.name} (usual)` : 'Just this day — not saved'}</option>
               {pickable.map((p) => (
                 <option key={p.id} value={p.id}>{p.name}</option>
               ))}
-              {/* The difference between these two is whether anyone will meet
-                  there again. One is a morning: words on this day and no row
-                  anywhere. The other is a place: saved, pickable by every
-                  later course, and offered as the canyon's usual. Named for
-                  that rather than for "somewhere else", which described both. */}
-              {siteMeetup && <option value={ELSEWHERE}>Just this once — write it below</option>}
+              {/* Both of these are about this day only: filing a new meeting
+                  point without ticking "make it the usual" points this day at
+                  it and no other. What separates them is whether anything is
+                  kept — words that live on this day, or a place every later
+                  course can pick. So they are named for that, not for "just
+                  this once", which is true of both. */}
+              {siteMeetup && <option value={ELSEWHERE}>Just this day — not saved</option>}
               {canFileToLibrary && <option value={NEWPOINT}>+ Save a new meeting point…</option>}
             </select>
           </label>
