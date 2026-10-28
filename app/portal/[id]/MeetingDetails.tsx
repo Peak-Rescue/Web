@@ -6,6 +6,7 @@ import { Tick } from './UpdateComposer'
 import AttachmentFields, { withLinkDraft } from './AttachmentFields'
 import { ChipRow } from '@/components/LinkChip'
 import TrashIcon from '@/components/TrashIcon'
+import Coords from '@/components/Coords'
 import { errorFrom } from '@/lib/action-result'
 import { Linkified, shortUrl, urlsIn } from '@/lib/linkify'
 import CloseButton from '@/components/CloseButton'
@@ -430,7 +431,7 @@ export default function MeetingDetails({
                   </p>
                 )}
                 {pickedMeetup.coords && (
-                  <p className="text-[11px] text-zinc-500 font-mono select-all">{pickedMeetup.coords}</p>
+                  <p className="text-[11px] text-zinc-500"><Coords value={pickedMeetup.coords} /></p>
                 )}
                 <ChipRow links={pickedMeetup.links ?? []} />
                 {/* Filing a new meetup asks which of the morning's pins
@@ -779,7 +780,7 @@ export default function MeetingDetails({
           {/* Plain, to copy into whatever map you use; the pins below are
               the one tap into Google Maps. */}
           {resolved.coords && (
-            <dd className="text-[11px] text-zinc-500 font-mono mt-0.5 select-all">{resolved.coords}</dd>
+            <dd className="text-[11px] text-zinc-500 mt-0.5"><Coords value={resolved.coords} /></dd>
           )}
           {placeWhy && <dd className="text-[11px] text-zinc-600 mt-0.5">{placeWhy}</dd>}
         </div>

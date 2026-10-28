@@ -7,6 +7,7 @@ import { type Site, type SiteLink, type MeetingPointRecord } from '@/lib/sites'
 import { type Venue } from '@/lib/library'
 import CloseButton from '@/components/CloseButton'
 import TrashIcon from '@/components/TrashIcon'
+import Coords from '@/components/Coords'
 import MeetingPointForm from './MeetingPointForm'
 import { errorFrom } from '@/lib/action-result'
 
@@ -163,7 +164,7 @@ export default function SiteRow({
             <p className="text-xs text-zinc-600">No beta written yet.</p>
           )}
           {site.coords && (
-            <p className="text-[11px] text-zinc-500 font-mono">{site.coords}</p>
+            <p className="text-[11px] text-zinc-500"><Coords value={site.coords} /></p>
           )}
           {meetup && (
             editingMeetup ? (
@@ -190,7 +191,7 @@ export default function SiteRow({
                 {/* Plain text, to copy into whatever map you use. The links
                     are for the one tap into Google Maps. */}
                 {meetup.coords && (
-                  <p className="text-[11px] text-zinc-500 font-mono select-all">{meetup.coords}</p>
+                  <p className="text-[11px] text-zinc-500"><Coords value={meetup.coords} /></p>
                 )}
                 {(meetup.links ?? []).length > 0 && (
                   <div className="flex flex-wrap gap-1.5">
@@ -303,7 +304,7 @@ export default function SiteRow({
                     <p className="text-zinc-400 whitespace-pre-line leading-relaxed max-w-prose">{pickedMeetup.directions}</p>
                   )}
                   {pickedMeetup.coords && (
-                    <p className="text-[11px] text-zinc-500 font-mono select-all">{pickedMeetup.coords}</p>
+                    <p className="text-[11px] text-zinc-500"><Coords value={pickedMeetup.coords} /></p>
                   )}
                   <button
                     type="button"
