@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Tick } from './UpdateComposer'
 import AttachmentFields, { withLinkDraft } from './AttachmentFields'
 import { ChipRow } from '@/components/LinkChip'
+import TrashIcon from '@/components/TrashIcon'
 import { errorFrom } from '@/lib/action-result'
 import { Linkified, shortUrl, urlsIn } from '@/lib/linkify'
 import CloseButton from '@/components/CloseButton'
@@ -180,6 +181,10 @@ export default function MeetingDetails({
     /** The day's pins to put on the place as well. Ticked by default: a link
         added while writing a meetup is nearly always about the meetup. */
     keepLinks: string[]
+    /** Links written here, about the place: the driving pin, the gate photo.
+        A meetup holds links and this form did not ask for one, so the only
+        way to give a new meetup a pin was to put it on a morning first. */
+    links: { label: string; url: string }[]
     /** Asked for from the picker rather than filed from today's words. The
         box above is then about a morning nobody is writing, so it is not
         drawn. */
@@ -323,6 +328,7 @@ export default function MeetingDetails({
       venueId: undefined,
       makeSiteUsual: false,
       keepLinks: draftLinks.map((l) => l.url),
+      links: [],
       fromPicker: Boolean(opts?.blank),
     })
     if (!fileOpts) {
@@ -341,9 +347,12 @@ export default function MeetingDetails({
         directions: fileDraft.directions,
         coords: fileDraft.coords,
         venueId: (fileDraft.venueId ?? fileOpts?.venueId) || null,
-        links: draftLinks
-          .filter((l) => fileDraft.keepLinks.includes(l.url))
-          .map((l) => ({ url: l.url, label: l.label ?? '' })),
+        links: [
+          ...draftLinks
+            .filter((l) => fileDraft.keepLinks.includes(l.url))
+            .map((l) => ({ url: l.url, label: l.label ?? '' })),
+          ...fileDraft.links.filter((l) => l.url.trim()),
+        ],
         makeSiteUsual: Boolean(fileOpts?.site) && fileDraft.makeSiteUsual,
       })
       if ('error' in res) { setError(res.error); return }
@@ -533,6 +542,48 @@ export default function MeetingDetails({
                   className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-zinc-200 focus:outline-none focus:border-zinc-500"
                 />
               </label>
+              {/* The meetup's own links — the driving pin, the gate photo —
+                  which every course meeting here reads. Written with it, not
+                  by putting one on a morning first and keeping it. */}
+              <div className="sm:col-span-2 space-y-1.5">
+                <span className="block text-[11px] uppercase tracking-wide text-zinc-500">Links</span>
+                {fileDraft.links.map((l, i) => (
+                  <div key={i} className="grid grid-cols-[minmax(7rem,1fr)_minmax(0,2fr)_1.25rem] gap-2 items-center">
+                    <input
+                      value={l.label}
+                      onChange={(e) => setFileDraft({
+                        ...fileDraft,
+                        links: fileDraft.links.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)),
+                      })}
+                      className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-zinc-200 focus:outline-none focus:border-zinc-500"
+                    />
+                    <input
+                      value={l.url}
+                      spellCheck={false}
+                      onChange={(e) => setFileDraft({
+                        ...fileDraft,
+                        links: fileDraft.links.map((x, j) => (j === i ? { ...x, url: e.target.value } : x)),
+                      })}
+                      className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-zinc-200 font-mono text-[12px] focus:outline-none focus:border-zinc-500"
+                    />
+                    <button
+                      type="button"
+                      aria-label={`Remove ${l.label || 'link'}`}
+                      onClick={() => setFileDraft({ ...fileDraft, links: fileDraft.links.filter((_, j) => j !== i) })}
+                      className="text-xs text-zinc-600 hover:text-red-400 transition-colors"
+                    >
+                      <TrashIcon />
+                    </button>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setFileDraft({ ...fileDraft, links: [...fileDraft.links, { label: '', url: '' }] })}
+                  className="text-[11px] text-zinc-500 hover:text-zinc-300 transition-colors"
+                >
+                  + Add link
+                </button>
+              </div>
             </div>
             {/* The pins already on this morning. A driving pin belongs to
                 the place and should be there for every course that meets
