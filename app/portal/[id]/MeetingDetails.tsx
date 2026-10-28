@@ -21,11 +21,6 @@ import { meetingDayLabel } from '@/lib/meeting-details'
 
 // The picker's value for a one-off spot typed below rather than filed.
 const ELSEWHERE = 'elsewhere'
-// Making one from the picker, rather than by typing a morning into the box
-// below and being offered to file it afterwards. Adding a place we will meet
-// at again is not a correction to today's note; it was only reachable that
-// way, which is why a pin for tomorrow turned into a meetup called 20.81099.
-const NEWPOINT = 'new'
 
 // A meetup as the picker knows it: enough to show what picking it means.
 type Meetup = {
@@ -186,10 +181,6 @@ export default function MeetingDetails({
         A meetup holds links and this form did not ask for one, so the only
         way to give a new meetup a pin was to put it on a morning first. */
     links: { label: string; url: string }[]
-    /** Asked for from the picker rather than filed from today's words. The
-        box above is then about a morning nobody is writing, so it is not
-        drawn. */
-    fromPicker?: boolean
   } | null>(null)
   const [fileOpts, setFileOpts] = useState<Awaited<ReturnType<typeof dayMeetingPointFilingOptions>> | null>(null)
 
@@ -311,11 +302,8 @@ export default function MeetingDetails({
   // Opened prefilled with a guess rather than filed on the guess: the first
   // line is usually the name, but the person who typed it is the one who
   // knows what the place is called and which region it serves.
-  function openFiling(opts?: { blank?: boolean }) {
-    // Blank where the picker asked for a new one: there are no typed words to
-    // guess from, and guessing from the last ones would put somebody else's
-    // morning in the form.
-    const text = opts?.blank ? '' : point.trim()
+  function openFiling() {
+    const text = point.trim()
     const coords = text.match(/-?\d{1,2}\.\d{3,}\s*,\s*-?\d{1,3}\.\d{3,}/)?.[0]?.replace(/\s+/g, '') ?? ''
     // A pasted pin and nothing else is a pin: it is not what the place is
     // called and it is not how to get there. Filling all three boxes with it
@@ -330,7 +318,6 @@ export default function MeetingDetails({
       makeSiteUsual: false,
       keepLinks: draftLinks.map((l) => l.url),
       links: [],
-      fromPicker: Boolean(opts?.blank),
     })
     if (!fileOpts) {
       dayMeetingPointFilingOptions(dayId)
@@ -410,7 +397,9 @@ export default function MeetingDetails({
             <select
               value={pointId}
               onChange={(e) => {
-                if (e.target.value === NEWPOINT) { openFiling({ blank: true }); return }
+                // Changing where we meet closes any half-written meetup: it
+                // was about the words in the box, and the box has moved on.
+                if (fileDraft) setFileDraft(null)
                 setPointId(e.target.value)
               }}
               className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-zinc-200 focus:outline-none focus:border-zinc-500"
@@ -419,14 +408,12 @@ export default function MeetingDetails({
               {pickable.map((p) => (
                 <option key={p.id} value={p.id}>{p.name}</option>
               ))}
-              {/* Both of these are about this day only: filing a new meeting
-                  point without ticking "make it the usual" points this day at
-                  it and no other. What separates them is whether anything is
-                  kept — words that live on this day, or a place every later
-                  course can pick. So they are named for that, not for "just
-                  this once", which is true of both. */}
-              {siteMeetup && <option value={ELSEWHERE}>Just this day — not saved</option>}
-              {canFileToLibrary && <option value={NEWPOINT}>+ Save a new meeting point…</option>}
+              {/* One entry, not two. "Write it below" and "save a new
+                  meeting point" were the same act with a different ending —
+                  both are about this day, and both start by writing where we
+                  are meeting — so keeping it is a tick under the words rather
+                  than a decision to make before writing them. */}
+              {siteMeetup && <option value={ELSEWHERE}>Somewhere else…</option>}
             </select>
           </label>
             {pickedMeetup && (pickedMeetup.directions || pickedMeetup.coords || pickedMeetup.links?.length) && (
@@ -478,7 +465,7 @@ export default function MeetingDetails({
             four words and sometimes a paragraph — where to park, which gate,
             what the water is doing — and a one-line box that scrolls what you
             wrote out of sight is no way to write the second kind. */}
-        <label className={`block sm:col-span-2 ${fileDraft?.fromPicker ? 'hidden' : ''}`}>
+        <label className="block sm:col-span-2">
           <span className="block text-[11px] uppercase tracking-wide text-zinc-500 mb-1">{wordsArePlace ? 'Where' : 'Note for this morning'}</span>
           <textarea
             autoFocus
@@ -489,25 +476,29 @@ export default function MeetingDetails({
             className="w-full min-h-[4.5rem] resize-y bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-zinc-200 leading-relaxed focus:outline-none focus:border-zinc-500"
           />
         </label>
-        {canFileToLibrary && wordsArePlace && point.trim() && !fileDraft && (
-          <div className="sm:col-span-2 -mt-1 flex items-center gap-1.5 text-[11px]">
-            <button
-              type="button"
+        {/* The whole difference between a morning and a place, in one tick.
+            Unticked, the words live on this day and nowhere else; ticked, they
+            become a meeting point every later course can pick — and the form
+            for the parts a place needs and a morning does not opens under it. */}
+        {canFileToLibrary && wordsArePlace && (
+          <label className="sm:col-span-2 -mt-1 inline-flex items-center gap-1.5 text-[11px] text-zinc-400 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={Boolean(fileDraft)}
               disabled={busy}
-              onClick={() => openFiling()}
-              className="text-zinc-500 hover:text-zinc-200 underline-offset-2 hover:underline transition-colors disabled:opacity-40"
-            >
-              Save to meeting points
-            </button>
-            <InfoHint text="Files these words as a meeting point other courses can pick, and points this day at it." />
-          </div>
+              onChange={(e) => (e.target.checked ? openFiling() : setFileDraft(null))}
+              className="accent-pr-red w-3 h-3"
+            />
+            Keep this as a meeting point
+            <InfoHint text="Saves it so every later course can pick it, instead of these words living on this day alone." />
+          </label>
         )}
         {/* Nested in the day's form rather than a dialog over it: what is
             being filed is the box just above, and covering it would hide the
             words being turned into a meetup. */}
         {fileDraft && (
           <div className="sm:col-span-2 p-3 rounded border border-zinc-700 bg-zinc-950/60 space-y-2">
-            <span className="block text-[11px] uppercase tracking-wide text-zinc-500">File as a meeting point</span>
+            <span className="block text-[11px] uppercase tracking-wide text-zinc-500">What the place needs</span>
             <div className="grid sm:grid-cols-2 gap-2">
               <label className="block">
                 <span className="block text-[11px] uppercase tracking-wide text-zinc-500 mb-1">Name</span>
@@ -654,7 +645,7 @@ export default function MeetingDetails({
                 disabled={filing || !fileDraft.name.trim()}
                 className="px-2.5 py-1 rounded bg-zinc-700 hover:bg-zinc-600 text-white text-xs font-medium transition-colors disabled:opacity-40"
               >
-                {filing ? 'Filing…' : 'File'}
+                {filing ? 'Saving…' : 'Save the place'}
               </button>
               <button
                 type="button"
