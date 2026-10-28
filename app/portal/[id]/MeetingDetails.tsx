@@ -310,8 +310,13 @@ export default function MeetingDetails({
     // made a meetup named after its own coordinates.
     const onlyAPin = Boolean(coords) && text.replace(/-?\d{1,2}\.\d{3,}\s*,\s*-?\d{1,3}\.\d{3,}/, '').trim() === ''
     setError(null)
+    // The first line of what was typed, or the canyon's name: the place is
+    // being kept as that canyon's, so that is what it is called until
+    // somebody says otherwise. Filled here as well as when the options land,
+    // because the options now arrive before this draft exists.
+    const typed = onlyAPin ? '' : (text.split('\n')[0].replace(/https?:\/\/\S+/gi, '').trim() || '').slice(0, 160)
     setFileDraft({
-      name: onlyAPin ? '' : (text.split('\n')[0].replace(/https?:\/\/\S+/gi, '').trim() || '').slice(0, 160),
+      name: typed || fileOpts?.site?.name || '',
       directions: onlyAPin ? '' : text,
       coords,
       venueId: undefined,
