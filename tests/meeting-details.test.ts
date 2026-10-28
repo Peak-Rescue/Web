@@ -36,8 +36,24 @@ describe('resolveDayMeeting', () => {
     expect(m.coords).toBe('20.88,-156.47')
   })
 
-  it('lets the day’s own words beat every meetup', () => {
-    const m = resolveDayMeeting({ meeting_point: 'Meet at the shop first' }, site)
+  // The words used to beat every meetup, so a gate code hid the pin it was
+  // about. Now they sit beside the meetup unless the day meets somewhere else.
+  it('keeps the day’s own words as a note beside the meetup', () => {
+    const m = resolveDayMeeting({ meeting_point: 'Gate code 4471' }, site)
+    expect(m.pointFrom).toBe('site-meetup')
+    expect(m.point).toBe(meetup.directions)
+    expect(m.note).toBe('Gate code 4471')
+  })
+
+  it('makes the day’s words the place when it meets somewhere else', () => {
+    const m = resolveDayMeeting({ meeting_point: 'Meet at the shop first', meets_elsewhere: true }, site)
+    expect(m.pointFrom).toBe('day')
+    expect(m.point).toBe('Meet at the shop first')
+    expect(m.note).toBeNull()
+  })
+
+  it('makes the day’s words the place when there is no meetup to name', () => {
+    const m = resolveDayMeeting({ meeting_point: 'Meet at the shop first' }, { ...site, meeting_points: null })
     expect(m.pointFrom).toBe('day')
     expect(m.point).toBe('Meet at the shop first')
   })
@@ -56,7 +72,7 @@ describe('resolveDayMeeting', () => {
 
   // The whole reason the chain resolves once instead of field by field.
   it('takes the name, pin and links from whichever answer won', () => {
-    const own = resolveDayMeeting({ meeting_point: 'Meet at the shop' }, site)
+    const own = resolveDayMeeting({ meeting_point: 'Meet at the shop', meets_elsewhere: true }, site)
     expect(own.placeName).toBeNull()
     expect(own.coords).toBeNull()
   })
