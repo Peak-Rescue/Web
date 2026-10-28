@@ -2988,6 +2988,10 @@ export default async function CourseView({
                               meetingPoints={showTasks ? schedMeetingPoints : []}
                               canFileToLibrary={showAsAdmin}
                               siteMeetup={d.sites?.meeting_points ?? null}
+                              // Known here already — the tick that keeps a
+                              // meetup is named after it, and asking the
+                              // server again made the name arrive late.
+                              siteName={d.sites?.name ?? null}
                               editPlaceHref={showAsAdmin && d.site_id ? `/admin/sites#site-${d.site_id}` : null}
                               // What the morning reads as, worked out once by
                               // the same resolver the PDF uses.

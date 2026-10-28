@@ -52,6 +52,7 @@ export default function MeetingDetails({
   meetingPoints = [],
   canFileToLibrary = false,
   siteMeetup = null,
+  siteName = null,
   editPlaceHref = null,
   resolved,
   meetingTime,
@@ -90,6 +91,10 @@ export default function MeetingDetails({
       (usual)" rather than the blank that makes a picker look unset, and so
       the same place is never offered twice under two names. */
   siteMeetup?: Meetup | null
+  /** The canyon this day is at, which the page already knows. The tick's
+      wording depends on it, and fetching it meant the tick said one thing
+      and then renamed itself a moment later. */
+  siteName?: string | null
   /** Where the usual meetup is edited, for those who may. */
   editPlaceHref?: string | null
   /** What the morning reads as, from `resolveDayMeeting`. */
@@ -316,7 +321,7 @@ export default function MeetingDetails({
     // because the options now arrive before this draft exists.
     const typed = onlyAPin ? '' : (text.split('\n')[0].replace(/https?:\/\/\S+/gi, '').trim() || '').slice(0, 160)
     setFileDraft({
-      name: typed || fileOpts?.site?.name || '',
+      name: typed || siteName || '',
       directions: onlyAPin ? '' : text,
       coords,
       venueId: undefined,
@@ -422,7 +427,6 @@ export default function MeetingDetails({
                 // Changing where we meet closes any half-written meetup: it
                 // was about the words in the box, and the box has moved on.
                 if (fileDraft) setFileDraft(null)
-                if (e.target.value === ELSEWHERE) void ensureOpts()
                 setPointId(e.target.value)
               }}
               className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-zinc-200 focus:outline-none focus:border-zinc-500"
@@ -512,11 +516,9 @@ export default function MeetingDetails({
               onChange={(e) => (e.target.checked ? openFiling() : setFileDraft(null))}
               className="accent-pr-red w-3 h-3"
             />
-            {!fileOpts
-              ? 'Keep it for next time'
-              : fileOpts.site
-                ? `Keep it as ${fileOpts.site.name}’s meeting point`
-                : 'Keep it — any day can pick it'}
+            {siteName
+              ? `Keep it as ${siteName}’s meeting point`
+              : 'Keep it — any day can pick it'}
           </label>
         )}
 
