@@ -128,30 +128,17 @@ export async function deleteSite(id: string) {
 // meets there, so correcting a gate code here corrects it everywhere at once —
 // the same bargain a site's beta makes, drawn around the thing that varies.
 
-export async function createMeetingPoint(formData: FormData) {
-  const admin = await requireAdmin()
-  const name = ((formData.get('name') as string) || '').trim()
-  if (!name) throw new Error('Name is required')
-  const { error } = await admin.from('meeting_points').insert({
-    name: name.slice(0, 160),
-    venue_id: ((formData.get('venue_id') as string) || '') || null,
-    directions: ((formData.get('directions') as string) || '').trim() || null,
-    coords: ((formData.get('coords') as string) || '').trim() || null,
-  })
-  if (error) throw new Error(error.message)
-  revalidate()
-}
-
-/** A meetup made where it is wanted: on the canyon that will use it.
+/** A meeting point made on the shelf: for a venue, where any of its days can
+ * pick it, or on a canyon, where it also becomes that canyon's usual.
  *
  * A new one could only be born on a course day — typed into a morning and
  * filed from there — so setting up a canyon in advance meant inventing a day
- * to type it on, or leaving the canyon with no meetup until somebody ran a
- * course at it. Made here, it is the site's usual at once, which is the only
- * reason to make one from this end.
+ * to type it on. And one made from a canyon was always that canyon's, so a
+ * lot every Maui day might use had no way in that did not claim it for one
+ * canyon first.
  */
-export async function createMeetingPointForSite(
-  siteId: string,
+export async function createMeetingPoint(
+  siteId: string | null,
   input: { name: string; venue_id?: string | null; directions?: string; coords?: string; links?: SiteLink[] }
 ): Promise<{ id: string } | ActionRefusal> {
   const admin = await requireAdmin()
@@ -180,11 +167,13 @@ export async function createMeetingPointForSite(
     .single()
   if (error) throw new Error(error.message)
 
-  const { error: siteError } = await admin
-    .from('sites')
-    .update({ meeting_point_id: row.id })
-    .eq('id', siteId)
-  if (siteError) throw new Error(siteError.message)
+  if (siteId) {
+    const { error: siteError } = await admin
+      .from('sites')
+      .update({ meeting_point_id: row.id })
+      .eq('id', siteId)
+    if (siteError) throw new Error(siteError.message)
+  }
 
   revalidate()
   return { id: row.id as string }

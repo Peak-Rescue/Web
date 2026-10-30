@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createMeetingPointForSite, updateMeetingPoint, deleteMeetingPoint } from './actions'
+import { createMeetingPoint, updateMeetingPoint, deleteMeetingPoint } from './actions'
 import { type MeetingPointRecord, type SiteLink } from '@/lib/sites'
 import { type Venue } from '@/lib/library'
 import TrashIcon from '@/components/TrashIcon'
@@ -20,14 +20,17 @@ export default function MeetingPointForm({
   venues,
   onDone,
   /** Making a new one for a canyon rather than changing an existing one. It
-      becomes that canyon's usual as it is saved — which is the only reason
-      to make one from this end. */
+      becomes that canyon's usual as it is saved. */
   forSite,
+  /** Making a new one for a venue alone: any of its days can pick it, and no
+      canyon is claimed for it. */
+  forVenue,
 }: {
   point: MeetingPointRecord | null
   venues: Venue[]
   onDone: (id?: string) => void
   forSite?: { id: string; venueId: string | null }
+  forVenue?: string
 }) {
   const router = useRouter()
   const [busy, setBusy] = useState(false)
@@ -36,7 +39,7 @@ export default function MeetingPointForm({
     name: point?.name ?? '',
     // The canyon's own venue, because a meetup made on a canyon is at that
     // canyon — asked for again, it is a question with one sensible answer.
-    venue_id: point?.venue_id ?? forSite?.venueId ?? '',
+    venue_id: point?.venue_id ?? forSite?.venueId ?? forVenue ?? '',
     directions: point?.directions ?? '',
     coords: point?.coords ?? '',
   })
@@ -123,7 +126,7 @@ export default function MeetingPointForm({
                 onDone()
                 return
               }
-              const made = await createMeetingPointForSite(forSite!.id, { ...form, links })
+              const made = await createMeetingPoint(forSite?.id ?? null, { ...form, links })
               if ('error' in made) { setError(made.error); return }
               onDone(made.id)
             })
@@ -131,7 +134,7 @@ export default function MeetingPointForm({
           disabled={busy || !form.name.trim()}
           className="px-3 py-1.5 rounded bg-pr-red hover:bg-pr-red-dark text-white text-sm font-medium transition-colors disabled:opacity-40"
         >
-          {busy ? 'Saving…' : point ? 'Save' : 'Add meetup'}
+          {busy ? 'Saving…' : point ? 'Save' : 'Add meeting point'}
         </button>
         {point && (
           <button

@@ -7,6 +7,7 @@ import AddLevel from './AddLevel'
 import EditVenue from './EditVenue'
 import PlaceLinkChip from './PlaceLinkChip'
 import RemovePlace from './RemovePlace'
+import VenueMeetingPoints from './VenueMeetingPoints'
 import { type Site, type MeetingPointRecord } from '@/lib/sites'
 import { type LibraryItem, type Venue, type VenueContact, type VenueLink } from '@/lib/library'
 import { countryName, regionLabel, splitRegion, SUBDIVISIONS } from '@/lib/regions'
@@ -60,6 +61,11 @@ export default function SitesShelf({
 }) {
   const pointById = new Map(points.map((p) => [p.id, p]))
   const meetupOf = (s: Site) => (s.meeting_point_id && pointById.get(s.meeting_point_id)) || null
+  // Which canyons call each meeting point their usual, for the venue's list.
+  const usualFor: Record<string, string[]> = {}
+  for (const s of sites) {
+    if (s.meeting_point_id) (usualFor[s.meeting_point_id] ??= []).push(s.name)
+  }
   // Grouped by venue, because that's how you go looking: "what have we got on
   // Maui?" rather than "show me every canyon we've ever run".
   const byVenue = new Map<string, Site[]>()
@@ -448,6 +454,15 @@ export default function SitesShelf({
               </div>
             )}
 
+            {g.venue && (
+              <VenueMeetingPoints
+                points={points.filter((p) => p.venue_id === g.venue!.id)}
+                usedBy={usualFor}
+                venues={venues}
+                canEdit={canEdit}
+              />
+            )}
+
             {g.plans.length > 0 && (
               <div className="mt-2">
                 <p className="text-[10px] uppercase tracking-wide text-zinc-700 mb-1.5">MEDEVAC</p>
@@ -490,6 +505,7 @@ export default function SitesShelf({
                 scope={{ venueId: g.venue.id }}
                 place={`venue:${g.venue.id}`}
                 placeName={g.venue.name}
+                venues={venues}
               />
             )}
             </div>

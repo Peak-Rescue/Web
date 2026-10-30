@@ -573,7 +573,7 @@ export default async function CourseView({
           .order('name'),
         // Where a day can be told to gather instead of the site's usual.
         admin.from('meeting_points')
-          .select('id, name, venue_id, directions, coords, links')
+          .select('id, name, venue_id, directions, coords, links, venues(name)')
           .eq('active', true)
           .order('name'),
       ])
@@ -1144,7 +1144,8 @@ export default async function CourseView({
   const shelfResources = editableResources.filter((r) => !r.place)
 
   const schedMeetingPoints = ((schedPointRows ?? []) as unknown as
-    { id: string; name: string; venue_id: string | null; directions: string | null; coords: string | null; links: { url: string; label: string }[] | null }[])
+    { id: string; name: string; venue_id: string | null; directions: string | null; coords: string | null; links: { url: string; label: string }[] | null; venues: { name: string } | null }[])
+    .map(({ venues, ...p }) => ({ ...p, venue_name: venues?.name ?? null }))
 
   // The editor's shape, not the page's: it wants the days plain, without the
   // site rows the read view joins in to show beta.
@@ -2916,9 +2917,9 @@ export default async function CourseView({
                       {/* Folded, the place is the only other thing worth
                           carrying — it is what tells one past day from
                           another. */}
-                      {d.location && (
+                      {(d.sites?.name ?? d.location) && (
                         <span className="text-sm text-zinc-300 truncate group-open/day:hidden">
-                          {d.location}
+                          {d.sites?.name ?? d.location}
                         </span>
                       )}
                     </>}
@@ -2992,6 +2993,8 @@ export default async function CourseView({
                               // meetup is named after it, and asking the
                               // server again made the name arrive late.
                               siteName={d.sites?.name ?? null}
+                              venueId={d.sites?.venue_id ?? (inst.venue_id as string | null) ?? null}
+                              venueName={d.sites ? d.sites.venues?.name ?? null : (venueRow?.name as string | undefined) ?? null}
                               editPlaceHref={showAsAdmin && d.site_id ? `/admin/sites#site-${d.site_id}` : null}
                               // What the morning reads as, worked out once by
                               // the same resolver the PDF uses.

@@ -7,6 +7,8 @@ import { createLibraryItem } from '@/app/admin/library/actions'
 import { errorFrom } from '@/lib/action-result'
 import TrashIcon from '@/components/TrashIcon'
 import ContactEditor from '@/components/ContactEditor'
+import MeetingPointForm from './MeetingPointForm'
+import { type Venue } from '@/lib/library'
 
 // Adding to a place, asking what it is first.
 //
@@ -19,7 +21,7 @@ import ContactEditor from '@/components/ContactEditor'
 // could make a map and a ropewiki link and nothing else: a canyon's beta is a
 // paragraph somebody writes, and a contact is a person with a number.
 
-type Kind = 'map' | 'beta' | 'plan' | 'permit' | 'weather' | 'contact'
+type Kind = 'map' | 'beta' | 'meetup' | 'plan' | 'permit' | 'weather' | 'contact'
 
 
 const input =
@@ -30,11 +32,14 @@ export default function AddToPlace({
   scope,
   place,
   placeName,
+  venues = [],
 }: {
   scope: PlaceScope
   /** `venue:<id>` or `region:<code>`, for the library forms that take a place. */
   place: string
   placeName: string
+  /** For the meeting point form's venue picker. */
+  venues?: Venue[]
 }) {
   const router = useRouter()
   const [kind, setKind] = useState<Kind | null>(null)
@@ -53,6 +58,10 @@ export default function AddToPlace({
   const choices: { k: Kind; label: string }[] = [
     { k: 'map', label: 'Map' },
     { k: 'beta', label: 'Beta' },
+    // A lot any day here can pick, without claiming it for one canyon. Only
+    // at a venue: a meeting point is ordered and offered by venue, and one
+    // filed to a whole state would be offered to nobody first.
+    ...(atVenue ? [{ k: 'meetup' as const, label: 'Meeting point' }] : []),
     // The evac and risk plan for this place. It was filed under Documents
     // with the company's blank templates, which is where you would look for
     // it only if you already knew it was not here.
@@ -225,6 +234,15 @@ export default function AddToPlace({
           scope={scope}
           scopeLabel={placeName}
           rolePlaceholder="Ranger district, landowner…"
+          onDone={() => setKind(null)}
+        />
+      )}
+
+      {kind === 'meetup' && 'venueId' in scope && (
+        <MeetingPointForm
+          point={null}
+          venues={venues}
+          forVenue={scope.venueId}
           onDone={() => setKind(null)}
         />
       )}

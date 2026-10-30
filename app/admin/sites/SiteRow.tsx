@@ -179,7 +179,7 @@ export default function SiteRow({
                       onClick={() => setEditingMeetup(true)}
                       className="ml-2 rounded border border-zinc-700 px-1.5 py-0.5 text-[11px] text-zinc-300 hover:text-white hover:border-zinc-500 transition-colors"
                     >
-                      Edit meetup
+                      Edit meeting point
                     </button>
                   )}
                 </p>
@@ -255,7 +255,7 @@ export default function SiteRow({
           <div className="sm:col-span-2 space-y-2">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className={label}>Usual meetup</label>
+                <label className={label}>Usual meeting point</label>
                 <div className="flex items-center gap-2">
                   <select
                     className={input}
@@ -263,9 +263,22 @@ export default function SiteRow({
                     onChange={(e) => { setForm({ ...form, meeting_point_id: e.target.value }); setEditingMeetup(false); setMakingMeetup(false) }}
                   >
                     <option value="">— none —</option>
-                    {points
-                      .filter((p) => p.active || p.id === form.meeting_point_id)
-                      .map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    {/* This venue's first: a Maui canyon meets at a Maui
+                        lot, and the rest of the list is every lot we have. */}
+                    {(() => {
+                      const live = points.filter((p) => p.active || p.id === form.meeting_point_id)
+                      const venueId = form.venue_id || site.venue_id
+                      const here = live.filter((p) => venueId && p.venue_id === venueId)
+                      const rest = live.filter((p) => !here.includes(p))
+                      const opt = (p: MeetingPointRecord) => <option key={p.id} value={p.id}>{p.name}</option>
+                      if (!here.length) return rest.map(opt)
+                      return (
+                        <>
+                          <optgroup label={venues.find((v) => v.id === venueId)?.name ?? 'This venue'}>{here.map(opt)}</optgroup>
+                          {rest.length > 0 && <optgroup label="Elsewhere">{rest.map(opt)}</optgroup>}
+                        </>
+                      )
+                    })()}
                   </select>
                   {/* The picker only ever offered meetups that already
                       existed, and a new one could only be born typed onto a

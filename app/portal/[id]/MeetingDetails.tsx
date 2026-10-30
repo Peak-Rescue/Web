@@ -28,6 +28,8 @@ type Meetup = {
   directions?: string | null
   coords?: string | null
   links?: MeetingLink[] | null
+  venue_id?: string | null
+  venue_name?: string | null
 }
 
 // Meeting point and time: read as two facts, edited in place, and announced
@@ -53,6 +55,8 @@ export default function MeetingDetails({
   canFileToLibrary = false,
   siteMeetup = null,
   siteName = null,
+  venueId = null,
+  venueName = null,
   editPlaceHref = null,
   resolved,
   meetingTime,
@@ -95,6 +99,11 @@ export default function MeetingDetails({
       wording depends on it, and fetching it meant the tick said one thing
       and then renamed itself a moment later. */
   siteName?: string | null
+  /** The venue this day is at — its canyon's, or the course's when it has
+      none. What a kept meeting point is filed under, and whose meeting
+      points the picker offers first. */
+  venueId?: string | null
+  venueName?: string | null
   /** Where the usual meetup is edited, for those who may. */
   editPlaceHref?: string | null
   /** What the morning reads as, from `resolveDayMeeting`. */
@@ -164,6 +173,21 @@ export default function MeetingDetails({
   const [filedPoints, setFiledPoints] = useState<Meetup[]>([])
   const pickable = [...meetingPoints, ...filedPoints.filter((f) => !meetingPoints.some((p) => p.id === f.id))]
     .filter((p) => p.id !== siteMeetup?.id)
+  // This venue's first, then the rest under their own venues — the same
+  // order the site picker uses, and what makes a Maui lot a Maui option.
+  const pickGroups = (() => {
+    const here = pickable.filter((p) => venueId && p.venue_id === venueId)
+    const rest = new Map<string, Meetup[]>()
+    for (const p of pickable) {
+      if (here.includes(p)) continue
+      const k = p.venue_name ?? 'Elsewhere'
+      rest.set(k, [...(rest.get(k) ?? []), p])
+    }
+    return [
+      ...(here.length ? [{ name: venueName ?? 'This venue', points: here }] : []),
+      ...[...rest.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([name, points]) => ({ name, points })),
+    ]
+  })()
   // The meetup the picker is on, read back under it: a name alone left the
   // form looking emptier than the page it opened from, with the directions
   // and the pin that were just on screen nowhere to be seen.
@@ -315,19 +339,24 @@ export default function MeetingDetails({
     // made a meetup named after its own coordinates.
     const onlyAPin = Boolean(coords) && text.replace(/-?\d{1,2}\.\d{3,}\s*,\s*-?\d{1,3}\.\d{3,}/, '').trim() === ''
     setError(null)
-    // The first line of what was typed, or the canyon's name: the place is
-    // being kept as that canyon's, so that is what it is called until
-    // somebody says otherwise. Filled here as well as when the options land,
-    // because the options now arrive before this draft exists.
-    const typed = onlyAPin ? '' : (text.split('\n')[0].replace(/https?:\/\/\S+/gi, '').trim() || '').slice(0, 160)
+    // The first line of what was typed is the name, and the rest is the
+    // directions — not the whole text again, which put the name in both
+    // boxes. Never the canyon's name: a meeting point is named for where it
+    // is, and one named after a canyon reads wrong the day a second canyon
+    // meets there too.
+    const [first = '', ...more] = onlyAPin ? [] : text.split('\n')
+    const typed = first.replace(/https?:\/\/\S+/gi, '').trim().slice(0, 160)
+    const rest = more.join('\n').trim()
     setFileDraft({
-      name: typed || siteName || '',
-      directions: onlyAPin ? '' : text,
+      name: typed,
+      // A first line that was only a link left no name, so the whole text
+      // stays as the directions rather than losing the link.
+      directions: typed ? rest : onlyAPin ? '' : text,
       coords,
-      venueId: undefined,
-      // Keeping it is making it the canyon's: where a day has a canyon,
-      // there is no other reason to keep the place at all.
-      makeSiteUsual: true,
+      venueId: venueId ?? undefined,
+      // Kept for the venue, and the canyon's usual only when asked: one
+      // morning at a lot is not evidence that the canyon always meets there.
+      makeSiteUsual: false,
       keepLinks: draftLinks.map((l) => l.url),
       links: [],
     })
@@ -335,7 +364,7 @@ export default function MeetingDetails({
   }
 
   /** The venues, and which canyon this day is at. Asked once, and as soon as
-      "New meeting location…" is picked rather than when the form opens: the
+      "New meeting point…" is picked rather than when the form opens: the
       answer decides what the tick under the box is even called. */
   async function ensureOpts() {
     if (fileOpts || loadingOpts.current) return
@@ -343,9 +372,6 @@ export default function MeetingDetails({
     try {
       const opts = await dayMeetingPointFilingOptions(dayId)
       setFileOpts(opts)
-      // Its canyon's name, where there is one and nothing was typed: the
-      // place is being kept as that canyon's, so that is what it is called.
-      setFileDraft((d) => (d && !d.name.trim() && opts.site ? { ...d, name: opts.site.name } : d))
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Couldn’t load venues')
     } finally {
@@ -368,7 +394,7 @@ export default function MeetingDetails({
             .map((l) => ({ url: l.url, label: l.label ?? '' })),
           ...fileDraft.links.filter((l) => l.url.trim()),
         ],
-        makeSiteUsual: Boolean(fileOpts?.site) && fileDraft.makeSiteUsual,
+        makeSiteUsual: Boolean(siteName) && fileDraft.makeSiteUsual,
       })
       if ('error' in res) { setError(res.error); return }
       setFiledPoints((prev) => [...prev, res])
@@ -431,16 +457,20 @@ export default function MeetingDetails({
               }}
               className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-zinc-200 focus:outline-none focus:border-zinc-500"
             >
-              <option value="">{siteMeetup ? `${siteMeetup.name} (usual)` : 'New meeting location…'}</option>
-              {pickable.map((p) => (
-                <option key={p.id} value={p.id}>{p.name}</option>
+              <option value="">{siteMeetup ? `${siteMeetup.name} (usual)` : 'New meeting point…'}</option>
+              {pickGroups.map((g) => (
+                <optgroup key={g.name} label={g.name}>
+                  {g.points.map((p) => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </optgroup>
               ))}
               {/* One entry, not two. "Write it below" and "save a new
                   meeting point" were the same act with a different ending —
                   both are about this day, and both start by writing where we
                   are meeting — so keeping it is a tick under the words rather
                   than a decision to make before writing them. */}
-              {siteMeetup && <option value={ELSEWHERE}>New meeting location…</option>}
+              {siteMeetup && <option value={ELSEWHERE}>New meeting point…</option>}
             </select>
           </label>
             {pickedMeetup && (pickedMeetup.directions || pickedMeetup.coords || pickedMeetup.links?.length) && (
@@ -516,9 +546,9 @@ export default function MeetingDetails({
               onChange={(e) => (e.target.checked ? openFiling() : setFileDraft(null))}
               className="accent-pr-red w-3 h-3"
             />
-            {siteName
-              ? `Keep it as ${siteName}’s meeting point`
-              : 'Keep it — any day can pick it'}
+            {venueName
+              ? `Keep it as a ${venueName} meeting point`
+              : 'Keep it as a meeting point any day can pick'}
           </label>
         )}
 
@@ -638,6 +668,21 @@ export default function MeetingDetails({
               </div>
             )}
 
+            {/* The rarer answer, behind the common one: most kept places are
+                somewhere any day here might meet, and only sometimes the
+                place this canyon always starts from. */}
+            {siteName && (
+              <label className="flex items-center gap-1.5 text-[11px] text-zinc-400 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={fileDraft.makeSiteUsual}
+                  onChange={(e) => setFileDraft({ ...fileDraft, makeSiteUsual: e.target.checked })}
+                  className="accent-pr-red w-3 h-3"
+                />
+                {siteName} meets here by default
+              </label>
+            )}
+
             <div className="flex items-center gap-2">
               <button
                 type="button"
@@ -645,7 +690,7 @@ export default function MeetingDetails({
                 disabled={filing || !fileDraft.name.trim()}
                 className="px-2.5 py-1 rounded bg-zinc-700 hover:bg-zinc-600 text-white text-xs font-medium transition-colors disabled:opacity-40"
               >
-                {filing ? 'Saving…' : 'Save the place'}
+                {filing ? 'Saving…' : 'Save meeting point'}
               </button>
               <button
                 type="button"
