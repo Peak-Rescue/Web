@@ -9,6 +9,9 @@ import { useTrackedSaves, useRegisterSaver } from '@/components/PendingSaves'
 import { useDayOrder } from './DayOrder'
 import { shelfLink } from '@/lib/library'
 
+// The site picker's value for a place typed rather than picked.
+const ELSEWHERE = 'elsewhere'
+
 // One day of a running order, as a thing you can edit wherever you meet it.
 //
 // It was inline in ScheduleEditor, which meant editing a day required putting
@@ -107,8 +110,10 @@ export default function ScheduleDayCard({
   const [pickedSite, setPickedSite] = useState<{ id: string | null } | null>(null)
   const siteId = pickedSite ? pickedSite.id : day.site_id
   const site = sites.find((s) => s.id === siteId)
-  // What the day falls back to, named rather than left blank: an empty picker
-  // that silently means "the lower lot" is a picker nobody trusts.
+  // "Somewhere else" is open when the day has typed words and no site, or
+  // when it was just picked and nothing is typed yet.
+  const [elsewhereOpen, setElsewhereOpen] = useState(false)
+  const elsewhere = !siteId && (elsewhereOpen || Boolean(day.location?.trim()))
 
   // The course's own venue first, then everywhere else — the list is one
   // dropdown, so the ordering is the only thing making a Maui course feel like
@@ -132,8 +137,12 @@ export default function ScheduleDayCard({
       const k = s.venue_name ?? 'Elsewhere'
       restBy.set(k, [...(restBy.get(k) ?? []), s])
     }
+    // Headed with the venue's name: these are sites, and "This course's
+    // venue" over a list of canyons called each of them a venue.
+    const hereVenues = new Set(here.map((s) => s.venue_name ?? ''))
+    const hereName = hereVenues.size === 1 && [...hereVenues][0] ? [...hereVenues][0] : 'Near this course'
     return [
-      ...(here.length ? [{ name: venueId ? 'This course’s venue' : 'Where this course is', sites: here }] : []),
+      ...(here.length ? [{ name: hereName, sites: here }] : []),
       ...[...restBy.entries()].map(([name, sites]) => ({ name, sites })),
     ]
   }, [sites, venueId, region, location])
@@ -220,40 +229,58 @@ export default function ScheduleDayCard({
           beta, the objectives, the topics. Where we gather is the morning's,
           and lives with the hour and the pins and the press that tells the
           course about them. */}
-      <div className="grid sm:grid-cols-2 gap-2">
-        <Marked icon={<PinIcon />}>
-          <input
-            defaultValue={day.location ?? ''}
-            onBlur={(e) => e.target.value !== (day.location ?? '') && run(() => updateScheduleDay(day.id, { location: e.target.value }), { quiet: true })}
-            placeholder="Location"
-            className={`w-full pl-7 ${input}`}
-          />
-        </Marked>
-        {/* Picking the place is what stops its beta being retyped per
-            course. Left unset, the day behaves exactly as it always
-            has — a free-text location and its own notes. */}
+      {/* One question, one control. A typed Location sat beside the site
+          picker and the two said the same thing twice — "Knucklehead" next
+          to Knucklehead Canyon — so the words are now only for a place that
+          is not a site, behind "Somewhere else". */}
+      <div className="space-y-2">
+        <p className={heading}>Site</p>
         {sites.length > 0 && (
           <Marked icon={<RouteIcon />}>
             <select
-              value={siteId ?? ''}
+              value={siteId ?? (elsewhere ? ELSEWHERE : '')}
               onChange={(e) => {
-                const next = e.target.value || null
+                const v = e.target.value
+                if (v === ELSEWHERE) {
+                  setElsewhereOpen(true)
+                  if (siteId) {
+                    setPickedSite({ id: null })
+                    void run(() => updateScheduleDay(day.id, { site_id: null })).then(() => setPickedSite(null))
+                  }
+                  return
+                }
+                setElsewhereOpen(false)
+                const next = v || null
                 setPickedSite({ id: next })
-                void run(() => updateScheduleDay(day.id, { site_id: next })).then(() => setPickedSite(null))
+                void run(() => updateScheduleDay(day.id, next ? { site_id: next } : { site_id: null, location: null }))
+                  .then(() => setPickedSite(null))
               }}
-              className={`w-full pl-7 ${input} ${siteId ? 'text-zinc-200' : 'text-zinc-500'}`}
+              className={`w-full pl-7 ${input} ${siteId || elsewhere ? 'text-zinc-200' : 'text-zinc-500'}`}
             >
-              <option value="">No beta</option>
+              <option value="">No site</option>
               {siteGroups.map((g) => (
                 <optgroup key={g.name} label={g.name}>
                   {g.sites.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}{s.kind ? ` · ${s.kind}` : ''}
-                    </option>
+                    <option key={s.id} value={s.id}>{s.name}</option>
                   ))}
                 </optgroup>
               ))}
+              <option value={ELSEWHERE}>Somewhere else…</option>
             </select>
+          </Marked>
+        )}
+        {(elsewhere || sites.length === 0) && (
+          <Marked icon={<PinIcon />}>
+            <input
+              // Keyed on the saved words so a site picked and un-picked does
+              // not leave stale text in an uncontrolled box.
+              key={day.location ?? ''}
+              autoFocus={elsewhereOpen && !day.location}
+              aria-label="Where, if not a site"
+              defaultValue={day.location ?? ''}
+              onBlur={(e) => e.target.value !== (day.location ?? '') && run(() => updateScheduleDay(day.id, { location: e.target.value }), { quiet: true })}
+              className={`w-full pl-7 ${input}`}
+            />
           </Marked>
         )}
       </div>

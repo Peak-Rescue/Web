@@ -143,9 +143,11 @@ export async function generateSchedulePdf(data: SchedulePdf): Promise<Uint8Array
       }
       b.y -= 2
     }
-    if (day.location) {
+    // The site names the place; typed words are only for a day at none.
+    const where = day.sites?.name ?? day.location
+    if (where) {
       b.text('Where', { x: MARGIN, size: 7.5, color: FAINT })
-      b.paragraph(day.location, { x: BODY_X, width: CONTENT_W - TIME_W, size: 9, leading: 12, color: MUTED })
+      b.paragraph(where, { x: BODY_X, width: CONTENT_W - TIME_W, size: 9, leading: 12, color: MUTED })
       b.y -= 2
     }
     // The place's own beta, before the day's note about it — the sheet that

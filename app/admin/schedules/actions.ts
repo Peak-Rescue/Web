@@ -256,6 +256,10 @@ export async function updateScheduleDay(
   if (patch.title !== undefined) update.title = patch.title.trim().slice(0, 200) || 'Day'
   if (patch.location !== undefined) update.location = patch.location?.trim() || null
   if (patch.site_id !== undefined) update.site_id = patch.site_id || null
+  // A day at a site is named by the site. Typed words beside it were a second
+  // answer to "where" — "Knucklehead" under Knucklehead Canyon — and they
+  // went stale the day the canyon was renamed.
+  if (patch.site_id) update.location = null
   if (patch.notes !== undefined) update.notes = patch.notes?.trim() || null
   if (patch.objectives !== undefined) {
     update.objectives = patch.objectives.map((o) => o.trim().slice(0, 300)).filter(Boolean)
