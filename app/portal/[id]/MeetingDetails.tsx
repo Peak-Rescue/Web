@@ -7,6 +7,7 @@ import AttachmentFields, { withLinkDraft } from './AttachmentFields'
 import { ChipRow } from '@/components/LinkChip'
 import TrashIcon from '@/components/TrashIcon'
 import Coords from '@/components/Coords'
+import PinField from '@/components/PinField'
 import { errorFrom } from '@/lib/action-result'
 import { Linkified, shortUrl, urlsIn } from '@/lib/linkify'
 import CloseButton from '@/components/CloseButton'
@@ -590,14 +591,14 @@ export default function MeetingDetails({
                   className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-zinc-200 focus:outline-none focus:border-zinc-500 resize-y leading-relaxed"
                 />
               </label>
-              <label className="block sm:col-span-2">
-                <span className="block text-[11px] uppercase tracking-wide text-zinc-500 mb-1">Coordinates</span>
-                <input
+              <div className="sm:col-span-2">
+                <PinField
                   value={fileDraft.coords}
-                  onChange={(e) => setFileDraft({ ...fileDraft, coords: e.target.value })}
+                  onChange={(coords) => setFileDraft((d) => (d ? { ...d, coords } : d))}
                   className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-zinc-200 focus:outline-none focus:border-zinc-500"
+                  labelClassName="block text-[11px] uppercase tracking-wide text-zinc-500 mb-1"
                 />
-              </label>
+              </div>
               {/* The meetup's own links — the driving pin, the gate photo —
                   which every course meeting here reads. Written with it, not
                   by putting one on a morning first and keeping it. */}

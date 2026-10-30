@@ -9,6 +9,7 @@ import CloseButton from '@/components/CloseButton'
 import TrashIcon from '@/components/TrashIcon'
 import Coords from '@/components/Coords'
 import MeetingPointForm from './MeetingPointForm'
+import PinField from '@/components/PinField'
 import { errorFrom } from '@/lib/action-result'
 
 // A link's address is typed by hand, so it is not always a URL. Naming it
@@ -245,10 +246,12 @@ export default function SiteRow({
               {venues.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
             </select>
           </div>
-          <div>
-            <label className={label}>Coordinates</label>
-            <input className={input} value={form.coords} onChange={(e) => setForm({ ...form, coords: e.target.value })} />
-          </div>
+          <PinField
+            value={form.coords}
+            onChange={(coords) => setForm((f) => ({ ...f, coords }))}
+            className={input}
+            labelClassName={label}
+          />
           {/* The meetup is part of setting a canyon up, so it is part of
               this form. It used to be held in the form's state and drawn
               nowhere: pressing Edit was the one way to lose sight of it. */}

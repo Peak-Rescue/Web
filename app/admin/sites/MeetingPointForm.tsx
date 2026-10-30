@@ -7,6 +7,7 @@ import { type MeetingPointRecord, type SiteLink } from '@/lib/sites'
 import { type Venue } from '@/lib/library'
 import TrashIcon from '@/components/TrashIcon'
 import { errorFrom } from '@/lib/action-result'
+import PinField from '@/components/PinField'
 
 const input = 'w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-zinc-500'
 const label = 'block text-[11px] text-zinc-500 mb-1'
@@ -75,10 +76,12 @@ export default function MeetingPointForm({
           onChange={(e) => setForm({ ...form, directions: e.target.value })}
         />
       </div>
-      <div>
-        <label className={label}>Coordinates</label>
-        <input className={input} value={form.coords} onChange={(e) => setForm({ ...form, coords: e.target.value })} />
-      </div>
+      <PinField
+        value={form.coords}
+        onChange={(coords) => setForm((f) => ({ ...f, coords }))}
+        className={input}
+        labelClassName={label}
+      />
 
       <div className="sm:col-span-2">
         <label className={label}>Links</label>

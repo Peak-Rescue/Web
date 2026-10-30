@@ -7,6 +7,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { type SiteLink } from '@/lib/sites'
 import { refuse, type ActionResult, type ActionRefusal } from '@/lib/action-result'
 import { isValidRegion } from '@/lib/regions'
+import { pinFromCoords, pinFromGoogleUrl, isGoogleMapsUrl } from '@/lib/pin'
 
 async function requireAdmin() {
   const supabase = await createClient()
@@ -529,3 +530,31 @@ export async function removeRegion(code: string): Promise<ActionResult> {
   revalidatePath('/admin/library')
 }
 
+
+// ─── Pins ────────────────────────────────────────────────────────────────────
+
+/** Coordinates from what was pasted into a pin field: coordinates as they
+ *  are, or a Google Maps link followed to the place it names. A share link
+ *  (maps.app.goo.gl) carries no position until it is followed, and the
+ *  browser cannot follow it — Google does not allow the cross-origin read —
+ *  so the server does, one hop at a time, and only ever to Google.
+ */
+export async function resolvePin(text: string): Promise<{ coords: string } | ActionRefusal> {
+  await requireAdmin()
+  const typed = pinFromCoords(text)
+  if (typed) return { coords: typed }
+  let url = text.trim()
+  if (!isGoogleMapsUrl(url)) {
+    return refuse('Paste coordinates like 20.9227, -156.2858, or a Google Maps link.')
+  }
+  for (let hop = 0; hop < 5; hop++) {
+    const found = pinFromGoogleUrl(url)
+    if (found) return { coords: found }
+    const res = await fetch(url, { redirect: 'manual', signal: AbortSignal.timeout(5000) })
+    const next = res.headers.get('location')
+    if (!next) break
+    url = new URL(next, url).toString()
+    if (!isGoogleMapsUrl(url)) break
+  }
+  return refuse('That link doesn’t say where the place is. In Google Maps, open the place and use Share → Copy link.')
+}
