@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { requireAdminUser } from '@/lib/course-access'
 import { upsertGearItem } from '@/app/admin/gear/actions'
 import { linesFromList } from '@/lib/gear-order-lines'
-import { cleanSizes, isSized, lineNames, netUnitPrice, parseSizeOptions, safeLink, sizesTotal } from '@/lib/gear-orders'
+import { cleanSizes, isSized, lineNames, netUnitPrice, parseSizeOptions, safeLink, sizesTotal, typedOverCatalog } from '@/lib/gear-orders'
 import { sendMail } from '@/lib/mailer'
 import { planSplit, type SplitLine } from '@/lib/gear-order-split'
 
@@ -248,8 +248,9 @@ export async function updateStandaloneLine(
 // product with none yet. Swapping one product for another does not keep the old
 // one's link or price: those described the product that just left.
 //
-// `keep` is the person's answer when the line holds values typed over the old
-// product: true carries them to the new one, and into its catalog gaps.
+// `keep` carries what was typed over the old product to the new one, and into
+// its catalog gaps. Only what was typed: a price changed by hand must not bring
+// the old product's untouched link along with it.
 export async function setLineProduct(
   lineId: string,
   gearItemId: string,
@@ -262,20 +263,31 @@ export async function setLineProduct(
   const item = data as Item | null
   if (!item) return fail('That item is no longer in the catalog.')
 
+  const { data: leaving } = line.product && line.gear_item_id
+    ? await admin.from('gear_items').select(ITEM_COLUMNS).eq('id', line.gear_item_id).maybeSingle()
+    : { data: null }
+  const old = leaving as Item | null
+  const typed = typedOverCatalog(line, old)
+  const typedSizes = (line.size_options ?? []).join() !== (old?.sizes ?? []).join() ? line.size_options : []
+
   const { product } = lineNames(item, await parentOf(admin, item))
   const { error } = await admin.from('gear_order_lines').update({
     gear_item_id: item.id,
     product,
     detail: line.detail ?? item.info,
-    url: keep ? safeLink(line.url) ?? safeLink(item.url) : safeLink(item.url) ?? (line.product ? null : line.url),
-    unit_price: keep ? line.unit_price ?? item.price : item.price ?? (line.product ? null : line.unit_price),
-    size_options: item.sizes?.length ? item.sizes : (line.product ? [] : line.size_options),
+    url: keep ? typed.url ?? safeLink(item.url) : safeLink(item.url) ?? (line.product ? null : line.url),
+    unit_price: keep ? typed.price ?? item.price : item.price ?? (line.product ? null : line.unit_price),
+    size_options: keep && typedSizes.length
+      ? typedSizes
+      : item.sizes?.length ? item.sizes : (line.product ? [] : line.size_options),
   }).eq('id', lineId)
   if (error) throw new Error(error.message)
 
   // What was typed on a generic line was about the product just chosen for it.
   // A swap's values were about the product that left, so those stay out.
-  if (!line.product || keep) {
+  if (keep) {
+    await fillCatalogGaps(admin, item, { url: typed.url, price: typed.price, options: typedSizes })
+  } else if (!line.product) {
     await fillCatalogGaps(admin, item, {
       url: safeLink(line.url), price: line.unit_price, options: line.size_options,
     })
@@ -288,7 +300,7 @@ export async function setLineProduct(
 // It goes under the line's generic item, so it is on offer next time too.
 export async function addLineProduct(
   lineId: string,
-  input: { brand: string; model: string; url?: string; price?: number | null }
+  input: { brand: string; model: string }
 ): Promise<{ ok: true } | Failed> {
   const { admin } = await requireAdminUser()
   const line = await ownLine(admin, lineId)
@@ -301,14 +313,13 @@ export async function addLineProduct(
   const model = input.model.trim()
   if (!model) return fail('Name the model.')
   if (!input.brand.trim()) return fail('Add the brand.')
-  const url = input.url?.trim() ? safeLink(input.url) : null
-  if (input.url?.trim() && !url) return fail('A link has to start with http:// or https://.')
   const made = await upsertGearItem({
     name: model, brand: input.brand.trim() || null, parentId: item.parent_id ?? item.id,
-    url, price: cleanPrice(input.price ?? null),
   })
   if ('error' in made) return made
-  return setLineProduct(lineId, made.id)
+  // Whatever was typed on the line a step early belongs to the product being
+  // named now. It stays in the line's own boxes, where it can be seen and changed.
+  return setLineProduct(lineId, made.id, { keep: true })
 }
 
 // Refiling from the line that shows it. A category says what a thing is, so a

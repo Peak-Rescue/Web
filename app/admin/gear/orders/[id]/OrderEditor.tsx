@@ -357,23 +357,10 @@ function productsFor(line: GearOrderLine, catalog: GearItem[], childrenOf: Map<s
 
 // The product menu only lists what the catalog holds, so the first product of
 // anything has to start somewhere. Here, on the line that wants it.
-//
-// Link and price are asked here, and start with whatever is typed on the line
-// but isn't the current product's: that is usually this new product's, entered
-// a step early. Shown rather than assumed, so a wrong guess can be cleared.
-function NewProduct({
-  lineId, typed, run, busy,
-}: {
-  lineId: string
-  typed: { url: string | null; price: number | null }
-  run: Run
-  busy: boolean
-}) {
+function NewProduct({ lineId, run, busy }: { lineId: string; run: Run; busy: boolean }) {
   const [open, setOpen] = useState(false)
   const [brand, setBrand] = useState('')
   const [model, setModel] = useState('')
-  const [url, setUrl] = useState(typed.url ?? '')
-  const [price, setPrice] = useState(typed.price == null ? '' : String(typed.price))
 
   if (!open) {
     return (
@@ -391,15 +378,13 @@ function NewProduct({
       onSubmit={(e) => {
         e.preventDefault()
         run(async () => {
-          unwrap(await addLineProduct(lineId, { brand, model, url, price: price === '' ? null : Number(price) }))
+          unwrap(await addLineProduct(lineId, { brand, model }))
           setOpen(false); setBrand(''); setModel('')
         })
       }}
     >
       <input autoFocus list="gear-brands" aria-label="Brand" placeholder="Brand" value={brand} onChange={(e) => setBrand(e.target.value)} className={`${input} w-36 text-xs`} />
       <input aria-label="Model" placeholder="Model" value={model} onChange={(e) => setModel(e.target.value)} className={`${input} min-w-0 flex-1 text-xs`} />
-      <input type="url" aria-label="Link" placeholder="Link" value={url} onChange={(e) => setUrl(e.target.value)} className={`${input} w-full text-xs`} />
-      <input type="number" min={0} step="0.01" aria-label="Price" placeholder="Price" value={price} onChange={(e) => setPrice(e.target.value)} className={`${input} w-28 text-xs`} />
       <button type="submit" disabled={busy || !model.trim() || !brand.trim()} className="text-xs text-zinc-300 hover:text-white disabled:opacity-40">Add</button>
       <button type="button" onClick={() => setOpen(false)} className="text-xs text-zinc-600 hover:text-zinc-300">Cancel</button>
     </form>
@@ -759,7 +744,7 @@ function LineRow({
         </p>
       )}
 
-      {line.gear_item_id && <NewProduct key={`${line.url}|${line.unit_price}`} lineId={line.id} typed={typed} run={run} busy={busy} />}
+      {line.gear_item_id && <NewProduct lineId={line.id} run={run} busy={busy} />}
 
       <div className="mt-2">
         <SizeOptionsField
