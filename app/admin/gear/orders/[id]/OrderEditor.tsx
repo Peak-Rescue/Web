@@ -158,9 +158,9 @@ export default function OrderEditor({
             className={`${input} w-full`}
           />
         </Field>
-        <Field label="Contact email">
+        <Field label="Contact emails">
           <input
-            type="email"
+            title="Separate more than one with commas"
             defaultValue={order.contact_email ?? ''}
             onBlur={(e) => { if (e.target.value.trim() !== (order.contact_email ?? '')) saveOrder({ contactEmail: e.target.value }) }}
             className={`${input} w-full`}

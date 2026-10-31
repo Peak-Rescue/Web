@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { requireAdminUser } from '@/lib/course-access'
 import { upsertGearItem } from '@/app/admin/gear/actions'
 import { linesFromList } from '@/lib/gear-order-lines'
-import { cleanSizes, isSized, lineNames, netUnitPrice, parseSizeOptions, safeLink, sizesTotal, typedOverCatalog } from '@/lib/gear-orders'
+import { cleanSizes, isSized, lineNames, netUnitPrice, parseEmails, parseSizeOptions, safeLink, sizesTotal, typedOverCatalog } from '@/lib/gear-orders'
 import { sendMail } from '@/lib/mailer'
 import { planSplit, type SplitLine } from '@/lib/gear-order-split'
 
@@ -81,7 +81,7 @@ export async function updateStandaloneOrder(
   }
   if (patch.clientId !== undefined) update.client_id = patch.clientId || null
   if (patch.contactName !== undefined) update.contact_name = patch.contactName?.trim().slice(0, 120) || null
-  if (patch.contactEmail !== undefined) update.contact_email = patch.contactEmail?.trim().slice(0, 200) || null
+  if (patch.contactEmail !== undefined) update.contact_email = patch.contactEmail?.trim().slice(0, 1000) || null
   if (patch.intro !== undefined) update.intro = patch.intro?.trim().slice(0, 2000) || null
   if (patch.esQuoteNumber !== undefined) update.es_quote_number = patch.esQuoteNumber?.trim().slice(0, 80) || null
   if (patch.status !== undefined) update.status = patch.status
@@ -484,15 +484,16 @@ export async function sendStandaloneOrder(orderId: string): Promise<{ ok: true }
     .maybeSingle()
   if (!order) return fail('Order not found.')
 
-  const to = order.contact_email?.trim()
-  if (!to || !/^\S+@\S+\.\S+$/.test(to)) return fail('Add a contact email first.')
+  const { good: to, bad } = parseEmails(order.contact_email)
+  if (bad.length > 0) return fail(`That doesn't look like an email address: ${bad.join(', ')}`)
+  if (to.length === 0) return fail('Add a contact email first.')
   if ((order.gear_order_lines ?? []).length === 0) return fail('There is nothing on this order yet.')
   if (!process.env.RESEND_API_KEY) return fail('Email is not configured in this environment.')
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://peak-rescue.com'
   const { error: sendError } = await sendMail({
     from: 'Peak Rescue <noreply@peak-rescue.com>',
-    to: [to],
+    to,
     subject: order.es_quote_number
       ? `Gear list ${order.es_quote_number} — ${order.title}`
       : `Gear list — ${order.title}`,

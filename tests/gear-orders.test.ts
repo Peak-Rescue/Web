@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { brandsIn, canonicalBrand } from '@/lib/gear'
-import { cleanSizes, defaultScale, lineNames, needsProduct, netUnitPrice, orderTotal, parseSizeOptions, safeLink, sizeRange, sizeRows, sizesSummary, sizesTotal, workFirst, isSized, typedOverCatalog } from '@/lib/gear-orders'
+import { cleanSizes, defaultScale, lineNames, needsProduct, netUnitPrice, orderTotal, parseSizeOptions, safeLink, sizeRange, sizeRows, sizesSummary, sizesTotal, workFirst, isSized, typedOverCatalog, parseEmails } from '@/lib/gear-orders'
 
 describe('orderTotal', () => {
   it('adds up the lines still wanted', () => {
@@ -81,6 +81,22 @@ describe('typedOverCatalog', () => {
 
   it('finds nothing on an empty line', () => {
     expect(typedOverCatalog({ url: null, unit_price: null }, product)).toEqual({ url: null, price: null })
+  })
+})
+
+describe('parseEmails', () => {
+  it('takes one address or several, however they were separated', () => {
+    expect(parseEmails('a@x.com').good).toEqual(['a@x.com'])
+    expect(parseEmails('a@x.com, b@y.org; c@z.mil\nd@w.net').good).toEqual(['a@x.com', 'b@y.org', 'c@z.mil', 'd@w.net'])
+  })
+
+  it('sends once to an address listed twice', () => {
+    expect(parseEmails('a@x.com, A@x.com').good).toEqual(['a@x.com'])
+  })
+
+  it('reports what is not an address', () => {
+    expect(parseEmails('a@x.com, b@y').bad).toEqual(['b@y'])
+    expect(parseEmails('')).toEqual({ good: [], bad: [] })
   })
 })
 

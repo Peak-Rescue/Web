@@ -115,6 +115,24 @@ export function lineNames(
   return parent ? { name: parent.name, product: full } : { name: full, product: null }
 }
 
+// Who an order goes to: one address or several, split on commas, semicolons or
+// spaces, the ways a list arrives when it is pasted out of an email. `bad` is
+// reported, so a typo stops the send instead of quietly losing someone.
+export function parseEmails(text: string | null | undefined): { good: string[]; bad: string[] } {
+  const seen = new Set<string>()
+  const good: string[] = []
+  const bad: string[] = []
+  for (const part of (text ?? '').split(/[\s,;]+/)) {
+    if (!part) continue
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(part)) bad.push(part)
+    else if (!seen.has(part.toLowerCase())) {
+      seen.add(part.toLowerCase())
+      good.push(part)
+    }
+  }
+  return { good, bad }
+}
+
 // A typed list of sizes: "S, M, L". Comma-separated because a size can hold a
 // space ("10.5 wide") and nothing else in this vocabulary needs a comma.
 export function parseSizeOptions(text: string): string[] {
