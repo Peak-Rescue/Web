@@ -24,6 +24,12 @@ export async function generateGearOrderPdf(data: GearOrderPdf): Promise<Uint8Arr
     title: data.courseTitle,
     subtitle: data.courseSubtitle,
     kind: data.esQuoteNumber ? `Gear order ${data.esQuoteNumber}` : 'Gear order',
+    masthead: {
+      eyebrow: data.courseTitle,
+      heading: 'Gear Order',
+      lines: data.courseSubtitle ? [data.courseSubtitle] : [],
+      ref: data.esQuoteNumber,
+    },
   })
 
   // Who said so and when. Without it this is an anonymous list of numbers, and

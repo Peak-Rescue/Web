@@ -68,6 +68,11 @@ export async function generateSchedulePdf(data: SchedulePdf): Promise<Uint8Array
     title: data.courseTitle,
     subtitle: data.courseSubtitle,
     kind: data.scheduleName || 'Running order',
+    masthead: {
+      eyebrow: data.courseTitle,
+      heading: 'Running Order',
+      lines: [data.scheduleName, data.courseSubtitle].filter((l): l is string => Boolean(l)),
+    },
   })
 
   if (data.overview) {

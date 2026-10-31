@@ -39,9 +39,8 @@ export type DocMeta = {
   // What this document is: "Gear list", "Running order". Rides the running
   // head and the footer so a loose page still says what it came from.
   kind: string
-  // For what leaves the company — a quote goes to a purchasing office that
-  // has never heard of us — not for the handouts our own crew carry.
-  // The website's hero, on paper: a black band across the top of page one with
+  // The website's hero, on paper, on everything of ours that isn't a signed
+  // record or somebody else's form: a black band across the top of page one with
   // the colour logo, a red eyebrow and the heading in the site's display face.
   // Replaces the title block and the red rule. Section headings become the
   // site's red tracked labels to match.
@@ -174,14 +173,25 @@ export class PdfBuilder {
     }
 
     let y = top - 46
-    this.tracked(m.eyebrow.toUpperCase(), { x: MARGIN, y, size: 8.5, color: RED, spacing: 1.6 })
+    // Course names run long and the band doesn't grow, so what can't fit stops
+    // short of the logo and the edge of the band instead of running into them.
+    const eyebrow = m.eyebrow.toUpperCase()
+    const tracking = 1.6
+    const eyebrowFits = (s: string) => this.bold.widthOfTextAtSize(winAnsiSafe(this.bold, s), 8.5) + s.length * tracking <= textW
+    let shown = eyebrow
+    while (!eyebrowFits(shown) && shown.length > 1) shown = shown.slice(0, -2).trimEnd() + '…'
+    this.tracked(shown, { x: MARGIN, y, size: 8.5, color: RED, spacing: tracking })
     y -= 32
     const display = this.display ?? this.bold
-    this.page.drawText(winAnsiSafe(display, m.heading), { x: MARGIN, y, size: 32, font: display, color: rgb(1, 1, 1) })
+    const heading = winAnsiSafe(display, m.heading)
+    const headingSize = Math.max(18, Math.min(32, 32 * textW / display.widthOfTextAtSize(heading, 32)))
+    this.page.drawText(heading, { x: MARGIN, y, size: headingSize, font: display, color: rgb(1, 1, 1) })
     y -= 22
+    const floor = top - BAND_H + (m.ref ? 30 : 14)
     m.lines.forEach((line, i) => {
       const size = i === 0 ? 11 : 9.5
-      for (const l of wrap(this.font, line, size, textW).slice(0, 2)) {
+      for (const l of wrap(i === 0 ? this.bold : this.font, line, size, textW).slice(0, 2)) {
+        if (y < floor) return
         this.page.drawText(l, { x: MARGIN, y, size, font: i === 0 ? this.bold : this.font, color: i === 0 ? ON_BAND : ON_BAND_DIM })
         y -= size * 1.5
       }

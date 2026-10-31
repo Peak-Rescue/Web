@@ -51,3 +51,13 @@ describe('generateSchedulePdf', () => {
     await expect(sheet([day({ sites: null, meeting_time: null })])).resolves.toBeDefined()
   })
 })
+
+describe('the masthead', () => {
+  it('holds a course name far too long for the band', async () => {
+    const long = 'Swiftwater Rescue Technician and Advanced Boat Handling for Military Partners '.repeat(3)
+    const bytes = await generateSchedulePdf({
+      courseTitle: long, courseSubtitle: long, scheduleName: long, overview: null, objectives: [], days: [day()],
+    })
+    expect(new TextDecoder().decode(bytes.slice(0, 5))).toBe('%PDF-')
+  })
+})

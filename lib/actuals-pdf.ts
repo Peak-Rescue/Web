@@ -34,6 +34,11 @@ export async function generateActualsPdf(data: ActualsPdf): Promise<Uint8Array> 
     title: data.courseTitle,
     subtitle: data.courseSubtitle,
     kind: 'Course actuals',
+    masthead: {
+      eyebrow: data.courseTitle,
+      heading: 'Course Actuals',
+      lines: data.courseSubtitle ? [data.courseSubtitle] : [],
+    },
   })
 
   // A page of money with no date on it is a page somebody will read next year

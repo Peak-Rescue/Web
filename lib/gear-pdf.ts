@@ -85,6 +85,11 @@ export async function generateGearListPdf(data: GearPdf): Promise<Uint8Array> {
     title: data.courseTitle,
     subtitle: data.courseSubtitle,
     kind: data.listName || 'Gear list',
+    masthead: {
+      eyebrow: data.courseTitle,
+      heading: 'Gear List',
+      lines: [data.listName, data.courseSubtitle].filter((l): l is string => Boolean(l)),
+    },
   })
 
   if (data.intro) {
@@ -271,10 +276,7 @@ export async function generateGearListPdf(data: GearPdf): Promise<Uint8Array> {
     let openSection: string | null = null
     b.continued = () => {
       if (namesSide) {
-        b.text(`${KIT_LABEL[gt]} (continued)`.toUpperCase(), { size: 9, bold: true, color: INK })
-        b.y -= 6
-        b.hairline()
-        b.y -= 14
+        b.sectionHeading(`${KIT_LABEL[gt]} (continued)`)
       }
       columnHeads()
       if (openSection) {
