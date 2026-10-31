@@ -1,3 +1,5 @@
+import { productName } from '@/lib/gear'
+
 // A gear order is the client's answer to a gear list: what they actually want
 // us to supply, how many, and what they said about it.
 //
@@ -21,6 +23,8 @@ export type GearOrderLine = {
   sort_order: number
   /** Standalone orders only. A course order's reads don't ask for these. */
   gear_item_id?: string | null
+  /** The specific product, under `name`, which says what is needed. */
+  product?: string | null
   url?: string | null
   unit_price?: number | null
 }
@@ -69,6 +73,17 @@ export const GEAR_ORDER_STATUS_STYLE: Record<GearOrderStatus, string> = {
 export function safeLink(url: string | null | undefined): string | null {
   const v = url?.trim()
   return v && /^https?:\/\/\S+$/i.test(v) ? v : null
+}
+
+// How a catalog row reads on a line: what is needed, then which product meets
+// it. A generic item has no product yet, and a product with no generic above it
+// is the only name it has.
+export function lineNames(
+  item: { name: string; brand?: string | null },
+  parent: { name: string } | null | undefined
+): { name: string; product: string | null } {
+  const full = productName(item)
+  return parent ? { name: parent.name, product: full } : { name: full, product: null }
 }
 
 // The money on the lines still wanted. `unpriced` is reported rather than

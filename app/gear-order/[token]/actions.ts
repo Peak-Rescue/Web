@@ -65,7 +65,7 @@ export async function submitGearOrder(
       try {
         const [{ data: admins }, { data: lines }] = await Promise.all([
           admin.from('profiles').select('email').eq('role', 'admin'),
-          admin.from('gear_order_lines').select('name, qty_wanted, removed').eq('order_id', order.id).order('sort_order'),
+          admin.from('gear_order_lines').select('name, product, qty_wanted, removed').eq('order_id', order.id).order('sort_order'),
         ])
         const recipients = (admins ?? []).map((a) => a.email).filter((e): e is string => Boolean(e))
         if (recipients.length === 0) return
@@ -97,7 +97,7 @@ export async function submitGearOrder(
             order.es_quote_number ? `Quote ${order.es_quote_number}.` : null,
             '',
             `${wanted.length} item${wanted.length === 1 ? '' : 's'} wanted${dropped.length ? `, ${dropped.length} struck off` : ''}:`,
-            ...wanted.map((l) => `  ${l.qty_wanted} × ${l.name}`),
+            ...wanted.map((l) => `  ${l.qty_wanted} × ${l.name}${l.product ? ` (${l.product})` : ''}`),
             input.note.trim() ? ['', `They said: "${input.note.trim()}"`].join('\n') : null,
             '',
             `${siteUrl}${path}`,

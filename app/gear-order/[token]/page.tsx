@@ -19,7 +19,7 @@ export default async function GearOrderPage({ params }: { params: Promise<{ toke
   const admin = createAdminClient()
   const { data: order } = await admin
     .from('gear_orders')
-    .select('id, instance_id, title, client_id, es_quote_number, status, intro, responded_at, responded_name, client_note, viewed_at, attachments, gear_order_lines(id, name, detail, category, qty_offered, qty_wanted, url, unit_price, removed, client_note, sort_order)')
+    .select('id, instance_id, title, client_id, es_quote_number, status, intro, responded_at, responded_name, client_note, viewed_at, attachments, gear_order_lines(id, name, product, detail, category, qty_offered, qty_wanted, url, unit_price, removed, client_note, sort_order)')
     .eq('accept_token', token)
     .maybeSingle()
   if (!order || order.status === 'draft') notFound()

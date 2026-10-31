@@ -82,7 +82,7 @@ export async function generateGearOrderPdf(data: GearOrderPdf): Promise<Uint8Arr
       const price = l.unit_price == null
         ? null
         : `${fmtMoney(Number(l.unit_price))} each — ${fmtMoney(Number(l.unit_price) * Number(l.qty_wanted))}`
-      const notes = [price, safeLink(l.url), l.client_note && `Client: ${l.client_note}`, l.admin_note].filter(Boolean) as string[]
+      const notes = [l.product, price, safeLink(l.url), l.client_note && `Client: ${l.client_note}`, l.admin_note].filter(Boolean) as string[]
       b.ensure(
         b.measure(body, { width, size: 9.5, leading: 12.5 }) +
           notes.reduce((h, n) => h + b.measure(n, { width, size: 8.5, leading: 11 }), 0) +

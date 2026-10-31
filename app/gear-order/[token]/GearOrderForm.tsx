@@ -105,6 +105,7 @@ export default function GearOrderForm({
                   <div className="flex items-start gap-3 flex-wrap sm:flex-nowrap">
                     <div className="min-w-0 flex-1">
                       <p className={`text-sm font-medium ${a?.removed ? 'text-zinc-600 line-through' : ''}`}>{l.name}</p>
+                      {l.product && <p className="text-xs text-zinc-300 mt-0.5">{l.product}</p>}
                       {l.detail && <p className="text-xs text-zinc-500 mt-0.5">{l.detail}</p>}
                       {l.qty_offered && (
                         <p className="text-[11px] text-zinc-600 mt-0.5">We suggested: {l.qty_offered}</p>

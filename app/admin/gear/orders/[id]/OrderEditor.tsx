@@ -328,6 +328,10 @@ function LineRow({
         </div>
       </div>
 
+      {products.length === 0 && line.product && (
+        <p className="text-xs text-zinc-400 mt-2 px-1.5">{line.product}</p>
+      )}
+
       {products.length > 0 && (
         <select
           aria-label="Product"

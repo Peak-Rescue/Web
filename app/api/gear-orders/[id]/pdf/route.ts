@@ -21,7 +21,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 
   const { data: order } = await admin
     .from('gear_orders')
-    .select('id, instance_id, title, client_id, es_quote_number, responded_name, responded_at, client_note, gear_order_lines(id, entry_id, name, detail, category, qty_offered, qty_wanted, url, unit_price, removed, client_note, admin_note, sort_order)')
+    .select('id, instance_id, title, client_id, es_quote_number, responded_name, responded_at, client_note, gear_order_lines(id, entry_id, name, product, detail, category, qty_offered, qty_wanted, url, unit_price, removed, client_note, admin_note, sort_order)')
     .eq('id', id)
     .maybeSingle()
   if (!order) return new Response('Not found', { status: 404 })

@@ -10,6 +10,7 @@
 
 import type { createAdminClient } from '@/lib/supabase/admin'
 import { GEAR_ENTRIES_SELECT, gearQuantity, gearLabel, productName } from '@/lib/gear'
+import { lineNames } from '@/lib/gear-orders'
 
 export async function linesFromList(
   admin: ReturnType<typeof createAdminClient>,
@@ -46,12 +47,17 @@ export async function linesFromList(
     ...(e.gear_entry_options ?? []).map((o) => o.gear_item_id),
   ]).filter((id): id is string => Boolean(id)))]
   const { data: itemRows } = itemIds.length
-    ? await admin.from('gear_items').select('id, name, brand, info, category, url, price').in('id', itemIds)
+    ? await admin.from('gear_items').select('id, name, brand, info, category, url, price, parent_id').in('id', itemIds)
     : { data: [] }
   const items = new Map((itemRows ?? []).map((i) => [i.id as string, i as {
     id: string; name: string; brand: string | null; info: string | null; category: string | null
-    url: string | null; price: number | null
+    url: string | null; price: number | null; parent_id: string | null
   }]))
+  const parentIds = [...new Set([...items.values()].map((i) => i.parent_id).filter((id): id is string => Boolean(id)))]
+  const { data: parentRows } = priced && parentIds.length
+    ? await admin.from('gear_items').select('id, name').in('id', parentIds)
+    : { data: [] }
+  const parents = new Map((parentRows ?? []).map((p) => [p.id as string, p as { id: string; name: string }]))
 
   return entries.map((e, i) => {
     const item = e.gear_item_id ? items.get(e.gear_item_id) : null
@@ -63,10 +69,16 @@ export async function linesFromList(
       .map((x) => ({ name: productName(x) }))
     const { title, detail } = gearLabel(base, options)
     const qty = gearQuantity(e, { students, view: 'course' })
+    // A row naming one product directly splits into need and product. A row
+    // with its own typed name or several options has already said what it means.
+    const named = priced && item?.parent_id && !e.name?.trim() && options.length === 0
+      ? lineNames(item, parents.get(item.parent_id))
+      : { name: title, product: null }
     return {
       entry_id: e.id,
       gear_item_id: e.gear_item_id,
-      name: title.slice(0, 200),
+      name: named.name.slice(0, 200),
+      product: named.product,
       detail: [detail, e.note?.trim() || item?.info || null].filter(Boolean).join(' — ') || null,
       category: item?.category ?? e.section ?? null,
       qty_offered: qty.text ?? qty.rule,

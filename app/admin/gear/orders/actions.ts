@@ -3,8 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { requireAdminUser } from '@/lib/course-access'
 import { linesFromList } from '@/lib/gear-order-lines'
-import { productName } from '@/lib/gear'
-import { safeLink } from '@/lib/gear-orders'
+import { lineNames, safeLink } from '@/lib/gear-orders'
 import { sendMail } from '@/lib/mailer'
 
 // Gear orders that belong to no course: a team asks what we would supply, and
@@ -105,6 +104,12 @@ async function ownOrder(admin: Awaited<ReturnType<typeof requireAdminUser>>['adm
   return Boolean(data)
 }
 
+async function parentOf(admin: Awaited<ReturnType<typeof requireAdminUser>>['admin'], item: Item) {
+  if (!item.parent_id) return null
+  const { data } = await admin.from('gear_items').select('name').eq('id', item.parent_id).maybeSingle()
+  return data as { name: string } | null
+}
+
 // The line copies the catalog's name, link and price as they stand today.
 export async function addCatalogLine(orderId: string, gearItemId: string): Promise<{ ok: true } | Failed> {
   const { admin } = await requireAdminUser()
@@ -113,10 +118,12 @@ export async function addCatalogLine(orderId: string, gearItemId: string): Promi
   const item = data as Item | null
   if (!item) return fail('That item is no longer in the catalog.')
 
+  const { name, product } = lineNames(item, await parentOf(admin, item))
   const { error } = await admin.from('gear_order_lines').insert({
     order_id: orderId,
     gear_item_id: item.id,
-    name: productName(item).slice(0, 200),
+    name: name.slice(0, 200),
+    product,
     detail: item.info,
     category: item.category,
     url: safeLink(item.url),
@@ -145,12 +152,12 @@ export async function addOneOffLine(orderId: string, name: string): Promise<{ ok
 async function ownLine(admin: Awaited<ReturnType<typeof requireAdminUser>>['admin'], lineId: string) {
   const { data } = await admin
     .from('gear_order_lines')
-    .select('id, order_id, gear_item_id, detail, url, unit_price, gear_orders!inner(instance_id)')
+    .select('id, order_id, gear_item_id, product, detail, url, unit_price, gear_orders!inner(instance_id)')
     .eq('id', lineId)
     .is('gear_orders.instance_id', null)
     .maybeSingle()
   return data as null | {
-    id: string; order_id: string; gear_item_id: string | null; detail: string | null
+    id: string; order_id: string; gear_item_id: string | null; product: string | null; detail: string | null
     url: string | null; unit_price: number | null
   }
 }
@@ -208,9 +215,9 @@ export async function updateStandaloneLine(
   return { ok: true }
 }
 
-// Settling a generic line on a product. Whatever the product knows replaces the
-// line's copy; what it does not know leaves the line's own value standing, so a
-// price already agreed is not wiped by a product with none yet.
+// Settling a line on a product. A price typed on a generic line survives a
+// product with none yet. Swapping one product for another does not keep the old
+// one's link or price: those described the product that just left.
 export async function setLineProduct(lineId: string, gearItemId: string): Promise<{ ok: true } | Failed> {
   const { admin } = await requireAdminUser()
   const line = await ownLine(admin, lineId)
@@ -219,12 +226,13 @@ export async function setLineProduct(lineId: string, gearItemId: string): Promis
   const item = data as Item | null
   if (!item) return fail('That item is no longer in the catalog.')
 
+  const { product } = lineNames(item, await parentOf(admin, item))
   const { error } = await admin.from('gear_order_lines').update({
     gear_item_id: item.id,
-    name: productName(item).slice(0, 200),
+    product,
     detail: line.detail ?? item.info,
-    url: safeLink(item.url) ?? line.url,
-    unit_price: item.price ?? line.unit_price,
+    url: safeLink(item.url) ?? (line.product ? null : line.url),
+    unit_price: item.price ?? (line.product ? null : line.unit_price),
   }).eq('id', lineId)
   if (error) throw new Error(error.message)
   touch(line.order_id)

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { orderTotal, safeLink } from '@/lib/gear-orders'
+import { lineNames, orderTotal, safeLink } from '@/lib/gear-orders'
 
 describe('orderTotal', () => {
   it('adds up the lines still wanted', () => {
@@ -48,5 +48,16 @@ describe('safeLink', () => {
     expect(safeLink('example.com')).toBeNull()
     expect(safeLink('')).toBeNull()
     expect(safeLink(null)).toBeNull()
+  })
+})
+
+describe('lineNames', () => {
+  it('leads with what is needed and names the product second', () => {
+    expect(lineNames({ name: 'Recon Stretch Shell', brand: 'Black Diamond' }, { name: 'Waterproof shell jacket' }))
+      .toEqual({ name: 'Waterproof shell jacket', product: 'Black Diamond Recon Stretch Shell' })
+  })
+
+  it('leaves a generic item with no product yet', () => {
+    expect(lineNames({ name: 'Skis' }, null)).toEqual({ name: 'Skis', product: null })
   })
 })
