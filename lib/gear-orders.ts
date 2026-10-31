@@ -181,6 +181,12 @@ export function cleanSizes(rows: { size: string; qty: number | string }[] | null
   return out.slice(0, 50)
 }
 
+// A line that comes in sizes has its quantity worked out from them, so there is
+// never a typed number to disagree with the breakdown.
+export function isSized(line: { size_options?: string[] | null; sizes?: GearOrderSize[] | null }): boolean {
+  return (line.size_options?.length ?? 0) > 0 || (line.sizes?.length ?? 0) > 0
+}
+
 export const sizesTotal = (sizes: { qty: number | string }[]): number =>
   sizes.reduce((sum, s) => sum + (Number(s.qty) > 0 ? Math.floor(Number(s.qty)) : 0), 0)
 

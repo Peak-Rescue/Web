@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { requireAdminUser } from '@/lib/course-access'
 import { upsertGearItem } from '@/app/admin/gear/actions'
 import { linesFromList } from '@/lib/gear-order-lines'
-import { cleanSizes, lineNames, parseSizeOptions, safeLink, sizesTotal } from '@/lib/gear-orders'
+import { cleanSizes, isSized, lineNames, parseSizeOptions, safeLink, sizesTotal } from '@/lib/gear-orders'
 import { sendMail } from '@/lib/mailer'
 import { planSplit, type SplitLine } from '@/lib/gear-order-split'
 
@@ -155,13 +155,13 @@ export async function addOneOffLine(orderId: string, name: string): Promise<{ ok
 async function ownLine(admin: Awaited<ReturnType<typeof requireAdminUser>>['admin'], lineId: string) {
   const { data } = await admin
     .from('gear_order_lines')
-    .select('id, order_id, gear_item_id, product, detail, url, unit_price, size_options, gear_orders!inner(instance_id)')
+    .select('id, order_id, gear_item_id, product, detail, url, unit_price, size_options, sizes, gear_orders!inner(instance_id)')
     .eq('id', lineId)
     .is('gear_orders.instance_id', null)
     .maybeSingle()
   return data as null | {
     id: string; order_id: string; gear_item_id: string | null; product: string | null; detail: string | null
-    url: string | null; unit_price: number | null; size_options: string[]
+    url: string | null; unit_price: number | null; size_options: string[]; sizes: { size: string; qty: number }[]
   }
 }
 
@@ -203,7 +203,8 @@ export async function updateStandaloneLine(
   if (patch.detail !== undefined) update.detail = patch.detail?.trim().slice(0, 1000) || null
   if (patch.removed !== undefined) update.removed = patch.removed
   if (patch.checked !== undefined) update.checked = patch.checked
-  if (patch.qtyWanted !== undefined) {
+  // A tab left open from before a line got sizes can still send a typed number.
+  if (patch.qtyWanted !== undefined && !isSized(line)) {
     update.qty_wanted = patch.qtyWanted === null || Number.isNaN(patch.qtyWanted)
       ? null
       : Math.max(0, Math.min(99999, patch.qtyWanted))
@@ -221,7 +222,8 @@ export async function updateStandaloneLine(
   if (patch.sizes !== undefined) {
     const sizes = cleanSizes(patch.sizes)
     update.sizes = sizes
-    if (sizes.length > 0) update.qty_wanted = sizesTotal(sizes)
+    // Emptied means nothing asked for, not whatever the total last was.
+    update.qty_wanted = sizes.length > 0 ? sizesTotal(sizes) : null
   }
 
   const { error } = await admin.from('gear_order_lines').update(update).eq('id', lineId)

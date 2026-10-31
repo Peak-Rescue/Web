@@ -7,7 +7,7 @@ import { fmtMoney } from '@/lib/expenses'
 import { GEAR_CATEGORIES, brandsIn, productName, unwrap } from '@/lib/gear'
 import CategorySelect from '@/app/admin/gear/CategorySelect'
 import {
-  GEAR_ORDER_STATUS_LABEL, GEAR_ORDER_STATUS_STYLE, needsProduct, orderTotal, sizesTotal, workFirst, safeLink, sizeRows,
+  GEAR_ORDER_STATUS_LABEL, GEAR_ORDER_STATUS_STYLE, isSized, needsProduct, orderTotal, sizesTotal, workFirst, safeLink, sizeRows,
   type GearOrder, type GearOrderLine,
 } from '@/lib/gear-orders'
 import GearSizeRows from '@/components/GearSizeRows'
@@ -572,23 +572,31 @@ function LineRow({
       )}
 
       <div className="grid grid-cols-2 sm:grid-cols-[5rem_7rem_1fr] gap-2 mt-2">
-        <input
-          key={`qty-${line.qty_wanted}`}
-          type="number"
-          min={0}
-          aria-label="Quantity"
-          placeholder="Qty"
-          // The sizes add up to this, so it is not a second answer to edit.
-          readOnly={(line.sizes ?? []).length > 0}
-          title={(line.sizes ?? []).length > 0 ? 'Total of the sizes below' : undefined}
-          defaultValue={line.qty_wanted ?? ''}
-          onChange={(e) => onDraft({ qty: e.target.value === '' ? null : Number(e.target.value) })}
-          onBlur={(e) => {
-            const v = e.target.value === '' ? null : Number(e.target.value)
-            if (v !== money(line.qty_wanted) && !(line.sizes ?? []).length) save({ qtyWanted: v })
-          }}
-          className={`${input} w-full text-center`}
-        />
+        {isSized(line) ? (
+          // The sizes add up to this, so it is not a second answer to type.
+          <output
+            aria-label="Quantity, the total of the sizes"
+            title="Total of the sizes below"
+            className="flex items-center justify-center rounded border border-transparent px-2 py-1.5 text-sm text-zinc-300"
+          >
+            {liveQty ?? 0}
+          </output>
+        ) : (
+          <input
+            key={`qty-${line.qty_wanted}`}
+            type="number"
+            min={0}
+            aria-label="Quantity"
+            placeholder="Qty"
+            defaultValue={line.qty_wanted ?? ''}
+            onChange={(e) => onDraft({ qty: e.target.value === '' ? null : Number(e.target.value) })}
+            onBlur={(e) => {
+              const v = e.target.value === '' ? null : Number(e.target.value)
+              if (v !== money(line.qty_wanted)) save({ qtyWanted: v })
+            }}
+            className={`${input} w-full text-center`}
+          />
+        )}
         <input
           key={`price-${line.unit_price}`}
           type="number"
@@ -623,6 +631,13 @@ function LineRow({
           )}
         </div>
       </div>
+
+      {/* A number typed before the line had sizes. It still counts until sizes
+          replace it, so it is said out loud rather than sitting there looking
+          like their total. */}
+      {!line.removed && (line.size_options ?? []).length > 0 && !(line.sizes ?? []).length && Number(liveQty ?? 0) > 0 && (
+        <p className="text-[11px] text-amber-300/80 mt-1 px-1.5">{liveQty} not split into sizes yet</p>
+      )}
 
       {!line.removed && Number(liveQty ?? 0) > 0 && livePrice != null && (
         <p className="text-xs text-zinc-400 mt-1.5 text-right">

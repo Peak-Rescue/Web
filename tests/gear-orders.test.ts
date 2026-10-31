@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { brandsIn, canonicalBrand } from '@/lib/gear'
-import { cleanSizes, defaultScale, lineNames, needsProduct, orderTotal, parseSizeOptions, safeLink, sizeRange, sizeRows, sizesSummary, sizesTotal, workFirst } from '@/lib/gear-orders'
+import { cleanSizes, defaultScale, lineNames, needsProduct, orderTotal, parseSizeOptions, safeLink, sizeRange, sizeRows, sizesSummary, sizesTotal, workFirst, isSized } from '@/lib/gear-orders'
 
 describe('orderTotal', () => {
   it('adds up the lines still wanted', () => {
@@ -73,6 +73,13 @@ describe('sizes', () => {
       { size: 'M', qty: '2' }, { size: 'm', qty: 1 }, { size: 'L', qty: '' }, { size: '', qty: 3 }, { size: 'XL', qty: -1 },
     ])).toEqual([{ size: 'M', qty: 3 }])
     expect(cleanSizes(null)).toEqual([])
+  })
+
+  it('takes the quantity from sizes once a line has any on offer or answered', () => {
+    expect(isSized({ size_options: ['S', 'M'] })).toBe(true)
+    expect(isSized({ size_options: [], sizes: [{ size: '178', qty: 2 }] })).toBe(true)
+    expect(isSized({ size_options: [], sizes: [] })).toBe(false)
+    expect(isSized({})).toBe(false)
   })
 
   it('adds up to the line total', () => {
