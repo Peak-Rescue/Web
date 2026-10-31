@@ -3,6 +3,8 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { unwrap } from '@/lib/gear'
+import ClientPicker from '@/components/ClientPicker'
+import type { ClientRow } from '@/lib/clients'
 import { createStandaloneOrder } from './actions'
 
 const input = 'bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-zinc-500'
@@ -10,7 +12,7 @@ const input = 'bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm fo
 export default function NewOrderForm({
   clients, lists,
 }: {
-  clients: { id: string; label: string }[]
+  clients: ClientRow[]
   lists: { id: string; name: string }[]
 }) {
   const router = useRouter()
@@ -35,22 +37,15 @@ export default function NewOrderForm({
   }
 
   return (
-    <form onSubmit={submit} className="rounded-lg border border-zinc-800 bg-zinc-900 p-4 flex items-end gap-3 flex-wrap">
+    <form onSubmit={submit} className="rounded-lg border border-zinc-800 bg-zinc-900 p-4 space-y-3">
+      <div>
+        <span className="block text-[11px] text-zinc-500 mb-1">Client</span>
+        <ClientPicker clients={clients} name="order_client_id" onChange={(id) => setClientId(id ?? '')} />
+      </div>
+      <div className="flex items-end gap-3 flex-wrap">
       <div className="flex-1 min-w-48">
         <label htmlFor="order-title" className="block text-[11px] text-zinc-500 mb-1">Name</label>
         <input id="order-title" value={title} onChange={(e) => setTitle(e.target.value)} className={`${input} w-full`} />
-      </div>
-      <div>
-        <label htmlFor="order-client" className="block text-[11px] text-zinc-500 mb-1">
-          Client{' '}
-          <a href="/admin/clients" target="_blank" rel="noreferrer" className="text-zinc-600 hover:text-zinc-300 underline underline-offset-2 decoration-zinc-700">
-            manage
-          </a>
-        </label>
-        <select id="order-client" value={clientId} onChange={(e) => setClientId(e.target.value)} className={`${input} w-52`}>
-          <option value="">None</option>
-          {clients.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
-        </select>
       </div>
       <div>
         <label htmlFor="order-list" className="block text-[11px] text-zinc-500 mb-1">Start from</label>
@@ -66,7 +61,8 @@ export default function NewOrderForm({
       >
         New order
       </button>
-      {error && <p className="w-full text-sm text-pr-red">{error}</p>}
+      </div>
+      {error && <p className="text-sm text-pr-red">{error}</p>}
     </form>
   )
 }

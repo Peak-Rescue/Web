@@ -37,10 +37,6 @@ export default async function GearOrdersPage() {
   }
   const orders = (orderRows ?? []) as unknown as Row[]
   const clients = (clientRows ?? []) as ClientRow[]
-  const clientOptions = clients
-    .filter((c) => !c.is_group)
-    .map((c) => ({ id: c.id, label: clientLabel(clients, c.id) }))
-    .sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }))
 
   return (
     <main className="min-h-screen bg-zinc-950 text-white pt-16 md:pt-20">
@@ -48,7 +44,7 @@ export default async function GearOrdersPage() {
         <Link href="/admin/gear" className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors mb-6 inline-block">← Gear catalog</Link>
         <h1 className="text-2xl font-bold mb-8">Gear orders</h1>
 
-        <NewOrderForm clients={clientOptions} lists={listRows ?? []} />
+        <NewOrderForm clients={clients} lists={listRows ?? []} />
 
         <div className="mt-6 space-y-2">
           {orders.map((o) => {

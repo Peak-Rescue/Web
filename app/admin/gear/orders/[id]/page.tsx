@@ -2,7 +2,7 @@ import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { CLIENT_COLUMNS, clientLabel, type ClientRow } from '@/lib/clients'
+import { CLIENT_COLUMNS, type ClientRow } from '@/lib/clients'
 import { type GearOrder } from '@/lib/gear-orders'
 import OrderEditor, { type SplitPartRow } from './OrderEditor'
 
@@ -43,16 +43,12 @@ export default async function GearOrderPage({ params }: { params: Promise<{ id: 
     : { data: null }
 
   const clients = (clientRows ?? []) as ClientRow[]
-  const clientOptions = clients
-    .filter((c) => !c.is_group)
-    .map((c) => ({ id: c.id, label: clientLabel(clients, c.id) }))
-    .sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }))
 
   return (
     <main className="min-h-screen bg-zinc-950 text-white pt-16 md:pt-20">
       <div className="max-w-4xl mx-auto px-4 py-10">
         <Link href="/admin/gear/orders" className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors mb-6 inline-block">← Gear orders</Link>
-        <OrderEditor order={order} catalog={items ?? []} clients={clientOptions} parts={(partRows ?? []) as unknown as SplitPartRow[]} parent={parent} />
+        <OrderEditor order={order} catalog={items ?? []} clients={clients} parts={(partRows ?? []) as unknown as SplitPartRow[]} parent={parent} />
       </div>
     </main>
   )

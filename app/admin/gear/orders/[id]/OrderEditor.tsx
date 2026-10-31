@@ -11,6 +11,8 @@ import {
   type GearOrder, type GearOrderLine,
 } from '@/lib/gear-orders'
 import GearSizeRows from '@/components/GearSizeRows'
+import ClientPicker from '@/components/ClientPicker'
+import type { ClientRow } from '@/lib/clients'
 import SizeOptionsField from '@/components/SizeOptionsField'
 import PdfLink from '@/components/PdfLink'
 import Link from 'next/link'
@@ -37,7 +39,7 @@ export default function OrderEditor({
 }: {
   order: GearOrder
   catalog: GearItem[]
-  clients: { id: string; label: string }[]
+  clients: ClientRow[]
   parts: SplitPartRow[]
   parent: { id: string; title: string } | null
 }) {
@@ -119,16 +121,17 @@ export default function OrderEditor({
       {error && <p className="text-sm text-pr-red mb-3">{error}</p>}
 
       <div className="grid sm:grid-cols-2 gap-3 mb-6">
-        <Field label="Client">
-          <select
-            value={order.client_id ?? ''}
-            onChange={(e) => saveOrder({ clientId: e.target.value || null })}
-            className={`${input} w-full`}
-          >
-            <option value="">None</option>
-            {clients.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
-          </select>
-        </Field>
+        {/* Not a Field: a label around this would send every click inside it to
+            the picker's first control. */}
+        <div className="sm:col-span-2">
+          <span className="block text-[11px] text-zinc-500 mb-1">Client</span>
+          <ClientPicker
+            clients={clients}
+            defaultId={order.client_id ?? null}
+            name="order_client_id"
+            onChange={(id) => saveOrder({ clientId: id })}
+          />
+        </div>
         <Field label="ES quote number">
           <input
             defaultValue={order.es_quote_number ?? ''}

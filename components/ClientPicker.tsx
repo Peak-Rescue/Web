@@ -28,14 +28,23 @@ export default function ClientPicker({
   clients,
   defaultId = null,
   name = 'client_id',
+  onChange,
 }: {
   clients: ClientRow[]
   defaultId?: string | null
   /** The form field the chosen id is submitted as. */
   name?: string
+  /** For a page with no form to submit, which saves as soon as this changes. */
+  onChange?: (id: string | null) => void
 }) {
   const [rows, setRows] = useState(clients)
   const [selected, setSelected] = useState<string | null>(defaultId)
+  const told = useRef(defaultId)
+  useEffect(() => {
+    if (told.current === selected) return
+    told.current = selected
+    onChange?.(selected)
+  }, [selected, onChange])
   const [mode, setMode] = useState<'show' | 'search' | 'browse' | 'add'>(defaultId ? 'show' : 'search')
   const [query, setQuery] = useState('')
   // The last words that found nothing. Learned onto whatever is chosen next
