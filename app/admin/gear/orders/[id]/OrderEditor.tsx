@@ -4,7 +4,8 @@ import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { AddGear, type GearItem } from '@/app/admin/gear/GearListEditor'
 import { fmtMoney } from '@/lib/expenses'
-import { productName, unwrap } from '@/lib/gear'
+import { GEAR_CATEGORIES, productName, unwrap } from '@/lib/gear'
+import CategorySelect from '@/app/admin/gear/CategorySelect'
 import {
   GEAR_ORDER_STATUS_LABEL, GEAR_ORDER_STATUS_STYLE, orderTotal, safeLink, sizeRows,
   type GearOrder, type GearOrderLine,
@@ -14,7 +15,7 @@ import PdfLink from '@/components/PdfLink'
 import TrashIcon from '@/components/TrashIcon'
 import {
   addCatalogLine, addLineProduct, addOneOffLine, deleteStandaloneLine, deleteStandaloneOrder, sendStandaloneOrder,
-  setLineProduct, updateStandaloneLine, updateStandaloneOrder,
+  setLineCategory, setLineProduct, updateStandaloneLine, updateStandaloneOrder,
 } from '../actions'
 
 const input = 'bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-zinc-500'
@@ -50,6 +51,11 @@ export default function OrderEditor({
     const m = new Map<string, GearItem[]>()
     for (const c of known) if (c.parent_id) m.set(c.parent_id, [...(m.get(c.parent_id) ?? []), c])
     return m
+  }, [known])
+
+  const categories = useMemo(() => {
+    const used = known.map((c) => c.category?.trim()).filter((c): c is string => Boolean(c))
+    return [...new Set<string>([...GEAR_CATEGORIES, ...used])]
   }, [known])
 
   const lines = [...order.gear_order_lines].sort((a, b) => a.sort_order - b.sort_order)
@@ -133,7 +139,7 @@ export default function OrderEditor({
 
       <div className="space-y-2">
         {lines.map((l) => (
-          <LineRow key={l.id} line={l} products={productsFor(l, known, childrenOf)} run={run} busy={busy} />
+          <LineRow key={l.id} line={l} products={productsFor(l, known, childrenOf)} categories={categories} run={run} busy={busy} />
         ))}
       </div>
 
@@ -311,10 +317,11 @@ function LineSizes({
 }
 
 function LineRow({
-  line, products, run, busy,
+  line, products, categories, run, busy,
 }: {
   line: GearOrderLine
   products: GearItem[]
+  categories: string[]
   run: Run
   busy: boolean
 }) {
@@ -337,7 +344,18 @@ function LineRow({
           }}
           className={`min-w-0 flex-1 bg-transparent border border-transparent hover:border-zinc-700 focus:border-zinc-500 rounded px-1.5 py-1 text-sm font-medium focus:outline-none ${line.removed ? 'line-through' : ''}`}
         />
-        {line.category && <span className="hidden sm:inline text-[11px] text-zinc-600 shrink-0">{line.category}</span>}
+        <CategorySelect
+          key={line.category}
+          value={line.category}
+          options={line.category && !categories.includes(line.category) ? [...categories, line.category] : categories}
+          disabled={busy}
+          onChange={(next) => {
+            if (next && next !== line.category) {
+              run(async () => unwrap(await setLineCategory(line.id, next)))
+            }
+          }}
+          className="shrink-0 max-w-40 bg-transparent border border-transparent hover:border-zinc-700 focus:border-zinc-500 rounded px-1 py-0.5 text-[11px] text-zinc-500 focus:outline-none"
+        />
         <button
           onClick={() => save({ removed: !line.removed })}
           disabled={busy}

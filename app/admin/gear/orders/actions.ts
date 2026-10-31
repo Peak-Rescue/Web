@@ -274,6 +274,32 @@ export async function addLineProduct(
   return setLineProduct(lineId, made.id)
 }
 
+// Refiling from the line that shows it. A category says what a thing is, so a
+// catalog line moves its generic item and every product under it, the way the
+// catalog keeps them together; other orders hold their own copy and stay put.
+export async function setLineCategory(lineId: string, category: string): Promise<{ ok: true } | Failed> {
+  const { admin } = await requireAdminUser()
+  const line = await ownLine(admin, lineId)
+  if (!line) return fail('Line not found.')
+  const clean = category.trim().slice(0, 80) || null
+
+  const { error } = await admin.from('gear_order_lines').update({ category: clean }).eq('id', lineId)
+  if (error) throw new Error(error.message)
+
+  if (line.gear_item_id && clean) {
+    const { data } = await admin.from('gear_items').select('id, parent_id').eq('id', line.gear_item_id).maybeSingle()
+    if (data) {
+      const typeId = (data.parent_id as string | null) ?? (data.id as string)
+      const { error: e2 } = await admin
+        .from('gear_items').update({ category: clean }).or(`id.eq.${typeId},parent_id.eq.${typeId}`)
+      if (e2) throw new Error(e2.message)
+      revalidatePath('/admin/gear')
+    }
+  }
+  touch(line.order_id)
+  return { ok: true }
+}
+
 export async function deleteStandaloneLine(lineId: string): Promise<{ ok: true } | Failed> {
   const { admin } = await requireAdminUser()
   const line = await ownLine(admin, lineId)
