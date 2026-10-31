@@ -72,6 +72,7 @@ export async function upsertGearItem(input: {
   brand?: string | null
   info?: string | null
   url?: string | null
+  price?: number | null
   category?: string | null
   parentId?: string | null
   aliases?: string[]
@@ -85,6 +86,11 @@ export async function upsertGearItem(input: {
   if (input.brand !== undefined) row.brand = input.brand?.trim() || null
   if (input.info !== undefined) row.info = input.info?.trim() || null
   if (input.url !== undefined) row.url = input.url?.trim() || null
+  if (input.price !== undefined) {
+    row.price = input.price === null || Number.isNaN(input.price)
+      ? null
+      : Math.round(Math.max(0, Math.min(999999, input.price)) * 100) / 100
+  }
   if (input.category !== undefined) row.category = input.category?.trim() || null
   if (!row.name) return fail('Name is required')
   if (input.aliases !== undefined) {
@@ -194,6 +200,7 @@ export async function mergeGearItems(keepId: string, dropId: string) {
   if (!keep || !drop) throw new Error('Item not found')
 
   await admin.from('gear_list_entries').update({ gear_item_id: keepId }).eq('gear_item_id', dropId)
+  await admin.from('gear_order_lines').update({ gear_item_id: keepId }).eq('gear_item_id', dropId)
   await admin.from('gear_items').update({ parent_id: keep.parent_id ? null : keepId }).eq('parent_id', dropId)
 
   // An entry could end up naming the keeper twice if it already listed both as

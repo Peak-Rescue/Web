@@ -8,19 +8,12 @@ import {
   createGearOrderUploadTargets, attachToGearOrder, detachFromGearOrder,
 } from './gear-order-actions'
 import { createClient as createBrowserClient } from '@/lib/supabase/client'
-import { GEAR_ORDER_STATUS_LABEL, type GearOrder } from '@/lib/gear-orders'
+import { GEAR_ORDER_STATUS_LABEL, GEAR_ORDER_STATUS_STYLE, type GearOrder } from '@/lib/gear-orders'
 import PdfLink from '@/components/PdfLink'
 import AdminCcPicker from '@/components/AdminCcPicker'
 import TrashIcon from '@/components/TrashIcon'
 
 const input = 'bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-zinc-500'
-
-const STATUS_STYLE: Record<string, string> = {
-  draft: 'bg-zinc-800 text-zinc-400',
-  sent: 'bg-amber-900/40 text-amber-300',
-  responded: 'bg-teal-900/40 text-teal-300',
-  closed: 'bg-zinc-800 text-zinc-500',
-}
 
 // Everything about supplying gear to the client, folded away. Admins only, and
 // closed by default — it matters on the day you send it and the day they answer,
@@ -110,7 +103,7 @@ function OrderCard({
   return (
     <div className="rounded-lg border border-zinc-800 bg-zinc-900 p-3 mb-3">
       <div className="flex items-center gap-2 flex-wrap mb-3">
-        <span className={`text-[10px] px-2 py-0.5 rounded ${STATUS_STYLE[order.status]}`}>
+        <span className={`text-[10px] px-2 py-0.5 rounded ${GEAR_ORDER_STATUS_STYLE[order.status]}`}>
           {GEAR_ORDER_STATUS_LABEL[order.status]}
         </span>
         {order.responded_at && (

@@ -2,7 +2,8 @@
 
 import { useState } from 'react'
 import { submitGearOrder } from './actions'
-import { type GearOrderLine } from '@/lib/gear-orders'
+import { orderTotal, safeLink, type GearOrderLine } from '@/lib/gear-orders'
+import { fmtMoney } from '@/lib/expenses'
 
 const input = 'bg-zinc-800 border border-zinc-700 rounded px-2.5 py-1.5 text-sm focus:outline-none focus:border-zinc-500'
 
@@ -14,12 +15,14 @@ export default function GearOrderForm({
   alreadyAnswered,
   defaultNote,
   defaultName,
+  standalone,
 }: {
   token: string
   lines: GearOrderLine[]
   alreadyAnswered: boolean
   defaultNote: string
   defaultName: string
+  standalone: boolean
 }) {
   const [answers, setAnswers] = useState<Record<string, Answer>>(() =>
     Object.fromEntries(lines.map((l) => [l.id, {
@@ -39,6 +42,12 @@ export default function GearOrderForm({
     setAnswers((a) => ({ ...a, [id]: { ...a[id], ...patch } }))
 
   const wanted = lines.filter((l) => !answers[l.id]?.removed && Number(answers[l.id]?.qty || 0) > 0).length
+
+  const { total, unpriced, anyPriced } = orderTotal(lines.map((l) => ({
+    qty: Number(answers[l.id]?.qty || 0),
+    removed: answers[l.id]?.removed ?? false,
+    unit_price: l.unit_price,
+  })))
 
   async function submit() {
     setBusy(true); setError(null)
@@ -61,7 +70,7 @@ export default function GearOrderForm({
       <div className="mt-8 rounded-lg border border-teal-800 bg-teal-950/40 p-6">
         <h2 className="text-lg font-semibold text-teal-200">Thank you — we&rsquo;ve got it</h2>
         <p className="text-sm text-zinc-300 mt-2">
-          Your list is with us and goes to purchasing from here. If anything changes, this same link stays open —
+          {standalone ? 'Your list is with us and we’ll be in touch.' : 'Your list is with us and goes to purchasing from here.'} If anything changes, this same link stays open —
           come back and send it again.
         </p>
       </div>
@@ -99,6 +108,21 @@ export default function GearOrderForm({
                       {l.detail && <p className="text-xs text-zinc-500 mt-0.5">{l.detail}</p>}
                       {l.qty_offered && (
                         <p className="text-[11px] text-zinc-600 mt-0.5">We suggested: {l.qty_offered}</p>
+                      )}
+                      {(l.unit_price != null || safeLink(l.url)) && (
+                        <p className="text-xs text-zinc-400 mt-1 flex items-center gap-3 flex-wrap">
+                          {l.unit_price != null && <span>{fmtMoney(Number(l.unit_price))} each</span>}
+                          {safeLink(l.url) && (
+                            <a
+                              href={safeLink(l.url)!}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="underline underline-offset-2 decoration-zinc-600 hover:text-white transition-colors"
+                            >
+                              View item
+                            </a>
+                          )}
+                        </p>
                       )}
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
@@ -173,6 +197,7 @@ export default function GearOrderForm({
           </button>
           <p className="text-xs text-zinc-500">
             {wanted} item{wanted === 1 ? '' : 's'} requested
+            {anyPriced && <> · {fmtMoney(total)}{unpriced > 0 ? ` + ${unpriced} unpriced` : ''}</>}
           </p>
         </div>
       </div>

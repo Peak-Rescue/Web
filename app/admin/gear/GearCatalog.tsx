@@ -248,6 +248,22 @@ export default function GearCatalog({ items }: { items: Row[] }) {
             neither costs a row when there is no link to show. */}
         {row.parent_id && (
           <>
+            <input
+              type="number"
+              min={0}
+              step="0.01"
+              aria-label={`Price of ${row.name}`}
+              title="What we charge"
+              placeholder="$"
+              defaultValue={row.price ?? ''}
+              onBlur={(e) => {
+                const next = e.target.value === '' ? null : Number(e.target.value)
+                if (next !== (row.price == null ? null : Number(row.price))) {
+                  run(() => upsertGearItem({ id: row.id, name: row.name, price: next }))
+                }
+              }}
+              className={`${input} w-20 py-0.5 text-[11px]`}
+            />
             {row.url && (
               <a
                 href={row.url} target="_blank" rel="noreferrer"

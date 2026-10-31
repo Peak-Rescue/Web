@@ -17,7 +17,7 @@ export default async function GearCatalogPage() {
 
   const [{ data: items }, { data: entries }, { count: templateCount }] = await Promise.all([
     admin.from('gear_items')
-      .select('id, name, brand, info, url, category, parent_id, aliases, disciplines, active')
+      .select('id, name, brand, info, url, price, category, parent_id, aliases, disciplines, active')
       .eq('active', true)
       .order('name'),
     admin.from('gear_list_entries').select('gear_item_id'),
@@ -38,7 +38,15 @@ export default async function GearCatalogPage() {
       <div className="max-w-4xl mx-auto px-4 py-10">
         <Link href="/admin" className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors mb-6 inline-block">← Admin</Link>
 
-        <h1 className="text-2xl font-bold mb-8">Gear catalog</h1>
+        <div className="flex items-center justify-between gap-3 mb-8">
+          <h1 className="text-2xl font-bold">Gear catalog</h1>
+          <Link
+            href="/admin/gear/orders"
+            className="text-xs px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded transition-colors"
+          >
+            Gear orders
+          </Link>
+        </div>
 
         <GearCatalog items={rows} />
 

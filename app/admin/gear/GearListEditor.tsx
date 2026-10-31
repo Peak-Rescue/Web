@@ -2137,10 +2137,12 @@ function SaveToShelf({
 // It opens inside the section it fills, so there is nothing to choose about
 // where an item lands and the panel stays open across adds — filling a section
 // means adding six things to it, not confirming the destination six times.
-function AddGear({
+export function AddGear({
   listId, catalog, courseDisciplines, childrenOf, onPick, onClose, busy, run, input, ownsCatalog,
+  oneOffLabel = 'just this list',
 }: {
   listId: string
+  oneOffLabel?: string
   ownsCatalog: boolean
   catalog: GearItem[]
   /** This course's disciplines. Gear tagged for another discipline stands back
@@ -2478,10 +2480,10 @@ function AddGear({
               <button
                 onClick={() => add(null, query, query.trim())}
                 disabled={busy}
-                title="Put it on this list only — nothing is added to the catalog"
+                title="Nothing is added to the catalog"
                 className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
               >
-                just this list
+                {oneOffLabel}
               </button>
             </div>
           </div>

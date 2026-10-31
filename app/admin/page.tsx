@@ -433,6 +433,17 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       ),
     },
     {
+      title: 'Gear Orders',
+      desc: 'Lists and prices for a team to look over and buy from us, with or without a course',
+      href: '/admin/gear/orders',
+      section: 'admin',
+      icon: (
+        <svg {...svgProps}>
+          <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/>
+        </svg>
+      ),
+    },
+    {
       title: 'Billing',
       desc: 'Hand a course to Harken to invoice, see what has been paid, and say who hears about it',
       href: '/admin/billing',

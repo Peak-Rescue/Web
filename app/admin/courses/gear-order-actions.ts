@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { parseContacts, primaryContactEmail, ccEmailOptions } from '@/lib/contacts'
-import { GEAR_ENTRIES_SELECT, gearQuantity, gearLabel, productName } from '@/lib/gear'
+import { linesFromList } from '@/lib/gear-order-lines'
 import { sendMail } from '@/lib/mailer'
 
 async function requireAdmin() {
@@ -21,51 +21,13 @@ function touch(instanceId: string) {
   revalidatePath(`/admin/courses/${instanceId}`)
 }
 
-// Snapshots the list onto a new order. Copies, not references: the list keeps
-// being edited for the course it teaches, and an order the client has already
-// answered must not shift under them.
-//
-// Quantities are resolved here rather than carried as rules. A row that says
-// "one between four" is a fact about a roster; what purchasing buys is twelve,
-// and twelve is what has to survive on the order even if the roster changes
-// later. `view: 'course'` is the POC's reading — what has to exist, not what
-// one person packs.
+// Snapshots the list onto a new order. See linesFromList for what gets copied.
 export async function createGearOrder(instanceId: string, listId: string) {
   const admin = await requireAdmin()
 
-  const [{ data: list }, { data: inst }] = await Promise.all([
-    admin.from('gear_lists').select(`id, name, ${GEAR_ENTRIES_SELECT}`).eq('id', listId).single(),
-    admin.from('course_instances').select('max_students').eq('id', instanceId).single(),
-  ])
-  if (!list) throw new Error('Gear list not found')
-
-  type Entry = {
-    id: string
-    gear_item_id: string | null
-    name: string | null
-    note: string | null
-    section: string | null
-    quantity: string | null
-    qty_each: number | null
-    qty_per_students: number | null
-    sort_order: number
-    gear_entry_options: { gear_item_id: string; sort_order: number }[] | null
-  }
-  const entries = ((list as unknown as { gear_list_entries: Entry[] }).gear_list_entries ?? [])
-    .sort((a, b) => a.sort_order - b.sort_order)
-
-  // Names live on the catalogue, not the row — a row carries a name only when
-  // it is a one-off typed straight onto the list.
-  const itemIds = [...new Set(entries.flatMap((e) => [
-    e.gear_item_id,
-    ...(e.gear_entry_options ?? []).map((o) => o.gear_item_id),
-  ]).filter((id): id is string => Boolean(id)))]
-  const { data: itemRows } = itemIds.length
-    ? await admin.from('gear_items').select('id, name, brand, info, category').in('id', itemIds)
-    : { data: [] }
-  const items = new Map((itemRows ?? []).map((i) => [i.id as string, i as {
-    id: string; name: string; brand: string | null; info: string | null; category: string | null
-  }]))
+  const { data: inst } = await admin.from('course_instances').select('max_students').eq('id', instanceId).single()
+  const lines = await linesFromList(admin, listId, inst?.max_students ?? null, { priced: false })
+  if (!lines) throw new Error('Gear list not found')
 
   const { data: order, error } = await admin
     .from('gear_orders')
@@ -74,33 +36,8 @@ export async function createGearOrder(instanceId: string, listId: string) {
     .single()
   if (error || !order) throw new Error(error?.message ?? 'Could not create the order')
 
-  const lines = entries.map((e, i) => {
-    const item = e.gear_item_id ? items.get(e.gear_item_id) : null
-    const base = e.name?.trim() || (item ? productName(item) : 'Item')
-    const options = (e.gear_entry_options ?? [])
-      .sort((a, b) => a.sort_order - b.sort_order)
-      .map((o) => items.get(o.gear_item_id))
-      .filter((x): x is NonNullable<typeof x> => Boolean(x))
-      .map((x) => ({ name: productName(x) }))
-    const { title, detail } = gearLabel(base, options)
-    const qty = gearQuantity(e, { students: inst?.max_students ?? null, view: 'course' })
-    return {
-      order_id: order.id,
-      entry_id: e.id,
-      name: title.slice(0, 200),
-      detail: [detail, e.note?.trim() || item?.info || null].filter(Boolean).join(' — ') || null,
-      category: item?.category ?? e.section ?? null,
-      qty_offered: qty.text ?? qty.rule,
-      // Pre-filled with the resolved total where there is one. A row whose
-      // quantity is "20 ft" or "sample of ladder types" has no number to
-      // pre-fill, and leaving it blank is the honest outcome — the client says.
-      qty_wanted: qty.text && /^\d+(\.\d+)?$/.test(qty.text) ? Number(qty.text) : null,
-      sort_order: i,
-    }
-  })
-
   if (lines.length > 0) {
-    const { error: e2 } = await admin.from('gear_order_lines').insert(lines)
+    const { error: e2 } = await admin.from('gear_order_lines').insert(lines.map((l) => ({ ...l, order_id: order.id })))
     if (e2) throw new Error(e2.message)
   }
 

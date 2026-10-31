@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { viewerIsAdmin } from '@/lib/course-access'
 import { courseShortName } from '@/lib/courses'
+import { CLIENT_COLUMNS, clientLabel, type ClientRow } from '@/lib/clients'
 import { type GearOrderLine } from '@/lib/gear-orders'
 import GearOrderForm from './GearOrderForm'
 
@@ -18,7 +19,7 @@ export default async function GearOrderPage({ params }: { params: Promise<{ toke
   const admin = createAdminClient()
   const { data: order } = await admin
     .from('gear_orders')
-    .select('id, instance_id, es_quote_number, status, intro, responded_at, responded_name, client_note, viewed_at, attachments, gear_order_lines(id, name, detail, category, qty_offered, qty_wanted, removed, client_note, sort_order)')
+    .select('id, instance_id, title, client_id, es_quote_number, status, intro, responded_at, responded_name, client_note, viewed_at, attachments, gear_order_lines(id, name, detail, category, qty_offered, qty_wanted, url, unit_price, removed, client_note, sort_order)')
     .eq('accept_token', token)
     .maybeSingle()
   if (!order || order.status === 'draft') notFound()
@@ -31,31 +32,41 @@ export default async function GearOrderPage({ params }: { params: Promise<{ toke
     : { data: [] }
   const signedByPath = new Map((signed ?? []).map((x) => [x.path, x.signedUrl]))
 
-  const { data: inst } = await admin
-    .from('course_instances')
-    .select('course_type, custom_title, client_name, starts_at, ends_at, location')
-    .eq('id', order.instance_id)
-    .single()
-  if (!inst) notFound()
+  // An order with no course names itself and says who it is for.
+  let heading = order.title ?? 'Gear list'
+  let subheading: (string | null)[] = []
+  if (order.instance_id) {
+    const { data: inst } = await admin
+      .from('course_instances')
+      .select('course_type, custom_title, client_name, starts_at, ends_at, location')
+      .eq('id', order.instance_id)
+      .single()
+    if (!inst) notFound()
+    heading = courseShortName(inst.course_type, inst.custom_title)
+    const dates = inst.starts_at
+      ? `${inst.starts_at}${inst.ends_at && inst.ends_at !== inst.starts_at ? ` – ${inst.ends_at}` : ''}`
+      : null
+    subheading = [inst.client_name, dates, inst.location]
+  } else if (order.client_id) {
+    const { data: clients } = await admin.from('clients').select(CLIENT_COLUMNS)
+    subheading = [clientLabel((clients ?? []) as ClientRow[], order.client_id) || null]
+  }
+  const standalone = !order.instance_id
 
   // Our own preview of the client's page doesn't count as the client's open.
   if (!order.viewed_at && !(await viewerIsAdmin(admin))) {
     await admin.from('gear_orders').update({ viewed_at: new Date().toISOString() }).eq('id', order.id)
   }
 
-  const courseName = courseShortName(inst.course_type, inst.custom_title)
   const lines = ([...(order.gear_order_lines ?? [])] as GearOrderLine[]).sort((a, b) => a.sort_order - b.sort_order)
-  const dates = inst.starts_at
-    ? `${inst.starts_at}${inst.ends_at && inst.ends_at !== inst.starts_at ? ` – ${inst.ends_at}` : ''}`
-    : null
 
   return (
     <main className="min-h-screen bg-zinc-950 text-white">
       <div className="max-w-3xl mx-auto px-4 py-12 md:py-16">
         <p className="text-xs uppercase tracking-[0.2em] text-pr-red mb-2">Peak Rescue</p>
-        <h1 className="text-2xl md:text-3xl font-bold">Gear list — {courseName}</h1>
+        <h1 className="text-2xl md:text-3xl font-bold">Gear list — {heading}</h1>
         <p className="text-sm text-zinc-400 mt-1">
-          {[inst.client_name, dates, inst.location].filter(Boolean).join(' · ')}
+          {subheading.filter(Boolean).join(' · ')}
         </p>
         {order.es_quote_number && (
           <p className="mt-3 inline-block text-sm font-mono px-2.5 py-1 rounded bg-zinc-900 border border-zinc-800 text-zinc-300">
@@ -90,8 +101,8 @@ export default async function GearOrderPage({ params }: { params: Promise<{ toke
         <div className="mt-8 rounded-lg border border-zinc-800 bg-zinc-900/50 p-4">
           <p className="text-sm text-zinc-300">
             Set the quantity you want for each item. Use <span className="text-zinc-100">Not needed</span> for anything
-            you already have, and leave a note on any line you want to talk about. Whatever you send back is what we
-            pass to our purchasing team.
+            you already have, and leave a note on any line you want to talk about.
+            {standalone ? ' Whatever you send back comes straight to us.' : ' Whatever you send back is what we pass to our purchasing team.'}
           </p>
           {order.responded_at && (
             <p className="text-xs text-teal-300 mt-3">
@@ -107,6 +118,7 @@ export default async function GearOrderPage({ params }: { params: Promise<{ toke
           alreadyAnswered={Boolean(order.responded_at)}
           defaultNote={order.client_note ?? ''}
           defaultName={order.responded_name ?? ''}
+          standalone={standalone}
         />
 
         <p className="text-xs text-zinc-600 mt-10">

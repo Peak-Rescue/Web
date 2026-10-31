@@ -36,6 +36,7 @@ export const GEAR_CATEGORIES = [
   'Harness and personal rigging',
   'Helmets and protection',
   'Clothing and exposure',
+  'Snow travel',
   'Packs and carry',
   'Lighting and optics',
   'Patient handling and access',
@@ -88,6 +89,9 @@ export type CatalogItem = {
   // What the gear is FOR, from the capability vocabulary. Category says what
   // it IS — the two are different axes and were tangled together until now.
   disciplines?: string[]
+  // What we charge. Only the catalog page and gear orders ask for it; nothing a
+  // student or instructor reads selects it.
+  price?: number | null
 }
 
 // Server actions hand back a message rather than throwing it, because Next

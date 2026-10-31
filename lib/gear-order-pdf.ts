@@ -3,7 +3,8 @@
 // again.
 
 import { CONTENT_W, FAINT, INK, MARGIN, MUTED, PdfBuilder, RED } from '@/lib/pdf-layout'
-import { type GearOrderLine } from '@/lib/gear-orders'
+import { orderTotal, safeLink, type GearOrderLine } from '@/lib/gear-orders'
+import { fmtMoney } from '@/lib/expenses'
 import { GEAR_CATEGORIES } from '@/lib/gear'
 
 export type GearOrderPdf = {
@@ -78,7 +79,10 @@ export async function generateGearOrderPdf(data: GearOrderPdf): Promise<Uint8Arr
       const width = CONTENT_W - QTY_W
       // The notes are part of the row: reserved with it, so a page never
       // breaks between an item and what the client said about it.
-      const notes = [l.client_note && `Client: ${l.client_note}`, l.admin_note].filter(Boolean) as string[]
+      const price = l.unit_price == null
+        ? null
+        : `${fmtMoney(Number(l.unit_price))} each — ${fmtMoney(Number(l.unit_price) * Number(l.qty_wanted))}`
+      const notes = [price, safeLink(l.url), l.client_note && `Client: ${l.client_note}`, l.admin_note].filter(Boolean) as string[]
       b.ensure(
         b.measure(body, { width, size: 9.5, leading: 12.5 }) +
           notes.reduce((h, n) => h + b.measure(n, { width, size: 8.5, leading: 11 }), 0) +
@@ -92,6 +96,16 @@ export async function generateGearOrderPdf(data: GearOrderPdf): Promise<Uint8Arr
       b.y -= 4
     }
     b.continued = null
+  }
+
+  const { total, unpriced, anyPriced } = orderTotal(
+    wanted.map((l) => ({ qty: l.qty_wanted, removed: l.removed, unit_price: l.unit_price }))
+  )
+  if (anyPriced) {
+    b.ensure(20)
+    b.y -= 6
+    b.text(`Total ${fmtMoney(total)}${unpriced > 0 ? ` + ${unpriced} unpriced` : ''}`, { x: MARGIN, size: 10, bold: true, color: INK })
+    b.y -= 14
   }
 
   // Kept, because "they didn't want these" is an answer purchasing benefits

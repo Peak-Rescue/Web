@@ -19,11 +19,20 @@ export type GearOrderLine = {
   client_note: string | null
   admin_note: string | null
   sort_order: number
+  /** Standalone orders only. A course order's reads don't ask for these. */
+  gear_item_id?: string | null
+  url?: string | null
+  unit_price?: number | null
 }
 
 export type GearOrder = {
   id: string
-  instance_id: string
+  /** Null for an order that belongs to no course; then `title` names it. */
+  instance_id: string | null
+  title?: string | null
+  client_id?: string | null
+  contact_name?: string | null
+  contact_email?: string | null
   list_id: string | null
   es_quote_number: string | null
   status: GearOrderStatus
@@ -46,6 +55,39 @@ export const GEAR_ORDER_STATUS_LABEL: Record<GearOrderStatus, string> = {
   sent: 'Sent — awaiting the client',
   responded: 'Client responded',
   closed: 'Closed',
+}
+
+export const GEAR_ORDER_STATUS_STYLE: Record<GearOrderStatus, string> = {
+  draft: 'bg-zinc-800 text-zinc-400',
+  sent: 'bg-amber-900/40 text-amber-300',
+  responded: 'bg-teal-900/40 text-teal-300',
+  closed: 'bg-zinc-800 text-zinc-500',
+}
+
+// A link goes on a page a client opens, so only a web address gets to be one:
+// a catalog row or a pasted value holding anything else renders as nothing.
+export function safeLink(url: string | null | undefined): string | null {
+  const v = url?.trim()
+  return v && /^https?:\/\/\S+$/i.test(v) ? v : null
+}
+
+// The money on the lines still wanted. `unpriced` is reported rather than
+// quietly left out, because a total that skips a line reads as the whole cost.
+export function orderTotal(
+  lines: { qty: number | null; removed: boolean; unit_price?: number | null }[]
+): { total: number; unpriced: number; anyPriced: boolean } {
+  let cents = 0
+  let unpriced = 0
+  for (const l of lines) {
+    if (l.removed || !(Number(l.qty ?? 0) > 0)) continue
+    if (l.unit_price == null) { unpriced++; continue }
+    cents += Math.round(Number(l.unit_price) * 100) * Number(l.qty)
+  }
+  return {
+    total: Math.round(cents) / 100,
+    unpriced,
+    anyPriced: lines.some((l) => l.unit_price != null),
+  }
 }
 
 // What purchasing actually buys: the lines still wanted, with the number the

@@ -5,6 +5,7 @@ import { after } from 'next/server'
 import { revalidatePath } from 'next/cache'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { courseShortName } from '@/lib/courses'
+import { CLIENT_COLUMNS, clientLabel, type ClientRow } from '@/lib/clients'
 import { sendMail } from '@/lib/mailer'
 
 export type LineAnswer = { id: string; qty: number | null; removed: boolean; note: string | null }
@@ -24,7 +25,7 @@ export async function submitGearOrder(
   const admin = createAdminClient()
   const { data: order } = await admin
     .from('gear_orders')
-    .select('id, instance_id, status, es_quote_number, gear_order_lines(id)')
+    .select('id, instance_id, title, client_id, status, es_quote_number, gear_order_lines(id)')
     .eq('accept_token', token)
     .maybeSingle()
   if (!order) return { ok: false, error: 'This link is no longer valid' }
@@ -62,30 +63,44 @@ export async function submitGearOrder(
   if (process.env.RESEND_API_KEY) {
     after(async () => {
       try {
-        const [{ data: admins }, { data: inst }, { data: lines }] = await Promise.all([
+        const [{ data: admins }, { data: lines }] = await Promise.all([
           admin.from('profiles').select('email').eq('role', 'admin'),
-          admin.from('course_instances').select('ref_number, course_type, custom_title, client_name').eq('id', order.instance_id).single(),
           admin.from('gear_order_lines').select('name, qty_wanted, removed').eq('order_id', order.id).order('sort_order'),
         ])
         const recipients = (admins ?? []).map((a) => a.email).filter((e): e is string => Boolean(e))
-        if (recipients.length === 0 || !inst) return
+        if (recipients.length === 0) return
+
+        // What the order reads as, and where to go and look at it.
+        let orderName = order.title ?? 'Gear order'
+        let clientName: string | null = null
+        let path = `/admin/gear/orders/${order.id}`
+        if (order.instance_id) {
+          const { data: inst } = await admin
+            .from('course_instances').select('course_type, custom_title, client_name').eq('id', order.instance_id).single()
+          if (!inst) return
+          orderName = courseShortName(inst.course_type, inst.custom_title)
+          clientName = inst.client_name
+          path = `/admin/courses/${order.instance_id}#gear`
+        } else if (order.client_id) {
+          const { data: clients } = await admin.from('clients').select(CLIENT_COLUMNS)
+          clientName = clientLabel((clients ?? []) as ClientRow[], order.client_id) || null
+        }
         const wanted = (lines ?? []).filter((l) => !l.removed && Number(l.qty_wanted ?? 0) > 0)
         const dropped = (lines ?? []).filter((l) => l.removed)
-        const courseName = courseShortName(inst.course_type, inst.custom_title)
         const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://peak-rescue.com'
         await sendMail({
           from: 'Peak Rescue Portal <noreply@peak-rescue.com>',
           to: recipients,
-          subject: `📦 Gear order ${order.es_quote_number ?? ''} answered — ${courseName}`.replace('  ', ' '),
+          subject: `📦 Gear order ${order.es_quote_number ?? ''} answered — ${orderName}`.replace('  ', ' '),
           text: [
-            `${name}${input.title ? ` (${input.title})` : ''} answered the gear list for ${courseName}${inst.client_name ? ` · ${inst.client_name}` : ''}.`,
+            `${name}${input.title ? ` (${input.title})` : ''} answered the gear list for ${orderName}${clientName ? ` · ${clientName}` : ''}.`,
             order.es_quote_number ? `Quote ${order.es_quote_number}.` : null,
             '',
             `${wanted.length} item${wanted.length === 1 ? '' : 's'} wanted${dropped.length ? `, ${dropped.length} struck off` : ''}:`,
             ...wanted.map((l) => `  ${l.qty_wanted} × ${l.name}`),
             input.note.trim() ? ['', `They said: "${input.note.trim()}"`].join('\n') : null,
             '',
-            `${siteUrl}/admin/courses/${order.instance_id}#gear`,
+            `${siteUrl}${path}`,
           ].filter((l): l is string => l !== null).join('\n'),
         })
       } catch (e) {
@@ -94,6 +109,6 @@ export async function submitGearOrder(
     })
   }
 
-  revalidatePath(`/admin/courses/${order.instance_id}`)
+  revalidatePath(order.instance_id ? `/admin/courses/${order.instance_id}` : `/admin/gear/orders/${order.id}`)
   return { ok: true }
 }
