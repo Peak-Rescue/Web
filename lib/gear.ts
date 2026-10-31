@@ -113,6 +113,21 @@ export function productName(item: { brand?: string | null; name: string }): stri
   return brand ? `${brand} ${item.name}` : item.name
 }
 
+// The brands in use, for the suggestion list every brand field shares.
+export function brandsIn(items: { brand?: string | null }[]): string[] {
+  return [...new Set(items.map((i) => i.brand?.trim()).filter(Boolean) as string[])]
+    .sort((a, b) => a.localeCompare(b))
+}
+
+// A brand somebody typed, in the spelling the catalog already has. Suggestions
+// only help whoever looks at them, and "black diamond" beside "Black Diamond"
+// is two brands to every filter that reads the column.
+export function canonicalBrand(typed: string, existing: (string | null | undefined)[]): string {
+  const clean = typed.trim().replace(/\s+/g, ' ')
+  const key = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '')
+  return existing.find((b) => b && key(b) === key(clean))?.trim() ?? clean
+}
+
 // Matches a typed query against a name, its synonyms, and — for a type — the
 // models under it. Typing "grigri" has to find "Descent device", or the person
 // typing it concludes we don't have one and adds a duplicate.

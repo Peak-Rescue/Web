@@ -13,7 +13,7 @@ import NewTabIcon from '@/components/NewTabIcon'
 import CloseButton from '@/components/CloseButton'
 import InfoHint from '@/components/InfoHint'
 import TrashIcon from '@/components/TrashIcon'
-import { GEAR_CATEGORIES, gearQuantity, isChoice, KIT_LABEL, kitSides, matchesGear, placeSets, productName, unwrap, type CatalogItem, type Joiner } from '@/lib/gear'
+import { GEAR_CATEGORIES, gearQuantity, isChoice, KIT_LABEL, kitSides, matchesGear, placeSets, productName, unwrap, type CatalogItem, type Joiner, brandsIn } from '@/lib/gear'
 import {
   addGearEntry, updateGearEntry, removeGearEntry, updateGearList, copyGearList,
   saveGearListIntoTemplate, setGearEntryOptions, upsertGearItem, renameGearSection,
@@ -809,6 +809,10 @@ export default function GearListEditor({
           </button>
         </div>
       </div>
+
+      <datalist id="gear-brands">
+        {brandsIn(known).map((b) => <option key={b} value={b} />)}
+      </datalist>
 
       {/* Said out loud here as well as inside the add panel, because a paste
           closes its panel on the way out and lands its rows below the fold —
@@ -2008,6 +2012,7 @@ function Row({
                   className={`flex-1 min-w-0 ${input}`}
                 />
                 <input
+                  list="gear-brands"
                   value={newBrand}
                   onChange={(ev) => setNewBrand(ev.target.value)}
                   onKeyDown={(ev) => { if (ev.key === 'Enter' && newModel.trim()) addNew() }}
@@ -2417,6 +2422,7 @@ export function AddGear({
               <div>
                 <label className="block text-[11px] text-zinc-500 mb-1">Brand</label>
                 <input
+                  list="gear-brands"
                   value={newItemBrand}
                   onChange={(e) => setNewItemBrand(e.target.value)}
                   placeholder="e.g. Petzl"

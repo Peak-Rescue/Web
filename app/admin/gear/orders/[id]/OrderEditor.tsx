@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { AddGear, type GearItem } from '@/app/admin/gear/GearListEditor'
 import { fmtMoney } from '@/lib/expenses'
-import { GEAR_CATEGORIES, productName, unwrap } from '@/lib/gear'
+import { GEAR_CATEGORIES, brandsIn, productName, unwrap } from '@/lib/gear'
 import CategorySelect from '@/app/admin/gear/CategorySelect'
 import {
   GEAR_ORDER_STATUS_LABEL, GEAR_ORDER_STATUS_STYLE, orderTotal, safeLink, sizeRows,
@@ -138,6 +138,10 @@ export default function OrderEditor({
         </p>
       )}
 
+      <datalist id="gear-brands">
+        {brandsIn(known).map((b) => <option key={b} value={b} />)}
+      </datalist>
+
       <div className="space-y-2">
         {lines.map((l) => (
           <LineRow key={l.id} line={l} products={productsFor(l, known, childrenOf)} categories={categories} run={run} busy={busy} />
@@ -270,7 +274,7 @@ function NewProduct({ lineId, run, busy }: { lineId: string; run: Run; busy: boo
         })
       }}
     >
-      <input autoFocus aria-label="Brand" placeholder="Brand" value={brand} onChange={(e) => setBrand(e.target.value)} className={`${input} w-36 text-xs`} />
+      <input autoFocus list="gear-brands" aria-label="Brand" placeholder="Brand" value={brand} onChange={(e) => setBrand(e.target.value)} className={`${input} w-36 text-xs`} />
       <input aria-label="Model" placeholder="Model" value={model} onChange={(e) => setModel(e.target.value)} className={`${input} min-w-0 flex-1 text-xs`} />
       <button type="submit" disabled={busy || !model.trim() || !brand.trim()} className="text-xs text-zinc-300 hover:text-white disabled:opacity-40">Add</button>
       <button type="button" onClick={() => setOpen(false)} className="text-xs text-zinc-600 hover:text-zinc-300">Cancel</button>

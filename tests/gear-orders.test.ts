@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { brandsIn, canonicalBrand } from '@/lib/gear'
 import { cleanSizes, defaultScale, lineNames, orderTotal, parseSizeOptions, safeLink, sizeRange, sizeRows, sizesSummary, sizesTotal } from '@/lib/gear-orders'
 
 describe('orderTotal', () => {
@@ -125,5 +126,25 @@ describe('size ranges', () => {
     expect(defaultScale({ category: 'Snow travel', name: 'Ski boots' })).toBe('mondo')
     expect(defaultScale({ category: 'Clothing and exposure', name: 'Mountain boot' })).toBe('eu')
     expect(defaultScale({ category: 'Clothing and exposure', name: 'Gloves' })).toBe('letter')
+  })
+})
+
+describe('canonicalBrand', () => {
+  const held = ['Black Diamond', 'Petzl', null]
+
+  it('files a different typing under the spelling already in use', () => {
+    expect(canonicalBrand('black diamond', held)).toBe('Black Diamond')
+    expect(canonicalBrand(' BlackDiamond ', held)).toBe('Black Diamond')
+    expect(canonicalBrand('Black-Diamond', held)).toBe('Black Diamond')
+  })
+
+  it('keeps a brand it has not seen, tidied', () => {
+    expect(canonicalBrand('  La   Sportiva ', held)).toBe('La Sportiva')
+  })
+})
+
+describe('brandsIn', () => {
+  it('lists each brand once, in order', () => {
+    expect(brandsIn([{ brand: 'Petzl' }, { brand: null }, { brand: 'Camp' }, { brand: 'Petzl ' }])).toEqual(['Camp', 'Petzl'])
   })
 })

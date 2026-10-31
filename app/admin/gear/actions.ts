@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { GEAR_ENTRIES_COPY_SELECT, type Joiner } from '@/lib/gear'
+import { GEAR_ENTRIES_COPY_SELECT, type Joiner, canonicalBrand } from '@/lib/gear'
 import { templateOffering } from '@/lib/library'
 import { requireAdminUser, requireCourseStaff, requireStaffOfCourse } from '@/lib/course-access'
 
@@ -84,7 +84,16 @@ export async function upsertGearItem(input: {
   // made each field's edit erase the others: renaming an item sent no brand
   // and no url, and so cleared both.
   const row: Record<string, unknown> = { name: input.name.trim().slice(0, 120) }
-  if (input.brand !== undefined) row.brand = input.brand?.trim() || null
+  if (input.brand !== undefined) {
+    row.brand = input.brand?.trim() || null
+    if (row.brand) {
+      // Against the other rows, so correcting a brand's own spelling still can.
+      let others = admin.from('gear_items').select('brand').not('brand', 'is', null)
+      if (input.id) others = others.neq('id', input.id)
+      const { data } = await others
+      row.brand = canonicalBrand(row.brand as string, (data ?? []).map((r) => r.brand as string))
+    }
+  }
   if (input.info !== undefined) row.info = input.info?.trim() || null
   if (input.url !== undefined) row.url = input.url?.trim() || null
   if (input.price !== undefined) {

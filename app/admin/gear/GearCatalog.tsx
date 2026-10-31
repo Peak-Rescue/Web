@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import { useSteadyRefresh } from '@/components/useSteadyRefresh'
-import { GEAR_CATEGORIES, matchesGear, unwrap, type CatalogItem } from '@/lib/gear'
+import { GEAR_CATEGORIES, brandsIn, matchesGear, unwrap, type CatalogItem } from '@/lib/gear'
 import SizeOptionsField from '@/components/SizeOptionsField'
 import { upsertGearItem, retireGearItem, renameGearCategory } from './actions'
 import CategorySelect, { NEW_TYPE } from './CategorySelect'
@@ -179,7 +179,7 @@ export default function GearCatalog({ items }: { items: Row[] }) {
   // entered three ways — which is exactly how "BD" and "Black Diamond" came to
   // be two brands before this column existed.
   const brands = useMemo(
-    () => [...new Set(items.map((i) => i.brand?.trim()).filter(Boolean) as string[])].sort((a, b) => a.localeCompare(b)),
+    () => brandsIn(items),
     [items]
   )
 
