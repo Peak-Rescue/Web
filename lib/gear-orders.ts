@@ -121,7 +121,7 @@ export const SIZE_SCALES: Record<SizeScaleId, {
   prefix: string
   suffix: string
 }> = {
-  letter: { label: 'S, M, L', values: ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL'], from: 'S', to: 'XL', step: 1, steps: [1], prefix: '', suffix: '' },
+  letter: { label: 'Clothing', values: ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL'], from: 'S', to: 'XL', step: 1, steps: [1], prefix: '', suffix: '' },
   eu: { label: 'Footwear EU', from: 38, to: 47, step: 1, steps: [1, 0.5], prefix: 'EU ', suffix: '' },
   us: { label: 'Footwear US', from: 6, to: 13, step: 1, steps: [1, 0.5], prefix: 'US ', suffix: '' },
   mondo: { label: 'Ski boots, mondo', from: 24.5, to: 30.5, step: 0.5, steps: [0.5, 1], prefix: 'Mondo ', suffix: '' },
