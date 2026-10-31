@@ -17,6 +17,7 @@ export default function GearOrderForm({
   defaultNote,
   defaultName,
   standalone,
+  draft,
 }: {
   token: string
   lines: GearOrderLine[]
@@ -24,6 +25,7 @@ export default function GearOrderForm({
   defaultNote: string
   defaultName: string
   standalone: boolean
+  draft: boolean
 }) {
   const [answers, setAnswers] = useState<Record<string, Answer>>(() =>
     Object.fromEntries(lines.map((l) => [l.id, {
@@ -229,7 +231,7 @@ export default function GearOrderForm({
         <div className="flex items-center gap-3 mt-4 flex-wrap">
           <button
             onClick={submit}
-            disabled={busy || !name.trim()}
+            disabled={busy || !name.trim() || draft}
             className="px-5 py-2.5 rounded bg-pr-red hover:bg-pr-red-dark text-white text-sm font-medium transition-colors disabled:opacity-40"
           >
             {busy ? 'Sending…' : alreadyAnswered ? 'Send updated list' : 'Send this back to us'}

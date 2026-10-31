@@ -7,28 +7,39 @@ import { fmtMoney } from '@/lib/expenses'
 import { GEAR_CATEGORIES, brandsIn, productName, unwrap } from '@/lib/gear'
 import CategorySelect from '@/app/admin/gear/CategorySelect'
 import {
-  GEAR_ORDER_STATUS_LABEL, GEAR_ORDER_STATUS_STYLE, needsProduct, orderTotal, productsToFillFirst, safeLink, sizeRows,
+  GEAR_ORDER_STATUS_LABEL, GEAR_ORDER_STATUS_STYLE, needsProduct, orderTotal, sizesTotal, workFirst, safeLink, sizeRows,
   type GearOrder, type GearOrderLine,
 } from '@/lib/gear-orders'
 import GearSizeRows from '@/components/GearSizeRows'
 import SizeOptionsField from '@/components/SizeOptionsField'
 import PdfLink from '@/components/PdfLink'
+import Link from 'next/link'
+import { planSplit } from '@/lib/gear-order-split'
 import TrashIcon from '@/components/TrashIcon'
 import {
   addCatalogLine, addLineProduct, addOneOffLine, deleteStandaloneLine, deleteStandaloneOrder, sendStandaloneOrder,
-  setLineCategory, setLineProduct, updateStandaloneLine, updateStandaloneOrder,
+  setLineCategory, setLineProduct, splitStandaloneOrder, undoStandaloneSplit, updateStandaloneLine, updateStandaloneOrder,
 } from '../actions'
 
 const input = 'bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-zinc-500'
 
 type Run = (fn: () => Promise<unknown>) => void
 
+export type SplitPartRow = {
+  id: string; title: string; status: GearOrder['status']; sent_at: string | null
+  gear_order_lines: { qty_wanted: number | null; unit_price: number | null; removed: boolean }[]
+}
+// Numbers being typed, ahead of the save.
+type Draft = { qty?: number | null; price?: number | null }
+
 export default function OrderEditor({
-  order, catalog, clients,
+  order, catalog, clients, parts, parent,
 }: {
   order: GearOrder
   catalog: GearItem[]
   clients: { id: string; label: string }[]
+  parts: SplitPartRow[]
+  parent: { id: string; title: string } | null
 }) {
   const router = useRouter()
   const [busy, setBusy] = useState(false)
@@ -39,12 +50,13 @@ export default function OrderEditor({
   // The order the sort produced, held still. Sorting live would move a line out
   // from under you the moment you filled in its last gap. New lines go last.
   const [sorted, setSorted] = useState<string[] | null>(null)
+  const [drafts, setDrafts] = useState<Record<string, Draft>>({})
 
   const run: Run = async (fn) => {
     setBusy(true); setError(null)
     try { await fn() }
     catch (e) { setError(e instanceof Error ? e.message : 'That didn’t work') }
-    finally { setBusy(false) }
+    finally { setBusy(false); setDrafts({}) }
   }
 
   const known = useMemo(() => {
@@ -69,9 +81,15 @@ export default function OrderEditor({
   }
   const shown = sorted ? [...lines].sort((a, b) => place(a.id) - place(b.id)) : lines
   const toFill = lines.filter(needsProduct).length
-  const { total, unpriced, anyPriced } = orderTotal(
-    lines.map((l) => ({ qty: l.qty_wanted, removed: l.removed, unit_price: l.unit_price }))
+  const live = lines.filter((l) => !l.removed)
+  const done = live.filter((l) => l.checked).length
+  // The total runs off what is in the boxes, so it moves as a number is typed.
+  const liveQty = (l: GearOrderLine) => (l.id in drafts && 'qty' in drafts[l.id] ? drafts[l.id].qty ?? null : l.qty_wanted)
+  const livePrice = (l: GearOrderLine) => (l.id in drafts && 'price' in drafts[l.id] ? drafts[l.id].price ?? null : l.unit_price ?? null)
+  const { total, unpriced } = orderTotal(
+    lines.map((l) => ({ qty: liveQty(l), removed: l.removed, unit_price: livePrice(l) }))
   )
+  const units = lines.reduce((n, l) => n + (l.removed ? 0 : Number(liveQty(l) ?? 0)), 0)
   const saveOrder = (patch: Parameters<typeof updateStandaloneOrder>[1]) =>
     run(async () => unwrap(await updateStandaloneOrder(order.id, patch)))
 
@@ -147,25 +165,66 @@ export default function OrderEditor({
         </p>
       )}
 
+      {parent && (
+        <p className="text-xs text-zinc-400 mb-3">
+          Part of <Link href={`/admin/gear/orders/${parent.id}`} className="underline underline-offset-2 decoration-zinc-600 hover:text-white">{parent.title}</Link>
+        </p>
+      )}
+
+      {parts.length > 0 && (
+        <div className="rounded-lg border border-zinc-700 bg-zinc-900 p-3 mb-4">
+          <div className="flex items-center gap-3 mb-2">
+            <p className="text-sm font-medium">
+              Split into {parts.length} orders{order.split_cap != null && ` of up to ${fmtMoney(Number(order.split_cap))}`}
+            </p>
+            {!parts.some((p) => p.sent_at) && (
+              <button
+                onClick={() => {
+                  if (confirm('Undo the split? The parts are deleted and this order opens again.')) {
+                    run(async () => unwrap(await undoStandaloneSplit(order.id)))
+                  }
+                }}
+                className="ml-auto text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+              >
+                Undo split
+              </button>
+            )}
+          </div>
+          <div className="space-y-1">
+            {parts.map((p) => (
+              <Link key={p.id} href={`/admin/gear/orders/${p.id}`} className="flex items-center gap-3 text-sm hover:text-white text-zinc-300 transition-colors">
+                <span className="min-w-0 flex-1 truncate">{p.title}</span>
+                <span>{fmtMoney(orderTotal(p.gear_order_lines.map((l) => ({ qty: l.qty_wanted, removed: l.removed, unit_price: l.unit_price }))).total)}</span>
+                <span className={`text-[10px] px-2 py-0.5 rounded ${GEAR_ORDER_STATUS_STYLE[p.status]}`}>{GEAR_ORDER_STATUS_LABEL[p.status]}</span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+
       <datalist id="gear-brands">
         {brandsIn(known).map((b) => <option key={b} value={b} />)}
       </datalist>
 
       {lines.length > 0 && (
         <div className="flex items-center gap-3 mb-2">
-          {toFill > 0 && <span className="text-xs text-amber-300/80">{toFill} still {toFill === 1 ? 'needs' : 'need'} a product</span>}
+          <span className="text-xs text-zinc-400">{done} of {live.length} checked</span>
+          {toFill > 0 && <span className="text-xs text-amber-300/80">{toFill} {toFill === 1 ? 'needs' : 'need'} a product</span>}
           <button
-            onClick={() => setSorted(sorted ? null : productsToFillFirst(lines).map((l) => l.id))}
+            onClick={() => setSorted(sorted ? null : workFirst(lines).map((l) => l.id))}
             className="ml-auto text-xs px-2.5 py-1 rounded border border-zinc-700 text-zinc-300 hover:text-white hover:border-zinc-500 transition-colors"
           >
-            {sorted ? 'List order' : 'No product first'}
+            {sorted ? 'List order' : 'Unchecked first'}
           </button>
         </div>
       )}
 
       <div className="space-y-2">
         {shown.map((l) => (
-          <LineRow key={l.id} line={l} products={productsFor(l, known, childrenOf)} categories={categories} run={run} busy={busy} />
+          <LineRow key={l.id} line={l} products={productsFor(l, known, childrenOf)} categories={categories} run={run} busy={busy}
+            liveQty={liveQty(l)} livePrice={livePrice(l)}
+            onDraft={(d) => setDrafts((all) => ({ ...all, [l.id]: { ...all[l.id], ...d } }))}
+          />
         ))}
       </div>
 
@@ -199,11 +258,18 @@ export default function OrderEditor({
         )}
       </div>
 
-      {anyPriced && (
-        <p className="mt-4 text-right text-sm">
-          <span className="text-zinc-500">Total</span> <span className="font-medium">{fmtMoney(total)}</span>
-          {unpriced > 0 && <span className="text-xs text-amber-300/80"> + {unpriced} unpriced</span>}
-        </p>
+      {lines.length > 0 && (
+        <div className="sticky bottom-0 z-10 mt-4 rounded-lg border border-zinc-700 bg-zinc-900/95 px-4 py-2.5 flex items-center gap-3 flex-wrap">
+          <span className="text-xs text-zinc-400">{units} {units === 1 ? 'item' : 'items'}</span>
+          <span className="ml-auto text-sm">
+            <span className="text-zinc-500">Total</span> <span className="font-semibold">{fmtMoney(total)}</span>
+            {unpriced > 0 && <span className="text-xs text-amber-300/80"> + {unpriced} unpriced</span>}
+          </span>
+        </div>
+      )}
+
+      {!order.split_from && parts.length === 0 && lines.length > 0 && (
+        <SplitPanel order={order} lines={lines} run={run} busy={busy} />
       )}
 
       <div className="mt-6 pt-4 border-t border-zinc-800 flex items-center gap-3 flex-wrap">
@@ -214,16 +280,14 @@ export default function OrderEditor({
         >
           {order.sent_at ? 'Send again' : 'Send to team'}
         </button>
-        {order.sent_at && (
-          <a
-            href={`/gear-order/${order.accept_token}`}
-            target="_blank"
-            rel="noreferrer"
-            className="text-xs text-zinc-400 hover:text-white transition-colors"
-          >
-            Their page
-          </a>
-        )}
+        <a
+          href={`/gear-order/${order.accept_token}`}
+          target="_blank"
+          rel="noreferrer"
+          className="text-xs px-2.5 py-1 rounded border border-zinc-700 text-zinc-300 hover:text-white hover:border-zinc-500 transition-colors"
+        >
+          Preview
+        </a>
         <PdfLink href={`/api/gear-orders/${order.id}/pdf`} label="PDF" />
         {order.status !== 'closed' && order.responded_at && (
           <button
@@ -305,11 +369,12 @@ function NewProduct({ lineId, run, busy }: { lineId: string; run: Run; busy: boo
 
 // Keyed on what the server holds, so a saved answer redraws from the record.
 function LineSizes({
-  line, busy, save,
+  line, busy, save, onDraftQty,
 }: {
   line: GearOrderLine
   busy: boolean
   save: (patch: Parameters<typeof updateStandaloneLine>[1]) => void
+  onDraftQty: (qty: number) => void
 }) {
   const [rows, setRows] = useState(() => sizeRows(line.size_options, line.sizes))
   const options = line.size_options ?? []
@@ -324,7 +389,7 @@ function LineSizes({
       canAdd={false}
       fixed={options.length > 0 && rows.length === options.length}
       rows={rows}
-      onChange={setRows}
+      onChange={(next) => { setRows(next); onDraftQty(sizesTotal(next)) }}
       onCommit={commit}
       disabled={busy}
       input={input}
@@ -332,12 +397,106 @@ function LineSizes({
   )
 }
 
+// Splitting by what a team can spend on one order. The plan is drawn as the cap
+// is typed, and the same function makes the orders on the server.
+function SplitPanel({
+  order, lines, run, busy,
+}: {
+  order: GearOrder
+  lines: GearOrderLine[]
+  run: Run
+  busy: boolean
+}) {
+  const [open, setOpen] = useState(false)
+  const [cap, setCap] = useState('')
+  const names = new Map(lines.map((l) => [l.id, l.product ?? l.name]))
+  const plan = useMemo(() => planSplit(lines.map((l) => ({
+    id: l.id, name: l.product ?? l.name, brand: l.gear_items?.brand ?? null,
+    qty: l.qty_wanted, unit_price: l.unit_price ?? null, removed: l.removed, sizes: l.sizes,
+  })), Number(cap)), [lines, cap])
+
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        className="mt-3 text-xs px-3 py-1.5 rounded border border-zinc-700 text-zinc-300 hover:text-white hover:border-zinc-500 transition-colors"
+      >
+        Split by budget
+      </button>
+    )
+  }
+  return (
+    <div className="mt-3 rounded-lg border border-zinc-700 bg-zinc-900 p-3 space-y-3">
+      <div className="flex items-center gap-3 flex-wrap">
+        <input
+          autoFocus
+          type="number"
+          min={0}
+          step="0.01"
+          aria-label="Most one order can be"
+          placeholder="Max per order $"
+          value={cap}
+          onChange={(e) => setCap(e.target.value)}
+          className={`${input} w-40`}
+        />
+        <button onClick={() => setOpen(false)} className="ml-auto text-xs text-zinc-500 hover:text-zinc-300 transition-colors">Cancel</button>
+      </div>
+
+      {plan.unpriced.length > 0 && (
+        <p className="text-xs text-amber-300/80">Price these first: {plan.unpriced.join(', ')}</p>
+      )}
+      {plan.leftOut.length > 0 && Number(cap) > 0 && (
+        <p className="text-xs text-zinc-400">No quantity, so left out: {plan.leftOut.join(', ')}</p>
+      )}
+      {plan.parts.length === 1 && <p className="text-xs text-zinc-400">It already fits in one order.</p>}
+
+      {plan.parts.length > 1 && (
+        <>
+          <div className="space-y-2">
+            {plan.parts.map((part, i) => (
+              <div key={i} className="rounded border border-zinc-800 p-2.5">
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="font-medium">Order {i + 1}</span>
+                  {part.overCap && <span className="text-xs text-amber-300/80">one item costs more than the cap</span>}
+                  <span className="ml-auto">{fmtMoney(part.cents / 100)}</span>
+                </div>
+                <ul className="mt-1 space-y-0.5">
+                  {part.pieces.map((piece) => (
+                    <li key={piece.lineId} className="text-xs text-zinc-400 flex gap-2">
+                      <span className="shrink-0">{piece.qty} ×</span>
+                      <span className="min-w-0 flex-1">{names.get(piece.lineId)}{piece.sizes.length > 0 && ` (${piece.sizes.map((s) => `${s.size} × ${s.qty}`).join(', ')})`}</span>
+                      <span className="shrink-0">{fmtMoney(piece.cents / 100)}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+          <button
+            disabled={busy}
+            onClick={() => {
+              if (!confirm(`Create ${plan.parts.length} orders? They start as drafts and this one closes.`)) return
+              run(async () => unwrap(await splitStandaloneOrder(order.id, Number(cap))))
+            }}
+            className="px-3 py-1.5 rounded bg-pr-red hover:bg-pr-red-dark text-white text-sm font-medium transition-colors disabled:opacity-40"
+          >
+            Create {plan.parts.length} orders
+          </button>
+        </>
+      )}
+    </div>
+  )
+}
+
 function LineRow({
-  line, products, categories, run, busy,
+  line, products, categories, run, busy, liveQty, livePrice, onDraft,
 }: {
   line: GearOrderLine
   products: GearItem[]
   categories: string[]
+  liveQty: number | null
+  livePrice: number | null
+  onDraft: (d: Draft) => void
   run: Run
   busy: boolean
 }) {
@@ -345,10 +504,28 @@ function LineRow({
     run(async () => unwrap(await updateStandaloneLine(line.id, patch)))
   const money = (n: number | null | undefined) => (n == null ? null : Number(n))
   const link = safeLink(line.url)
+  // Shows the moment it is ticked; the save follows behind.
+  const [checked, setChecked] = useState(Boolean(line.checked))
+  const [seenChecked, setSeenChecked] = useState(Boolean(line.checked))
+  if (seenChecked !== Boolean(line.checked)) {
+    setSeenChecked(Boolean(line.checked))
+    setChecked(Boolean(line.checked))
+  }
 
   return (
-    <div className={`rounded-lg border border-zinc-800 bg-zinc-900 p-3 ${line.removed ? 'opacity-50' : ''}`}>
+    <div className={`rounded-lg border p-3 transition-colors ${checked ? 'border-emerald-700 bg-emerald-950/40' : 'border-zinc-800 bg-zinc-900'} ${line.removed ? 'opacity-50' : ''}`}>
       <div className="flex items-center gap-2">
+        <input
+          type="checkbox"
+          aria-label={`Mark ${line.name} as finished`}
+          title="Finished"
+          checked={checked}
+          onChange={(e) => {
+            setChecked(e.target.checked)
+            save({ checked: e.target.checked })
+          }}
+          className="shrink-0 size-4 accent-emerald-600"
+        />
         <input
           key={line.name}
           aria-label="Item"
@@ -405,6 +582,7 @@ function LineRow({
           readOnly={(line.sizes ?? []).length > 0}
           title={(line.sizes ?? []).length > 0 ? 'Total of the sizes below' : undefined}
           defaultValue={line.qty_wanted ?? ''}
+          onChange={(e) => onDraft({ qty: e.target.value === '' ? null : Number(e.target.value) })}
           onBlur={(e) => {
             const v = e.target.value === '' ? null : Number(e.target.value)
             if (v !== money(line.qty_wanted) && !(line.sizes ?? []).length) save({ qtyWanted: v })
@@ -419,6 +597,7 @@ function LineRow({
           aria-label="Unit price"
           placeholder="Price each"
           defaultValue={line.unit_price ?? ''}
+          onChange={(e) => onDraft({ price: e.target.value === '' ? null : Number(e.target.value) })}
           onBlur={(e) => {
             const v = e.target.value === '' ? null : Number(e.target.value)
             if (v !== money(line.unit_price)) save({ unitPrice: v })
@@ -444,6 +623,12 @@ function LineRow({
           )}
         </div>
       </div>
+
+      {!line.removed && Number(liveQty ?? 0) > 0 && livePrice != null && (
+        <p className="text-xs text-zinc-400 mt-1.5 text-right">
+          {liveQty} × {fmtMoney(livePrice)} = <span className="text-zinc-200">{fmtMoney(Number(liveQty) * livePrice)}</span>
+        </p>
+      )}
 
       {products.length === 0 && line.product && (
         <p className="text-xs text-zinc-400 mt-2 px-1.5">{line.product}</p>
@@ -477,6 +662,7 @@ function LineRow({
           line={line}
           busy={busy}
           save={save}
+          onDraftQty={(qty) => onDraft({ qty })}
         />
       </div>
 

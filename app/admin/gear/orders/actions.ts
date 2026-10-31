@@ -6,6 +6,7 @@ import { upsertGearItem } from '@/app/admin/gear/actions'
 import { linesFromList } from '@/lib/gear-order-lines'
 import { cleanSizes, lineNames, parseSizeOptions, safeLink, sizesTotal } from '@/lib/gear-orders'
 import { sendMail } from '@/lib/mailer'
+import { planSplit, type SplitLine } from '@/lib/gear-order-split'
 
 // Gear orders that belong to no course: a team asks what we would supply, and
 // might buy it from us. Course orders keep their own actions and their own
@@ -189,7 +190,7 @@ export async function updateStandaloneLine(
   lineId: string,
   patch: {
     name?: string; detail?: string | null; url?: string | null; unitPrice?: number | null
-    qtyWanted?: number | null; removed?: boolean
+    qtyWanted?: number | null; removed?: boolean; checked?: boolean
     sizeOptions?: string; sizes?: { size: string; qty: string | number }[]
   }
 ): Promise<{ ok: true } | Failed> {
@@ -201,6 +202,7 @@ export async function updateStandaloneLine(
   if (patch.name !== undefined) update.name = patch.name.trim().slice(0, 200) || 'Item'
   if (patch.detail !== undefined) update.detail = patch.detail?.trim().slice(0, 1000) || null
   if (patch.removed !== undefined) update.removed = patch.removed
+  if (patch.checked !== undefined) update.checked = patch.checked
   if (patch.qtyWanted !== undefined) {
     update.qty_wanted = patch.qtyWanted === null || Number.isNaN(patch.qtyWanted)
       ? null
@@ -323,6 +325,97 @@ export async function deleteStandaloneLine(lineId: string): Promise<{ ok: true }
   const { error } = await admin.from('gear_order_lines').delete().eq('id', lineId)
   if (error) throw new Error(error.message)
   touch(line.order_id)
+  return { ok: true }
+}
+
+// One order into several, each under a cap. The parts are ordinary orders with
+// their own link and PDF, copied from the original's current state, and they
+// start as drafts: nothing reaches the team until each is sent. The original is
+// closed, since answering it now would answer nothing.
+export async function splitStandaloneOrder(orderId: string, cap: number): Promise<{ count: number } | Failed> {
+  const { admin } = await requireAdminUser()
+  const { data } = await admin
+    .from('gear_orders')
+    .select('id, title, client_id, contact_name, contact_email, intro, es_quote_number, split_from, gear_order_lines(*, gear_items(brand))')
+    .eq('id', orderId).is('instance_id', null)
+    .maybeSingle()
+  if (!data) return fail('Order not found.')
+  const order = data as unknown as {
+    id: string; title: string; client_id: string | null; contact_name: string | null; contact_email: string | null
+    intro: string | null; es_quote_number: string | null; split_from: string | null
+    gear_order_lines: (Record<string, unknown> & {
+      id: string; name: string; product: string | null; qty_wanted: number | null; unit_price: number | null
+      removed: boolean; sizes: { size: string; qty: number }[]; sort_order: number
+      gear_items: { brand: string | null } | null
+    })[]
+  }
+  if (order.split_from) return fail('This is already one part of a split.')
+  const { count: existing } = await admin
+    .from('gear_orders').select('id', { count: 'exact', head: true }).eq('split_from', orderId)
+  if (existing) return fail('This order is already split. Undo that first.')
+
+  const rows = [...order.gear_order_lines].sort((a, b) => a.sort_order - b.sort_order)
+  const lines: SplitLine[] = rows.map((l) => ({
+    id: l.id, name: l.product ?? l.name, brand: l.gear_items?.brand ?? null,
+    qty: l.qty_wanted, unit_price: l.unit_price, removed: l.removed, sizes: l.sizes,
+  }))
+  const plan = planSplit(lines, cap)
+  if (plan.unpriced.length > 0) return fail(`Price these first: ${plan.unpriced.join(', ')}.`)
+  if (plan.parts.length < 2) return fail('This order already fits under that amount.')
+
+  const byId = new Map(rows.map((l) => [l.id, l]))
+  const made: string[] = []
+  try {
+    for (const [i, part] of plan.parts.entries()) {
+      const { data: created, error } = await admin.from('gear_orders').insert({
+        title: `${order.title} (${i + 1} of ${plan.parts.length})`.slice(0, 200),
+        client_id: order.client_id,
+        contact_name: order.contact_name,
+        contact_email: order.contact_email,
+        intro: order.intro,
+        es_quote_number: order.es_quote_number,
+        split_from: order.id,
+      }).select('id').single()
+      if (error || !created) throw new Error(error?.message ?? 'Could not create a part')
+      made.push(created.id)
+      const { error: e2 } = await admin.from('gear_order_lines').insert(part.pieces.map((piece, sort) => {
+        const { id, order_id, gear_items, ...copy } = byId.get(piece.lineId)!
+        return { ...copy, order_id: created.id, qty_wanted: piece.qty, sizes: piece.sizes, sort_order: sort }
+      }))
+      if (e2) throw new Error(e2.message)
+    }
+    const { error: e3 } = await admin
+      .from('gear_orders').update({ status: 'closed', split_cap: cap }).eq('id', orderId)
+    if (e3) throw new Error(e3.message)
+  } catch (e) {
+    // All the parts or none: half a split reads as a smaller order.
+    if (made.length) await admin.from('gear_orders').delete().in('id', made)
+    throw e
+  }
+  touch(orderId)
+  return { count: plan.parts.length }
+}
+
+// Only while nothing has gone out. Once a team holds a part's link, deleting it
+// would break a link they were sent.
+export async function undoStandaloneSplit(orderId: string): Promise<{ ok: true } | Failed> {
+  const { admin } = await requireAdminUser()
+  const { data: order } = await admin
+    .from('gear_orders').select('id, sent_at, responded_at').eq('id', orderId).is('instance_id', null).maybeSingle()
+  if (!order) return fail('Order not found.')
+  const { data: parts } = await admin.from('gear_orders').select('id, sent_at').eq('split_from', orderId)
+  if ((parts ?? []).some((p) => p.sent_at)) return fail('A part has already been sent, so this split has to stay.')
+
+  if (parts?.length) {
+    const { error } = await admin.from('gear_orders').delete().in('id', parts.map((p) => p.id))
+    if (error) throw new Error(error.message)
+  }
+  const { error } = await admin.from('gear_orders').update({
+    status: order.responded_at ? 'responded' : order.sent_at ? 'sent' : 'draft',
+    split_cap: null,
+  }).eq('id', orderId)
+  if (error) throw new Error(error.message)
+  touch(orderId)
   return { ok: true }
 }
 

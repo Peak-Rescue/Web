@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { brandsIn, canonicalBrand } from '@/lib/gear'
-import { cleanSizes, defaultScale, lineNames, needsProduct, orderTotal, parseSizeOptions, safeLink, sizeRange, sizeRows, sizesSummary, sizesTotal, productsToFillFirst } from '@/lib/gear-orders'
+import { cleanSizes, defaultScale, lineNames, needsProduct, orderTotal, parseSizeOptions, safeLink, sizeRange, sizeRows, sizesSummary, sizesTotal, workFirst } from '@/lib/gear-orders'
 
 describe('orderTotal', () => {
   it('adds up the lines still wanted', () => {
@@ -166,11 +166,12 @@ describe('lines still needing a product', () => {
     expect(needsProduct(line({ gear_item_id: null }))).toBe(false)
   })
 
-  it('brings them to the top, keeping list order within each group', () => {
-    const filled = line({ sort_order: 0, product: 'Testco Shell' })
+  it('puts what is left to do first, and finished lines last', () => {
+    const done = line({ sort_order: 0, product: 'A', checked: true })
     const skis = line({ sort_order: 1 })
-    const alsoFilled = line({ sort_order: 2, product: 'Testco Pants' })
+    const unchecked = line({ sort_order: 2, product: 'B' })
     const skins = line({ sort_order: 3 })
-    expect(productsToFillFirst([filled, skis, alsoFilled, skins])).toEqual([skis, skins, filled, alsoFilled])
+    const struck = line({ sort_order: 4, removed: true })
+    expect(workFirst([done, skis, unchecked, skins, struck])).toEqual([skis, skins, unchecked, done, struck])
   })
 })

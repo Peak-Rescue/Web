@@ -33,6 +33,9 @@ export type GearOrderLine = {
   unit_price?: number | null
   size_options?: string[]
   sizes?: GearOrderSize[]
+  /** Our own mark that the line is finished. The team never sees it. */
+  checked?: boolean
+  gear_items?: { brand: string | null } | null
 }
 
 export type GearOrder = {
@@ -43,6 +46,8 @@ export type GearOrder = {
   client_id?: string | null
   contact_name?: string | null
   contact_email?: string | null
+  split_from?: string | null
+  split_cap?: number | null
   list_id: string | null
   es_quote_number: string | null
   status: GearOrderStatus
@@ -206,9 +211,11 @@ export function needsProduct(line: Pick<GearOrderLine, 'gear_item_id' | 'product
   return !line.removed && Boolean(line.gear_item_id) && !line.product
 }
 
-// The ones to fill in first, and the list's own order within each.
-export function productsToFillFirst<T extends Parameters<typeof needsProduct>[0] & { sort_order: number }>(lines: T[]): T[] {
-  return [...lines].sort((a, b) => Number(needsProduct(b)) - Number(needsProduct(a)) || a.sort_order - b.sort_order)
+// What is left to do comes first: lines with no product, then the rest not yet
+// checked off, then what is finished. The list's own order within each.
+export function workFirst<T extends Parameters<typeof needsProduct>[0] & { sort_order: number; checked?: boolean }>(lines: T[]): T[] {
+  const rank = (l: T) => (l.removed ? 3 : l.checked ? 2 : needsProduct(l) ? 0 : 1)
+  return [...lines].sort((a, b) => rank(a) - rank(b) || a.sort_order - b.sort_order)
 }
 
 // The money on the lines still wanted. `unpriced` is reported rather than

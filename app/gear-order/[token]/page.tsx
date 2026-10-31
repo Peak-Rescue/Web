@@ -22,7 +22,12 @@ export default async function GearOrderPage({ params }: { params: Promise<{ toke
     .select('id, instance_id, title, client_id, es_quote_number, status, intro, responded_at, responded_name, client_note, viewed_at, attachments, gear_order_lines(id, name, product, detail, category, qty_offered, qty_wanted, url, unit_price, size_options, sizes, removed, client_note, sort_order)')
     .eq('accept_token', token)
     .maybeSingle()
-  if (!order || order.status === 'draft') notFound()
+  if (!order) notFound()
+
+  // A draft is nobody's to see but ours: an admin gets the team's page, so what
+  // it will say can be read before it goes.
+  const isAdmin = await viewerIsAdmin(admin)
+  if (order.status === 'draft' && !isAdmin) notFound()
 
   // The bucket is private and a token page is not a login, so each file gets
   // its own short-lived URL rather than the client being sent to storage.
@@ -54,7 +59,7 @@ export default async function GearOrderPage({ params }: { params: Promise<{ toke
   const standalone = !order.instance_id
 
   // Our own preview of the client's page doesn't count as the client's open.
-  if (!order.viewed_at && !(await viewerIsAdmin(admin))) {
+  if (!order.viewed_at && !isAdmin) {
     await admin.from('gear_orders').update({ viewed_at: new Date().toISOString() }).eq('id', order.id)
   }
 
@@ -63,6 +68,13 @@ export default async function GearOrderPage({ params }: { params: Promise<{ toke
   return (
     <main className="min-h-screen bg-zinc-950 text-white">
       <div className="max-w-3xl mx-auto px-4 py-12 md:py-16">
+        {isAdmin && (
+          <p className="mb-6 rounded border border-amber-800 bg-amber-950/40 px-3 py-2 text-sm text-amber-200">
+            {order.status === 'draft'
+              ? 'Draft preview. This hasn’t been sent yet, so it can’t be answered.'
+              : 'You’re viewing the team’s page as an admin.'}
+          </p>
+        )}
         <p className="text-xs uppercase tracking-[0.2em] text-pr-red mb-2">Peak Rescue</p>
         <h1 className="text-2xl md:text-3xl font-bold">Gear list — {heading}</h1>
         <p className="text-sm text-zinc-400 mt-1">
@@ -119,6 +131,7 @@ export default async function GearOrderPage({ params }: { params: Promise<{ toke
           defaultNote={order.client_note ?? ''}
           defaultName={order.responded_name ?? ''}
           standalone={standalone}
+          draft={order.status === 'draft'}
         />
 
         <p className="text-xs text-zinc-600 mt-10">
