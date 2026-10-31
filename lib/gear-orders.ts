@@ -200,6 +200,17 @@ export function sizeRows(
   return [...known, ...extra]
 }
 
+// A line still naming only what is needed. A one-off has no catalog item to
+// choose a product under, and a struck-off line needs nothing.
+export function needsProduct(line: Pick<GearOrderLine, 'gear_item_id' | 'product' | 'removed'>): boolean {
+  return !line.removed && Boolean(line.gear_item_id) && !line.product
+}
+
+// The ones to fill in first, and the list's own order within each.
+export function productsToFillFirst<T extends Parameters<typeof needsProduct>[0] & { sort_order: number }>(lines: T[]): T[] {
+  return [...lines].sort((a, b) => Number(needsProduct(b)) - Number(needsProduct(a)) || a.sort_order - b.sort_order)
+}
+
 // The money on the lines still wanted. `unpriced` is reported rather than
 // quietly left out, because a total that skips a line reads as the whole cost.
 export function orderTotal(

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { brandsIn, canonicalBrand } from '@/lib/gear'
-import { cleanSizes, defaultScale, lineNames, orderTotal, parseSizeOptions, safeLink, sizeRange, sizeRows, sizesSummary, sizesTotal } from '@/lib/gear-orders'
+import { cleanSizes, defaultScale, lineNames, needsProduct, orderTotal, parseSizeOptions, safeLink, sizeRange, sizeRows, sizesSummary, sizesTotal, productsToFillFirst } from '@/lib/gear-orders'
 
 describe('orderTotal', () => {
   it('adds up the lines still wanted', () => {
@@ -150,5 +150,27 @@ describe('canonicalBrand', () => {
 describe('brandsIn', () => {
   it('lists each brand once, in order', () => {
     expect(brandsIn([{ brand: 'Petzl' }, { brand: null }, { brand: 'Camp' }, { brand: 'Petzl ' }])).toEqual(['Camp', 'Petzl'])
+  })
+})
+
+describe('lines still needing a product', () => {
+  const line = (over = {}) => ({ gear_item_id: 'i', product: null, removed: false, sort_order: 0, ...over })
+
+  it('means a catalog line with no product chosen', () => {
+    expect(needsProduct(line())).toBe(true)
+    expect(needsProduct(line({ product: 'Testco Shell' }))).toBe(false)
+  })
+
+  it('asks nothing of a struck-off line or a one-off', () => {
+    expect(needsProduct(line({ removed: true }))).toBe(false)
+    expect(needsProduct(line({ gear_item_id: null }))).toBe(false)
+  })
+
+  it('brings them to the top, keeping list order within each group', () => {
+    const filled = line({ sort_order: 0, product: 'Testco Shell' })
+    const skis = line({ sort_order: 1 })
+    const alsoFilled = line({ sort_order: 2, product: 'Testco Pants' })
+    const skins = line({ sort_order: 3 })
+    expect(productsToFillFirst([filled, skis, alsoFilled, skins])).toEqual([skis, skins, filled, alsoFilled])
   })
 })

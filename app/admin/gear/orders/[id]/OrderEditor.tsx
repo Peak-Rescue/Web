@@ -7,7 +7,7 @@ import { fmtMoney } from '@/lib/expenses'
 import { GEAR_CATEGORIES, brandsIn, productName, unwrap } from '@/lib/gear'
 import CategorySelect from '@/app/admin/gear/CategorySelect'
 import {
-  GEAR_ORDER_STATUS_LABEL, GEAR_ORDER_STATUS_STYLE, orderTotal, safeLink, sizeRows,
+  GEAR_ORDER_STATUS_LABEL, GEAR_ORDER_STATUS_STYLE, needsProduct, orderTotal, productsToFillFirst, safeLink, sizeRows,
   type GearOrder, type GearOrderLine,
 } from '@/lib/gear-orders'
 import GearSizeRows from '@/components/GearSizeRows'
@@ -36,6 +36,9 @@ export default function OrderEditor({
   const [adding, setAdding] = useState(false)
   // Rows the picker just wrote, which the catalog prop has not caught up with.
   const [fresh, setFresh] = useState<GearItem[]>([])
+  // The order the sort produced, held still. Sorting live would move a line out
+  // from under you the moment you filled in its last gap. New lines go last.
+  const [sorted, setSorted] = useState<string[] | null>(null)
 
   const run: Run = async (fn) => {
     setBusy(true); setError(null)
@@ -60,6 +63,12 @@ export default function OrderEditor({
   }, [known])
 
   const lines = [...order.gear_order_lines].sort((a, b) => a.sort_order - b.sort_order)
+  const place = (id: string) => {
+    const i = sorted?.indexOf(id) ?? -1
+    return i < 0 ? Infinity : i
+  }
+  const shown = sorted ? [...lines].sort((a, b) => place(a.id) - place(b.id)) : lines
+  const toFill = lines.filter(needsProduct).length
   const { total, unpriced, anyPriced } = orderTotal(
     lines.map((l) => ({ qty: l.qty_wanted, removed: l.removed, unit_price: l.unit_price }))
   )
@@ -142,8 +151,20 @@ export default function OrderEditor({
         {brandsIn(known).map((b) => <option key={b} value={b} />)}
       </datalist>
 
+      {lines.length > 0 && (
+        <div className="flex items-center gap-3 mb-2">
+          {toFill > 0 && <span className="text-xs text-amber-300/80">{toFill} still {toFill === 1 ? 'needs' : 'need'} a product</span>}
+          <button
+            onClick={() => setSorted(sorted ? null : productsToFillFirst(lines).map((l) => l.id))}
+            className="ml-auto text-xs px-2.5 py-1 rounded border border-zinc-700 text-zinc-300 hover:text-white hover:border-zinc-500 transition-colors"
+          >
+            {sorted ? 'List order' : 'No product first'}
+          </button>
+        </div>
+      )}
+
       <div className="space-y-2">
-        {lines.map((l) => (
+        {shown.map((l) => (
           <LineRow key={l.id} line={l} products={productsFor(l, known, childrenOf)} categories={categories} run={run} busy={busy} />
         ))}
       </div>
@@ -368,6 +389,10 @@ function LineRow({
           <TrashIcon />
         </button>
       </div>
+
+      {needsProduct(line) && (
+        <p className="text-[11px] text-amber-300/80 mt-0.5 px-1.5">Needs a product</p>
+      )}
 
       <div className="grid grid-cols-2 sm:grid-cols-[5rem_7rem_1fr] gap-2 mt-2">
         <input
