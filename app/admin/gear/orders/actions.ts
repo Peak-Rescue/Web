@@ -6,6 +6,7 @@ import { upsertGearItem } from '@/app/admin/gear/actions'
 import { linesFromList } from '@/lib/gear-order-lines'
 import { cleanSizes, isSized, lineNames, parseEmails, parseSizeOptions, safeLink, sizesTotal, typedOverCatalog } from '@/lib/gear-orders'
 import { sendMail } from '@/lib/mailer'
+import { greetingNames, parseContacts, type CoursePOC } from '@/lib/contacts'
 
 // Gear orders that belong to no course: a team asks what we would supply, and
 // might buy it from us. Course orders keep their own actions and their own
@@ -67,7 +68,7 @@ export async function createStandaloneOrder(input: {
 export async function updateStandaloneOrder(
   orderId: string,
   patch: {
-    title?: string; clientId?: string | null; contactName?: string | null; contactEmail?: string | null
+    title?: string; clientId?: string | null; contacts?: CoursePOC[]
     intro?: string | null; esQuoteNumber?: string | null; status?: 'closed'; discountPercent?: number | null
     splitCap?: number | null
   }
@@ -80,8 +81,7 @@ export async function updateStandaloneOrder(
     update.title = title
   }
   if (patch.clientId !== undefined) update.client_id = patch.clientId || null
-  if (patch.contactName !== undefined) update.contact_name = patch.contactName?.trim().slice(0, 120) || null
-  if (patch.contactEmail !== undefined) update.contact_email = patch.contactEmail?.trim().slice(0, 1000) || null
+  if (patch.contacts !== undefined) update.contacts = parseContacts(patch.contacts)
   if (patch.intro !== undefined) update.intro = patch.intro?.trim().slice(0, 2000) || null
   if (patch.esQuoteNumber !== undefined) update.es_quote_number = patch.esQuoteNumber?.trim().slice(0, 80) || null
   if (patch.status !== undefined) update.status = patch.status
@@ -388,12 +388,13 @@ export async function sendStandaloneOrder(orderId: string): Promise<{ ok: true }
   const { admin, user } = await requireAdminUser()
   const { data: order } = await admin
     .from('gear_orders')
-    .select('id, title, accept_token, es_quote_number, status, contact_name, contact_email, gear_order_lines(id)')
+    .select('id, title, accept_token, es_quote_number, status, contacts, gear_order_lines(id)')
     .eq('id', orderId).is('instance_id', null)
     .maybeSingle()
   if (!order) return fail('Order not found.')
 
-  const { good: to, bad } = parseEmails(order.contact_email)
+  const contacts = parseContacts(order.contacts)
+  const { good: to, bad } = parseEmails(contacts.flatMap((c) => c.emails).join(','))
   if (bad.length > 0) return fail(`That doesn't look like an email address: ${bad.join(', ')}`)
   if (to.length === 0) return fail('Add a contact email first.')
   if ((order.gear_order_lines ?? []).length === 0) return fail('There is nothing on this order yet.')
@@ -411,7 +412,7 @@ export async function sendStandaloneOrder(orderId: string): Promise<{ ok: true }
       ? `Gear list ${order.es_quote_number} — ${order.title}`
       : `Gear list — ${order.title}`,
     text: [
-      `${order.contact_name || 'Hello'},`,
+      `${greetingNames(contacts) || 'Hello'},`,
       '',
       `Here is the gear list we put together: ${order.title}${order.es_quote_number ? `, quote ${order.es_quote_number}` : ''}.`,
       '',

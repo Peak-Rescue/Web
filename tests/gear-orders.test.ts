@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { brandsIn, canonicalBrand } from '@/lib/gear'
+import { greetingNames } from '@/lib/contacts'
 import { cleanSizes, defaultScale, lineNames, needsProduct, netUnitPrice, orderTotal, parseSizeOptions, safeLink, sizeRange, sizeRows, sizesSummary, sizesTotal, workFirst, isSized, typedOverCatalog, parseEmails } from '@/lib/gear-orders'
 
 describe('orderTotal', () => {
@@ -241,5 +242,20 @@ describe('lines still needing a product', () => {
     const skins = line({ sort_order: 3 })
     const struck = line({ sort_order: 4, removed: true })
     expect(workFirst([done, skis, unchecked, skins, struck])).toEqual([skis, skins, unchecked, done, struck])
+  })
+})
+
+describe('greetingNames', () => {
+  const poc = (name: string) => ({ name, phones: [], emails: [] })
+
+  it('names everyone the mail is going to', () => {
+    expect(greetingNames([poc('Noah Werner')])).toBe('Noah Werner')
+    expect(greetingNames([poc('Noah Werner'), poc('Sam Ortiz')])).toBe('Noah Werner and Sam Ortiz')
+    expect(greetingNames([poc('A'), poc(''), poc('B'), poc('C')])).toBe('A, B and C')
+  })
+
+  it('has nothing to say with no names', () => {
+    expect(greetingNames([poc('')])).toBeNull()
+    expect(greetingNames([])).toBeNull()
   })
 })

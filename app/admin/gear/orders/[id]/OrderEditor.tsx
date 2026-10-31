@@ -12,6 +12,8 @@ import {
 } from '@/lib/gear-orders'
 import GearSizeRows from '@/components/GearSizeRows'
 import ClientPicker from '@/components/ClientPicker'
+import CourseContactsEditor from '@/components/CourseContactsEditor'
+import { parseContacts } from '@/lib/contacts'
 import type { ClientRow } from '@/lib/clients'
 import SizeOptionsField from '@/components/SizeOptionsField'
 import PdfLink from '@/components/PdfLink'
@@ -139,21 +141,11 @@ export default function OrderEditor({
               onChange={(id) => saveOrder({ clientId: id })}
             />
           </div>
-          <Field label="Contact name">
-            <input
-              defaultValue={order.contact_name ?? ''}
-              onBlur={(e) => { if (e.target.value.trim() !== (order.contact_name ?? '')) saveOrder({ contactName: e.target.value }) }}
-              className={`${input} w-full`}
-            />
-          </Field>
-          <Field label="Contact emails">
-            <input
-              title="Separate more than one with commas"
-              defaultValue={order.contact_email ?? ''}
-              onBlur={(e) => { if (e.target.value.trim() !== (order.contact_email ?? '')) saveOrder({ contactEmail: e.target.value }) }}
-              className={`${input} w-full`}
-            />
-          </Field>
+          <CourseContactsEditor
+            initial={parseContacts(order.contacts)}
+            hideBilling
+            onSave={(contacts) => saveOrder({ contacts })}
+          />
         </div>
         <div className="grid sm:grid-cols-2 gap-3">
           <Field label="ES quote number">

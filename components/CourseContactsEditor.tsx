@@ -1,6 +1,6 @@
 'use client'
 
-import { Fragment, useRef, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import type { CoursePOC } from '@/lib/contacts'
 import TrashIcon from '@/components/TrashIcon'
 import FileContactCard from '@/components/FileContactCard'
@@ -79,8 +79,15 @@ function labelFor(pocs: CoursePOC[], i: number) {
 export default function CourseContactsEditor({
   initial,
   instanceId,
+  onSave,
+  hideBilling = false,
 }: {
   initial: CoursePOC[]
+  /** For a page with no form around it: called with the list whenever it has
+      changed, as focus leaves a field or a row goes. */
+  onSave?: (contacts: CoursePOC[]) => void
+  /** Who gets invoiced is a question for a course, not for a gear list. */
+  hideBilling?: boolean
   /** Absent while the course is still being created: there is nothing to
       file a person against until it exists. */
   instanceId?: string
@@ -113,6 +120,22 @@ export default function CourseContactsEditor({
     }))
     .filter((p) => p.name || p.phones.length || p.emails.length)
 
+  const savedRef = useRef(JSON.stringify(cleaned))
+  const saveNext = useRef(false)
+  const commit = () => {
+    const now = JSON.stringify(cleaned)
+    if (!onSave || now === savedRef.current) return
+    savedRef.current = now
+    onSave(cleaned)
+  }
+  // A row removed has no field to blur, so it saves once the list has redrawn.
+  useEffect(() => {
+    if (saveNext.current) {
+      saveNext.current = false
+      commit()
+    }
+  })
+
   function update(mut: (next: CoursePOC[]) => void, opts?: { notify?: boolean }) {
     setPocs((prev) => {
       const next = structuredClone(prev)
@@ -120,13 +143,14 @@ export default function CourseContactsEditor({
       return next
     })
     if (opts?.notify) {
+      saveNext.current = true
       // Wait a tick so the hidden input re-renders with the new value first.
       queueMicrotask(() => hiddenRef.current?.dispatchEvent(new Event('input', { bubbles: true })))
     }
   }
 
   return (
-    <div className="sm:col-span-2 space-y-4">
+    <div className="sm:col-span-2 space-y-4" onBlur={commit}>
       <input ref={hiddenRef} type="hidden" name="contacts_json" value={JSON.stringify(cleaned)} readOnly />
       {pocs.map((p, i) => (
         <Fragment key={i}>
@@ -242,7 +266,7 @@ export default function CourseContactsEditor({
           Unticking asks first when the row has anything in it. Somebody typed
           that person's details, and a checkbox that silently throws away
           typing is a checkbox people stop trusting. */}
-      <label className="flex items-center gap-2 text-xs text-zinc-400 cursor-pointer w-fit">
+      {!hideBilling && <label className="flex items-center gap-2 text-xs text-zinc-400 cursor-pointer w-fit">
         <input
           type="checkbox"
           checked={hasBilling}
@@ -265,7 +289,7 @@ export default function CourseContactsEditor({
           className="accent-pr-red"
         />
         Bill someone other than the point of contact
-      </label>
+      </label>}
 
     </div>
   )

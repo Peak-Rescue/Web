@@ -47,6 +47,7 @@ export type GearOrder = {
   client_id?: string | null
   contact_name?: string | null
   contact_email?: string | null
+  contacts?: unknown
   split_from?: string | null
   split_cap?: number | null
   discount_percent?: number | null

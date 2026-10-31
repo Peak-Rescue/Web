@@ -117,6 +117,14 @@ export function withInvoiceContact(
   return untagged.map((c, j) => (j === i ? { ...filled, role: 'billing' } : c))
 }
 
+// How a mail to everyone on a list opens: "Noah Werner and Sam Ortiz".
+export function greetingNames(contacts: CoursePOC[]): string | null {
+  const names = contacts.map((c) => c.name).filter(Boolean)
+  if (names.length === 0) return null
+  if (names.length === 1) return names[0]
+  return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
+}
+
 // Every other email on file — offered as opt-in CCs when sending a quote.
 // The billing POC is in here: copying them on the quote is a choice worth
 // offering, just not one worth making for you.
