@@ -11,6 +11,7 @@ import {
   type GearOrder, type GearOrderLine,
 } from '@/lib/gear-orders'
 import GearSizeRows from '@/components/GearSizeRows'
+import SizeOptionsField from '@/components/SizeOptionsField'
 import PdfLink from '@/components/PdfLink'
 import TrashIcon from '@/components/TrashIcon'
 import {
@@ -269,9 +270,9 @@ function NewProduct({ lineId, run, busy }: { lineId: string; run: Run; busy: boo
         })
       }}
     >
-      <input aria-label="Brand" placeholder="Brand" value={brand} onChange={(e) => setBrand(e.target.value)} className={`${input} w-36 text-xs`} />
-      <input autoFocus aria-label="Model" placeholder="Model" value={model} onChange={(e) => setModel(e.target.value)} className={`${input} min-w-0 flex-1 text-xs`} />
-      <button type="submit" disabled={busy || !model.trim()} className="text-xs text-zinc-300 hover:text-white disabled:opacity-40">Add</button>
+      <input autoFocus aria-label="Brand" placeholder="Brand" value={brand} onChange={(e) => setBrand(e.target.value)} className={`${input} w-36 text-xs`} />
+      <input aria-label="Model" placeholder="Model" value={model} onChange={(e) => setModel(e.target.value)} className={`${input} min-w-0 flex-1 text-xs`} />
+      <button type="submit" disabled={busy || !model.trim() || !brand.trim()} className="text-xs text-zinc-300 hover:text-white disabled:opacity-40">Add</button>
       <button type="button" onClick={() => setOpen(false)} className="text-xs text-zinc-600 hover:text-zinc-300">Cancel</button>
     </form>
   )
@@ -294,15 +295,13 @@ function LineSizes({
 
   return (
     <div className="mt-2">
-      <input
-        aria-label="Sizes on offer"
-        placeholder="Sizes on offer"
-        title="Separated by commas. Leave empty and sizes can be typed instead."
-        defaultValue={options.join(', ')}
-        onBlur={(e) => {
-          if (e.target.value.trim() !== options.join(', ')) save({ sizeOptions: e.target.value })
-        }}
-        className={`${input} w-full text-xs`}
+      <SizeOptionsField
+        value={options}
+        category={line.category}
+        name={line.name}
+        disabled={busy}
+        onCommit={(next) => save({ sizeOptions: next.join(', ') })}
+        input={input}
       />
       <GearSizeRows
         fixed={options.length > 0 && rows.length === options.length}

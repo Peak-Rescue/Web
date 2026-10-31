@@ -267,6 +267,7 @@ export async function addLineProduct(
 
   const model = input.model.trim()
   if (!model) return fail('Name the model.')
+  if (!input.brand.trim()) return fail('Add the brand.')
   const made = await upsertGearItem({
     name: model, brand: input.brand.trim() || null, parentId: item.parent_id ?? item.id,
   })

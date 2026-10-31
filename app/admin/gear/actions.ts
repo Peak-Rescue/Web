@@ -95,6 +95,12 @@ export async function upsertGearItem(input: {
   if (input.sizes !== undefined) row.sizes = input.sizes
   if (input.category !== undefined) row.category = input.category?.trim() || null
   if (!row.name) return fail('Name is required')
+  // A product is somebody's product. Every add form sends through here, so this
+  // is the one place a brand can be asked for; without it a product reads as a
+  // bare model name beside the "Black Diamond Recon Shell" above it.
+  if (!input.id && input.parentId && !input.brand?.trim()) {
+    return fail(`Add the brand for ${row.name}.`)
+  }
   if (input.aliases !== undefined) {
     row.aliases = [...new Set(input.aliases.map((a) => a.trim().toLowerCase()).filter(Boolean))]
   }

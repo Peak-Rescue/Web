@@ -107,6 +107,58 @@ export function parseSizeOptions(text: string): string[] {
   return out.slice(0, 50)
 }
 
+// The patterns sizes actually come in. Skis, poles and hardware follow none,
+// so those stay typed. Rope is sold by the length: 10 m steps, rarely 5. Some
+// footwear comes in half sizes and some doesn't, so the step is asked.
+export type SizeScaleId = 'letter' | 'eu' | 'us' | 'mondo' | 'metres'
+export const SIZE_SCALES: Record<SizeScaleId, {
+  label: string
+  values?: readonly string[]
+  from: number | string
+  to: number | string
+  step: number
+  steps: readonly number[]
+  prefix: string
+  suffix: string
+}> = {
+  letter: { label: 'S, M, L', values: ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL'], from: 'S', to: 'XL', step: 1, steps: [1], prefix: '', suffix: '' },
+  eu: { label: 'Footwear EU', from: 38, to: 47, step: 1, steps: [1, 0.5], prefix: 'EU ', suffix: '' },
+  us: { label: 'Footwear US', from: 6, to: 13, step: 1, steps: [1, 0.5], prefix: 'US ', suffix: '' },
+  mondo: { label: 'Ski boots, mondo', from: 24.5, to: 30.5, step: 0.5, steps: [0.5, 1], prefix: 'Mondo ', suffix: '' },
+  metres: { label: 'Length, metres', from: 30, to: 100, step: 10, steps: [10, 5], prefix: '', suffix: ' m' },
+}
+
+// Written out from a range. Backwards still means the same sizes, and a range
+// too big for a line stops at what a line can hold.
+export function sizeRange(id: SizeScaleId, from: string | number, to: string | number, step: number): string[] {
+  const scale = SIZE_SCALES[id]
+  if (scale.values) {
+    const a = scale.values.indexOf(String(from))
+    const b = scale.values.indexOf(String(to))
+    if (a < 0 || b < 0) return []
+    return scale.values.slice(Math.min(a, b), Math.max(a, b) + 1)
+  }
+  const a = Number(from)
+  const b = Number(to)
+  if (!Number.isFinite(a) || !Number.isFinite(b) || !(step > 0) || String(from) === '' || String(to) === '') return []
+  const low = Math.min(a, b)
+  const high = Math.max(a, b)
+  const out: string[] = []
+  // Counted rather than added up, so half sizes never drift off the half.
+  for (let i = 0; low + i * step <= high && out.length < 50; i++) {
+    out.push(`${scale.prefix}${low + i * step}${scale.suffix}`)
+  }
+  return out
+}
+
+// The scale a range opens on, as a guess at the common case for this gear.
+export function defaultScale(item: { category?: string | null; name?: string | null }): SizeScaleId {
+  if (/rope|cord/i.test(item.category ?? '') || /\brope\b/i.test(item.name ?? '')) return 'metres'
+  if (/ski.?boot/i.test(item.name ?? '')) return 'mondo'
+  if (/boot|shoe|footwear/i.test(item.name ?? '')) return 'eu'
+  return 'letter'
+}
+
 // What gets stored. Empty rows go, and the same size typed twice is one size
 // with both numbers on it, so the summary never reads "M × 2, M × 1".
 export function cleanSizes(rows: { size: string; qty: number | string }[] | null | undefined): GearOrderSize[] {

@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react'
 import { useSteadyRefresh } from '@/components/useSteadyRefresh'
 import { GEAR_CATEGORIES, matchesGear, unwrap, type CatalogItem } from '@/lib/gear'
-import { parseSizeOptions } from '@/lib/gear-orders'
+import SizeOptionsField from '@/components/SizeOptionsField'
 import { upsertGearItem, retireGearItem, renameGearCategory } from './actions'
 import CategorySelect, { NEW_TYPE } from './CategorySelect'
 
@@ -115,6 +115,7 @@ export default function GearCatalog({ items }: { items: Row[] }) {
   // Which product has its link line open. A link is set once and read by
   // clicking, so it earns an icon and not a field on every row.
   const [linking, setLinking] = useState<string | null>(null)
+  const [sizing, setSizing] = useState<string | null>(null)
   // Which row is having a note written on it. Same shape as `linking`: the
   // field is a line of its own, so it opens on a press rather than on the
   // pointer passing over.
@@ -265,19 +266,13 @@ export default function GearCatalog({ items }: { items: Row[] }) {
               }}
               className={`${input} w-20 py-0.5 text-[11px]`}
             />
-            <input
-              aria-label={`Sizes of ${row.name}`}
-              title="Sizes, separated by commas"
-              placeholder="Sizes"
-              defaultValue={(row.sizes ?? []).join(', ')}
-              onBlur={(e) => {
-                const next = parseSizeOptions(e.target.value)
-                if (next.join() !== (row.sizes ?? []).join()) {
-                  run(() => upsertGearItem({ id: row.id, name: row.name, sizes: next }))
-                }
-              }}
-              className={`${input} w-24 py-0.5 text-[11px]`}
-            />
+            <button
+              onClick={() => setSizing(sizing === row.id ? null : row.id)}
+              title={(row.sizes ?? []).length ? (row.sizes ?? []).join(', ') : 'Add sizes'}
+              className={`text-[11px] transition-colors ${(row.sizes ?? []).length ? 'text-zinc-500 hover:text-white' : 'text-zinc-700 hover:text-white'}`}
+            >
+              sizes
+            </button>
             {row.url && (
               <a
                 href={row.url} target="_blank" rel="noreferrer"
@@ -447,6 +442,19 @@ export default function GearCatalog({ items }: { items: Row[] }) {
             placeholder="https://…"
             className={`${input} mt-1 w-full text-[11px]`}
           />
+        )}
+
+        {sizing === row.id && (
+          <div className="mt-1">
+            <SizeOptionsField
+              value={row.sizes ?? []}
+              category={row.category}
+              name={row.name}
+              disabled={busy}
+              onCommit={(next) => run(() => upsertGearItem({ id: row.id, name: row.name, sizes: next }))}
+              input={input}
+            />
+          </div>
         )}
       </div>
     )
@@ -679,7 +687,7 @@ function AddProduct({
       />
       <button
         onClick={submit}
-        disabled={busy || !name.trim()}
+        disabled={busy || !name.trim() || !brand.trim()}
         className="px-3 py-1 rounded bg-pr-red hover:bg-pr-red-dark text-white text-xs font-medium transition-colors disabled:opacity-40"
       >
         Add

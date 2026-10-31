@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { cleanSizes, lineNames, orderTotal, parseSizeOptions, safeLink, sizeRows, sizesSummary, sizesTotal } from '@/lib/gear-orders'
+import { cleanSizes, defaultScale, lineNames, orderTotal, parseSizeOptions, safeLink, sizeRange, sizeRows, sizesSummary, sizesTotal } from '@/lib/gear-orders'
 
 describe('orderTotal', () => {
   it('adds up the lines still wanted', () => {
@@ -88,5 +88,42 @@ describe('sizes', () => {
       { size: 'S', qty: '' }, { size: 'M', qty: '2' }, { size: 'XXL', qty: '1' },
     ])
     expect(sizeRows([], null)).toEqual([])
+  })
+})
+
+describe('size ranges', () => {
+  it('writes out clothing from one size to another', () => {
+    expect(sizeRange('letter', 'S', 'XL', 1)).toEqual(['S', 'M', 'L', 'XL'])
+    expect(sizeRange('letter', 'XL', 'S', 1)).toEqual(['S', 'M', 'L', 'XL'])
+  })
+
+  it('writes out footwear, half sizes included', () => {
+    expect(sizeRange('eu', 42, 44, 1)).toEqual(['EU 42', 'EU 43', 'EU 44'])
+    expect(sizeRange('us', 9, 10, 0.5)).toEqual(['US 9', 'US 9.5', 'US 10'])
+  })
+
+  it('writes out ski boots in mondo', () => {
+    expect(sizeRange('mondo', 26, 27, 0.5)).toEqual(['Mondo 26', 'Mondo 26.5', 'Mondo 27'])
+  })
+
+  it('steps rope by the length', () => {
+    expect(sizeRange('metres', 30, 60, 10)).toEqual(['30 m', '40 m', '50 m', '60 m'])
+    expect(sizeRange('metres', 30, 40, 5)).toEqual(['30 m', '35 m', '40 m'])
+  })
+
+  it('gives nothing for a range that is not one', () => {
+    expect(sizeRange('metres', '', 60, 10)).toEqual([])
+    expect(sizeRange('letter', 'nope', 'XL', 1)).toEqual([])
+  })
+
+  it('stays within what a line can hold', () => {
+    expect(sizeRange('metres', 1, 100000, 5)).toHaveLength(50)
+  })
+
+  it('opens on the likely scale', () => {
+    expect(defaultScale({ category: 'Rope and cord', name: 'Static rope' })).toBe('metres')
+    expect(defaultScale({ category: 'Snow travel', name: 'Ski boots' })).toBe('mondo')
+    expect(defaultScale({ category: 'Clothing and exposure', name: 'Mountain boot' })).toBe('eu')
+    expect(defaultScale({ category: 'Clothing and exposure', name: 'Gloves' })).toBe('letter')
   })
 })

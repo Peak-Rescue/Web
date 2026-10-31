@@ -2016,7 +2016,7 @@ function Row({
                 />
                 <button
                   onClick={addNew}
-                  disabled={busy || !newModel.trim()}
+                  disabled={busy || !newModel.trim() || !newBrand.trim()}
                   title="Adds it to the gear catalog and puts it on this line"
                   className="shrink-0 text-xs px-2 py-1.5 rounded bg-pr-red hover:bg-pr-red-dark text-white transition-colors disabled:opacity-40"
                 >
@@ -2415,7 +2415,7 @@ export function AddGear({
                 </datalist>
               </div>
               <div>
-                <label className="block text-[11px] text-zinc-500 mb-1">Brand <span className="text-zinc-600">— optional</span></label>
+                <label className="block text-[11px] text-zinc-500 mb-1">Brand</label>
                 <input
                   value={newItemBrand}
                   onChange={(e) => setNewItemBrand(e.target.value)}
@@ -2424,7 +2424,7 @@ export function AddGear({
                 />
               </div>
               <div>
-                <label className="block text-[11px] text-zinc-500 mb-1">Model <span className="text-zinc-600">— optional</span></label>
+                <label className="block text-[11px] text-zinc-500 mb-1">Model</label>
                 <input
                   value={newModel}
                   onChange={(e) => setNewModel(e.target.value)}
