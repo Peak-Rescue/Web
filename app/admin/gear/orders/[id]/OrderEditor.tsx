@@ -125,56 +125,61 @@ export default function OrderEditor({
 
       {error && <p className="text-sm text-pr-red mb-3">{error}</p>}
 
-      <div className="grid sm:grid-cols-2 gap-3 mb-6">
-        {/* Not a Field: a label around this would send every click inside it to
-            the picker's first control. */}
-        <div className="sm:col-span-2">
-          <span className="block text-[11px] text-zinc-500 mb-1">Client</span>
-          <ClientPicker
-            clients={clients}
-            defaultId={order.client_id ?? null}
-            name="order_client_id"
-            onChange={(id) => saveOrder({ clientId: id })}
-          />
+      <div className="space-y-3 mb-6">
+        {/* Who it goes to, together, since that is one question. */}
+        <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-3 grid sm:grid-cols-2 gap-3">
+          {/* Not a Field: a label around this would send every click inside it to
+              the picker's first control. */}
+          <div className="sm:col-span-2">
+            <span className="block text-[11px] text-zinc-500 mb-1">Client</span>
+            <ClientPicker
+              clients={clients}
+              defaultId={order.client_id ?? null}
+              name="order_client_id"
+              onChange={(id) => saveOrder({ clientId: id })}
+            />
+          </div>
+          <Field label="Contact name">
+            <input
+              defaultValue={order.contact_name ?? ''}
+              onBlur={(e) => { if (e.target.value.trim() !== (order.contact_name ?? '')) saveOrder({ contactName: e.target.value }) }}
+              className={`${input} w-full`}
+            />
+          </Field>
+          <Field label="Contact emails">
+            <input
+              title="Separate more than one with commas"
+              defaultValue={order.contact_email ?? ''}
+              onBlur={(e) => { if (e.target.value.trim() !== (order.contact_email ?? '')) saveOrder({ contactEmail: e.target.value }) }}
+              className={`${input} w-full`}
+            />
+          </Field>
         </div>
-        <Field label="ES quote number">
-          <input
-            defaultValue={order.es_quote_number ?? ''}
-            onBlur={(e) => { if (e.target.value.trim() !== (order.es_quote_number ?? '')) saveOrder({ esQuoteNumber: e.target.value }) }}
-            className={`${input} w-full font-mono`}
-          />
-        </Field>
-        <Field label="Contact name">
-          <input
-            defaultValue={order.contact_name ?? ''}
-            onBlur={(e) => { if (e.target.value.trim() !== (order.contact_name ?? '')) saveOrder({ contactName: e.target.value }) }}
-            className={`${input} w-full`}
-          />
-        </Field>
-        <Field label="Contact emails">
-          <input
-            title="Separate more than one with commas"
-            defaultValue={order.contact_email ?? ''}
-            onBlur={(e) => { if (e.target.value.trim() !== (order.contact_email ?? '')) saveOrder({ contactEmail: e.target.value }) }}
-            className={`${input} w-full`}
-          />
-        </Field>
-        <Field label="Order discount %">
-          <input
-            type="number"
-            min={0}
-            max={100}
-            step="0.5"
-            value={orderPercent}
-            onChange={(e) => setOrderPercent(e.target.value)}
-            onBlur={(e) => {
-              const v = e.target.value === '' ? null : Number(e.target.value)
-              if (v !== (order.discount_percent == null ? null : Number(order.discount_percent))) saveOrder({ discountPercent: v })
-            }}
-            className={`${input} w-full`}
-          />
-        </Field>
-        <div className="sm:col-span-2">
+        <div className="grid sm:grid-cols-2 gap-3">
+          <Field label="ES quote number">
+            <input
+              defaultValue={order.es_quote_number ?? ''}
+              onBlur={(e) => { if (e.target.value.trim() !== (order.es_quote_number ?? '')) saveOrder({ esQuoteNumber: e.target.value }) }}
+              className={`${input} w-full font-mono`}
+            />
+          </Field>
+          <Field label="Order discount %">
+            <input
+              type="number"
+              min={0}
+              max={100}
+              step="0.5"
+              value={orderPercent}
+              onChange={(e) => setOrderPercent(e.target.value)}
+              onBlur={(e) => {
+                const v = e.target.value === '' ? null : Number(e.target.value)
+                if (v !== (order.discount_percent == null ? null : Number(order.discount_percent))) saveOrder({ discountPercent: v })
+              }}
+              className={`${input} w-full`}
+            />
+          </Field>
+        </div>
+        <div>
           <Field label="Intro">
             <textarea
               rows={2}
