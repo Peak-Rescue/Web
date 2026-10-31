@@ -164,6 +164,27 @@ async function ownLine(admin: Awaited<ReturnType<typeof requireAdminUser>>['admi
   }
 }
 
+// The first link, price or size list a product is ever given goes back to the
+// catalog, so it is only entered once. Filling a gap and never replacing a
+// value: a deal's price on one order is not the new price for everyone. Products
+// only, since "Skis" has no price or product page of its own.
+async function fillCatalogGaps(
+  admin: Awaited<ReturnType<typeof requireAdminUser>>['admin'],
+  item: Item,
+  given: { url?: string | null; price?: number | null; options?: string[] }
+) {
+  if (!item.parent_id) return
+  const fill: Record<string, unknown> = {}
+  if (given.url && !item.url) fill.url = given.url
+  if (given.price != null && item.price == null) fill.price = given.price
+  if (given.options?.length && !item.sizes?.length) fill.sizes = given.options
+  if (Object.keys(fill).length > 0) {
+    const { error } = await admin.from('gear_items').update(fill).eq('id', item.id)
+    if (error) throw new Error(error.message)
+    revalidatePath('/admin/gear')
+  }
+}
+
 export async function updateStandaloneLine(
   lineId: string,
   patch: {
@@ -204,23 +225,9 @@ export async function updateStandaloneLine(
   const { error } = await admin.from('gear_order_lines').update(update).eq('id', lineId)
   if (error) throw new Error(error.message)
 
-  // The first link, price or size list a product is ever given goes back to the catalog,
-  // so it is only entered once. Filling a gap and never replacing a value: a
-  // deal's price on one order is not the new price for everyone. Products only,
-  // since "Skis" has no price or product page of its own.
   if (line.gear_item_id && (url || price != null || options?.length)) {
     const { data } = await admin.from('gear_items').select(ITEM_COLUMNS).eq('id', line.gear_item_id).maybeSingle()
-    const item = data as Item | null
-    if (item?.parent_id) {
-      const fill: Record<string, unknown> = {}
-      if (url && !item.url) fill.url = url
-      if (price != null && item.price == null) fill.price = price
-      if (options?.length && !item.sizes?.length) fill.sizes = options
-      if (Object.keys(fill).length > 0) {
-        await admin.from('gear_items').update(fill).eq('id', item.id)
-        revalidatePath('/admin/gear')
-      }
-    }
+    if (data) await fillCatalogGaps(admin, data as Item, { url, price, options })
   }
   touch(line.order_id)
   return { ok: true }
@@ -247,6 +254,14 @@ export async function setLineProduct(lineId: string, gearItemId: string): Promis
     size_options: item.sizes?.length ? item.sizes : (line.product ? [] : line.size_options),
   }).eq('id', lineId)
   if (error) throw new Error(error.message)
+
+  // What was typed on a generic line was about the product just chosen for it.
+  // A swap's values were about the product that left, so those stay out.
+  if (!line.product) {
+    await fillCatalogGaps(admin, item, {
+      url: safeLink(line.url), price: line.unit_price, options: line.size_options,
+    })
+  }
   touch(line.order_id)
   return { ok: true }
 }
