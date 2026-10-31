@@ -297,25 +297,17 @@ function LineSizes({
     if (JSON.stringify(next) !== before) save({ sizes: next })
   }
 
+  if (rows.length === 0) return null
   return (
-    <div className="mt-2">
-      <SizeOptionsField
-        value={options}
-        category={line.category}
-        name={line.name}
-        disabled={busy}
-        onCommit={(next) => save({ sizeOptions: next.join(', ') })}
-        input={input}
-      />
-      <GearSizeRows
-        fixed={options.length > 0 && rows.length === options.length}
-        rows={rows}
-        onChange={setRows}
-        onCommit={commit}
-        disabled={busy}
-        input={input}
-      />
-    </div>
+    <GearSizeRows
+      canAdd={false}
+      fixed={options.length > 0 && rows.length === options.length}
+      rows={rows}
+      onChange={setRows}
+      onCommit={commit}
+      disabled={busy}
+      input={input}
+    />
   )
 }
 
@@ -447,12 +439,21 @@ function LineRow({
 
       {line.gear_item_id && <NewProduct lineId={line.id} run={run} busy={busy} />}
 
-      <LineSizes
-        key={JSON.stringify([line.size_options, line.sizes])}
-        line={line}
-        busy={busy}
-        save={save}
-      />
+      <div className="mt-2">
+        <SizeOptionsField
+          value={line.size_options ?? []}
+          category={line.category}
+          name={line.name}
+          onCommit={(next) => save({ sizeOptions: next.join(', ') })}
+          input={input}
+        />
+        <LineSizes
+          key={JSON.stringify([line.size_options, line.sizes])}
+          line={line}
+          busy={busy}
+          save={save}
+        />
+      </div>
 
       <input
         key={`note-${line.detail}`}

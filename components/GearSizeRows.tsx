@@ -9,7 +9,7 @@ import type { SizeRow } from '@/lib/gear-orders'
 // Known sizes are a box each. Otherwise sizes are typed, because a ski length
 // or a boot's mondo is no list of ours to require.
 export default function GearSizeRows({
-  fixed, rows, onChange, onCommit, disabled, input,
+  fixed, rows, onChange, onCommit, disabled, input, canAdd = true,
 }: {
   /** The line has a size list, so the sizes themselves aren't editable here. */
   fixed: boolean
@@ -18,6 +18,8 @@ export default function GearSizeRows({
   onCommit?: (rows: SizeRow[]) => void
   disabled?: boolean
   input: string
+  /** Off where the sizes are added somewhere else on the screen. */
+  canAdd?: boolean
 }) {
   const set = (i: number, patch: Partial<SizeRow>) =>
     onChange(rows.map((r, j) => (j === i ? { ...r, ...patch } : r)))
@@ -69,7 +71,7 @@ export default function GearSizeRows({
           )}
         </div>
       ))}
-      {!fixed && (
+      {!fixed && canAdd && (
         <button
           type="button"
           disabled={disabled}

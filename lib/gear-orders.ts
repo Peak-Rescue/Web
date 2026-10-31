@@ -110,7 +110,7 @@ export function parseSizeOptions(text: string): string[] {
 // The patterns sizes actually come in. Skis, poles and hardware follow none,
 // so those stay typed. Rope is sold by the length: 10 m steps, rarely 5. Some
 // footwear comes in half sizes and some doesn't, so the step is asked.
-export type SizeScaleId = 'letter' | 'eu' | 'us' | 'mondo' | 'metres'
+export type SizeScaleId = 'letter' | 'paired' | 'eu' | 'us' | 'mondo' | 'metres'
 export const SIZE_SCALES: Record<SizeScaleId, {
   label: string
   values?: readonly string[]
@@ -121,7 +121,9 @@ export const SIZE_SCALES: Record<SizeScaleId, {
   prefix: string
   suffix: string
 }> = {
-  letter: { label: 'Clothing', values: ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL'], from: 'S', to: 'XL', step: 1, steps: [1], prefix: '', suffix: '' },
+  letter: { label: 'Letter sizes', values: ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL'], from: 'S', to: 'XL', step: 1, steps: [1], prefix: '', suffix: '' },
+  // Harnesses and packs often straddle two sizes.
+  paired: { label: 'Paired sizes', values: ['XS/S', 'S/M', 'M/L', 'L/XL', 'XL/XXL'], from: 'S/M', to: 'L/XL', step: 1, steps: [1], prefix: '', suffix: '' },
   eu: { label: 'Footwear EU', from: 38, to: 47, step: 1, steps: [1, 0.5], prefix: 'EU ', suffix: '' },
   us: { label: 'Footwear US', from: 6, to: 13, step: 1, steps: [1, 0.5], prefix: 'US ', suffix: '' },
   mondo: { label: 'Ski boots, mondo', from: 24.5, to: 30.5, step: 0.5, steps: [0.5, 1], prefix: 'Mondo ', suffix: '' },

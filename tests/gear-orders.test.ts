@@ -98,6 +98,10 @@ describe('size ranges', () => {
     expect(sizeRange('letter', 'XL', 'S', 1)).toEqual(['S', 'M', 'L', 'XL'])
   })
 
+  it('writes out paired sizes', () => {
+    expect(sizeRange('paired', 'S/M', 'M/L', 1)).toEqual(['S/M', 'M/L'])
+  })
+
   it('writes out footwear, half sizes included', () => {
     expect(sizeRange('eu', 42, 44, 1)).toEqual(['EU 42', 'EU 43', 'EU 44'])
     expect(sizeRange('us', 9, 10, 0.5)).toEqual(['US 9', 'US 9.5', 'US 10'])

@@ -450,7 +450,6 @@ export default function GearCatalog({ items }: { items: Row[] }) {
               value={row.sizes ?? []}
               category={row.category}
               name={row.name}
-              disabled={busy}
               onCommit={(next) => run(() => upsertGearItem({ id: row.id, name: row.name, sizes: next }))}
               input={input}
             />
