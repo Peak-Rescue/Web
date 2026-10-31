@@ -7,7 +7,7 @@ import { fmtMoney } from '@/lib/expenses'
 import { GEAR_CATEGORIES, brandsIn, productName, unwrap } from '@/lib/gear'
 import CategorySelect from '@/app/admin/gear/CategorySelect'
 import {
-  GEAR_ORDER_STATUS_LABEL, GEAR_ORDER_STATUS_STYLE, isSized, needsProduct, netUnitPrice, orderTotal, sizesTotal, workFirst, safeLink, sizeRows,
+  GEAR_ORDER_STATUS_LABEL, GEAR_ORDER_STATUS_STYLE, isSized, needsProduct, netUnitPrice, orderTotal, typedOverCatalog, sizesTotal, workFirst, safeLink, sizeRows,
   type GearOrder, type GearOrderLine,
 } from '@/lib/gear-orders'
 import GearSizeRows from '@/components/GearSizeRows'
@@ -18,7 +18,7 @@ import { planSplit } from '@/lib/gear-order-split'
 import TrashIcon from '@/components/TrashIcon'
 import {
   addCatalogLine, addLineProduct, addOneOffLine, deleteStandaloneLine, deleteStandaloneOrder, sendStandaloneOrder,
-  setLineCategory, setLineProduct, splitStandaloneOrder, undoStandaloneSplit, updateStandaloneLine, updateStandaloneOrder,
+  saveLineToCatalog, setLineCategory, setLineProduct, splitStandaloneOrder, undoStandaloneSplit, updateStandaloneLine, updateStandaloneOrder,
 } from '../actions'
 
 const input = 'bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-zinc-500'
@@ -357,10 +357,23 @@ function productsFor(line: GearOrderLine, catalog: GearItem[], childrenOf: Map<s
 
 // The product menu only lists what the catalog holds, so the first product of
 // anything has to start somewhere. Here, on the line that wants it.
-function NewProduct({ lineId, run, busy }: { lineId: string; run: Run; busy: boolean }) {
+//
+// Link and price are asked here, and start with whatever is typed on the line
+// but isn't the current product's: that is usually this new product's, entered
+// a step early. Shown rather than assumed, so a wrong guess can be cleared.
+function NewProduct({
+  lineId, typed, run, busy,
+}: {
+  lineId: string
+  typed: { url: string | null; price: number | null }
+  run: Run
+  busy: boolean
+}) {
   const [open, setOpen] = useState(false)
   const [brand, setBrand] = useState('')
   const [model, setModel] = useState('')
+  const [url, setUrl] = useState(typed.url ?? '')
+  const [price, setPrice] = useState(typed.price == null ? '' : String(typed.price))
 
   if (!open) {
     return (
@@ -378,13 +391,15 @@ function NewProduct({ lineId, run, busy }: { lineId: string; run: Run; busy: boo
       onSubmit={(e) => {
         e.preventDefault()
         run(async () => {
-          unwrap(await addLineProduct(lineId, { brand, model }))
+          unwrap(await addLineProduct(lineId, { brand, model, url, price: price === '' ? null : Number(price) }))
           setOpen(false); setBrand(''); setModel('')
         })
       }}
     >
       <input autoFocus list="gear-brands" aria-label="Brand" placeholder="Brand" value={brand} onChange={(e) => setBrand(e.target.value)} className={`${input} w-36 text-xs`} />
       <input aria-label="Model" placeholder="Model" value={model} onChange={(e) => setModel(e.target.value)} className={`${input} min-w-0 flex-1 text-xs`} />
+      <input type="url" aria-label="Link" placeholder="Link" value={url} onChange={(e) => setUrl(e.target.value)} className={`${input} w-full text-xs`} />
+      <input type="number" min={0} step="0.01" aria-label="Price" placeholder="Price" value={price} onChange={(e) => setPrice(e.target.value)} className={`${input} w-28 text-xs`} />
       <button type="submit" disabled={busy || !model.trim() || !brand.trim()} className="text-xs text-zinc-300 hover:text-white disabled:opacity-40">Add</button>
       <button type="button" onClick={() => setOpen(false)} className="text-xs text-zinc-600 hover:text-zinc-300">Cancel</button>
     </form>
@@ -532,6 +547,10 @@ function LineRow({
     run(async () => unwrap(await updateStandaloneLine(line.id, patch)))
   const money = (n: number | null | undefined) => (n == null ? null : Number(n))
   const link = safeLink(line.url)
+  const current = products.find((p) => p.id === line.gear_item_id) ?? null
+  const typed = typedOverCatalog(line, current)
+  const priceDiffers = typed.price != null && current?.price != null
+  const linkDiffers = Boolean(typed.url && current?.url)
   // Shows the moment it is ticked; the save follows behind.
   const [checked, setChecked] = useState(Boolean(line.checked))
   const [seenChecked, setSeenChecked] = useState(Boolean(line.checked))
@@ -705,7 +724,16 @@ function LineRow({
           aria-label="Product"
           value={products.some((p) => p.id === line.gear_item_id) ? line.gear_item_id ?? '' : ''}
           disabled={busy}
-          onChange={(e) => { if (e.target.value) run(async () => unwrap(await setLineProduct(line.id, e.target.value))) }}
+          onChange={(e) => {
+            const next = products.find((p) => p.id === e.target.value)
+            if (!next) return
+            // Swapping would replace these, so the person says what they meant.
+            const said = [typed.price != null && fmtMoney(typed.price), typed.url && 'the link'].filter(Boolean).join(' and ')
+            const keep = current != null && said !== '' && confirm(
+              `This line has ${said} typed on it. Keep that for ${productName(next)}?\n\nOK keeps it. Cancel uses what the catalog has for ${productName(next)}.`
+            )
+            run(async () => unwrap(await setLineProduct(line.id, next.id, { keep })))
+          }}
           className={`${input} w-full mt-2 text-xs`}
         >
           <option value="">Choose a product</option>
@@ -713,7 +741,25 @@ function LineRow({
         </select>
       )}
 
-      {line.gear_item_id && <NewProduct lineId={line.id} run={run} busy={busy} />}
+      {/* What this line says against the catalog, so it is plain which of the two
+          a number lives on. It only reaches the catalog by this button. */}
+      {current && (priceDiffers || linkDiffers) && (
+        <p className="mt-1.5 px-1.5 text-[11px] text-zinc-400">
+          This order only. Catalog has {[priceDiffers && fmtMoney(Number(current.price)), linkDiffers && 'a different link'].filter(Boolean).join(' and ')}.{' '}
+          <button
+            onClick={() => {
+              if (confirm(`Use this line's link and price for ${productName(current)} everywhere from now on?`)) {
+                run(async () => unwrap(await saveLineToCatalog(line.id)))
+              }
+            }}
+            className="underline underline-offset-2 decoration-zinc-600 hover:text-white transition-colors"
+          >
+            Update catalog
+          </button>
+        </p>
+      )}
+
+      {line.gear_item_id && <NewProduct key={`${line.url}|${line.unit_price}`} lineId={line.id} typed={typed} run={run} busy={busy} />}
 
       <div className="mt-2">
         <SizeOptionsField

@@ -247,7 +247,14 @@ export async function updateStandaloneLine(
 // Settling a line on a product. A price typed on a generic line survives a
 // product with none yet. Swapping one product for another does not keep the old
 // one's link or price: those described the product that just left.
-export async function setLineProduct(lineId: string, gearItemId: string): Promise<{ ok: true } | Failed> {
+//
+// `keep` is the person's answer when the line holds values typed over the old
+// product: true carries them to the new one, and into its catalog gaps.
+export async function setLineProduct(
+  lineId: string,
+  gearItemId: string,
+  { keep = false }: { keep?: boolean } = {}
+): Promise<{ ok: true } | Failed> {
   const { admin } = await requireAdminUser()
   const line = await ownLine(admin, lineId)
   if (!line) return fail('Line not found.')
@@ -260,15 +267,15 @@ export async function setLineProduct(lineId: string, gearItemId: string): Promis
     gear_item_id: item.id,
     product,
     detail: line.detail ?? item.info,
-    url: safeLink(item.url) ?? (line.product ? null : line.url),
-    unit_price: item.price ?? (line.product ? null : line.unit_price),
+    url: keep ? safeLink(line.url) ?? safeLink(item.url) : safeLink(item.url) ?? (line.product ? null : line.url),
+    unit_price: keep ? line.unit_price ?? item.price : item.price ?? (line.product ? null : line.unit_price),
     size_options: item.sizes?.length ? item.sizes : (line.product ? [] : line.size_options),
   }).eq('id', lineId)
   if (error) throw new Error(error.message)
 
   // What was typed on a generic line was about the product just chosen for it.
   // A swap's values were about the product that left, so those stay out.
-  if (!line.product) {
+  if (!line.product || keep) {
     await fillCatalogGaps(admin, item, {
       url: safeLink(line.url), price: line.unit_price, options: line.size_options,
     })
@@ -281,7 +288,7 @@ export async function setLineProduct(lineId: string, gearItemId: string): Promis
 // It goes under the line's generic item, so it is on offer next time too.
 export async function addLineProduct(
   lineId: string,
-  input: { brand: string; model: string }
+  input: { brand: string; model: string; url?: string; price?: number | null }
 ): Promise<{ ok: true } | Failed> {
   const { admin } = await requireAdminUser()
   const line = await ownLine(admin, lineId)
@@ -294,8 +301,11 @@ export async function addLineProduct(
   const model = input.model.trim()
   if (!model) return fail('Name the model.')
   if (!input.brand.trim()) return fail('Add the brand.')
+  const url = input.url?.trim() ? safeLink(input.url) : null
+  if (input.url?.trim() && !url) return fail('A link has to start with http:// or https://.')
   const made = await upsertGearItem({
     name: model, brand: input.brand.trim() || null, parentId: item.parent_id ?? item.id,
+    url, price: cleanPrice(input.price ?? null),
   })
   if ('error' in made) return made
   return setLineProduct(lineId, made.id)
@@ -323,6 +333,26 @@ export async function setLineCategory(lineId: string, category: string): Promise
       revalidatePath('/admin/gear')
     }
   }
+  touch(line.order_id)
+  return { ok: true }
+}
+
+// Making this line's link and price the catalog's, on purpose. A line never does
+// that by itself, because one deal's price is not the new price for everyone.
+export async function saveLineToCatalog(lineId: string): Promise<{ ok: true } | Failed> {
+  const { admin } = await requireAdminUser()
+  const line = await ownLine(admin, lineId)
+  if (!line?.gear_item_id) return fail('This line is not from the catalog.')
+  // Only what the line actually holds: a blank box is not an instruction to
+  // wipe what the catalog knows.
+  const update: Record<string, unknown> = {}
+  if (safeLink(line.url)) update.url = safeLink(line.url)
+  if (line.unit_price != null) update.price = line.unit_price
+  if (Object.keys(update).length === 0) return fail('This line has no link or price to save.')
+  const { error } = await admin.from('gear_items').update(update)
+    .eq('id', line.gear_item_id).not('parent_id', 'is', null)
+  if (error) throw new Error(error.message)
+  revalidatePath('/admin/gear')
   touch(line.order_id)
   return { ok: true }
 }

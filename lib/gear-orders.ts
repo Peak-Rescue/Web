@@ -88,6 +88,22 @@ export function safeLink(url: string | null | undefined): string | null {
   return v && /^https?:\/\/\S+$/i.test(v) ? v : null
 }
 
+// What this line says that its catalog product doesn't: typed for this deal, or
+// typed in the belief the line was already another product. Either way it is
+// somebody's work, so it is never dropped without being shown to them. A generic
+// item has no link or price of its own, so everything on that line counts.
+export function typedOverCatalog(
+  line: { url?: string | null; unit_price?: number | null },
+  product: { url?: string | null; price?: number | null } | null | undefined
+): { url: string | null; price: number | null } {
+  const url = safeLink(line.url)
+  const price = line.unit_price == null ? null : Number(line.unit_price)
+  return {
+    url: url && url !== safeLink(product?.url) ? url : null,
+    price: price != null && price !== (product?.price == null ? null : Number(product.price)) ? price : null,
+  }
+}
+
 // How a catalog row reads on a line: what is needed, then which product meets
 // it. A generic item has no product yet, and a product with no generic above it
 // is the only name it has.

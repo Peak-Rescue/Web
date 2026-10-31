@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { brandsIn, canonicalBrand } from '@/lib/gear'
-import { cleanSizes, defaultScale, lineNames, needsProduct, netUnitPrice, orderTotal, parseSizeOptions, safeLink, sizeRange, sizeRows, sizesSummary, sizesTotal, workFirst, isSized } from '@/lib/gear-orders'
+import { cleanSizes, defaultScale, lineNames, needsProduct, netUnitPrice, orderTotal, parseSizeOptions, safeLink, sizeRange, sizeRows, sizesSummary, sizesTotal, workFirst, isSized, typedOverCatalog } from '@/lib/gear-orders'
 
 describe('orderTotal', () => {
   it('adds up the lines still wanted', () => {
@@ -60,6 +60,27 @@ describe('discounts', () => {
 
   it('leaves a line with no discount at its list price', () => {
     expect(orderTotal([{ qty: 1, removed: false, unit_price: 99.95 }])).toMatchObject({ total: 99.95, saved: 0 })
+  })
+})
+
+describe('typedOverCatalog', () => {
+  const product = { url: 'https://example.com/dps', price: 1495 }
+
+  it('finds what was changed on the line', () => {
+    expect(typedOverCatalog({ url: 'https://example.com/bd', unit_price: 999 }, product))
+      .toEqual({ url: 'https://example.com/bd', price: 999 })
+  })
+
+  it('ignores what still matches the catalog', () => {
+    expect(typedOverCatalog({ url: 'https://example.com/dps', unit_price: 1495 }, product)).toEqual({ url: null, price: null })
+  })
+
+  it('counts everything typed on a line with no product', () => {
+    expect(typedOverCatalog({ url: 'https://example.com/x', unit_price: 5 }, null)).toEqual({ url: 'https://example.com/x', price: 5 })
+  })
+
+  it('finds nothing on an empty line', () => {
+    expect(typedOverCatalog({ url: null, unit_price: null }, product)).toEqual({ url: null, price: null })
   })
 })
 
