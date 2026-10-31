@@ -110,19 +110,23 @@ export default async function GearOrderPage({ params }: { params: Promise<{ toke
           </div>
         )}
 
-        <div className="mt-8 rounded-lg border border-zinc-800 bg-zinc-900/50 p-4">
-          <p className="text-sm text-zinc-300">
-            Set the quantity you want for each item. Use <span className="text-zinc-100">Not needed</span> for anything
-            you already have, and leave a note on any line you want to talk about.
-            {standalone ? ' Whatever you send back comes straight to us.' : ' Whatever you send back is what we pass to our purchasing team.'}
-          </p>
-          {order.responded_at && (
-            <p className="text-xs text-teal-300 mt-3">
-              You answered this on {new Date(order.responded_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
-              {order.responded_name ? ` as ${order.responded_name}` : ''}. You can change it and send it again.
-            </p>
-          )}
-        </div>
+        {(!standalone || order.responded_at) && (
+          <div className="mt-8 rounded-lg border border-zinc-800 bg-zinc-900/50 p-4">
+            {!standalone && (
+              <p className="text-sm text-zinc-300">
+                Set the quantity you want for each item. Use <span className="text-zinc-100">Not needed</span> for anything
+                you already have, and leave a note on any line you want to talk about. Whatever you send back is what we
+                pass to our purchasing team.
+              </p>
+            )}
+            {order.responded_at && (
+              <p className={`text-xs text-teal-300 ${standalone ? '' : 'mt-3'}`}>
+                You answered this on {new Date(order.responded_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                {order.responded_name ? ` as ${order.responded_name}` : ''}. You can change it and send it again.
+              </p>
+            )}
+          </div>
+        )}
 
         <GearOrderForm
           token={token}
