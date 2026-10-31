@@ -10,6 +10,21 @@ const input = 'bg-zinc-800 border border-zinc-700 rounded px-2.5 py-1.5 text-sm 
 
 type Answer = { qty: string; removed: boolean; note: string; sizes: SizeRow[] }
 
+function ItemLink({ url, children }: { url?: string | null; children: React.ReactNode }) {
+  const href = safeLink(url)
+  if (!href) return <>{children}</>
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      className="underline underline-offset-2 decoration-zinc-600 hover:decoration-white hover:text-white transition-colors"
+    >
+      {children}
+    </a>
+  )
+}
+
 export default function GearOrderForm({
   token,
   lines,
@@ -119,26 +134,20 @@ export default function GearOrderForm({
                 >
                   <div className="flex items-start gap-3 flex-wrap sm:flex-nowrap">
                     <div className="min-w-0 flex-1">
-                      <p className={`text-sm font-medium ${a?.removed ? 'text-zinc-600 line-through' : ''}`}>{l.name}</p>
-                      {l.product && <p className="text-xs text-zinc-300 mt-0.5">{l.product}</p>}
+                      <p className={`text-sm font-medium ${a?.removed ? 'text-zinc-600 line-through' : ''}`}>
+                        {/* The link is to the product, so that is the name that
+                            carries it. A line with no product has only the one. */}
+                        {l.product ? l.name : <ItemLink url={l.url}>{l.name}</ItemLink>}
+                      </p>
+                      {l.product && (
+                        <p className="text-xs text-zinc-300 mt-0.5"><ItemLink url={l.url}>{l.product}</ItemLink></p>
+                      )}
                       {l.detail && <p className="text-xs text-zinc-500 mt-0.5">{l.detail}</p>}
                       {l.qty_offered && (
                         <p className="text-[11px] text-zinc-600 mt-0.5">We suggested: {l.qty_offered}</p>
                       )}
-                      {(l.unit_price != null || safeLink(l.url)) && (
-                        <p className="text-xs text-zinc-400 mt-1 flex items-center gap-3 flex-wrap">
-                          {l.unit_price != null && <span>{fmtMoney(Number(l.unit_price))} each</span>}
-                          {safeLink(l.url) && (
-                            <a
-                              href={safeLink(l.url)!}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="underline underline-offset-2 decoration-zinc-600 hover:text-white transition-colors"
-                            >
-                              View item
-                            </a>
-                          )}
-                        </p>
+                      {l.unit_price != null && (
+                        <p className="text-xs text-zinc-400 mt-1">{fmtMoney(Number(l.unit_price))} each</p>
                       )}
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
