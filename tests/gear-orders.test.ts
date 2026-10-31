@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { brandsIn, canonicalBrand } from '@/lib/gear'
-import { cleanSizes, defaultScale, lineNames, needsProduct, orderTotal, parseSizeOptions, safeLink, sizeRange, sizeRows, sizesSummary, sizesTotal, workFirst, isSized } from '@/lib/gear-orders'
+import { cleanSizes, defaultScale, lineNames, needsProduct, netUnitPrice, orderTotal, parseSizeOptions, safeLink, sizeRange, sizeRows, sizesSummary, sizesTotal, workFirst, isSized } from '@/lib/gear-orders'
 
 describe('orderTotal', () => {
   it('adds up the lines still wanted', () => {
     expect(orderTotal([
       { qty: 2, removed: false, unit_price: 59 },
       { qty: 1, removed: false, unit_price: 449.5 },
-    ])).toEqual({ total: 567.5, unpriced: 0, anyPriced: true })
+    ])).toMatchObject({ total: 567.5, subtotal: 567.5, saved: 0, unpriced: 0, anyPriced: true })
   })
 
   it('leaves out struck-off lines and lines nobody asked for', () => {
@@ -36,6 +36,30 @@ describe('orderTotal', () => {
 
   it('says when nothing is priced, so a course order shows no $0.00', () => {
     expect(orderTotal([{ qty: 3, removed: false }]).anyPriced).toBe(false)
+  })
+})
+
+describe('discounts', () => {
+  it('takes the line discount, then the order discount on top', () => {
+    expect(netUnitPrice(100, 10)).toBe(90)
+    expect(netUnitPrice(100, null, 10)).toBe(90)
+    expect(netUnitPrice(100, 10, 10)).toBe(81)
+  })
+
+  it('rounds each unit, so the total is a whole number of that price', () => {
+    expect(netUnitPrice(449.5, 15)).toBe(382.08)
+    expect(orderTotal([{ qty: 6, removed: false, unit_price: 449.5, discount_percent: 15 }]).total).toBe(2292.48)
+  })
+
+  it('reports what was given away', () => {
+    expect(orderTotal([
+      { qty: 2, removed: false, unit_price: 100, discount_percent: 10 },
+      { qty: 1, removed: false, unit_price: 50 },
+    ], 10)).toMatchObject({ subtotal: 250, total: 207, saved: 43 })
+  })
+
+  it('leaves a line with no discount at its list price', () => {
+    expect(orderTotal([{ qty: 1, removed: false, unit_price: 99.95 }])).toMatchObject({ total: 99.95, saved: 0 })
   })
 })
 

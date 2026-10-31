@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { requireAdminUser } from '@/lib/course-access'
 import { upsertGearItem } from '@/app/admin/gear/actions'
 import { linesFromList } from '@/lib/gear-order-lines'
-import { cleanSizes, isSized, lineNames, parseSizeOptions, safeLink, sizesTotal } from '@/lib/gear-orders'
+import { cleanSizes, isSized, lineNames, netUnitPrice, parseSizeOptions, safeLink, sizesTotal } from '@/lib/gear-orders'
 import { sendMail } from '@/lib/mailer'
 import { planSplit, type SplitLine } from '@/lib/gear-order-split'
 
@@ -25,6 +25,11 @@ const ITEM_COLUMNS = 'id, name, brand, info, url, category, price, parent_id, si
 type Item = {
   id: string; name: string; brand: string | null; info: string | null; url: string | null
   category: string | null; price: number | null; parent_id: string | null; sizes: string[]
+}
+
+function cleanPercent(v: number | null): number | null {
+  if (v === null || Number.isNaN(v) || v <= 0) return null
+  return Math.round(Math.min(100, v) * 100) / 100
 }
 
 function cleanPrice(v: number | null): number | null {
@@ -64,7 +69,7 @@ export async function updateStandaloneOrder(
   orderId: string,
   patch: {
     title?: string; clientId?: string | null; contactName?: string | null; contactEmail?: string | null
-    intro?: string | null; esQuoteNumber?: string | null; status?: 'closed'
+    intro?: string | null; esQuoteNumber?: string | null; status?: 'closed'; discountPercent?: number | null
   }
 ): Promise<{ ok: true } | Failed> {
   const { admin } = await requireAdminUser()
@@ -80,6 +85,7 @@ export async function updateStandaloneOrder(
   if (patch.intro !== undefined) update.intro = patch.intro?.trim().slice(0, 2000) || null
   if (patch.esQuoteNumber !== undefined) update.es_quote_number = patch.esQuoteNumber?.trim().slice(0, 80) || null
   if (patch.status !== undefined) update.status = patch.status
+  if (patch.discountPercent !== undefined) update.discount_percent = cleanPercent(patch.discountPercent)
 
   const { error } = await admin.from('gear_orders').update(update).eq('id', orderId).is('instance_id', null)
   if (error) throw new Error(error.message)
@@ -190,7 +196,7 @@ export async function updateStandaloneLine(
   lineId: string,
   patch: {
     name?: string; detail?: string | null; url?: string | null; unitPrice?: number | null
-    qtyWanted?: number | null; removed?: boolean; checked?: boolean
+    qtyWanted?: number | null; removed?: boolean; checked?: boolean; discountPercent?: number | null
     sizeOptions?: string; sizes?: { size: string; qty: string | number }[]
   }
 ): Promise<{ ok: true } | Failed> {
@@ -203,6 +209,7 @@ export async function updateStandaloneLine(
   if (patch.detail !== undefined) update.detail = patch.detail?.trim().slice(0, 1000) || null
   if (patch.removed !== undefined) update.removed = patch.removed
   if (patch.checked !== undefined) update.checked = patch.checked
+  if (patch.discountPercent !== undefined) update.discount_percent = cleanPercent(patch.discountPercent)
   // A tab left open from before a line got sizes can still send a typed number.
   if (patch.qtyWanted !== undefined && !isSized(line)) {
     update.qty_wanted = patch.qtyWanted === null || Number.isNaN(patch.qtyWanted)
@@ -338,16 +345,16 @@ export async function splitStandaloneOrder(orderId: string, cap: number): Promis
   const { admin } = await requireAdminUser()
   const { data } = await admin
     .from('gear_orders')
-    .select('id, title, client_id, contact_name, contact_email, intro, es_quote_number, split_from, gear_order_lines(*, gear_items(brand))')
+    .select('id, title, client_id, contact_name, contact_email, intro, es_quote_number, split_from, discount_percent, gear_order_lines(*, gear_items(brand))')
     .eq('id', orderId).is('instance_id', null)
     .maybeSingle()
   if (!data) return fail('Order not found.')
   const order = data as unknown as {
     id: string; title: string; client_id: string | null; contact_name: string | null; contact_email: string | null
-    intro: string | null; es_quote_number: string | null; split_from: string | null
+    intro: string | null; es_quote_number: string | null; split_from: string | null; discount_percent: number | null
     gear_order_lines: (Record<string, unknown> & {
       id: string; name: string; product: string | null; qty_wanted: number | null; unit_price: number | null
-      removed: boolean; sizes: { size: string; qty: number }[]; sort_order: number
+      removed: boolean; sizes: { size: string; qty: number }[]; sort_order: number; discount_percent: number | null
       gear_items: { brand: string | null } | null
     })[]
   }
@@ -359,7 +366,9 @@ export async function splitStandaloneOrder(orderId: string, cap: number): Promis
   const rows = [...order.gear_order_lines].sort((a, b) => a.sort_order - b.sort_order)
   const lines: SplitLine[] = rows.map((l) => ({
     id: l.id, name: l.product ?? l.name, brand: l.gear_items?.brand ?? null,
-    qty: l.qty_wanted, unit_price: l.unit_price, removed: l.removed, sizes: l.sizes,
+    qty: l.qty_wanted, removed: l.removed, sizes: l.sizes,
+    // The cap is what the team spends, so it runs on the discounted price.
+    unit_price: l.unit_price == null ? null : netUnitPrice(l.unit_price, l.discount_percent, order.discount_percent),
   }))
   const plan = planSplit(lines, cap)
   if (plan.unpriced.length > 0) return fail(`Price these first: ${plan.unpriced.join(', ')}.`)
@@ -376,6 +385,7 @@ export async function splitStandaloneOrder(orderId: string, cap: number): Promis
         contact_email: order.contact_email,
         intro: order.intro,
         es_quote_number: order.es_quote_number,
+        discount_percent: order.discount_percent,
         split_from: order.id,
       }).select('id').single()
       if (error || !created) throw new Error(error?.message ?? 'Could not create a part')

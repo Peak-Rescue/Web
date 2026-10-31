@@ -23,7 +23,7 @@ export default async function GearOrdersPage() {
 
   const [{ data: orderRows }, { data: clientRows }, { data: listRows }] = await Promise.all([
     admin.from('gear_orders')
-      .select('id, instance_id, title, client_id, status, created_at, gear_order_lines(qty_wanted, unit_price, removed), course_instances(course_type, custom_title, client_name)')
+      .select('id, instance_id, title, client_id, status, created_at, discount_percent, gear_order_lines(qty_wanted, unit_price, discount_percent, removed), course_instances(course_type, custom_title, client_name)')
       .order('created_at', { ascending: false }),
     admin.from('clients').select(CLIENT_COLUMNS),
     admin.from('gear_lists').select('id, name').eq('is_template', true).order('name'),
@@ -31,8 +31,8 @@ export default async function GearOrdersPage() {
 
   type Row = {
     id: string; instance_id: string | null; title: string | null; client_id: string | null
-    status: GearOrderStatus; created_at: string
-    gear_order_lines: { qty_wanted: number | null; unit_price: number | null; removed: boolean }[]
+    status: GearOrderStatus; created_at: string; discount_percent: number | null
+    gear_order_lines: { qty_wanted: number | null; unit_price: number | null; discount_percent: number | null; removed: boolean }[]
     course_instances: { course_type: string; custom_title: string | null; client_name: string | null } | null
   }
   const orders = (orderRows ?? []) as unknown as Row[]
@@ -56,7 +56,8 @@ export default async function GearOrdersPage() {
             const name = course ? courseShortName(course.course_type, course.custom_title) : o.title
             const who = course ? course.client_name : o.client_id ? clientLabel(clients, o.client_id) : null
             const { total, unpriced, anyPriced } = orderTotal(
-              o.gear_order_lines.map((l) => ({ qty: l.qty_wanted, removed: l.removed, unit_price: l.unit_price }))
+              o.gear_order_lines.map((l) => ({ qty: l.qty_wanted, removed: l.removed, unit_price: l.unit_price, discount_percent: l.discount_percent })),
+              o.discount_percent
             )
             return (
               <Link

@@ -31,6 +31,7 @@ export type GearOrderLine = {
   product?: string | null
   url?: string | null
   unit_price?: number | null
+  discount_percent?: number | null
   size_options?: string[]
   sizes?: GearOrderSize[]
   /** Our own mark that the line is finished. The team never sees it. */
@@ -48,6 +49,7 @@ export type GearOrder = {
   contact_email?: string | null
   split_from?: string | null
   split_cap?: number | null
+  discount_percent?: number | null
   list_id: string | null
   es_quote_number: string | null
   status: GearOrderStatus
@@ -224,20 +226,37 @@ export function workFirst<T extends Parameters<typeof needsProduct>[0] & { sort_
   return [...lines].sort((a, b) => rank(a) - rank(b) || a.sort_order - b.sort_order)
 }
 
+// What one unit costs after discounts: the line's, then the order's on top.
+// Rounded per unit, so a total is always a whole number of a price someone can
+// read, and the budget split and the total can never disagree by a cent.
+export function netUnitPrice(
+  unitPrice: number,
+  linePercent?: number | null,
+  orderPercent?: number | null
+): number {
+  const after = Number(unitPrice) * (1 - Number(linePercent ?? 0) / 100) * (1 - Number(orderPercent ?? 0) / 100)
+  return Math.round(after * 100) / 100
+}
+
 // The money on the lines still wanted. `unpriced` is reported rather than
 // quietly left out, because a total that skips a line reads as the whole cost.
 export function orderTotal(
-  lines: { qty: number | null; removed: boolean; unit_price?: number | null }[]
-): { total: number; unpriced: number; anyPriced: boolean } {
-  let cents = 0
+  lines: { qty: number | null; removed: boolean; unit_price?: number | null; discount_percent?: number | null }[],
+  orderPercent?: number | null
+): { total: number; subtotal: number; saved: number; unpriced: number; anyPriced: boolean } {
+  let net = 0
+  let gross = 0
   let unpriced = 0
   for (const l of lines) {
     if (l.removed || !(Number(l.qty ?? 0) > 0)) continue
     if (l.unit_price == null) { unpriced++; continue }
-    cents += Math.round(Number(l.unit_price) * 100) * Number(l.qty)
+    gross += Math.round(Number(l.unit_price) * 100) * Number(l.qty)
+    net += Math.round(netUnitPrice(l.unit_price, l.discount_percent, orderPercent) * 100) * Number(l.qty)
   }
   return {
-    total: Math.round(cents) / 100,
+    total: Math.round(net) / 100,
+    subtotal: Math.round(gross) / 100,
+    saved: Math.round(gross - net) / 100,
     unpriced,
     anyPriced: lines.some((l) => l.unit_price != null),
   }

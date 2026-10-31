@@ -19,7 +19,7 @@ export default async function GearOrderPage({ params }: { params: Promise<{ toke
   const admin = createAdminClient()
   const { data: order } = await admin
     .from('gear_orders')
-    .select('id, instance_id, title, client_id, es_quote_number, status, intro, responded_at, responded_name, client_note, viewed_at, attachments, gear_order_lines(id, name, product, detail, category, qty_offered, qty_wanted, url, unit_price, size_options, sizes, removed, client_note, sort_order)')
+    .select('id, instance_id, title, client_id, discount_percent, es_quote_number, status, intro, responded_at, responded_name, client_note, viewed_at, attachments, gear_order_lines(id, name, product, detail, category, qty_offered, qty_wanted, url, unit_price, discount_percent, size_options, sizes, removed, client_note, sort_order)')
     .eq('accept_token', token)
     .maybeSingle()
   if (!order) notFound()
@@ -132,6 +132,7 @@ export default async function GearOrderPage({ params }: { params: Promise<{ toke
           defaultName={order.responded_name ?? ''}
           standalone={standalone}
           draft={order.status === 'draft'}
+          orderDiscount={order.discount_percent}
         />
 
         <p className="text-xs text-zinc-600 mt-10">

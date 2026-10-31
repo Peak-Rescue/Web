@@ -3,7 +3,7 @@
 // again.
 
 import { CONTENT_W, FAINT, INK, MARGIN, MUTED, PdfBuilder, RED } from '@/lib/pdf-layout'
-import { orderTotal, safeLink, sizesSummary, type GearOrderLine } from '@/lib/gear-orders'
+import { netUnitPrice, orderTotal, safeLink, sizesSummary, type GearOrderLine } from '@/lib/gear-orders'
 import { fmtMoney } from '@/lib/expenses'
 import { GEAR_CATEGORIES } from '@/lib/gear'
 
@@ -14,6 +14,7 @@ export type GearOrderPdf = {
   respondedName: string | null
   respondedAt: string | null
   clientNote: string | null
+  orderDiscount?: number | null
   lines: GearOrderLine[]
 }
 
@@ -85,9 +86,10 @@ export async function generateGearOrderPdf(data: GearOrderPdf): Promise<Uint8Arr
       const width = CONTENT_W - QTY_W
       // The notes are part of the row: reserved with it, so a page never
       // breaks between an item and what the client said about it.
-      const price = l.unit_price == null
+      const net = l.unit_price == null ? null : netUnitPrice(l.unit_price, l.discount_percent, data.orderDiscount)
+      const price = net == null
         ? null
-        : `${fmtMoney(Number(l.unit_price))} each — ${fmtMoney(Number(l.unit_price) * Number(l.qty_wanted))}`
+        : `${net < Number(l.unit_price) ? `${fmtMoney(Number(l.unit_price))} list, ` : ''}${fmtMoney(net)} each — ${fmtMoney(net * Number(l.qty_wanted))}`
       const notes = [l.product, sizesSummary(l.sizes), price, safeLink(l.url), l.client_note && `Client: ${l.client_note}`, l.admin_note].filter(Boolean) as string[]
       b.ensure(
         b.measure(body, { width, size: 9.5, leading: 12.5 }) +
@@ -104,12 +106,19 @@ export async function generateGearOrderPdf(data: GearOrderPdf): Promise<Uint8Arr
     b.continued = null
   }
 
-  const { total, unpriced, anyPriced } = orderTotal(
-    wanted.map((l) => ({ qty: l.qty_wanted, removed: l.removed, unit_price: l.unit_price }))
+  const { total, subtotal, saved, unpriced, anyPriced } = orderTotal(
+    wanted.map((l) => ({ qty: l.qty_wanted, removed: l.removed, unit_price: l.unit_price, discount_percent: l.discount_percent })),
+    data.orderDiscount
   )
   if (anyPriced) {
-    b.ensure(20)
+    b.ensure(44)
     b.y -= 6
+    if (saved > 0) {
+      b.text(`Subtotal ${fmtMoney(subtotal)}`, { x: MARGIN, size: 9.5, color: MUTED })
+      b.y -= 13
+      b.text(`Discount ${fmtMoney(saved)}`, { x: MARGIN, size: 9.5, color: MUTED })
+      b.y -= 14
+    }
     b.text(`Total ${fmtMoney(total)}${unpriced > 0 ? ` + ${unpriced} unpriced` : ''}`, { x: MARGIN, size: 10, bold: true, color: INK })
     b.y -= 14
   }

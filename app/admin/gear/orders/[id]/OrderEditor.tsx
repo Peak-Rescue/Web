@@ -7,7 +7,7 @@ import { fmtMoney } from '@/lib/expenses'
 import { GEAR_CATEGORIES, brandsIn, productName, unwrap } from '@/lib/gear'
 import CategorySelect from '@/app/admin/gear/CategorySelect'
 import {
-  GEAR_ORDER_STATUS_LABEL, GEAR_ORDER_STATUS_STYLE, isSized, needsProduct, orderTotal, sizesTotal, workFirst, safeLink, sizeRows,
+  GEAR_ORDER_STATUS_LABEL, GEAR_ORDER_STATUS_STYLE, isSized, needsProduct, netUnitPrice, orderTotal, sizesTotal, workFirst, safeLink, sizeRows,
   type GearOrder, type GearOrderLine,
 } from '@/lib/gear-orders'
 import GearSizeRows from '@/components/GearSizeRows'
@@ -26,11 +26,11 @@ const input = 'bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm fo
 type Run = (fn: () => Promise<unknown>) => void
 
 export type SplitPartRow = {
-  id: string; title: string; status: GearOrder['status']; sent_at: string | null
-  gear_order_lines: { qty_wanted: number | null; unit_price: number | null; removed: boolean }[]
+  id: string; title: string; status: GearOrder['status']; sent_at: string | null; discount_percent: number | null
+  gear_order_lines: { qty_wanted: number | null; unit_price: number | null; discount_percent: number | null; removed: boolean }[]
 }
 // Numbers being typed, ahead of the save.
-type Draft = { qty?: number | null; price?: number | null }
+type Draft = { qty?: number | null; price?: number | null; discount?: number | null }
 
 export default function OrderEditor({
   order, catalog, clients, parts, parent,
@@ -51,6 +51,7 @@ export default function OrderEditor({
   // from under you the moment you filled in its last gap. New lines go last.
   const [sorted, setSorted] = useState<string[] | null>(null)
   const [drafts, setDrafts] = useState<Record<string, Draft>>({})
+  const [orderPercent, setOrderPercent] = useState(order.discount_percent == null ? '' : String(order.discount_percent))
 
   const run: Run = async (fn) => {
     setBusy(true); setError(null)
@@ -86,8 +87,11 @@ export default function OrderEditor({
   // The total runs off what is in the boxes, so it moves as a number is typed.
   const liveQty = (l: GearOrderLine) => (l.id in drafts && 'qty' in drafts[l.id] ? drafts[l.id].qty ?? null : l.qty_wanted)
   const livePrice = (l: GearOrderLine) => (l.id in drafts && 'price' in drafts[l.id] ? drafts[l.id].price ?? null : l.unit_price ?? null)
-  const { total, unpriced } = orderTotal(
-    lines.map((l) => ({ qty: liveQty(l), removed: l.removed, unit_price: livePrice(l) }))
+  const liveDiscount = (l: GearOrderLine) => (l.id in drafts && 'discount' in drafts[l.id] ? drafts[l.id].discount ?? null : l.discount_percent ?? null)
+  const liveOrderPercent = orderPercent === '' ? null : Number(orderPercent)
+  const { total, subtotal, saved, unpriced } = orderTotal(
+    lines.map((l) => ({ qty: liveQty(l), removed: l.removed, unit_price: livePrice(l), discount_percent: liveDiscount(l) })),
+    liveOrderPercent
   )
   const units = lines.reduce((n, l) => n + (l.removed ? 0 : Number(liveQty(l) ?? 0)), 0)
   const saveOrder = (patch: Parameters<typeof updateStandaloneOrder>[1]) =>
@@ -147,6 +151,21 @@ export default function OrderEditor({
             className={`${input} w-full`}
           />
         </Field>
+        <Field label="Order discount %">
+          <input
+            type="number"
+            min={0}
+            max={100}
+            step="0.5"
+            value={orderPercent}
+            onChange={(e) => setOrderPercent(e.target.value)}
+            onBlur={(e) => {
+              const v = e.target.value === '' ? null : Number(e.target.value)
+              if (v !== (order.discount_percent == null ? null : Number(order.discount_percent))) saveOrder({ discountPercent: v })
+            }}
+            className={`${input} w-full`}
+          />
+        </Field>
         <div className="sm:col-span-2">
           <Field label="Intro">
             <textarea
@@ -194,7 +213,7 @@ export default function OrderEditor({
             {parts.map((p) => (
               <Link key={p.id} href={`/admin/gear/orders/${p.id}`} className="flex items-center gap-3 text-sm hover:text-white text-zinc-300 transition-colors">
                 <span className="min-w-0 flex-1 truncate">{p.title}</span>
-                <span>{fmtMoney(orderTotal(p.gear_order_lines.map((l) => ({ qty: l.qty_wanted, removed: l.removed, unit_price: l.unit_price }))).total)}</span>
+                <span>{fmtMoney(orderTotal(p.gear_order_lines.map((l) => ({ qty: l.qty_wanted, removed: l.removed, unit_price: l.unit_price, discount_percent: l.discount_percent })), p.discount_percent).total)}</span>
                 <span className={`text-[10px] px-2 py-0.5 rounded ${GEAR_ORDER_STATUS_STYLE[p.status]}`}>{GEAR_ORDER_STATUS_LABEL[p.status]}</span>
               </Link>
             ))}
@@ -222,7 +241,7 @@ export default function OrderEditor({
       <div className="space-y-2">
         {shown.map((l) => (
           <LineRow key={l.id} line={l} products={productsFor(l, known, childrenOf)} categories={categories} run={run} busy={busy}
-            liveQty={liveQty(l)} livePrice={livePrice(l)}
+            liveQty={liveQty(l)} livePrice={livePrice(l)} liveDiscount={liveDiscount(l)} orderPercent={liveOrderPercent}
             onDraft={(d) => setDrafts((all) => ({ ...all, [l.id]: { ...all[l.id], ...d } }))}
           />
         ))}
@@ -262,6 +281,11 @@ export default function OrderEditor({
         <div className="sticky bottom-0 z-10 mt-4 rounded-lg border border-zinc-700 bg-zinc-900/95 px-4 py-2.5 flex items-center gap-3 flex-wrap">
           <span className="text-xs text-zinc-400">{units} {units === 1 ? 'item' : 'items'}</span>
           <span className="ml-auto text-sm">
+            {saved > 0 && (
+              <span className="text-xs text-zinc-400 mr-3">
+                <span className="line-through">{fmtMoney(subtotal)}</span> <span className="text-emerald-400">{fmtMoney(saved)} off</span>
+              </span>
+            )}
             <span className="text-zinc-500">Total</span> <span className="font-semibold">{fmtMoney(total)}</span>
             {unpriced > 0 && <span className="text-xs text-amber-300/80"> + {unpriced} unpriced</span>}
           </span>
@@ -412,8 +436,10 @@ function SplitPanel({
   const names = new Map(lines.map((l) => [l.id, l.product ?? l.name]))
   const plan = useMemo(() => planSplit(lines.map((l) => ({
     id: l.id, name: l.product ?? l.name, brand: l.gear_items?.brand ?? null,
-    qty: l.qty_wanted, unit_price: l.unit_price ?? null, removed: l.removed, sizes: l.sizes,
-  })), Number(cap)), [lines, cap])
+    qty: l.qty_wanted, removed: l.removed, sizes: l.sizes,
+    // The cap is what the team spends, so it runs on the discounted price.
+    unit_price: l.unit_price == null ? null : netUnitPrice(l.unit_price, l.discount_percent, order.discount_percent),
+  })), Number(cap)), [lines, cap, order.discount_percent])
 
   if (!open) {
     return (
@@ -489,13 +515,15 @@ function SplitPanel({
 }
 
 function LineRow({
-  line, products, categories, run, busy, liveQty, livePrice, onDraft,
+  line, products, categories, run, busy, liveQty, livePrice, liveDiscount, orderPercent, onDraft,
 }: {
   line: GearOrderLine
   products: GearItem[]
   categories: string[]
   liveQty: number | null
   livePrice: number | null
+  liveDiscount: number | null
+  orderPercent: number | null
   onDraft: (d: Draft) => void
   run: Run
   busy: boolean
@@ -571,7 +599,7 @@ function LineRow({
         <p className="text-[11px] text-amber-300/80 mt-0.5 px-1.5">Needs a product</p>
       )}
 
-      <div className="grid grid-cols-2 sm:grid-cols-[5rem_7rem_1fr] gap-2 mt-2">
+      <div className="grid grid-cols-3 sm:grid-cols-[5rem_7rem_5rem_1fr] gap-2 mt-2">
         {isSized(line) ? (
           // The sizes add up to this, so it is not a second answer to type.
           <output
@@ -612,7 +640,23 @@ function LineRow({
           }}
           className={`${input} w-full`}
         />
-        <div className="col-span-2 sm:col-span-1 flex items-center gap-2">
+        <input
+          key={`off-${line.discount_percent}`}
+          type="number"
+          min={0}
+          max={100}
+          step="0.5"
+          aria-label="Discount percent"
+          placeholder="% off"
+          defaultValue={line.discount_percent ?? ''}
+          onChange={(e) => onDraft({ discount: e.target.value === '' ? null : Number(e.target.value) })}
+          onBlur={(e) => {
+            const v = e.target.value === '' ? null : Number(e.target.value)
+            if (v !== money(line.discount_percent)) save({ discountPercent: v })
+          }}
+          className={`${input} w-full`}
+        />
+        <div className="col-span-3 sm:col-span-1 flex items-center gap-2">
           <input
             key={`url-${line.url}`}
             type="url"
@@ -641,7 +685,14 @@ function LineRow({
 
       {!line.removed && Number(liveQty ?? 0) > 0 && livePrice != null && (
         <p className="text-xs text-zinc-400 mt-1.5 text-right">
-          {liveQty} × {fmtMoney(livePrice)} = <span className="text-zinc-200">{fmtMoney(Number(liveQty) * livePrice)}</span>
+          {(() => {
+            const net = netUnitPrice(livePrice, liveDiscount, orderPercent)
+            return (
+              <>
+                {liveQty} × {net < livePrice && <span className="line-through mr-1">{fmtMoney(livePrice)}</span>}{fmtMoney(net)} = <span className="text-zinc-200">{fmtMoney(Number(liveQty) * net)}</span>
+              </>
+            )
+          })()}
         </p>
       )}
 

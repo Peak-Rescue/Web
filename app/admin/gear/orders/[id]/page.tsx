@@ -22,7 +22,7 @@ export default async function GearOrderPage({ params }: { params: Promise<{ id: 
 
   const [{ data: orderRow }, { data: items }, { data: clientRows }, { data: partRows }] = await Promise.all([
     admin.from('gear_orders')
-      .select('id, instance_id, title, client_id, contact_name, contact_email, list_id, es_quote_number, status, accept_token, intro, sent_at, viewed_at, responded_at, responded_name, responded_title, client_note, attachments, split_from, split_cap, gear_order_lines(id, entry_id, gear_item_id, name, product, detail, category, qty_offered, qty_wanted, url, unit_price, size_options, sizes, removed, checked, client_note, admin_note, sort_order, gear_items(brand))')
+      .select('id, instance_id, title, client_id, contact_name, contact_email, list_id, es_quote_number, status, accept_token, intro, sent_at, viewed_at, responded_at, responded_name, responded_title, client_note, attachments, split_from, split_cap, discount_percent, gear_order_lines(id, entry_id, gear_item_id, name, product, detail, category, qty_offered, qty_wanted, url, unit_price, discount_percent, size_options, sizes, removed, checked, client_note, admin_note, sort_order, gear_items(brand))')
       .eq('id', id)
       .maybeSingle(),
     admin.from('gear_items')
@@ -30,7 +30,7 @@ export default async function GearOrderPage({ params }: { params: Promise<{ id: 
       .eq('active', true).order('name'),
     admin.from('clients').select(CLIENT_COLUMNS),
     admin.from('gear_orders')
-      .select('id, title, status, sent_at, gear_order_lines(qty_wanted, unit_price, removed)')
+      .select('id, title, status, sent_at, discount_percent, gear_order_lines(qty_wanted, unit_price, discount_percent, removed)')
       .eq('split_from', id)
       .order('title'),
   ])

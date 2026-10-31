@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { submitGearOrder } from './actions'
-import { orderTotal, safeLink, sizeRows, sizesTotal, type GearOrderLine, type SizeRow } from '@/lib/gear-orders'
+import { netUnitPrice, orderTotal, safeLink, sizeRows, sizesTotal, type GearOrderLine, type SizeRow } from '@/lib/gear-orders'
 import GearSizeRows from '@/components/GearSizeRows'
 import { fmtMoney } from '@/lib/expenses'
 
@@ -33,6 +33,7 @@ export default function GearOrderForm({
   defaultName,
   standalone,
   draft,
+  orderDiscount,
 }: {
   token: string
   lines: GearOrderLine[]
@@ -41,6 +42,7 @@ export default function GearOrderForm({
   defaultName: string
   standalone: boolean
   draft: boolean
+  orderDiscount: number | null
 }) {
   const [answers, setAnswers] = useState<Record<string, Answer>>(() =>
     Object.fromEntries(lines.map((l) => [l.id, {
@@ -66,11 +68,12 @@ export default function GearOrderForm({
 
   const wanted = lines.filter((l) => !answers[l.id]?.removed && Number(qtyOf(answers[l.id]) || 0) > 0).length
 
-  const { total, unpriced, anyPriced } = orderTotal(lines.map((l) => ({
+  const { total, saved, unpriced, anyPriced } = orderTotal(lines.map((l) => ({
     qty: Number(qtyOf(answers[l.id]) || 0),
     removed: answers[l.id]?.removed ?? false,
     unit_price: l.unit_price,
-  })))
+    discount_percent: l.discount_percent,
+  })), orderDiscount)
 
   async function submit() {
     const nameless = lines.find((l) => {
@@ -147,7 +150,12 @@ export default function GearOrderForm({
                         <p className="text-[11px] text-zinc-600 mt-0.5">We suggested: {l.qty_offered}</p>
                       )}
                       {l.unit_price != null && (
-                        <p className="text-xs text-zinc-400 mt-1">{fmtMoney(Number(l.unit_price))} each</p>
+                        <p className="text-xs text-zinc-400 mt-1">
+                          {netUnitPrice(l.unit_price, l.discount_percent, orderDiscount) < Number(l.unit_price) && (
+                            <span className="line-through mr-1.5">{fmtMoney(Number(l.unit_price))}</span>
+                          )}
+                          {fmtMoney(netUnitPrice(l.unit_price, l.discount_percent, orderDiscount))} each
+                        </p>
                       )}
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
@@ -248,6 +256,7 @@ export default function GearOrderForm({
           <p className="text-xs text-zinc-500">
             {wanted} item{wanted === 1 ? '' : 's'} requested
             {anyPriced && <> · {fmtMoney(total)}{unpriced > 0 ? ` + ${unpriced} unpriced` : ''}</>}
+            {saved > 0 && <span className="text-emerald-400"> · you save {fmtMoney(saved)}</span>}
           </p>
         </div>
       </div>
