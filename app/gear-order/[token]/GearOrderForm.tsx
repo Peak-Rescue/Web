@@ -2,12 +2,13 @@
 
 import { useState } from 'react'
 import { submitGearOrder } from './actions'
-import { orderTotal, safeLink, type GearOrderLine } from '@/lib/gear-orders'
+import { orderTotal, safeLink, sizeRows, sizesTotal, type GearOrderLine, type SizeRow } from '@/lib/gear-orders'
+import GearSizeRows from '@/components/GearSizeRows'
 import { fmtMoney } from '@/lib/expenses'
 
 const input = 'bg-zinc-800 border border-zinc-700 rounded px-2.5 py-1.5 text-sm focus:outline-none focus:border-zinc-500'
 
-type Answer = { qty: string; removed: boolean; note: string }
+type Answer = { qty: string; removed: boolean; note: string; sizes: SizeRow[] }
 
 export default function GearOrderForm({
   token,
@@ -29,6 +30,7 @@ export default function GearOrderForm({
       qty: l.qty_wanted === null ? '' : String(l.qty_wanted),
       removed: l.removed,
       note: l.client_note ?? '',
+      sizes: sizeRows(l.size_options, l.sizes),
     }]))
   )
   const [name, setName] = useState(defaultName)
@@ -41,21 +43,32 @@ export default function GearOrderForm({
   const set = (id: string, patch: Partial<Answer>) =>
     setAnswers((a) => ({ ...a, [id]: { ...a[id], ...patch } }))
 
-  const wanted = lines.filter((l) => !answers[l.id]?.removed && Number(answers[l.id]?.qty || 0) > 0).length
+  // Once a line is split into sizes, they are its quantity.
+  const qtyOf = (a: Answer | undefined): string =>
+    a?.sizes.length ? String(sizesTotal(a.sizes)) : a?.qty ?? ''
+
+  const wanted = lines.filter((l) => !answers[l.id]?.removed && Number(qtyOf(answers[l.id]) || 0) > 0).length
 
   const { total, unpriced, anyPriced } = orderTotal(lines.map((l) => ({
-    qty: Number(answers[l.id]?.qty || 0),
+    qty: Number(qtyOf(answers[l.id]) || 0),
     removed: answers[l.id]?.removed ?? false,
     unit_price: l.unit_price,
   })))
 
   async function submit() {
+    const nameless = lines.find((l) => {
+      const a = answers[l.id]
+      return !a?.removed && a?.sizes.some((s) => Number(s.qty) > 0 && !s.size.trim())
+    })
+    if (nameless) { setError(`Say which size you want on ${nameless.name}`); return }
+
     setBusy(true); setError(null)
     const res = await submitGearOrder(token, {
       name, title, note,
       lines: lines.map((l) => ({
         id: l.id,
-        qty: answers[l.id]?.qty === '' ? null : Number(answers[l.id]?.qty),
+        qty: qtyOf(answers[l.id]) === '' ? null : Number(qtyOf(answers[l.id])),
+        sizes: answers[l.id]?.sizes ?? [],
         removed: answers[l.id]?.removed ?? false,
         note: answers[l.id]?.note ?? null,
       })),
@@ -128,18 +141,35 @@ export default function GearOrderForm({
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       <label className="sr-only" htmlFor={`qty-${l.id}`}>Quantity for {l.name}</label>
-                      <input
-                        id={`qty-${l.id}`}
-                        type="number"
-                        min={0}
-                        step={1}
-                        inputMode="numeric"
-                        disabled={a?.removed}
-                        value={a?.qty ?? ''}
-                        onChange={(e) => set(l.id, { qty: e.target.value })}
-                        placeholder="—"
-                        className={`${input} w-20 text-center disabled:opacity-30`}
-                      />
+                      {a?.sizes.length ? (
+                        <span id={`qty-${l.id}`} className="text-sm text-zinc-300 w-20 text-center">
+                          {sizesTotal(a.sizes)} total
+                        </span>
+                      ) : (
+                        <>
+                          <input
+                            id={`qty-${l.id}`}
+                            type="number"
+                            min={0}
+                            step={1}
+                            inputMode="numeric"
+                            disabled={a?.removed}
+                            value={a?.qty ?? ''}
+                            onChange={(e) => set(l.id, { qty: e.target.value })}
+                            placeholder="—"
+                            className={`${input} w-20 text-center disabled:opacity-30`}
+                          />
+                          {standalone && !a?.removed && (
+                            <button
+                              type="button"
+                              onClick={() => set(l.id, { sizes: [{ size: '', qty: a?.qty ?? '' }] })}
+                              className="text-xs px-2.5 py-1.5 rounded border border-zinc-800 text-zinc-500 hover:text-zinc-300 transition-colors"
+                            >
+                              By size
+                            </button>
+                          )}
+                        </>
+                      )}
                       <button
                         type="button"
                         onClick={() => set(l.id, { removed: !a?.removed })}
@@ -153,6 +183,14 @@ export default function GearOrderForm({
                       </button>
                     </div>
                   </div>
+                  {standalone && !a?.removed && (a?.sizes.length ?? 0) > 0 && (
+                    <GearSizeRows
+                      fixed={(l.size_options ?? []).length > 0 && a?.sizes.length === (l.size_options ?? []).length}
+                      rows={a?.sizes ?? []}
+                      onChange={(sizes) => set(l.id, { sizes })}
+                      input={input}
+                    />
+                  )}
                   {!a?.removed && (
                     <input
                       value={a?.note ?? ''}

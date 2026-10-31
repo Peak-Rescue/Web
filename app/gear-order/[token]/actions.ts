@@ -7,8 +7,12 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { courseShortName } from '@/lib/courses'
 import { CLIENT_COLUMNS, clientLabel, type ClientRow } from '@/lib/clients'
 import { sendMail } from '@/lib/mailer'
+import { cleanSizes, sizesSummary, sizesTotal, type GearOrderSize } from '@/lib/gear-orders'
 
-export type LineAnswer = { id: string; qty: number | null; removed: boolean; note: string | null }
+export type LineAnswer = {
+  id: string; qty: number | null; removed: boolean; note: string | null
+  sizes?: { size: string; qty: string | number }[]
+}
 
 // Public action — authorization is the unguessable token itself.
 //
@@ -38,8 +42,14 @@ export async function submitGearOrder(
 
   for (const l of input.lines) {
     if (!own.has(l.id)) continue
-    const qty = l.qty === null || Number.isNaN(l.qty) ? null : Math.max(0, Math.min(99999, l.qty))
+    // Sizes are for orders with no course. Where there are any, the line's total
+    // is theirs to set, whatever number the page sent alongside them.
+    const sizes = order.instance_id ? null : cleanSizes(l.sizes)
+    const qty = sizes?.length
+      ? sizesTotal(sizes)
+      : l.qty === null || Number.isNaN(l.qty) ? null : Math.max(0, Math.min(99999, l.qty))
     await admin.from('gear_order_lines').update({
+      ...(sizes ? { sizes } : {}),
       qty_wanted: qty,
       removed: Boolean(l.removed),
       client_note: l.note?.trim().slice(0, 500) || null,
@@ -65,7 +75,7 @@ export async function submitGearOrder(
       try {
         const [{ data: admins }, { data: lines }] = await Promise.all([
           admin.from('profiles').select('email').eq('role', 'admin'),
-          admin.from('gear_order_lines').select('name, product, qty_wanted, removed').eq('order_id', order.id).order('sort_order'),
+          admin.from('gear_order_lines').select('name, product, qty_wanted, removed, sizes').eq('order_id', order.id).order('sort_order'),
         ])
         const recipients = (admins ?? []).map((a) => a.email).filter((e): e is string => Boolean(e))
         if (recipients.length === 0) return
@@ -97,7 +107,7 @@ export async function submitGearOrder(
             order.es_quote_number ? `Quote ${order.es_quote_number}.` : null,
             '',
             `${wanted.length} item${wanted.length === 1 ? '' : 's'} wanted${dropped.length ? `, ${dropped.length} struck off` : ''}:`,
-            ...wanted.map((l) => `  ${l.qty_wanted} × ${l.name}${l.product ? ` (${l.product})` : ''}`),
+            ...wanted.map((l) => `  ${l.qty_wanted} × ${l.name}${l.product ? ` (${l.product})` : ''}${sizesSummary(l.sizes as GearOrderSize[]) ? `: ${sizesSummary(l.sizes as GearOrderSize[])}` : ''}`),
             input.note.trim() ? ['', `They said: "${input.note.trim()}"`].join('\n') : null,
             '',
             `${siteUrl}${path}`,

@@ -2,8 +2,9 @@
 
 import { revalidatePath } from 'next/cache'
 import { requireAdminUser } from '@/lib/course-access'
+import { upsertGearItem } from '@/app/admin/gear/actions'
 import { linesFromList } from '@/lib/gear-order-lines'
-import { lineNames, safeLink } from '@/lib/gear-orders'
+import { cleanSizes, lineNames, parseSizeOptions, safeLink, sizesTotal } from '@/lib/gear-orders'
 import { sendMail } from '@/lib/mailer'
 
 // Gear orders that belong to no course: a team asks what we would supply, and
@@ -19,10 +20,10 @@ function touch(orderId?: string) {
   if (orderId) revalidatePath(`/admin/gear/orders/${orderId}`)
 }
 
-const ITEM_COLUMNS = 'id, name, brand, info, url, category, price, parent_id'
+const ITEM_COLUMNS = 'id, name, brand, info, url, category, price, parent_id, sizes'
 type Item = {
   id: string; name: string; brand: string | null; info: string | null; url: string | null
-  category: string | null; price: number | null; parent_id: string | null
+  category: string | null; price: number | null; parent_id: string | null; sizes: string[]
 }
 
 function cleanPrice(v: number | null): number | null {
@@ -128,6 +129,7 @@ export async function addCatalogLine(orderId: string, gearItemId: string): Promi
     category: item.category,
     url: safeLink(item.url),
     unit_price: item.price,
+    size_options: item.sizes,
     sort_order: await nextSort(admin, orderId),
   })
   if (error) throw new Error(error.message)
@@ -152,13 +154,13 @@ export async function addOneOffLine(orderId: string, name: string): Promise<{ ok
 async function ownLine(admin: Awaited<ReturnType<typeof requireAdminUser>>['admin'], lineId: string) {
   const { data } = await admin
     .from('gear_order_lines')
-    .select('id, order_id, gear_item_id, product, detail, url, unit_price, gear_orders!inner(instance_id)')
+    .select('id, order_id, gear_item_id, product, detail, url, unit_price, size_options, gear_orders!inner(instance_id)')
     .eq('id', lineId)
     .is('gear_orders.instance_id', null)
     .maybeSingle()
   return data as null | {
     id: string; order_id: string; gear_item_id: string | null; product: string | null; detail: string | null
-    url: string | null; unit_price: number | null
+    url: string | null; unit_price: number | null; size_options: string[]
   }
 }
 
@@ -167,6 +169,7 @@ export async function updateStandaloneLine(
   patch: {
     name?: string; detail?: string | null; url?: string | null; unitPrice?: number | null
     qtyWanted?: number | null; removed?: boolean
+    sizeOptions?: string; sizes?: { size: string; qty: string | number }[]
   }
 ): Promise<{ ok: true } | Failed> {
   const { admin } = await requireAdminUser()
@@ -190,21 +193,29 @@ export async function updateStandaloneLine(
   }
   const price = patch.unitPrice !== undefined ? cleanPrice(patch.unitPrice) : undefined
   if (price !== undefined) update.unit_price = price
+  const options = patch.sizeOptions !== undefined ? parseSizeOptions(patch.sizeOptions) : undefined
+  if (options !== undefined) update.size_options = options
+  if (patch.sizes !== undefined) {
+    const sizes = cleanSizes(patch.sizes)
+    update.sizes = sizes
+    if (sizes.length > 0) update.qty_wanted = sizesTotal(sizes)
+  }
 
   const { error } = await admin.from('gear_order_lines').update(update).eq('id', lineId)
   if (error) throw new Error(error.message)
 
-  // The first link or price a product is ever given goes back to the catalog,
+  // The first link, price or size list a product is ever given goes back to the catalog,
   // so it is only entered once. Filling a gap and never replacing a value: a
   // deal's price on one order is not the new price for everyone. Products only,
   // since "Skis" has no price or product page of its own.
-  if (line.gear_item_id && (url || price != null)) {
+  if (line.gear_item_id && (url || price != null || options?.length)) {
     const { data } = await admin.from('gear_items').select(ITEM_COLUMNS).eq('id', line.gear_item_id).maybeSingle()
     const item = data as Item | null
     if (item?.parent_id) {
       const fill: Record<string, unknown> = {}
       if (url && !item.url) fill.url = url
       if (price != null && item.price == null) fill.price = price
+      if (options?.length && !item.sizes?.length) fill.sizes = options
       if (Object.keys(fill).length > 0) {
         await admin.from('gear_items').update(fill).eq('id', item.id)
         revalidatePath('/admin/gear')
@@ -233,10 +244,34 @@ export async function setLineProduct(lineId: string, gearItemId: string): Promis
     detail: line.detail ?? item.info,
     url: safeLink(item.url) ?? (line.product ? null : line.url),
     unit_price: item.price ?? (line.product ? null : line.unit_price),
+    size_options: item.sizes?.length ? item.sizes : (line.product ? [] : line.size_options),
   }).eq('id', lineId)
   if (error) throw new Error(error.message)
   touch(line.order_id)
   return { ok: true }
+}
+
+// A product the catalog does not have yet, named from the line that needs it.
+// It goes under the line's generic item, so it is on offer next time too.
+export async function addLineProduct(
+  lineId: string,
+  input: { brand: string; model: string }
+): Promise<{ ok: true } | Failed> {
+  const { admin } = await requireAdminUser()
+  const line = await ownLine(admin, lineId)
+  if (!line) return fail('Line not found.')
+  if (!line.gear_item_id) return fail('This line is not from the catalog, so a product has nothing to sit under.')
+  const { data } = await admin.from('gear_items').select(ITEM_COLUMNS).eq('id', line.gear_item_id).single()
+  const item = data as Item | null
+  if (!item) return fail('That item is no longer in the catalog.')
+
+  const model = input.model.trim()
+  if (!model) return fail('Name the model.')
+  const made = await upsertGearItem({
+    name: model, brand: input.brand.trim() || null, parentId: item.parent_id ?? item.id,
+  })
+  if ('error' in made) return made
+  return setLineProduct(lineId, made.id)
 }
 
 export async function deleteStandaloneLine(lineId: string): Promise<{ ok: true } | Failed> {

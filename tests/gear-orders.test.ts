@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { lineNames, orderTotal, safeLink } from '@/lib/gear-orders'
+import { cleanSizes, lineNames, orderTotal, parseSizeOptions, safeLink, sizeRows, sizesSummary, sizesTotal } from '@/lib/gear-orders'
 
 describe('orderTotal', () => {
   it('adds up the lines still wanted', () => {
@@ -59,5 +59,34 @@ describe('lineNames', () => {
 
   it('leaves a generic item with no product yet', () => {
     expect(lineNames({ name: 'Skis' }, null)).toEqual({ name: 'Skis', product: null })
+  })
+})
+
+describe('sizes', () => {
+  it('reads a typed list, keeping spaces and dropping repeats', () => {
+    expect(parseSizeOptions(' S, m ,M, 10.5 wide,, ')).toEqual(['S', 'm', '10.5 wide'])
+  })
+
+  it('stores only real answers, and one row per size', () => {
+    expect(cleanSizes([
+      { size: 'M', qty: '2' }, { size: 'm', qty: 1 }, { size: 'L', qty: '' }, { size: '', qty: 3 }, { size: 'XL', qty: -1 },
+    ])).toEqual([{ size: 'M', qty: 3 }])
+    expect(cleanSizes(null)).toEqual([])
+  })
+
+  it('adds up to the line total', () => {
+    expect(sizesTotal([{ qty: '2' }, { qty: 4 }, { qty: '' }])).toBe(6)
+  })
+
+  it('summarises for the PDF and the email', () => {
+    expect(sizesSummary([{ size: 'M', qty: 2 }, { size: 'L', qty: 4 }])).toBe('M × 2, L × 4')
+    expect(sizesSummary([])).toBeNull()
+  })
+
+  it('draws a box per known size, and keeps an answer the list no longer holds', () => {
+    expect(sizeRows(['S', 'M'], [{ size: 'M', qty: 2 }, { size: 'XXL', qty: 1 }])).toEqual([
+      { size: 'S', qty: '' }, { size: 'M', qty: '2' }, { size: 'XXL', qty: '1' },
+    ])
+    expect(sizeRows([], null)).toEqual([])
   })
 })

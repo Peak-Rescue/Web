@@ -73,6 +73,7 @@ export async function upsertGearItem(input: {
   info?: string | null
   url?: string | null
   price?: number | null
+  sizes?: string[]
   category?: string | null
   parentId?: string | null
   aliases?: string[]
@@ -91,6 +92,7 @@ export async function upsertGearItem(input: {
       ? null
       : Math.round(Math.max(0, Math.min(999999, input.price)) * 100) / 100
   }
+  if (input.sizes !== undefined) row.sizes = input.sizes
   if (input.category !== undefined) row.category = input.category?.trim() || null
   if (!row.name) return fail('Name is required')
   if (input.aliases !== undefined) {

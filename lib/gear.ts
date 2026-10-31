@@ -92,6 +92,8 @@ export type CatalogItem = {
   // What we charge. Only the catalog page and gear orders ask for it; nothing a
   // student or instructor reads selects it.
   price?: number | null
+  // What it comes in, as whatever it is measured in: S/M/L, a length, a mondo.
+  sizes?: string[]
 }
 
 // Server actions hand back a message rather than throwing it, because Next

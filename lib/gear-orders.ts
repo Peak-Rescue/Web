@@ -9,6 +9,10 @@ import { productName } from '@/lib/gear'
 
 export type GearOrderStatus = 'draft' | 'sent' | 'responded' | 'closed'
 
+export type GearOrderSize = { size: string; qty: number }
+/** A size being typed: the quantity is still whatever is in the box. */
+export type SizeRow = { size: string; qty: string }
+
 export type GearOrderLine = {
   id: string
   entry_id: string | null
@@ -27,6 +31,8 @@ export type GearOrderLine = {
   product?: string | null
   url?: string | null
   unit_price?: number | null
+  size_options?: string[]
+  sizes?: GearOrderSize[]
 }
 
 export type GearOrder = {
@@ -84,6 +90,60 @@ export function lineNames(
 ): { name: string; product: string | null } {
   const full = productName(item)
   return parent ? { name: parent.name, product: full } : { name: full, product: null }
+}
+
+// A typed list of sizes: "S, M, L". Comma-separated because a size can hold a
+// space ("10.5 wide") and nothing else in this vocabulary needs a comma.
+export function parseSizeOptions(text: string): string[] {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const part of text.split(',')) {
+    const size = part.trim().slice(0, 40)
+    if (size && !seen.has(size.toLowerCase())) {
+      seen.add(size.toLowerCase())
+      out.push(size)
+    }
+  }
+  return out.slice(0, 50)
+}
+
+// What gets stored. Empty rows go, and the same size typed twice is one size
+// with both numbers on it, so the summary never reads "M × 2, M × 1".
+export function cleanSizes(rows: { size: string; qty: number | string }[] | null | undefined): GearOrderSize[] {
+  const out: GearOrderSize[] = []
+  for (const r of rows ?? []) {
+    const size = String(r.size ?? '').trim().slice(0, 40)
+    const qty = Math.min(99999, Math.floor(Number(r.qty)))
+    if (!size || !(qty > 0)) continue
+    const held = out.find((o) => o.size.toLowerCase() === size.toLowerCase())
+    if (held) held.qty = Math.min(99999, held.qty + qty)
+    else out.push({ size, qty })
+  }
+  return out.slice(0, 50)
+}
+
+export const sizesTotal = (sizes: { qty: number | string }[]): number =>
+  sizes.reduce((sum, s) => sum + (Number(s.qty) > 0 ? Math.floor(Number(s.qty)) : 0), 0)
+
+export function sizesSummary(sizes: GearOrderSize[] | null | undefined): string | null {
+  return sizes?.length ? sizes.map((s) => `${s.size} × ${s.qty}`).join(', ') : null
+}
+
+// The rows to draw: one per known size, then anything answered that the list no
+// longer holds, so a number somebody gave never silently stops showing.
+export function sizeRows(
+  options: string[] | null | undefined,
+  sizes: GearOrderSize[] | null | undefined
+): SizeRow[] {
+  const given = sizes ?? []
+  const known = (options ?? []).map((size) => ({
+    size,
+    qty: String(given.find((s) => s.size.toLowerCase() === size.toLowerCase())?.qty ?? ''),
+  }))
+  const extra = given
+    .filter((s) => !known.some((k) => k.size.toLowerCase() === s.size.toLowerCase()))
+    .map((s) => ({ size: s.size, qty: String(s.qty) }))
+  return [...known, ...extra]
 }
 
 // The money on the lines still wanted. `unpriced` is reported rather than

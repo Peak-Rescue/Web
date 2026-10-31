@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react'
 import { useSteadyRefresh } from '@/components/useSteadyRefresh'
 import { GEAR_CATEGORIES, matchesGear, unwrap, type CatalogItem } from '@/lib/gear'
+import { parseSizeOptions } from '@/lib/gear-orders'
 import { upsertGearItem, retireGearItem, renameGearCategory } from './actions'
 import CategorySelect, { NEW_TYPE } from './CategorySelect'
 
@@ -263,6 +264,19 @@ export default function GearCatalog({ items }: { items: Row[] }) {
                 }
               }}
               className={`${input} w-20 py-0.5 text-[11px]`}
+            />
+            <input
+              aria-label={`Sizes of ${row.name}`}
+              title="Sizes, separated by commas"
+              placeholder="Sizes"
+              defaultValue={(row.sizes ?? []).join(', ')}
+              onBlur={(e) => {
+                const next = parseSizeOptions(e.target.value)
+                if (next.join() !== (row.sizes ?? []).join()) {
+                  run(() => upsertGearItem({ id: row.id, name: row.name, sizes: next }))
+                }
+              }}
+              className={`${input} w-24 py-0.5 text-[11px]`}
             />
             {row.url && (
               <a

@@ -47,11 +47,11 @@ export async function linesFromList(
     ...(e.gear_entry_options ?? []).map((o) => o.gear_item_id),
   ]).filter((id): id is string => Boolean(id)))]
   const { data: itemRows } = itemIds.length
-    ? await admin.from('gear_items').select('id, name, brand, info, category, url, price, parent_id').in('id', itemIds)
+    ? await admin.from('gear_items').select('id, name, brand, info, category, url, price, parent_id, sizes').in('id', itemIds)
     : { data: [] }
   const items = new Map((itemRows ?? []).map((i) => [i.id as string, i as {
     id: string; name: string; brand: string | null; info: string | null; category: string | null
-    url: string | null; price: number | null; parent_id: string | null
+    url: string | null; price: number | null; parent_id: string | null; sizes: string[]
   }]))
   const parentIds = [...new Set([...items.values()].map((i) => i.parent_id).filter((id): id is string => Boolean(id)))]
   const { data: parentRows } = priced && parentIds.length
@@ -88,6 +88,7 @@ export async function linesFromList(
       qty_wanted: qty.text && /^\d+(\.\d+)?$/.test(qty.text) ? Number(qty.text) : null,
       url: priced ? e.url ?? item?.url ?? null : null,
       unit_price: priced ? item?.price ?? null : null,
+      size_options: priced ? item?.sizes ?? [] : [],
       sort_order: i,
     }
   })

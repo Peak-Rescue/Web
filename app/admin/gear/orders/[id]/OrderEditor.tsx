@@ -6,13 +6,14 @@ import { AddGear, type GearItem } from '@/app/admin/gear/GearListEditor'
 import { fmtMoney } from '@/lib/expenses'
 import { productName, unwrap } from '@/lib/gear'
 import {
-  GEAR_ORDER_STATUS_LABEL, GEAR_ORDER_STATUS_STYLE, orderTotal, safeLink,
+  GEAR_ORDER_STATUS_LABEL, GEAR_ORDER_STATUS_STYLE, orderTotal, safeLink, sizeRows,
   type GearOrder, type GearOrderLine,
 } from '@/lib/gear-orders'
+import GearSizeRows from '@/components/GearSizeRows'
 import PdfLink from '@/components/PdfLink'
 import TrashIcon from '@/components/TrashIcon'
 import {
-  addCatalogLine, addOneOffLine, deleteStandaloneLine, deleteStandaloneOrder, sendStandaloneOrder,
+  addCatalogLine, addLineProduct, addOneOffLine, deleteStandaloneLine, deleteStandaloneOrder, sendStandaloneOrder,
   setLineProduct, updateStandaloneLine, updateStandaloneOrder,
 } from '../actions'
 
@@ -234,6 +235,81 @@ function productsFor(line: GearOrderLine, catalog: GearItem[], childrenOf: Map<s
   return childrenOf.get(item.parent_id ?? item.id) ?? []
 }
 
+// The product menu only lists what the catalog holds, so the first product of
+// anything has to start somewhere. Here, on the line that wants it.
+function NewProduct({ lineId, run, busy }: { lineId: string; run: Run; busy: boolean }) {
+  const [open, setOpen] = useState(false)
+  const [brand, setBrand] = useState('')
+  const [model, setModel] = useState('')
+
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        className="mt-2 block text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+      >
+        + Product
+      </button>
+    )
+  }
+  return (
+    <form
+      className="mt-2 flex items-center gap-2 flex-wrap"
+      onSubmit={(e) => {
+        e.preventDefault()
+        run(async () => {
+          unwrap(await addLineProduct(lineId, { brand, model }))
+          setOpen(false); setBrand(''); setModel('')
+        })
+      }}
+    >
+      <input aria-label="Brand" placeholder="Brand" value={brand} onChange={(e) => setBrand(e.target.value)} className={`${input} w-36 text-xs`} />
+      <input autoFocus aria-label="Model" placeholder="Model" value={model} onChange={(e) => setModel(e.target.value)} className={`${input} min-w-0 flex-1 text-xs`} />
+      <button type="submit" disabled={busy || !model.trim()} className="text-xs text-zinc-300 hover:text-white disabled:opacity-40">Add</button>
+      <button type="button" onClick={() => setOpen(false)} className="text-xs text-zinc-600 hover:text-zinc-300">Cancel</button>
+    </form>
+  )
+}
+
+// Keyed on what the server holds, so a saved answer redraws from the record.
+function LineSizes({
+  line, busy, save,
+}: {
+  line: GearOrderLine
+  busy: boolean
+  save: (patch: Parameters<typeof updateStandaloneLine>[1]) => void
+}) {
+  const [rows, setRows] = useState(() => sizeRows(line.size_options, line.sizes))
+  const options = line.size_options ?? []
+  const commit = (next: typeof rows) => {
+    const before = JSON.stringify(sizeRows(line.size_options, line.sizes))
+    if (JSON.stringify(next) !== before) save({ sizes: next })
+  }
+
+  return (
+    <div className="mt-2">
+      <input
+        aria-label="Sizes on offer"
+        placeholder="Sizes on offer"
+        title="Separated by commas. Leave empty and sizes can be typed instead."
+        defaultValue={options.join(', ')}
+        onBlur={(e) => {
+          if (e.target.value.trim() !== options.join(', ')) save({ sizeOptions: e.target.value })
+        }}
+        className={`${input} w-full text-xs`}
+      />
+      <GearSizeRows
+        fixed={options.length > 0 && rows.length === options.length}
+        rows={rows}
+        onChange={setRows}
+        onCommit={commit}
+        disabled={busy}
+        input={input}
+      />
+    </div>
+  )
+}
+
 function LineRow({
   line, products, run, busy,
 }: {
@@ -287,10 +363,13 @@ function LineRow({
           min={0}
           aria-label="Quantity"
           placeholder="Qty"
+          // The sizes add up to this, so it is not a second answer to edit.
+          readOnly={(line.sizes ?? []).length > 0}
+          title={(line.sizes ?? []).length > 0 ? 'Total of the sizes below' : undefined}
           defaultValue={line.qty_wanted ?? ''}
           onBlur={(e) => {
             const v = e.target.value === '' ? null : Number(e.target.value)
-            if (v !== money(line.qty_wanted)) save({ qtyWanted: v })
+            if (v !== money(line.qty_wanted) && !(line.sizes ?? []).length) save({ qtyWanted: v })
           }}
           className={`${input} w-full text-center`}
         />
@@ -344,6 +423,15 @@ function LineRow({
           {products.map((p) => <option key={p.id} value={p.id}>{productName(p)}</option>)}
         </select>
       )}
+
+      {line.gear_item_id && <NewProduct lineId={line.id} run={run} busy={busy} />}
+
+      <LineSizes
+        key={JSON.stringify([line.size_options, line.sizes])}
+        line={line}
+        busy={busy}
+        save={save}
+      />
 
       <input
         key={`note-${line.detail}`}

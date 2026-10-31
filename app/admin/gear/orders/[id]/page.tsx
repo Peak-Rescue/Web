@@ -22,11 +22,11 @@ export default async function GearOrderPage({ params }: { params: Promise<{ id: 
 
   const [{ data: orderRow }, { data: items }, { data: clientRows }] = await Promise.all([
     admin.from('gear_orders')
-      .select('id, instance_id, title, client_id, contact_name, contact_email, list_id, es_quote_number, status, accept_token, intro, sent_at, viewed_at, responded_at, responded_name, responded_title, client_note, attachments, gear_order_lines(id, entry_id, gear_item_id, name, product, detail, category, qty_offered, qty_wanted, url, unit_price, removed, client_note, admin_note, sort_order)')
+      .select('id, instance_id, title, client_id, contact_name, contact_email, list_id, es_quote_number, status, accept_token, intro, sent_at, viewed_at, responded_at, responded_name, responded_title, client_note, attachments, gear_order_lines(id, entry_id, gear_item_id, name, product, detail, category, qty_offered, qty_wanted, url, unit_price, size_options, sizes, removed, client_note, admin_note, sort_order)')
       .eq('id', id)
       .maybeSingle(),
     admin.from('gear_items')
-      .select('id, name, brand, info, url, category, parent_id, aliases, disciplines, price')
+      .select('id, name, brand, info, url, category, parent_id, aliases, disciplines, price, sizes')
       .eq('active', true).order('name'),
     admin.from('clients').select(CLIENT_COLUMNS),
   ])
