@@ -162,9 +162,16 @@ export async function sendGearOrder(instanceId: string, orderId: string, formDat
   }
   const cc = [...new Set([...contactCc, ...adminCc])]
 
+  // The mail invites a reply, and a reply belongs with whoever sent the link.
+  const { data: { user: senderUser } } = await (await createClient()).auth.getUser()
+  const { data: sender } = senderUser
+    ? await admin.from('profiles').select('email').eq('id', senderUser.id).maybeSingle()
+    : { data: null }
+
   const { error: sendError } = await sendMail({
     from: 'Peak Rescue <noreply@peak-rescue.com>',
     to: [toEmail],
+    replyTo: sender?.email ?? senderUser?.email ?? undefined,
     cc: cc.length > 0 ? cc : undefined,
     subject: order.es_quote_number
       ? `Gear list ${order.es_quote_number} — ${courseName}`

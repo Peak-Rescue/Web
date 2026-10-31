@@ -1,4 +1,4 @@
-// Breaking one gear order into several, each under a spending cap.
+// How one gear order would divide under a spending cap.
 //
 // A team's purchasing can often only sign off so much on one order. The rule on
 // top of the cap is that a brand stays together where it can, because each order
@@ -6,8 +6,8 @@
 // first part with room. A brand too big for any one part has to spread, and
 // within it a line only breaks across parts if that line alone is over the cap.
 //
-// A plan, not a write: the same function draws the preview and makes the orders.
-// Money is in whole cents throughout, so a cap of $1,000.00 is exactly that.
+// A plan, not a write: the order stays one order, and this shows how it could be
+// bought in pieces. Money is in whole cents throughout, so a cap of $1,000.00 is exactly that.
 
 import type { GearOrderSize } from '@/lib/gear-orders'
 

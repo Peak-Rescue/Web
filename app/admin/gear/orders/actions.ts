@@ -4,9 +4,8 @@ import { revalidatePath } from 'next/cache'
 import { requireAdminUser } from '@/lib/course-access'
 import { upsertGearItem } from '@/app/admin/gear/actions'
 import { linesFromList } from '@/lib/gear-order-lines'
-import { cleanSizes, isSized, lineNames, netUnitPrice, parseEmails, parseSizeOptions, safeLink, sizesTotal, typedOverCatalog } from '@/lib/gear-orders'
+import { cleanSizes, isSized, lineNames, parseEmails, parseSizeOptions, safeLink, sizesTotal, typedOverCatalog } from '@/lib/gear-orders'
 import { sendMail } from '@/lib/mailer'
-import { planQty, planSplit, type SplitLine } from '@/lib/gear-order-split'
 
 // Gear orders that belong to no course: a team asks what we would supply, and
 // might buy it from us. Course orders keep their own actions and their own
@@ -70,6 +69,7 @@ export async function updateStandaloneOrder(
   patch: {
     title?: string; clientId?: string | null; contactName?: string | null; contactEmail?: string | null
     intro?: string | null; esQuoteNumber?: string | null; status?: 'closed'; discountPercent?: number | null
+    splitCap?: number | null
   }
 ): Promise<{ ok: true } | Failed> {
   const { admin } = await requireAdminUser()
@@ -86,6 +86,9 @@ export async function updateStandaloneOrder(
   if (patch.esQuoteNumber !== undefined) update.es_quote_number = patch.esQuoteNumber?.trim().slice(0, 80) || null
   if (patch.status !== undefined) update.status = patch.status
   if (patch.discountPercent !== undefined) update.discount_percent = cleanPercent(patch.discountPercent)
+  if (patch.splitCap !== undefined) {
+    update.split_cap = patch.splitCap != null && patch.splitCap > 0 ? Math.round(patch.splitCap * 100) / 100 : null
+  }
 
   const { error } = await admin.from('gear_orders').update(update).eq('id', orderId).is('instance_id', null)
   if (error) throw new Error(error.message)
@@ -378,115 +381,11 @@ export async function deleteStandaloneLine(lineId: string): Promise<{ ok: true }
   return { ok: true }
 }
 
-// One order into several, each under a cap. The parts are ordinary orders with
-// their own link and PDF, copied from the original's current state, and they
-// start as drafts: nothing reaches the team until each is sent. The original is
-// closed, since answering it now would answer nothing.
-export async function splitStandaloneOrder(
-  orderId: string,
-  cap: number,
-  fillQty: number | null = null
-): Promise<{ count: number } | Failed> {
-  const { admin } = await requireAdminUser()
-  const { data } = await admin
-    .from('gear_orders')
-    .select('id, title, client_id, contact_name, contact_email, intro, es_quote_number, split_from, discount_percent, gear_order_lines(*, gear_items(brand))')
-    .eq('id', orderId).is('instance_id', null)
-    .maybeSingle()
-  if (!data) return fail('Order not found.')
-  const order = data as unknown as {
-    id: string; title: string; client_id: string | null; contact_name: string | null; contact_email: string | null
-    intro: string | null; es_quote_number: string | null; split_from: string | null; discount_percent: number | null
-    gear_order_lines: (Record<string, unknown> & {
-      id: string; name: string; product: string | null; qty_wanted: number | null; unit_price: number | null
-      removed: boolean; sizes: { size: string; qty: number }[]; sort_order: number; discount_percent: number | null
-      gear_items: { brand: string | null } | null
-    })[]
-  }
-  if (order.split_from) return fail('This is already one part of a split.')
-  const { count: existing } = await admin
-    .from('gear_orders').select('id', { count: 'exact', head: true }).eq('split_from', orderId)
-  if (existing) return fail('This order is already split. Undo that first.')
-
-  const rows = [...order.gear_order_lines].sort((a, b) => a.sort_order - b.sort_order)
-  const lines: SplitLine[] = rows.map((l) => ({
-    id: l.id, name: l.product ?? l.name, brand: l.gear_items?.brand ?? null,
-    qty: planQty(l.qty_wanted, fillQty), removed: l.removed, sizes: l.sizes,
-    // The cap is what the team spends, so it runs on the discounted price.
-    unit_price: l.unit_price == null ? null : netUnitPrice(l.unit_price, l.discount_percent, order.discount_percent),
-  }))
-  const plan = planSplit(lines, cap)
-  if (plan.unpriced.length > 0) return fail(`Price these first: ${plan.unpriced.join(', ')}.`)
-  if (plan.parts.length < 2) return fail('This order already fits under that amount.')
-
-  const byId = new Map(rows.map((l) => [l.id, l]))
-  const made: string[] = []
-  try {
-    for (const [i, part] of plan.parts.entries()) {
-      const { data: created, error } = await admin.from('gear_orders').insert({
-        title: `${order.title} (${i + 1} of ${plan.parts.length})`.slice(0, 200),
-        client_id: order.client_id,
-        contact_name: order.contact_name,
-        contact_email: order.contact_email,
-        intro: order.intro,
-        es_quote_number: order.es_quote_number,
-        discount_percent: order.discount_percent,
-        split_from: order.id,
-      }).select('id').single()
-      if (error || !created) throw new Error(error?.message ?? 'Could not create a part')
-      made.push(created.id)
-      const { error: e2 } = await admin.from('gear_order_lines').insert(part.pieces.map((piece, sort) => {
-        const { id, order_id, gear_items, ...copy } = byId.get(piece.lineId)!
-        // A planned number, not an answer, so the team's page offers it as a
-        // suggestion for them to break into sizes.
-        const planned = !(Number(copy.qty_wanted ?? 0) > 0)
-        return {
-          ...copy, order_id: created.id, qty_wanted: piece.qty, sizes: piece.sizes, sort_order: sort,
-          ...(planned ? { qty_offered: String(piece.qty) } : {}),
-        }
-      }))
-      if (e2) throw new Error(e2.message)
-    }
-    const { error: e3 } = await admin
-      .from('gear_orders').update({ status: 'closed', split_cap: cap }).eq('id', orderId)
-    if (e3) throw new Error(e3.message)
-  } catch (e) {
-    // All the parts or none: half a split reads as a smaller order.
-    if (made.length) await admin.from('gear_orders').delete().in('id', made)
-    throw e
-  }
-  touch(orderId)
-  return { count: plan.parts.length }
-}
-
-// Only while nothing has gone out. Once a team holds a part's link, deleting it
-// would break a link they were sent.
-export async function undoStandaloneSplit(orderId: string): Promise<{ ok: true } | Failed> {
-  const { admin } = await requireAdminUser()
-  const { data: order } = await admin
-    .from('gear_orders').select('id, sent_at, responded_at').eq('id', orderId).is('instance_id', null).maybeSingle()
-  if (!order) return fail('Order not found.')
-  const { data: parts } = await admin.from('gear_orders').select('id, sent_at').eq('split_from', orderId)
-  if ((parts ?? []).some((p) => p.sent_at)) return fail('A part has already been sent, so this split has to stay.')
-
-  if (parts?.length) {
-    const { error } = await admin.from('gear_orders').delete().in('id', parts.map((p) => p.id))
-    if (error) throw new Error(error.message)
-  }
-  const { error } = await admin.from('gear_orders').update({
-    status: order.responded_at ? 'responded' : order.sent_at ? 'sent' : 'draft',
-    split_cap: null,
-  }).eq('id', orderId)
-  if (error) throw new Error(error.message)
-  touch(orderId)
-  return { ok: true }
-}
-
 // Re-sendable, like a course order: a second pass is the same email against the
 // same link. Nothing here asks for an ES quote number. These orders may never
 // have one, and it shows on their page if it is ever added.
 export async function sendStandaloneOrder(orderId: string): Promise<{ ok: true } | Failed> {
-  const { admin } = await requireAdminUser()
+  const { admin, user } = await requireAdminUser()
   const { data: order } = await admin
     .from('gear_orders')
     .select('id, title, accept_token, es_quote_number, status, contact_name, contact_email, gear_order_lines(id)')
@@ -500,10 +399,14 @@ export async function sendStandaloneOrder(orderId: string): Promise<{ ok: true }
   if ((order.gear_order_lines ?? []).length === 0) return fail('There is nothing on this order yet.')
   if (!process.env.RESEND_API_KEY) return fail('Email is not configured in this environment.')
 
+  // The mail invites a reply, and a reply belongs with whoever sent the link.
+  const { data: sender } = await admin.from('profiles').select('email').eq('id', user.id).maybeSingle()
+
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://peak-rescue.com'
   const { error: sendError } = await sendMail({
     from: 'Peak Rescue <noreply@peak-rescue.com>',
     to,
+    replyTo: sender?.email ?? user.email ?? undefined,
     subject: order.es_quote_number
       ? `Gear list ${order.es_quote_number} — ${order.title}`
       : `Gear list — ${order.title}`,

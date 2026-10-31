@@ -15,33 +15,26 @@ import ClientPicker from '@/components/ClientPicker'
 import type { ClientRow } from '@/lib/clients'
 import SizeOptionsField from '@/components/SizeOptionsField'
 import PdfLink from '@/components/PdfLink'
-import Link from 'next/link'
 import { planQty, planSplit } from '@/lib/gear-order-split'
 import TrashIcon from '@/components/TrashIcon'
 import {
   addCatalogLine, addLineProduct, addOneOffLine, deleteStandaloneLine, deleteStandaloneOrder, sendStandaloneOrder,
-  saveLineToCatalog, setLineCategory, setLineProduct, splitStandaloneOrder, undoStandaloneSplit, updateStandaloneLine, updateStandaloneOrder,
+  saveLineToCatalog, setLineCategory, setLineProduct, updateStandaloneLine, updateStandaloneOrder,
 } from '../actions'
 
 const input = 'bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-zinc-500'
 
 type Run = (fn: () => Promise<unknown>) => void
 
-export type SplitPartRow = {
-  id: string; title: string; status: GearOrder['status']; sent_at: string | null; discount_percent: number | null
-  gear_order_lines: { qty_wanted: number | null; unit_price: number | null; discount_percent: number | null; removed: boolean }[]
-}
 // Numbers being typed, ahead of the save.
 type Draft = { qty?: number | null; price?: number | null; discount?: number | null }
 
 export default function OrderEditor({
-  order, catalog, clients, parts, parent,
+  order, catalog, clients,
 }: {
   order: GearOrder
   catalog: GearItem[]
   clients: ClientRow[]
-  parts: SplitPartRow[]
-  parent: { id: string; title: string } | null
 }) {
   const router = useRouter()
   const [busy, setBusy] = useState(false)
@@ -199,42 +192,6 @@ export default function OrderEditor({
         </p>
       )}
 
-      {parent && (
-        <p className="text-xs text-zinc-400 mb-3">
-          Part of <Link href={`/admin/gear/orders/${parent.id}`} className="underline underline-offset-2 decoration-zinc-600 hover:text-white">{parent.title}</Link>
-        </p>
-      )}
-
-      {parts.length > 0 && (
-        <div className="rounded-lg border border-zinc-700 bg-zinc-900 p-3 mb-4">
-          <div className="flex items-center gap-3 mb-2">
-            <p className="text-sm font-medium">
-              Split into {parts.length} orders{order.split_cap != null && ` of up to ${fmtMoney(Number(order.split_cap))}`}
-            </p>
-            {!parts.some((p) => p.sent_at) && (
-              <button
-                onClick={() => {
-                  if (confirm('Undo the split? The parts are deleted and this order opens again.')) {
-                    run(async () => unwrap(await undoStandaloneSplit(order.id)))
-                  }
-                }}
-                className="ml-auto text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
-              >
-                Undo split
-              </button>
-            )}
-          </div>
-          <div className="space-y-1">
-            {parts.map((p) => (
-              <Link key={p.id} href={`/admin/gear/orders/${p.id}`} className="flex items-center gap-3 text-sm hover:text-white text-zinc-300 transition-colors">
-                <span className="min-w-0 flex-1 truncate">{p.title}</span>
-                <span>{fmtMoney(orderTotal(p.gear_order_lines.map((l) => ({ qty: l.qty_wanted, removed: l.removed, unit_price: l.unit_price, discount_percent: l.discount_percent })), p.discount_percent).total)}</span>
-                <span className={`text-[10px] px-2 py-0.5 rounded ${GEAR_ORDER_STATUS_STYLE[p.status]}`}>{GEAR_ORDER_STATUS_LABEL[p.status]}</span>
-              </Link>
-            ))}
-          </div>
-        </div>
-      )}
 
       <datalist id="gear-brands">
         {brandsIn(known).map((b) => <option key={b} value={b} />)}
@@ -328,8 +285,8 @@ export default function OrderEditor({
         </div>
       )}
 
-      {!order.split_from && parts.length === 0 && lines.length > 0 && (
-        <SplitPanel order={order} lines={lines} run={run} busy={busy} eachCount={each > 0 ? eachCount : ''} />
+      {lines.length > 0 && (
+        <SplitPanel order={order} lines={lines} saveCap={(cap) => saveOrder({ splitCap: cap })} eachCount={each > 0 ? eachCount : ''} />
       )}
 
       <div className="mt-6 pt-4 border-t border-zinc-800 flex items-center gap-3 flex-wrap">
@@ -457,19 +414,21 @@ function LineSizes({
   )
 }
 
-// Splitting by what a team can spend on one order. The plan is drawn as the cap
-// is typed, and the same function makes the orders on the server.
+// How this order would divide if a team can only spend so much on one purchase.
+// A view of the one order, not new orders: it stays a single list with a single
+// link, and this is for working out what to tell them. The cap is kept on the
+// order so the view is still there next time.
 function SplitPanel({
-  order, lines, run, busy, eachCount,
+  order, lines, saveCap, eachCount,
 }: {
   order: GearOrder
   lines: GearOrderLine[]
-  run: Run
-  busy: boolean
+  saveCap: (cap: number | null) => void
   eachCount: string
 }) {
-  const [open, setOpen] = useState(false)
-  const [cap, setCap] = useState('')
+  const savedCap = order.split_cap == null ? '' : String(Number(order.split_cap))
+  const [open, setOpen] = useState(savedCap !== '')
+  const [cap, setCap] = useState(savedCap)
   // Follows the calculator until a number is typed here.
   const [typedFill, setTypedFill] = useState<string | null>(null)
   const fillText = typedFill ?? eachCount
@@ -505,6 +464,7 @@ function SplitPanel({
           placeholder="Max per order $"
           value={cap}
           onChange={(e) => setCap(e.target.value)}
+          onBlur={() => { if (cap !== savedCap) saveCap(cap === '' ? null : Number(cap)) }}
           className={`${input} w-40`}
         />
         {anyBlank && (
@@ -521,7 +481,12 @@ function SplitPanel({
             />
           </label>
         )}
-        <button onClick={() => setOpen(false)} className="ml-auto text-xs text-zinc-500 hover:text-zinc-300 transition-colors">Cancel</button>
+        <button
+          onClick={() => { setOpen(false); setCap(''); if (savedCap !== '') saveCap(null) }}
+          className="ml-auto text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+        >
+          Close
+        </button>
       </div>
 
       {plan.unpriced.length > 0 && (
@@ -554,16 +519,6 @@ function SplitPanel({
               </div>
             ))}
           </div>
-          <button
-            disabled={busy}
-            onClick={() => {
-              if (!confirm(`Create ${plan.parts.length} orders? They start as drafts and this one closes.`)) return
-              run(async () => unwrap(await splitStandaloneOrder(order.id, Number(cap), fill)))
-            }}
-            className="px-3 py-1.5 rounded bg-pr-red hover:bg-pr-red-dark text-white text-sm font-medium transition-colors disabled:opacity-40"
-          >
-            Create {plan.parts.length} orders
-          </button>
         </>
       )}
     </div>
