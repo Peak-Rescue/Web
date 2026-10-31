@@ -384,7 +384,7 @@ export async function deleteStandaloneLine(lineId: string): Promise<{ ok: true }
 // Re-sendable, like a course order: a second pass is the same email against the
 // same link. Nothing here asks for an ES quote number. These orders may never
 // have one, and it shows on their page if it is ever added.
-export async function sendStandaloneOrder(orderId: string): Promise<{ ok: true } | Failed> {
+export async function sendStandaloneOrder(orderId: string): Promise<{ to: string[] } | Failed> {
   const { admin, user } = await requireAdminUser()
   const { data: order } = await admin
     .from('gear_orders')
@@ -430,5 +430,5 @@ export async function sendStandaloneOrder(orderId: string): Promise<{ ok: true }
     sent_at: new Date().toISOString(),
   }).eq('id', orderId)
   touch(orderId)
-  return { ok: true }
+  return { to }
 }

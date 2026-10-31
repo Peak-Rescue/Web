@@ -7,7 +7,7 @@ import { fmtMoney } from '@/lib/expenses'
 import { GEAR_CATEGORIES, brandsIn, productName, unwrap } from '@/lib/gear'
 import CategorySelect from '@/app/admin/gear/CategorySelect'
 import {
-  GEAR_ORDER_STATUS_LABEL, GEAR_ORDER_STATUS_STYLE, isSized, needsProduct, netUnitPrice, orderTotal, typedOverCatalog, sizesTotal, workFirst, safeLink, sizeRows,
+  GEAR_ORDER_STATUS_LABEL, GEAR_ORDER_STATUS_STYLE, isSized, needsProduct, netUnitPrice, orderTotal, parseEmails, typedOverCatalog, sizesTotal, workFirst, safeLink, sizeRows,
   type GearOrder, type GearOrderLine,
 } from '@/lib/gear-orders'
 import GearSizeRows from '@/components/GearSizeRows'
@@ -48,6 +48,22 @@ export default function OrderEditor({
   // from under you the moment you filled in its last gap. New lines go last.
   const [sorted, setSorted] = useState<string[] | null>(null)
   const [drafts, setDrafts] = useState<Record<string, Draft>>({})
+  const [confirmingSend, setConfirmingSend] = useState(false)
+  const [sending, setSending] = useState(false)
+  const [sendResult, setSendResult] = useState<{ ok: boolean; message: string } | null>(null)
+  const recipients = parseEmails(parseContacts(order.contacts).flatMap((c) => c.emails).join(',')).good
+  const send = async () => {
+    setSending(true); setSendResult(null)
+    try {
+      const { to } = unwrap(await sendStandaloneOrder(order.id))
+      setSendResult({ ok: true, message: `Sent to ${to.join(', ')}.` })
+      setConfirmingSend(false)
+    } catch (e) {
+      setSendResult({ ok: false, message: e instanceof Error ? `Not sent. ${e.message}` : 'Not sent. Something went wrong.' })
+    } finally {
+      setSending(false)
+    }
+  }
   // "What would twelve of everything come to?" Asked of the prices and discounts
   // on the page, and written nowhere, so it can't be mistaken for an answer.
   const [eachCount, setEachCount] = useState('')
@@ -287,10 +303,47 @@ export default function OrderEditor({
       )}
 
       <div className="mt-6 pt-4 border-t border-zinc-800 flex items-center gap-3 flex-wrap">
+        {/* Said here, where the button is. Errors at the top of the page are out
+            of sight from down here, and a send that fails quietly is the worst
+            kind: it reads as having gone. */}
+        {confirmingSend && (
+          <div className="w-full rounded-lg border border-zinc-700 bg-zinc-900 p-3">
+            {recipients.length > 0 ? (
+              <>
+                <p className="text-sm">Send this to:</p>
+                <ul className="mt-1 text-sm text-zinc-300">
+                  {recipients.map((r) => <li key={r}>{r}</li>)}
+                </ul>
+                <div className="mt-3 flex items-center gap-3">
+                  <button
+                    disabled={sending}
+                    onClick={send}
+                    className="px-3 py-1.5 rounded bg-pr-red hover:bg-pr-red-dark text-white text-sm font-medium transition-colors disabled:opacity-40"
+                  >
+                    {sending ? 'Sending…' : 'Send'}
+                  </button>
+                  <button onClick={() => setConfirmingSend(false)} className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">
+                    Cancel
+                  </button>
+                </div>
+              </>
+            ) : (
+              <p className="text-sm text-amber-300/80">
+                Add a contact email first.{' '}
+                <button onClick={() => setConfirmingSend(false)} className="text-xs text-zinc-500 hover:text-zinc-300">Close</button>
+              </p>
+            )}
+          </div>
+        )}
+        {sendResult && (
+          <p className={`w-full text-sm ${sendResult.ok ? 'text-emerald-400' : 'text-pr-red'}`}>{sendResult.message}</p>
+        )}
+        {/* Not disabled while something else saves. Leaving a field starts a
+            save the moment the pointer goes down, and a button that disables
+            itself between press and release swallows the click whole. */}
         <button
-          disabled={busy}
-          onClick={() => run(async () => unwrap(await sendStandaloneOrder(order.id)))}
-          className="px-3 py-1.5 rounded bg-pr-red hover:bg-pr-red-dark text-white text-sm font-medium transition-colors disabled:opacity-40"
+          onClick={() => { setSendResult(null); setConfirmingSend(true) }}
+          className="px-3 py-1.5 rounded bg-pr-red hover:bg-pr-red-dark text-white text-sm font-medium transition-colors"
         >
           {order.sent_at ? 'Send again' : 'Send to team'}
         </button>
@@ -303,6 +356,11 @@ export default function OrderEditor({
           Preview
         </a>
         <PdfLink href={`/api/gear-orders/${order.id}/pdf`} label="PDF" />
+        {order.sent_at && (
+          <span suppressHydrationWarning className="text-xs text-zinc-500">
+            Last sent {new Date(order.sent_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+          </span>
+        )}
         {order.status !== 'closed' && order.responded_at && (
           <button
             onClick={() => saveOrder({ status: 'closed' })}
