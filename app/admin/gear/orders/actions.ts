@@ -6,7 +6,7 @@ import { upsertGearItem } from '@/app/admin/gear/actions'
 import { linesFromList } from '@/lib/gear-order-lines'
 import { cleanSizes, isSized, lineNames, netUnitPrice, parseEmails, parseSizeOptions, safeLink, sizesTotal, typedOverCatalog } from '@/lib/gear-orders'
 import { sendMail } from '@/lib/mailer'
-import { planSplit, type SplitLine } from '@/lib/gear-order-split'
+import { planQty, planSplit, type SplitLine } from '@/lib/gear-order-split'
 
 // Gear orders that belong to no course: a team asks what we would supply, and
 // might buy it from us. Course orders keep their own actions and their own
@@ -382,7 +382,11 @@ export async function deleteStandaloneLine(lineId: string): Promise<{ ok: true }
 // their own link and PDF, copied from the original's current state, and they
 // start as drafts: nothing reaches the team until each is sent. The original is
 // closed, since answering it now would answer nothing.
-export async function splitStandaloneOrder(orderId: string, cap: number): Promise<{ count: number } | Failed> {
+export async function splitStandaloneOrder(
+  orderId: string,
+  cap: number,
+  fillQty: number | null = null
+): Promise<{ count: number } | Failed> {
   const { admin } = await requireAdminUser()
   const { data } = await admin
     .from('gear_orders')
@@ -407,7 +411,7 @@ export async function splitStandaloneOrder(orderId: string, cap: number): Promis
   const rows = [...order.gear_order_lines].sort((a, b) => a.sort_order - b.sort_order)
   const lines: SplitLine[] = rows.map((l) => ({
     id: l.id, name: l.product ?? l.name, brand: l.gear_items?.brand ?? null,
-    qty: l.qty_wanted, removed: l.removed, sizes: l.sizes,
+    qty: planQty(l.qty_wanted, fillQty), removed: l.removed, sizes: l.sizes,
     // The cap is what the team spends, so it runs on the discounted price.
     unit_price: l.unit_price == null ? null : netUnitPrice(l.unit_price, l.discount_percent, order.discount_percent),
   }))
@@ -433,7 +437,13 @@ export async function splitStandaloneOrder(orderId: string, cap: number): Promis
       made.push(created.id)
       const { error: e2 } = await admin.from('gear_order_lines').insert(part.pieces.map((piece, sort) => {
         const { id, order_id, gear_items, ...copy } = byId.get(piece.lineId)!
-        return { ...copy, order_id: created.id, qty_wanted: piece.qty, sizes: piece.sizes, sort_order: sort }
+        // A planned number, not an answer, so the team's page offers it as a
+        // suggestion for them to break into sizes.
+        const planned = !(Number(copy.qty_wanted ?? 0) > 0)
+        return {
+          ...copy, order_id: created.id, qty_wanted: piece.qty, sizes: piece.sizes, sort_order: sort,
+          ...(planned ? { qty_offered: String(piece.qty) } : {}),
+        }
       }))
       if (e2) throw new Error(e2.message)
     }

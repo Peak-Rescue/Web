@@ -36,6 +36,14 @@ export type SplitPlan = {
   leftOut: string[]
 }
 
+// A quantity to plan with: the line's own, or the stand-in given for lines nobody
+// has answered yet, which is how "what if twelve of everything" gets split
+// before anyone has picked a size.
+export function planQty(qty: number | null | undefined, fill: number | null | undefined): number | null {
+  if (Number(qty ?? 0) > 0) return Number(qty)
+  return Number(fill ?? 0) > 0 ? Number(fill) : (qty ?? null)
+}
+
 const toCents = (dollars: number) => Math.round(dollars * 100)
 
 // Takes units off the front of a size list, leaving the rest for the next part.

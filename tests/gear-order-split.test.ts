@@ -1,10 +1,23 @@
 import { describe, expect, it } from 'vitest'
-import { planSplit, type SplitLine } from '@/lib/gear-order-split'
+import { planQty, planSplit, type SplitLine } from '@/lib/gear-order-split'
 
 const line = (id: string, brand: string | null, qty: number | null, price: number | null, over: Partial<SplitLine> = {}): SplitLine => ({
   id, name: id, brand, qty, unit_price: price, removed: false, ...over,
 })
 const ids = (p: { pieces: { lineId: string }[] }) => p.pieces.map((x) => x.lineId)
+
+describe('planQty', () => {
+  it('uses the stand-in only where a line has no quantity', () => {
+    expect(planQty(3, 12)).toBe(3)
+    expect(planQty(null, 12)).toBe(12)
+    expect(planQty(0, 12)).toBe(12)
+  })
+
+  it('leaves a line alone with no stand-in', () => {
+    expect(planQty(null, null)).toBeNull()
+    expect(planQty(null, 0)).toBeNull()
+  })
+})
 
 describe('planSplit', () => {
   it('leaves an order under the cap as one part', () => {

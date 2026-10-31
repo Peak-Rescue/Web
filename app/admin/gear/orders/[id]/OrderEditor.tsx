@@ -16,7 +16,7 @@ import type { ClientRow } from '@/lib/clients'
 import SizeOptionsField from '@/components/SizeOptionsField'
 import PdfLink from '@/components/PdfLink'
 import Link from 'next/link'
-import { planSplit } from '@/lib/gear-order-split'
+import { planQty, planSplit } from '@/lib/gear-order-split'
 import TrashIcon from '@/components/TrashIcon'
 import {
   addCatalogLine, addLineProduct, addOneOffLine, deleteStandaloneLine, deleteStandaloneOrder, sendStandaloneOrder,
@@ -329,7 +329,7 @@ export default function OrderEditor({
       )}
 
       {!order.split_from && parts.length === 0 && lines.length > 0 && (
-        <SplitPanel order={order} lines={lines} run={run} busy={busy} />
+        <SplitPanel order={order} lines={lines} run={run} busy={busy} eachCount={each > 0 ? eachCount : ''} />
       )}
 
       <div className="mt-6 pt-4 border-t border-zinc-800 flex items-center gap-3 flex-wrap">
@@ -460,22 +460,28 @@ function LineSizes({
 // Splitting by what a team can spend on one order. The plan is drawn as the cap
 // is typed, and the same function makes the orders on the server.
 function SplitPanel({
-  order, lines, run, busy,
+  order, lines, run, busy, eachCount,
 }: {
   order: GearOrder
   lines: GearOrderLine[]
   run: Run
   busy: boolean
+  eachCount: string
 }) {
   const [open, setOpen] = useState(false)
   const [cap, setCap] = useState('')
+  // Follows the calculator until a number is typed here.
+  const [typedFill, setTypedFill] = useState<string | null>(null)
+  const fillText = typedFill ?? eachCount
+  const fill = Number(fillText) > 0 ? Number(fillText) : null
+  const anyBlank = lines.some((l) => !l.removed && !(Number(l.qty_wanted ?? 0) > 0))
   const names = new Map(lines.map((l) => [l.id, l.product ?? l.name]))
   const plan = useMemo(() => planSplit(lines.map((l) => ({
     id: l.id, name: l.product ?? l.name, brand: l.gear_items?.brand ?? null,
-    qty: l.qty_wanted, removed: l.removed, sizes: l.sizes,
+    qty: planQty(l.qty_wanted, fill), removed: l.removed, sizes: l.sizes,
     // The cap is what the team spends, so it runs on the discounted price.
     unit_price: l.unit_price == null ? null : netUnitPrice(l.unit_price, l.discount_percent, order.discount_percent),
-  })), Number(cap)), [lines, cap, order.discount_percent])
+  })), Number(cap)), [lines, cap, fill, order.discount_percent])
 
   if (!open) {
     return (
@@ -501,6 +507,20 @@ function SplitPanel({
           onChange={(e) => setCap(e.target.value)}
           className={`${input} w-40`}
         />
+        {anyBlank && (
+          <label className="flex items-center gap-2 text-xs text-zinc-400">
+            Lines with no quantity:
+            <input
+              type="number"
+              min={0}
+              step={1}
+              inputMode="numeric"
+              value={fillText}
+              onChange={(e) => setTypedFill(e.target.value)}
+              className={`${input} w-16 py-1 text-center text-xs`}
+            />
+          </label>
+        )}
         <button onClick={() => setOpen(false)} className="ml-auto text-xs text-zinc-500 hover:text-zinc-300 transition-colors">Cancel</button>
       </div>
 
@@ -538,7 +558,7 @@ function SplitPanel({
             disabled={busy}
             onClick={() => {
               if (!confirm(`Create ${plan.parts.length} orders? They start as drafts and this one closes.`)) return
-              run(async () => unwrap(await splitStandaloneOrder(order.id, Number(cap))))
+              run(async () => unwrap(await splitStandaloneOrder(order.id, Number(cap), fill)))
             }}
             className="px-3 py-1.5 rounded bg-pr-red hover:bg-pr-red-dark text-white text-sm font-medium transition-colors disabled:opacity-40"
           >
