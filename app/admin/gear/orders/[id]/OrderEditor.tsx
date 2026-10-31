@@ -53,6 +53,9 @@ export default function OrderEditor({
   // from under you the moment you filled in its last gap. New lines go last.
   const [sorted, setSorted] = useState<string[] | null>(null)
   const [drafts, setDrafts] = useState<Record<string, Draft>>({})
+  // "What would twelve of everything come to?" Asked of the prices and discounts
+  // on the page, and written nowhere, so it can't be mistaken for an answer.
+  const [eachCount, setEachCount] = useState('')
   const [orderPercent, setOrderPercent] = useState(order.discount_percent == null ? '' : String(order.discount_percent))
 
   const run: Run = async (fn) => {
@@ -93,6 +96,15 @@ export default function OrderEditor({
   const liveOrderPercent = orderPercent === '' ? null : Number(orderPercent)
   const { total, subtotal, saved, unpriced } = orderTotal(
     lines.map((l) => ({ qty: liveQty(l), removed: l.removed, unit_price: livePrice(l), discount_percent: liveDiscount(l) })),
+    liveOrderPercent
+  )
+  const each = Number(eachCount)
+  const perSet = orderTotal(
+    lines.map((l) => ({ qty: 1, removed: l.removed, unit_price: livePrice(l), discount_percent: liveDiscount(l) })),
+    liveOrderPercent
+  )
+  const atEach = orderTotal(
+    lines.map((l) => ({ qty: each, removed: l.removed, unit_price: livePrice(l), discount_percent: liveDiscount(l) })),
     liveOrderPercent
   )
   const units = lines.reduce((n, l) => n + (l.removed ? 0 : Number(liveQty(l) ?? 0)), 0)
@@ -292,6 +304,27 @@ export default function OrderEditor({
             <span className="text-zinc-500">Total</span> <span className="font-semibold">{fmtMoney(total)}</span>
             {unpriced > 0 && <span className="text-xs text-amber-300/80"> + {unpriced} unpriced</span>}
           </span>
+          <div className="w-full flex items-center gap-2 flex-wrap border-t border-zinc-800 pt-2">
+            <label htmlFor="each-count" className="text-xs text-zinc-400">If everyone got one of each, for</label>
+            <input
+              id="each-count"
+              type="number"
+              min={0}
+              step={1}
+              inputMode="numeric"
+              value={eachCount}
+              onChange={(e) => setEachCount(e.target.value)}
+              className={`${input} w-16 py-0.5 text-center text-xs`}
+            />
+            <span className="text-xs text-zinc-400">people</span>
+            {each > 0 && (
+              <span className="ml-auto text-sm">
+                <span className="text-xs text-zinc-400 mr-2">{fmtMoney(perSet.total)} each</span>
+                <span className="font-semibold">{fmtMoney(atEach.total)}</span>
+                {atEach.unpriced > 0 && <span className="text-xs text-amber-300/80"> + {atEach.unpriced} unpriced</span>}
+              </span>
+            )}
+          </div>
         </div>
       )}
 
