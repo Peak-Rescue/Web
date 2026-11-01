@@ -101,7 +101,7 @@ export async function submitGearOrder(
         await sendMail({
           from: 'Peak Rescue Portal <noreply@peak-rescue.com>',
           to: recipients,
-          subject: `📦 Gear order ${order.es_quote_number ?? ''} answered — ${orderName}`.replace('  ', ' '),
+          subject: `Gear order ${order.es_quote_number ?? ''} answered — ${orderName}`.replace('  ', ' '),
           text: [
             `${name}${input.title ? ` (${input.title})` : ''} answered the gear list for ${orderName}${clientName ? ` · ${clientName}` : ''}.`,
             order.es_quote_number ? `Quote ${order.es_quote_number}.` : null,
