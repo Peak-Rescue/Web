@@ -510,7 +510,11 @@ export default function EstimatePanel({
     const next: Factors = [...rowFactors(row)]
     next[idx] = value
     const product = next.reduce((p, f) => p * (f.trim() === '' ? 1 : Number(f) || 0), 1)
-    updateRow(key, { qty: String(round2(product)), factors: next })
+    // A number typed into a factor box is a choice for the course as it
+    // stands — two days of skiing on a seven-day course — not a stale copy of
+    // the course's own number, so it is kept the moment it is typed. It is
+    // still asked about again if the course changes shape.
+    updateRow(key, { qty: String(round2(product)), factors: next, ack: counts })
   }
 
   function updateRow(key: number, patch: Partial<Row>) {
@@ -1101,14 +1105,22 @@ export default function EstimatePanel({
                         }`}
                       />
                       {driftsByKey.get(r.key)?.filter((d) => d.idx === i).map((d) => (
-                        <button
-                          key={d.idx}
-                          onClick={() => setFactor(r.key, i, String(d.expected))}
-                          title={`The course now has ${d.expected} ${d.name}`}
-                          className="mt-0.5 text-[10px] text-amber-400 hover:text-amber-200 transition-colors"
-                        >
-                          → {d.expected}
-                        </button>
+                        <span key={d.idx} className="mt-0.5 flex items-center gap-1.5 text-[10px]">
+                          <button
+                            onClick={() => setFactor(r.key, i, String(d.expected))}
+                            title={`The course now has ${d.expected} ${d.name}`}
+                            className="text-amber-400 hover:text-amber-200 transition-colors"
+                          >
+                            → {d.expected}
+                          </button>
+                          <button
+                            onClick={() => keepRows([r.key])}
+                            title="Keep this quantity — asked again only if the course's length, instructors or students change"
+                            className="text-zinc-500 hover:text-white underline underline-offset-2 transition-colors"
+                          >
+                            keep
+                          </button>
+                        </span>
                       ))}
                       {factorLabels(r)[i] ? (
                         <span className="mt-0.5 text-[10px] text-zinc-600">{factorLabels(r)[i]}</span>

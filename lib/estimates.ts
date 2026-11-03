@@ -89,8 +89,12 @@ export type FactorCounts = {
 // have. These are also the costs measured against the calendar rather than
 // against the days worked — which is why the vehicle and the lodging come out
 // at the same number nearly every time.
+//
+// "Rental" alone is not enough: ski, boot and skin rentals are gear, used on
+// the days the course runs, and reading them as a vehicle quoted them two
+// travel days and every break they were never out for.
 export function spansTravelDays(label: string): boolean {
-  return /lodging|hotel|meal|vehicle|rental|fuel/i.test(label)
+  return /lodging|hotel|meal|vehicle|\b(car|van|truck)\b|fuel/i.test(label)
 }
 
 export function daysForLine(label: string, counts: { days: number; calendarDays: number }): number {
