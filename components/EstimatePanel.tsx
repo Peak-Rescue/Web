@@ -66,6 +66,9 @@ const QUICK_FACTORS = [
   { name: 'instructors', hint: 'instructors on the course' },
   { name: 'participants', hint: 'students + instructors' },
   { name: 'days', hint: 'days the course runs' },
+  // Read the way the lodging rate reads it: a line named for lodging, a hotel
+  // or meals gets the calendar plus the night before and after.
+  { name: 'nights', hint: 'lodging lines add the travel nights' },
 ]
 
 const MARGIN_PRESETS = [0.2, 0.25, 0.3]
