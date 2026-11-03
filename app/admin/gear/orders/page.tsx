@@ -23,7 +23,7 @@ export default async function GearOrdersPage() {
 
   const [{ data: orderRows }, { data: clientRows }, { data: listRows }] = await Promise.all([
     admin.from('gear_orders')
-      .select('id, instance_id, title, client_id, status, created_at, discount_percent, gear_order_lines(qty_wanted, unit_price, discount_percent, removed), course_instances!gear_orders_instance_id_fkey(course_type, custom_title, client_name)')
+      .select('id, instance_id, title, client_id, status, created_at, discount_percent, gear_order_lines(qty_wanted, unit_price, discount_percent, removed), course_instances!gear_orders_instance_id_fkey(course_type, custom_title, client_name), for_course:course_instances!gear_orders_for_instance_id_fkey(course_type, custom_title)')
       .order('created_at', { ascending: false }),
     admin.from('clients').select(CLIENT_COLUMNS),
     admin.from('gear_lists').select('id, name').eq('is_template', true).order('name'),
@@ -34,6 +34,7 @@ export default async function GearOrdersPage() {
     status: GearOrderStatus; created_at: string; discount_percent: number | null
     gear_order_lines: { qty_wanted: number | null; unit_price: number | null; discount_percent: number | null; removed: boolean }[]
     course_instances: { course_type: string; custom_title: string | null; client_name: string | null } | null
+    for_course: { course_type: string; custom_title: string | null } | null
   }
   const orders = (orderRows ?? []) as unknown as Row[]
   const clients = (clientRows ?? []) as ClientRow[]
@@ -64,7 +65,7 @@ export default async function GearOrdersPage() {
                 <span className="min-w-0 flex-1">
                   <span className="block text-sm font-medium">{name}</span>
                   <span className="block text-xs text-zinc-500 mt-0.5">
-                    {[who, course ? 'course order' : null, `${o.gear_order_lines.length} ${o.gear_order_lines.length === 1 ? 'line' : 'lines'}`].filter(Boolean).join(' · ')}
+                    {[who, course ? 'course order' : o.for_course ? `for ${courseShortName(o.for_course.course_type, o.for_course.custom_title)}` : null, `${o.gear_order_lines.length} ${o.gear_order_lines.length === 1 ? 'line' : 'lines'}`].filter(Boolean).join(' · ')}
                   </span>
                 </span>
                 {anyPriced && (

@@ -18,6 +18,8 @@ import BillingSection from './BillingSection'
 import { type InvoiceRequest } from '@/lib/billing'
 import ActualsPanel from '@/components/ActualsPanel'
 import PricingFold from '@/components/PricingFold'
+import GearQuotesSection, { type GearQuoteRow } from './GearQuotesSection'
+import { orderTotal, type GearOrderStatus } from '@/lib/gear-orders'
 import { actualsAreLive, estimateCostSeed } from '@/lib/actuals'
 import { courseFieldDates, payPlan } from '@/lib/pay'
 import { loadActuals } from '@/lib/actuals-data'
@@ -80,6 +82,7 @@ export default async function CoursePricingEditor({
     { data: sourceRows }, { data: offDayRows },
     actuals,
     { data: invoiceRows }, { data: billerRows }, { data: readerRows },
+    { data: gearQuoteRows },
   ] = await Promise.all([
     admin.from('course_estimates')
       .select('id, title, margin, price_override, created_at, archived_at, starts_at, ends_at, extends_id, relation, estimate_items(label, qty, rate, notes, qty_factors, rate_id, drift_ack, sort_order)')
@@ -118,6 +121,9 @@ export default async function CoursePricingEditor({
     admin.from('invoice_requests').select('*').eq('instance_id', instanceId).order('created_at', { ascending: false }),
     admin.from('billing_recipients').select('id, name').eq('active', true).order('name'),
     admin.from('report_recipients').select('id, name').eq('active', true).order('name'),
+    admin.from('gear_orders')
+      .select('id, title, status, discount_percent, gear_order_lines(qty_wanted, unit_price, discount_percent, removed)')
+      .eq('for_instance_id', instanceId).order('created_at'),
   ])
 
   const quotePeople = (adminRows ?? [])
@@ -125,6 +131,25 @@ export default async function CoursePricingEditor({
     .filter((p) => p.name)
   const pricingRates: PricingRate[] = (pricingRateRows ?? []).map((r) => ({ ...r, rate: Number(r.rate) }))
   const quotes: QuoteRow[] = (quoteRows ?? []).map((q) => ({ ...q, total: Number(q.total) }))
+  const gearQuotes: GearQuoteRow[] = ((gearQuoteRows ?? []) as unknown as {
+    id: string; title: string | null; status: GearOrderStatus; discount_percent: number | null
+    gear_order_lines: { qty_wanted: number | null; unit_price: number | null; discount_percent: number | null; removed: boolean }[]
+  }[]).map((o) => ({
+    id: o.id,
+    title: o.title,
+    status: o.status,
+    lines: o.gear_order_lines.length,
+    ...orderTotal(
+      o.gear_order_lines.map((l) => ({ qty: l.qty_wanted, removed: l.removed, unit_price: l.unit_price, discount_percent: l.discount_percent })),
+      o.discount_percent
+    ),
+  }))
+  const liveGearQuotes = gearQuotes.filter((q) => q.status !== 'closed')
+  const gearQuoteSummary = liveGearQuotes.length === 0
+    ? null
+    : liveGearQuotes.length === 1
+      ? (liveGearQuotes[0].anyPriced ? fmtMoney(liveGearQuotes[0].total) : '1 open')
+      : `${liveGearQuotes.length} open`
 
   // Two lengths, because they stop being the same number as soon as a break
   // is in the middle: people are paid for the days the course runs, while the
@@ -534,6 +559,13 @@ export default async function CoursePricingEditor({
             price: coaPrice({ margin: e.margin, price_override: e.priceOverride, items: e.items }),
           }))}
       />
+      </PricingFold>
+
+      {/* Gear the client might buy from us. Next to the course's quotes
+          because it is the same question — what we are asking them to pay —
+          but its own fold, since it is billed and sent on its own. */}
+      <PricingFold title="Gear quotes" summary={gearQuoteSummary} defaultOpen={liveGearQuotes.length > 0}>
+        <GearQuotesSection instanceId={instanceId} quotes={gearQuotes} />
       </PricingFold>
 
       {/* Between the quote and the actuals, because that is where it happens:

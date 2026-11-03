@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { CLIENT_COLUMNS, type ClientRow } from '@/lib/clients'
 import { type GearOrder } from '@/lib/gear-orders'
+import { courseShortName } from '@/lib/courses'
 import OrderEditor from './OrderEditor'
 
 export const metadata = { title: 'Gear order' }
@@ -22,7 +23,7 @@ export default async function GearOrderPage({ params }: { params: Promise<{ id: 
 
   const [{ data: orderRow }, { data: items }, { data: clientRows }] = await Promise.all([
     admin.from('gear_orders')
-      .select('id, instance_id, title, client_id, contacts, list_id, es_quote_number, status, accept_token, intro, sent_at, viewed_at, responded_at, responded_name, responded_title, client_note, attachments, split_from, split_cap, discount_percent, gear_order_lines(id, entry_id, gear_item_id, name, product, detail, category, qty_offered, qty_wanted, url, unit_price, discount_percent, size_options, sizes, removed, checked, client_note, admin_note, sort_order, gear_items(brand))')
+      .select('id, instance_id, for_instance_id, title, client_id, contacts, list_id, es_quote_number, status, accept_token, intro, sent_at, viewed_at, responded_at, responded_name, responded_title, client_note, attachments, split_from, split_cap, discount_percent, gear_order_lines(id, entry_id, gear_item_id, name, product, detail, category, qty_offered, qty_wanted, url, unit_price, discount_percent, size_options, sizes, removed, checked, client_note, admin_note, sort_order, gear_items(brand))')
       .eq('id', id)
       .maybeSingle(),
     admin.from('gear_items')
@@ -35,11 +36,23 @@ export default async function GearOrderPage({ params }: { params: Promise<{ id: 
   if (order.instance_id) redirect(`/admin/courses/${order.instance_id}#gear`)
 
   const clients = (clientRows ?? []) as ClientRow[]
+  // A quote made for a course goes back to that course's pricing, where it
+  // was started and where it is listed.
+  const forId = (orderRow as unknown as { for_instance_id: string | null }).for_instance_id
+  const { data: forCourse } = forId
+    ? await admin.from('course_instances').select('id, course_type, custom_title').eq('id', forId).maybeSingle()
+    : { data: null }
 
   return (
     <main className="min-h-screen bg-zinc-950 text-white pt-16 md:pt-20">
       <div className="max-w-4xl mx-auto px-4 py-10">
-        <Link href="/admin/gear/orders" className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors mb-6 inline-block">← Gear orders</Link>
+        {forCourse ? (
+          <Link href={`/portal/${forCourse.id}#pricing`} className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors mb-6 inline-block">
+            ← {courseShortName(forCourse.course_type as string, forCourse.custom_title as string | null)} pricing
+          </Link>
+        ) : (
+          <Link href="/admin/gear/orders" className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors mb-6 inline-block">← Gear orders</Link>
+        )}
         <OrderEditor order={order} catalog={items ?? []} clients={clients} />
       </div>
     </main>

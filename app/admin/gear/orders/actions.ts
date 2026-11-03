@@ -7,6 +7,7 @@ import { linesFromList } from '@/lib/gear-order-lines'
 import { cleanSizes, isSized, lineNames, parseEmails, parseSizeOptions, safeLink, sizesTotal, typedOverCatalog } from '@/lib/gear-orders'
 import { sendMail } from '@/lib/mailer'
 import { greetingNames, parseContacts, type CoursePOC } from '@/lib/contacts'
+import { courseShortName } from '@/lib/courses'
 
 // Gear orders that belong to no course: a team asks what we would supply, and
 // might buy it from us. Course orders keep their own actions and their own
@@ -62,6 +63,36 @@ export async function createStandaloneOrder(input: {
     if (e2) throw new Error(e2.message)
   }
   touch()
+  return { id: order.id }
+}
+
+// A priced order for gear a course's client asked us to quote: not the list of
+// what to bring, which is the course's own order and stays unpriced, but what
+// they might buy from us. It is a standalone order in every other way, so it is
+// worked on here; it only remembers the course, and starts with its client and
+// contacts so nobody types them twice.
+export async function createCourseGearQuote(instanceId: string): Promise<{ id: string } | Failed> {
+  const { admin } = await requireAdminUser()
+  const { data: course } = await admin
+    .from('course_instances')
+    .select('course_type, custom_title, client_id, contacts')
+    .eq('id', instanceId)
+    .maybeSingle()
+  if (!course) return fail('That course no longer exists.')
+
+  const { data: order, error } = await admin
+    .from('gear_orders')
+    .insert({
+      title: `${courseShortName(course.course_type as string, course.custom_title as string | null)} gear quote`.slice(0, 200),
+      client_id: course.client_id ?? null,
+      contacts: parseContacts(course.contacts),
+      for_instance_id: instanceId,
+    })
+    .select('id')
+    .single()
+  if (error || !order) throw new Error(error?.message ?? 'Could not create the order')
+  touch()
+  revalidatePath(`/portal/${instanceId}`)
   return { id: order.id }
 }
 
