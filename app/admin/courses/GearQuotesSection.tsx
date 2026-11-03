@@ -63,7 +63,7 @@ export default function GearQuotesSection({ instanceId, quotes }: { instanceId: 
       ))}
       <div className="flex items-center gap-2">
         <button type="button" onClick={start} disabled={busy} className={btn.secondary}>
-          {busy ? 'Starting…' : 'Price gear for this client'}
+          {busy ? 'Starting…' : 'New gear quote'}
         </button>
         <InfoHint text="For gear the client wants to buy from us, priced from the catalog. Separate from the course's gear list, which says what to bring and never shows prices." />
         {error && <span className="text-xs text-pr-red">{error}</span>}

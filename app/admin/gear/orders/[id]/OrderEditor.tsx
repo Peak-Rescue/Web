@@ -32,11 +32,14 @@ type Run = (fn: () => Promise<unknown>) => void
 type Draft = { qty?: number | null; price?: number | null; discount?: number | null }
 
 export default function OrderEditor({
-  order, catalog, clients,
+  order, catalog, clients, backTo,
 }: {
   order: GearOrder
   catalog: GearItem[]
   clients: ClientRow[]
+  /** Where the page's back link goes, and where deleting lands: the course's
+      pricing for a quote made from a course, the orders list otherwise. */
+  backTo: string
 }) {
   const router = useRouter()
   const [busy, setBusy] = useState(false)
@@ -374,7 +377,7 @@ export default function OrderEditor({
             if (!confirm(order.sent_at ? 'Delete this order? The team’s link stops working.' : 'Delete this order?')) return
             run(async () => {
               await deleteStandaloneOrder(order.id)
-              router.push('/admin/gear/orders')
+              router.push(backTo)
             })
           }}
           className="ml-auto text-xs text-zinc-600 hover:text-red-400 transition-colors"

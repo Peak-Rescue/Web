@@ -47,13 +47,18 @@ export default async function GearOrderPage({ params }: { params: Promise<{ id: 
     <main className="min-h-screen bg-zinc-950 text-white pt-16 md:pt-20">
       <div className="max-w-4xl mx-auto px-4 py-10">
         {forCourse ? (
-          <Link href={`/portal/${forCourse.id}#pricing`} className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors mb-6 inline-block">
+          <Link href={`/portal/${forCourse.id}?mode=build&open=pricing`} className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors mb-6 inline-block">
             ← {courseShortName(forCourse.course_type as string, forCourse.custom_title as string | null)} pricing
           </Link>
         ) : (
           <Link href="/admin/gear/orders" className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors mb-6 inline-block">← Gear orders</Link>
         )}
-        <OrderEditor order={order} catalog={items ?? []} clients={clients} />
+        <OrderEditor
+          order={order}
+          catalog={items ?? []}
+          clients={clients}
+          backTo={forCourse ? `/portal/${forCourse.id}?mode=build&open=pricing` : '/admin/gear/orders'}
+        />
       </div>
     </main>
   )

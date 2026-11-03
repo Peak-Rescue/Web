@@ -129,9 +129,13 @@ export async function updateStandaloneOrder(
 
 export async function deleteStandaloneOrder(orderId: string): Promise<void> {
   const { admin } = await requireAdminUser()
-  const { error } = await admin.from('gear_orders').delete().eq('id', orderId).is('instance_id', null)
+  const { data: gone, error } = await admin
+    .from('gear_orders').delete().eq('id', orderId).is('instance_id', null).select('for_instance_id')
   if (error) throw new Error(error.message)
   touch(orderId)
+  // A quote made for a course is listed on it, and deleting lands there.
+  const forId = gone?.[0]?.for_instance_id as string | null | undefined
+  if (forId) revalidatePath(`/portal/${forId}`)
 }
 
 async function nextSort(admin: Awaited<ReturnType<typeof requireAdminUser>>['admin'], orderId: string) {
