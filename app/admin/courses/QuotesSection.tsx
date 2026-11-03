@@ -40,6 +40,7 @@ export default function QuotesSection({
   people,
   estimates,
   coaTitles,
+  gearQuotes = [],
 }: {
   instanceId: string
   refNumber: number
@@ -54,6 +55,8 @@ export default function QuotesSection({
   /** Title of every COA on the course, set-aside ones included — a quiet quote
       still has to be able to say which option it priced. */
   coaTitles: Record<string, string>
+  /** Gear quotes that can go out in the same email as a course quote. */
+  gearQuotes?: { id: string; title: string; draft: boolean }[]
   /** The photo the quote page will use. It sits on this row because that is
       the row that makes a quote — a picture chosen somewhere else is a setting
       you do not know applies until you have already sent one. */
@@ -286,6 +289,7 @@ export default function QuotesSection({
                     contactEmail={contactEmail}
                     ccOptions={ccOptions}
                     adminCcOptions={adminCcOptions}
+                    gearQuotes={gearQuotes}
                   />
                 ) : (
                   <span className="text-xs text-zinc-600" title="Add a point-of-contact email in Details to send from here">

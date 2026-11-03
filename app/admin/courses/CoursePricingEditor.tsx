@@ -551,6 +551,9 @@ export default async function CoursePricingEditor({
         adminCcOptions={adminCcOptions}
         people={quotePeople}
         coaTitles={Object.fromEntries(allCoas.filter((e) => e.id).map((e) => [e.id!, e.title]))}
+        gearQuotes={liveGearQuotes
+          .filter((g) => g.lines > 0)
+          .map((g) => ({ id: g.id, title: g.title ?? 'Gear quote', draft: g.status === 'draft' }))}
         estimates={estimatePanels
           .filter((e) => e.id)
           .map((e) => ({

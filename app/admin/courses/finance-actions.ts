@@ -1003,12 +1003,25 @@ export async function sendQuote(instanceId: string, quoteId: string, formData?: 
   const adminCc = await allowedAdminCc(admin, formData?.getAll('cc_admin') ?? [])
   const cc = [...new Set([...(quote.prepared_by_email ? [quote.prepared_by_email] : []), ...requestedCc, ...adminCc])]
 
+  // Gear quotes going out in the same email. Only this course's, and only
+  // ones with something on them — the ids are a claim from the form, and an
+  // empty order is a link to a blank page.
+  const gearIds = [...new Set((formData?.getAll('gear_order') ?? []).map(String).filter(Boolean))]
+  const { data: gearRows } = gearIds.length > 0
+    ? await admin.from('gear_orders')
+      .select('id, title, status, accept_token, es_quote_number, gear_order_lines(id)')
+      .in('id', gearIds).eq('for_instance_id', instanceId).is('instance_id', null)
+    : { data: [] }
+  const gearOrders = ((gearRows ?? []) as { id: string; title: string | null; status: string; accept_token: string; es_quote_number: string | null; gear_order_lines: { id: string }[] }[])
+    .filter((g) => g.status !== 'closed' && g.gear_order_lines.length > 0)
+  if (gearOrders.length !== gearIds.length) throw new Error('A gear quote ticked for this email is empty, closed or not on this course')
+
   const { error: sendError } = await sendMail({
     from: 'Peak Rescue <noreply@peak-rescue.com>',
     to: [toEmail],
     cc: cc.length > 0 ? cc : undefined,
     replyTo: quote.prepared_by_email ?? undefined,
-    subject: `Peak Rescue Quote ${qNum} — ${courseName}`,
+    subject: `Peak Rescue Quote ${qNum} — ${courseName}${gearOrders.length > 0 ? ' and gear' : ''}`,
     text: [
       `${contacts[0]?.name || 'Hello'},`,
       '',
@@ -1018,6 +1031,14 @@ export async function sendQuote(instanceId: string, quoteId: string, formData?: 
       '',
       'The page has the full details and a button to accept and lock in your dates.',
       '',
+      ...gearOrders.flatMap((g) => [
+        `We have also priced the gear you asked about — ${g.title ?? 'gear quote'}${g.es_quote_number ? `, quote ${g.es_quote_number}` : ''}:`,
+        '',
+        `${siteUrl}/gear-order/${g.accept_token}`,
+        '',
+        'You can change the quantities, take off anything you do not need, and leave us notes — then send it back to us.',
+        '',
+      ]),
       `Questions? Just reply to this email.`,
       '',
       quote.prepared_by_name ?? 'Peak Rescue',
@@ -1026,6 +1047,12 @@ export async function sendQuote(instanceId: string, quoteId: string, formData?: 
   if (sendError) throw new Error(`Email failed: ${sendError.message}`)
 
   await admin.from('course_quotes').update({ status: 'sent', sent_at: new Date().toISOString() }).eq('id', quoteId)
+  for (const g of gearOrders) {
+    await admin.from('gear_orders').update({
+      status: g.status === 'responded' ? 'responded' : 'sent',
+      sent_at: new Date().toISOString(),
+    }).eq('id', g.id)
+  }
   await releaseBillingChoice(admin, instanceId, quoteId)
   const { data: cur } = await admin.from('course_instances').select('status').eq('id', instanceId).single()
   if (cur?.status === 'tentative') {
@@ -1036,6 +1063,7 @@ export async function sendQuote(instanceId: string, quoteId: string, formData?: 
   revalidatePath(`/admin/courses/${instanceId}`)
   revalidatePath('/admin/courses')
   revalidatePath('/admin')
+  if (gearOrders.length > 0) revalidatePath('/admin/gear/orders')
 }
 
 // Copies all COAs from another course into this one (for pricing a course

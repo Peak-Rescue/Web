@@ -20,19 +20,27 @@ export default function QuoteSendForm({
   contactEmail,
   ccOptions,
   adminCcOptions,
+  gearQuotes = [],
 }: {
   action: (formData: FormData) => Promise<void>
   contactEmail: string
   ccOptions: string[]
   adminCcOptions: { id: string; name: string; email: string }[]
+  /** Gear quotes on this course that can ride along in the same email. A
+      draft is ticked to begin with, since the usual case is sending both
+      together; one already sent is offered but left off. */
+  gearQuotes?: { id: string; title: string; draft: boolean }[]
 }) {
   const [copies, setCopies] = useState(0)
+  const [withGear, setWithGear] = useState(gearQuotes.filter((g) => g.draft).length)
 
   // Counted off the form itself rather than from state per checkbox: the
   // colleague picker owns its own inputs, and both kinds of cc are one answer
   // to one question — who else gets this.
-  const count = (form: HTMLFormElement) =>
+  const count = (form: HTMLFormElement) => {
     setCopies(form.querySelectorAll('input[name="cc_extra"]:checked, input[name="cc_admin"]:checked').length)
+    setWithGear(form.querySelectorAll('input[name="gear_order"]:checked').length)
+  }
 
   return (
     <form
@@ -40,6 +48,12 @@ export default function QuoteSendForm({
       onChange={(e) => count(e.currentTarget)}
       className="flex items-center gap-2.5 flex-wrap"
     >
+      {gearQuotes.map((g) => (
+        <label key={g.id} className="flex items-center gap-1.5 text-xs text-zinc-400 cursor-pointer" title="Put this gear quote's link in the same email, and mark it sent">
+          <input type="checkbox" name="gear_order" value={g.id} defaultChecked={g.draft} className="accent-pr-red size-3.5" />
+          with {g.title}
+        </label>
+      ))}
       {ccOptions.map((email) => (
         <label key={email} className="flex items-center gap-1.5 text-xs text-zinc-400 cursor-pointer" title={`Also send a copy to ${email}`}>
           <input type="checkbox" name="cc_extra" value={email} className="accent-pr-red size-3.5" />
@@ -49,13 +63,12 @@ export default function QuoteSendForm({
       <AdminCcPicker admins={adminCcOptions} />
       <button
         title={
-          copies === 0
-            ? `Sends the quote to ${contactEmail}`
-            : `Sends the quote to ${contactEmail}, copying ${copies} other ${copies === 1 ? 'address' : 'addresses'}`
+          `Sends the quote${withGear > 0 ? ` and ${withGear === 1 ? 'the gear quote' : `${withGear} gear quotes`}` : ''} to ${contactEmail}` +
+          (copies === 0 ? '' : `, copying ${copies} other ${copies === 1 ? 'address' : 'addresses'}`)
         }
         className={btn.primary}
       >
-        Send to {contactEmail}
+        {withGear > 0 ? 'Send both to' : 'Send to'} {contactEmail}
         {copies > 0 && <span className="text-white/75"> + {copies} cc</span>}
       </button>
     </form>
