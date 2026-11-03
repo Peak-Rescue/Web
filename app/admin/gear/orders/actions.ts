@@ -6,7 +6,8 @@ import { upsertGearItem } from '@/app/admin/gear/actions'
 import { linesFromList } from '@/lib/gear-order-lines'
 import { cleanSizes, isSized, lineNames, parseEmails, parseSizeOptions, safeLink, sizesTotal, typedOverCatalog } from '@/lib/gear-orders'
 import { sendMail } from '@/lib/mailer'
-import { greetingNames, parseContacts, type CoursePOC } from '@/lib/contacts'
+import { greetingNames, parseContacts, primaryContactEmail, type CoursePOC } from '@/lib/contacts'
+import { sendQuote } from '@/app/admin/courses/finance-actions'
 import { courseShortName } from '@/lib/courses'
 
 // Gear orders that belong to no course: a team asks what we would supply, and
@@ -419,6 +420,29 @@ export async function deleteStandaloneLine(lineId: string): Promise<{ ok: true }
 // Re-sendable, like a course order: a second pass is the same email against the
 // same link. Nothing here asks for an ES quote number. These orders may never
 // have one, and it shows on their page if it is ever added.
+// The same combined email as sending the course quote with this one ticked,
+// started from this side. One template for both, so the client gets the same
+// message whichever page the send was pressed on.
+export async function sendWithCourseQuote(orderId: string, quoteId: string): Promise<{ to: string[] } | Failed> {
+  const { admin } = await requireAdminUser()
+  const { data: order } = await admin
+    .from('gear_orders').select('for_instance_id').eq('id', orderId).is('instance_id', null).maybeSingle()
+  const instanceId = order?.for_instance_id as string | null | undefined
+  if (!instanceId) return fail('This order is not a quote for a course.')
+  const { data: inst } = await admin.from('course_instances').select('contacts').eq('id', instanceId).single()
+  const to = primaryContactEmail(parseContacts(inst?.contacts))
+  const fd = new FormData()
+  fd.append('gear_order', orderId)
+  try {
+    await sendQuote(instanceId, quoteId, fd)
+  } catch (e) {
+    return fail(e instanceof Error ? e.message : 'Something went wrong.')
+  }
+  touch(orderId)
+  revalidatePath(`/portal/${instanceId}`)
+  return { to: to ? [to] : [] }
+}
+
 export async function sendStandaloneOrder(orderId: string): Promise<{ to: string[] } | Failed> {
   const { admin, user } = await requireAdminUser()
   const { data: order } = await admin

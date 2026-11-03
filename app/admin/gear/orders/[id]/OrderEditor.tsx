@@ -20,7 +20,7 @@ import PdfLink from '@/components/PdfLink'
 import { planQty, planSplit } from '@/lib/gear-order-split'
 import TrashIcon from '@/components/TrashIcon'
 import {
-  addCatalogLine, addLineProduct, addOneOffLine, deleteStandaloneLine, deleteStandaloneOrder, sendStandaloneOrder,
+  addCatalogLine, addLineProduct, addOneOffLine, deleteStandaloneLine, deleteStandaloneOrder, sendStandaloneOrder, sendWithCourseQuote,
   saveLineToCatalog, setLineCategory, setLineProduct, updateStandaloneLine, updateStandaloneOrder,
 } from '../actions'
 
@@ -32,7 +32,7 @@ type Run = (fn: () => Promise<unknown>) => void
 type Draft = { qty?: number | null; price?: number | null; discount?: number | null }
 
 export default function OrderEditor({
-  order, catalog, clients, backTo,
+  order, catalog, clients, backTo, courseQuotes = [], courseContact = null,
 }: {
   order: GearOrder
   catalog: GearItem[]
@@ -40,6 +40,12 @@ export default function OrderEditor({
   /** Where the page's back link goes, and where deleting lands: the course's
       pricing for a quote made from a course, the orders list otherwise. */
   backTo: string
+  /** Draft quotes on the course this is priced for, which can go out in the
+      same email. Empty for an order with no course. */
+  courseQuotes?: { id: string; label: string }[]
+  /** Who the combined email goes to — the course's main contact, as when it
+      is sent from the course quote. */
+  courseContact?: string | null
 }) {
   const router = useRouter()
   const [busy, setBusy] = useState(false)
@@ -54,11 +60,16 @@ export default function OrderEditor({
   const [confirmingSend, setConfirmingSend] = useState(false)
   const [sending, setSending] = useState(false)
   const [sendResult, setSendResult] = useState<{ ok: boolean; message: string } | null>(null)
-  const recipients = parseEmails(parseContacts(order.contacts).flatMap((c) => c.emails).join(',')).good
+  // Ticked to start with when there is one draft course quote, the same way the
+  // course quote's send starts with its gear quote ticked: usually both go.
+  const [withQuote, setWithQuote] = useState(courseQuotes.length === 1 ? courseQuotes[0].id : '')
+  const recipients = withQuote
+    ? (courseContact ? [courseContact] : [])
+    : parseEmails(parseContacts(order.contacts).flatMap((c) => c.emails).join(',')).good
   const send = async () => {
     setSending(true); setSendResult(null)
     try {
-      const { to } = unwrap(await sendStandaloneOrder(order.id))
+      const { to } = unwrap(withQuote ? await sendWithCourseQuote(order.id, withQuote) : await sendStandaloneOrder(order.id))
       setSendResult({ ok: true, message: `Sent to ${to.join(', ')}.` })
       setConfirmingSend(false)
     } catch (e) {
@@ -313,7 +324,31 @@ export default function OrderEditor({
           <div className="w-full rounded-lg border border-zinc-700 bg-zinc-900 p-3">
             {recipients.length > 0 ? (
               <>
-                <p className="text-sm">Send this to:</p>
+                {courseQuotes.length === 1 && (
+                  <label className="mb-2 flex items-center gap-1.5 text-xs text-zinc-400 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={withQuote !== ''}
+                      onChange={(e) => setWithQuote(e.target.checked ? courseQuotes[0].id : '')}
+                      className="accent-pr-red size-3.5"
+                    />
+                    with course quote {courseQuotes[0].label}, in the same email
+                  </label>
+                )}
+                {courseQuotes.length > 1 && (
+                  <label className="mb-2 flex items-center gap-1.5 text-xs text-zinc-400">
+                    With course quote
+                    <select
+                      value={withQuote}
+                      onChange={(e) => setWithQuote(e.target.value)}
+                      className="bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-xs"
+                    >
+                      <option value="">none — gear only</option>
+                      {courseQuotes.map((q) => <option key={q.id} value={q.id}>{q.label}</option>)}
+                    </select>
+                  </label>
+                )}
+                <p className="text-sm">Send {withQuote ? 'both' : 'this'} to:</p>
                 <ul className="mt-1 text-sm text-zinc-300">
                   {recipients.map((r) => <li key={r}>{r}</li>)}
                 </ul>

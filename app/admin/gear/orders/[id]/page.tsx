@@ -5,6 +5,8 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { CLIENT_COLUMNS, type ClientRow } from '@/lib/clients'
 import { type GearOrder } from '@/lib/gear-orders'
 import { courseShortName } from '@/lib/courses'
+import { quoteNumber } from '@/lib/quotes'
+import { parseContacts, primaryContactEmail } from '@/lib/contacts'
 import OrderEditor from './OrderEditor'
 
 export const metadata = { title: 'Gear order' }
@@ -39,9 +41,18 @@ export default async function GearOrderPage({ params }: { params: Promise<{ id: 
   // A quote made for a course goes back to that course's pricing, where it
   // was started and where it is listed.
   const forId = (orderRow as unknown as { for_instance_id: string | null }).for_instance_id
-  const { data: forCourse } = forId
-    ? await admin.from('course_instances').select('id, course_type, custom_title').eq('id', forId).maybeSingle()
-    : { data: null }
+  const [{ data: forCourse }, { data: draftQuotes }] = forId
+    ? await Promise.all([
+        admin.from('course_instances').select('id, course_type, custom_title, ref_number, contacts').eq('id', forId).maybeSingle(),
+        admin.from('course_quotes').select('id, quote_seq')
+          .eq('instance_id', forId).eq('status', 'draft').is('archived_at', null).order('quote_seq'),
+      ])
+    : [{ data: null }, { data: null }]
+  // Draft course quotes this order can go out with, in the one email.
+  const courseQuotes = forCourse
+    ? (draftQuotes ?? []).map((q) => ({ id: q.id as string, label: quoteNumber(forCourse.ref_number as number, q.quote_seq as number) }))
+    : []
+  const courseContact = forCourse ? primaryContactEmail(parseContacts(forCourse.contacts)) : null
 
   return (
     <main className="min-h-screen bg-zinc-950 text-white pt-16 md:pt-20">
@@ -57,6 +68,8 @@ export default async function GearOrderPage({ params }: { params: Promise<{ id: 
           order={order}
           catalog={items ?? []}
           clients={clients}
+          courseQuotes={courseQuotes}
+          courseContact={courseContact}
           backTo={forCourse ? `/portal/${forCourse.id}?mode=build&open=pricing` : '/admin/gear/orders'}
         />
       </div>
