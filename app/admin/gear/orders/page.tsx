@@ -23,7 +23,7 @@ export default async function GearOrdersPage() {
 
   const [{ data: orderRows }, { data: clientRows }, { data: listRows }] = await Promise.all([
     admin.from('gear_orders')
-      .select('id, instance_id, title, client_id, status, created_at, discount_percent, gear_order_lines(qty_wanted, unit_price, discount_percent, removed), course_instances(course_type, custom_title, client_name)')
+      .select('id, instance_id, title, client_id, status, created_at, discount_percent, gear_order_lines(qty_wanted, unit_price, discount_percent, removed), course_instances!gear_orders_instance_id_fkey(course_type, custom_title, client_name)')
       .order('created_at', { ascending: false }),
     admin.from('clients').select(CLIENT_COLUMNS),
     admin.from('gear_lists').select('id, name').eq('is_template', true).order('name'),
