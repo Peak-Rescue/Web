@@ -1,7 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { crewPlanOf, crewPlanSummary, roleLabel, seatsOverPlan } from '@/lib/staffing-roles'
 import InfoHint from '@/components/InfoHint'
-import { courseShortName, courseDayCounts } from '@/lib/courses'
+import { courseShortName, courseDayCounts, courseScopeBullets } from '@/lib/courses'
 import { coaPrice, guessSeedQty, wantsSeedLine, coaSpan, coaHasOwnSpan, DEFAULT_MARGIN } from '@/lib/estimates'
 import { type OptionRelation } from '@/lib/quotes'
 import { describeForBiller, numberSoFar } from '@/lib/billing'
@@ -51,6 +51,7 @@ export default async function CoursePricingEditor({
     client_name: string | null
     course_type: string | null
     max_students: number | null
+    location?: string | null
     starts_at: string | null
     ends_at: string | null
     breaks_paid?: boolean | null
@@ -551,6 +552,10 @@ export default async function CoursePricingEditor({
         adminCcOptions={adminCcOptions}
         people={quotePeople}
         coaTitles={Object.fromEntries(allCoas.filter((e) => e.id).map((e) => [e.id!, e.title]))}
+        courseBullets={courseScopeBullets(
+          { starts_at: course.starts_at, ends_at: course.ends_at, max_students: course.max_students, location: course.location ?? null },
+          offDayRows ?? []
+        )}
         gearQuotes={liveGearQuotes
           .filter((g) => g.lines > 0)
           .map((g) => ({ id: g.id, title: g.title ?? 'Gear quote', draft: g.status === 'draft' }))}

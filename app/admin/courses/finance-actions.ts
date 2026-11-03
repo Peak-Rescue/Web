@@ -7,7 +7,7 @@ import { after } from 'next/server'
 import { syncCourseCalendar } from '@/lib/google-calendar'
 import { parseContacts, primaryContactEmail, ccEmailOptions } from '@/lib/contacts'
 import { guessSeedQty, wantsSeedLine, coaPrice, type SeedCounts, plannedInstructorCount } from '@/lib/estimates'
-import { courseDayCounts, trainingDurationPhrase } from '@/lib/courses'
+import { courseDayCounts, courseScopeBullets } from '@/lib/courses'
 import { todayHere } from '@/lib/course-clock'
 import { sendMail } from '@/lib/mailer'
 import { QUOTE_ROW_COLUMNS, type QuoteRow } from '@/lib/quotes'
@@ -671,12 +671,7 @@ export async function createQuote(
   // The dates head the quote already, so the duration line is about the shape
   // of the teaching inside them: a course broken over a weekend is two 5-day
   // segments, not 12 days.
-  const duration = trainingDurationPhrase(inst.starts_at, inst.ends_at, offDays ?? [])
-  const bullets = [
-    duration ? `Duration: ${duration}` : null,
-    inst.max_students ? `Participants: up to ${inst.max_students} students` : null,
-    inst.location ? `Location: ${inst.location}` : null,
-  ].filter((b): b is string => Boolean(b))
+  const bullets = courseScopeBullets(inst, offDays ?? [])
 
   const { services } = await import('@/lib/data/services')
   const blurb = services.find((s) => s.slug === inst.course_type)?.description ?? null

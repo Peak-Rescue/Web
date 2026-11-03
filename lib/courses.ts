@@ -128,6 +128,21 @@ export function trainingDurationPhrase(
   return `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]} segments of training`
 }
 
+/** The lines a new quote starts its scope with, read off the course. One
+    builder for the new quote and for the check that tells a draft its lines
+    have fallen behind the course, so the two cannot disagree about wording. */
+export function courseScopeBullets(
+  course: { starts_at: string | null; ends_at: string | null; max_students: number | null; location: string | null },
+  offDays: OffDayRange[]
+): string[] {
+  const duration = trainingDurationPhrase(course.starts_at, course.ends_at, offDays)
+  return [
+    duration ? `Duration: ${duration}` : null,
+    course.max_students ? `Participants: up to ${course.max_students} students` : null,
+    course.location ? `Location: ${course.location}` : null,
+  ].filter((b): b is string => Boolean(b))
+}
+
 /** A break, normalised to two dates. The rows in the table say the same thing
     with a nullable end date. Whether the crew is paid through breaks is asked
     once for the whole course, not here — see courseDayCounts. */

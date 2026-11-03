@@ -5,6 +5,7 @@ import SaveButton from '@/components/SaveButton'
 import QuoteSendForm from './QuoteSendForm'
 import { createQuote, updateQuote, setQuoteStatus, deleteQuote, sendQuote, reopenQuote } from './finance-actions'
 import QuoteTotalFields from './QuoteTotalFields'
+import ScopeBulletsField from './ScopeBulletsField'
 import { quoteNumber, type QuoteOption, type QuoteRow } from '@/lib/quotes'
 import { fmtMoney } from '@/lib/expenses'
 import StatusChip, { QUOTE_STATUS } from '@/components/StatusChip'
@@ -41,6 +42,7 @@ export default function QuotesSection({
   estimates,
   coaTitles,
   gearQuotes = [],
+  courseBullets = [],
 }: {
   instanceId: string
   refNumber: number
@@ -57,6 +59,9 @@ export default function QuotesSection({
   coaTitles: Record<string, string>
   /** Gear quotes that can go out in the same email as a course quote. */
   gearQuotes?: { id: string; title: string; draft: boolean }[]
+  /** The scope lines a quote made today would start with, so a draft can say
+      when its own have fallen behind the course. */
+  courseBullets?: string[]
   /** The photo the quote page will use. It sits on this row because that is
       the row that makes a quote — a picture chosen somewhere else is a setting
       you do not know applies until you have already sent one. */
@@ -262,7 +267,11 @@ export default function QuotesSection({
                 </div>
                 <div className="sm:col-span-3">
                   <label className={labelCls}>Scope bullets (one per line — shown under the price)</label>
-                  <textarea name="scope_bullets" rows={3} defaultValue={(q.scope_bullets ?? []).join('\n')} className={`${inputCls} resize-y`} />
+                  <ScopeBulletsField
+                    key={(q.scope_bullets ?? []).join('\n')}
+                    initial={q.scope_bullets ?? []}
+                    fromCourse={courseBullets}
+                  />
                 </div>
                 <div className="sm:col-span-3">
                   <label className={labelCls}>Course overview (shown above the price on the quote page; leave empty to skip it)</label>
