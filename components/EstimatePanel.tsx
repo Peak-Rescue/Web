@@ -56,6 +56,18 @@ function trimFactors(f: Factors): string[] {
   return out
 }
 
+// The names a hand-built multiplier is most often given, offered as a pick
+// list under its name box. Each is a name lib/estimates already reads off the
+// course, so picking one brings its number with it. "Participants" is the
+// students and the instructors together; "people" is not on the list because
+// older lines use it for staff alone.
+const QUICK_FACTORS = [
+  { name: 'students', hint: 'students on the course' },
+  { name: 'instructors', hint: 'instructors on the course' },
+  { name: 'participants', hint: 'students + instructors' },
+  { name: 'days', hint: 'days the course runs' },
+]
+
 const MARGIN_PRESETS = [0.2, 0.25, 0.3]
 const SAVE_DEBOUNCE_MS = 900
 
@@ -486,13 +498,25 @@ export default function EstimatePanel({
     updateRow(key, { factors: [...current, '1'] })
   }
 
+  // Naming a multiplier after something the course knows fills in the course's
+  // number for it. Only on an exact pick from the list, so typing "days" a
+  // letter at a time does not overwrite a number on the way past "day".
   function setFactorLabel(key: number, idx: number, value: string) {
     const row = rows.find((r) => r.key === key)
     if (!row) return
     const next = [...row.flabels]
     while (next.length <= idx) next.push(null)
     next[idx] = value || null
-    updateRow(key, { flabels: next })
+    const quick = QUICK_FACTORS.some((q) => q.name === value.trim().toLowerCase())
+    const known = quick ? factorValue(value, row.label, counts) : null
+    if (known === null) {
+      updateRow(key, { flabels: next })
+      return
+    }
+    const factors = [...rowFactors(row)]
+    factors[idx] = String(known)
+    const product = factors.reduce((p, f) => p * (f.trim() === '' ? 1 : Number(f) || 0), 1)
+    updateRow(key, { flabels: next, factors, qty: String(round2(product)) })
   }
 
   function toggleCalc(key: number) {
@@ -1007,6 +1031,9 @@ export default function EstimatePanel({
         </div>
       )}
 
+      <datalist id="estimate-quick-factors">
+        {QUICK_FACTORS.map((q) => <option key={q.name} value={q.name} label={q.hint} />)}
+      </datalist>
       <div className={card}>
         <div className="divide-y divide-zinc-800">
           {rows.map((r) => (
@@ -1129,8 +1156,10 @@ export default function EstimatePanel({
                           <input
                             value={r.flabels[i] ?? ''}
                             onChange={(e) => setFactorLabel(r.key, i, e.target.value)}
+                            list="estimate-quick-factors"
                             placeholder="name"
-                            className="w-14 bg-transparent border-b border-zinc-800 focus:border-zinc-500 focus:outline-none text-[10px] text-zinc-400 text-center"
+                            title="Pick students, instructors, participants or days to fill in the course's number, or type any name"
+                            className="w-20 bg-transparent border-b border-zinc-800 focus:border-zinc-500 focus:outline-none text-[10px] text-zinc-400 text-center"
                           />
                           {i >= factorLabels(r).length && rowFactors(r).length > 1 && (
                             <button
