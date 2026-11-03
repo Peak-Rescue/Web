@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
 import { fmtMoney } from '@/lib/expenses'
 import { useLiveCoaPrices } from '@/lib/live-coa-prices'
 
@@ -36,6 +37,15 @@ export default function QuoteTotalFields({
 }) {
   const [totalValue, setTotalValue] = useState(String(total))
   const [optionValues, setOptionValues] = useState(() => (options ?? []).map((o) => String(o.total)))
+  // Taking the COA's price is the decision, so it saves on the spot. It used to
+  // fill the box and wait for Save quote — which stays disabled for a change
+  // made in code rather than typed, so the new number never reached the
+  // server and the old one came back on every reload.
+  const anchor = useRef<HTMLDivElement>(null)
+  const takeAndSave = (apply: () => void) => {
+    flushSync(apply)
+    anchor.current?.closest('form')?.requestSubmit()
+  }
   // A mounted panel knows its price before the server does; fall back to the
   // server's for COAs that aren't on screen.
   const livePrices = useLiveCoaPrices()
@@ -51,7 +61,7 @@ export default function QuoteTotalFields({
     })
     const stale = staleAt.some(Boolean)
     return (
-      <div className="sm:col-span-3">
+      <div ref={anchor} className="sm:col-span-3">
         <label className={labelCls}>Options (client picks one or more when accepting)</label>
         <div className="space-y-2">
           {options.map((o, i) => (
@@ -75,11 +85,13 @@ export default function QuoteTotalFields({
           <button
             type="button"
             onClick={() =>
-              setOptionValues((v) =>
-                v.map((x, i) => {
-                  const p = priceOf(options[i].estimate_id)
-                  return p !== undefined ? String(p) : x
-                })
+              takeAndSave(() =>
+                setOptionValues((v) =>
+                  v.map((x, i) => {
+                    const p = priceOf(options[i].estimate_id)
+                    return p !== undefined ? String(p) : x
+                  })
+                )
               )
             }
             className={`${staleLinkCls} mt-2`}
@@ -94,7 +106,7 @@ export default function QuoteTotalFields({
   const current = priceOf(estimateId)
   const stale = current !== undefined && current !== Number(totalValue)
   return (
-    <div>
+    <div ref={anchor}>
       <label className={labelCls}>Total price (USD)</label>
       <input
         name="total"
@@ -106,7 +118,7 @@ export default function QuoteTotalFields({
         className={stale ? staleInputCls : inputCls}
       />
       {stale && (
-        <button type="button" onClick={() => setTotalValue(String(current))} className={`mt-1 ${staleLinkCls}`}>
+        <button type="button" onClick={() => takeAndSave(() => setTotalValue(String(current)))} className={`mt-1 ${staleLinkCls}`}>
           Update to {fmtMoney(current!)}
         </button>
       )}
