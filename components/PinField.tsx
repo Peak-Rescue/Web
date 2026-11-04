@@ -6,8 +6,8 @@ import { pinFromCoords } from '@/lib/pin'
 import { errorFrom } from '@/lib/action-result'
 import InfoHint from '@/components/InfoHint'
 
-// Where a place is, as coordinates — typed, looked up from an address, or read
-// out of a Google Maps link pasted here. The link is turned into coordinates the moment it lands, so
+// Where a place is, as coordinates — typed, or read out of a Google Maps link
+// pasted here. The link is turned into coordinates the moment it lands, so
 // what is saved is always a pin and what is on screen is what will be saved.
 export default function PinField({
   value,
@@ -44,7 +44,7 @@ export default function PinField({
       const r = await resolvePin(t)
       if ('error' in r) { setError(r.error); return }
       onChange(r.coords)
-      setNote(r.from === 'address' ? 'Found from the address — check it on the map' : 'From the Google Maps link')
+      setNote('From the Google Maps link')
     } catch (e) {
       setError(errorFrom(e, 'Couldn’t read that link'))
     } finally {
@@ -57,10 +57,11 @@ export default function PinField({
     <div>
       <span className={labelClassName}>
         <span className="inline-flex items-center gap-1">
-          {/* Names what the box takes, since it takes three things and a
-              bare "Pin" read as coordinates only. */}
-          Pin, address or Google Maps link
-          <InfoHint text="Coordinates, a street address, or a Google Maps link: open the place in Google Maps, then Share → Copy link, and paste it here. It is turned into coordinates, which open in whatever map the reader uses. An address is the least exact of the three — a trailhead or a back gate is better as a link." />
+          {/* Names what the box takes, since a bare "Pin" read as
+              coordinates only. No addresses: the free lookup had no house
+              numbers for rural Montana, and a near-miss pin looks right. */}
+          Pin or Google Maps link
+          <InfoHint text="Coordinates, or a Google Maps link: open the place in Google Maps, then Share → Copy link, and paste it here. It is turned into coordinates, which open in whatever map the reader uses." />
         </span>
       </span>
       <input
