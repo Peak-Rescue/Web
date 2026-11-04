@@ -558,9 +558,10 @@ export default function MeetingDetails({
               onChange={(e) => (e.target.checked ? openFiling() : setFileDraft(null))}
               className="accent-pr-red w-3 h-3"
             />
-            {venueName
-              ? `Keep it as a ${venueName} meeting point`
-              : 'Keep it as a meeting point any day can pick'}
+            {/* Says what it is for, not where it is filed: the venue is
+                chosen in the form this opens, and naming the course's venue
+                here read as the only place it could go. */}
+            Save as a meeting point to reuse
           </label>
         )}
 
