@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { requireCourseStaff } from '@/lib/course-access'
 import { normalizeDocLink } from '@/lib/doc-links'
+import { pinFromCoords } from '@/lib/pin'
 import type { UpdateLink, UpdateAttachment } from './update-actions'
 
 const MAX_FIELD = 500
@@ -37,6 +38,8 @@ export async function saveDayMeetingDetails(
     /** The words are a one-off place rather than a note on the meetup. */
     meetsElsewhere: boolean
     meetingPoint: string
+    /** The day's own pin, kept only while the words are the place. */
+    meetingCoords?: string
     meetingTime: string
     links: UpdateLink[]
     attachments: UpdateAttachment[]
@@ -69,6 +72,7 @@ export async function saveDayMeetingDetails(
       meeting_point_id: input.meetsElsewhere ? null : input.meetingPointId,
       meets_elsewhere: input.meetsElsewhere,
       meeting_point: input.meetingPoint.trim().slice(0, MAX_FIELD) || null,
+      ...(input.meetingCoords !== undefined ? { meeting_coords: pinFromCoords(input.meetingCoords) } : {}),
       meeting_time: input.meetingTime.trim().slice(0, MAX_FIELD) || null,
       meeting_links: links,
       meeting_attachments: (input.attachments ?? []).slice(0, 20),

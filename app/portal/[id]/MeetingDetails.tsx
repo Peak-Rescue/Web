@@ -5,9 +5,9 @@ import { useRouter } from 'next/navigation'
 import { Tick } from './UpdateComposer'
 import AttachmentFields, { withLinkDraft } from './AttachmentFields'
 import { ChipRow } from '@/components/LinkChip'
-import TrashIcon from '@/components/TrashIcon'
 import Coords from '@/components/Coords'
 import PinField from '@/components/PinField'
+import { pinFromCoords } from '@/lib/pin'
 import { errorFrom } from '@/lib/action-result'
 import { Linkified, shortUrl, urlsIn } from '@/lib/linkify'
 import CloseButton from '@/components/CloseButton'
@@ -53,6 +53,7 @@ export default function MeetingDetails({
   meetingPoint,
   meetingPointId,
   meetsElsewhere,
+  meetingCoords = null,
   meetingPoints = [],
   canFileToLibrary = false,
   siteMeetup = null,
@@ -87,6 +88,8 @@ export default function MeetingDetails({
   meetingPointId: string | null
   /** The words are a one-off place, not a note on the canyon's usual. */
   meetsElsewhere: boolean
+  /** The day's own pin, for a place written out rather than picked. */
+  meetingCoords?: string | null
   /** Everywhere a day could be told to gather. Empty for anyone who can't
       edit, so a student is sent no list of the company's meetups. */
   meetingPoints?: Meetup[]
@@ -163,6 +166,9 @@ export default function MeetingDetails({
   // it blank means today.
   const [date] = useState(meetingDate ?? '')
   const [point, setPoint] = useState(meetingPoint ?? '')
+  // The pin goes with the words, saved or not: a one-off lay-by needs a map
+  // link as much as a place kept for next year does.
+  const [pin, setPin] = useState(meetingCoords ?? '')
   // Picking the usual by name is the same place as leaving it on the usual,
   // and the two used to be two options saved two ways.
   const savedPick = meetsElsewhere ? ELSEWHERE : meetingPointId && meetingPointId !== siteMeetup?.id ? meetingPointId : ''
@@ -211,17 +217,11 @@ export default function MeetingDetails({
   // arrive without overwriting a choice made while they were loading.
   const [fileDraft, setFileDraft] = useState<{
     name: string
-    directions: string
-    coords: string
     venueId: string | undefined
     makeSiteUsual: boolean
     /** The day's pins to put on the place as well. Ticked by default: a link
         added while writing a meetup is nearly always about the meetup. */
     keepLinks: string[]
-    /** Links written here, about the place: the driving pin, the gate photo.
-        A meetup holds links and this form did not ask for one, so the only
-        way to give a new meetup a pin was to put it on a morning first. */
-    links: { label: string; url: string }[]
   } | null>(null)
   const [fileOpts, setFileOpts] = useState<Awaited<ReturnType<typeof dayMeetingPointFilingOptions>> | null>(null)
 
@@ -309,6 +309,9 @@ export default function MeetingDetails({
         meetingPointId: elsewhere ? null : pointId || null,
         meetsElsewhere: elsewhere,
         meetingPoint: point,
+        // Only while the words are the place. A picked meetup brings its own,
+        // and a pin left over from before it was picked would contradict it.
+        meetingCoords: wordsArePlace ? pin : '',
         meetingTime: time,
         links: savedLinks,
         attachments: draftFiles,
@@ -343,37 +346,41 @@ export default function MeetingDetails({
   // Opened prefilled with a guess rather than filed on the guess: the first
   // line is usually the name, but the person who typed it is the one who
   // knows what the place is called and which region it serves.
+  // The words already written are the directions and the pin box under them
+  // is the pin, so keeping a meetup asks only what a day does not: what the
+  // place is called, and which venue it belongs to.
+  const PIN_IN_TEXT = /-?\d{1,2}\.\d{3,}\s*,\s*-?\d{1,3}\.\d{3,}/
   function openFiling() {
     const text = point.trim()
-    const coords = text.match(/-?\d{1,2}\.\d{3,}\s*,\s*-?\d{1,3}\.\d{3,}/)?.[0]?.replace(/\s+/g, '') ?? ''
     // A pasted pin and nothing else is a pin: it is not what the place is
-    // called and it is not how to get there. Filling all three boxes with it
-    // made a meetup named after its own coordinates.
-    const onlyAPin = Boolean(coords) && text.replace(/-?\d{1,2}\.\d{3,}\s*,\s*-?\d{1,3}\.\d{3,}/, '').trim() === ''
+    // called. Moved to the pin box when that is empty, so it is not lost.
+    const inText = text.match(PIN_IN_TEXT)?.[0]?.replace(/\s+/g, '') ?? ''
+    const onlyAPin = Boolean(inText) && text.replace(PIN_IN_TEXT, '').trim() === ''
+    if (onlyAPin && !pin.trim()) { setPin(inText); setPoint('') }
     setError(null)
-    // The first line of what was typed is the name, and the rest is the
-    // directions — not the whole text again, which put the name in both
-    // boxes. Never the canyon's name: a meeting point is named for where it
-    // is, and one named after a canyon reads wrong the day a second canyon
-    // meets there too.
-    const [first = '', ...more] = onlyAPin ? [] : text.split('\n')
-    const typed = first.replace(/https?:\/\/\S+/gi, '').trim().slice(0, 160)
-    const rest = more.join('\n').trim()
+    // The first line is the guess at the name. Never the canyon's name: a
+    // meeting point is named for where it is, and one named after a canyon
+    // reads wrong the day a second canyon meets there too.
+    const first = onlyAPin ? '' : text.split('\n')[0]
     setFileDraft({
-      name: typed,
-      // A first line that was only a link left no name, so the whole text
-      // stays as the directions rather than losing the link.
-      directions: typed ? rest : onlyAPin ? '' : text,
-      coords,
+      name: first.replace(/https?:\/\/\S+/gi, '').trim().slice(0, 160),
       venueId: venueId ?? undefined,
       // Kept for the venue, and the canyon's usual only when asked: one
       // morning at a lot is not evidence that the canyon always meets there.
       makeSiteUsual: false,
       keepLinks: draftLinks.map((l) => l.url),
-      links: [],
     })
     void ensureOpts()
   }
+
+  // What the kept meetup's directions are: the words, less a first line that
+  // only said its name — written once as the name, not twice.
+  function directionsFor(name: string): string {
+    const [first = '', ...more] = point.trim().split('\n')
+    const firstName = first.replace(/https?:\/\/\S+/gi, '').trim()
+    return firstName && firstName === name.trim() ? more.join('\n').trim() : point.trim()
+  }
+
 
   /** The venues, and which canyon this day is at. Asked once, and as soon as
       "New meeting point…" is picked rather than when the form opens: the
@@ -397,14 +404,13 @@ export default function MeetingDetails({
     try {
       const res = await fileDayMeetingPoint(dayId, {
         name: fileDraft.name,
-        directions: fileDraft.directions,
-        coords: fileDraft.coords,
+        directions: directionsFor(fileDraft.name),
+        coords: pinFromCoords(pin) ?? '',
         venueId: (fileDraft.venueId ?? fileOpts?.venueId) || null,
         links: [
           ...draftLinks
             .filter((l) => fileDraft.keepLinks.includes(l.url))
             .map((l) => ({ url: l.url, label: l.label ?? '' })),
-          ...fileDraft.links.filter((l) => l.url.trim()),
         ],
         makeSiteUsual: Boolean(siteName) && fileDraft.makeSiteUsual,
       })
@@ -412,6 +418,7 @@ export default function MeetingDetails({
       setFiledPoints((prev) => [...prev, res])
       setPointId(res.id === siteMeetup?.id ? '' : res.id)
       setPoint('')
+      setPin('')
       setFileDraft(null)
       router.refresh()
     } catch (e) {
@@ -422,7 +429,7 @@ export default function MeetingDetails({
   }
 
   function discard() {
-    setPoint(meetingPoint ?? ''); setPointId(savedPick); setTime(meetingTime ?? '')
+    setPoint(meetingPoint ?? ''); setPin(meetingCoords ?? ''); setPointId(savedPick); setTime(meetingTime ?? '')
     setDraftLinks(links)
     setLinkDraft('')
     setDraftFiles(files.map(({ path, filename }) => ({ path, filename })))
@@ -534,7 +541,7 @@ export default function MeetingDetails({
             four words and sometimes a paragraph — where to park, which gate,
             what the water is doing — and a one-line box that scrolls what you
             wrote out of sight is no way to write the second kind. */}
-        <label className={`block sm:col-span-2 ${fileDraft ? 'hidden' : ''}`}>
+        <label className="block sm:col-span-2">
           <span className="block text-[11px] uppercase tracking-wide text-zinc-500 mb-1">{wordsArePlace ? 'Where' : 'Note for this morning'}</span>
           <textarea
             autoFocus
@@ -545,6 +552,19 @@ export default function MeetingDetails({
             className="w-full min-h-[4.5rem] resize-y bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-zinc-200 leading-relaxed focus:outline-none focus:border-zinc-500"
           />
         </label>
+        {/* The day's own pin, whether or not the place is kept. Only while the
+            words are the place: under a picked meetup they are a note, and
+            the meetup carries the pin. */}
+        {wordsArePlace && (
+          <div className="sm:col-span-2 -mt-1">
+            <PinField
+              value={pin}
+              onChange={setPin}
+              className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-zinc-200 focus:outline-none focus:border-zinc-500"
+              labelClassName="block text-[11px] uppercase tracking-wide text-zinc-500 mb-1"
+            />
+          </div>
+        )}
         {/* One decision with a default, so one tick. Two radios where one is
             "do nothing" asks somebody to choose what they already have; a
             morning that belongs to this day alone is what every unticked box
@@ -594,65 +614,6 @@ export default function MeetingDetails({
                   ))}
                 </select>
               </label>
-              <label className="block sm:col-span-2">
-                <span className="block text-[11px] uppercase tracking-wide text-zinc-500 mb-1">Directions</span>
-                <textarea
-                  rows={3}
-                  value={fileDraft.directions}
-                  onChange={(e) => setFileDraft({ ...fileDraft, directions: e.target.value })}
-                  className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-zinc-200 focus:outline-none focus:border-zinc-500 resize-y leading-relaxed"
-                />
-              </label>
-              <div className="sm:col-span-2">
-                <PinField
-                  value={fileDraft.coords}
-                  onChange={(coords) => setFileDraft((d) => (d ? { ...d, coords } : d))}
-                  className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-zinc-200 focus:outline-none focus:border-zinc-500"
-                  labelClassName="block text-[11px] uppercase tracking-wide text-zinc-500 mb-1"
-                />
-              </div>
-              {/* The meetup's own links — the driving pin, the gate photo —
-                  which every course meeting here reads. Written with it, not
-                  by putting one on a morning first and keeping it. */}
-              <div className="sm:col-span-2 space-y-1.5">
-                <span className="block text-[11px] uppercase tracking-wide text-zinc-500">Links</span>
-                {fileDraft.links.map((l, i) => (
-                  <div key={i} className="grid grid-cols-[minmax(7rem,1fr)_minmax(0,2fr)_1.25rem] gap-2 items-center">
-                    <input
-                      value={l.label}
-                      onChange={(e) => setFileDraft({
-                        ...fileDraft,
-                        links: fileDraft.links.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)),
-                      })}
-                      className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-zinc-200 focus:outline-none focus:border-zinc-500"
-                    />
-                    <input
-                      value={l.url}
-                      spellCheck={false}
-                      onChange={(e) => setFileDraft({
-                        ...fileDraft,
-                        links: fileDraft.links.map((x, j) => (j === i ? { ...x, url: e.target.value } : x)),
-                      })}
-                      className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm text-zinc-200 font-mono text-[12px] focus:outline-none focus:border-zinc-500"
-                    />
-                    <button
-                      type="button"
-                      aria-label={`Remove ${l.label || 'link'}`}
-                      onClick={() => setFileDraft({ ...fileDraft, links: fileDraft.links.filter((_, j) => j !== i) })}
-                      className="text-xs text-zinc-600 hover:text-red-400 transition-colors"
-                    >
-                      <TrashIcon />
-                    </button>
-                  </div>
-                ))}
-                <button
-                  type="button"
-                  onClick={() => setFileDraft({ ...fileDraft, links: [...fileDraft.links, { label: '', url: '' }] })}
-                  className="text-[11px] text-zinc-500 hover:text-zinc-300 transition-colors"
-                >
-                  + Add link
-                </button>
-              </div>
             </div>
             {/* The pins already on this morning. A driving pin belongs to
                 the place and should be there for every course that meets

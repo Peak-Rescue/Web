@@ -105,6 +105,8 @@ type DayRow = {
   meets_elsewhere?: boolean | null
   meeting_time?: string | null
   meeting_points?: MeetingPoint | null
+  /** The day's own pin, for a place written out rather than picked. */
+  meeting_coords?: string | null
 }
 type SiteRow = {
   name?: string | null
@@ -151,7 +153,9 @@ export function resolveDayMeeting(
     note: chosen?.meetup ? dayWords : null,
     time: trim(day?.meeting_time),
     usualTime: trim(site?.usual_meeting_time),
-    coords: chosen?.meetup ? trim(chosen.meetup.coords) : null,
+    // A picked meetup brings its own pin; a place written out on the day
+    // carries the day's.
+    coords: chosen?.meetup ? trim(chosen.meetup.coords) : chosen?.from === 'day' ? trim(day?.meeting_coords) : null,
     links: [...(chosen?.meetup?.links ?? []), ...(site?.links ?? [])],
     pointLinks: chosen?.meetup?.links ?? [],
     siteName: trim(site?.name),

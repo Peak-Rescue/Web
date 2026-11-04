@@ -43,6 +43,7 @@ export type SchedulePdfDay = {
   sites: SchedulePdfSite | null
   meeting_point: string | null
   meets_elsewhere?: boolean | null
+  meeting_coords?: string | null
   meeting_time: string | null
   meeting_points: SchedulePdfMeetup | null
   notes: string | null
