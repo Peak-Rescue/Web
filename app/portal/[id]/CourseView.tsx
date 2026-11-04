@@ -573,7 +573,7 @@ export default async function CourseView({
           .order('name'),
         // Where a day can be told to gather instead of the site's usual.
         admin.from('meeting_points')
-          .select('id, name, venue_id, directions, coords, links, venues(name)')
+          .select('id, name, venue_id, directions, coords, links, venues(name, region_code)')
           .eq('active', true)
           .order('name'),
       ])
@@ -1144,8 +1144,8 @@ export default async function CourseView({
   const shelfResources = editableResources.filter((r) => !r.place)
 
   const schedMeetingPoints = ((schedPointRows ?? []) as unknown as
-    { id: string; name: string; venue_id: string | null; directions: string | null; coords: string | null; links: { url: string; label: string }[] | null; venues: { name: string } | null }[])
-    .map(({ venues, ...p }) => ({ ...p, venue_name: venues?.name ?? null }))
+    { id: string; name: string; venue_id: string | null; directions: string | null; coords: string | null; links: { url: string; label: string }[] | null; venues: { name: string; region_code: string | null } | null }[])
+    .map(({ venues, ...p }) => ({ ...p, venue_name: venues?.name ?? null, region_code: venues?.region_code ?? null }))
 
   // The editor's shape, not the page's: it wants the days plain, without the
   // site rows the read view joins in to show beta.
@@ -2995,6 +2995,7 @@ export default async function CourseView({
                               siteName={d.sites?.name ?? null}
                               venueId={d.sites?.venue_id ?? (inst.venue_id as string | null) ?? null}
                               venueName={d.sites ? d.sites.venues?.name ?? null : (venueRow?.name as string | undefined) ?? null}
+                              regionCode={d.sites?.venues?.region_code ?? (inst.region as string | null) ?? null}
                               editPlaceHref={showAsAdmin && d.site_id ? `/admin/sites#site-${d.site_id}` : null}
                               // What the morning reads as, worked out once by
                               // the same resolver the PDF uses.

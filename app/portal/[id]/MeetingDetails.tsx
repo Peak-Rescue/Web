@@ -31,6 +31,7 @@ type Meetup = {
   links?: MeetingLink[] | null
   venue_id?: string | null
   venue_name?: string | null
+  region_code?: string | null
 }
 
 // Meeting point and time: read as two facts, edited in place, and announced
@@ -58,6 +59,7 @@ export default function MeetingDetails({
   siteName = null,
   venueId = null,
   venueName = null,
+  regionCode = null,
   editPlaceHref = null,
   resolved,
   meetingTime,
@@ -105,6 +107,9 @@ export default function MeetingDetails({
       points the picker offers first. */
   venueId?: string | null
   venueName?: string | null
+  /** The day's region — its canyon's venue's, or the course's — so the
+      picker offers meetups nearby and not the whole library. */
+  regionCode?: string | null
   /** Where the usual meetup is edited, for those who may. */
   editPlaceHref?: string | null
   /** What the morning reads as, from `resolveDayMeeting`. */
@@ -172,8 +177,14 @@ export default function MeetingDetails({
   // refresh brings the library back with it in — otherwise the select would
   // be set to an id it has no option for and read as the usual.
   const [filedPoints, setFiledPoints] = useState<Meetup[]>([])
+  // Only places this day could plausibly gather: this venue's, and others in
+  // the same region. The whole library was offered before, so a Montana course
+  // with no meetups of its own opened onto five Maui parking lots. A day with
+  // neither a venue nor a region cannot be judged, and keeps the whole list.
+  const nearby = (p: Meetup) =>
+    (!venueId && !regionCode) || (venueId && p.venue_id === venueId) || (regionCode && p.region_code === regionCode)
   const pickable = [...meetingPoints, ...filedPoints.filter((f) => !meetingPoints.some((p) => p.id === f.id))]
-    .filter((p) => p.id !== siteMeetup?.id)
+    .filter((p) => p.id !== siteMeetup?.id && (nearby(p) || p.id === savedPick))
   // This venue's first, then the rest under their own venues — the same
   // order the site picker uses, and what makes a Maui lot a Maui option.
   const pickGroups = (() => {
