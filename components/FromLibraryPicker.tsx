@@ -3,8 +3,8 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { errorFrom, type ActionResult } from '@/lib/action-result'
-import { KIND_META, type LibraryKind } from '@/lib/library'
-import { AudiencePills } from '@/components/AudiencePills'
+import { KIND_META, type LibraryKind, type LibraryAudience } from '@/lib/library'
+import { AudiencePills, AudienceFilter, matchesAudience } from '@/components/AudiencePills'
 
 // Adding something that already exists.
 //
@@ -61,6 +61,7 @@ export default function FromLibraryPicker({
   const [rows, setRows] = useState<LibraryChoice[] | null>(null)
   const [picked, setPicked] = useState<Set<string>>(new Set())
   const [q, setQ] = useState('')
+  const [audienceFilter, setAudienceFilter] = useState<LibraryAudience | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   async function show() {
@@ -123,19 +124,23 @@ export default function FromLibraryPicker({
   const shown = (rows ?? [])
     .filter((r) => !r.alreadyAdded)
     .filter((r) => !needle || r.title.toLowerCase().includes(needle))
+    .filter((r) => matchesAudience(r.audience, audienceFilter))
     // Suggested first: what the course's place and expertise match is the
     // answer nine times out of ten, and the tenth is why there is a search box.
     .sort((a, b) => Number(b.suggested) - Number(a.suggested))
 
   return (
     <div className="basis-full mt-2 p-3 bg-zinc-950 border border-zinc-800 rounded space-y-2">
-      <input
-        autoFocus
-        value={q}
-        onChange={(e) => setQ(e.target.value)}
-        placeholder="Search the library…"
-        className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-xs focus:outline-none focus:border-zinc-500"
-      />
+      <div className="flex items-center gap-2">
+        <input
+          autoFocus
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Search the library…"
+          className="flex-1 min-w-0 bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-xs focus:outline-none focus:border-zinc-500"
+        />
+        <AudienceFilter value={audienceFilter} onChange={setAudienceFilter} />
+      </div>
 
       <div className="max-h-64 overflow-y-auto space-y-1">
         {busy && !rows && <p className="text-xs text-zinc-500">Reading the library…</p>}

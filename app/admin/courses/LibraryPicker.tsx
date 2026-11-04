@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { addLibraryItems, loadPickerItems } from './actions'
 import { KIND_META, AUDIENCE_META, type LibraryAudience } from '@/lib/library'
-import { AudiencePills } from '@/components/AudiencePills'
+import { AudiencePills, AudienceFilter, matchesAudience } from '@/components/AudiencePills'
 import { CAPABILITY_META, CAPABILITY_ORDER, type CapabilityCategory } from '@/lib/capabilities'
 
 export type PickerItem = {
@@ -44,6 +44,7 @@ export default function LibraryPicker({
   const [open, setOpen] = useState(false)
   const [q, setQ] = useState('')
   const [scope, setScope] = useState<string>('suggested') // 'suggested' | 'all' | a discipline
+  const [audienceFilter, setAudienceFilter] = useState<LibraryAudience | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -54,6 +55,7 @@ export default function LibraryPicker({
       .filter((i) => {
         if (scope === 'suggested' && !i.suggested && !needle) return false
         if (scope !== 'suggested' && scope !== 'all' && !i.disciplines.includes(scope)) return false
+        if (!matchesAudience(i.audience, audienceFilter)) return false
         if (!needle) return true
         return (
           i.title.toLowerCase().includes(needle) ||
@@ -63,7 +65,7 @@ export default function LibraryPicker({
       })
       .sort((a, b) => Number(b.suggested) - Number(a.suggested) || a.title.localeCompare(b.title))
       .slice(0, 80)
-  }, [items, q, scope])
+  }, [items, q, scope, audienceFilter])
 
   const chosen = [...selected].map((id) => items.find((i) => i.id === id)).filter(Boolean) as PickerItem[]
   const offDiscipline = chosen.filter(
@@ -135,6 +137,7 @@ export default function LibraryPicker({
             <option key={c} value={c}>{CAPABILITY_META[c].label}</option>
           ))}
         </select>
+        <AudienceFilter value={audienceFilter} onChange={setAudienceFilter} />
         <button onClick={() => setOpen(false)} className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">
           Cancel
         </button>

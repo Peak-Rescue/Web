@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { searchLibraryForSetup } from './actions'
-import { KIND_META } from '@/lib/library'
+import { KIND_META, type LibraryAudience } from '@/lib/library'
+import { AudiencePills, AudienceFilter } from '@/components/AudiencePills'
 import { CAPABILITY_META } from '@/lib/capabilities'
 
 type Candidate = {
@@ -33,6 +34,7 @@ export default function SetupItemPicker({
 }) {
   const [open, setOpen] = useState(false)
   const [q, setQ] = useState('')
+  const [audienceFilter, setAudienceFilter] = useState<LibraryAudience | null>(null)
   const [results, setResults] = useState<Candidate[]>([])
   const [searching, setSearching] = useState(false)
   const box = useRef<HTMLInputElement>(null)
@@ -54,7 +56,7 @@ export default function SetupItemPicker({
     const t = setTimeout(async () => {
       setSearching(true)
       try {
-        const rows = (await searchLibraryForSetup(term)) as Candidate[]
+        const rows = (await searchLibraryForSetup(term, 25, audienceFilter)) as Candidate[]
         if (live) setResults(rows)
       } finally {
         if (live) setSearching(false)
@@ -64,7 +66,7 @@ export default function SetupItemPicker({
       live = false
       clearTimeout(t)
     }
-  }, [q, open])
+  }, [q, open, audienceFilter])
 
   const typed = q.trim().length >= 2
   const shown = typed ? results : []
@@ -88,8 +90,9 @@ export default function SetupItemPicker({
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Search the library by title…"
-          className="flex-1 bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-xs focus:outline-none focus:border-zinc-500"
+          className="flex-1 min-w-0 bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-xs focus:outline-none focus:border-zinc-500"
         />
+        <AudienceFilter value={audienceFilter} onChange={setAudienceFilter} />
         <button
           onClick={() => { setOpen(false); setQ(''); setResults([]) }}
           className="text-[11px] text-zinc-500 hover:text-white transition-colors"
@@ -116,6 +119,7 @@ export default function SetupItemPicker({
                       {KIND_META[r.kind as keyof typeof KIND_META]}
                     </span>
                   )}
+                  {r.audience === 'internal' && <AudiencePills audience="internal" />}
                   {have && <span className="text-[10px] text-zinc-600">already here</span>}
                 </span>
                 <span className="block text-[10px] text-zinc-600 mt-0.5 truncate">

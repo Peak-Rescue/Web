@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { applyLibrarySelection, loadPickerItems } from './actions'
 import { KIND_META, AUDIENCE_META, BUCKET_META, BUCKET_ORDER, type LibraryAudience, type LibraryBucket } from '@/lib/library'
-import { AudiencePills } from '@/components/AudiencePills'
+import { AudiencePills, AudienceFilter, matchesAudience } from '@/components/AudiencePills'
 import { CAPABILITY_META, CAPABILITY_ORDER, type CapabilityCategory } from '@/lib/capabilities'
 import { type PickerItem } from './LibraryPicker'
 import InfoHint from '@/components/InfoHint'
@@ -38,6 +38,7 @@ export default function SuggestedContent({
   const [scope, setScope] = useState<string>('suggested')
   const [bucket, setBucket] = useState<string>('all')
   const [q, setQ] = useState('')
+  const [audienceFilter, setAudienceFilter] = useState<LibraryAudience | null>(null)
 
   const [checked, setChecked] = useState<Set<string>>(new Set())
   const [groupAudience, setGroupAudience] = useState<Record<string, LibraryAudience>>({})
@@ -55,13 +56,14 @@ export default function SuggestedContent({
         if (i.sourceClass !== scope.slice(6)) continue
       } else if (scope !== 'suggested' && scope !== 'all' && !i.disciplines.includes(scope)) continue
       if (needle && !i.title.toLowerCase().includes(needle) && !i.topics.some((t) => t.toLowerCase().includes(needle))) continue
+      if (!matchesAudience(i.audience, audienceFilter)) continue
       const key = i.topics.find((t) => t !== 'needs-link-check') ?? 'Other material'
       map.set(key, [...(map.get(key) ?? []), i])
     }
     return [...map.entries()]
       .map(([title, its]) => ({ title, items: its.sort((a, b) => a.title.localeCompare(b.title)) }))
       .sort((a, b) => a.title.localeCompare(b.title))
-  }, [items, existingItemIds, scope, q, bucket])
+  }, [items, existingItemIds, scope, q, bucket, audienceFilter])
 
   // A section defaults to what its items already say, not to a guess from the
   // section's name. Mixed groups default to the stricter level.
@@ -168,6 +170,7 @@ export default function SuggestedContent({
             placeholder="Search…"
             className={`w-36 ${select}`}
           />
+          <AudienceFilter value={audienceFilter} onChange={setAudienceFilter} />
           <select value={bucket} onChange={(e) => setBucket(e.target.value)} className={select}>
             <option value="all">All libraries</option>
             {BUCKET_ORDER.map((b) => (

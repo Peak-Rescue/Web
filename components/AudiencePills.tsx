@@ -55,3 +55,92 @@ export function ForPill({ audience }: { audience: 'student' | 'instructor' }) {
     </span>
   )
 }
+
+// Narrowing a library search to who an item reaches. Two pills in the colours
+// the rows already wear, one or neither picked: an item is either seen by
+// students or kept to instructors, so "both" would be no filter and "neither"
+// would be an empty list. Every library search uses this one, so the control
+// reads the same wherever a search does.
+export function AudienceFilter({
+  value,
+  onChange,
+  className = '',
+}: {
+  value: LibraryAudience | null
+  onChange: (next: LibraryAudience | null) => void
+  className?: string
+}) {
+  return (
+    <span className={`inline-flex items-center gap-1 shrink-0 ${className}`}>
+      {FILTER_CHOICES.map((c) => {
+        const on = value === c.audience
+        return (
+          <button
+            key={c.audience}
+            type="button"
+            aria-pressed={on}
+            onClick={() => onChange(on ? null : c.audience)}
+            title={filterTitle(c.audience, on)}
+            className={filterPillClass(c.colour, on, value !== null)}
+          >
+            {c.label}
+          </button>
+        )
+      })}
+    </span>
+  )
+}
+
+// The same two pills as links, for a page that filters through its address —
+// the library page, which is rendered on the server and keeps every filter in
+// the URL. `hrefFor` gives the address with that audience picked, or with the
+// filter cleared for null.
+export function AudienceFilterLinks({
+  value,
+  hrefFor,
+  className = '',
+}: {
+  value: LibraryAudience | null
+  hrefFor: Record<LibraryAudience | 'none', string>
+  className?: string
+}) {
+  return (
+    <span className={`inline-flex items-center gap-1 shrink-0 ${className}`}>
+      {FILTER_CHOICES.map((c) => {
+        const on = value === c.audience
+        return (
+          <a
+            key={c.audience}
+            href={on ? hrefFor.none : hrefFor[c.audience]}
+            aria-current={on ? 'true' : undefined}
+            title={filterTitle(c.audience, on)}
+            className={filterPillClass(c.colour, on, value !== null)}
+          >
+            {c.label}
+          </a>
+        )
+      })}
+    </span>
+  )
+}
+
+const FILTER_CHOICES: { audience: LibraryAudience; label: string; colour: string }[] = [
+  { audience: 'shared', label: 'Students', colour: STUDENTS },
+  { audience: 'internal', label: 'Instructors only', colour: INSTRUCTORS },
+]
+
+const filterTitle = (a: LibraryAudience, on: boolean) =>
+  on ? 'Show everything' : `Only what ${a === 'shared' ? 'students can see' : 'is kept to instructors'}`
+
+// Picked: ringed. Another picked: faded. Neither: both a little quiet, so the
+// pair reads as a choice to make rather than two labels on the row.
+const filterPillClass = (colour: string, on: boolean, anyOn: boolean) =>
+  `text-[10px] leading-none px-1.5 py-1 rounded transition-opacity ${colour} ${
+    on ? 'ring-1 ring-current' : anyOn ? 'opacity-40 hover:opacity-80' : 'opacity-70 hover:opacity-100'
+  }`
+
+/** Whether a row passes the audience filter. A row with no audience of its own
+    is read as shared, the library's default. */
+export function matchesAudience(rowAudience: string | null | undefined, filter: LibraryAudience | null): boolean {
+  return !filter || (rowAudience === 'internal' ? 'internal' : 'shared') === filter
+}

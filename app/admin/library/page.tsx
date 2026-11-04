@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation'
+import { AudienceFilterLinks } from '@/components/AudiencePills'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -645,8 +646,24 @@ export default async function LibraryPage({
             {venues.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
           </select>
           )}
+          {/* Set by the pills under the form, and carried through a search so
+              typing a new term does not drop who it is for. */}
+          {audience && <input type="hidden" name="audience" value={audience} />}
           <button className="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 rounded text-sm text-zinc-300 transition-colors">Filter</button>
         </form>
+        {!onPlaces && (
+          <div className="-mt-4 mb-6 flex items-center gap-2 text-[11px] text-zinc-500">
+            Who sees it
+            <AudienceFilterLinks
+              value={audience === 'internal' || audience === 'shared' ? audience : null}
+              hrefFor={{
+                shared: href({ audience: 'shared', page: undefined }),
+                internal: href({ audience: 'internal', page: undefined }),
+                none: href({ audience: undefined, page: undefined }),
+              }}
+            />
+          </div>
+        )}
 
         {/* ── Add ──────────────────────────────────────────────────────── */}
         {/* Documents only — a gear list or schedule is started from its

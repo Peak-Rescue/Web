@@ -827,15 +827,20 @@ export async function removeCourseSetupItem(rowId: string) {
     rows and the question is always "where is this one document". Published
     only — pending material has not been sorted yet, and putting it on a course
     type is a judgement that comes after the one in the review queue. */
-export async function searchLibraryForSetup(q: string, limit = 25) {
+export async function searchLibraryForSetup(q: string, limit = 25, audience: 'internal' | 'shared' | null = null) {
   const admin = await requireAdmin()
   const term = q.trim()
   if (term.length < 2) return []
-  const { data, error } = await admin
+  let query = admin
     .from('library_items')
     .select('id, title, kind, bucket, audience, disciplines, source_class')
     .eq('status', 'published')
     .ilike('title', `%${term}%`)
+  // Filtered here rather than after, so the limit counts only rows that pass.
+  // No audience reads as shared, the library's default.
+  if (audience === 'internal') query = query.eq('audience', 'internal')
+  if (audience === 'shared') query = query.or('audience.is.null,audience.neq.internal')
+  const { data, error } = await query
     .order('title')
     .limit(limit)
   if (error) throw new Error(error.message)

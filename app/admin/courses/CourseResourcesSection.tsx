@@ -9,7 +9,7 @@ import { createClient } from '@/lib/supabase/client'
 import AddButtons from '@/components/AddButtons'
 import { type FilingValue } from '@/components/FilingFields'
 import { KIND_META, shelfLink, type LibraryAudience, type LibraryKind } from '@/lib/library'
-import { AudiencePills } from '@/components/AudiencePills'
+import { AudiencePills, AudienceFilter, matchesAudience } from '@/components/AudiencePills'
 import AudienceToggle from '@/components/AudienceToggle'
 import {
   addCourseResourceLink,
@@ -92,6 +92,7 @@ export default function CourseResourcesSection({
   const [pickerOpen, setPickerOpen] = useState(false)
   const [showAll, setShowAll] = useState(false)
   const [q, setQ] = useState('')
+  const [audienceFilter, setAudienceFilter] = useState<LibraryAudience | null>(null)
   // Narrowed to one type rather than to a guessed word. "Find one" used to
   // put "med plan" in the search box, which matches nothing on a file called
   // Maui-Canyoning-Medical-MEDEVAC-Plan — the thing it was opened to find.
@@ -158,6 +159,7 @@ export default function CourseResourcesSection({
   const unadded = (picker ?? [])
     .filter((i) => !i.alreadyAdded)
     .filter((i) => (scope === 'venue' ? i.placed : !i.placed))
+    .filter((i) => matchesAudience(i.audience, audienceFilter))
     .sort((a, b) => Number(b.suggested) - Number(a.suggested) || a.title.localeCompare(b.title))
   // What fits this course — its venue, its region, or its disciplines — is what
   // the picker opens on. The rest of the shelf is one press away and says how
@@ -406,12 +408,15 @@ export default function CourseResourcesSection({
               nobody reads one. You come here knowing what you want — last
               year's Maui med plan — and the only thing that finds it by name
               is a box to type the name in. */}
-          <input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Search the shelf by title…"
-            className="w-full mb-2 bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-zinc-500"
-          />
+          <div className="flex items-center gap-2 mb-2">
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Search the shelf by title…"
+              className="flex-1 min-w-0 bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-zinc-500"
+            />
+            <AudienceFilter value={audienceFilter} onChange={setAudienceFilter} />
+          </div>
           {onlyKind && (
             <p className="text-[11px] text-zinc-500 mb-2">
               {kindHere.length && !showAll
