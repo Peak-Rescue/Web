@@ -44,7 +44,13 @@ export default function PinField({
       const r = await resolvePin(t)
       if ('error' in r) { setError(r.error); return }
       onChange(r.coords)
-      setNote(r.from === 'address' ? `Found from the address — check it on the map` : 'From the Google Maps link')
+      setNote(
+        r.from === 'street'
+          ? 'Couldn’t find the house number — this is somewhere on the street. A Google Maps link would be exact.'
+          : r.from === 'address'
+            ? 'Found from the address — check it on the map'
+            : 'From the Google Maps link'
+      )
     } catch (e) {
       setError(errorFrom(e, 'Couldn’t read that link'))
     } finally {

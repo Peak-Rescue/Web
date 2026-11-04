@@ -539,7 +539,7 @@ export async function removeRegion(code: string): Promise<ActionResult> {
  *  browser cannot follow it — Google does not allow the cross-origin read —
  *  so the server does, one hop at a time, and only ever to Google.
  */
-export async function resolvePin(text: string): Promise<{ coords: string; from?: 'link' | 'address' } | ActionRefusal> {
+export async function resolvePin(text: string): Promise<{ coords: string; from?: 'link' | 'address' | 'street' } | ActionRefusal> {
   await requireAdmin()
   const typed = pinFromCoords(text)
   if (typed) return { coords: typed }
@@ -561,25 +561,41 @@ export async function resolvePin(text: string): Promise<{ coords: string; from?:
 }
 
 // A street address, looked up on OpenStreetMap's public geocoder. Free, and
-// asks only for a name in the request and no more than one lookup a second,
-// which a person typing addresses one at a time never comes near. An address
-// it cannot place is refused rather than guessed: a pin a town over is worse
-// than no pin.
-async function pinFromAddress(address: string): Promise<{ coords: string; from: 'address' } | ActionRefusal> {
+// asks only for a name in the request and no more than one lookup a second.
+// An address it cannot place is refused rather than guessed: a pin a town over
+// is worse than no pin.
+//
+// OpenStreetMap is thin on house numbers and files plenty of streets under the
+// county rather than the town on the envelope — "123 Laura Louise Ln, Bozeman"
+// finds nothing though the lane is there. So a miss is asked again as the
+// street in its state, and a pin found that way says it is the street, not
+// the door.
+async function pinFromAddress(address: string): Promise<{ coords: string; from: 'address' | 'street' } | ActionRefusal> {
   if (address.length < 5) return refuse('Paste coordinates, a Google Maps link, or a street address.')
-  const q = new URLSearchParams({ q: address, format: 'json', limit: '1' })
-  try {
-    const res = await fetch(`https://nominatim.openstreetmap.org/search?${q}`, {
-      headers: { 'User-Agent': 'PeakRescuePortal/1.0 (https://peak-rescue.com)', 'Accept-Language': 'en' },
-      signal: AbortSignal.timeout(5000),
-    })
-    if (!res.ok) return refuse('The address lookup is not answering. Paste a Google Maps link instead.')
-    const hits = (await res.json()) as { lat: string; lon: string }[]
-    const hit = hits[0]
-    const coords = hit ? pinFromCoords(`${hit.lat}, ${hit.lon}`) : null
-    if (!coords) return refuse('Couldn’t find that address. Try adding the town and state, or paste a Google Maps link.')
-    return { coords, from: 'address' }
-  } catch {
-    return refuse('The address lookup is not answering. Paste a Google Maps link instead.')
+  const parts = address.split(',').map((p) => p.trim()).filter(Boolean)
+  const street = parts[0]?.replace(/^\d+[a-z]?\s+/i, '') ?? ''
+  // The state is the part with two capital letters in it, zip or not.
+  const state = parts.slice(1).map((p) => p.match(/\b([A-Z]{2})\b/)?.[1]).find(Boolean)
+  const tries: { q: string; from: 'address' | 'street' }[] = [{ q: address, from: 'address' }]
+  if (parts.length > 1 && street && street !== parts[0]) tries.push({ q: [street, ...parts.slice(1)].join(', '), from: 'street' })
+  if (street && state) tries.push({ q: `${street}, ${state}, USA`, from: 'street' })
+
+  for (let i = 0; i < tries.length; i++) {
+    // The geocoder's limit is one request a second.
+    if (i > 0) await new Promise((r) => setTimeout(r, 1100))
+    const q = new URLSearchParams({ q: tries[i].q, format: 'json', limit: '1' })
+    try {
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?${q}`, {
+        headers: { 'User-Agent': 'PeakRescuePortal/1.0 (https://peak-rescue.com)', 'Accept-Language': 'en' },
+        signal: AbortSignal.timeout(5000),
+      })
+      if (!res.ok) return refuse('The address lookup is not answering. Paste a Google Maps link instead.')
+      const hit = ((await res.json()) as { lat: string; lon: string }[])[0]
+      const coords = hit ? pinFromCoords(`${hit.lat}, ${hit.lon}`) : null
+      if (coords) return { coords, from: tries[i].from }
+    } catch {
+      return refuse('The address lookup is not answering. Paste a Google Maps link instead.')
+    }
   }
+  return refuse('Couldn’t find that address. Paste a Google Maps link instead.')
 }
