@@ -57,7 +57,9 @@ export default function PinField({
     <div>
       <span className={labelClassName}>
         <span className="inline-flex items-center gap-1">
-          Pin
+          {/* Names what the box takes, since it takes three things and a
+              bare "Pin" read as coordinates only. */}
+          Pin, address or Google Maps link
           <InfoHint text="Coordinates, a street address, or a Google Maps link: open the place in Google Maps, then Share → Copy link, and paste it here. It is turned into coordinates, which open in whatever map the reader uses. An address is the least exact of the three — a trailhead or a back gate is better as a link." />
         </span>
       </span>
