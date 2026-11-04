@@ -545,7 +545,7 @@ export async function resolvePin(text: string): Promise<{ coords: string } | Act
   if (typed) return { coords: typed }
   let url = text.trim()
   if (!isGoogleMapsUrl(url)) {
-    return refuse('Paste coordinates like 20.9227, -156.2858, or a Google Maps link.')
+    return refuse('Those aren’t coordinates it can read. Try 45.67178, -111.06059, a UTM or MGRS grid like 12T 495281 5057583, or a Google Maps link.')
   }
   for (let hop = 0; hop < 5; hop++) {
     const found = pinFromGoogleUrl(url)

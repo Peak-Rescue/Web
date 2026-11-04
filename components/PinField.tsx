@@ -57,11 +57,10 @@ export default function PinField({
     <div>
       <span className={labelClassName}>
         <span className="inline-flex items-center gap-1">
-          {/* Names what the box takes, since a bare "Pin" read as
-              coordinates only. No addresses: the free lookup had no house
-              numbers for rural Montana, and a near-miss pin looks right. */}
-          Pin or Google Maps link
-          <InfoHint text="Coordinates, or a Google Maps link: open the place in Google Maps, then Share → Copy link, and paste it here. It is turned into coordinates, which open in whatever map the reader uses." />
+          {/* Names what the box takes. No addresses: the free lookup had no
+              house numbers for rural Montana, and a near-miss pin looks right. */}
+          Coordinates or Google Maps link
+          <InfoHint text="Coordinates in any common form — 45.67178, -111.06059 · N45 40.307 W111 03.636 · 45°40'18&quot;N 111°03'38&quot;W · UTM 12T 495281 5057583 · MGRS/USNG 12T VR 95280 57582 — or a Google Maps link: open the place, then Share → Copy link, and paste it here. Whatever goes in is kept as latitude and longitude, which open in whatever map the reader uses." />
         </span>
       </span>
       <input
