@@ -22,9 +22,6 @@ export default function PinField({
 }) {
   const [busy, setBusy] = useState(false)
   const [note, setNote] = useState<string | null>(null)
-  // A pin on the street rather than the door is worth a second look before
-  // anybody drives to it, so that note is said in the colour that asks for one.
-  const [approximate, setApproximate] = useState(false)
   const [error, setError] = useState<string | null>(null)
   // Disabling the box while a link is read blurs it, and the blur would read
   // the same link a second time.
@@ -35,7 +32,6 @@ export default function PinField({
     if (reading.current) return
     setError(null)
     setNote(null)
-    setApproximate(false)
     if (!t) return
     const typed = pinFromCoords(t)
     if (typed) {
@@ -48,14 +44,7 @@ export default function PinField({
       const r = await resolvePin(t)
       if ('error' in r) { setError(r.error); return }
       onChange(r.coords)
-      setApproximate(r.from === 'street')
-      setNote(
-        r.from === 'street'
-          ? 'Couldn’t find the house number — this is somewhere on the street. A Google Maps link would be exact.'
-          : r.from === 'address'
-            ? 'Found from the address — check it on the map'
-            : 'From the Google Maps link'
-      )
+      setNote(r.from === 'address' ? 'Found from the address — check it on the map' : 'From the Google Maps link')
     } catch (e) {
       setError(errorFrom(e, 'Couldn’t read that link'))
     } finally {
@@ -93,7 +82,7 @@ export default function PinField({
         className={`${className} font-mono text-[12px]`}
       />
       {busy && <span className="block mt-1 text-[11px] text-zinc-500">Finding the pin…</span>}
-      {!busy && note && <span className={`block mt-1 text-[11px] ${approximate ? 'text-amber-500/80' : 'text-zinc-500'}`}>{note}</span>}
+      {!busy && note && <span className="block mt-1 text-[11px] text-zinc-500">{note}</span>}
       {!busy && error && <span className="block mt-1 text-[11px] text-pr-red">{error}</span>}
     </div>
   )
