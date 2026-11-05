@@ -76,11 +76,20 @@ async function resolveRecipients(
   return [...new Set(emails.filter((e): e is string => Boolean(e)).map((e) => e.trim().toLowerCase()))]
 }
 
-export type SendResult = { recipients: number; sent: number; problem: string | null }
+export type SendResult = {
+  recipients: number; sent: number; problem: string | null
+  /** Who it missed, for a "send to the ones who missed it" — the same message
+      to only them, recorded against the same row. Null when it all went. */
+  retry: MessageRetry | null
+}
+export type MessageRetry = { messageId: string; to: string[]; copy: boolean }
 
 export async function sendCourseMessage(
   instanceId: string,
-  input: { subject: string; body: string; audience: MessageAudience; copyMe?: boolean }
+  input: {
+    subject: string; body: string; audience: MessageAudience; copyMe?: boolean
+    retry?: MessageRetry | null
+  }
 ): Promise<SendResult> {
   const { user, admin, authorName, authorEmail } = await requireCourseStaff(instanceId)
 
@@ -89,8 +98,12 @@ export async function sendCourseMessage(
   if (!subject) throw new Error('Give it a subject')
   if (!body) throw new Error('Write the message first')
 
-  const recipients = await resolveRecipients(admin, instanceId, input.audience)
-  if (recipients.length === 0) throw new Error('There’s nobody in that group yet')
+  // A retry is narrowed to the ones missed, and still drawn from the group,
+  // so an address that is not on the course cannot be mailed by naming it.
+  const wanted = input.retry ? new Set(input.retry.to.map((e) => e.trim().toLowerCase())) : null
+  const recipients = (await resolveRecipients(admin, instanceId, input.audience))
+    .filter((e) => !wanted || wanted.has(e))
+  if (recipients.length === 0 && !input.retry?.copy) throw new Error('There’s nobody in that group yet')
   if (!process.env.RESEND_API_KEY) throw new Error('Email isn’t configured on this environment')
 
   const { data: inst } = await admin
@@ -121,7 +134,7 @@ export async function sendCourseMessage(
   // it went. Only when they aren't already a recipient, and never counted in
   // the delivered figure — that number is a promise about the course.
   const mine = authorEmail?.trim().toLowerCase() ?? null
-  const wantsCopy = input.copyMe !== false && mine !== null && !recipients.includes(mine)
+  const wantsCopy = (input.retry ? input.retry.copy : input.copyMe !== false) && mine !== null && !recipients.includes(mine)
   // One envelope each, as a batch rather than all at once: the account takes
   // ten requests a second, and a course past that lost everyone after the tenth.
   const sentOk = await sendEach(
@@ -132,16 +145,30 @@ export async function sendCourseMessage(
   const copyOk = !wantsCopy || sentOk[recipients.length] === true
   const delivered = results.filter((r) => r.ok)
 
-  await admin.from('course_messages').insert({
-    instance_id: instanceId,
-    subject,
-    body,
-    audience: input.audience,
-    created_by: user.id,
-    recipient_count: recipients.length,
-    sent_count: delivered.length,
-    recipients: delivered.map((r) => r.to),
-  })
+  let messageId = input.retry?.messageId ?? null
+  if (input.retry) {
+    // The same message reaching more of its people, not a second message.
+    const { data: prev } = await admin
+      .from('course_messages').select('sent_count, recipients').eq('id', input.retry.messageId).eq('instance_id', instanceId).maybeSingle()
+    if (prev) {
+      await admin.from('course_messages').update({
+        sent_count: (prev.sent_count ?? 0) + delivered.length,
+        recipients: [...new Set([...((prev.recipients as string[] | null) ?? []), ...delivered.map((r) => r.to)])],
+      }).eq('id', input.retry.messageId)
+    }
+  } else {
+    const { data: row } = await admin.from('course_messages').insert({
+      instance_id: instanceId,
+      subject,
+      body,
+      audience: input.audience,
+      created_by: user.id,
+      recipient_count: recipients.length,
+      sent_count: delivered.length,
+      recipients: delivered.map((r) => r.to),
+    }).select('id').single()
+    messageId = (row?.id as string | undefined) ?? null
+  }
 
   revalidatePath(`/portal/${instanceId}`)
   return {
@@ -153,8 +180,11 @@ export async function sendCourseMessage(
         ? `${recipients.length - delivered.length} of ${recipients.length} didn’t go through.`
         : null,
       // Its whole job is to be the proof it sent, so it can't fail in silence.
-      copyOk ? null : 'Your own copy didn’t send — the course’s did.',
+      copyOk ? null : delivered.length === recipients.length ? 'Your own copy didn’t send — the course’s did.' : 'Your own copy didn’t send either.',
     ].filter(Boolean).join(' ') || null,
+    retry: messageId && (delivered.length < recipients.length || !copyOk)
+      ? { messageId, to: results.filter((r) => !r.ok).map((r) => r.to), copy: !copyOk }
+      : null,
   }
 }
 

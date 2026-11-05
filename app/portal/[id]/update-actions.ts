@@ -80,7 +80,12 @@ export async function createUpdateUploadTargets(
 
 // ─── Notifying ──────────────────────────────────────────────────────────────
 
-type NotifyOutcome = { recipients: number; sent: number; problem: string | null }
+type NotifyOutcome = {
+  recipients: number; sent: number; problem: string | null
+  /** Who it did not reach, and whether the author's copy failed — what a
+      "send to the ones who missed it" has to go on. */
+  missed: string[]; copyMissed: boolean
+}
 
 // The crew is a real audience, not an afterthought: a gear change posted the
 // night before is exactly as much news to the instructor driving up in the
@@ -197,10 +202,10 @@ async function notify(
 
   if (recipients.length === 0 && authorCopy.length === 0) {
     const who = audience === 'instructors' ? 'nobody else instructing' : audience === 'students' ? 'nobody enrolled' : 'nobody else on the course'
-    return { recipients: 0, sent: 0, problem: `There is ${who} to email yet, so this is on the course page only.` }
+    return { recipients: 0, sent: 0, problem: `There is ${who} to email yet, so this is on the course page only.`, missed: [], copyMissed: false }
   }
   if (!process.env.RESEND_API_KEY) {
-    return { recipients: recipients.length, sent: 0, problem: 'Email isn’t configured, so this is on the course page only.' }
+    return { recipients: recipients.length, sent: 0, problem: 'Email isn’t configured, so this is on the course page only.', missed: [], copyMissed: false }
   }
 
   const courseName = inst ? courseDisplayName(inst.course_type, inst.custom_title) : 'your course'
@@ -258,7 +263,9 @@ async function notify(
   const copyOk = authorCopy.length === 0 || results[recipients.length] === true
   const sent = results.slice(0, recipients.length).filter(Boolean).length
 
-  const copyProblem = copyOk ? null : 'Your own copy didn’t send — everyone else’s did.'
+  // "Everyone else's did" only when that is true — beside "5 of 15 didn't"
+  // it was a contradiction on the same line.
+  const copyProblem = copyOk ? null : sent === recipients.length ? 'Your own copy didn’t send — everyone else’s did.' : 'Your own copy didn’t send either.'
   const sendProblem =
     sent === 0 && recipients.length > 0 ? 'The email couldn’t be sent — the update is on the course page.'
     : sent < recipients.length ? `${recipients.length - sent} of ${recipients.length} emails didn’t go through.`
@@ -268,12 +275,27 @@ async function notify(
     recipients: recipients.length,
     sent,
     problem: [sendProblem, copyProblem].filter(Boolean).join(' ') || null,
+    missed: recipients.filter((_, i) => !results[i]),
+    copyMissed: !copyOk,
   }
 }
 
 // ─── Posting, editing, notifying again ──────────────────────────────────────
 
-export type PostResult = { recipients: number; sent: number; emailProblem: string | null }
+export type PostResult = {
+  recipients: number; sent: number; emailProblem: string | null
+  /** What a retry needs when some of it did not go: who, and whether the
+      author's copy was among them. Null when everyone got it. */
+  retry: Retry | null
+}
+
+/** Sending the same notice again to only the people a send missed. Carries
+    what made the first one read the way it did, so the second matches it. */
+export type Retry = { to: string[]; copy: boolean; subjectNote?: string | null; moved?: boolean; first?: boolean; updateId?: string }
+
+function retryFrom(o: NotifyOutcome, extra: Omit<Retry, 'to' | 'copy'> = {}): Retry | null {
+  return o.missed.length || o.copyMissed ? { to: o.missed, copy: o.copyMissed, ...extra } : null
+}
 
 export async function postCourseUpdate(
   instanceId: string,
@@ -328,7 +350,10 @@ export async function postCourseUpdate(
   await recordPush(admin, instanceId, 'updates', audience, user.id)
 
   revalidatePath(`/portal/${instanceId}`)
-  return { recipients: outcome.recipients, sent: outcome.sent, emailProblem: outcome.problem }
+  return {
+    recipients: outcome.recipients, sent: outcome.sent, emailProblem: outcome.problem,
+    retry: retryFrom(outcome, { first: true, subjectNote: (input.subjectNote ?? '').trim().slice(0, 120) || null, updateId: row.id }),
+  }
 }
 
 // Editing does not email. The notice already sent points at this page, so a
@@ -372,13 +397,15 @@ export async function editCourseUpdate(
 export async function renotifyCourseUpdate(
   instanceId: string,
   updateId: string,
-  copyMe = true
+  copyMe = true,
+  /** Only the people an earlier send missed, worded as that send was. */
+  retry: Retry | null = null
 ): Promise<PostResult> {
   const { user, admin, authorName } = await requireCourseStaff(instanceId)
 
   const { data: existing } = await admin
     .from('course_updates')
-    .select('notify_count, audience')
+    .select('notify_count, audience, sent_count')
     .eq('id', updateId)
     .eq('instance_id', instanceId)
     .single()
@@ -386,7 +413,25 @@ export async function renotifyCourseUpdate(
 
   // The group it was addressed to, not whoever is on the course now — a second
   // notice goes to the same people as the first.
-  const outcome = await notify(admin, instanceId, authorName, user.email ?? null, cleanAudience(existing.audience), true, null, copyMe !== false)
+  const audience = cleanAudience(existing.audience)
+  if (retry) {
+    // Narrowed to the ones missed, and still through the audience, so a name
+    // that is not on this course cannot be mailed by putting it in the list.
+    const outcome = await notify(
+      admin, instanceId, authorName, user.email ?? null, audience,
+      !retry.first, retry.first ? retry.subjectNote ?? null : null, retry.copy, null,
+      { only: retry.to },
+    )
+    // The same notice reaching more of its people, not another notice.
+    await admin
+      .from('course_updates')
+      .update({ sent_count: (existing.sent_count ?? 0) + outcome.sent })
+      .eq('id', updateId)
+    revalidatePath(`/portal/${instanceId}`)
+    return { recipients: outcome.recipients, sent: outcome.sent, emailProblem: outcome.problem, retry: retryFrom(outcome, { first: retry.first, subjectNote: retry.subjectNote, updateId }) }
+  }
+
+  const outcome = await notify(admin, instanceId, authorName, user.email ?? null, audience, true, null, copyMe !== false)
 
   await admin
     .from('course_updates')
@@ -398,14 +443,12 @@ export async function renotifyCourseUpdate(
     })
     .eq('id', updateId)
 
-  await recordPush(admin, instanceId, 'updates', cleanAudience(existing.audience), user.id)
+  await recordPush(admin, instanceId, 'updates', audience, user.id)
 
   revalidatePath(`/portal/${instanceId}`)
-  return { recipients: outcome.recipients, sent: outcome.sent, emailProblem: outcome.problem }
+  return { recipients: outcome.recipients, sent: outcome.sent, emailProblem: outcome.problem, retry: retryFrom(outcome, { updateId }) }
 }
 
-// Removing an update takes it off the course page. The email that already went
-// out is gone — the UI says so before asking.
 export async function deleteCourseUpdate(instanceId: string, updateId: string) {
   const { admin } = await requireCourseStaff(instanceId)
 
@@ -438,7 +481,11 @@ export async function deleteCourseUpdate(instanceId: string, updateId: string) {
 // construction.
 export async function announceMeetingDetails(
   instanceId: string,
-  input: { audience?: UpdateAudience; meetingDate: string; copyMe?: boolean }
+  input: {
+    audience?: UpdateAudience; meetingDate: string; copyMe?: boolean
+    /** Only the people an earlier announcement missed, worded as it was. */
+    retry?: Retry | null
+  }
 ): Promise<PostResult> {
   const { user, admin, authorName } = await requireCourseStaff(instanceId)
   const audience = cleanAudience(input.audience)
@@ -454,7 +501,9 @@ export async function announceMeetingDetails(
   // Told about this day before, so anyone reading has an earlier version of
   // it. Not a comparison of the fields: a different day is a different plan,
   // not a correction of the last one.
-  const moved = Boolean(day && announced.includes(day))
+  // A retry says what the first one said: by now this day is on the list,
+  // and reading it again would turn "is now set" into "has changed".
+  const moved = input.retry ? Boolean(input.retry.moved) : Boolean(day && announced.includes(day))
 
   const named = meetingDayLabel(day, null)
   const when = named ? ` for ${named}` : ''
@@ -472,8 +521,13 @@ export async function announceMeetingDetails(
     input.copyMe !== false,
     moved
       ? `The meeting point or time${when} has changed — please check it before you set off.`
-      : `Where and when to meet${when} is now set.`
+      : `Where and when to meet${when} is now set.`,
+    input.retry ? { only: input.retry.to } : undefined
   )
+  if (input.retry) {
+    revalidatePath(`/portal/${instanceId}`)
+    return { recipients: outcome.recipients, sent: outcome.sent, emailProblem: outcome.problem, retry: retryFrom(outcome, { moved }) }
+  }
 
   // Written once it has actually gone out, which is what makes the next
   // announcement for this day a correction rather than the plan arriving.
@@ -490,7 +544,7 @@ export async function announceMeetingDetails(
 
   revalidatePath(`/portal/${instanceId}`)
   revalidatePath(`/admin/courses/${instanceId}`)
-  return { recipients: outcome.recipients, sent: outcome.sent, emailProblem: outcome.problem }
+  return { recipients: outcome.recipients, sent: outcome.sent, emailProblem: outcome.problem, retry: retryFrom(outcome, { moved }) }
 }
 
 // ─── A second pair of eyes ───────────────────────────────────────────────
@@ -592,7 +646,9 @@ export async function requestGearReview(
 
   revalidatePath(`/portal/${instanceId}`)
   revalidatePath(`/admin/courses/${instanceId}`)
-  return { recipients: outcome.recipients, sent: outcome.sent, emailProblem: outcome.problem }
+  // A gear review asks named people; the asker sees who answered, so a miss
+  // is resent from there rather than from a button here.
+  return { recipients: outcome.recipients, sent: outcome.sent, emailProblem: outcome.problem, retry: null }
 }
 
 /**

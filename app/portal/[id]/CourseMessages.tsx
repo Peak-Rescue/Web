@@ -1,8 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { sendCourseMessage, deleteCourseMessage, type MessageAudience } from './message-actions'
+import { sendCourseMessage, deleteCourseMessage, type MessageAudience, type MessageRetry } from './message-actions'
+import ResendMissed from '@/components/ResendMissed'
 import CloseButton from '@/components/CloseButton'
 import ComposerTrigger, { MailIcon } from '@/components/ComposerTrigger'
 
@@ -50,6 +51,8 @@ export default function CourseMessages({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<string | null>(null)
+  const [retry, setRetry] = useState<MessageRetry | null>(null)
+  const lastSent = useRef<{ subject: string; body: string; audience: MessageAudience }>({ subject: '', body: '', audience: 'everyone' })
   const [expanded, setExpanded] = useState<string | null>(null)
 
   const countFor = (a: MessageAudience) =>
@@ -65,11 +68,14 @@ export default function CourseMessages({
     if (!subject.trim() || !body.trim()) return
     if (!confirm(`Send this to ${count} ${count === 1 ? 'person' : 'people'}? It can't be unsent.`)) return
 
-    setBusy(true); setError(null); setResult(null)
+    setBusy(true); setError(null); setResult(null); setRetry(null)
     try {
       const r = await sendCourseMessage(instanceId, { subject, body, audience, copyMe })
+      // The words go with a retry: the boxes are emptied below.
+      lastSent.current = { subject, body, audience }
       setSubject(''); setBody(''); setOpen(false)
       setResult(r.problem ?? `Sent to ${r.sent} ${r.sent === 1 ? 'person' : 'people'}.`)
+      setRetry(r.retry)
       router.refresh()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'That didn’t send')
@@ -161,7 +167,23 @@ export default function CourseMessages({
         <ComposerTrigger label="Send an email" icon={<MailIcon />} onClick={() => { setOpen(true); setResult(null) }} />
       )}
 
-      {result && <p className="text-xs text-teal-300">{result}</p>}
+      {result && (
+        <p className="text-xs text-teal-300 flex items-center gap-2 flex-wrap">
+          {result}
+          <ResendMissed
+            retry={retry}
+            resend={async (r) => {
+              const out = await sendCourseMessage(instanceId, { ...lastSent.current, retry: r })
+              router.refresh()
+              return {
+                message: out.problem ?? `Sent to the ${out.sent === 1 ? 'one' : out.sent} who missed it.`,
+                retry: out.retry,
+              }
+            }}
+            onDone={(message, next) => { setResult(message); setRetry(next) }}
+          />
+        </p>
+      )}
       {error && <p className="text-xs text-pr-red">{error}</p>}
 
       {messages.length > 0 && (

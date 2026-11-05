@@ -14,7 +14,8 @@ import CloseButton from '@/components/CloseButton'
 import type { MeetingLink, MeetingFile } from '@/lib/meeting-details'
 import type { UpdateLink, UpdateAttachment, UpdateAudience } from './update-actions'
 import type { NotifyCounts } from '@/lib/course-notify'
-import { announceMeetingDetails } from './update-actions'
+import { announceMeetingDetails, type Retry } from './update-actions'
+import ResendMissed from '@/components/ResendMissed'
 import { saveDayMeetingDetails } from './logistics-actions'
 import { fileDayMeetingPoint, dayMeetingPointFilingOptions, keepLinksOnMeetingPoint } from '@/app/admin/sites/actions'
 import { meetingDayLabel } from '@/lib/meeting-details'
@@ -258,6 +259,8 @@ export default function MeetingDetails({
   const [keeping, setKeeping] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<string | null>(null)
+  const [retry, setRetry] = useState<Retry | null>(null)
+  const lastSend = useRef<{ audience: UpdateAudience; meetingDate: string }>({ audience: 'everyone', meetingDate: '' })
 
   // The meetup's pins after this day's own — and never the same URL twice,
   // for the day that retyped a meetup's link.
@@ -302,7 +305,7 @@ export default function MeetingDetails({
   // question "did that send?" had to be asked of a screen that had already
   // said "Saved".
   async function submit(thenTell: boolean) {
-    setBusy(true); setError(null); setResult(null)
+    setBusy(true); setError(null); setResult(null); setRetry(null)
     try {
       const savedLinks = withLinkDraft(draftLinks, linkDraft)
       await saveDayMeetingDetails(dayId, {
@@ -331,6 +334,9 @@ export default function MeetingDetails({
         sent.emailProblem ??
           `Emailed ${sent.sent === 1 ? '1 person' : `${sent.sent} people`} a link to this page.`
       )
+      setRetry(sent.retry)
+      // Kept for the retry: it goes to the same day and audience as this one.
+      lastSend.current = { audience, meetingDate: date }
       router.refresh()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'That didn’t save')
@@ -904,6 +910,17 @@ export default function MeetingDetails({
             {isSet ? 'Edit meeting details' : 'Add meeting details'}
           </button>
           {result && <span className="text-[11px] text-zinc-500">{result}</span>}
+          <ResendMissed
+            retry={retry}
+            resend={async (r) => {
+              const sent = await announceMeetingDetails(instanceId, { ...lastSend.current, copyMe: r.copy, retry: r })
+              return {
+                message: sent.emailProblem ?? `Emailed the ${sent.sent === 1 ? 'one' : sent.sent} who missed it.`,
+                retry: sent.retry,
+              }
+            }}
+            onDone={(message, next) => { setResult(message); setRetry(next) }}
+          />
           {error && <span className="text-[11px] text-pr-red">{error}</span>}
         </div>
       )}

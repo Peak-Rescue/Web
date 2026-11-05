@@ -4,8 +4,9 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { linkLabel } from '@/lib/course-links'
 import Composer from './UpdateComposer'
+import ResendMissed from '@/components/ResendMissed'
 import {
-  postCourseUpdate, editCourseUpdate, deleteCourseUpdate, renotifyCourseUpdate,
+  postCourseUpdate, editCourseUpdate, deleteCourseUpdate, renotifyCourseUpdate, type Retry,
   updateAttachmentFilingDraft,
   fileUpdateAttachmentToLibrary,
   type UpdateLink, type UpdateAttachment, type UpdateAudience,
@@ -56,6 +57,8 @@ export default function CourseUpdates({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<string | null>(null)
+  // Who the last send missed, for a second try at only them.
+  const [retry, setRetry] = useState<Retry | null>(null)
   const [editing, setEditing] = useState<string | null>(null)
   // Closed until asked for, like the email composer beside it. A box standing
   // permanently open is a box the feed has to be read around.
@@ -65,7 +68,7 @@ export default function CourseUpdates({
     new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
 
   async function run(fn: () => Promise<string | void>) {
-    setBusy(true); setError(null); setResult(null)
+    setBusy(true); setError(null); setResult(null); setRetry(null)
     try {
       const message = await fn()
       if (message) setResult(message)
@@ -98,13 +101,29 @@ export default function CourseUpdates({
               if (!confirm(`Post this and email ${who} a link to it?`)) return
               const r = await postCourseUpdate(instanceId, draft)
               setComposing(false)
+              setRetry(r.retry)
               return r.emailProblem ?? `Posted. ${r.sent} ${r.sent === 1 ? 'person' : 'people'} emailed a link to it.`
             })
           }
         />
       )}
 
-      {result && <p className="text-xs text-teal-300">{result}</p>}
+      {result && (
+        <p className="text-xs text-teal-300 flex items-center gap-2 flex-wrap">
+          {result}
+          <ResendMissed
+            retry={retry?.updateId ? retry : null}
+            resend={async (r) => {
+              const out = await renotifyCourseUpdate(instanceId, r.updateId!, r.copy, r)
+              return {
+                message: out.emailProblem ?? `Emailed the ${out.sent === 1 ? 'one' : out.sent} who missed it.`,
+                retry: out.retry,
+              }
+            }}
+            onDone={(message, next) => { setResult(message); setRetry(next) }}
+          />
+        </p>
+      )}
       {error && <p className="text-xs text-pr-red">{error}</p>}
 
       {updates.length === 0
@@ -226,6 +245,7 @@ export default function CourseUpdates({
                           run(async () => {
                             if (!confirm('Email everyone again to say this changed?')) return
                             const r = await renotifyCourseUpdate(instanceId, u.id)
+                            setRetry(r.retry)
                             return r.emailProblem ?? `${r.sent} ${r.sent === 1 ? 'person' : 'people'} emailed again.`
                           })
                         }
