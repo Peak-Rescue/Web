@@ -29,6 +29,7 @@ function looksGibberish(value: string): boolean {
 export function isLikelyContactSpam(fields: {
   firstName: string
   lastName: string
+  email: string
   organization: string | null
   message: string
 }): boolean {
@@ -41,6 +42,14 @@ export function isLikelyContactSpam(fields: {
   // strong enough evidence on its own, so it carries double weight.
   const msg = fields.message
   if (looksGibberish(msg) || (msg.length >= 12 && !/\s/.test(msg))) score += 2
+
+  // A "message" with no letters at all is a bot pasting a phone number.
+  else if (!/[a-zA-Z]/.test(msg)) score += 2
+
+  // Gmail ignores dots, so bots scatter them to mint fresh addresses
+  // ("geb.i.yuz.ow.u.y.u.7.7@gmail.com"). One or two dots is a person.
+  const [local, domain] = fields.email.toLowerCase().split('@')
+  if (domain === 'gmail.com' && (local.match(/\./g) ?? []).length >= 3) score += 1
 
   // Requiring two signals keeps a lone unusual name or org out of spam.
   return score >= 2

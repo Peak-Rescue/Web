@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { track } from '@vercel/analytics'
 import { submitContactForm } from './actions'
 
@@ -12,6 +12,12 @@ const labelClass =
 export default function ContactForm() {
   const [state, setState] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle')
   const [error, setError] = useState('')
+  // When the form appeared, so the server can tell a person from a bot that
+  // submits the instant the page loads.
+  const shownAt = useRef(0)
+  useEffect(() => {
+    shownAt.current = Date.now()
+  }, [])
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -27,11 +33,13 @@ export default function ContactForm() {
       interest: String(fd.get('interest') ?? ''),
       message: String(fd.get('message') ?? ''),
       company_website: String(fd.get('hp_field') ?? ''),
+      fillMs: shownAt.current ? Date.now() - shownAt.current : null,
     })
     if (res.ok) {
       track('contact_submitted', { interest: String(fd.get('interest') ?? '') || 'unspecified' })
       setState('sent')
       form.reset()
+      shownAt.current = Date.now()
     } else {
       setState('error')
       setError(res.error)

@@ -14,6 +14,8 @@ export type ContactInput = {
   message: string
   // Honeypot — must stay empty for real users.
   company_website: string
+  // Milliseconds between the form appearing and being sent.
+  fillMs?: number | null
 }
 
 export type ContactResult = { ok: true } | { ok: false; error: string }
@@ -55,7 +57,15 @@ export async function submitContactForm(input: ContactInput): Promise<ContactRes
     (await checkRateLimit(admin, 'contact_ip', ip, { limit: 10, windowMinutes: 60 }))
   if (!withinLimits) return { ok: true }
 
-  const spam = isLikelyContactSpam({ firstName, lastName, organization, message })
+  // Nobody fills in a name, email and message in under three seconds. A
+  // missing time means the action was called without our form.
+  const fillMs = typeof input.fillMs === 'number' && Number.isFinite(input.fillMs)
+    ? Math.min(Math.max(Math.round(input.fillMs), 0), 2_147_483_647)
+    : null
+  const spam =
+    fillMs === null ||
+    fillMs < 3000 ||
+    isLikelyContactSpam({ firstName, lastName, email, organization, message })
 
   // Durable capture first — this must succeed for the form to "work".
   const { error } = await admin.from('contact_submissions').insert({
@@ -66,6 +76,7 @@ export async function submitContactForm(input: ContactInput): Promise<ContactRes
     interest,
     message,
     spam,
+    fill_ms: fillMs,
   })
   if (error) {
     return { ok: false, error: 'Something went wrong. Please email info@peak-rescue.com directly.' }
