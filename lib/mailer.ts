@@ -105,3 +105,24 @@ export async function sendMailBatch(
 function failedBatch(message: string): BatchResponse {
   return { data: null, error: { name: 'application_error', message, statusCode: null }, headers: null }
 }
+
+// The same letter to each of a list, one envelope apiece, sent as batches
+// rather than as a send per address fired all at once. The account allows ten
+// requests a second; a course notice to fifteen people plus the author's copy
+// was sixteen at the same instant, and the last six were turned away — which
+// the page then reported as five students and the author's receipt not
+// getting it. A batch is one request for up to a hundred, and it lands or
+// fails whole, so the answer per address is the answer for its batch.
+export async function sendEach(
+  payloads: CreateBatchEmailOptions[],
+  { label = 'resend batch' }: { label?: string } = {}
+): Promise<boolean[]> {
+  const out: boolean[] = []
+  for (let i = 0; i < payloads.length; i += MAX_BATCH) {
+    const chunk = payloads.slice(i, i + MAX_BATCH)
+    const { error } = await sendMailBatch(chunk, { label })
+    if (error) console.error(`${label} failed for ${chunk.length}:`, error)
+    out.push(...chunk.map(() => !error))
+  }
+  return out
+}

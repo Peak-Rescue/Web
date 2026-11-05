@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { courseDisplayName } from '@/lib/courses'
-import { sendMail } from '@/lib/mailer'
+import { sendEach } from '@/lib/mailer'
 
 // Group email to the people on a course.
 //
@@ -109,7 +109,7 @@ export async function sendCourseMessage(
 
   // One send per address. A course roster is not a mailing list, and a reply
   // should reach the person who wrote it rather than everyone at once.
-  const send = (to: string) => sendMail({
+  const letter = (to: string) => ({
     from: FROM,
     to: [to],
     replyTo: authorEmail ?? 'info@peak-rescue.com',
@@ -122,18 +122,14 @@ export async function sendCourseMessage(
   // the delivered figure — that number is a promise about the course.
   const mine = authorEmail?.trim().toLowerCase() ?? null
   const wantsCopy = input.copyMe !== false && mine !== null && !recipients.includes(mine)
-  const copySent: Promise<boolean> = wantsCopy
-    ? send(mine!).then(({ error }) => { if (error) console.error('Author copy failed:', error); return !error })
-    : Promise.resolve(true)
-
-  const results = await Promise.all(
-    recipients.map(async (to) => {
-      const { error } = await send(to)
-      if (error) console.error(`Course message to ${to} failed:`, error)
-      return { to, ok: !error }
-    })
+  // One envelope each, as a batch rather than all at once: the account takes
+  // ten requests a second, and a course past that lost everyone after the tenth.
+  const sentOk = await sendEach(
+    [...recipients, ...(wantsCopy ? [mine!] : [])].map(letter),
+    { label: 'course message' }
   )
-  const copyOk = await copySent
+  const results = recipients.map((to, i) => ({ to, ok: sentOk[i] }))
+  const copyOk = !wantsCopy || sentOk[recipients.length] === true
   const delivered = results.filter((r) => r.ok)
 
   await admin.from('course_messages').insert({

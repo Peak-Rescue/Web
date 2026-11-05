@@ -7,7 +7,7 @@ import { requireCourseStaff } from '@/lib/course-access'
 import { normalizeDocLink } from '@/lib/doc-links'
 import { courseDisplayName } from '@/lib/courses'
 import { meetingDayLabel } from '@/lib/meeting-details'
-import { sendMail } from '@/lib/mailer'
+import { sendEach, sendMail } from '@/lib/mailer'
 import { classify } from '@/lib/sorting'
 import { courseCapabilityCategories } from '@/lib/capabilities'
 import { type Venue } from '@/lib/library'
@@ -248,27 +248,15 @@ async function notify(
   // That number is a promise about how many other people this reached, made
   // before something that can't be taken back — a receipt to yourself is not
   // one of them, and folding it in would quietly make the promise wrong.
-  const send = (to: string) =>
-    sendMail({ from: FROM, to: [to], replyTo: 'info@peak-rescue.com', subject, text })
-  const copySent: Promise<boolean> = authorCopy.length > 0
-    ? send(authorCopy[0]).then(({ error }) => {
-        if (error) console.error('Author copy failed:', error)
-        return !error
-      })
-    : Promise.resolve(true)
-
-  const results = await Promise.all(
-    recipients.map(async (to) => {
-      const { error } = await send(to)
-      if (error) console.error(`Course update email to ${to} failed:`, error)
-      return !error
-    })
-  )
+  const letter = (to: string) => ({ from: FROM, to: [to], replyTo: 'info@peak-rescue.com', subject, text })
+  // One envelope each, sent as a batch: firing them all at once ran past the
+  // account's ten-a-second limit and lost everyone after the tenth.
+  const results = await sendEach([...recipients, ...authorCopy.slice(0, 1)].map(letter), { label: 'course update' })
   // A copy that quietly fails is worse than none: its whole job is to be the
   // proof you pressed the button, so its absence would read as "it didn't
   // send" when in fact everyone else got it. Say so rather than log it.
-  const copyOk = await copySent
-  const sent = results.filter(Boolean).length
+  const copyOk = authorCopy.length === 0 || results[recipients.length] === true
+  const sent = results.slice(0, recipients.length).filter(Boolean).length
 
   const copyProblem = copyOk ? null : 'Your own copy didn’t send — everyone else’s did.'
   const sendProblem =
