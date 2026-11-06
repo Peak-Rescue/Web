@@ -57,6 +57,7 @@ export default function CourseResourcesSection({
   instanceId,
   resources,
   placeLabel,
+  placeValue = '',
 }: {
   /** Which of the course's two sections this is. Venue offers what the
       library has filed under a place — the med plan, the evac plan, the
@@ -70,6 +71,9 @@ export default function CourseResourcesSection({
   // Venue name, or the region when there is no venue — what the library would
   // file a document under. Null when the course has neither set yet.
   placeLabel: string | null
+  /** The same place in the picker's encoding. Passed by the Venue section
+      only: there, filing under the place is the point. */
+  placeValue?: string
 }) {
   const router = useRouter()
   const [busy, setBusy] = useState(false)
@@ -567,6 +571,7 @@ export default function CourseResourcesSection({
         busy={busy}
         withAudience
         libraryPlace={placeLabel}
+        libraryPlaceValue={scope === 'venue' ? placeValue : ''}
         defaultKind={linkKind}
         defaultToLibrary={Boolean(linkKind) || Boolean(pendingFiles)}
         files={pendingFiles}

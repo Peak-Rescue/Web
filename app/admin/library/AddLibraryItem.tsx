@@ -1,12 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { CAPABILITY_META, CAPABILITY_ORDER } from '@/lib/capabilities'
 import {
   ACCESS_META, LINK_AUDIENCE_META, KIND_META,
   bucketForKind, type Venue,
 } from '@/lib/library'
-import { createLibraryItem } from './actions'
+import { createLibraryItem, createLibraryUploadTarget } from './actions'
+import { createClient } from '@/lib/supabase/client'
 import PlaceSelect from '@/components/PlaceSelect'
 import { type SiteOption } from '@/app/admin/schedules/types'
 import KindOptions from '@/components/KindOptions'
@@ -49,10 +50,46 @@ export default function AddLibraryItem({
   const [bucket, setBucket] = useState(defaultBucket ?? 'resource')
   const isMap = kind === 'map'
   const isPermit = kind === 'permit'
+  // A file or a link: either is what the thing is, the questions are the
+  // same. Before, a file could reach the library only by being uploaded onto
+  // some course first — which also filed it under that course's place.
+  const [file, setFile] = useState<File | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const titleRef = useRef<HTMLInputElement>(null)
+
+  async function submit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    const form = e.currentTarget
+    const data = new FormData(form)
+    setBusy(true)
+    setError(null)
+    try {
+      if (file) {
+        const target = await createLibraryUploadTarget(file.name, file.size)
+        if ('error' in target) throw new Error(target.error)
+        const { error: upErr } = await createClient().storage
+          .from('task-documents')
+          .uploadToSignedUrl(target.path, target.token, file, { contentType: file.type })
+        if (upErr) throw new Error(`Upload failed: ${upErr.message}`)
+        data.set('storage_path', target.path)
+        data.set('filename', file.name)
+        data.delete('url')
+      }
+      await createLibraryItem(data)
+      form.reset()
+      setFile(null)
+      setKind(defaultKind ?? '')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'That didn’t save')
+    } finally {
+      setBusy(false)
+    }
+  }
 
   return (
     <form
-      action={createLibraryItem}
+      onSubmit={submit}
       className="mt-3 p-4 bg-zinc-900 border border-zinc-800 rounded-lg grid grid-cols-1 sm:grid-cols-2 gap-3"
     >
       <div>
@@ -89,13 +126,47 @@ export default function AddLibraryItem({
 
       <div className="sm:col-span-2">
         <label className={label}>Title *</label>
-        <input name="title" required className={input} />
+        <input ref={titleRef} name="title" required className={input} />
       </div>
 
-      <div className="sm:col-span-2">
-        <label className={label}>{isMap ? 'Link to the map' : 'Link (Drive, YouTube, or any URL)'}</label>
-        <input name="url" className={input} placeholder="https://…" />
-      </div>
+      {file ? (
+        <div className="sm:col-span-2">
+          <label className={label}>File</label>
+          <div className="flex items-center gap-3 text-sm text-zinc-200">
+            <span className="truncate">{file.name}</span>
+            <button type="button" onClick={() => setFile(null)} className="text-xs text-zinc-500 hover:text-zinc-300 shrink-0">
+              Use a link instead
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="sm:col-span-2">
+          <label className={label}>{isMap ? 'Link to the map' : 'Link (Drive, YouTube, or any URL)'}</label>
+          <div className="flex gap-2">
+            <input name="url" className={input} />
+            {/* A map is a CalTopo link; there is no file to upload. */}
+            {!isMap && (
+              <label className="shrink-0 px-3 py-2 rounded border border-dashed border-zinc-700 hover:border-zinc-500 text-sm text-zinc-300 cursor-pointer transition-colors">
+                or upload a file
+                <input
+                  type="file"
+                  className="hidden"
+                  onChange={(e) => {
+                    const picked = e.target.files?.[0] ?? null
+                    e.target.value = ''
+                    if (!picked) return
+                    setFile(picked)
+                    // Named after the file until somebody says otherwise.
+                    if (titleRef.current && !titleRef.current.value.trim()) {
+                      titleRef.current.value = picked.name.replace(/\.[a-z0-9]{1,5}$/i, '') || picked.name
+                    }
+                  }}
+                />
+              </label>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* A map's first link says what it is; the rest are added on the item
           once it exists, where they can be seen next to each other. */}
@@ -165,10 +236,14 @@ export default function AddLibraryItem({
         <input name="topics" className={input} placeholder="Rappelling, Anchors" />
       </div>
 
-      <div className="sm:col-span-2">
-        <button className="px-4 py-2 bg-pr-red hover:bg-pr-red-dark text-white rounded text-sm font-medium transition-colors">
-          Add to library
+      <div className="sm:col-span-2 flex items-center gap-3">
+        <button
+          disabled={busy}
+          className="px-4 py-2 bg-pr-red hover:bg-pr-red-dark text-white rounded text-sm font-medium transition-colors disabled:opacity-50"
+        >
+          {busy ? (file ? 'Uploading…' : 'Adding…') : 'Add to library'}
         </button>
+        {error && <span className="text-xs text-amber-400">{error}</span>}
       </div>
     </form>
   )

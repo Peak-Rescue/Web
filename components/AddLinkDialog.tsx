@@ -7,14 +7,14 @@ import { libraryFilingOptions } from '@/app/admin/courses/resource-actions'
 
 /** What the panel starts from: what the dialog already knows, and nothing
     assumed about the rest. */
-const blankFiling = (kind: string, title: string): FilingValue => ({
+const blankFiling = (kind: string, title: string, place = ''): FilingValue => ({
   title,
   url: '',
   kind,
   note: '',
   course_types: [],
   audience: 'internal',
-  place: '',
+  place,
   client_id: null,
   disciplines: [],
   topicsRaw: '',
@@ -34,6 +34,7 @@ export default function AddLinkDialog({
   busy,
   withAudience = false,
   libraryPlace = null,
+  libraryPlaceValue = '',
   onSubmit,
   onCancel,
   defaultKind,
@@ -50,6 +51,12 @@ export default function AddLinkDialog({
   // library until somebody sets a place is how a med plan ends up pasted
   // onto one course and nowhere else.
   libraryPlace?: string | null
+  /** The place a filed row starts with, in the place picker's own encoding
+      (venue:…, region:…). Only where being about a place is the point — the
+      course's Venue section. Reference is not about anywhere by default, so
+      a manual added from a Bozeman course arrived filed to Bozeman, which is
+      the place it happened to be added from, not the place it is about. */
+  libraryPlaceValue?: string
   /** Pre-ticked and pre-typed, where the thing being added is already known —
       the MEDEVAC banner opens this asking for a MEDEVAC plan. */
   defaultKind?: string
@@ -155,7 +162,7 @@ export default function AddLinkDialog({
     const chosen = audience ?? 'internal'
     // One answer, used twice: the pills above decide who sees it on the
     // course, and the library row has no business disagreeing with them.
-    const answers = toLibrary ? { ...(filing ?? blankFiling(kind, name)), audience: chosen } : undefined
+    const answers = toLibrary ? { ...(filing ?? blankFiling(kind, name, libraryPlaceValue)), audience: chosen } : undefined
     // A file is uploaded and filed by the caller; a link is added by it. The
     // questions are the same either way, which is the point of asking them
     // here rather than after the upload has already decided.
@@ -245,7 +252,7 @@ export default function AddLinkDialog({
             />
             <span>
               Add to the library
-              {libraryPlace && <> for <span className="font-medium">{libraryPlace}</span></>}
+              {libraryPlace && libraryPlaceValue && <> for <span className="font-medium">{libraryPlace}</span></>}
             </span>
           </label>
 
@@ -267,7 +274,13 @@ export default function AddLinkDialog({
                 // the other.
                 const picked = Array.from(e.target.files ?? [])
                 e.target.value = ''
-                if (picked.length) onUpload(picked, kind, audience ?? 'internal', toLibrary ? filing ?? undefined : undefined)
+                // A file always lands in the library, ticked or not, so it
+                // always carries the filing — or it was filed from the
+                // course, place and all, behind the panel's back.
+                if (picked.length) onUpload(picked, kind, audience ?? 'internal', {
+                  ...(filing ?? blankFiling(kind, name, libraryPlaceValue)),
+                  audience: audience ?? 'internal',
+                })
               }}
             />
             <span className="text-xs text-zinc-500 shrink-0">Choose…</span>
@@ -283,7 +296,7 @@ export default function AddLinkDialog({
           options ? (
             <div className="mt-3 pt-3 border-t border-zinc-800 grid grid-cols-1 sm:grid-cols-2 gap-3">
               <FilingFields
-                value={filing ?? blankFiling(kind, name)}
+                value={filing ?? blankFiling(kind, name, libraryPlaceValue)}
                 onChange={(next) => setFiling(next)}
                 venues={options.venues}
                 sites={options.sites}

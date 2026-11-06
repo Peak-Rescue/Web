@@ -193,13 +193,9 @@ export async function createLibraryItem(formData: FormData) {
     throw new Error('A map needs a place — pick the country, state, venue or canyon it is about.')
   }
 
-  const { data: created, error } = await admin.from('library_items').insert({
+  const filed = {
     title: ((formData.get('title') as string) || '').trim().slice(0, 200) || 'Untitled',
     description: ((formData.get('description') as string) || '').trim() || null,
-    url: url || null,
-    edit_url: ((formData.get('edit_url') as string) || '').trim() || null,
-    drive_file_id: driveMatch?.[1] ?? null,
-    source_type: driveMatch ? 'drive' : youtube ? 'youtube' : 'link',
     kind: VALID_KINDS.has(kind) ? kind : 'reference',
     bucket: isMap ? 'map' : VALID_BUCKETS.has(bucket) ? bucket : 'resource',
     audience: (formData.get('audience') as string) === 'shared' ? 'shared' : 'internal',
@@ -210,6 +206,36 @@ export async function createLibraryItem(formData: FormData) {
     site_id: place.site_id,
     region: place.region,
     expires_at: ((formData.get('expires_at') as string) || '') || null,
+  }
+
+  // A file, uploaded by the form before it posted. Filed by the same code a
+  // course upload goes through — storage, the file route, the Drive backup —
+  // and then given everything this form asked, which is more than a course
+  // knows. The form's answers win over anything the filing guessed.
+  const storagePath = ((formData.get('storage_path') as string) || '').trim()
+  if (storagePath) {
+    if (!storagePath.startsWith('library/')) throw new Error('Not a library upload')
+    const { fileToLibrary } = await import('@/lib/library-file')
+    const r = await fileToLibrary(admin, {
+      path: storagePath,
+      filename: (formData.get('filename') as string) || filed.title,
+      instanceId: null,
+      told: filed.kind,
+      audience: filed.audience === 'shared' ? 'shared' : 'internal',
+    })
+    if ('error' in r) throw new Error(r.error)
+    const { error: fileError } = await admin.from('library_items').update(filed).eq('id', r.id)
+    if (fileError) throw new Error(fileError.message)
+    revalidate()
+    return
+  }
+
+  const { data: created, error } = await admin.from('library_items').insert({
+    ...filed,
+    url: url || null,
+    edit_url: ((formData.get('edit_url') as string) || '').trim() || null,
+    drive_file_id: driveMatch?.[1] ?? null,
+    source_type: driveMatch ? 'drive' : youtube ? 'youtube' : 'link',
     status: 'published',
   }).select('id').single()
   if (error) throw new Error(error.message)
@@ -226,6 +252,24 @@ export async function createLibraryItem(formData: FormData) {
   }
 
   revalidate()
+}
+
+/** Somewhere for the library form to put a file before it posts — the same
+    bucket and limit a course upload uses, so both arrive at fileToLibrary
+    looking alike. */
+export async function createLibraryUploadTarget(
+  name: string,
+  size: number
+): Promise<{ path: string; token: string } | ActionRefusal> {
+  const admin = await requireAdmin()
+  if (size > 20 * 1024 * 1024) return refuse(`“${name}” is over the 20 MB limit`)
+  const { randomUUID } = await import('crypto')
+  const ext = (name.split('.').pop() ?? 'pdf').toLowerCase().replace(/[^a-z0-9]/g, '') || 'pdf'
+  const { data, error } = await admin.storage
+    .from('task-documents')
+    .createSignedUploadUrl(`library/${randomUUID()}.${ext}`)
+  if (error || !data) throw new Error(error?.message ?? 'Could not create upload URL')
+  return { path: data.path, token: data.token }
 }
 
 // ─── Deleting an item that courses are pointing at ──────────────────────────

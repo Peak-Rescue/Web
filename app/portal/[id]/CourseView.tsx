@@ -988,6 +988,8 @@ export default async function CourseView({
   const { data: venueRow } = await venueRowPromise
   const coursePlace: string | null =
     (venueRow?.name as string | undefined) ?? (regionLabel(inst.region as string | null) || null)
+  // The same place as the place picker spells it, for filing venue material.
+  const coursePlaceValue = inst.venue_id ? `venue:${inst.venue_id}` : inst.region ? `region:${inst.region}` : ''
 
   const blocks = inst.starts_at && inst.ends_at
     ? computeBlocks(inst.starts_at, inst.ends_at, offDays ?? [])
@@ -2668,6 +2670,7 @@ export default async function CourseView({
                       instanceId={id}
                       resources={venueResources}
                       placeLabel={coursePlace}
+                      placeValue={coursePlaceValue}
                     />
                   </>
                 ) : null
