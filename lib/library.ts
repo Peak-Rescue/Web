@@ -14,11 +14,14 @@ export type LibraryBucket = 'teaching' | 'resource' | 'map' | 'instructor' | 'do
 // course template — maps come from the venue, resources and instructor
 // material are pulled in deliberately, and per-delivery logistics live on the
 // course itself. Mixing them is how one course's travel plans reached another.
+// Each hint names the types on its card (KIND_GROUPS) and nothing else. They
+// used to promise papers, guides, JPRs and teaching notes, none of which a
+// thing could be filed as.
 export const BUCKET_META: Record<LibraryBucket, { label: string; hint: string }> = {
-  teaching:   { label: 'Teaching material', hint: 'How-tos: technique videos, walkthroughs, skill sheets' },
-  resource:   { label: 'Reference',         hint: 'Manuals, tech notes, standards, papers' },
+  teaching:   { label: 'Teaching material', hint: 'Presentations, skill sheets and technique videos' },
+  resource:   { label: 'Reference',         hint: 'Manuals, tech notes and standards' },
   map:        { label: 'Maps',              hint: 'CalTopo, SARTopo and other maps' },
-  instructor: { label: 'Instructor material', hint: 'Guides, outlines, debriefs and teaching notes — never shown to students' },
+  instructor: { label: 'Instructor material', hint: 'Course outlines and debriefs — never shown to students' },
   // The company rather than the course. Everything here was living in
   // whichever teaching shelf it least embarrassed — eighteen logo files under
   // instructor material, the employee handbook beside rope technique — on the
@@ -27,7 +30,7 @@ export const BUCKET_META: Record<LibraryBucket, { label: string; hint: string }>
   // A place's evac plan is no longer among them. It is read under its venue
   // with the maps and the beta; what is left here is the blank one it gets
   // written on.
-  documents:  { label: 'Documents',          hint: 'JPRs, equipment logs, blank forms and Peak paperwork' },
+  documents:  { label: 'Documents',          hint: 'Forms and templates, logos and brand assets' },
 }
 export const BUCKET_ORDER: LibraryBucket[] = ['teaching', 'resource', 'map', 'instructor', 'documents']
 
