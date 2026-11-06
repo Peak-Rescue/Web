@@ -8,7 +8,7 @@ import { type LibraryAudience } from '@/lib/library'
 import { regionLabel } from '@/lib/regions'
 import { refuse, type ActionResult } from '@/lib/action-result'
 import { classify, NEEDS_SORTING } from '@/lib/sorting'
-import { bucketForKind, KINDS_OFF_BUCKET_SHELVES, type Venue } from '@/lib/library'
+import { bucketForKind, KINDS_OFF_BUCKET_SHELVES, KIND_GROUPS, type Venue } from '@/lib/library'
 import { type SiteOption } from '@/app/admin/schedules/types'
 import { type ClientSelectGroup } from '@/lib/clients'
 import { courseCapabilityCategories, CAPABILITY_META, type CapabilityCategory } from '@/lib/capabilities'
@@ -99,6 +99,17 @@ export type ResourcePickerItem = {
 // top — the same venue-beats-region ranking the map picker uses, since the
 // reason is identical: a document written for this venue outranks one written
 // for the state it sits in.
+// Filtered by what a row is, not which shelf it sits on: the bucket is often
+// a leftover from before anyone said. Teaching material is taught from the
+// curriculum, not looked up, yet eighteen videos filed on these shelves were
+// being offered as reference — and an outline is instructor material that
+// arrived with the debriefs, which are the one instructor type meant here.
+const NOT_REFERENCE_KINDS = [
+  ...KINDS_OFF_BUCKET_SHELVES,
+  ...(KIND_GROUPS.find((g) => g.label === 'Teaching material')?.kinds ?? []),
+  'outline',
+]
+
 export async function loadResourceLibrary(instanceId: string): Promise<ResourcePickerItem[]> {
   const { admin } = await requireTeam(instanceId)
 
@@ -121,7 +132,7 @@ export async function loadResourceLibrary(instanceId: string): Promise<ResourceP
       // A kit list is gear, and gear is its own section on the course. Its
       // bucket is a leftover, so it would otherwise be offered here as a
       // reference. See KINDS_OFF_BUCKET_SHELVES.
-      .not('kind', 'in', `(${KINDS_OFF_BUCKET_SHELVES.join(',')})`)
+      .not('kind', 'in', `(${NOT_REFERENCE_KINDS.join(',')})`)
       .eq('status', 'published')
       // Company paperwork is not course material, and a permit is admin-only
       // material that never reaches a course. See 235.
