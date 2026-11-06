@@ -19,7 +19,7 @@ export type LibraryBucket = 'teaching' | 'resource' | 'map' | 'instructor' | 'do
 // thing could be filed as.
 export const BUCKET_META: Record<LibraryBucket, { label: string; hint: string }> = {
   teaching:   { label: 'Teaching material', hint: 'Presentations, skill sheets and technique videos' },
-  resource:   { label: 'Reference',         hint: 'Manuals, tech notes and standards' },
+  resource:   { label: 'Reference',         hint: 'Manuals, tech notes, standards and studies' },
   map:        { label: 'Maps',              hint: 'CalTopo, SARTopo and other maps' },
   instructor: { label: 'Instructor material', hint: 'Course outlines and debriefs — never shown to students' },
   // The company rather than the course. Everything here was living in
@@ -101,6 +101,7 @@ const BUCKET_FOR_KIND: Partial<Record<LibraryKind, LibraryBucket>> = {
   brand: 'documents',
   manual: 'resource',
   tech_note: 'resource',
+  study: 'resource',
   standard: 'resource',
   presentation: 'teaching',
   skill_sheet: 'teaching',
@@ -306,6 +307,10 @@ export function moduleAudience(v: string): LibraryAudience {
 export const LIBRARY_KINDS = [
   'manual',
   'tech_note',
+  // Testing somebody did — pull tests, drop tests, a paper — kept for what
+  // it shows, not as a rule to follow (a standard) or a product's own word
+  // (a tech note).
+  'study',
   'presentation',
   'video',
   'map',
@@ -343,7 +348,7 @@ export const KIND_GROUPS: { label: string; kinds: LibraryKind[] }[] = [
   // way a MEDEVAC plan reads on the venue. Which shelf the row sits on is a
   // separate question, answered below.
   { label: 'Gear lists',        kinds: ['kit_list'] },
-  { label: 'Reference',         kinds: ['manual', 'tech_note', 'standard'] },
+  { label: 'Reference',         kinds: ['manual', 'tech_note', 'standard', 'study'] },
   { label: 'Instructor material', kinds: ['outline', 'debrief'] },
   { label: 'Documents',         kinds: ['form', 'brand'] },
   // A plan and a permit are about one place — Deer Haven's risk eval, the
@@ -361,6 +366,7 @@ export const KIND_GROUPS: { label: string; kinds: LibraryKind[] }[] = [
 export const KIND_META: Record<LibraryKind, string> = {
   manual: 'Manual',
   tech_note: 'Tech note / product doc',
+  study: 'Study / test report',
   presentation: 'Presentation',
   video: 'Video',
   map: 'Map',
@@ -565,7 +571,7 @@ export function proposedBucket(item: {
   if (item.kind === 'permit' || item.kind === 'form' || item.kind === 'medevac') return 'documents'
   // A map's shelf is its type; nothing here should ever move one.
   if (item.kind === 'map') return 'map'
-  if (item.kind === 'standard' || item.kind === 'tech_note' || item.kind === 'manual') return 'resource'
+  if (item.kind === 'standard' || item.kind === 'tech_note' || item.kind === 'manual' || item.kind === 'study') return 'resource'
   if (item.kind === 'presentation' || item.kind === 'skill_sheet') return 'teaching'
   if (item.kind === 'outline') return 'instructor'
   // Photos and video are their own question, answered on the media shelf

@@ -2686,7 +2686,7 @@ export default async function CourseView({
               ['MEDEVAC', ['medevac']],
               ['Permits', ['permit']],
               ['Beta', ['route']],
-              ['Other', ['', 'reference', 'manual', 'tech_note', 'standard', 'form', 'presentation', 'outline', 'skill_sheet', 'video', 'media', 'map']],
+              ['Other', ['', 'reference', 'manual', 'tech_note', 'standard', 'study', 'form', 'presentation', 'outline', 'skill_sheet', 'video', 'media', 'map']],
             ] as const).map(([heading, kinds]) => {
               const rows = venueRead.filter((r) => (kinds as readonly string[]).includes(r.rawKind ?? ''))
               if (rows.length === 0) return null
