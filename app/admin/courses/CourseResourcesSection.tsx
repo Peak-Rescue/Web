@@ -224,6 +224,9 @@ export default function CourseResourcesSection({
         chosenKind,
         chosenAudience,
         filing && {
+          // One name for one file. Typed for a batch, it would name all of
+          // them the same thing.
+          title: picked.length === 1 ? filing.title : undefined,
           audience: filing.audience as 'internal' | 'shared' | 'admin',
           place: filing.place,
           disciplines: filing.disciplines,

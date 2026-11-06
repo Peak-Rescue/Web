@@ -741,6 +741,7 @@ export async function finalizeResourceUploads(
       place, its disciplines, no client — which is the thing the panel
       exists to stop. */
   filing?: {
+    title?: string
     audience?: 'internal' | 'shared' | 'admin'
     place?: string
     disciplines?: string[]
