@@ -107,27 +107,16 @@ export async function loadResourceLibrary(instanceId: string): Promise<ResourceP
     admin
       .from('library_items')
       .select('id, title, url, kind, audience, region, venue_id, site_id, bucket, disciplines, course_types, client_id, venues(name)')
-      // Reference, plus the plans a place has. A venue's evac plan is the
-      // thing somebody goes looking for while building the course that goes
-      // there, and it sits on the Documents shelf — so offering only the
-      // Reference shelf here meant it could not be found from the course at
-      // all. Filtered to this course's place below, like everything else.
-      // Instructor material joins them for one type: a debrief is written
-      // after a delivery and is worth exactly one thing, which is reaching
-      // the next course that goes there. It comes with the place or not at
-      // all, like the plans below — and it is instructors-only material, so
-      // the audience ceiling keeps it off a student's page by itself.
-      .in('bucket', ['resource', 'documents', 'instructor'])
-      // A kit list is gear, and gear is its own section on the course. Its
-      // bucket is a leftover, so it would otherwise be offered here as a
-      // reference. See KINDS_OFF_BUCKET_SHELVES.
-      .not('kind', 'in', `(${KINDS_OFF_BUCKET_SHELVES.join(',')})`)
+      // The whole library, not one shelf. Which shelf a row sits on decides
+      // what the picker opens on, never whether it can be found: limiting
+      // this to Reference meant a skill sheet or a video somebody wanted on
+      // the course could not be added from here at all.
       .eq('status', 'published')
       // Company paperwork is not course material, and a permit is admin-only
       // material that never reaches a course. See 235.
       .eq('admin_only', false)
       .order('title')
-      .limit(300),
+      .limit(2000),
     admin.from('course_resources').select('library_item_id').eq('instance_id', instanceId),
     admin.from('clients').select('id, parent_id'),
   ])
@@ -185,8 +174,12 @@ export async function loadResourceLibrary(instanceId: string): Promise<ResourceP
       audience: r.audience as LibraryAudience,
       venueName,
       regionLabel: regionLabel(r.region),
-      suggested: clientHit || offeringHit || (placeOnly ? venueHit || regionHit : venueHit || regionHit || shared.length > 0),
-      hidden: clientMiss || offeringMiss || (placeOnly && !venueHit && !regionHit),
+      // Off the shortlist, not out of reach: a place-only row from somewhere
+      // else, or material tied to another offering, is still found by
+      // searching or by showing everything. Only another client's material is
+      // withheld outright.
+      suggested: !offeringMiss && (clientHit || offeringHit || (placeOnly ? venueHit || regionHit : venueHit || regionHit || shared.length > 0)),
+      hidden: clientMiss,
       matchedOn: (clientHit ? 'client' : offeringHit ? 'offering' : venueHit ? 'venue' : regionHit ? 'region' : shared.length > 0 ? 'discipline' : null) as ResourcePickerItem['matchedOn'],
       disciplineLabel: shared.map((d) => CAPABILITY_META[d as CapabilityCategory]?.label ?? d).join(', ') || null,
       alreadyAdded: added.has(r.id),

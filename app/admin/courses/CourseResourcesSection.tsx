@@ -156,11 +156,13 @@ export default function CourseResourcesSection({
   const btn =
     'text-xs px-2.5 py-1.5 rounded border border-zinc-700 text-zinc-300 hover:text-white hover:border-zinc-500 transition-colors disabled:opacity-40'
 
-  const unadded = (picker ?? [])
+  const anywhere = (picker ?? [])
     .filter((i) => !i.alreadyAdded)
-    .filter((i) => (scope === 'venue' ? i.placed : !i.placed))
     .filter((i) => matchesAudience(i.audience, audienceFilter))
     .sort((a, b) => Number(b.suggested) - Number(a.suggested) || a.title.localeCompare(b.title))
+  // Browsing keeps to this section's half of the library; typing a name does
+  // not. Somebody searching for a thing has already decided it belongs here.
+  const unadded = anywhere.filter((i) => (scope === 'venue' ? i.placed : !i.placed))
   // What fits this course — its venue, its region, or its disciplines — is what
   // the picker opens on. The rest of the shelf is one press away and says how
   // much of it there is, so nothing is hidden, only stood back from.
@@ -177,7 +179,7 @@ export default function CourseResourcesSection({
   // it is the answer and the rest are a fallback behind it.
   const kindHere = onlyKind ? byKind.filter((i) => i.suggested) : []
   const available = needle
-    ? byKind.filter((i) => i.title.toLowerCase().includes(needle))
+    ? (onlyKind ? anywhere.filter((i) => i.kind === onlyKind) : anywhere).filter((i) => i.title.toLowerCase().includes(needle))
     : onlyKind
       ? (kindHere.length && !showAll ? kindHere : byKind)
       : showAll || fitting.length === 0
