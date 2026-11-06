@@ -32,6 +32,8 @@ export type GearOrderLine = {
   url?: string | null
   unit_price?: number | null
   discount_percent?: number | null
+  /** What it costs us, as percent off unit_price. Admin only. */
+  cost_percent?: number | null
   size_options?: string[]
   sizes?: GearOrderSize[]
   /** Our own mark that the line is finished. The team never sees it. */
@@ -51,6 +53,8 @@ export type GearOrder = {
   split_from?: string | null
   split_cap?: number | null
   discount_percent?: number | null
+  /** Our discount off retail for lines that do not give their own. */
+  cost_percent?: number | null
   list_id: string | null
   es_quote_number: string | null
   status: GearOrderStatus
@@ -294,6 +298,53 @@ export function orderTotal(
     saved: Math.round(gross - net) / 100,
     unpriced,
     anyPriced: lines.some((l) => l.unit_price != null),
+  }
+}
+
+// What a unit costs us. A line's own figure wins over the order's default —
+// unlike their discount, ours is one deal per item, not one stacked on another.
+// Null when neither says, so an unknown cost is never read as free.
+export function costUnitPrice(
+  unitPrice: number,
+  linePercent?: number | null,
+  orderPercent?: number | null
+): number | null {
+  const pct = linePercent ?? orderPercent
+  if (pct == null) return null
+  return Math.round(Number(unitPrice) * (1 - Number(pct) / 100) * 100) / 100
+}
+
+// Percent off a retail price that gives a price, for the boxes that take
+// either. Four places, so the price typed comes back to the cent.
+export function percentFor(retail: number, price: number): number | null {
+  if (!(retail > 0) || price < 0 || price > retail) return null
+  return Math.round((1 - price / retail) * 1000000) / 10000
+}
+
+// What the order makes us, on the lines still wanted that have both a price to
+// them and a cost to us. `uncosted` says how many it could not count, so a
+// profit with gaps in it does not read as the whole of it.
+export function orderProfit(
+  lines: { qty: number | null; removed: boolean; unit_price?: number | null; discount_percent?: number | null; cost_percent?: number | null }[],
+  orderDiscount?: number | null,
+  orderCost?: number | null
+): { revenue: number; cost: number; profit: number; margin: number | null; uncosted: number } {
+  let revenue = 0
+  let cost = 0
+  let uncosted = 0
+  for (const l of lines) {
+    if (l.removed || !(Number(l.qty ?? 0) > 0) || l.unit_price == null) continue
+    const ours = costUnitPrice(l.unit_price, l.cost_percent, orderCost)
+    if (ours == null) { uncosted++; continue }
+    revenue += Math.round(netUnitPrice(l.unit_price, l.discount_percent, orderDiscount) * 100) * Number(l.qty)
+    cost += Math.round(ours * 100) * Number(l.qty)
+  }
+  return {
+    revenue: Math.round(revenue) / 100,
+    cost: Math.round(cost) / 100,
+    profit: Math.round(revenue - cost) / 100,
+    margin: revenue > 0 ? (revenue - cost) / revenue : null,
+    uncosted,
   }
 }
 

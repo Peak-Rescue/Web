@@ -7,7 +7,7 @@ import { fmtMoney } from '@/lib/expenses'
 import { GEAR_CATEGORIES, brandsIn, productName, unwrap } from '@/lib/gear'
 import CategorySelect from '@/app/admin/gear/CategorySelect'
 import {
-  GEAR_ORDER_STATUS_LABEL, GEAR_ORDER_STATUS_STYLE, isSized, needsProduct, netUnitPrice, orderTotal, parseEmails, typedOverCatalog, sizesTotal, workFirst, safeLink, sizeRows,
+  GEAR_ORDER_STATUS_LABEL, GEAR_ORDER_STATUS_STYLE, isSized, needsProduct, netUnitPrice, orderTotal, orderProfit, costUnitPrice, percentFor, parseEmails, typedOverCatalog, sizesTotal, workFirst, safeLink, sizeRows,
   type GearOrder, type GearOrderLine,
 } from '@/lib/gear-orders'
 import GearSizeRows from '@/components/GearSizeRows'
@@ -29,7 +29,7 @@ const input = 'bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm fo
 type Run = (fn: () => Promise<unknown>) => void
 
 // Numbers being typed, ahead of the save.
-type Draft = { qty?: number | null; price?: number | null; discount?: number | null }
+type Draft = { qty?: number | null; price?: number | null; discount?: number | null; cost?: number | null }
 
 export default function OrderEditor({
   order, catalog, clients, backTo, courseQuotes = [], courseContact = null,
@@ -82,6 +82,8 @@ export default function OrderEditor({
   // on the page, and written nowhere, so it can't be mistaken for an answer.
   const [eachCount, setEachCount] = useState('')
   const [orderPercent, setOrderPercent] = useState(order.discount_percent == null ? '' : String(order.discount_percent))
+  // Our own discount off retail, for every line that does not give one.
+  const [orderCost, setOrderCost] = useState(order.cost_percent == null ? '' : String(order.cost_percent))
 
   const run: Run = async (fn) => {
     setBusy(true); setError(null)
@@ -118,7 +120,14 @@ export default function OrderEditor({
   const liveQty = (l: GearOrderLine) => (l.id in drafts && 'qty' in drafts[l.id] ? drafts[l.id].qty ?? null : l.qty_wanted)
   const livePrice = (l: GearOrderLine) => (l.id in drafts && 'price' in drafts[l.id] ? drafts[l.id].price ?? null : l.unit_price ?? null)
   const liveDiscount = (l: GearOrderLine) => (l.id in drafts && 'discount' in drafts[l.id] ? drafts[l.id].discount ?? null : l.discount_percent ?? null)
+  const liveCost = (l: GearOrderLine) => (l.id in drafts && 'cost' in drafts[l.id] ? drafts[l.id].cost ?? null : l.cost_percent ?? null)
   const liveOrderPercent = orderPercent === '' ? null : Number(orderPercent)
+  const liveOrderCost = orderCost === '' ? null : Number(orderCost)
+  const profit = orderProfit(
+    lines.map((l) => ({ qty: liveQty(l), removed: l.removed, unit_price: livePrice(l), discount_percent: liveDiscount(l), cost_percent: liveCost(l) })),
+    liveOrderPercent,
+    liveOrderCost
+  )
   const { total, subtotal, saved, unpriced } = orderTotal(
     lines.map((l) => ({ qty: liveQty(l), removed: l.removed, unit_price: livePrice(l), discount_percent: liveDiscount(l) })),
     liveOrderPercent
@@ -200,6 +209,23 @@ export default function OrderEditor({
               className={`${input} w-full`}
             />
           </Field>
+          {/* Ours, not theirs: what we pay, as percent off retail, for every
+              line that does not give its own. Never on the team's page. */}
+          <Field label="Our discount off retail %">
+            <input
+              type="number"
+              min={0}
+              max={100}
+              step="0.5"
+              value={orderCost}
+              onChange={(e) => setOrderCost(e.target.value)}
+              onBlur={(e) => {
+                const v = e.target.value === '' ? null : Number(e.target.value)
+                if (v !== (order.cost_percent == null ? null : Number(order.cost_percent))) saveOrder({ costPercent: v })
+              }}
+              className={`${input} w-full`}
+            />
+          </Field>
         </div>
         <div>
           <Field label="Intro">
@@ -241,6 +267,7 @@ export default function OrderEditor({
         {shown.map((l) => (
           <LineRow key={l.id} line={l} products={productsFor(l, known, childrenOf)} categories={categories} run={run} busy={busy}
             liveQty={liveQty(l)} livePrice={livePrice(l)} liveDiscount={liveDiscount(l)} orderPercent={liveOrderPercent}
+            liveCost={liveCost(l)} orderCost={liveOrderCost}
             onDraft={(d) => setDrafts((all) => ({ ...all, [l.id]: { ...all[l.id], ...d } }))}
           />
         ))}
@@ -288,6 +315,20 @@ export default function OrderEditor({
             <span className="text-zinc-500">Total</span> <span className="font-semibold">{fmtMoney(total)}</span>
             {unpriced > 0 && <span className="text-xs text-amber-300/80"> + {unpriced} unpriced</span>}
           </span>
+          {/* Ours alone: the team's page reads none of this. */}
+          {(profit.revenue > 0 || profit.uncosted > 0) && (
+            <span className="w-full text-right text-xs text-zinc-400">
+              {profit.revenue > 0 && (
+                <>
+                  Our cost {fmtMoney(profit.cost)} · <span className={profit.profit >= 0 ? 'text-emerald-400' : 'text-pr-red'}>profit {fmtMoney(profit.profit)}</span>
+                  {profit.margin != null && <span className="text-zinc-500"> ({Math.round(profit.margin * 1000) / 10}%)</span>}
+                </>
+              )}
+              {profit.uncosted > 0 && (
+                <span className="text-amber-300/80">{profit.revenue > 0 ? ' · ' : ''}{profit.uncosted} {profit.uncosted === 1 ? 'line has' : 'lines have'} no cost yet</span>
+              )}
+            </span>
+          )}
           <div className="w-full flex items-center gap-2 flex-wrap border-t border-zinc-800 pt-2">
             <label htmlFor="each-count" className="text-xs text-zinc-400">If everyone got one of each, for</label>
             <input
@@ -619,7 +660,7 @@ function SplitPanel({
 }
 
 function LineRow({
-  line, products, categories, run, busy, liveQty, livePrice, liveDiscount, orderPercent, onDraft,
+  line, products, categories, run, busy, liveQty, livePrice, liveDiscount, orderPercent, liveCost, orderCost, onDraft,
 }: {
   line: GearOrderLine
   products: GearItem[]
@@ -628,6 +669,8 @@ function LineRow({
   livePrice: number | null
   liveDiscount: number | null
   orderPercent: number | null
+  liveCost: number | null
+  orderCost: number | null
   onDraft: (d: Draft) => void
   run: Run
   busy: boolean
@@ -707,7 +750,7 @@ function LineRow({
         <p className="text-[11px] text-amber-300/80 mt-0.5 px-1.5">Needs a product</p>
       )}
 
-      <div className="grid grid-cols-3 sm:grid-cols-[5rem_7rem_5rem_1fr] gap-2 mt-2">
+      <div className="grid grid-cols-2 sm:grid-cols-[5rem_7rem_1fr] gap-2 mt-2">
         {isSized(line) ? (
           // The sizes add up to this, so it is not a second answer to type.
           <output
@@ -738,8 +781,9 @@ function LineRow({
           type="number"
           min={0}
           step="0.01"
-          aria-label="Unit price"
-          placeholder="Price each"
+          aria-label="Retail price each"
+          title="Retail price each"
+          placeholder="Retail each"
           defaultValue={line.unit_price ?? ''}
           onChange={(e) => onDraft({ price: e.target.value === '' ? null : Number(e.target.value) })}
           onBlur={(e) => {
@@ -748,23 +792,7 @@ function LineRow({
           }}
           className={`${input} w-full`}
         />
-        <input
-          key={`off-${line.discount_percent}`}
-          type="number"
-          min={0}
-          max={100}
-          step="0.5"
-          aria-label="Discount percent"
-          placeholder="% off"
-          defaultValue={line.discount_percent ?? ''}
-          onChange={(e) => onDraft({ discount: e.target.value === '' ? null : Number(e.target.value) })}
-          onBlur={(e) => {
-            const v = e.target.value === '' ? null : Number(e.target.value)
-            if (v !== money(line.discount_percent)) save({ discountPercent: v })
-          }}
-          className={`${input} w-full`}
-        />
-        <div className="col-span-3 sm:col-span-1 flex items-center gap-2">
+        <div className="col-span-2 sm:col-span-1 flex items-center gap-2">
           <input
             key={`url-${line.url}`}
             type="url"
@@ -784,6 +812,29 @@ function LineRow({
         </div>
       </div>
 
+      {/* Two prices off the one retail figure: theirs, and ours. Each is a
+          price or a percent, whichever the deal was said in, and typing one
+          fills in the other. Ours never reaches the team's page or the PDF. */}
+      <div className="grid sm:grid-cols-2 gap-2 mt-2">
+        <PricePair
+          key={`them-${line.unit_price}-${line.discount_percent}`}
+          label="To them"
+          retail={livePrice}
+          percent={line.discount_percent ?? null}
+          onLive={(pct) => onDraft({ discount: pct })}
+          onCommit={(pct) => { if (pct !== money(line.discount_percent)) save({ discountPercent: pct }) }}
+        />
+        <PricePair
+          key={`us-${line.unit_price}-${line.cost_percent}`}
+          label="Our cost"
+          retail={livePrice}
+          percent={line.cost_percent ?? null}
+          fallbackPercent={orderCost}
+          onLive={(pct) => onDraft({ cost: pct })}
+          onCommit={(pct) => { if (pct !== money(line.cost_percent)) save({ costPercent: pct }) }}
+        />
+      </div>
+
       {/* A number typed before the line had sizes. It still counts until sizes
           replace it, so it is said out loud rather than sitting there looking
           like their total. */}
@@ -798,6 +849,12 @@ function LineRow({
             return (
               <>
                 {liveQty} × {net < livePrice && <span className="line-through mr-1">{fmtMoney(livePrice)}</span>}{fmtMoney(net)} = <span className="text-zinc-200">{fmtMoney(Number(liveQty) * net)}</span>
+                {(() => {
+                  const ours = costUnitPrice(livePrice, liveCost, orderCost)
+                  if (ours == null) return null
+                  const gain = Math.round((net - ours) * Number(liveQty) * 100) / 100
+                  return <span className={`ml-2 ${gain >= 0 ? 'text-emerald-400' : 'text-pr-red'}`}>profit {fmtMoney(gain)}</span>
+                })()}
               </>
             )
           })()}
@@ -876,6 +933,75 @@ function LineRow({
         className={`${input} w-full mt-2 text-xs`}
       />
       {line.client_note && <p className="text-[11px] text-amber-300/80 mt-1.5 px-1.5">“{line.client_note}”</p>}
+    </div>
+  )
+}
+
+// A price and the percent off retail that gives it, side by side, either one
+// typed. Held as the percent, so a retail price corrected later carries the
+// deal with it; the dollar box is that percent read back as money.
+function PricePair({
+  label, retail, percent, fallbackPercent = null, onLive, onCommit,
+}: {
+  label: string
+  retail: number | null
+  percent: number | null
+  /** The order-wide figure a line without its own falls back to, shown as
+      the placeholder so an empty box does not read as nothing. */
+  fallbackPercent?: number | null
+  onLive: (pct: number | null) => void
+  onCommit: (pct: number | null) => void
+}) {
+  const asPrice = (pct: number | null) =>
+    pct == null || retail == null ? '' : String(Math.round(retail * (1 - pct / 100) * 100) / 100)
+  const [pct, setPct] = useState(percent == null ? '' : String(Math.round(Number(percent) * 100) / 100))
+  const [price, setPrice] = useState(asPrice(percent == null ? null : Number(percent)))
+  const noRetail = retail == null
+  const box = 'bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-zinc-500 disabled:opacity-40 w-full min-w-0'
+  const current = () => (pct === '' ? null : Number(pct))
+  const fallbackPrice = fallbackPercent != null && retail != null ? asPrice(fallbackPercent) : ''
+
+  return (
+    <div className="flex items-center gap-1.5" title={noRetail ? 'Add the retail price first' : undefined}>
+      <span className="w-16 shrink-0 text-[11px] text-zinc-500">{label}</span>
+      <span className="text-xs text-zinc-600">$</span>
+      <input
+        type="number"
+        min={0}
+        step="0.01"
+        aria-label={`${label}, price each`}
+        placeholder={fallbackPrice || 'price'}
+        disabled={noRetail}
+        value={price}
+        onChange={(e) => {
+          setPrice(e.target.value)
+          const next = e.target.value === '' ? null : percentFor(retail ?? 0, Number(e.target.value))
+          setPct(next == null ? '' : String(Math.round(next * 100) / 100))
+          onLive(next)
+        }}
+        onBlur={(e) => onCommit(e.target.value === '' ? null : percentFor(retail ?? 0, Number(e.target.value)))}
+        className={box}
+      />
+      <span className="text-xs text-zinc-600">or</span>
+      <input
+        type="number"
+        min={0}
+        max={100}
+        step="0.5"
+        aria-label={`${label}, percent off retail`}
+        placeholder={fallbackPercent != null ? `${fallbackPercent}` : '%'}
+        disabled={noRetail}
+        value={pct}
+        onChange={(e) => {
+          setPct(e.target.value)
+          const next = e.target.value === '' ? null : Number(e.target.value)
+          setPrice(asPrice(next))
+          onLive(next)
+        }}
+        onBlur={() => onCommit(current())}
+        className={`${box} max-w-[5rem]`}
+      />
+      <span className="text-xs text-zinc-600">% off</span>
     </div>
   )
 }

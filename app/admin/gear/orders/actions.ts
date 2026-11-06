@@ -29,9 +29,10 @@ type Item = {
   category: string | null; price: number | null; parent_id: string | null; sizes: string[]
 }
 
+// Four places, so a percent worked out from a typed price gives that price back.
 function cleanPercent(v: number | null): number | null {
   if (v === null || Number.isNaN(v) || v <= 0) return null
-  return Math.round(Math.min(100, v) * 100) / 100
+  return Math.round(Math.min(100, v) * 10000) / 10000
 }
 
 function cleanPrice(v: number | null): number | null {
@@ -102,6 +103,7 @@ export async function updateStandaloneOrder(
   patch: {
     title?: string; clientId?: string | null; contacts?: CoursePOC[]
     intro?: string | null; esQuoteNumber?: string | null; status?: 'closed'; discountPercent?: number | null
+    costPercent?: number | null
     splitCap?: number | null
   }
 ): Promise<{ ok: true } | Failed> {
@@ -118,6 +120,7 @@ export async function updateStandaloneOrder(
   if (patch.esQuoteNumber !== undefined) update.es_quote_number = patch.esQuoteNumber?.trim().slice(0, 80) || null
   if (patch.status !== undefined) update.status = patch.status
   if (patch.discountPercent !== undefined) update.discount_percent = cleanPercent(patch.discountPercent)
+  if (patch.costPercent !== undefined) update.cost_percent = cleanPercent(patch.costPercent)
   if (patch.splitCap !== undefined) {
     update.split_cap = patch.splitCap != null && patch.splitCap > 0 ? Math.round(patch.splitCap * 100) / 100 : null
   }
@@ -236,6 +239,7 @@ export async function updateStandaloneLine(
   patch: {
     name?: string; detail?: string | null; url?: string | null; unitPrice?: number | null
     qtyWanted?: number | null; removed?: boolean; checked?: boolean; discountPercent?: number | null
+    costPercent?: number | null
     sizeOptions?: string; sizes?: { size: string; qty: string | number }[]
   }
 ): Promise<{ ok: true } | Failed> {
@@ -249,6 +253,7 @@ export async function updateStandaloneLine(
   if (patch.removed !== undefined) update.removed = patch.removed
   if (patch.checked !== undefined) update.checked = patch.checked
   if (patch.discountPercent !== undefined) update.discount_percent = cleanPercent(patch.discountPercent)
+  if (patch.costPercent !== undefined) update.cost_percent = cleanPercent(patch.costPercent)
   // A tab left open from before a line got sizes can still send a typed number.
   if (patch.qtyWanted !== undefined && !isSized(line)) {
     update.qty_wanted = patch.qtyWanted === null || Number.isNaN(patch.qtyWanted)
