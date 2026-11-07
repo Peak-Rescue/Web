@@ -69,6 +69,10 @@ export type CourseExtras = {
   invitesAnswered: number
   /** Of those answered, how many said yes. */
   invitesInterested: number
+  /** Said yes without being asked — from the calendar or the staffing panel.
+      Kept out of the three above, so "x of y" only ever means an inquiry
+      went out. */
+  invitesVolunteered: number
   /** Furthest any quote on the course has got. */
   quote: 'none' | 'draft' | 'sent' | 'accepted' | 'declined'
   /** How far the handoff to Harken has got. */
@@ -88,10 +92,21 @@ export const NO_EXTRAS: CourseExtras = {
   invitesSent: 0,
   invitesAnswered: 0,
   invitesInterested: 0,
+  invitesVolunteered: 0,
   quote: 'none',
   billing: 'not-sent',
   booksClosed: false,
   inviteLink: 'none',
+}
+
+/** What the interest replies come to, in a few words, or null when there
+    are none. "x of y" only when an inquiry went out — that is how you tell
+    one was sent — and volunteers after it, so they cannot pass for one. */
+export function interestLabel(x: Pick<CourseExtras, 'invitesSent' | 'invitesInterested' | 'invitesVolunteered'>): string | null {
+  const plus = x.invitesVolunteered > 0 ? ` +${x.invitesVolunteered}` : ''
+  if (x.invitesSent > 0) return `${x.invitesInterested} of ${x.invitesSent} interested${plus}`
+  if (x.invitesVolunteered > 0) return `${x.invitesVolunteered} volunteered`
+  return null
 }
 
 /** A course as the step list needs to read it — the list's own row, narrowed. */
@@ -286,8 +301,8 @@ export function courseSteps(
         ? { tone: 'idle' as const, detail: 'Nobody needed' }
       : staffed === 0
         ? awaiting > 0
-          ? { tone: 'waiting' as const, detail: `${x.invitesInterested} of ${x.invitesSent} interested` }
-          : { tone: 'action' as const, detail: 'Nobody yet' }
+          ? { tone: 'waiting' as const, detail: interestLabel(x)! }
+          : { tone: 'action' as const, detail: interestLabel(x) ?? 'Nobody yet' }
         // Ahead of the head count and ahead of the primary, because a full crew
         // with somebody in two places is worse than a short one: it reads as
         // solved. Named rather than counted — the name is what you were going to
@@ -308,7 +323,7 @@ export function courseSteps(
               detail: `Needs ${short.map((x) => `${x.open} ${roleLabel(x.role).toLowerCase()}`).join(', ')}`,
             }
           : awaiting > 0
-            ? { tone: 'waiting' as const, detail: `${staffed} of ${wanted}, ${x.invitesInterested} of ${x.invitesSent} interested` }
+            ? { tone: 'waiting' as const, detail: `${staffed} of ${wanted}, ${interestLabel(x)}` }
             : { tone: 'action' as const, detail: `${staffed} of ${wanted}` }),
   }
 
@@ -521,7 +536,7 @@ export async function loadCourseExtras(
       forChain(admin.from('course_schedules').select('instance_id').in('instance_id', chainIds)),
       forChain(admin.from('course_modules').select('instance_id').in('instance_id', chainIds)),
       forChain(admin.from('gear_lists').select('instance_id').in('instance_id', chainIds)),
-      forChain(admin.from('course_interest_invites').select('instance_id, responded_at, interested, self_initiated').in('instance_id', chainIds)),
+      forChain(admin.from('course_interest_invites').select('instance_id, responded_at, interested, self_initiated, sent_count').in('instance_id', chainIds)),
       admin.from('course_quotes').select('instance_id, status, archived_at'),
       admin.from('invoice_requests').select('instance_id, status'),
       admin.from('course_actuals').select('instance_id, closed_at'),
@@ -534,10 +549,15 @@ export async function loadCourseExtras(
   for (const r of mods  ?? []) if (out[r.instance_id]) out[r.instance_id].curriculum = true
   for (const r of gear  ?? []) if (out[r.instance_id]) out[r.instance_id].gear = true
 
-  for (const r of (invites ?? []) as { instance_id: string; responded_at: string | null; interested: boolean | null; self_initiated: boolean }[]) {
+  for (const r of (invites ?? []) as { instance_id: string; responded_at: string | null; interested: boolean | null; self_initiated: boolean; sent_count: number }[]) {
     const e = out[r.instance_id]
     if (!e) continue
-    if (r.self_initiated && !r.responded_at) continue
+    // Volunteered and never emailed. Once the inquiry reaches them too, they
+    // were asked like everybody else and count that way.
+    if (r.self_initiated && !r.sent_count) {
+      if (r.responded_at && r.interested) e.invitesVolunteered += 1
+      continue
+    }
     e.invitesSent += 1
     if (r.responded_at) e.invitesAnswered += 1
     if (r.responded_at && r.interested) e.invitesInterested += 1
