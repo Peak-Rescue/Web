@@ -245,6 +245,9 @@ export default function StaffingInterest({
                 >
                   {inv.interested === true ? 'Interested' : inv.interested === false ? "Can't make it" : 'Awaiting reply'}
                 </span>
+                {inv.selfInitiated && (
+                  <span className="text-xs text-zinc-500" title="Raised from the calendar before we sent an inquiry">asked themselves</span>
+                )}
                 {inv.interested === null && inv.sentAt && (
                   <span className="text-xs text-zinc-600">sent {fmtDay(inv.sentAt)}</span>
                 )}

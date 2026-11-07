@@ -36,6 +36,8 @@ export type InterestInviteRow = {
   accepts: string[] | null
   note: string | null
   assigned: boolean
+  /** Raised by the instructor from the calendar, not asked by us. */
+  selfInitiated: boolean
 }
 
 /** The panel's whole world, and plain data all the way down — it crosses the
@@ -125,7 +127,7 @@ export async function loadStaffingPanel(
       .select('id, name, email, instructor_role, sectors, instructor_capabilities(category, role)')
       .eq('active', true).order('name'),
     admin.from('course_interest_invites')
-      .select('id, instructor_id, sent_at, responded_at, interested, accepts, note')
+      .select('id, instructor_id, sent_at, responded_at, interested, accepts, note, self_initiated')
       .eq('instance_id', instanceId).order('created_at'),
     nearbyCourses,
   ])
@@ -182,7 +184,9 @@ export async function loadStaffingPanel(
       qualified: hasSkill(i) && clearedForSector(i),
       leadQualified: caps(i).some((c) => categories.includes(c.category) && c.role === 'lead') && clearedForSector(i),
     })),
-    invites: (inviteRows ?? []).map((r) => ({
+    // A row somebody opened from the calendar and never answered is not an
+    // inquiry — nobody asked, and nobody said anything.
+    invites: (inviteRows ?? []).filter((r) => !(r.self_initiated && !r.responded_at)).map((r) => ({
       id: r.id,
       instructorId: r.instructor_id,
       name: instructorById.get(r.instructor_id)?.name ?? 'Former instructor',
@@ -192,6 +196,7 @@ export async function loadStaffingPanel(
       accepts: (r.accepts as string[] | null) ?? null,
       note: r.note,
       assigned: assignedIds.has(r.instructor_id),
+      selfInitiated: Boolean(r.self_initiated),
     })),
   }
 }

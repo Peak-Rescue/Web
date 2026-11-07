@@ -28,6 +28,16 @@ export type CalendarCourse = {
   client?: string | null
   location?: string | null
   crew?: string[]
+  /** For an instructor looking at a course they could work and are not on:
+      where they stand on it, and whether it still needs anybody. Present, the
+      chip opens a card that lets them say they are interested. */
+  interest?: {
+    /** Their existing answer page, if a row exists. */
+    token: string | null
+    /** null until they have answered. */
+    answer: boolean | null
+    needsCrew: boolean
+  }
 }
 
 function chipStyle(c: CalendarCourse): string {

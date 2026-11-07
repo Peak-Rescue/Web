@@ -55,9 +55,9 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   // What a calendar chip is drawn from, for the two reads that fetch courses
   // nobody assigned the viewer to.
   const CAL_COLS =
-    'id, ref_number, course_type, course_category, custom_title, custom_categories, client_name, location, starts_at, ends_at, status, internal, start_time, video_url, all_staff, series_id, instance_instructors(role, in_charge, topic, instructors(name))'
+    'id, ref_number, course_type, course_category, custom_title, custom_categories, client_name, location, starts_at, ends_at, status, instructor_slots, internal, start_time, video_url, all_staff, series_id, instance_instructors(role, in_charge, topic, instructors(name))'
   // Profile gate + personalized data in one parallel round.
-  const [{ data: profile }, { data: assignmentRows }, myTasks, myDoneTasks, allInstancesRes, { data: inviteRows }, { data: capRow }, { data: hoursRow }, { data: allStaffRows }, { data: meetingInviteRows }, { data: rsvpRows }] = await Promise.all([
+  const [{ data: profile }, { data: assignmentRows }, myTasks, myDoneTasks, allInstancesRes, { data: inviteRows }, { data: capRow }, { data: hoursRow }, { data: allStaffRows }, { data: meetingInviteRows }, { data: rsvpRows }, { data: myInterestRows }] = await Promise.all([
     admin.from('profiles').select('role, first_name, last_name, email').eq('id', user.id).single(),
     admin
       .from('instance_instructors')
@@ -103,6 +103,14 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       .from('meeting_rsvps')
       .select('instance_id, going, instructors!inner(profile_id)')
       .eq('instructors.profile_id', user.id),
+    // Every interest row the viewer has, asked or self-raised, so a chip can
+    // say where they stand and open the same answer page.
+    showAllCourses
+      ? admin
+          .from('course_interest_invites')
+          .select('instance_id, token, interested, responded_at, instructors!inner(profile_id)')
+          .eq('instructors.profile_id', user.id)
+      : Promise.resolve({ data: null }),
   ])
 
   if (!['admin', 'instructor'].includes(profile?.role ?? '')) redirect('/dashboard')
@@ -233,6 +241,25 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         .filter((r) => r.instructors)
         .map((r) => ({ role: r.role, in_charge: r.in_charge, name: r.instructors!.name }))
     )
+  // A course an instructor could be asked to work and has not been put on:
+  // its chip opens a card that lets them say so. Only on "All courses",
+  // which is where a course they are not on can be seen at all.
+  const myInterest = new Map(
+    ((myInterestRows ?? []) as { instance_id: string; token: string; interested: boolean | null; responded_at: string | null }[])
+      .map((r) => [r.instance_id, r])
+  )
+  const interestFor = (i: InstRow): CalendarCourse['interest'] => {
+    if (showAsAdmin || assignedIds.has(i.id) || i.internal || i.all_staff || isSession(i)) return undefined
+    if (i.status === 'cancelled' || i.status === 'completed') return undefined
+    if ((i.ends_at ?? i.starts_at ?? '') < today) return undefined
+    const row = myInterest.get(i.id)
+    const crew = (i.instance_instructors ?? []).length
+    return {
+      token: row?.token ?? null,
+      answer: row?.responded_at ? row.interested : null,
+      needsCrew: !i.instructor_slots || crew < slotsToStaff(i.instructor_slots),
+    }
+  }
   const calendarCourses: CalendarCourse[] = calendarSource
     .filter((i) => i && i.status !== 'cancelled' && i.starts_at && i.ends_at)
     .map((i) => ({
@@ -256,6 +283,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       client: i.client_name,
       location: i.location,
       crew: chipCrew(i),
+      interest: interestFor(i),
     }))
 
   const calMonth = /^\d{4}-\d{2}$/.test(cal ?? '') ? cal! : today.slice(0, 7)

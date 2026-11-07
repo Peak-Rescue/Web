@@ -521,7 +521,7 @@ export async function loadCourseExtras(
       forChain(admin.from('course_schedules').select('instance_id').in('instance_id', chainIds)),
       forChain(admin.from('course_modules').select('instance_id').in('instance_id', chainIds)),
       forChain(admin.from('gear_lists').select('instance_id').in('instance_id', chainIds)),
-      forChain(admin.from('course_interest_invites').select('instance_id, responded_at, interested').in('instance_id', chainIds)),
+      forChain(admin.from('course_interest_invites').select('instance_id, responded_at, interested, self_initiated').in('instance_id', chainIds)),
       admin.from('course_quotes').select('instance_id, status, archived_at'),
       admin.from('invoice_requests').select('instance_id, status'),
       admin.from('course_actuals').select('instance_id, closed_at'),
@@ -534,9 +534,10 @@ export async function loadCourseExtras(
   for (const r of mods  ?? []) if (out[r.instance_id]) out[r.instance_id].curriculum = true
   for (const r of gear  ?? []) if (out[r.instance_id]) out[r.instance_id].gear = true
 
-  for (const r of (invites ?? []) as { instance_id: string; responded_at: string | null; interested: boolean | null }[]) {
+  for (const r of (invites ?? []) as { instance_id: string; responded_at: string | null; interested: boolean | null; self_initiated: boolean }[]) {
     const e = out[r.instance_id]
     if (!e) continue
+    if (r.self_initiated && !r.responded_at) continue
     e.invitesSent += 1
     if (r.responded_at) e.invitesAnswered += 1
     if (r.responded_at && r.interested) e.invitesInterested += 1

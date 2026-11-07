@@ -5,6 +5,7 @@ import { useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { CalendarCourse } from './CourseCalendar'
 import { CATEGORY_STYLE, isOurs, sectorOf } from '@/lib/calendar-colors'
+import InterestCard from './InterestCard'
 
 // Calendar event bar with a styled hover tooltip replacing the native title
 // popup (whose ~1s delay is browser-controlled). Rendered through a portal so
@@ -35,6 +36,7 @@ export default function CalendarChip({
   // the bar sits too close to the viewport top for the panel to fit.
   const [tip, setTip] = useState<{ x: number; y: number; below: boolean } | null>(null)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [card, setCard] = useState<{ x: number; y: number } | null>(null)
 
   const onEnter = (e: React.MouseEvent) => {
     const rect = e.currentTarget.getBoundingClientRect()
@@ -106,8 +108,38 @@ export default function CalendarChip({
   // Your answer, as one character at the front of the bar: enough to scan a
   // month for the weeks you have not answered, without a control in a strip
   // a few pixels tall that is also a link.
-  const answer = course.rsvp === true ? '✓ ' : course.rsvp === false ? '✗ ' : ''
+  const said = course.rsvp ?? course.interest?.answer
+  const answer = said === true ? '✓ ' : said === false ? '✗ ' : ''
   const label = `${answer}${course.label}${course.noClass ? ' · no class yet' : ''}`
+
+  // A course this instructor could work: the bar opens a card rather than
+  // going anywhere, because the course page is not theirs to open. A dot says
+  // it is still looking for crew and they have not said anything yet.
+  if (course.interest && !course.href) {
+    const open = course.interest.needsCrew && course.interest.answer === null
+    return (
+      <>
+        <button
+          type="button"
+          {...chipProps}
+          className={`${className} text-left cursor-pointer`}
+          onClick={(e) => {
+            onLeave()
+            const r = e.currentTarget.getBoundingClientRect()
+            setCard({ x: Math.min(Math.max(r.left, 8), window.innerWidth - 296), y: r.bottom + 4 })
+          }}
+        >
+          {open && <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-300 mr-1 align-middle" />}
+          {label}
+          {tooltip}
+        </button>
+        {card && createPortal(
+          <InterestCard course={course} at={card} onClose={() => setCard(null)} when={fmtRange(course.starts_at, course.ends_at)} />,
+          document.body
+        )}
+      </>
+    )
+  }
 
   return course.href ? (
     <Link key={course.id} href={course.href} {...chipProps}>

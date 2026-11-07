@@ -716,46 +716,78 @@ export async function updateInstanceDates(
     }
   }
 
-  // Moved dates → tell every assigned instructor. They plan travel and time
-  // off around these dates, and the calendar event changes under them
-  // silently: the sync never emails, precisely so this can (best-effort).
+  // Moved dates → tell everyone planning around them: the crew, and anybody
+  // who said they were interested. They plan travel and time off around these
+  // dates, and the calendar event changes under them silently: the sync never
+  // emails, precisely so this can (best-effort).
   //
-  // Confirmed courses only. A tentative course's dates slide around while
-  // the client makes up their mind, and a mail for each slide is what makes
-  // the one that matters unreadable.
+  // Whatever the status. Tentative ones were left out so a client making up
+  // their mind did not mean a mail per slide — but somebody who has set the
+  // days aside wants to hear when they move, tentative or not. Nobody else
+  // gets these, so the slides only reach people they matter to.
   const moved =
     before !== null &&
-    announcesChanges(before.status) &&
+    before.status !== 'cancelled' &&
     (before.starts_at !== starts_at || before.ends_at !== ends_at)
 
   if (moved && process.env.RESEND_API_KEY) {
     after(async () => {
       try {
-        const recipients = await assignedEmails(admin, id)
-        if (recipients.length === 0) return
+        const [crew, { data: crewIds }, { data: keen }] = await Promise.all([
+          assignedEmails(admin, id),
+          admin.from('instance_instructors').select('instructor_id').eq('instance_id', id),
+          admin
+            .from('course_interest_invites')
+            .select('instructor_id, token, instructors(name, email)')
+            .eq('instance_id', id)
+            .eq('interested', true),
+        ])
+        const onCrew = new Set((crewIds ?? []).map((r) => r.instructor_id))
+        const interested = (keen ?? [])
+          .filter((r) => !onCrew.has(r.instructor_id))
+          .map((r) => ({ token: r.token as string, ...(r.instructors as unknown as { name: string; email: string | null }) }))
+          .filter((r) => r.email)
+        if (crew.length === 0 && interested.length === 0) return
 
         const { courseShortName } = await import('@/lib/courses')
         const courseName = courseShortName(before.course_type, before.custom_title)
         const wasScheduled = Boolean(before.starts_at)
         const when = dateRange(starts_at, ends_at)
         const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://peak-rescue.com'
+        const subject = `${starts_at ? (wasScheduled ? 'New dates' : 'Dates set') : 'Dates removed'} — ${courseName} (${when})`
+        const head = [
+          starts_at
+            ? `${courseName} is now scheduled for ${when}.`
+            : `${courseName} no longer has dates on the calendar.`,
+          wasScheduled ? `Previously: ${dateRange(before.starts_at, before.ends_at)}` : null,
+          '',
+          `Course: ${courseName}${before.client_name ? ` · ${before.client_name}` : ''}`,
+          before.location ? `Location: ${before.location}` : null,
+        ]
+        const from = 'Peak Rescue Portal <noreply@peak-rescue.com>'
+        const lines = (l: (string | null)[]) => l.filter((x): x is string => x !== null).join('\n')
 
-        await sendMail({
-          from: 'Peak Rescue Portal <noreply@peak-rescue.com>',
-          to: recipients,
-          subject: `${starts_at ? (wasScheduled ? 'New dates' : 'Dates set') : 'Dates removed'} — ${courseName} (${when})`,
-          text: [
-            starts_at
-              ? `${courseName} is now scheduled for ${when}.`
-              : `${courseName} no longer has dates on the calendar.`,
-            wasScheduled ? `Previously: ${dateRange(before.starts_at, before.ends_at)}` : null,
-            '',
-            `Course: ${courseName}${before.client_name ? ` · ${before.client_name}` : ''}`,
-            before.location ? `Location: ${before.location}` : null,
-            '',
-            `Details: ${siteUrl}/portal/${id}`,
-          ].filter((l): l is string => l !== null).join('\n'),
-        })
+        const { sendMailBatch } = await import('@/lib/mailer')
+        await sendMailBatch([
+          ...(crew.length > 0
+            ? [{ from, to: crew, subject, text: lines([...head, '', `Details: ${siteUrl}/portal/${id}`]) }]
+            : []),
+          // Their yes was to the old dates, so ask again rather than assume
+          // it carries over. The link is the page they answered on.
+          ...interested.map((p) => ({
+            from,
+            to: [p.email!],
+            subject,
+            text: lines([
+              `${p.name.split(' ')[0]}, you said you were interested in this course, and its dates have changed.`,
+              '',
+              ...head,
+              '',
+              starts_at ? 'Still available for the new dates? Update your answer here:' : 'Your answer stands for now — we will be in touch when it has dates again:',
+              `${siteUrl}/staffing/${p.token}`,
+            ]),
+          })),
+        ])
       } catch (e) {
         console.error('Course date-change email failed:', e)
       }
