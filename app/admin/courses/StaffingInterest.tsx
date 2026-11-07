@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { INSTANCE_ROLES, roleLabel, ROLE_BADGE, type InstanceRole } from '@/lib/staffing-roles'
 import { useRouter } from 'next/navigation'
+import { startInterest } from '@/app/admin/interest-actions'
 import { assignInstructor } from './actions'
 import { sendInterestInvites, deleteInterestInvite } from './staffing-actions'
 import TrashIcon from '@/components/TrashIcon'
@@ -62,6 +63,21 @@ export default function StaffingInterest({
   const [assigningId, setAssigningId] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const router = useRouter()
+  const [raising, setRaising] = useState(false)
+  // Yours, not somebody else's: put your own name forward on a course another
+  // admin is running, rather than staffing yourself onto it. Same answer page
+  // and same row as anyone else's, so whoever runs it sees it in the list.
+  async function raiseOwn() {
+    setRaising(true)
+    setMessage(null)
+    const r = await startInterest(instanceId)
+    if ('error' in r) {
+      setMessage(r.error)
+      setRaising(false)
+      return
+    }
+    router.push(`/staffing/${r.token}`)
+  }
 
   const interested = invites.filter((i) => i.interested === true)
   const declined = invites.filter((i) => i.interested === false)
@@ -148,6 +164,14 @@ export default function StaffingInterest({
         className="inline-flex items-center text-xs px-2.5 py-1.5 rounded border border-zinc-700 text-zinc-300 hover:text-white hover:border-zinc-500 transition-colors"
       >
         {showPicker ? 'Close' : '+ Email instructors about this course'}
+      </button>
+      <button
+        onClick={raiseOwn}
+        disabled={raising}
+        title="Put your own name forward without staffing yourself — whoever runs this course sees it below"
+        className="ml-2 inline-flex items-center text-xs px-2.5 py-1.5 rounded border border-zinc-700 text-zinc-300 hover:text-white hover:border-zinc-500 transition-colors disabled:opacity-50"
+      >
+        {raising ? 'Opening…' : 'I’m interested'}
       </button>
 
       {message && <p className="mt-2 text-xs text-teal-300">{message}</p>}

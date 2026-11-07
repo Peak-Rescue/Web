@@ -15,7 +15,8 @@ export async function startInterest(instanceId: string): Promise<{ token: string
   if (!user) return { error: 'Sign in first' }
 
   const admin = createAdminClient()
-  const [{ data: me }, { data: inst }] = await Promise.all([
+  const [{ data: profile }, { data: me }, { data: inst }] = await Promise.all([
+    admin.from('profiles').select('role').eq('id', user.id).single(),
     admin.from('instructors').select('id, active, instructor_capabilities(category)').eq('profile_id', user.id).maybeSingle(),
     admin
       .from('course_instances')
@@ -23,7 +24,7 @@ export async function startInterest(instanceId: string): Promise<{ token: string
       .eq('id', instanceId)
       .maybeSingle(),
   ])
-  if (!me || me.active === false) return { error: 'Only instructors can do that' }
+  if (!me || me.active === false) return { error: 'You need an instructor profile to put your name forward' }
   if (!inst) return { error: 'That course no longer exists' }
 
   // The same rule that decides whether the course is on this person's
@@ -31,7 +32,11 @@ export async function startInterest(instanceId: string): Promise<{ token: string
   // would not show.
   const mine = new Set(((me.instructor_capabilities ?? []) as { category: string }[]).map((c) => c.category))
   const qualified = courseCapabilityCategories(inst.course_type, inst.custom_categories).some((c) => mine.has(c))
-  if (!qualified || inst.internal || inst.all_staff) return { error: 'This course isn’t open for interest' }
+  // An admin can see and open any course, so the calendar's rule does not
+  // apply: the point for them is saying "I'd take this" on a course somebody
+  // else is running, instead of quietly staffing themselves onto it.
+  const isAdmin = profile?.role === 'admin'
+  if (!isAdmin && (!qualified || inst.internal || inst.all_staff)) return { error: 'This course isn’t open for interest' }
   if (inst.status === 'cancelled' || inst.status === 'completed') return { error: 'This course isn’t staffing' }
   if ((inst.ends_at ?? inst.starts_at ?? '9999') < todayHere()) return { error: 'This course has already run' }
   if ((inst.instance_instructors ?? []).some((r) => r.instructor_id === me.id)) return { error: 'You’re already on this course' }
