@@ -220,6 +220,7 @@ function CrewMeter({
   crew,
   clashing,
   awaiting,
+  interest,
   onOpen,
 }: {
   slots: number | null | undefined
@@ -229,6 +230,10 @@ function CrewMeter({
   optional?: boolean
   crew: { role: string; in_charge?: boolean | null }[]
   awaiting: number
+  /** The interest inquiry, once one has gone out: how many were asked and
+      how many said yes. Shown until the crew is full, so a course that has
+      been asked about reads differently from one nobody has touched. */
+  interest: { sent: number; interested: number }
   /** Crew who are on another course these same days. The meter counts heads and
       the heads are all here — which is exactly why it has to say this: "2 of 2"
       about somebody who cannot turn up reads as solved. */
@@ -301,8 +306,8 @@ function CrewMeter({
             ? clashing.length === 1 ? `${clashing[0]} clashes` : `${clashing.length} clash`
           : crew.length > 0 && !primary
             ? 'no primary'
-            : awaiting > 0
-              ? `${awaiting} asked`
+            : interest.sent > 0
+              ? `${interest.interested} of ${interest.sent} interested`
               : `${crew.length} of ${wanted}`}
     </span>
     </button>
@@ -507,6 +512,7 @@ export default function CourseQuickActions({
               crew={crew}
               clashing={clashing}
               awaiting={extras.invitesSent - extras.invitesAnswered}
+              interest={{ sent: extras.invitesSent, interested: extras.invitesInterested }}
               onOpen={() => toggle('staffing')}
             />
           </Cell>

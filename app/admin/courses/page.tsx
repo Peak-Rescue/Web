@@ -43,7 +43,7 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
     admin
       .from('course_instances')
       .select(`
-        id, ref_number, slug, course_type, course_category, custom_title, status, location, client_name, contacts, owner_id, invite_token, invite_expires_at, starts_at, ends_at, max_students, instructor_slots, lead_slots, assist_slots, shadow_slots, internal, start_time, created_at,
+        id, ref_number, slug, course_type, course_category, custom_title, status, location, client_name, contacts, owner_id, invite_token, invite_expires_at, starts_at, ends_at, max_students, instructor_slots, lead_slots, assist_slots, shadow_slots, internal, all_staff, start_time, created_at,
         creator:profiles!created_by(first_name, last_name),
         instance_instructors(count),
         crew:instance_instructors(instructor_id, role, in_charge, instructors(name)),
@@ -128,7 +128,11 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
 
   // Upcoming: last end date is today or in the future (or no dates yet)
   // Past: last end date is before today
-  const upcoming = instances
+  // An all-staff training has nothing to staff, quote or bill — everybody is
+  // already invited. It stays on the calendar below and leaves the list,
+  // where twenty-two weekly sessions buried the courses that do need work.
+  const listed = instances.filter((i) => !i.all_staff)
+  const upcoming = listed
     .filter(i => {
       const end = lastEndDate(i)
       return !end || end >= today
@@ -139,7 +143,7 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
       return aDate.localeCompare(bDate)
     })
 
-  const past = instances
+  const past = listed
     .filter(i => {
       const end = lastEndDate(i)
       return !!end && end < today

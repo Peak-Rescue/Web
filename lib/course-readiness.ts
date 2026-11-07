@@ -67,6 +67,8 @@ export type CourseExtras = {
   /** Interest invites sent, and how many have come back either way. */
   invitesSent: number
   invitesAnswered: number
+  /** Of those answered, how many said yes. */
+  invitesInterested: number
   /** Furthest any quote on the course has got. */
   quote: 'none' | 'draft' | 'sent' | 'accepted' | 'declined'
   /** How far the handoff to Harken has got. */
@@ -85,6 +87,7 @@ export const NO_EXTRAS: CourseExtras = {
   gear: false,
   invitesSent: 0,
   invitesAnswered: 0,
+  invitesInterested: 0,
   quote: 'none',
   billing: 'not-sent',
   booksClosed: false,
@@ -283,7 +286,7 @@ export function courseSteps(
         ? { tone: 'idle' as const, detail: 'Nobody needed' }
       : staffed === 0
         ? awaiting > 0
-          ? { tone: 'waiting' as const, detail: `${awaiting} asked` }
+          ? { tone: 'waiting' as const, detail: `${x.invitesInterested} of ${x.invitesSent} interested` }
           : { tone: 'action' as const, detail: 'Nobody yet' }
         // Ahead of the head count and ahead of the primary, because a full crew
         // with somebody in two places is worse than a short one: it reads as
@@ -305,7 +308,7 @@ export function courseSteps(
               detail: `Needs ${short.map((x) => `${x.open} ${roleLabel(x.role).toLowerCase()}`).join(', ')}`,
             }
           : awaiting > 0
-            ? { tone: 'waiting' as const, detail: `${staffed} of ${wanted}, ${awaiting} out` }
+            ? { tone: 'waiting' as const, detail: `${staffed} of ${wanted}, ${x.invitesInterested} of ${x.invitesSent} interested` }
             : { tone: 'action' as const, detail: `${staffed} of ${wanted}` }),
   }
 
@@ -518,7 +521,7 @@ export async function loadCourseExtras(
       forChain(admin.from('course_schedules').select('instance_id').in('instance_id', chainIds)),
       forChain(admin.from('course_modules').select('instance_id').in('instance_id', chainIds)),
       forChain(admin.from('gear_lists').select('instance_id').in('instance_id', chainIds)),
-      forChain(admin.from('course_interest_invites').select('instance_id, responded_at').in('instance_id', chainIds)),
+      forChain(admin.from('course_interest_invites').select('instance_id, responded_at, interested').in('instance_id', chainIds)),
       admin.from('course_quotes').select('instance_id, status, archived_at'),
       admin.from('invoice_requests').select('instance_id, status'),
       admin.from('course_actuals').select('instance_id, closed_at'),
@@ -531,11 +534,12 @@ export async function loadCourseExtras(
   for (const r of mods  ?? []) if (out[r.instance_id]) out[r.instance_id].curriculum = true
   for (const r of gear  ?? []) if (out[r.instance_id]) out[r.instance_id].gear = true
 
-  for (const r of (invites ?? []) as { instance_id: string; responded_at: string | null }[]) {
+  for (const r of (invites ?? []) as { instance_id: string; responded_at: string | null; interested: boolean | null }[]) {
     const e = out[r.instance_id]
     if (!e) continue
     e.invitesSent += 1
     if (r.responded_at) e.invitesAnswered += 1
+    if (r.responded_at && r.interested) e.invitesInterested += 1
   }
 
   // Furthest-along wins: a course with an accepted quote and two old drafts
