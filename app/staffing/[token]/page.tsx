@@ -188,8 +188,8 @@ export default async function StaffingInvitePage({
     assigned.some((c) => c.in_charge)
 
   return (
-    <main className="min-h-screen bg-zinc-950 text-white">
-      <div className="max-w-2xl mx-auto px-6 py-16">
+    <main className="min-h-screen bg-zinc-950 text-white pt-16 md:pt-20">
+      <div className="max-w-2xl mx-auto px-6 pt-10 pb-16">
         {user && (
           <Link href="/admin" className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors mb-6 inline-block">
             ← Portal

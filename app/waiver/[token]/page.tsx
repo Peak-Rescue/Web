@@ -20,7 +20,7 @@ export default async function PublicWaiverPage({
   if (!resolved.ok && resolved.reason === 'unknown') notFound()
 
   return (
-    <main className="min-h-screen bg-zinc-950 text-white">
+    <main className="min-h-screen bg-zinc-950 text-white pt-16 md:pt-20">
       <div className="max-w-3xl mx-auto px-4 py-10">
         {!resolved.ok ? (
           <div className="px-5 py-6 rounded-lg border border-zinc-800 bg-zinc-900">

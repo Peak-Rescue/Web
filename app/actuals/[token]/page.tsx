@@ -63,7 +63,7 @@ export default async function SharedActualsPage({ params }: { params: Promise<{ 
     : null
 
   return (
-    <main className="min-h-screen bg-zinc-950 text-white">
+    <main className="min-h-screen bg-zinc-950 text-white pt-16 md:pt-20">
       <div className="max-w-3xl mx-auto px-4 py-12 md:py-16">
         <p className="text-xs uppercase tracking-[0.2em] text-pr-red mb-2">Peak Rescue</p>
         <h1 className="text-2xl md:text-3xl font-bold">

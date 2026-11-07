@@ -66,7 +66,7 @@ export default async function GearOrderPage({ params }: { params: Promise<{ toke
   const lines = ([...(order.gear_order_lines ?? [])] as GearOrderLine[]).sort((a, b) => a.sort_order - b.sort_order)
 
   return (
-    <main className="min-h-screen bg-zinc-950 text-white">
+    <main className="min-h-screen bg-zinc-950 text-white pt-16 md:pt-20">
       <div className="max-w-3xl mx-auto px-4 py-12 md:py-16">
         {isAdmin && (
           <p className="mb-6 rounded border border-amber-800 bg-amber-950/40 px-3 py-2 text-sm text-amber-200">
