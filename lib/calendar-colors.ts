@@ -40,16 +40,17 @@ export function sectorOf(c: CalendarSubject): Sector {
 }
 
 /**
- * No client of any kind: instructor development, CE, a planning day — work we
- * lay on for ourselves. A consultation has no students but is still that
- * client's job, so the client is what this is about.
+ * Internal: work that does not earn — instructor development, CE, a demo, a
+ * pro bono day. A client on it does not change that; it only says who the
+ * work is with. So the flag alone decides, the same flag that keeps it off
+ * the course list.
  *
  * It rides on top of the sector colour rather than replacing it, because the
  * two answer different questions: the colour says which sector's work a day
  * is, this says whether it earns. Both stay true of the same chip.
  */
 export function isOurs(c: CalendarSubject): boolean {
-  return Boolean(c.internal) && !c.client
+  return Boolean(c.internal)
 }
 
 /**
