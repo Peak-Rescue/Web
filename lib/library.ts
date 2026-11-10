@@ -105,6 +105,10 @@ const BUCKET_FOR_KIND: Partial<Record<LibraryKind, LibraryBucket>> = {
   standard: 'resource',
   presentation: 'teaching',
   skill_sheet: 'teaching',
+  // A technique video is taught from. Left out, a video kept whatever shelf
+  // the form opened on — Reference, mostly — so two added under Teaching
+  // material landed beside the manuals.
+  video: 'teaching',
   // No bucket worth naming. A kit list is read from the Gear lists card,
   // which is a template shelf and not one of these. The column is NOT NULL so
   // the row keeps whatever it had, and KINDS_OFF_BUCKET_SHELVES is what stops
@@ -572,7 +576,7 @@ export function proposedBucket(item: {
   // A map's shelf is its type; nothing here should ever move one.
   if (item.kind === 'map') return 'map'
   if (item.kind === 'standard' || item.kind === 'tech_note' || item.kind === 'manual' || item.kind === 'study') return 'resource'
-  if (item.kind === 'presentation' || item.kind === 'skill_sheet') return 'teaching'
+  if (item.kind === 'presentation' || item.kind === 'skill_sheet' || item.kind === 'video') return 'teaching'
   if (item.kind === 'outline') return 'instructor'
   // Photos and video are their own question, answered on the media shelf
   // rather than by shuffling them between the teaching ones.
