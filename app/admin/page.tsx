@@ -7,7 +7,7 @@ import { loadMyOpenTasks, loadMyDoneTasks } from '@/lib/course-tasks'
 import CourseCalendar, { type CalendarCourse } from '@/components/CourseCalendar'
 import StaffingInterestList from '@/components/StaffingInterestList'
 import { courseShortName, courseEventTitle, crewFirstNames, isSession, sessionTimeLabel } from '@/lib/courses'
-import MeetingRsvp from '@/components/MeetingRsvp'
+import NextMeetingCard from '@/components/NextMeetingCard'
 import { meetingStarted } from '@/lib/meetings'
 import { courseCapabilityCategories } from '@/lib/capabilities'
 import { todayHere } from '@/lib/course-clock'
@@ -297,6 +297,9 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     .filter((r) => r.instructors)
     .sort((a, b) => Number(Boolean(b.in_charge)) - Number(Boolean(a.in_charge)))
   const canAnswer = Boolean(hoursRow?.id && hoursRow.active !== false)
+  const nextMeetingDate = nextMeeting?.starts_at
+    ? new Date(`${nextMeeting.starts_at}T00:00:00Z`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' })
+    : ''
 
   const homeHref = ({ all = showAllCourses, month = cal }: { all?: boolean; month?: string } = {}) => {
     const q = new URLSearchParams()
@@ -587,13 +590,13 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
             against, and a fold that has to be opened every visit is a fold
             everyone opens every visit. It still closes if you want it gone. */}
         {nextMeeting && (
-          <section className="mb-10 px-4 py-3 bg-zinc-900 border border-zinc-800 rounded-lg">
-            {/* Two rows: everything you can do about it beside the heading —
-                answer, join, sign up to teach — and what and when beneath. */}
-            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-              <h2 className="text-xs font-medium text-zinc-500 uppercase tracking-wide">Next meeting</h2>
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-                {canAnswer && <MeetingRsvp instanceId={nextMeeting.id} mine={myRsvp.get(nextMeeting.id) ?? null} compact />}
+          <NextMeetingCard
+            instanceId={nextMeeting.id}
+            mine={myRsvp.get(nextMeeting.id) ?? null}
+            canAnswer={canAnswer}
+            brief={`${courseShortName(nextMeeting.course_type, nextMeeting.custom_title)} · ${nextMeetingDate}`}
+            actions={
+              <>
                 {nextMeeting.video_url && (
                   <a href={nextMeeting.video_url} target="_blank" rel="noopener noreferrer" className="text-xs text-zinc-300 underline underline-offset-2 hover:text-white">
                     Join video call
@@ -604,14 +607,15 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
                     Teaching sign-up
                   </Link>
                 )}
-              </div>
-            </div>
+              </>
+            }
+          >
             <p className="mt-1.5 text-sm text-zinc-400">
               <Link href={`/portal/${nextMeeting.id}`} className="font-semibold text-white hover:underline">
                 {courseShortName(nextMeeting.course_type, nextMeeting.custom_title)}
               </Link>
               {' · '}
-              {new Date(`${nextMeeting.starts_at}T00:00:00Z`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' })}
+              {nextMeetingDate}
               {sessionTimeLabel(nextMeeting) && ` · ${sessionTimeLabel(nextMeeting)} Mountain`}
               {nextMeeting.location && ` · ${nextMeeting.location}`}
               {' · '}
@@ -623,7 +627,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
                 <span className="text-amber-300">No class yet</span>
               )}
             </p>
-          </section>
+          </NextMeetingCard>
         )}
 
         <details open className="mb-10 group">

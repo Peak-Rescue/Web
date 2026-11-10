@@ -9,11 +9,14 @@ export default function MeetingRsvp({
   instanceId,
   mine,
   compact = false,
+  onAnswer,
 }: {
   instanceId: string
   mine: boolean | null
   /** Smaller pills, for a row of other actions. */
   compact?: boolean
+  /** Told of each answer as it is given, before the save lands. */
+  onAnswer?: (going: boolean | null) => void
 }) {
   const [answer, setAnswer] = useState(mine)
   const [failed, setFailed] = useState(false)
@@ -23,12 +26,14 @@ export default function MeetingRsvp({
     if (pending || answer === going) return
     const before = answer
     setAnswer(going)
+    onAnswer?.(going)
     setFailed(false)
     start(async () => {
       try {
         await setMeetingRsvp(instanceId, going)
       } catch {
         setAnswer(before)
+        onAnswer?.(before)
         setFailed(true)
       }
     })
@@ -39,7 +44,7 @@ export default function MeetingRsvp({
       on
         ? tone === 'yes'
           ? 'bg-teal-900/40 border-teal-600 text-teal-200'
-          : 'bg-zinc-800 border-zinc-500 text-zinc-200'
+          : 'bg-rose-950/50 border-rose-700 text-rose-200'
         : 'border-zinc-700 text-zinc-400 hover:text-white hover:border-zinc-500'
     }`
 
