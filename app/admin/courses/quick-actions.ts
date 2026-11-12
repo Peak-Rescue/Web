@@ -5,6 +5,8 @@ import { crewPlanOf } from '@/lib/staffing-roles'
 import { parseContacts, primaryContactEmail, ccEmailOptions } from '@/lib/contacts'
 import { loadStaffingPanel, type StaffingPanelData } from '@/lib/staffing-panel'
 import { loadBillingPanel, type BillingPanelData } from '@/lib/billing-handoff'
+import { loadTasksWithDocs, type LoadedTask } from '@/lib/course-tasks'
+import type { TaskPerson, TaskSuggestion } from '@/components/CourseTasksPanel'
 
 // What the courses list needs to open a quick-action drawer under a row.
 //
@@ -150,5 +152,46 @@ export async function booksData(instanceId: string): Promise<BooksQuickData> {
     invoiced: a.rolled.invoiced || null,
     costTotal: a.rolled.costsTotal + a.rolled.instructorPay,
     costLines: a.costLines.length + a.cardLines.length + a.expenseLines.length + a.payLines.length,
+  }
+}
+
+export type TasksQuickData = {
+  instanceId: string
+  tasks: LoadedTask[]
+  people: TaskPerson[]
+  suggestions: TaskSuggestion[]
+  currentUserId: string
+}
+
+/** The course page's task list, in a drawer — to hand a job out without
+    opening the course. Same loader, same people, same suggestions. */
+export async function tasksData(instanceId: string): Promise<TasksQuickData> {
+  const { user, admin } = await requireAdminUser()
+
+  const [tasks, { data: peopleRows }, { data: templateRows }, { data: crewRows }] = await Promise.all([
+    loadTasksWithDocs(admin, instanceId),
+    admin.from('profiles').select('id, first_name, last_name, role').in('role', ['admin', 'instructor']).order('first_name'),
+    admin.from('course_task_templates').select('id, title, default_line, sort_order').eq('active', true).order('sort_order'),
+    admin.from('instance_instructors').select('instructors(profile_id)').eq('instance_id', instanceId),
+  ])
+
+  const staffed = new Set(
+    (crewRows ?? []).map((r) => (r.instructors as unknown as { profile_id: string | null } | null)?.profile_id).filter(Boolean)
+  )
+  const people: TaskPerson[] = (peopleRows ?? [])
+    .map((p) => ({
+      id: p.id,
+      name: [p.first_name, p.last_name].filter(Boolean).join(' '),
+      onCourse: p.role === 'admin' || staffed.has(p.id),
+    }))
+    .filter((p) => p.name)
+
+  return {
+    instanceId,
+    // Unassigned rows stay off, as on the course page.
+    tasks: tasks.filter((t) => t.assignees.length > 0),
+    people,
+    suggestions: templateRows ?? [],
+    currentUserId: user.id,
   }
 }

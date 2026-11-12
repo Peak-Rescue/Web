@@ -116,7 +116,7 @@ function InstanceCard({
   // moves when the thing the panel changes changes — assigning somebody, a
   // draft quote leaving, a handoff, the books shutting — so the panel re-asks
   // the server without the list having to tell it to.
-  const version = [step.crew.length, x.invitesSent, x.invitesAnswered, x.invitesInterested, x.invitesVolunteered, x.quote, x.billing, x.booksClosed, inst.status].join('|')
+  const version = [step.crew.length, x.invitesSent, x.invitesAnswered, x.invitesInterested, x.invitesVolunteered, x.tasksOpen, x.tasksDone, x.quote, x.billing, x.booksClosed, inst.status].join('|')
 
   return (
     <div className="p-4 bg-zinc-900 border border-zinc-800 rounded-lg transition-colors hover:border-zinc-600">

@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useTransition } from 'react'
 import Link from 'next/link'
-import { staffingData, quoteData, billingData, booksData } from './quick-actions'
+import { staffingData, quoteData, billingData, booksData, tasksData } from './quick-actions'
 import { setInstanceStatus, setInstanceOwner } from './actions'
 import StaffingPanel from './StaffingPanel'
 import QuoteQuickSend from './QuoteQuickSend'
@@ -16,7 +16,8 @@ import {
 } from '@/lib/course-readiness'
 import type { StaffingPanelData } from '@/lib/staffing-panel'
 import type { BillingPanelData } from '@/lib/billing-handoff'
-import type { QuoteQuickData, BooksQuickData } from './quick-actions'
+import type { QuoteQuickData, BooksQuickData, TasksQuickData } from './quick-actions'
+import CourseTasksPanel from '@/components/CourseTasksPanel'
 import OwnerPill from '@/components/OwnerPill'
 import { type CourseOwner } from '@/lib/course-owner'
 import { crewOrder, roleLabel, ROLE_SOLID, asInstanceRole } from '@/lib/staffing-roles'
@@ -50,7 +51,8 @@ import PrimaryStar from '@/components/PrimaryStar'
 // not, never amber — nobody writes a curriculum from a list, and a loud mark
 // on every unbuilt one would drown the money above it.
 
-export type Panel = StepPanel | 'status' | 'owner'
+export type Panel = StepPanel | 'status' | 'owner' | 'tasks'
+type DrawerPanel = Exclude<Panel, 'status' | 'owner'>
 
 // ── The columns ──────────────────────────────────────────────────────────────
 //
@@ -70,6 +72,7 @@ const COL = {
   status: 'w-[104px]',
   crew: 'w-[176px]',
   students: 'w-[148px]',
+  tasks: 'w-[96px]',
 }
 
 /** A labelled column: the heading, the rule under it, and the mark below. The
@@ -521,6 +524,23 @@ export default function CourseQuickActions({
             <Students instanceId={instanceId} students={students} link={extras.inviteLink} />
           </Cell>
         )}
+
+        {/* Handing a job out is the reason to open it, so it stays on a
+            course that has run: the debrief and the books are tasks too. */}
+        <Cell label="Tasks" width={COL.tasks}>
+          <button
+            type="button"
+            onClick={() => toggle('tasks')}
+            title={extras.tasksOpen > 0 ? 'Open tasks on this course — click to see them or hand out another' : 'Hand somebody a task on this course'}
+            className={`text-xs px-2 py-1 rounded border transition-colors ${
+              extras.tasksOpen > 0
+                ? 'border-zinc-600 text-zinc-200 hover:border-zinc-400'
+                : 'border-zinc-800 text-zinc-500 hover:text-zinc-300 hover:border-zinc-600'
+            } ${open === 'tasks' ? 'ring-1 ring-zinc-400' : ''}`}
+          >
+            {extras.tasksOpen > 0 ? `${extras.tasksOpen} open` : extras.tasksDone > 0 ? 'All done' : '+ Assign'}
+          </button>
+        </Cell>
       </div>
 
       {/* Where the money has got to, on its own line on every card. */}
@@ -670,7 +690,7 @@ function StatusPicker({
   )
 }
 
-type PanelData = StaffingPanelData | QuoteQuickData | BillingPanelData | BooksQuickData
+type PanelData = StaffingPanelData | QuoteQuickData | BillingPanelData | BooksQuickData | TasksQuickData
 
 // The panel itself, fetched when it is opened rather than rendered with the
 // list. What comes back is the course's own data, drawn by the same panels the
@@ -683,7 +703,7 @@ function LazyPanel({
   instanceId,
   version,
 }: {
-  panel: StepPanel
+  panel: DrawerPanel
   instanceId: string
   version: string
 }) {
@@ -696,6 +716,7 @@ function LazyPanel({
       panel === 'staffing' ? staffingData
       : panel === 'quote' ? quoteData
       : panel === 'books' ? booksData
+      : panel === 'tasks' ? tasksData
       : billingData
     loader(instanceId)
       .then((d) => { if (live) { setData(d); setError(null) } })
@@ -715,5 +736,19 @@ function LazyPanel({
   if (panel === 'staffing') return <StaffingPanel data={data as StaffingPanelData} />
   if (panel === 'quote') return <QuoteQuickSend data={data as QuoteQuickData} />
   if (panel === 'books') return <BooksQuickClose data={data as BooksQuickData} />
+  if (panel === 'tasks') {
+    const t = data as TasksQuickData
+    return (
+      <CourseTasksPanel
+        instanceId={t.instanceId}
+        tasks={t.tasks}
+        people={t.people}
+        suggestions={t.suggestions}
+        canManage
+        currentUserId={t.currentUserId}
+        canFileToLibrary
+      />
+    )
+  }
   return <BillingSection {...(data as BillingPanelData)} />
 }

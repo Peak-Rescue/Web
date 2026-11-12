@@ -83,6 +83,10 @@ export type CourseExtras = {
       invite token and nothing else, so a course with no live link is one
       nobody can join — worth reporting even though it is never urgent. */
   inviteLink: 'none' | 'live' | 'expired'
+  /** Tasks handed to somebody and not yet ticked. Unassigned template rows
+      are not counted, for the same reason the course page doesn't show them. */
+  tasksOpen: number
+  tasksDone: number
 }
 
 export const NO_EXTRAS: CourseExtras = {
@@ -97,6 +101,8 @@ export const NO_EXTRAS: CourseExtras = {
   billing: 'not-sent',
   booksClosed: false,
   inviteLink: 'none',
+  tasksOpen: 0,
+  tasksDone: 0,
 }
 
 /** What the interest replies come to, in a few words, or null when there
@@ -531,7 +537,7 @@ export async function loadCourseExtras(
   const none = { data: [] as { instance_id: string }[] }
   const forChain = <T>(q: T) => (chainIds.length > 0 ? q : Promise.resolve(none))
 
-  const [{ data: sched }, { data: mods }, { data: gear }, { data: invites }, { data: quotes }, { data: invoices }, { data: actuals }] =
+  const [{ data: sched }, { data: mods }, { data: gear }, { data: invites }, { data: quotes }, { data: invoices }, { data: actuals }, { data: tasks }] =
     await Promise.all([
       forChain(admin.from('course_schedules').select('instance_id').in('instance_id', chainIds)),
       forChain(admin.from('course_modules').select('instance_id').in('instance_id', chainIds)),
@@ -540,6 +546,9 @@ export async function loadCourseExtras(
       admin.from('course_quotes').select('instance_id, status, archived_at'),
       admin.from('invoice_requests').select('instance_id, status'),
       admin.from('course_actuals').select('instance_id, closed_at'),
+      // Unfiltered, like the quotes: a list of every course would put
+      // hundreds of ids in the URL.
+      admin.from('course_tasks').select('instance_id, status, course_task_assignees!inner(profile_id)').not('instance_id', 'is', null),
     ])
 
   const out: Record<string, CourseExtras> = {}
@@ -561,6 +570,13 @@ export async function loadCourseExtras(
     e.invitesSent += 1
     if (r.responded_at) e.invitesAnswered += 1
     if (r.responded_at && r.interested) e.invitesInterested += 1
+  }
+
+  for (const r of (tasks ?? []) as { instance_id: string; status: string }[]) {
+    const e = out[r.instance_id]
+    if (!e) continue
+    if (r.status === 'done') e.tasksDone += 1
+    else e.tasksOpen += 1
   }
 
   // Furthest-along wins: a course with an accepted quote and two old drafts
