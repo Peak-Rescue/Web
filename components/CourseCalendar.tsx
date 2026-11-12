@@ -3,7 +3,7 @@ import CalendarChip from './CalendarChip'
 import MonthJump from './MonthJump'
 import { YM } from '@/lib/month-token'
 import { todayHere } from '@/lib/course-clock'
-import { CATEGORY_STYLE, OURS_MARK, isOurs, sectorOf } from '@/lib/calendar-colors'
+import { CATEGORY_STYLE, OURS_MARK, OURS_MARK_OUTLINE, isOurs, sectorOf } from '@/lib/calendar-colors'
 
 export type CalendarCourse = {
   id: string
@@ -45,11 +45,12 @@ function chipStyle(c: CalendarCourse): string {
   // The internal hatch rides along with whatever the status draws — a
   // tentative internal day is dashed and hatched, both facts at once.
   const mark = (isOurs(c) ? ` ${OURS_MARK}` : '') + (c.noClass ? ' border-dashed opacity-60' : '')
+  const outlineMark = (isOurs(c) ? ` ${OURS_MARK_OUTLINE}` : '') + (c.noClass ? ' border-dashed opacity-60' : '')
   switch (c.status) {
     case 'tentative':
-      return `${s.outline} border-dashed${mark}`
+      return `${s.outline} border-dashed${outlineMark}`
     case 'quoted':
-      return `${s.outline}${mark}`
+      return `${s.outline}${outlineMark}`
     case 'completed':
       return `${s.solid} opacity-60${mark}`
     case 'cancelled':

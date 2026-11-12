@@ -62,3 +62,5 @@ export function isOurs(c: CalendarSubject): boolean {
  * replaces was 3px of signal against the whole length of that bar.
  */
 export const OURS_MARK = 'ours-hatch'
+/** For a chip drawn as an outline only — see globals.css. */
+export const OURS_MARK_OUTLINE = 'ours-hatch-outline'
