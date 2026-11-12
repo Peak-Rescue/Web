@@ -325,7 +325,7 @@ export default function OrderEditor({
                 </>
               )}
               {profit.uncosted > 0 && (
-                <span className="text-amber-300/80">{profit.revenue > 0 ? ' · ' : ''}{profit.uncosted} {profit.uncosted === 1 ? 'line has' : 'lines have'} no cost yet</span>
+                <span className="text-amber-300/80">{profit.revenue > 0 ? ' · ' : ''}{profit.uncosted} {profit.uncosted === 1 ? 'line is' : 'lines are'} missing “Our cost”, so no profit yet</span>
               )}
             </span>
           )}
