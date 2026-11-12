@@ -165,10 +165,13 @@ body::-webkit-scrollbar {
    white, so a light stripe closes the gap under the text and every letter
    crossing one goes soft. Darkening moves the whole bar away from the text
    instead, and the texture still reads. */
+/* Stripes in the chip's own text colour, not black: an outlined chip
+   (tentative, quoted) has no fill for a dark stripe to show against, and on
+   the near-black page a black hatch simply vanished. */
 .ours-hatch {
   background-image: repeating-linear-gradient(
     135deg,
-    rgb(0 0 0 / 0.3) 0 3px,
+    color-mix(in srgb, currentColor 22%, transparent) 0 3px,
     transparent 3px 8px
   );
 }
