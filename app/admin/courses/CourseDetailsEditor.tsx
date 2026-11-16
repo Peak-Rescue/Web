@@ -138,16 +138,19 @@ export default function CourseDetailsEditor({
             <option value="cancelled">Cancelled</option>
           </select>
         </div>
-        <div>
-          <label className="block text-xs text-zinc-400 mb-1">Location</label>
-          <input name="location" defaultValue={course.location ?? ''} className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
-        </div>
+        {meeting && (
+          <div>
+            <label className="block text-xs text-zinc-400 mb-1">Location</label>
+            <input name="location" defaultValue={course.location ?? ''} className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
+          </div>
+        )}
         {!meeting && (
           <>
             <CourseLocationFields
               venues={venues}
               defaultRegion={course.region}
               defaultVenueId={course.venue_id}
+              defaultLocation={course.location}
             />
             <div>
               <label className="block text-xs text-zinc-400 mb-1">Client / organization</label>

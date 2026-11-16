@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import RegionSelect from './RegionSelect'
 import { createPlaceInline } from '@/app/admin/library/actions'
-import { regionLabel, splitRegion } from '@/lib/regions'
+import { regionLabel, splitRegion, venuePlaceLine } from '@/lib/regions'
 
 export type VenueOption = { id: string; name: string; region_code: string | null }
 
@@ -21,14 +21,21 @@ const label = 'block text-xs text-zinc-400 mb-1'
 // venue already chosen stays whatever its state, or the auto-saving form would
 // save its loss. Venues without a region code still appear — they are unfiled,
 // not elsewhere — and a state with no venues yet gets a way to add one there.
+//
+// Location comes last, as the line that says it more exactly: a client's base
+// or plant is never a filed venue, and the Location is what quotes, invites and
+// emails print. Picking a venue fills it in, but only while it is empty or
+// still says what the last venue filled in — never over what somebody typed.
 export default function CourseLocationFields({
   venues,
   defaultRegion,
   defaultVenueId,
+  defaultLocation,
 }: {
   venues: VenueOption[]
   defaultRegion?: string | null
   defaultVenueId?: string | null
+  defaultLocation?: string | null
 }) {
   const [region, setRegion] = useState(defaultRegion ?? '')
   // Controlled, because changing the region moves options between optgroups and
@@ -36,6 +43,7 @@ export default function CourseLocationFields({
   // on the auto-saving details form means saving the loss.
   const [venueId, setVenueId] = useState(defaultVenueId ?? '')
   const [fresh, setFresh] = useState<VenueOption | null>(null)
+  const [location, setLocation] = useState(defaultLocation ?? '')
   const [making, setMaking] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -61,15 +69,26 @@ export default function CourseLocationFields({
   )
   const unfiled = all.filter((v) => !v.region_code)
 
+  const placeLine = (id: string, list: VenueOption[] = all) => {
+    const v = list.find((x) => x.id === id)
+    return v ? venuePlaceLine(v.name, v.region_code) : ''
+  }
+  // The venue changing carries the Location with it, unless it was typed.
+  function pickVenue(id: string, list?: VenueOption[]) {
+    if (!location.trim() || location === placeLine(venueId, list)) setLocation(placeLine(id, list))
+    setVenueId(id)
+  }
+
   async function make(typed: string) {
     setBusy(true)
     setError(null)
     try {
       const r = await createPlaceInline(typed, region || null)
       if ('error' in r) { setError(r.error); return }
-      setFresh({ ...r, region_code: region || null })
+      const made = { ...r, region_code: region || null }
+      setFresh(made)
       announce.current = true
-      setVenueId(r.id)
+      pickVenue(r.id, [...all, made])
       setMaking(false)
       router.refresh()
     } finally {
@@ -86,7 +105,7 @@ export default function CourseLocationFields({
       </div>
       <div>
         <label className={label}>Venue</label>
-        <select ref={selectRef} name="venue_id" value={venueId} onChange={(e) => setVenueId(e.target.value)} className={input}>
+        <select ref={selectRef} name="venue_id" value={venueId} onChange={(e) => pickVenue(e.target.value)} className={input}>
           <option value="">— none —</option>
           {here.length > 0 && (
             <optgroup label={regionLabel(region)}>
@@ -129,6 +148,10 @@ export default function CourseLocationFields({
         )}
         {error && <p className="text-[11px] text-pr-red mt-1">{error}</p>}
         <p className="text-xs text-zinc-500 mt-1">Brings in its maps, permits and rescue plans.</p>
+      </div>
+      <div>
+        <label className={label}>Location</label>
+        <input name="location" value={location} onChange={(e) => setLocation(e.target.value)} className={input} />
       </div>
     </>
   )

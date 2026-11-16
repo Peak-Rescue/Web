@@ -25,3 +25,13 @@ describe('seedsNothing', () => {
     expect(seedsNothing({ course_type: 'standby-rescue', job: true })).toBe(false)
   })
 })
+
+import { venuePlaceLine } from '@/lib/regions'
+
+describe('venuePlaceLine', () => {
+  it('says the venue and where it is, as the backfill does', () => {
+    expect(venuePlaceLine('Zion', 'US-UT')).toBe('Zion, UT')
+    expect(venuePlaceLine('Chamonix', 'FR')).toBe('Chamonix, FR')
+    expect(venuePlaceLine('Somewhere', null)).toBe('Somewhere')
+  })
+})

@@ -6,7 +6,7 @@ import { after } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { contactsFromForm } from '@/lib/contacts'
 import { syncCourseCalendar, removeCourseEvent } from '@/lib/google-calendar'
-import { isValidRegion } from '@/lib/regions'
+import { isValidRegion, venuePlaceLine } from '@/lib/regions'
 import { requireAdminUser, requireCourseStaff } from '@/lib/course-access'
 import { sendMail } from '@/lib/mailer'
 import { announcesChanges, emailAdminsNewCourse, notifyRoleChange } from '@/lib/course-notify'
@@ -231,6 +231,13 @@ const MAX_REPEATS = 60
     client any more: the name on a course is the database's copy of the tree's
     (see migration 261), so what is checked here is only that the id is a
     client rather than a sector, and `label` is how it will read. */
+// The venue as a Location line, for a course saved with the box left blank.
+async function venuePlace(admin: ReturnType<typeof createAdminClient>, venueId: string | null): Promise<string | null> {
+  if (!venueId) return null
+  const { data } = await admin.from('venues').select('name, region_code').eq('id', venueId).maybeSingle()
+  return data ? venuePlaceLine(data.name as string, data.region_code as string | null) : null
+}
+
 async function chosenClient(admin: ReturnType<typeof createAdminClient>, formData: FormData) {
   const id = ((formData.get('client_id') as string) || '').trim()
   if (!id) return { client_id: null, label: null }
@@ -253,10 +260,11 @@ export async function createInstance(formData: FormData) {
   // nobody enrols, so no headcount.
   const job              = course_type === 'custom' && formData.get('job') !== null
   const internal         = !job && formData.get('internal') !== null
-  const location         = (formData.get('location') as string) || null
   const regionRaw        = (formData.get('region') as string) || ''
   const region           = isValidRegion(regionRaw) ? regionRaw : null
   const venue_id         = (formData.get('venue_id') as string) || null
+  // A blank Location says the venue, so nothing that prints it prints nothing.
+  const location         = ((formData.get('location') as string) ?? '').trim() || await venuePlace(admin, venue_id)
   const { client_id, label: client_label } = await chosenClient(admin, formData)
   const contacts         = contactsFromForm(formData.get('contacts_json'))
   const notes            = (formData.get('notes') as string) || null
@@ -410,10 +418,11 @@ export async function updateInstanceDetails(id: string, formData: FormData) {
   const custom_categories = course_type === 'custom' ? (formData.getAll('custom_categories') as string[]) : null
   const status           = formData.get('status') as string
   const internal         = formData.get('internal') !== null
-  const location         = (formData.get('location') as string) || null
   const regionRaw        = (formData.get('region') as string) || ''
   const region           = isValidRegion(regionRaw) ? regionRaw : null
   const venue_id         = (formData.get('venue_id') as string) || null
+  // A blank Location says the venue, so nothing that prints it prints nothing.
+  const location         = ((formData.get('location') as string) ?? '').trim() || await venuePlace(admin, venue_id)
   const client_id        = formData.has('client_id') ? (await chosenClient(admin, formData)).client_id : undefined
   const contactsRaw      = formData.get('contacts_json')
   // Who to ring about the place, as opposed to about the client. Same jsonb

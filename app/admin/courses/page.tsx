@@ -213,10 +213,6 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
               </select>
             </div>
 
-            <div>
-              <label className="block text-xs text-zinc-400 mb-1">Location</label>
-              <input name="location" className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
-            </div>
             <CourseLocationFields venues={venueRows ?? []} />
             <div>
               <label className="block text-xs text-zinc-400 mb-1">Client / organization</label>

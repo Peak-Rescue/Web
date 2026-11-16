@@ -192,6 +192,14 @@ export function regionShort(code: string | null | undefined): string {
   return sub || country
 }
 
+/** What a course's Location says when nobody typed one: the venue and its
+    state, "Zion, UT". One wording for the form's fill-in, the server's and
+    migration 297's backfill, so a filled-in line can be recognised as one. */
+export function venuePlaceLine(name: string, code: string | null | undefined): string {
+  const where = regionShort(code)
+  return where ? `${name}, ${where}` : name
+}
+
 export function isValidRegion(code: string | null | undefined): boolean {
   if (!code) return false
   const [country, sub] = code.split('-')
