@@ -177,7 +177,7 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
 
         <div className="mb-8">
           <h1 className="text-2xl font-bold">Courses</h1>
-          <p className="text-zinc-400 mt-1">Schedule and manage course instances</p>
+          <p className="text-zinc-400 mt-1">Schedule and manage courses and jobs</p>
         </div>
 
         {/* What the next person needs to pick this up: who asked, who to call,
@@ -197,7 +197,7 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
               <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
               </svg>
-              New Course Instance
+              New course or job
             </div>
           </summary>
           <form action={createInstance} className="mt-4 p-6 bg-zinc-900 rounded-lg border border-zinc-800 grid grid-cols-1 sm:grid-cols-2 gap-4">

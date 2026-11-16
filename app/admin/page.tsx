@@ -399,7 +399,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     },
     {
       title: 'Courses',
-      desc: 'Schedule and manage course instances',
+      desc: 'Schedule and manage courses and jobs',
       href: '/admin/courses',
       section: 'admin',
       icon: (
