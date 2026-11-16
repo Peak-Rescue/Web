@@ -41,6 +41,12 @@ const STATUS_BADGE = {
   missing:  { label: 'Not on file', dot: 'bg-zinc-600' },
 }
 
+// Postgres sends microseconds; Safari reads more than three fractional digits
+// as an invalid date, so trim to milliseconds before parsing.
+function parseTimestamp(ts: string) {
+  return new Date(ts.replace(/(\.\d{3})\d+/, '$1')).getTime()
+}
+
 type CertGridActions = {
   upsertCert: (fd: FormData) => Promise<{ id: string; cert_type: CertType; level: string | null; expires_at: string | null; notes: string | null; updated_at: string } | null>
   deleteCert: (id: string) => Promise<void>
@@ -101,8 +107,8 @@ export default function CertGrid({ initialCerts, actions }: { initialCerts: DbCe
     if (pendingDocs.length > 0) return true
     const cert = certMap[editing]
     if (!cert) return false
-    const savedAt = new Date(cert.updated_at).getTime()
-    return cert.instructor_cert_documents.some(d => new Date(d.created_at).getTime() > savedAt)
+    const savedAt = parseTimestamp(cert.updated_at)
+    return cert.instructor_cert_documents.some(d => parseTimestamp(d.created_at) > savedAt)
   })()
 
   const canSave = (() => {
@@ -285,7 +291,7 @@ export default function CertGrid({ initialCerts, actions }: { initialCerts: DbCe
                         {cert?.level && <div className="text-xs mt-1 opacity-80">{cert.level}</div>}
                         {cert?.expires_at && (
                           <div className="text-xs mt-1 opacity-70">
-                            Expires {new Date(cert.expires_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
+                            Expires {new Date(cert.expires_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' })}
                           </div>
                         )}
                         {docCount > 0 && (
