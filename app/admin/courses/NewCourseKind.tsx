@@ -1,20 +1,30 @@
 'use client'
 
-import { useState } from 'react'
-import { CourseTypeSelect } from './CourseTypeSelect'
+import { createContext, useContext, useState } from 'react'
+import { CourseTypeSelect, type NewKind } from './CourseTypeSelect'
 import MeetingFields from './MeetingFields'
 
 const FIELD =
   'w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500'
 
+const KindContext = createContext<NewKind>('course')
+
+/** A field only a course has — the student count. A job is a crew on a site,
+    and an empty headcount box on it reads as something somebody forgot. Not
+    mounted, so not submitted either. */
+export function CourseOnly({ children }: { children: React.ReactNode }) {
+  return useContext(KindContext) === 'course' ? <>{children}</> : null
+}
+
 /** The top of the new-course form, and what follows from it.
  *
  *  The form is a course form until somebody picks Custom and then says it is
- *  an internal meeting. From there the answer decides what the rest of the
- *  form is: a meeting has no client, no contact, no headcount and no crew
- *  plan, and leaving those on screen reads as four things somebody forgot.
- *  The course fields arrive as children, already rendered by the page, and
- *  are simply not mounted for a meeting — so they are not submitted either.
+ *  a job or an internal meeting. From there the answer decides what the rest
+ *  of the form is: a meeting has no client, no contact, no headcount and no
+ *  crew plan, and leaving those on screen reads as four things somebody
+ *  forgot. A job keeps all of those but the headcount. The course fields
+ *  arrive as children, already rendered by the page, and are simply not
+ *  mounted for a meeting — so they are not submitted either.
  */
 export default function NewCourseKind({
   people,
@@ -24,12 +34,12 @@ export default function NewCourseKind({
   people: { id: string; name: string }[]
   children: React.ReactNode
 }) {
-  const [meeting, setMeeting] = useState(false)
+  const [kind, setKind] = useState<NewKind>('course')
 
   return (
-    <>
-      <CourseTypeSelect meeting={meeting} onMeetingChange={setMeeting} />
-      {!meeting ? (
+    <KindContext.Provider value={kind}>
+      <CourseTypeSelect kind={kind} onKindChange={setKind} />
+      {kind !== 'meeting' ? (
         children
       ) : (
         <>
@@ -46,6 +56,6 @@ export default function NewCourseKind({
           </div>
         </>
       )}
-    </>
+    </KindContext.Provider>
   )
 }

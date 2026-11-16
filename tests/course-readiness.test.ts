@@ -596,3 +596,11 @@ describe('staffing against the crew plan', () => {
     expect(s.detail).toBe('Needs 1 lead')
   })
 })
+
+describe('jobs', () => {
+  it('have nothing to build', () => {
+    const keys = (i: StepInput) => courseSteps(i, extras(), TODAY).filter((s) => s.track === 'build').map((s) => s.key)
+    expect(keys(inst())).toEqual(['schedule', 'curriculum', 'gear'])
+    expect(keys(inst({ job: true }))).toEqual([])
+  })
+})

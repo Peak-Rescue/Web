@@ -147,6 +147,9 @@ export type StepInput = {
       "Unset means at least one" is the rule for a course, and here it turned
       twenty-five weekly meetings into twenty-five open seats. */
   crewOptional?: boolean
+  /** Work we are hired for rather than a course we teach. A job has no
+      schedule, curriculum or gear list to build, so it has no build line. */
+  job?: boolean
 }
 
 /** How long costs are allowed to keep arriving before anybody is asked to
@@ -361,9 +364,13 @@ export function courseSteps(
     pricing,
     quote,
     billing,
-    { key: 'schedule',   label: 'Schedule',   track: 'build', tone: x.schedule   ? 'done' : 'idle', detail: x.schedule   ? 'Built' : 'None yet' },
-    { key: 'curriculum', label: 'Curriculum', track: 'build', tone: x.curriculum ? 'done' : 'idle', detail: x.curriculum ? 'Built' : 'None yet' },
-    { key: 'gear',       label: 'Gear',       track: 'build', tone: x.gear       ? 'done' : 'idle', detail: x.gear       ? 'Built' : 'None yet' },
+    // A job has nothing to build: no day-by-day plan, nothing to teach, and
+    // the crew brings its own kit.
+    ...(inst.job ? [] : [
+      { key: 'schedule',   label: 'Schedule',   track: 'build', tone: x.schedule   ? 'done' : 'idle', detail: x.schedule   ? 'Built' : 'None yet' },
+      { key: 'curriculum', label: 'Curriculum', track: 'build', tone: x.curriculum ? 'done' : 'idle', detail: x.curriculum ? 'Built' : 'None yet' },
+      { key: 'gear',       label: 'Gear',       track: 'build', tone: x.gear       ? 'done' : 'idle', detail: x.gear       ? 'Built' : 'None yet' },
+    ] as Drafted[]),
   ])
 }
 

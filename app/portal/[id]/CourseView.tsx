@@ -385,7 +385,7 @@ export default async function CourseView({
   const [{ data: inst }, { data: offDays }, { data: modules }, { data: instructors }, taskRows, { data: peopleRows }, { data: templateRows }, { data: courseDocRows }, { data: taskDocRows }, { data: mapRows }, { data: resourceRows }, { data: linkRows }, { data: updateRows }, { data: enrollmentRows }, { data: messageRows }] =
     await Promise.all([
       admin.from('course_instances')
-        .select('course_type, custom_title, status, location, client_name, client_id, notes, ref_number, starts_at, ends_at, meeting_date, meeting_announced_dates, meeting_point, meeting_time, meeting_links, meeting_attachments, intro, custom_categories, contacts, max_students, instructor_slots, lead_slots, assist_slots, shadow_slots, course_category, internal, invite_token, invite_expires_at, hero_image, hero_position, hero_scale, venue_id, region, place_contacts, waiver_template_id, waiver_token, waiver_token_expires_at, breaks_paid, owner_id, billing_quote_id, start_time, end_time, video_url, all_staff, series_id')
+        .select('course_type, custom_title, status, location, client_name, client_id, notes, ref_number, starts_at, ends_at, meeting_date, meeting_announced_dates, meeting_point, meeting_time, meeting_links, meeting_attachments, intro, custom_categories, contacts, max_students, instructor_slots, lead_slots, assist_slots, shadow_slots, course_category, internal, invite_token, invite_expires_at, hero_image, hero_position, hero_scale, venue_id, region, place_contacts, waiver_template_id, waiver_token, waiver_token_expires_at, breaks_paid, owner_id, billing_quote_id, start_time, end_time, video_url, all_staff, series_id, job')
         .eq('id', id)
         .single(),
       admin.from('instance_off_days')
@@ -459,7 +459,7 @@ export default async function CourseView({
   // left is who is on it, where to be, and what it paid. Everything this
   // switches off is switched off because filling it in would be a question
   // nobody on a job has an answer to.
-  const jobNotCourse = isJob(inst.course_type as string)
+  const jobNotCourse = isJob(inst.course_type as string, inst.job as boolean | null)
   // Nearly every section below is shown to staff while it is still empty,
   // because an empty section is where its first contents get added. A staff
   // session is the exception — an hour's class has no gear list to start and
@@ -468,8 +468,8 @@ export default async function CourseView({
   const session = isSession(inst)
   const staffSeeEmpty = showTasks && !session
   // And the word for one, for the copy that has to name it.
-  const noun = workNoun(inst.course_type as string)
-  const Noun = WorkNoun(inst.course_type as string)
+  const noun = workNoun(inst.course_type as string, inst.job as boolean | null)
+  const Noun = WorkNoun(inst.course_type as string, inst.job as boolean | null)
 
   // Every attachment on the course — task documents (even from completed
   // tasks, where they'd otherwise be folded away) plus general course files —

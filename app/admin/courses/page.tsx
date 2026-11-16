@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createInstance } from './actions'
 import CreateCourseButton from './CreateCourseButton'
-import NewCourseKind from './NewCourseKind'
+import NewCourseKind, { CourseOnly } from './NewCourseKind'
 import CancelNewCourseButton from './CancelNewCourseButton'
 import { courseShortName, courseEventTitle, crewFirstNames, sessionTimeLabel } from '@/lib/courses'
 import CourseCalendar, { type CalendarCourse } from '@/components/CourseCalendar'
@@ -43,7 +43,7 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
     admin
       .from('course_instances')
       .select(`
-        id, ref_number, slug, course_type, course_category, custom_title, status, location, client_name, contacts, owner_id, invite_token, invite_expires_at, starts_at, ends_at, max_students, instructor_slots, lead_slots, assist_slots, shadow_slots, internal, all_staff, start_time, created_at,
+        id, ref_number, slug, course_type, course_category, custom_title, status, location, client_name, contacts, owner_id, invite_token, invite_expires_at, starts_at, ends_at, max_students, instructor_slots, lead_slots, assist_slots, shadow_slots, internal, all_staff, start_time, created_at, job,
         creator:profiles!created_by(first_name, last_name),
         instance_instructors(count),
         crew:instance_instructors(instructor_id, role, in_charge, instructors(name)),
@@ -223,10 +223,12 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
             </div>
             <CourseContactsEditor initial={[]} />
             <NewCourseDates today={today} others={otherCourses} />
-            <div>
-              <label className="block text-xs text-zinc-400 mb-1">Number of students</label>
-              <input name="max_students" type="number" min="1" placeholder="e.g. 10" className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
-            </div>
+            <CourseOnly>
+              <div>
+                <label className="block text-xs text-zinc-400 mb-1">Number of students</label>
+                <input name="max_students" type="number" min="1" placeholder="e.g. 10" className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500" />
+              </div>
+            </CourseOnly>
             <div>
               <label className="block text-xs text-zinc-400 mb-1">
                 Crew plan

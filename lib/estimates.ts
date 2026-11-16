@@ -267,6 +267,15 @@ export type SeedCounts = {
 // the panel asks it about courses whose details are still incomplete — a
 // missing day count is a factor nobody can supply, which this already answers
 // with null rather than a guess.
+/** A custom job starts from an empty COA. What we are hired for varies too
+ *  much — a flat fee, an hourly standby, a day on a set — for day rates
+ *  guessed off a crew plan to be a useful start, and a guessed line on a
+ *  quote is one somebody has to notice and delete. Typed jobs (standby rescue,
+ *  TV rigging) are priced the usual way, off the crew plan. */
+export function seedsNothing(course: { course_type: string | null; job?: boolean | null }): boolean {
+  return course.course_type === 'custom' && Boolean(course.job)
+}
+
 /** Which default lines a course actually wants.
  *
  *  The three per-seat field-day rates and the plain instructor field day answer

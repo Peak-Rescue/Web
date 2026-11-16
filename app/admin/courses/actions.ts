@@ -249,7 +249,10 @@ export async function createInstance(formData: FormData) {
   const custom_title     = (formData.get('custom_title') as string) || null
   const custom_categories = course_type === 'custom' ? (formData.getAll('custom_categories') as string[]) : null
   const status           = (formData.get('status') as string) || 'tentative'
-  const internal         = formData.get('internal') !== null
+  // A job is a custom booking we are hired for: paid, so never internal, and
+  // nobody enrols, so no headcount.
+  const job              = course_type === 'custom' && formData.get('job') !== null
+  const internal         = !job && formData.get('internal') !== null
   const location         = (formData.get('location') as string) || null
   const regionRaw        = (formData.get('region') as string) || ''
   const region           = isValidRegion(regionRaw) ? regionRaw : null
@@ -257,7 +260,7 @@ export async function createInstance(formData: FormData) {
   const { client_id, label: client_label } = await chosenClient(admin, formData)
   const contacts         = contactsFromForm(formData.get('contacts_json'))
   const notes            = (formData.get('notes') as string) || null
-  const max_students     = formData.get('max_students') ? Number(formData.get('max_students')) : null
+  const max_students     = !job && formData.get('max_students') ? Number(formData.get('max_students')) : null
   const crewPlan         = crewPlanFromForm(formData)
   const starts_at        = (formData.get('starts_at') as string) || null
   const session          = sessionFromForm(formData, internal)
@@ -333,7 +336,7 @@ export async function createInstance(formData: FormData) {
     // unassigned — makes the state that means "nobody is driving this" so
     // common that it stops being read.
     .insert(occurrences.map((o) => ({
-      course_category, course_type, custom_title, custom_categories, status, internal,
+      course_category, course_type, custom_title, custom_categories, status, internal, job,
       location, region, venue_id, client_id, contacts, notes, max_students,
       // The seats are what somebody typed. instructor_slots is not written here
       // or anywhere — the database computes it from these three.

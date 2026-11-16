@@ -240,29 +240,32 @@ export const COURSE_TYPE_OPTIONS = [
 // students, nothing to teach, and no kit list to send anybody, because the
 // crew brings its own and always has.
 //
-// Held here as a list of offerings rather than a column on the instance,
-// because it is a fact about the kind of work and not about the booking: a
-// standby job is never accidentally a course, and adding the next one is a
-// line in this array. A custom event is never a job — there is nothing to
-// read it off — so it keeps the full course page and the parts nobody fills
-// in stay empty, which is the same thing it did before.
+// Held here as a list of offerings, because for these it is a fact about the
+// kind of work and not about the booking: a standby job is never accidentally
+// a course, and adding the next one is a line in this array.
+//
+// A custom booking has no offering to read it off, so it carries its own
+// answer in `course_instances.job`, set when it is made. Only a custom one is
+// read: a booking retyped in Details to a real course is that course, whatever
+// it was made as.
 export const JOB_OFFERINGS = ['standby-rescue', 'tv-rigging-safety']
 
 /** Whether this is work we are hired to do rather than a course we teach. */
-export function isJob(course_type: string | null | undefined): boolean {
+export function isJob(course_type: string | null | undefined, job?: boolean | null): boolean {
+  if (course_type === 'custom') return Boolean(job)
   return Boolean(course_type && JOB_OFFERINGS.includes(course_type))
 }
 
 /** What to call one of these on screen. Everything on the course page says
     "course" somewhere, and a standby crew reading about their "course
     details" is being told the page is about something else. */
-export function workNoun(course_type: string | null | undefined): 'course' | 'job' {
-  return isJob(course_type) ? 'job' : 'course'
+export function workNoun(course_type: string | null | undefined, job?: boolean | null): 'course' | 'job' {
+  return isJob(course_type, job) ? 'job' : 'course'
 }
 
 /** The same word to start a sentence with. */
-export function WorkNoun(course_type: string | null | undefined): 'Course' | 'Job' {
-  return isJob(course_type) ? 'Job' : 'Course'
+export function WorkNoun(course_type: string | null | undefined, job?: boolean | null): 'Course' | 'Job' {
+  return isJob(course_type, job) ? 'Job' : 'Course'
 }
 
 export function courseDisplayName(course_type: string, custom_title: string | null): string {

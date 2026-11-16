@@ -2,7 +2,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { crewPlanOf, crewPlanSummary, roleLabel, seatsOverPlan } from '@/lib/staffing-roles'
 import InfoHint from '@/components/InfoHint'
 import { courseShortName, courseDayCounts, courseScopeBullets } from '@/lib/courses'
-import { coaPrice, guessSeedQty, wantsSeedLine, coaSpan, coaHasOwnSpan, DEFAULT_MARGIN } from '@/lib/estimates'
+import { coaPrice, guessSeedQty, wantsSeedLine, seedsNothing, coaSpan, coaHasOwnSpan, DEFAULT_MARGIN } from '@/lib/estimates'
 import { type OptionRelation } from '@/lib/quotes'
 import { describeForBiller, numberSoFar } from '@/lib/billing'
 import { billableQuoteOptions, billingState, pickBillableQuote, pickSeedCoa } from '@/lib/billing-handoff'
@@ -50,6 +50,8 @@ export default async function CoursePricingEditor({
     ref_number: number
     client_name: string | null
     course_type: string | null
+    /** A custom job, priced by hand from an empty COA. */
+    job?: boolean | null
     max_students: number | null
     location?: string | null
     starts_at: string | null
@@ -293,7 +295,7 @@ export default async function CoursePricingEditor({
       items: (pricingRateRows ?? [])
         // Same pick the server makes when it persists this COA, so the panel you
         // look at and the rows that get saved cannot show different lines.
-        .filter((r) => r.default_line && wantsSeedLine(r, seedCounts))
+        .filter((r) => !seedsNothing(course) && r.default_line && wantsSeedLine(r, seedCounts))
         .map((r) => {
           const guess = guessSeedQty(r, seedCounts)
           return { label: r.label, qty: guess.qty, rate: Number(r.rate), notes: null, factors: guess.factors, factor_labels: null, rate_id: r.id as string, drift_ack: null }

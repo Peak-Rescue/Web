@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react'
 import { crewPlanOf } from '@/lib/staffing-roles'
 import Link from 'next/link'
-import { courseShortName, COURSE_TYPE_OPTIONS, isSession } from '@/lib/courses'
+import { courseShortName, COURSE_TYPE_OPTIONS, isJob, isSession } from '@/lib/courses'
 import { COURSE_STATUSES, COURSE_STATUS_STYLES as STATUS_STYLES } from '@/lib/course-status'
 import {
   courseSteps, showsSteps, coursePhase, courseSettled, NO_EXTRAS,
@@ -48,6 +48,8 @@ export type Instance = {
   invite_token?: string | null
   invite_expires_at?: string | null
   internal?: boolean | null
+  /** A custom booking made as a job. Read through isJob, never alone. */
+  job?: boolean | null
   all_staff?: boolean | null
   start_time?: string | null
   instance_instructors: { count: number }[]
@@ -75,6 +77,7 @@ function asStepInput(inst: Instance, clashing: string[] = []): StepInput {
     starts_at: inst.starts_at,
     ends_at: inst.ends_at,
     internal: inst.internal,
+    job: isJob(inst.course_type, inst.job),
     crewOptional: isSession(inst),
   }
 }
@@ -177,7 +180,7 @@ function InstanceCard({
           crewOptional={step.crewOptional}
           owner={owner}
           owners={owners}
-          students={inst.internal ? null : { enrolled: studentCount, max: inst.max_students }}
+          students={inst.internal || isJob(inst.course_type, inst.job) ? null : { enrolled: studentCount, max: inst.max_students }}
           hasBillingContact={billTo(parseContacts(inst.contacts)) !== null}
           version={version}
           clashing={clashing}

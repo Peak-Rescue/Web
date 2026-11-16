@@ -5,14 +5,23 @@ import { COURSE_TYPE_OPTIONS } from '@/lib/courses'
 import { CAPABILITY_META, CAPABILITY_ORDER } from '@/lib/capabilities'
 import InfoHint from '@/components/InfoHint'
 
+/** What a custom booking is. Only the new-course form asks. */
+export type NewKind = 'course' | 'job' | 'meeting'
+
+const KIND_LABEL: Record<NewKind, string> = {
+  course: 'Course',
+  job: 'Job or service',
+  meeting: 'Internal meeting',
+}
+
 export function CourseTypeSelect({
   defaultCategory = '',
   defaultType = '',
   defaultCustomTitle = '',
   defaultCustomCategories = [],
   defaultInternal = false,
-  meeting = false,
-  onMeetingChange,
+  kind = 'course',
+  onKindChange,
 }: {
   defaultCategory?: string
   defaultType?: string
@@ -20,14 +29,17 @@ export function CourseTypeSelect({
   defaultCustomCategories?: string[]
   defaultInternal?: boolean
   /** The new-course form's fork, asked only once somebody has said Custom:
-      a course of our own making, or a meeting of our own people. Asked here
-      rather than at the top of the form because nearly everything made there
-      is a course, and a question that is answered the same way nine times in
-      ten is one to keep out of the way. While it is a meeting the name and the
-      custom-event box are left to the meeting's own fields. */
-  meeting?: boolean
-  onMeetingChange?: (meeting: boolean) => void
+      a course of our own making, a job we are hired for, or a meeting of our
+      own people. Asked here rather than at the top of the form because nearly
+      everything made there is a course, and a question that is answered the
+      same way nine times in ten is one to keep out of the way. While it is a
+      meeting the name and the custom-event box are left to the meeting's own
+      fields. */
+  kind?: NewKind
+  onKindChange?: (kind: NewKind) => void
 }) {
+  const meeting = kind === 'meeting'
+  const job = kind === 'job'
   const [category, setCategory] = useState(defaultCategory)
   const [courseType, setCourseType] = useState(defaultType)
   const [internal, setInternal] = useState(defaultInternal)
@@ -43,7 +55,7 @@ export function CourseTypeSelect({
   // a caution rather than a refusal: a save that fails for a reason nobody can
   // read is worse than an untagged course. An internal day is exempt either
   // way — a planning day draws on no discipline and staffs nobody.
-  const needsDiscipline = isCustom && !internal && categories.length === 0
+  const needsDiscipline = isCustom && (job || !internal) && categories.length === 0
 
   return (
     <div className="sm:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -54,7 +66,7 @@ export function CourseTypeSelect({
           name="course_category"
           required
           value={category}
-          onChange={e => { setCategory(e.target.value); setCourseType(''); onMeetingChange?.(false) }}
+          onChange={e => { setCategory(e.target.value); setCourseType(''); onKindChange?.('course') }}
           className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500"
         >
           <option value="" disabled>Select a category…</option>
@@ -72,7 +84,7 @@ export function CourseTypeSelect({
           required
           value={courseType}
           disabled={!category}
-          onChange={e => { setCourseType(e.target.value); if (e.target.value !== 'custom') onMeetingChange?.(false) }}
+          onChange={e => { setCourseType(e.target.value); if (e.target.value !== 'custom') onKindChange?.('course') }}
           className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500 disabled:opacity-40"
         >
           <option value="" disabled>{category ? 'Select a course…' : '← Pick a category first'}</option>
@@ -83,24 +95,21 @@ export function CourseTypeSelect({
         </select>
       </div>
 
-      {isCustom && onMeetingChange && (
+      {isCustom && onKindChange && (
         <div className="sm:col-span-2 flex gap-1 text-xs">
-          {([
-            [false, 'Course or job'],
-            [true, 'Internal meeting'],
-          ] as const).map(([value, label]) => (
+          {(Object.keys(KIND_LABEL) as NewKind[]).map((value) => (
             <button
-              key={label}
+              key={value}
               type="button"
-              aria-pressed={meeting === value}
-              onClick={() => onMeetingChange(value)}
+              aria-pressed={kind === value}
+              onClick={() => onKindChange(value)}
               className={`px-2.5 py-1 rounded-full border transition-colors ${
-                meeting === value
+                kind === value
                   ? 'bg-zinc-800 border-zinc-600 text-white'
                   : 'border-zinc-800 text-zinc-500 hover:text-zinc-300'
               }`}
             >
-              {label}
+              {KIND_LABEL[value]}
             </button>
           ))}
         </div>
@@ -109,12 +118,13 @@ export function CourseTypeSelect({
       {/* Step 3 — custom name (only if custom selected) */}
       {isCustom && !meeting && (
         <div className="sm:col-span-2">
-          <label className="block text-xs text-zinc-400 mb-1">Custom course name *</label>
+          {job && <input type="hidden" name="job" value="1" />}
+          <label className="block text-xs text-zinc-400 mb-1">{job ? 'Job name *' : 'Custom course name *'}</label>
           <input
             name="custom_title"
             required
             defaultValue={defaultCustomTitle}
-            placeholder="e.g. Canyon Course — Taiwan"
+            placeholder={job ? undefined : 'e.g. Canyon Course — Taiwan'}
             className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500"
           />
         </div>
@@ -132,6 +142,8 @@ export function CourseTypeSelect({
         <div className="sm:col-span-2">
           <label className="block text-xs text-zinc-400 mb-1">Custom event</label>
           <div className="flex flex-wrap gap-x-4 gap-y-2 p-3 bg-zinc-800/50 border border-zinc-700 rounded">
+            {/* A job is paid work by definition, so it is never internal. */}
+            {!job && (
             <label className="w-full flex items-center gap-1.5 text-sm text-zinc-300 cursor-pointer">
               <input
                 type="checkbox"
@@ -142,8 +154,9 @@ export function CourseTypeSelect({
               />
               Internal — no students
             </label>
+            )}
             {isCustom && (
-              <div className="w-full pt-2 mt-1 border-t border-zinc-700">
+              <div className={job ? 'w-full' : 'w-full pt-2 mt-1 border-t border-zinc-700'}>
                 <p className="text-xs text-zinc-400 mb-2 flex items-center gap-1.5">
                   Disciplines *
                   {needsDiscipline && (
@@ -175,9 +188,9 @@ export function CourseTypeSelect({
             )}
           </div>
           <p className="text-[11px] text-zinc-500 mt-1">
-            {internal
+            {internal && !job
               ? 'Seen only by the people added to it — anyone can be added.'
-              : 'Instructors signed off in a checked discipline see this course in their “All courses” calendar and count as qualified for staffing.'}
+              : `Instructors signed off in a checked discipline see this ${job ? 'job' : 'course'} in their “All courses” calendar and count as qualified for staffing.`}
           </p>
         </div>
       )}
