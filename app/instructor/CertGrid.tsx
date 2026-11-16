@@ -17,6 +17,7 @@ type DbCert = {
   level: string | null
   expires_at: string | null
   notes: string | null
+  updated_at: string
   instructor_cert_documents: CertDoc[]
 }
 
@@ -41,7 +42,7 @@ const STATUS_BADGE = {
 }
 
 type CertGridActions = {
-  upsertCert: (fd: FormData) => Promise<{ id: string; cert_type: CertType; level: string | null; expires_at: string | null; notes: string | null } | null>
+  upsertCert: (fd: FormData) => Promise<{ id: string; cert_type: CertType; level: string | null; expires_at: string | null; notes: string | null; updated_at: string } | null>
   deleteCert: (id: string) => Promise<void>
   addCertDocument: (certId: string, url: string, fileName: string) => Promise<CertDoc | null>
   deleteCertDocument: (docId: string) => Promise<void>
@@ -92,13 +93,25 @@ export default function CertGrid({ initialCerts, actions }: { initialCerts: DbCe
     currentExpiry !== originalExpiry
   )
 
+  // An existing cert attaches uploads straight away rather than staging them,
+  // so a renewal document can already be on file. Anything uploaded since the
+  // cert was last saved counts as the new document.
+  const hasNewDoc = (() => {
+    if (!editing) return false
+    if (pendingDocs.length > 0) return true
+    const cert = certMap[editing]
+    if (!cert) return false
+    const savedAt = new Date(cert.updated_at).getTime()
+    return cert.instructor_cert_documents.some(d => new Date(d.created_at).getTime() > savedAt)
+  })()
+
   const canSave = (() => {
     if (!editing) return false
     const savedDocs = certMap[editing]?.instructor_cert_documents ?? []
     if (savedDocs.length === 0 && pendingDocs.length === 0) return false
     if (CERT_META[editing].hasLevel && !currentLevel) return false
-    if (levelChanged && pendingDocs.length === 0) return false
-    if (expiryChanged && pendingDocs.length === 0) return false
+    if (levelChanged && !hasNewDoc) return false
+    if (expiryChanged && !hasNewDoc) return false
     if (levelChanged && CERT_META[editing].hasExpiry && !currentExpiry) return false
     return true
   })()
@@ -156,12 +169,12 @@ export default function CertGrid({ initialCerts, actions }: { initialCerts: DbCe
       return
     }
     if (levelChanged) {
-      if (pendingDocs.length === 0) {
+      if (!hasNewDoc) {
         alert('Level changed — please upload a new document for the updated level.')
         return
       }
     }
-    if (expiryChanged && pendingDocs.length === 0) {
+    if (expiryChanged && !hasNewDoc) {
       alert('Expiration date changed — please upload the renewed certificate document.')
       return
     }
@@ -326,7 +339,7 @@ export default function CertGrid({ initialCerts, actions }: { initialCerts: DbCe
                             onChange={e => setCurrentExpiry(e.target.value)}
                             className="w-full px-3 py-2 bg-zinc-800 border border-zinc-600 rounded text-white focus:outline-none focus:border-pr-red"
                           />
-                          {expiryChanged && (
+                          {expiryChanged && !hasNewDoc && (
                             <p className="mt-1.5 text-xs text-yellow-400">
                               Expiration date changed — please upload the renewed certificate document.
                             </p>

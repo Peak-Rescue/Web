@@ -73,7 +73,7 @@ export async function adminUpsertCert(profileId: string, formData: FormData) {
       .update({ cert_type, level, expires_at, notes })
       .eq('id', existingId)
       .eq('instructor_id', profileId)
-      .select('id, cert_type, level, expires_at, notes')
+      .select('id, cert_type, level, expires_at, notes, updated_at')
       .single()
     if (error) throw new Error(error.message)
     await revalidateByProfileId(profileId)
@@ -82,7 +82,7 @@ export async function adminUpsertCert(profileId: string, formData: FormData) {
     const { data, error } = await admin
       .from('instructor_certs')
       .insert({ instructor_id: profileId, cert_type, level, expires_at, notes })
-      .select('id, cert_type, level, expires_at, notes')
+      .select('id, cert_type, level, expires_at, notes, updated_at')
       .single()
     if (error) throw new Error(error.message)
     await revalidateByProfileId(profileId)

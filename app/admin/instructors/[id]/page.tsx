@@ -81,7 +81,7 @@ export default async function AdminInstructorDetailPage({ params }: { params: Pr
   const { data: certs } = profile
     ? await admin
         .from('instructor_certs')
-        .select('id, cert_type, level, expires_at, notes, instructor_cert_documents(id, url, file_name, created_at)')
+        .select('id, cert_type, level, expires_at, notes, updated_at, instructor_cert_documents(id, url, file_name, created_at)')
         .eq('instructor_id', profile.id)
         .order('cert_type')
     : { data: [] }

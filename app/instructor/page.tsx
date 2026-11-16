@@ -37,7 +37,7 @@ export default async function InstructorPage() {
 
   const { data: certs } = await admin
     .from('instructor_certs')
-    .select('id, cert_type, level, expires_at, notes, instructor_cert_documents(id, url, file_name, created_at)')
+    .select('id, cert_type, level, expires_at, notes, updated_at, instructor_cert_documents(id, url, file_name, created_at)')
     .eq('instructor_id', user.id)
     .order('cert_type')
 
