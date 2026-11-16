@@ -9,6 +9,7 @@ import { optionAvailable, selectionProblem, type QuoteOption } from '@/lib/quote
 export default function AcceptForm({
   token,
   clientName,
+  proceed = 'this training',
   options,
   canPay,
   invoiceContact,
@@ -20,6 +21,8 @@ export default function AcceptForm({
   /** Square is set up, so the client may pay by card as they accept. */
   canPay: boolean
   clientName: string | null
+  /** What the client is saying yes to: "this training", or "this service" for a job. */
+  proceed?: string
   // Multi-option quotes: the client checks the option or options they want;
   // null = classic single-total quote, no picking involved.
   options: QuoteOption[] | null
@@ -237,7 +240,7 @@ export default function AcceptForm({
         />
         <span>
           I am authorized to accept this quote{clientName ? ` on behalf of ${clientName}` : ''} and would like to
-          proceed with this training.
+          proceed with {proceed}.
         </span>
       </label>
       {error && <p className="sm:col-span-2 text-sm text-red-400">{error}</p>}

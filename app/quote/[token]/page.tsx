@@ -4,9 +4,9 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { viewerIsAdmin } from '@/lib/course-access'
 import QuoteHeroPicker from '@/app/admin/courses/QuoteHeroPicker'
 import { HERO_CHOICES, clientSafeHero } from '@/lib/quote-heroes'
-import { courseDisplayName, courseShortName } from '@/lib/courses'
+import { courseDisplayName, courseShortName, isJob } from '@/lib/courses'
 import { services, categoryMeta, type ServiceCategory } from '@/lib/data/services'
-import { QUOTE_MISSION, quoteCommitment, QUOTE_CONTACT, quoteNumber, type QuoteBillTo, type QuoteOption } from '@/lib/quotes'
+import { QUOTE_MISSION, quoteCommitment, QUOTE_CONTACT, quoteNumber, quoteWords, type QuoteBillTo, type QuoteOption } from '@/lib/quotes'
 import { fmtMoney } from '@/lib/expenses'
 import AcceptForm from './AcceptForm'
 import PayButton from './PayButton'
@@ -41,10 +41,12 @@ export default async function QuotePage({
 
   const { data: inst } = await admin
     .from('course_instances')
-    .select('ref_number, course_type, course_category, custom_title, client_name, location, starts_at, ends_at, hero_image, hero_position, hero_scale, contacts')
+    .select('ref_number, course_type, course_category, custom_title, client_name, location, starts_at, ends_at, hero_image, hero_position, hero_scale, contacts, job')
     .eq('id', quote.instance_id)
     .single()
   if (!inst) notFound()
+  const job = isJob(inst.course_type, inst.job)
+  const words = quoteWords(job)
 
   const isAdmin = await viewerIsAdmin(admin)
 
@@ -172,7 +174,7 @@ export default async function QuotePage({
             <p className="text-pr-red font-semibold tracking-[0.2em] text-sm uppercase mb-2">
               {courseShortName(inst.course_type, inst.custom_title)}
             </p>
-            <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-3">Training Quote</h1>
+            <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-3">{words.heading}</h1>
             <p className="text-zinc-300 text-lg">
               Prepared for <span className="font-semibold text-white">{inst.client_name ?? 'your team'}</span>
             </p>
@@ -280,8 +282,8 @@ export default async function QuotePage({
               </div>
               {!accepted && (
                 <p className="mt-4 text-sm text-zinc-400">
-                  Select what fits when accepting below. The courses are alternatives — one of them — and an
-                  addition is priced as the difference, taken on top of the course it adds to.
+                  Select what fits when accepting below. The {words.units} are alternatives — one of them — and an
+                  addition is priced as the difference, taken on top of the {words.unit} it adds to.
                 </p>
               )}
             </>
@@ -322,11 +324,12 @@ export default async function QuotePage({
           <section className="mt-8 p-8 bg-zinc-900 border border-pr-red/40 rounded-xl">
             <h2 className="text-xl font-bold mb-1">Ready to lock in these dates?</h2>
             <p className="text-sm text-zinc-400 mb-6">
-              Accepting reserves your training dates. Contracting paperwork can follow through your normal channels.
+              Accepting reserves {words.reserves}. Contracting paperwork can follow through your normal channels.
             </p>
             <AcceptForm
               token={token}
               clientName={inst.client_name}
+              proceed={words.proceed}
               options={options}
               canPay={cardReady}
               invoiceContact={invoiceContact}
@@ -371,7 +374,7 @@ export default async function QuotePage({
         {/* ── Commitment ── */}
         <section className="mt-12 mb-20 pt-10 border-t border-zinc-800">
           <h2 className="text-xl font-bold mb-4">Our Commitment to You</h2>
-          <p className="text-zinc-300 leading-relaxed">{quoteCommitment(inst.course_category)}</p>
+          <p className="text-zinc-300 leading-relaxed">{quoteCommitment(inst.course_category, job)}</p>
           {quote.prepared_by_name && (
             <div className="mt-8">
               <p className="font-semibold">{quote.prepared_by_name}</p>

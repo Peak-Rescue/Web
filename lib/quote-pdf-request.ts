@@ -5,7 +5,7 @@
 // the copy we attached stops matching the copy the client filed.
 
 import { createAdminClient } from '@/lib/supabase/admin'
-import { courseDisplayName, courseShortName } from '@/lib/courses'
+import { courseDisplayName, courseShortName, isJob } from '@/lib/courses'
 import { generateQuotePdf } from '@/lib/quote-pdf'
 import { quoteCommitment, quoteNumber, type QuoteOption } from '@/lib/quotes'
 import { todayHere } from '@/lib/course-clock'
@@ -19,7 +19,7 @@ export async function quotePdfResponse(quoteId: string): Promise<Response> {
   const [{ data: inst }, { data: payment }] = await Promise.all([
     admin
       .from('course_instances')
-      .select('ref_number, course_type, course_category, custom_title, client_name, location, starts_at, ends_at')
+      .select('ref_number, course_type, course_category, custom_title, client_name, location, starts_at, ends_at, job')
       .eq('id', quote.instance_id)
       .maybeSingle(),
     admin
@@ -40,6 +40,7 @@ export async function quotePdfResponse(quoteId: string): Promise<Response> {
     : 'Dates to be confirmed'
 
   const qNum = quoteNumber(inst.ref_number, quote.quote_seq)
+  const job = isJob(inst.course_type, inst.job)
   const bytes = await generateQuotePdf({
     quoteNumber: qNum,
     courseName: courseDisplayName(inst.course_type, inst.custom_title),
@@ -59,7 +60,8 @@ export async function quotePdfResponse(quoteId: string): Promise<Response> {
         ? { amount: Number(payment.amount_paid), on: payment.paid_at ? (payment.paid_at as string).slice(0, 10) : null }
         : null,
     preparedBy: quote.prepared_by_name ? { name: quote.prepared_by_name, email: quote.prepared_by_email } : null,
-    commitment: quoteCommitment(inst.course_category),
+    commitment: quoteCommitment(inst.course_category, job),
+    job,
     today: todayHere(),
   })
 

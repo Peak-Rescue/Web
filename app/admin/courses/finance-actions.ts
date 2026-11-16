@@ -7,7 +7,7 @@ import { after } from 'next/server'
 import { syncCourseCalendar } from '@/lib/google-calendar'
 import { parseContacts, primaryContactEmail, ccEmailOptions } from '@/lib/contacts'
 import { guessSeedQty, wantsSeedLine, seedsNothing, coaPrice, type SeedCounts, plannedInstructorCount } from '@/lib/estimates'
-import { courseDayCounts, courseScopeBullets } from '@/lib/courses'
+import { courseDayCounts, courseScopeBullets, isJob } from '@/lib/courses'
 import { todayHere } from '@/lib/course-clock'
 import { sendMail } from '@/lib/mailer'
 import { QUOTE_ROW_COLUMNS, type QuoteRow } from '@/lib/quotes'
@@ -612,7 +612,7 @@ export async function createQuote(
   const [{ data: inst }, { data: estimates }, { data: lastQuote }, { data: profile }, { data: offDays }] = await Promise.all([
     admin
       .from('course_instances')
-      .select('course_type, custom_title, client_name, location, starts_at, ends_at, max_students')
+      .select('course_type, custom_title, client_name, location, starts_at, ends_at, max_students, job')
       .eq('id', instanceId)
       .single(),
     estimateQuery,
@@ -671,7 +671,7 @@ export async function createQuote(
   // The dates head the quote already, so the duration line is about the shape
   // of the teaching inside them: a course broken over a weekend is two 5-day
   // segments, not 12 days.
-  const bullets = courseScopeBullets(inst, offDays ?? [])
+  const bullets = courseScopeBullets(inst, offDays ?? [], isJob(inst.course_type, inst.job))
 
   const { services } = await import('@/lib/data/services')
   const blurb = services.find((s) => s.slug === inst.course_type)?.description ?? null

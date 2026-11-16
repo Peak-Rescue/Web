@@ -18,16 +18,28 @@ export const QUOTE_MISSION =
 // without claiming either one's specialty. That is also why a category added
 // later needs no change here: the general line is the default, and it will be
 // right. Only a new *military* offering would want a look.
-export function quoteCommitment(course_category: string | null): string {
+//
+// A job is not training, so its quote says service where a course's says
+// training — the same paragraph otherwise.
+export function quoteCommitment(course_category: string | null, job = false): string {
   const domain =
     course_category === 'tactical' ? 'mountain warfare operations' : 'technical rescue and mobility'
   return (
-    'We truly look forward to this opportunity! We stand behind our mission to be the top training team for ' +
+    `We truly look forward to this opportunity! We stand behind our mission to be the top ${job ? '' : 'training '}team for ` +
     domain +
-    '. We are committed to giving you the best training; specially designed for YOU ' +
+    `. We are committed to giving you the best ${job ? 'service' : 'training'}; specially designed for YOU ` +
     'and your team! Your teams are the heart of our company and we value your experience with Peak Rescue! ' +
     'Looking forward to working with you!'
   )
+}
+
+/** The words a client reads that change when the quote prices a job — work we
+    are hired for — rather than a course. Typed jobs (standby rescue) and custom
+    ones alike: read it with isJob, never off the flag alone. */
+export function quoteWords(job: boolean) {
+  return job
+    ? { heading: 'Service Quote', kind: 'Service quote', unit: 'service', units: 'services', proceed: 'this service', reserves: 'your dates' }
+    : { heading: 'Training Quote', kind: 'Training quote', unit: 'course', units: 'courses', proceed: 'this training', reserves: 'your training dates' }
 }
 
 export const QUOTE_CONTACT = {

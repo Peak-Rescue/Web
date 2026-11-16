@@ -9,7 +9,7 @@
 import { CONTENT_W, FAINT, INK, MARGIN, MUTED, PANEL, PdfBuilder, RED } from '@/lib/pdf-layout'
 import { fmtMoney } from '@/lib/expenses'
 import { longDate } from '@/lib/course-clock'
-import { QUOTE_CONTACT, QUOTE_MISSION, type QuoteOption } from '@/lib/quotes'
+import { QUOTE_CONTACT, QUOTE_MISSION, quoteWords, type QuoteOption } from '@/lib/quotes'
 
 export type QuotePdf = {
   quoteNumber: string
@@ -34,16 +34,19 @@ export type QuotePdf = {
   commitment: string
   /** yyyy-mm-dd on the office clock, for deciding whether it has expired. */
   today: string
+  /** Work we are hired for rather than a course: says service, not training. */
+  job?: boolean
 }
 
 export async function generateQuotePdf(data: QuotePdf): Promise<Uint8Array> {
+  const words = quoteWords(Boolean(data.job))
   const b = await PdfBuilder.create({
     title: data.courseName,
     subtitle: [data.quoteNumber, data.subtitle].filter(Boolean).join('  ·  '),
-    kind: 'Training quote',
+    kind: words.kind,
     masthead: {
       eyebrow: data.courseShortName ?? data.courseName,
-      heading: 'Training Quote',
+      heading: words.heading,
       lines: [`Prepared for ${data.clientName ?? 'your team'}`, data.subtitle ?? ''].filter(Boolean),
       ref: data.quoteNumber,
     },
@@ -135,7 +138,7 @@ export async function generateQuotePdf(data: QuotePdf): Promise<Uint8Array> {
     }
     b.y -= 4
     b.paragraph(
-      'The courses are alternatives: one of them. An addition is priced as the difference, taken on top of the course it adds to.',
+      `The ${words.units} are alternatives: one of them. An addition is priced as the difference, taken on top of the ${words.unit} it adds to.`,
       { size: 9, color: MUTED }
     )
   } else {

@@ -103,8 +103,11 @@ const COUNT_WORDS = ['', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 
 export function trainingDurationPhrase(
   starts_at: string | null,
   ends_at: string | null,
-  offDays: OffDayRange[]
+  offDays: OffDayRange[],
+  /** A job is not training, so its days are just days. */
+  job = false
 ): string | null {
+  const of = job ? '' : ' of training'
   if (!starts_at) return null
   const blocks = computeBlocks(starts_at, ends_at ?? starts_at, offDays)
   if (blocks.length === 0) return null
@@ -114,7 +117,7 @@ export function trainingDurationPhrase(
   )
   if (lengths.length === 1) {
     const n = lengths[0]
-    return `${n} day${n === 1 ? '' : 's'} of training`
+    return `${n} day${n === 1 ? '' : 's'}${of}`
   }
 
   const count = COUNT_WORDS[lengths.length] ?? String(lengths.length)
@@ -122,10 +125,10 @@ export function trainingDurationPhrase(
   // "two 5-day segments" says it in one phrase. Ragged ones get spelled out
   // in order, because which segment is which is what the reader is after.
   if (lengths.every((n) => n === lengths[0])) {
-    return `${count} ${lengths[0]}-day segments of training`
+    return `${count} ${lengths[0]}-day segments${of}`
   }
   const parts = lengths.map((n) => `${n}-day`)
-  return `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]} segments of training`
+  return `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]} segments${of}`
 }
 
 /** The lines a new quote starts its scope with, read off the course. One
@@ -133,9 +136,10 @@ export function trainingDurationPhrase(
     have fallen behind the course, so the two cannot disagree about wording. */
 export function courseScopeBullets(
   course: { starts_at: string | null; ends_at: string | null; max_students: number | null; location: string | null },
-  offDays: OffDayRange[]
+  offDays: OffDayRange[],
+  job = false
 ): string[] {
-  const duration = trainingDurationPhrase(course.starts_at, course.ends_at, offDays)
+  const duration = trainingDurationPhrase(course.starts_at, course.ends_at, offDays, job)
   return [
     duration ? `Duration: ${duration}` : null,
     course.max_students ? `Participants: up to ${course.max_students} students` : null,
