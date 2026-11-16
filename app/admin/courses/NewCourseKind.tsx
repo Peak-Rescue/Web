@@ -7,13 +7,26 @@ import MeetingFields from './MeetingFields'
 const FIELD =
   'w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500'
 
-const KindContext = createContext<NewKind>('course')
+const KindContext = createContext<{ kind: NewKind; setKind: (kind: NewKind) => void }>({
+  kind: 'course',
+  setKind: () => {},
+})
+
+/** Holds what the form is making, for the fields and the submit button alike —
+    they sit apart in the page, so the answer lives above both. */
+export function NewKindScope({ children }: { children: React.ReactNode }) {
+  const [kind, setKind] = useState<NewKind>('course')
+  return <KindContext.Provider value={{ kind, setKind }}>{children}</KindContext.Provider>
+}
+
+/** What the form is making, once somebody has said. */
+export const useNewKind = () => useContext(KindContext).kind
 
 /** A field only a course has — the student count. A job is a crew on a site,
     and an empty headcount box on it reads as something somebody forgot. Not
     mounted, so not submitted either. */
 export function CourseOnly({ children }: { children: React.ReactNode }) {
-  return useContext(KindContext) === 'course' ? <>{children}</> : null
+  return useNewKind() === 'course' ? <>{children}</> : null
 }
 
 /** The top of the new-course form, and what follows from it.
@@ -34,10 +47,10 @@ export default function NewCourseKind({
   people: { id: string; name: string }[]
   children: React.ReactNode
 }) {
-  const [kind, setKind] = useState<NewKind>('course')
+  const { kind, setKind } = useContext(KindContext)
 
   return (
-    <KindContext.Provider value={kind}>
+    <>
       <CourseTypeSelect kind={kind} onKindChange={setKind} />
       {kind !== 'meeting' ? (
         children
@@ -56,6 +69,6 @@ export default function NewCourseKind({
           </div>
         </>
       )}
-    </KindContext.Provider>
+    </>
   )
 }

@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createInstance } from './actions'
 import CreateCourseButton from './CreateCourseButton'
-import NewCourseKind, { CourseOnly } from './NewCourseKind'
+import NewCourseKind, { CourseOnly, NewKindScope } from './NewCourseKind'
 import CancelNewCourseButton from './CancelNewCourseButton'
 import { courseShortName, courseEventTitle, crewFirstNames, sessionTimeLabel } from '@/lib/courses'
 import CourseCalendar, { type CalendarCourse } from '@/components/CourseCalendar'
@@ -201,6 +201,7 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
             </div>
           </summary>
           <form action={createInstance} className="mt-4 p-6 bg-zinc-900 rounded-lg border border-zinc-800 grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <NewKindScope>
             <NewCourseKind people={(rosterRows ?? []) as { id: string; name: string }[]}>
 
             <div>
@@ -264,6 +265,7 @@ export default async function CoursesPage({ searchParams }: { searchParams: Prom
               <CreateCourseButton />
               <CancelNewCourseButton />
             </div>
+            </NewKindScope>
           </form>
         </details>
 
