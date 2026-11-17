@@ -118,7 +118,6 @@ export default function StaffingInterest({
           (result.skipped.length ? ` — skipped ${result.skipped.join(', ')}` : '')
       )
       setShowPicker(false)
-      router.refresh()
     } catch (e) {
       setMessage(e instanceof Error ? e.message : 'Sending failed — please try again')
     } finally {
@@ -133,8 +132,8 @@ export default function StaffingInterest({
       const fd = new FormData()
       fd.set('instructor_id', instructorId)
       fd.set('role', role)
+      // The action's revalidate brings the new crew back with it; no refresh.
       await assignInstructor(instanceId, fd)
-      router.refresh()
     } finally {
       setAssigningId(null)
     }
@@ -142,7 +141,6 @@ export default function StaffingInterest({
 
   async function removeInvite(inviteId: string) {
     await deleteInterestInvite(instanceId, inviteId)
-    router.refresh()
   }
 
   // Qualified first, then the rest — mirrors the assign dropdown's grouping.

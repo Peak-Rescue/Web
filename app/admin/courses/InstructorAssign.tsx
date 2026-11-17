@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useFormStatus } from 'react-dom'
 import { assignInstructor } from './actions'
 import type { StaffingConflicts } from '@/lib/courses'
 import { INSTANCE_ROLES, roleLabel } from '@/lib/staffing-roles'
@@ -83,7 +84,7 @@ export default function InstructorAssign({
             <option key={r} value={r}>{roleLabel(r)}</option>
           ))}
         </select>
-        <button type="submit" className="px-4 py-2 bg-pr-red hover:bg-pr-red-dark text-white rounded text-sm font-medium transition-colors">Assign</button>
+        <AssignButton />
       </form>
 
       {pickedClashes.length > 0 && (
@@ -103,5 +104,20 @@ export default function InstructorAssign({
         </button>
       )}
     </div>
+  )
+}
+
+// The click waits on the course page coming back re-rendered, so say so
+// rather than leave a button that looks like it did nothing.
+function AssignButton() {
+  const { pending } = useFormStatus()
+  return (
+    <button
+      type="submit"
+      disabled={pending}
+      className="px-4 py-2 bg-pr-red hover:bg-pr-red-dark disabled:opacity-60 text-white rounded text-sm font-medium transition-colors"
+    >
+      {pending ? 'Assigning…' : 'Assign'}
+    </button>
   )
 }

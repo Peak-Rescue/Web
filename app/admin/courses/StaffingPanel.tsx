@@ -1,7 +1,6 @@
 'use client'
 
 import { useTransition } from 'react'
-import { useRouter } from 'next/navigation'
 import { removeInstructor, setCourseRole, setPrimary } from './actions'
 import InstructorAssign from './InstructorAssign'
 import GuestInstructorButton from './GuestInstructorButton'
@@ -109,8 +108,10 @@ function CrewRow({
       a word before it happens rather than a warning after. */
   solePrimary: boolean
 }) {
+  // No router.refresh() after these: each action revalidates, and that already
+  // sends the re-rendered page back with its reply. A refresh on top rendered
+  // the whole course page a second time, which is most of why a click lagged.
   const [pending, start] = useTransition()
-  const router = useRouter()
 
   return (
     // The primary's row is lifted: a left edge in teal and a name in white.
@@ -143,7 +144,7 @@ function CrewRow({
             value={member.role}
             disabled={pending}
             onChange={(e) =>
-              start(async () => { await setCourseRole(instanceId, member.instructorId, e.target.value); router.refresh() })
+              start(async () => { await setCourseRole(instanceId, member.instructorId, e.target.value) })
             }
             title="What this course pays them by the hour"
             className={`bg-zinc-800 border rounded px-1.5 py-0.5 text-xs font-semibold uppercase tracking-wide focus:outline-none focus:border-zinc-500 disabled:opacity-50 ${ROLE_BADGE[asInstanceRole(member.role)]}`}
@@ -163,7 +164,7 @@ function CrewRow({
             type="button"
             disabled={pending}
             onClick={() =>
-              start(async () => { await setPrimary(instanceId, member.instructorId, !member.inCharge); router.refresh() })
+              start(async () => { await setPrimary(instanceId, member.instructorId, !member.inCharge) })
             }
             aria-pressed={member.inCharge}
             title={
@@ -189,7 +190,7 @@ function CrewRow({
             // Refreshed here rather than left to the action's revalidation:
             // the same panel is drawn on two pages, and the one it is drawn
             // on is the one that has to redraw. Its siblings all do the same.
-            start(async () => { await removeInstructor(instanceId, member.instructorId); router.refresh() })
+            start(async () => { await removeInstructor(instanceId, member.instructorId) })
           }
           className="text-xs text-zinc-500 hover:text-red-400 transition-colors disabled:opacity-50"
         >

@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { useRouter } from 'next/navigation'
 import { addGuestInstructor } from './staffing-actions'
 import { INSTANCE_ROLES, roleLabel, type InstanceRole } from '@/lib/staffing-roles'
 
@@ -16,7 +15,6 @@ export default function GuestInstructorButton({
   /** Only picks the wage the box opens on — see InstructorAssign. */
   hasCrew: boolean
 }) {
-  const router = useRouter()
   const [open, setOpen] = useState(false)
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
@@ -48,7 +46,6 @@ export default function GuestInstructorButton({
         setFirstName('')
         setLastName('')
         setEmail('')
-        router.refresh()
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Something went wrong')
       }
