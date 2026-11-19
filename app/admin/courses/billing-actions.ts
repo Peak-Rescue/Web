@@ -10,6 +10,7 @@ import { quoteNumber } from '@/lib/quotes'
 import { pickBillableQuote, resolveBilledQuote } from '@/lib/billing-handoff'
 import { fmtMoney } from '@/lib/expenses'
 import { sendMail } from '@/lib/mailer'
+import { syncCourseCalendar } from '@/lib/google-calendar'
 
 type Result = { ok: true } | { ok: false; error: string }
 
@@ -55,7 +56,7 @@ export async function sendInvoiceRequest(
   const [{ data: inst }, { data: quotes }, { data: recipients }] = await Promise.all([
     admin
       .from('course_instances')
-      .select('ref_number, course_type, custom_title, client_name, starts_at, ends_at, contacts, billing_quote_id')
+      .select('status, ref_number, course_type, custom_title, client_name, starts_at, ends_at, contacts, billing_quote_id')
       .eq('id', instanceId)
       .maybeSingle(),
     admin
@@ -139,6 +140,15 @@ export async function sendInvoiceRequest(
     sent_to: chosen.map((r) => r.name),
   })
   if (error) return { ok: false, error: 'Could not create the request — please try again' }
+
+  // Billing a course says it is happening. An accepted quote confirms it on
+  // its own, but a job priced without one never passes through acceptance,
+  // and would sit tentative with its invoice already raised.
+  if (inst.status === 'tentative' || inst.status === 'quoted') {
+    await admin.from('course_instances').update({ status: 'confirmed' }).eq('id', instanceId)
+    after(() => syncCourseCalendar(admin, instanceId))
+    revalidatePath('/admin/courses')
+  }
 
   // Every active recipient is told, and each gets their own link: the queue is
   // shared, the address into it is not.
