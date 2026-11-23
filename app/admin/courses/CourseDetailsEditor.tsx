@@ -72,7 +72,11 @@ export default function CourseDetailsEditor({
   owners = [],
   kind = 'course',
   clients = [],
+  dateNotice = null,
 }: {
+  /** The crew-not-told-yet question, when the dates have moved since they
+      were last announced. Built by the page, which has the count. */
+  dateNotice?: React.ReactNode
   /** The client tree, for the client picker. */
   clients?: ClientRow[]
   instanceId: string
@@ -250,6 +254,7 @@ export default function CourseDetailsEditor({
           today={todayIn(courseZone(course.region))}
           others={others}
         />
+        {dateNotice && <div className="mt-3">{dateNotice}</div>}
       </div>
 
       {/* Off days — folded behind a deliberate reveal: most courses run

@@ -77,6 +77,50 @@ export function announcesChanges(status: string | null | undefined): boolean {
   return status === 'confirmed' || status === 'completed'
 }
 
+// ─── Date changes ────────────────────────────────────────────────────────────
+
+// Everyone planning around a course's dates: the crew, and anybody who said
+// they were interested and is not on it yet. They plan travel and time off
+// around these dates, and the calendar event changes under them silently:
+// the sync never emails, precisely so the announcement can.
+//
+// Whatever the status. Tentative ones were left out once so a client making
+// up their mind did not mean a mail per slide, but somebody who has set the
+// days aside wants to hear when they move, tentative or not.
+export async function dateChangeRecipients(
+  admin: SupabaseClient,
+  instanceId: string
+): Promise<{ crew: string[]; interested: { token: string; name: string; email: string }[] }> {
+  const [{ data: crewRows }, { data: keen }] = await Promise.all([
+    admin.from('instance_instructors').select('instructor_id, instructors(email)').eq('instance_id', instanceId),
+    admin
+      .from('course_interest_invites')
+      .select('instructor_id, token, instructors(name, email)')
+      .eq('instance_id', instanceId)
+      .eq('interested', true),
+  ])
+  const crew = (crewRows ?? [])
+    .map((a) => (a.instructors as unknown as { email: string | null } | null)?.email)
+    .filter((e): e is string => Boolean(e))
+  const onCrew = new Set((crewRows ?? []).map((r) => r.instructor_id))
+  const interested = (keen ?? [])
+    .filter((r) => !onCrew.has(r.instructor_id))
+    .map((r) => ({ token: r.token as string, ...(r.instructors as unknown as { name: string; email: string | null }) }))
+    .filter((r): r is { token: string; name: string; email: string } => Boolean(r.email))
+  return { crew, interested }
+}
+
+/** How many inboxes the date-change email would reach — the number on its
+    button. Counted from the same list the email is sent to, so the two
+    cannot disagree. */
+export async function dateChangeAudience(
+  admin: SupabaseClient,
+  instanceId: string
+): Promise<number> {
+  const { crew, interested } = await dateChangeRecipients(admin, instanceId)
+  return new Set([...crew, ...interested.map((p) => p.email)].map((e) => e.toLowerCase())).size
+}
+
 // ─── New-course alerts to admins ─────────────────────────────────────────────
 
 /** Whether one admin's boxes cover one course.

@@ -64,7 +64,8 @@ import WaiverQrPanel, { type WaiverQr } from '@/components/WaiverQrPanel'
 import UnmatchedWaivers from '@/components/UnmatchedWaivers'
 import { loadUnmatchedWaivers } from '@/lib/waiver-data'
 import { loadStudentWaiver } from '@/lib/waiver-data'
-import { notifyCountsFrom } from '@/lib/course-notify'
+import { dateChangeAudience, notifyCountsFrom } from '@/lib/course-notify'
+import DateChangeNotice from './DateChangeNotice'
 import { meetingDayPassed, resolveDayMeeting } from '@/lib/meeting-details'
 import { ChipRow } from '@/components/LinkChip'
 import { Section, SubHead, InstructorCard, StudentCard, BETWEEN_BLOCKS, SECTION_LABEL, type SectionKey } from './sections'
@@ -385,7 +386,7 @@ export default async function CourseView({
   const [{ data: inst }, { data: offDays }, { data: modules }, { data: instructors }, taskRows, { data: peopleRows }, { data: templateRows }, { data: courseDocRows }, { data: taskDocRows }, { data: mapRows }, { data: resourceRows }, { data: linkRows }, { data: updateRows }, { data: enrollmentRows }, { data: messageRows }] =
     await Promise.all([
       admin.from('course_instances')
-        .select('course_type, custom_title, status, location, client_name, client_id, notes, ref_number, starts_at, ends_at, meeting_date, meeting_announced_dates, meeting_point, meeting_time, meeting_links, meeting_attachments, intro, custom_categories, contacts, max_students, instructor_slots, lead_slots, assist_slots, shadow_slots, course_category, internal, invite_token, invite_expires_at, hero_image, hero_position, hero_scale, venue_id, region, place_contacts, waiver_template_id, waiver_token, waiver_token_expires_at, breaks_paid, owner_id, billing_quote_id, start_time, end_time, video_url, all_staff, series_id, job')
+        .select('course_type, custom_title, status, location, client_name, client_id, notes, ref_number, starts_at, ends_at, meeting_date, meeting_announced_dates, meeting_point, meeting_time, meeting_links, meeting_attachments, intro, custom_categories, contacts, max_students, instructor_slots, lead_slots, assist_slots, shadow_slots, course_category, internal, invite_token, invite_expires_at, hero_image, hero_position, hero_scale, venue_id, region, place_contacts, waiver_template_id, waiver_token, waiver_token_expires_at, breaks_paid, owner_id, billing_quote_id, start_time, end_time, video_url, all_staff, series_id, job, dates_announced_starts_at, dates_announced_ends_at')
         .eq('id', id)
         .single(),
       admin.from('instance_off_days')
@@ -453,6 +454,13 @@ export default async function CourseView({
     ])
 
   if (!inst) notFound()
+
+  // Dates that moved since the crew last heard them. Asked here rather than
+  // emailed from the date painter, which saves on every drag. The count is
+  // its own read, but only for a course with the question open.
+  const datesUnannounced = showAsAdmin && inst.status !== 'cancelled' &&
+    (inst.starts_at !== inst.dates_announced_starts_at || inst.ends_at !== inst.dates_announced_ends_at)
+  const dateNoticePromise = keep(datesUnannounced ? dateChangeAudience(admin, id) : Promise.resolve(0))
 
   // Work we are hired to do rather than to teach — a standby shift, a set to
   // keep safe. No students, nothing to teach, no kit list to send: what is
@@ -1571,6 +1579,19 @@ export default async function CourseView({
   const teachSections = doors(TEACH)
   const buildSections = showAsAdmin ? doors(BUILD) : null
 
+  // Shown twice: under the painter, where the dates are being dragged, and at
+  // the top, where it is still waiting after the editor is closed.
+  const spanOrTbd = (a: string | null, b: string | null) => (a ? fmtSpan(a, b ?? a) : 'no dates')
+  const dateNoticePeople = await dateNoticePromise
+  const dateNotice = datesUnannounced && dateNoticePeople > 0 ? (
+    <DateChangeNotice
+      instanceId={id}
+      was={spanOrTbd(inst.dates_announced_starts_at, inst.dates_announced_ends_at)}
+      now={spanOrTbd(inst.starts_at, inst.ends_at)}
+      people={dateNoticePeople}
+    />
+  ) : null
+
   return (
     <main className="min-h-screen bg-zinc-950 text-white pt-16 md:pt-20">
       {/* Wider than it was.
@@ -1682,6 +1703,8 @@ export default async function CourseView({
               {blocks.map((b) => fmtSpan(b.starts_at, b.ends_at)).join('  ·  ')}
             </p>
           )}
+
+          {dateNotice && <div className="mt-4">{dateNotice}</div>}
         </div>
 
         <CourseModeProvider initial={mode}>
@@ -1732,6 +1755,7 @@ export default async function CourseView({
                       internal={Boolean(inst.internal)}
                       owners={await ownersPromise}
                       clients={await clientsPromise}
+                      dateNotice={dateNotice}
                     />
                   }
                 >

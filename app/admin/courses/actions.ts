@@ -9,7 +9,7 @@ import { syncCourseCalendar, removeCourseEvent } from '@/lib/google-calendar'
 import { isValidRegion, venuePlaceLine } from '@/lib/regions'
 import { requireAdminUser, requireCourseStaff } from '@/lib/course-access'
 import { sendMail } from '@/lib/mailer'
-import { announcesChanges, emailAdminsNewCourse, notifyRoleChange } from '@/lib/course-notify'
+import { announcesChanges, dateChangeRecipients, emailAdminsNewCourse, notifyRoleChange } from '@/lib/course-notify'
 import { clampOffDays, dayShift, strokeOffDays, type OffSpan } from '@/lib/courses'
 import { todayHere } from '@/lib/course-clock'
 import { assertCustomCourseTagged, courseCapabilityCategories, CAPABILITY_ORDER } from '@/lib/capabilities'
@@ -702,7 +702,7 @@ export async function updateInstanceDates(
   const admin = createAdminClient()
   const { data: before } = await admin
     .from('course_instances')
-    .select('starts_at, ends_at, status, course_type, custom_title, client_name, location')
+    .select('status')
     .eq('id', id)
     .single()
 
@@ -728,80 +728,26 @@ export async function updateInstanceDates(
     }
   }
 
-  // Moved dates → tell everyone planning around them: the crew, and anybody
-  // who said they were interested. They plan travel and time off around these
-  // dates, and the calendar event changes under them silently: the sync never
-  // emails, precisely so this can (best-effort).
+  // The crew are not emailed from here. This runs on every drag of the date
+  // painter, and a mail per drag is what people learn to ignore. The course
+  // page asks instead, for as long as these dates differ from the ones the
+  // crew were last told (announceDateChange below).
   //
-  // Whatever the status. Tentative ones were left out so a client making up
-  // their mind did not mean a mail per slide — but somebody who has set the
-  // days aside wants to hear when they move, tentative or not. Nobody else
-  // gets these, so the slides only reach people they matter to.
-  const moved =
-    before !== null &&
-    before.status !== 'cancelled' &&
-    (before.starts_at !== starts_at || before.ends_at !== ends_at)
-
-  if (moved && process.env.RESEND_API_KEY) {
+  // Unless there is nobody to ask about: then the new dates are simply the
+  // announced ones. Otherwise a course moved before anyone was staffed would
+  // later say "Previously: …" about dates its crew never heard.
+  if (before && before.status !== 'cancelled') {
     after(async () => {
       try {
-        const [crew, { data: crewIds }, { data: keen }] = await Promise.all([
-          assignedEmails(admin, id),
-          admin.from('instance_instructors').select('instructor_id').eq('instance_id', id),
-          admin
-            .from('course_interest_invites')
-            .select('instructor_id, token, instructors(name, email)')
-            .eq('instance_id', id)
-            .eq('interested', true),
-        ])
-        const onCrew = new Set((crewIds ?? []).map((r) => r.instructor_id))
-        const interested = (keen ?? [])
-          .filter((r) => !onCrew.has(r.instructor_id))
-          .map((r) => ({ token: r.token as string, ...(r.instructors as unknown as { name: string; email: string | null }) }))
-          .filter((r) => r.email)
-        if (crew.length === 0 && interested.length === 0) return
-
-        const { courseShortName } = await import('@/lib/courses')
-        const courseName = courseShortName(before.course_type, before.custom_title)
-        const wasScheduled = Boolean(before.starts_at)
-        const when = dateRange(starts_at, ends_at)
-        const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://peak-rescue.com'
-        const subject = `${starts_at ? (wasScheduled ? 'New dates' : 'Dates set') : 'Dates removed'} — ${courseName} (${when})`
-        const head = [
-          starts_at
-            ? `${courseName} is now scheduled for ${when}.`
-            : `${courseName} no longer has dates on the calendar.`,
-          wasScheduled ? `Previously: ${dateRange(before.starts_at, before.ends_at)}` : null,
-          '',
-          `Course: ${courseName}${before.client_name ? ` · ${before.client_name}` : ''}`,
-          before.location ? `Location: ${before.location}` : null,
-        ]
-        const from = 'Peak Rescue Portal <noreply@peak-rescue.com>'
-        const lines = (l: (string | null)[]) => l.filter((x): x is string => x !== null).join('\n')
-
-        const { sendMailBatch } = await import('@/lib/mailer')
-        await sendMailBatch([
-          ...(crew.length > 0
-            ? [{ from, to: crew, subject, text: lines([...head, '', `Details: ${siteUrl}/portal/${id}`]) }]
-            : []),
-          // Their yes was to the old dates, so ask again rather than assume
-          // it carries over. The link is the page they answered on.
-          ...interested.map((p) => ({
-            from,
-            to: [p.email!],
-            subject,
-            text: lines([
-              `${p.name.split(' ')[0]}, you said you were interested in this course, and its dates have changed.`,
-              '',
-              ...head,
-              '',
-              starts_at ? 'Still available for the new dates? Update your answer here:' : 'Your answer stands for now — we will be in touch when it has dates again:',
-              `${siteUrl}/staffing/${p.token}`,
-            ]),
-          })),
-        ])
+        const { crew, interested } = await dateChangeRecipients(admin, id)
+        if (crew.length === 0 && interested.length === 0) {
+          await admin
+            .from('course_instances')
+            .update({ dates_announced_starts_at: starts_at, dates_announced_ends_at: ends_at })
+            .eq('id', id)
+        }
       } catch (e) {
-        console.error('Course date-change email failed:', e)
+        console.error('Course date announcement check failed:', e)
       }
     })
   }
@@ -817,6 +763,123 @@ export async function updateInstanceDates(
   // which days this course actually holds — and a clash is about days held, not
   // days typed.
   return { clash: await crewClashNotice(admin, id) }
+}
+
+type AnnouncedRow = {
+  starts_at: string | null
+  ends_at: string | null
+  dates_announced_starts_at: string | null
+  dates_announced_ends_at: string | null
+}
+
+/** Settle the course's dates as the ones the crew know about, but only if
+    nobody else got there first: two clicks of the button, or two admins,
+    would otherwise both send. True when this call is the one that did it. */
+async function claimAnnouncement(
+  admin: ReturnType<typeof createAdminClient>,
+  id: string,
+  row: AnnouncedRow
+): Promise<boolean> {
+  let q = admin
+    .from('course_instances')
+    .update({ dates_announced_starts_at: row.starts_at, dates_announced_ends_at: row.ends_at })
+    .eq('id', id)
+  q = row.dates_announced_starts_at === null ? q.is('dates_announced_starts_at', null) : q.eq('dates_announced_starts_at', row.dates_announced_starts_at)
+  q = row.dates_announced_ends_at === null ? q.is('dates_announced_ends_at', null) : q.eq('dates_announced_ends_at', row.dates_announced_ends_at)
+  const { data, error } = await q.select('id')
+  if (error) throw new Error(error.message)
+  return (data ?? []).length > 0
+}
+
+/** Tell the crew the course's dates have moved, once they have stopped
+    moving. Says the dates it was last announced at as "Previously", not the
+    dates of the last drag — those were never news to anybody. */
+export async function announceDateChange(id: string): Promise<ActionResult> {
+  await requireAdmin()
+  const admin = createAdminClient()
+  const { data: row } = await admin
+    .from('course_instances')
+    .select('starts_at, ends_at, dates_announced_starts_at, dates_announced_ends_at, course_type, custom_title, client_name, location')
+    .eq('id', id)
+    .single()
+  if (!row) throw new Error('Course not found')
+
+  const { starts_at, ends_at } = row
+  const was = { starts_at: row.dates_announced_starts_at, ends_at: row.dates_announced_ends_at }
+  if (was.starts_at === starts_at && was.ends_at === ends_at) return
+  if (!(await claimAnnouncement(admin, id, row))) return
+
+  try {
+    const { crew, interested } = await dateChangeRecipients(admin, id)
+    if ((crew.length > 0 || interested.length > 0) && process.env.RESEND_API_KEY) {
+      const { courseShortName } = await import('@/lib/courses')
+      const courseName = courseShortName(row.course_type, row.custom_title)
+      const wasScheduled = Boolean(was.starts_at)
+      const when = dateRange(starts_at, ends_at)
+      const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://peak-rescue.com'
+      const subject = `${starts_at ? (wasScheduled ? 'New dates' : 'Dates set') : 'Dates removed'} — ${courseName} (${when})`
+      const head = [
+        starts_at
+          ? `${courseName} is now scheduled for ${when}.`
+          : `${courseName} no longer has dates on the calendar.`,
+        wasScheduled ? `Previously: ${dateRange(was.starts_at, was.ends_at)}` : null,
+        '',
+        `Course: ${courseName}${row.client_name ? ` · ${row.client_name}` : ''}`,
+        row.location ? `Location: ${row.location}` : null,
+      ]
+      const from = 'Peak Rescue Portal <noreply@peak-rescue.com>'
+      const lines = (l: (string | null)[]) => l.filter((x): x is string => x !== null).join('\n')
+
+      const { sendMailBatch } = await import('@/lib/mailer')
+      const { error } = await sendMailBatch([
+        ...(crew.length > 0
+          ? [{ from, to: crew, subject, text: lines([...head, '', `Details: ${siteUrl}/portal/${id}`]) }]
+          : []),
+        // Their yes was to the old dates, so ask again rather than assume
+        // it carries over. The link is the page they answered on.
+        ...interested.map((p) => ({
+          from,
+          to: [p.email],
+          subject,
+          text: lines([
+            `${p.name.split(' ')[0]}, you said you were interested in this course, and its dates have changed.`,
+            '',
+            ...head,
+            '',
+            starts_at ? 'Still available for the new dates? Update your answer here:' : 'Your answer stands for now — we will be in touch when it has dates again:',
+            `${siteUrl}/staffing/${p.token}`,
+          ]),
+        })),
+      ])
+      if (error) throw new Error(error.message)
+    }
+  } catch (e) {
+    // Nobody was told, so the question goes back on the page rather than
+    // the course pretending it was answered.
+    await admin
+      .from('course_instances')
+      .update({ dates_announced_starts_at: was.starts_at, dates_announced_ends_at: was.ends_at })
+      .eq('id', id)
+    console.error('Course date-change email failed:', e)
+    return refuse('The email did not go out. Try again in a moment.')
+  }
+
+  revalidatePath(`/portal/${id}`)
+}
+
+/** The dates moved and nobody needs to hear it — a slip caught before anyone
+    could have acted on it, or a crew already told in person. */
+export async function skipDateChange(id: string) {
+  await requireAdmin()
+  const admin = createAdminClient()
+  const { data: row } = await admin
+    .from('course_instances')
+    .select('starts_at, ends_at, dates_announced_starts_at, dates_announced_ends_at')
+    .eq('id', id)
+    .single()
+  if (!row) throw new Error('Course not found')
+  await claimAnnouncement(admin, id, row)
+  revalidatePath(`/portal/${id}`)
 }
 
 /** Who on this course is now double-booked, in one sentence, or null.
