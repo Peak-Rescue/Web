@@ -504,19 +504,24 @@ export default function EstimatePanel({
   // Naming a multiplier after something the course knows fills in the course's
   // number for it. Only on an exact pick from the list, so typing "days" a
   // letter at a time does not overwrite a number on the way past "day".
+  // Only an empty box is filled: one still blank or on the placeholder 1. A
+  // number already typed there is the estimator's, and naming the box says
+  // what it counts, not that it should be replaced.
   function setFactorLabel(key: number, idx: number, value: string) {
     const row = rows.find((r) => r.key === key)
     if (!row) return
     const next = [...row.flabels]
     while (next.length <= idx) next.push(null)
     next[idx] = value || null
+    const factors = [...rowFactors(row)]
+    const current = (factors[idx] ?? '').trim()
+    const empty = current === '' || current === '1'
     const quick = QUICK_FACTORS.some((q) => q.name === value.trim().toLowerCase())
-    const known = quick ? factorValue(value, row.label, counts) : null
+    const known = quick && empty ? factorValue(value, row.label, counts) : null
     if (known === null) {
       updateRow(key, { flabels: next })
       return
     }
-    const factors = [...rowFactors(row)]
     factors[idx] = String(known)
     const product = factors.reduce((p, f) => p * (f.trim() === '' ? 1 : Number(f) || 0), 1)
     updateRow(key, { flabels: next, factors, qty: String(round2(product)) })
